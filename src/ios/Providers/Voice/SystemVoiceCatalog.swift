@@ -73,10 +73,10 @@ enum SystemVoiceCatalog {
     /// is overwhelming; restrict to the app's supported UI locales UNION the user's
     /// system-preferred languages (so someone whose phone is set to Spanish still
     /// sees Spanish voices even though the app has no Spanish UI yet).
-    ///   • App UI locales: de/en/fr/ja/ko/ru/zh (from Localizable.xcstrings).
+    ///   • App UI locales: en/zh(WP-03 起只上架中英,见 supportedLanguages)。
     ///   • User preference: Locale.preferredLanguages base codes.
     static func allowedLanguageCodes() -> Set<String> {
-        let appUI: Set<String> = ["de", "en", "fr", "ja", "ko", "ru", "zh"]
+        let appUI: Set<String> = ["en", "zh"]
         let preferred = Locale.preferredLanguages.compactMap { tag -> String? in
             Locale(identifier: tag).language.languageCode?.identifier.lowercased()
         }
@@ -98,12 +98,7 @@ enum SystemVoiceCatalog {
 
         let usable = all.filter { voice in
             // 1. Drop Novelty voices (robotic / joke voices).
-            if #available(iOS 17, *) {
-                if voice.voiceTraits.contains(.isNoveltyVoice) { return false }
-            } else if voice.identifier.hasPrefix("com.apple.speech.synthesis.voice.") {
-                // Pre-iOS-17 fallback: the legacy id prefix is the Novelty family.
-                return false
-            }
+            if voice.voiceTraits.contains(.isNoveltyVoice) { return false }
             // 2. Drop Eloquence robot voices (low quality, heavily duplicated names).
             if voice.identifier.lowercased().contains("eloquence") { return false }
             // 3. Keep only the app-supported + user-preferred languages.
@@ -122,10 +117,9 @@ enum SystemVoiceCatalog {
     /// Gender word, LOCALIZED to the current UI language (e.g. "男声"/"女声" in zh,
     /// "Male"/"Female" in en). nil when the voice doesn't report a gender.
     private static func genderWord(for voice: AVSpeechSynthesisVoice) -> String? {
-        guard #available(iOS 17, *) else { return nil }
         switch voice.gender {
-        case .male:   return String(localized: "Male voice", comment: "TTS voice gender label")
-        case .female: return String(localized: "Female voice", comment: "TTS voice gender label")
+        case .male:   return AppLocalized("Male voice", comment: "TTS voice gender label")
+        case .female: return AppLocalized("Female voice", comment: "TTS voice gender label")
         default:      return nil
         }
     }
@@ -196,7 +190,7 @@ enum SystemVoiceCatalog {
                 let parts = voiceId.split(separator: ".").map(String.init)
                 let leaf = parts.last ?? voiceId
                 let lang = parts.count >= 2 ? parts[parts.count - 2] : ""
-                let notInstalled = String(localized: "not installed", comment: "voice pack not downloaded")
+                let notInstalled = AppLocalized("not installed", comment: "voice pack not downloaded")
                 name = lang.isEmpty ? "\(leaf) · \(notInstalled)" : "\(leaf) (\(lang)) · \(notInstalled)"
             }
             return systemEntry(modelId: voiceId, displayName: name, modality: [.audioOutput])
@@ -205,20 +199,20 @@ enum SystemVoiceCatalog {
         switch suffix {
         case "system-tts", "output":
             return systemEntry(modelId: "system-tts",
-                               displayName: String(localized: "System Voice (Auto)", comment: "Built-in TTS auto-by-language option"),
+                               displayName: AppLocalized("System Voice (Auto)", comment: "Built-in TTS auto-by-language option"),
                                modality: [.audioOutput])
         case "system-asr-online":
             return systemEntry(modelId: "system-asr-online",
-                               displayName: String(localized: "System Recognition (Online)", comment: "Built-in cloud ASR option"),
+                               displayName: AppLocalized("System Recognition (Online)", comment: "Built-in cloud ASR option"),
                                modality: [.audioInput])
         case "system-asr-offline":
             return systemEntry(modelId: "system-asr-offline",
-                               displayName: String(localized: "System Recognition (Offline)", comment: "Built-in on-device ASR option"),
+                               displayName: AppLocalized("System Recognition (Offline)", comment: "Built-in on-device ASR option"),
                                modality: [.audioInput])
         default:
             // Bare sentinel / "system-asr" / "input" → legacy default ASR entry.
             return systemEntry(modelId: "system-asr",
-                               displayName: String(localized: "System Speech Recognition", comment: "Built-in ASR option"),
+                               displayName: AppLocalized("System Speech Recognition", comment: "Built-in ASR option"),
                                modality: [.audioInput])
         }
     }
@@ -253,7 +247,6 @@ final class SystemVoiceRoster: ObservableObject {
         guard !observerInstalled else { return }
         // availableVoicesDidChangeNotification is iOS 17+. On older systems the
         // roster simply never refreshes live (the picker still rebuilds on open).
-        guard #available(iOS 17, *) else { observerInstalled = true; return }
         observerInstalled = true
         NotificationCenter.default.addObserver(
             forName: AVSpeechSynthesizer.availableVoicesDidChangeNotification,

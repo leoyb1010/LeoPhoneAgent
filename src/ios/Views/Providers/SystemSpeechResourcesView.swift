@@ -45,35 +45,31 @@ struct SystemSpeechResourcesView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("本机语言资源") {
-                if #available(iOS 26.0, *) {
-                    Picker("语言", selection: $localeID) {
-                        ForEach(Array(Set(locales + [localeID])).sorted(), id: \.self) { identifier in
-                            Text(Locale.current.localizedString(forIdentifier: identifier) ?? identifier).tag(identifier)
-                        }
-                    }.disabled(installation != nil)
-                    LabeledContent("资源状态", value: statusLabel)
-                    if let resolved = availability?.resolvedLocale, resolved != localeID {
-                        LabeledContent("系统匹配语言", value: resolved)
+                Picker("语言", selection: $localeID) {
+                    ForEach(Array(Set(locales + [localeID])).sorted(), id: \.self) { identifier in
+                        Text(Locale.current.localizedString(forIdentifier: identifier) ?? identifier).tag(identifier)
                     }
-                    if installation != nil {
-                        ProgressView(value: min(1, max(0, progress)))
-                        Button("请求取消下载") { installation?.cancel() }
-                    } else {
-                        Button("下载并保留本机语言资源") { install() }
-                            .disabled(availability == nil || availability?.state == .installed || availability?.state == .unsupported || availability?.state == .downloading)
-                        if reserved {
-                            Button("释放本 App 的语言保留") {
-                                Task {
-                                    _ = await AssetInventory.release(reservedLocale: Locale(identifier: availability?.resolvedLocale ?? localeID))
-                                    await refresh()
-                                }
+                }.disabled(installation != nil)
+                LabeledContent("资源状态", value: statusLabel)
+                if let resolved = availability?.resolvedLocale, resolved != localeID {
+                    LabeledContent("系统匹配语言", value: resolved)
+                }
+                if installation != nil {
+                    ProgressView(value: min(1, max(0, progress)))
+                    Button("请求取消下载") { installation?.cancel() }
+                } else {
+                    Button("下载并保留本机语言资源") { install() }
+                        .disabled(availability == nil || availability?.state == .installed || availability?.state == .unsupported || availability?.state == .downloading)
+                    if reserved {
+                        Button("释放本 App 的语言保留") {
+                            Task {
+                                _ = await AssetInventory.release(reservedLocale: Locale(identifier: availability?.resolvedLocale ?? localeID))
+                                await refresh()
                             }
                         }
                     }
-                    Button("刷新资源状态") { Task { await refresh() } }
-                } else {
-                    Text("系统转写资源管理需要 iOS 26 或更新版本。旧系统继续使用可用的系统识别接口，并遵守离线限制。")
                 }
+                Button("刷新资源状态") { Task { await refresh() } }
                 Text("下载大小、存储和最终资源清理由 Apple 管理。释放保留不等于立即删除系统资源。离开此页会请求取消本页下载；再次进入后以系统状态为准。")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -83,7 +79,7 @@ struct SystemSpeechResourcesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { metricsTick += 1 }
         .task {
-            if #available(iOS 26.0, *) { locales = await SpeechTranscriber.supportedLocales.map(\.identifier) }
+            locales = await SpeechTranscriber.supportedLocales.map(\.identifier)
             await refresh()
         }
         .onChange(of: localeID) { _, _ in Task { await refresh() } }
@@ -112,7 +108,6 @@ struct SystemSpeechResourcesView: View {
     }
 
     @MainActor private func refresh() async {
-        guard #available(iOS 26.0, *) else { return }
         let requested = localeID
         let result = await AppleSpeechAnalyzer.availability(locale: Locale(identifier: requested))
         let reservations = await AssetInventory.reservedLocales
@@ -122,7 +117,7 @@ struct SystemSpeechResourcesView: View {
     }
 
     @MainActor private func install() {
-        guard installation == nil, #available(iOS 26.0, *) else { return }
+        guard installation == nil else { return }
         message = nil; progress = 0
         let requested = localeID
         installation = Task { @MainActor in

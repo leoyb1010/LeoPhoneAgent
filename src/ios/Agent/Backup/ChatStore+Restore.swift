@@ -28,8 +28,8 @@ extension ChatStore {
 
         var errorDescription: String? {
             switch self {
-            case .databaseUnavailable: return String(localized: "聊天数据库不可用")
-            case .sqlite: return String(localized: "写入聊天数据库失败，已回滚")
+            case .databaseUnavailable: return AppLocalized("聊天数据库不可用")
+            case .sqlite: return AppLocalized("写入聊天数据库失败，已回滚")
             }
         }
     }

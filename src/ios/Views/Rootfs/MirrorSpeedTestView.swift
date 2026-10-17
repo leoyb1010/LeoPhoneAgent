@@ -63,8 +63,8 @@ struct MirrorEntry: Identifiable, Hashable {
     /// Name / region for display, in the app language (`name` and `region`
     /// are the English catalog keys; resolved on read so a language switch
     /// takes effect without relaunch).
-    var localizedName: String { String(localized: String.LocalizationValue(name)) }
-    var localizedRegion: String { String(localized: String.LocalizationValue(region)) }
+    var localizedName: String { AppLocalized(String.LocalizationValue(name)) }
+    var localizedRegion: String { AppLocalized(String.LocalizationValue(region)) }
 }
 
 struct MirrorTestResult: Identifiable {
@@ -471,12 +471,12 @@ struct MirrorsSectionView: View {
     @ObservedObject private var vm = MirrorSpeedTestViewModel.shared
 
     var body: some View {
-        Section(String(localized: "Mirrors")) {
+        Section(AppLocalized("Mirrors")) {
             Button {
                 vm.runAllTests()
             } label: {
                 Label {
-                    Text(String(localized: "Detect Fast Mirrors"))
+                    Text(AppLocalized("Detect Fast Mirrors"))
                 } icon: {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 9))
@@ -545,8 +545,8 @@ struct MirrorCategoryDetailView: View {
 
     var body: some View {
         List {
-            Section(String(localized: "Current")) {
-                Toggle(String(localized: "Use Mirror"), isOn: Binding(
+            Section(AppLocalized("Current")) {
+                Toggle(AppLocalized("Use Mirror"), isOn: Binding(
                     get: { vm.useCustomMirror[category] == true },
                     set: { vm.setUseCustom($0, for: category) }
                 ))
@@ -561,12 +561,12 @@ struct MirrorCategoryDetailView: View {
                             .lineLimit(1)
                     }
                 } else {
-                    Text(String(localized: "Official (default)"))
+                    Text(AppLocalized("Official (default)"))
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section(sortedResults.isEmpty ? String(localized: "Mirrors") : String(localized: "Speed Test Results")) {
+            Section(sortedResults.isEmpty ? AppLocalized("Mirrors") : AppLocalized("Speed Test Results")) {
                 if sortedResults.isEmpty {
                     // Show all mirrors for this category (no test results yet)
                     ForEach(MirrorEntry.mirrors(for: category), id: \.id) { mirror in
@@ -594,7 +594,7 @@ struct MirrorCategoryDetailView: View {
                     vm.runTest(for: category)
                 } label: {
                     Label {
-                        Text(String(localized: "Test Speed"))
+                        Text(AppLocalized("Test Speed"))
                     } icon: {
                         Image(systemName: "bolt.fill")
                             .font(.system(size: 9))
@@ -625,7 +625,7 @@ struct MirrorCategoryDetailView: View {
                     Text(mirror.localizedName)
                         .font(.body)
                     if mirror.isOfficial {
-                        Text(String(localized: "Official"))
+                        Text(AppLocalized("Official"))
                             .font(.caption2.weight(.medium))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 5)
@@ -659,7 +659,7 @@ struct MirrorCategoryDetailView: View {
                     Text(result.mirror.localizedName)
                         .font(.body)
                     if result.mirror.isOfficial {
-                        Text(String(localized: "Official"))
+                        Text(AppLocalized("Official"))
                             .font(.caption2.weight(.medium))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 5)
@@ -684,7 +684,7 @@ struct MirrorCategoryDetailView: View {
                     .font(.caption.monospaced())
                     .foregroundStyle(ms < 200 ? .green : ms < 500 ? .orange : .red)
             } else {
-                Text(String(localized: "Timeout"))
+                Text(AppLocalized("Timeout"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

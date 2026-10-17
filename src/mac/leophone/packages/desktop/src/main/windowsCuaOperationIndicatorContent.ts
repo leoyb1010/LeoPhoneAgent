@@ -13,8 +13,9 @@ export const INDICATOR_SHADOW_INSET = { top: 6, right: 8, bottom: 12, left: 8 } 
 
 export function indicatorCopy(locale: Locale): { text: string; width: number } {
   return locale === "zh-CN"
-    ? { text: "ZCode 正在操作电脑", width: 234 }
-    : { text: "ZCode is controlling your computer", width: 308 };
+    ? // [leo] 用户可见的产品名统一为 LeoBot；名字多 1 个字符，宽度随之 +8px。
+      { text: "LeoBot 正在操作电脑", width: 242 }
+    : { text: "LeoBot is controlling your computer", width: 316 };
 }
 
 export function indicatorWindowSize(locale: Locale): { width: number; height: number } {

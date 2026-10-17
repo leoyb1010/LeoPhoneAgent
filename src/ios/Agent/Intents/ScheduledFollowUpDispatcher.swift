@@ -145,8 +145,8 @@ enum ScheduledFollowUpDispatcher {
             guard !outcome.shouldKeepObserving else { return }
             let hidden = SessionLockStore.isHiddenFromSystemSurfaces(sessionId)
             ScheduledTaskRunner.notify(
-                title: String(localized: "定时跟进已完成:\(followUp.title)"),
-                body: hidden ? String(localized: "打开 LeoBot 查看结果") : String(text.prefix(200)),
+                title: AppLocalized("定时跟进已完成:\(followUp.title)"),
+                body: hidden ? AppLocalized("打开 LeoBot 查看结果") : String(text.prefix(200)),
                 sessionId: sessionId)
         }
         return runId
@@ -162,10 +162,10 @@ enum ScheduledFollowUpDispatcher {
         guard let followUp = task.followUp, followUp.trigger == .once,
               let fireAt = followUp.fireAt, fireAt > Date() else { return }
         let content = UNMutableNotificationContent()
-        content.title = String(localized: "定时跟进到点了")
+        content.title = AppLocalized("定时跟进到点了")
         content.body = SessionLockStore.isHiddenFromSystemSurfaces(followUp.sessionId)
-            ? String(localized: "打开 LeoBot 运行它")
-            : String(localized: "「\(followUp.title)」· 打开 LeoBot 运行它")
+            ? AppLocalized("打开 LeoBot 运行它")
+            : AppLocalized("「\(followUp.title)」· 打开 LeoBot 运行它")
         content.sound = .default
         content.userInfo["sessionId"] = followUp.sessionId
         content.applyFocusQuiet()

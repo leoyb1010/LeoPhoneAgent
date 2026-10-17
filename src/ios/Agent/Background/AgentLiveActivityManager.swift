@@ -34,6 +34,15 @@ final class AgentLiveActivityManager {
     private var lastRenewDate: Date = .distantPast
     private static let minRenewInterval: TimeInterval = 5.0
 
+    /// [WP-41] 这张卡要不要带 update token(Mac 任务卡要,中继据此在 App 不在时远程更新)。
+    /// 由 `startActivity(sessions:remotePush:)` 设定;renew / 前台补启沿用。
+    private var remotePush = false
+    private var pushTokenTask: Task<Void, Never>?
+    private var currentPushToken: String?
+    private var registeredTokenSessions: Set<String> = []
+
+    private var requestPushType: PushType? { remotePush ? .token : nil }
+
     /// `Activity.request` 在 app 刚滑到后台的瞬间会以「Target is not foreground」失败。这是已知且有补救的
     /// 预期情况(renew 路径存 `pendingStartState`、回前台重启),不是故障,不该占 ERROR 位
     /// (真机 4 天 20 条 ERROR;ERROR 不受日志限流,看日志时还会被当成真问题)。
@@ -61,7 +70,6 @@ final class AgentLiveActivityManager {
         if ProcessInfo.processInfo.isiOSAppOnMac {
             return false
         }
-        guard #available(iOS 16.2, *) else { return false }
         // [T-ipad16-activitykit-crash] ActivityKit is WEAK-linked
         // (LC_LOAD_WEAK_DYLIB) and Live Activities came to iPad only with
         // iPadOS 17. `#available(iOS 16.2, *)` passes on iPadOS 16.2, so gated
@@ -84,10 +92,6 @@ final class AgentLiveActivityManager {
         //     resolve — if it doesn't, instantiating
         //     Activity<AgentActivityAttributes> metadata is what crashes.
         if UIDevice.current.userInterfaceIdiom == .pad {
-            guard #available(iOS 17.0, *) else {
-                logger.info("[LiveActivity][probe] unavailable: iPad on iPadOS 16.x")
-                return false
-            }
         }
         guard let handle = dlopen("/System/Library/Frameworks/ActivityKit.framework/ActivityKit", RTLD_LAZY) else {
             logger.info("[LiveActivity][probe] unavailable: dlopen failed")
@@ -114,9 +118,7 @@ final class AgentLiveActivityManager {
             logger.info("[LiveActivity][cleanup src=\(source)] skipped: ActivityKit unavailable")
             return
         }
-        if #available(iOS 16.2, *) {
-            _cleanupStaleActivities(source: source)
-        }
+        _cleanupStaleActivities(source: source)
     }
 
     /// [T-live-activity-toggle] User preference gate (Settings → Background →
@@ -127,25 +129,22 @@ final class AgentLiveActivityManager {
         (UserDefaults.standard.object(forKey: "liveActivityEnabled") as? Bool) ?? true
     }
 
-    func startActivity(sessions: [LiveSessionSnapshot]) {
+    /// - Parameter remotePush: [WP-41] 请求 `.token` 推送类型并把 update token 登记到中继
+    ///   (Mac 任务卡)。聊天任务卡保持纯本地。
+    func startActivity(sessions: [LiveSessionSnapshot], remotePush: Bool = false) {
         guard Self.isActivityKitAvailable, Self.isUserEnabled else { return }
-        if #available(iOS 16.2, *) {
-            _startActivity(sessions: sessions)
-        }
+        self.remotePush = remotePush
+        _startActivity(sessions: sessions)
     }
 
     func updateActivity(sessions: [LiveSessionSnapshot]) {
         guard Self.isActivityKitAvailable, Self.isUserEnabled else { return }
-        if #available(iOS 16.2, *) {
-            _updateActivity(sessions: sessions)
-        }
+        _updateActivity(sessions: sessions)
     }
 
     func endActivity() {
         guard Self.isActivityKitAvailable else { return }
-        if #available(iOS 16.2, *) {
-            _endActivity()
-        }
+        _endActivity()
     }
 
     /// [T-ios-live-activity-multisession-dismiss] Mark a single session as
@@ -154,9 +153,7 @@ final class AgentLiveActivityManager {
     /// message, while remaining sessions continue refreshing normally.
     func markSessionCompleted(sessionId: String, lastMessage: String) {
         guard Self.isActivityKitAvailable, Self.isUserEnabled else { return }
-        if #available(iOS 16.2, *) {
-            _markSessionCompleted(sessionId: sessionId, lastMessage: lastMessage)
-        }
+        _markSessionCompleted(sessionId: sessionId, lastMessage: lastMessage)
     }
 
     /// [T-ios-live-activity-soft-finish] Soft-finish: when the last task ends,
@@ -170,12 +167,10 @@ final class AgentLiveActivityManager {
         // Disabled → no soft-finish card; fall through to a hard end so any
         // activity left over from before the switch was flipped is removed.
         guard Self.isUserEnabled else {
-            if #available(iOS 16.2, *) { _endActivity() }
+            _endActivity()
             return
         }
-        if #available(iOS 16.2, *) {
-            await _finishActivity(lastMessages: lastMessages)
-        }
+        await _finishActivity(lastMessages: lastMessages)
     }
 
     /// [T-ios-delete-session-live-activity] Called when a session is deleted.
@@ -185,25 +180,21 @@ final class AgentLiveActivityManager {
     /// deleted one; otherwise it ends immediately (dismissalPolicy .immediate).
     func handleSessionDeleted(_ sessionId: String) {
         guard Self.isActivityKitAvailable else { return }
-        if #available(iOS 16.2, *) {
-            _handleSessionDeleted(sessionId)
-        }
+        _handleSessionDeleted(sessionId)
     }
 
     /// Called on foreground return. If a soft-finished ("completed") activity is
     /// lingering, end it now that the user is back in the app.
     func dismissFinishedActivityOnForeground() {
         guard Self.isActivityKitAvailable else { return }
-        if #available(iOS 16.2, *) {
-            let completedState = (lastPushedState as? AgentActivityAttributes.ContentState)?.allCompleted == true
-            guard awaitingDismissal || completedState else { return }
-            logger.info("[LiveActivity][finish] foreground return — dismissing completed activity (awaitingDismissal=\(awaitingDismissal) completedState=\(completedState))")
-            _endActivity()
-            let remaining = SessionActivityTracker.shared.activeSessions
-            if !remaining.isEmpty {
-                logger.info("[LiveActivity][finish] \(remaining.count) session(s) still active after dismiss — restarting activity")
-                BackgroundKeepAliveManager.shared.updateLiveActivityIfNeeded(source: "postDismissRecovery")
-            }
+        let completedState = (lastPushedState as? AgentActivityAttributes.ContentState)?.allCompleted == true
+        guard awaitingDismissal || completedState else { return }
+        logger.info("[LiveActivity][finish] foreground return — dismissing completed activity (awaitingDismissal=\(awaitingDismissal) completedState=\(completedState))")
+        _endActivity()
+        let remaining = SessionActivityTracker.shared.activeSessions
+        if !remaining.isEmpty {
+            logger.info("[LiveActivity][finish] \(remaining.count) session(s) still active after dismiss — restarting activity")
+            BackgroundKeepAliveManager.shared.updateLiveActivityIfNeeded(source: "postDismissRecovery")
         }
     }
 
@@ -252,9 +243,7 @@ final class AgentLiveActivityManager {
 
     func audioStateChanged(source: String) {
         guard Self.isActivityKitAvailable else { return }
-        if #available(iOS 16.2, *) {
-            _audioStateChanged(source: source)
-        }
+        _audioStateChanged(source: source)
     }
 
     @available(iOS 16.2, *)
@@ -394,11 +383,14 @@ final class AgentLiveActivityManager {
             }
             return
         }
-        guard !stale.isEmpty else {
-            logger.verbose("[LiveActivity][cleanup src=\(source)] nothing to clean: systemActivities is empty")
+        // [WP-41] 中继 push-to-start 拉起的卡不是「上一个进程留下的」:App 被杀时它正显示
+        // Mac 那边的审批/进度,由中继负责 update/end(或到 stale-date 自然变灰)。
+        let localStale = stale.filter { $0.attributes.origin != AgentActivityAttributes.relayOrigin }
+        guard !localStale.isEmpty else {
+            logger.verbose("[LiveActivity][cleanup src=\(source)] nothing to clean: systemActivities is empty (relay-started cards are kept)")
             return
         }
-        logger.info("[LiveActivity][cleanup src=\(source)] ending \(stale.count) stale activity(ies) from previous session")
+        logger.info("[LiveActivity][cleanup src=\(source)] ending \(localStale.count) stale activity(ies) from previous session")
         let finalState = AgentActivityAttributes.ContentState(
             activeSessionCount: 0,
             sessions: [],
@@ -406,7 +398,7 @@ final class AgentLiveActivityManager {
             soulName: ""
         )
         let finalContent = ActivityContent(state: finalState, staleDate: nil)
-        for activity in stale {
+        for activity in localStale {
             let id = activity.id
             Task {
                 await activity.end(finalContent, dismissalPolicy: .immediate)
@@ -497,9 +489,10 @@ final class AgentLiveActivityManager {
             let activity = try Activity.request(
                 attributes: attributes,
                 content: content,
-                pushType: nil
+                pushType: requestPushType
             )
             currentActivity = activity
+            observePushToken(of: activity)
             startTime = now
             // Record so the first _updateActivity dedup compares correctly and a
             // later audio-only end has a snapshot to reason about.
@@ -541,9 +534,7 @@ final class AgentLiveActivityManager {
     /// so it simply disappears; other sessions keep their card.
     func dropSession(_ sessionId: String) {
         guard Self.isActivityKitAvailable else { return }
-        if #available(iOS 16.2, *) {
-            _removeSession(sessionId, tag: "dropSession")
-        }
+        _removeSession(sessionId, tag: "dropSession")
     }
 
     @available(iOS 16.2, *)
@@ -615,7 +606,7 @@ final class AgentLiveActivityManager {
         let prev = (lastPushedState as? AgentActivityAttributes.ContentState)?
             .sessions.first { $0.sessionId == sessionId }
         var snap = prev ?? LiveSessionSnapshot(
-            sessionId: sessionId, title: String(localized: "Agent Task"),
+            sessionId: sessionId, title: AppLocalized("Agent Task"),
             toolIcon: "checkmark.circle.fill", toolStatus: "", loopIteration: 0
         )
         Self.applyOutcome(to: &snap, lastMessage: Self.collapseLastMessage(lastMessage))
@@ -829,14 +820,14 @@ final class AgentLiveActivityManager {
                 redacted.lastMessage = privacyCompletedStatus
             case .attention:
                 redacted.toolIcon = "exclamationmark.circle.fill"
-                redacted.lastMessage = String(localized: "Needs attention")
+                redacted.lastMessage = AppLocalized("Needs attention")
             case .paused:
                 // A run parked until the app returns says so (no content in it).
                 redacted.toolIcon = pausedIcon
                 redacted.lastMessage = privacyPausedStatus
             case .stopped:
                 redacted.toolIcon = "stop.circle.fill"
-                redacted.lastMessage = String(localized: "Stopped")
+                redacted.lastMessage = AppLocalized("Stopped")
             }
         } else if snap.needsApproval {
             // A run waiting for your OK says so even in Privacy Mode (no command text).
@@ -845,7 +836,7 @@ final class AgentLiveActivityManager {
             redacted.lastMessage = ""
         } else if snap.needsAnswer {
             // [T-ask-user] Content-free: the question itself never reaches the lock screen here.
-            redacted.toolStatus = String(localized: "等你回答")
+            redacted.toolStatus = AppLocalized("等你回答")
             redacted.toolIcon = LiveSessionSnapshot.questionIcon
             redacted.lastMessage = ""
         } else if snap.toolIcon == pausedIcon {
@@ -870,12 +861,12 @@ final class AgentLiveActivityManager {
 
     /// Neutral placeholders used by Privacy Mode. Localized so the redacted
     /// strings still match the user's language.
-    private static var privacyTaskTitle: String { String(localized: "Agent Task") }
-    private static var privacyWorkingStatus: String { String(localized: "Working…") }
-    private static var privacyCompletedStatus: String { String(localized: "Completed") }
-    private static var privacyApprovalStatus: String { String(localized: "等你批准") }
+    private static var privacyTaskTitle: String { AppLocalized("Agent Task") }
+    private static var privacyWorkingStatus: String { AppLocalized("Working…") }
+    private static var privacyCompletedStatus: String { AppLocalized("Completed") }
+    private static var privacyApprovalStatus: String { AppLocalized("等你批准") }
     /// Content-free already: the text and glyph of a run parked until the app returns.
-    private static var privacyPausedStatus: String { String(localized: "已暂停，回到 App 继续") }
+    private static var privacyPausedStatus: String { AppLocalized("已暂停，回到 App 继续") }
     private static let pausedIcon = "pause.circle.fill"
 
     /// [T-la-stale] A running card whose app stopped updating it (killed,
@@ -917,26 +908,64 @@ final class AgentLiveActivityManager {
         // 只会挡住正在看的内容(用户 2026-09-26 反馈)。离开 App 后还没批的,由审批通知接着提醒。
         let alert = newlyWaiting.isEmpty || UIApplication.shared.leoIsInUse ? nil : AlertConfiguration(
             title: LocalizedStringResource("需要你批准"),
-            body: LocalizedStringResource(stringLiteral: state.privacyMode ? String(localized: "有一步在等你批准") : newlyWaiting[0].title),
+            body: LocalizedStringResource(stringLiteral: state.privacyMode ? AppLocalized("有一步在等你批准") : newlyWaiting[0].title),
             sound: .default)
         logger.info("[LiveActivity][push] #\(count) active=\(state.activeSessionCount) sessions=\(state.sessions.count) alert=\(alert != nil)")
-        enqueueUpdate {
-            await activity.update(content, alertConfiguration: alert)
-            logger.info("[LiveActivity][push] #\(count) activity.update() returned")
+        updateCoalescer.submit(PendingActivityUpdate(activity: activity, content: content, alert: alert, count: count))
+        registerPushTokenIfSessionsChanged(state)
+    }
+
+    private struct PendingActivityUpdate {
+        let activity: Activity<AgentActivityAttributes>
+        let content: ActivityContent<AgentActivityAttributes.ContentState>
+        let alert: AlertConfiguration?
+        let count: Int
+    }
+
+    /// [T-la-serial] ActivityKit calls must land in the order they were made — a
+    /// late "running" after "completed" resurrected finished cards. [WP-41] Was a
+    /// Task chain that replayed every frame; now single-flight with a replaceable
+    /// next value: one update in flight, newer states overwrite the queued one
+    /// (each is a full state), the newest always lands last. A dropped frame's
+    /// "needs your OK" alert is carried into its replacement.
+    private lazy var updateCoalescer = SingleFlightCoalescer<PendingActivityUpdate>(
+        merge: { old, new in
+            PendingActivityUpdate(activity: new.activity, content: new.content,
+                                  alert: new.alert ?? old.alert, count: new.count)
+        },
+        perform: { item in
+            await item.activity.update(item.content, alertConfiguration: item.alert)
+            logger.info("[LiveActivity][push] #\(item.count) activity.update() returned")
+        })
+
+    // MARK: - [WP-41] Remote push token
+
+    private func observePushToken(of activity: Activity<AgentActivityAttributes>) {
+        pushTokenTask?.cancel()
+        currentPushToken = nil
+        registeredTokenSessions = []
+        guard remotePush else { return }
+        pushTokenTask = Task { [weak self] in
+            for await data in activity.pushTokenUpdates {
+                let token = LiveActivityTokenRegistration.hex(data)
+                guard let self else { return }
+                self.currentPushToken = token
+                self.registeredTokenSessions = []
+                if let state = self.lastPushedState as? AgentActivityAttributes.ContentState {
+                    self.registerPushTokenIfSessionsChanged(state)
+                }
+            }
         }
     }
 
-    /// [T-la-serial] ActivityKit calls run strictly in the order they were
-    /// made. Separate `Task { await update }` calls can land out of order, and
-    /// a late "running" landing after "completed" resurrected finished cards.
-    private var updateChain: Task<Void, Never>?
-
-    private func enqueueUpdate(_ operation: @escaping @Sendable () async -> Void) {
-        let previous = updateChain
-        updateChain = Task {
-            await previous?.value
-            await operation()
-        }
+    /// 卡上的会话变了(新 Mac 任务上卡)就用同一个 token 重新登记,中继才找得到它。
+    private func registerPushTokenIfSessionsChanged(_ state: AgentActivityAttributes.ContentState) {
+        guard remotePush, let token = currentPushToken else { return }
+        let key = LiveActivityTokenRegistration.sessionKey(state.sessions)
+        guard !key.isEmpty, key != registeredTokenSessions else { return }
+        registeredTokenSessions = key
+        PushRegistrar.shared.registerActivityUpdateToken(token, sessions: state.sessions,
+                                                         privacyMode: state.privacyMode)
     }
 
     @available(iOS 16.2, *)
@@ -981,9 +1010,10 @@ final class AgentLiveActivityManager {
                 let newActivity = try Activity.request(
                     attributes: attributes,
                     content: content,
-                    pushType: nil
+                    pushType: self.requestPushType
                 )
                 self.currentActivity = newActivity
+                self.observePushToken(of: newActivity)
                 self.lastRenewDate = Date()
                 self.lastPushedState = state
                 self.lastPushDate = Date()
@@ -1021,8 +1051,9 @@ final class AgentLiveActivityManager {
         let attributes = AgentActivityAttributes(startDate: startTime ?? Date())
         let content = ActivityContent(state: state, staleDate: Self.staleDate(for: state))
         do {
-            let activity = try Activity.request(attributes: attributes, content: content, pushType: nil)
+            let activity = try Activity.request(attributes: attributes, content: content, pushType: requestPushType)
             currentActivity = activity
+            observePushToken(of: activity)
             lastRenewDate = Date()
             lastPushedState = state
             lastPushDate = Date()
@@ -1117,7 +1148,7 @@ final class AgentLiveActivityManager {
         }
         let content = ActivityContent(state: finished, staleDate: nil)
         // Behind any running-state update still in flight, never ahead of it.
-        await updateChain?.value
+        await updateCoalescer.waitUntilIdle()
         await activity.update(content)
         self.lastPushedState = finished
         self.lastPushDate = Date()
@@ -1138,18 +1169,18 @@ final class AgentLiveActivityManager {
         switch snap.outcome {
         case .stopped:
             snap.toolIcon = "stop.circle.fill"
-            snap.toolStatus = String(localized: "Stopped")
+            snap.toolStatus = AppLocalized("Stopped")
         case .paused:
             // [T-la-false-failure] Not a verdict: the run carries on once the app
             // is back. Pause glyph, not the orange exclamation.
             snap.toolIcon = "pause.circle.fill"
-            snap.toolStatus = String(localized: "已暂停，回到 App 继续")
+            snap.toolStatus = AppLocalized("已暂停，回到 App 继续")
         case .attention:
             snap.toolIcon = "exclamationmark.circle.fill"
-            snap.toolStatus = String(localized: "Needs attention")
+            snap.toolStatus = AppLocalized("Needs attention")
         case .done:
             snap.toolIcon = "checkmark.circle.fill"
-            snap.toolStatus = String(localized: "Completed")
+            snap.toolStatus = AppLocalized("Completed")
         }
     }
 
@@ -1170,6 +1201,10 @@ final class AgentLiveActivityManager {
         pendingPushWorkItem = nil
         pendingState = nil
         completedSessionSnapshots = [:]
+        pushTokenTask?.cancel()
+        pushTokenTask = nil
+        currentPushToken = nil
+        registeredTokenSessions = []
         let currentId = (currentActivity as? Activity<AgentActivityAttributes>)?.id ?? "nil"
         let finalState = AgentActivityAttributes.ContentState(
             activeSessionCount: 0,

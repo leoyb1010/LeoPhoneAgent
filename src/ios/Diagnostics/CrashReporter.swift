@@ -83,7 +83,10 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
 
     // MARK: - Public API
 
-    func onAppLaunch() {
+    /// [WP-46] 必须在 `didFinishLaunching` 最早处同步调用(后台拉起也一样):检查旧标记要赶在
+    /// 本进程任何 inactive/background 回调之前,否则旧进程的退出状态会被新进程覆盖。
+    /// 之后的重复调用(MinisApp 首帧那一处)是空操作。
+    func onAppLaunch(isBackgroundLaunch: Bool = false) {
         guard !launched else { return }
         launched = true
         CrashSignalHandler.install()
@@ -91,7 +94,7 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
             checkStaleMarker()
             try? FileManager.default.removeItem(at: Self.hangSnapshotURL)
             try? FileManager.default.removeItem(at: Self.crashStackURL)
-            writeLaunchMarker()
+            writeLaunchMarker(phase: CrashMarkerPolicy.initialPhase(isBackgroundLaunch: isBackgroundLaunch))
         }
         MXMetricManager.shared.add(self)
         logger.info("CrashReporter initialized, signal handlers + MetricKit subscriber registered")
@@ -113,8 +116,13 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
     /// into the launch marker on `markerQueue`.
     @MainActor
     func updateMarkerPhase(phase: String) {
+        // [WP-46] 还没检查过旧标记时,文件里的是上一个进程的状态 —— 不能往里写。
+        guard launched else { return }
         let url = launchMarkerURL
         var marker: [String: Any] = [:]
+        // 进程被杀时不会有机会再写:每次换阶段顺手把最近日志带进标记,
+        // 下次启动的报告里「退出前的日志」才真的是那个进程的。
+        marker["lastLogLines"] = logRingSnapshot()
 
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
@@ -186,10 +194,12 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         }
 
         let patch = marker
+        let pid = Int(ProcessInfo.processInfo.processIdentifier)
         markerQueue.async {
             guard FileManager.default.fileExists(atPath: url.path),
                   let data = try? Data(contentsOf: url),
-                  var stored = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                  var stored = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  CrashMarkerPolicy.mayMerge(storedPid: stored["pid"] as? Int, currentPid: pid)
             else { return }
             stored.merge(patch) { _, new in new }
             if let updated = try? JSONSerialization.data(withJSONObject: stored),
@@ -221,7 +231,7 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
 
     // MARK: - Launch Marker
 
-    private func writeLaunchMarker() {
+    private func writeLaunchMarker(phase: String) {
         let info = Bundle.main.infoDictionary
         let version = (info?["CFBundleShortVersionString"] as? String) ?? "?"
         let build = (info?["CFBundleVersion"] as? String) ?? "?"
@@ -235,7 +245,7 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
             "build": "\(version) (\(build))",
             "pid": pid,
             "launchedAt": now,
-            "lastPhase": "active",
+            "lastPhase": phase,
             "lastPhaseAt": now,
             "memoryMB": currentMemoryMB(),
             "memoryFreeMB": systemFreeMB()
@@ -291,32 +301,13 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
             return "normal"
         }()
 
-        let crashType: String
-        // [T-crash-noise] 在多任务里划掉 App、或调试工具重启它,进程都是在 inactive 时收到 SIGKILL,
-        // 以前一律记成"前台崩溃",真崩溃被淹没(一晚上 24 份全是这种)。inactive 且没在跑命令、内存不高的,
-        // 单独标成"被结束",排查时一眼能跳过;active 时的 SIGKILL(看门狗卡死等)仍按崩溃记。
-        if lastPhase == "inactive", !runningShell, (memoryMB ?? 0) < 350 {
-            crashType = "Terminated while inactive (swiped away or relaunched) — not a crash"
-        } else if lastPhase == "active" || lastPhase == "inactive" {
-            if runningShell {
-                crashType = "⚠️ FOREGROUND CRASH during shell execution"
-            } else if let mem = memoryMB, mem >= 350 {
-                crashType = "⚠️ FOREGROUND CRASH (high memory: \(mem)MB)"
-            } else {
-                crashType = "⚠️ FOREGROUND CRASH (SIGKILL — app was in use)"
-            }
-        } else if lastPhase == "background" {
-            if let rem = bgTaskRemaining, rem > 0 && rem < 5 {
-                crashType = "Background Task Timeout (task expired with \(String(format: "%.1f", rem))s left)"
-            } else if let mem = memoryMB, mem >= 300 {
-                crashType = "Background Jetsam (high memory: \(mem)MB)"
-            } else if let free = memoryFreeMB, free < 500 {
-                crashType = "Background Jetsam (system memory pressure)"
-            } else {
-                crashType = "Background Termination (system reclaimed memory — normal)"
-            }
-        } else {
-            crashType = "Unknown Termination"
+        // [T-crash-noise] / [WP-46] 分类规则见 CrashMarkerPolicy。
+        let verdict = CrashMarkerPolicy.classify(lastPhase: lastPhase, runningShell: runningShell, memoryMB: memoryMB,
+                                                 memoryFreeMB: memoryFreeMB, bgTaskRemaining: bgTaskRemaining)
+        let crashType = verdict.type
+        guard verdict.writesReport else {
+            logger.info("Previous process was reclaimed in the background (\(markerBuild ?? "?"), phase since \(lastPhaseAt ?? "?")) — normal, no report")
+            return
         }
 
         logger.warning("Stale launch marker found — previous exit was abnormal: phase=\(lastPhase)")
@@ -327,6 +318,8 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
             type: crashType,
             callStack: nil,
             savedShellCommands: savedShellCommands,
+            // 旧进程换阶段时存下的日志;没有就如实说没有,绝不拿本进程的日志冒充。
+            logLinesOverride: (markerInfo?["lastLogLines"] as? [String]) ?? [],
             lastPhase: lastPhase,
             lastPhaseAt: lastPhaseAt,
             memoryMB: memoryMB,
@@ -452,6 +445,7 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         type: String,
         callStack: String?,
         savedShellCommands: [[String: Any]] = [],
+        logLinesOverride: [String]? = nil,
         lastPhase: String? = nil,
         lastPhaseAt: String? = nil,
         memoryMB: Int? = nil,
@@ -638,7 +632,7 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
             }
         }
 
-        let logLines = logRingSnapshot()
+        let logLines = logLinesOverride ?? logRingSnapshot()
         report += "\n--- Last \(logLines.count) Log Lines (before exit) ---\n"
         if logLines.isEmpty {
             report += "(none recorded)\n"

@@ -394,7 +394,7 @@ private struct ReplyActionBarV3: View {
     /// Disambiguate repeated menu rows ("Save as File 2") when a reply has
     /// multiple tables/code blocks; single occurrences keep the clean title.
     private func menuTitle(_ key: String.LocalizationValue, index: Int, total: Int) -> String {
-        let base = String(localized: key)
+        let base = AppLocalized(key)
         return total > 1 ? "\(base) \(index + 1)" : base
     }
 
@@ -488,12 +488,12 @@ private struct ReplyActionBarV3: View {
                 if bridge.onShareCard != nil {
                     Button {
                         bridge.onShareCard?()
-                    } label: { Label(String(localized: "Share as Card"), systemImage: "photo.artframe") }
+                    } label: { Label(AppLocalized("Share as Card"), systemImage: "photo.artframe") }
                 }
                 // Markdown here, not plainReply -- the sanitizer costs ~30ms
                 // per 100KB and Menu labels can be built during body passes.
                 ShareLink(item: markdownReply) {
-                    Label(String(localized: "Share as Text"), systemImage: "doc.plaintext")
+                    Label(AppLocalized("Share as Text"), systemImage: "doc.plaintext")
                 }
             } label: {
                 Image(systemName: "square.and.arrow.up")
@@ -510,7 +510,7 @@ private struct ReplyActionBarV3: View {
                 if bridge.onCopyScreenshot != nil {
                     Button {
                         bridge.onCopyScreenshot?()
-                    } label: { Label(String(localized: "Copy Screenshot"), systemImage: "camera.viewfinder") }
+                    } label: { Label(AppLocalized("Copy Screenshot"), systemImage: "camera.viewfinder") }
                 }
                 // [T-smart-copy] Content-shaped actions, memo-backed (no
                 // parsing here -- Menu builders run every render pass).
@@ -555,7 +555,7 @@ private struct ReplyActionBarV3: View {
                             Button {
                                 sendToHostClipboard(host: host)
                             } label: {
-                                Label(String(localized: "Copy to \(host.name)"), systemImage: "macbook.and.iphone")
+                                Label(AppLocalized("Copy to \(host.name)"), systemImage: "macbook.and.iphone")
                             }
                         }
                     }
@@ -707,7 +707,7 @@ private struct BridgedAssistantFooterV3: View {
                 Button {
                     UIPasteboard.general.string = error
                 } label: {
-                    Label(String(localized: "Copy Error"), systemImage: "doc.on.doc")
+                    Label(AppLocalized("Copy Error"), systemImage: "doc.on.doc")
                 }
             }
             Spacer()
@@ -715,7 +715,7 @@ private struct BridgedAssistantFooterV3: View {
                 // [B3] 倒计时中显示「重连中 · 第 N 次 · Ns」;没网时不空转倒计时,等网络恢复。
                 Text(bridge.autoRetryCountdown > 0
                      ? "\(LLMRetryPolicy.reconnectingLabel(attempt: bridge.autoRetryAttempt)) · \(bridge.autoRetryCountdown)s"
-                     : String(localized: "等网络恢复…"))
+                     : AppLocalized("等网络恢复…"))
                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(Color.secondary.opacity(0.12)).clipShape(Capsule())
@@ -724,7 +724,7 @@ private struct BridgedAssistantFooterV3: View {
                 Button {
                     DeepLinkCoordinator.shared.pendingSettingsTarget = .providers
                 } label: {
-                    Text(String(localized: "Add Provider")).font(.caption.weight(.semibold))
+                    Text(AppLocalized("Add Provider")).font(.caption.weight(.semibold))
                         .foregroundStyle(ChatColors.primaryText)
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .background(ChatColors.primaryText.opacity(0.15)).clipShape(Capsule())
@@ -747,7 +747,7 @@ private struct BridgedAssistantFooterV3: View {
                 Button(action: onRetry) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise").font(.caption.weight(.semibold))
-                        Text(String(localized: "Retry")).font(.caption.weight(.semibold))
+                        Text(AppLocalized("Retry")).font(.caption.weight(.semibold))
                     }
                     .foregroundStyle(ChatColors.primaryText)
                     .padding(.horizontal, 12).padding(.vertical, 6)
@@ -763,7 +763,7 @@ private struct BridgedAssistantFooterV3: View {
         HStack(alignment: .center, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "pause.circle.fill").font(.caption).foregroundStyle(.orange)
-                Text(String(localized: "Interrupted — tap Resume to continue")).font(.caption).foregroundStyle(.secondary)
+                Text(AppLocalized("Interrupted — tap Resume to continue")).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             if let onResume = bridge.onResume { resumeButton(onResume) }
@@ -776,7 +776,7 @@ private struct BridgedAssistantFooterV3: View {
         Button(action: onResume) {
             HStack(spacing: 4) {
                 Image(systemName: "play.fill").font(.caption.weight(.semibold))
-                Text(String(localized: "Resume")).font(.caption.weight(.semibold))
+                Text(AppLocalized("Resume")).font(.caption.weight(.semibold))
             }
             .foregroundStyle(.black)
             .padding(.horizontal, 12).padding(.vertical, 6)
@@ -821,11 +821,11 @@ private struct BridgedAssistantFooterV3: View {
 
     private func usageSummary(_ u: TokenUsage) -> String {
         var parts: [String] = []
-        if u.latestContextTokens > 0 { parts.append("\(String(localized: "Context")):\(fmtTok(u.latestContextTokens))") }
-        parts.append("\(String(localized: "Input")):\(fmtTok(u.inputTokens))")
-        parts.append("\(String(localized: "Output")):\(fmtTok(u.outputTokens))")
-        if u.cacheReadTokens > 0 { parts.append("\(String(localized: "Cache Read")):\(fmtTok(u.cacheReadTokens))") }
-        if u.cacheCreationTokens > 0 { parts.append("\(String(localized: "Cache Write")):\(fmtTok(u.cacheCreationTokens))") }
+        if u.latestContextTokens > 0 { parts.append("\(AppLocalized("Context")):\(fmtTok(u.latestContextTokens))") }
+        parts.append("\(AppLocalized("Input")):\(fmtTok(u.inputTokens))")
+        parts.append("\(AppLocalized("Output")):\(fmtTok(u.outputTokens))")
+        if u.cacheReadTokens > 0 { parts.append("\(AppLocalized("Cache Read")):\(fmtTok(u.cacheReadTokens))") }
+        if u.cacheCreationTokens > 0 { parts.append("\(AppLocalized("Cache Write")):\(fmtTok(u.cacheCreationTokens))") }
         return parts.joined(separator: " ")
     }
     private func fmtTok(_ c: Int) -> String {
@@ -3753,7 +3753,7 @@ extension CollectionViewMessageListV3 {
         /// Base contentInset.top (without sub-viewport overflow compensation).
         /// iOS 26+ relies on system; older iOS uses an 8pt manual padding.
         var baseContentInsetTop: CGFloat {
-            if #available(iOS 26, *) { return 0 } else { return 8 }
+            return 0
         }
 
         /// Base contentInset.bottom = inputBarHeight + floatingBarHeight

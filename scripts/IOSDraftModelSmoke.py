@@ -3,6 +3,7 @@
 Keychain, database and network adapters stay entirely in memory.
 """
 from pathlib import Path
+from ios_smoke_support import APP_LOCALIZED_SHIM, APP_LOCALIZATION_SOURCE
 import importlib.util
 import subprocess
 import tempfile
@@ -107,7 +108,7 @@ func expect(_ condition: Bool, _ message: String) { if !condition { print("FAIL:
 }
 '''
 with tempfile.TemporaryDirectory(prefix='leo-draft-model-') as folder:
-    code = Path(folder) / 'Smoke.swift'; code.write_text(swift)
+    code = Path(folder) / 'Smoke.swift'; code.write_text(APP_LOCALIZED_SHIM + swift)
     binary = Path(folder) / 'smoke'
     subprocess.run(['swiftc', '-parse-as-library', str(code), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)

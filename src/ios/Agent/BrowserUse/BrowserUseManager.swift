@@ -2676,7 +2676,7 @@ final class BrowserDownloadCenter: ObservableObject {
         guard let idx = entries.firstIndex(where: { $0.id == id }),
               entries[idx].state == .downloading else { return }
         entries[idx].onCancel?()
-        entries[idx].state = .failed(reason: String(localized: "Cancelled", comment: "Download cancelled by user"))
+        entries[idx].state = .failed(reason: AppLocalized("Cancelled", comment: "Download cancelled by user"))
         entries[idx].seen = true
         let e = entries[idx]
         queueAgentEvent(sessionId: e.sessionId, filename: e.filename,

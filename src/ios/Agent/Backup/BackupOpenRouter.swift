@@ -24,7 +24,7 @@ enum BackupOpenRouter {
     /// which stages synchronously while the security scope is still held.
     static func presentStaged(_ staged: URL?) {
         guard let staged else {
-            presentAlert(String(localized: "无法读取这个备份文件"))
+            presentAlert(AppLocalized("无法读取这个备份文件"))
             return
         }
         // Give a dismissing sheet a beat so the presentation isn't dropped.
@@ -34,7 +34,7 @@ enum BackupOpenRouter {
             // running: refuse a second restore screen instead of stacking one.
             if await BackupActivityLock.shared.isBusy {
                 try? FileManager.default.removeItem(at: staged)
-                presentAlert(String(localized: "已有备份或恢复在进行中"))
+                presentAlert(AppLocalized("已有备份或恢复在进行中"))
                 return
             }
             present(packageURL: staged, ownsFile: true)
@@ -79,8 +79,8 @@ enum BackupOpenRouter {
     }
 
     private static func presentAlert(_ message: String) {
-        let alert = UIAlertController(title: String(localized: "备份与恢复"), message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: String(localized: "好"), style: .default))
+        let alert = UIAlertController(title: AppLocalized("备份与恢复"), message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: AppLocalized("好"), style: .default))
         topViewController()?.present(alert, animated: true)
     }
 

@@ -40,8 +40,8 @@ struct MountedFoldersSettingsView: View {
             if model.entries.isEmpty {
                 Section {
                     LeoEmptyState(systemImage: "externaldrive.badge.plus",
-                                  title: String(localized: "No mounted folders"),
-                                  message: String(localized: "Tap + to pick a folder from Files (e.g. an Obsidian vault in iCloud Drive)."))
+                                  title: AppLocalized("No mounted folders"),
+                                  message: AppLocalized("Tap + to pick a folder from Files (e.g. an Obsidian vault in iCloud Drive)."))
                 }
             } else {
                 Section {
@@ -154,10 +154,10 @@ struct MountedFoldersSettingsView: View {
                 }
             )
         }
-        .alert(String(localized: "Error"),
+        .alert(AppLocalized("Error"),
                isPresented: Binding(get: { errorText != nil },
                                     set: { if !$0 { errorText = nil } })) {
-            Button(String(localized: "OK"), role: .cancel) { errorText = nil }
+            Button(AppLocalized("OK"), role: .cancel) { errorText = nil }
         } message: {
             Text(errorText ?? "")
         }
@@ -295,7 +295,7 @@ private struct MountedFolderRow: View {
                     .font(.body.weight(.medium))
                 accessBadge
                 if needsReauthorization && !isRetrying {
-                    LeoCapsuleBadge(text: String(localized: "需要重新授权"),
+                    LeoCapsuleBadge(text: AppLocalized("需要重新授权"),
                                     systemImage: "key.fill",
                                     tint: LeoTheme.ColorToken.warning)
                 }
@@ -312,15 +312,15 @@ private struct MountedFolderRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             if isRetrying || state == nil {
-                Label(String(localized: "Checking access…"), systemImage: "clock")
+                Label(AppLocalized("Checking access…"), systemImage: "clock")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             } else if needsReauthorization {
                 // 和别处失败提示同一个组件(LeoInlineError):说清发生了什么 + 一个重试入口。
                 // 重试会清零退避、在后台重新解析书签;仍失败就换成删掉后重新选择文件夹。
                 LeoInlineError(
-                    message: String(localized: "这个文件夹的授权已失效,已暂停自动重试。点「重试」再试一次;仍然失败的话,请删除这个挂载后重新选择文件夹。"),
-                    retryTitle: String(localized: "重试"),
+                    message: AppLocalized("这个文件夹的授权已失效,已暂停自动重试。点「重试」再试一次;仍然失败的话,请删除这个挂载后重新选择文件夹。"),
+                    retryTitle: AppLocalized("重试"),
                     onRetry: onRetry,
                     style: .card
                 )
@@ -339,13 +339,13 @@ private struct MountedFolderRow: View {
         switch state {
         case .none, .active: return nil
         case .stale:
-            return String(localized: "The folder moved or was renamed. Remove this mount and pick the folder again.")
+            return AppLocalized("The folder moved or was renamed. Remove this mount and pick the folder again.")
         case .permissionDenied:
-            return String(localized: "Access to this folder was revoked. Remove this mount and pick the folder again.")
+            return AppLocalized("Access to this folder was revoked. Remove this mount and pick the folder again.")
         case .contentsUnavailable:
-            return String(localized: "The folder's contents aren't downloaded. Open it once in the Files app, then come back.")
+            return AppLocalized("The folder's contents aren't downloaded. Open it once in the Files app, then come back.")
         case .failed(let reason):
-            return String(localized: "Couldn't mount: \(reason)")
+            return AppLocalized("Couldn't mount: \(reason)")
         }
     }
 
@@ -356,11 +356,11 @@ private struct MountedFolderRow: View {
     @ViewBuilder
     private var accessBadge: some View {
         if !entry.isWritable {
-            badgePill(text: String(localized: "Read-only"), color: .orange)
+            badgePill(text: AppLocalized("Read-only"), color: .orange)
         } else if !entry.userAllowWrite {
-            badgePill(text: String(localized: "Locked"), color: .purple)
+            badgePill(text: AppLocalized("Locked"), color: .purple)
         } else {
-            badgePill(text: String(localized: "R/W"), color: .green)
+            badgePill(text: AppLocalized("R/W"), color: .green)
         }
     }
 
@@ -421,8 +421,8 @@ private struct AddMountSheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Allow writes")
                             Text(allowWrite
-                                ? String(localized: "AI, shell, and Files browser can modify files in this mount.")
-                                : String(localized: "This mount will be exposed as read-only. Useful for reference vaults you don't want the AI to touch."))
+                                ? AppLocalized("AI, shell, and Files browser can modify files in this mount.")
+                                : AppLocalized("This mount will be exposed as read-only. Useful for reference vaults you don't want the AI to touch."))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -438,10 +438,10 @@ private struct AddMountSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel"), action: onCancel)
+                    Button(AppLocalized("Cancel"), action: onCancel)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "Mount"), action: onConfirm)
+                    Button(AppLocalized("Mount"), action: onConfirm)
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }

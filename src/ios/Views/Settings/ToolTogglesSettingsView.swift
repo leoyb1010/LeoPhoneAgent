@@ -12,22 +12,22 @@ struct ToolTogglesSettingsView: View {
         List {
             Section {
                 Toggle(isOn: $browserUse) {
-                    Label(String(localized: "浏览器"), systemImage: "globe")
+                    Label(AppLocalized("浏览器"), systemImage: "globe")
                 }
                 .accessibilityIdentifier("toolToggles.browser")
                 Toggle(isOn: $subAgents) {
-                    Label(String(localized: "子代理"), systemImage: "person.2.fill")
+                    Label(AppLocalized("子代理"), systemImage: "person.2.fill")
                 }
                 .accessibilityIdentifier("toolToggles.subagents")
                 Toggle(isOn: $selfScheduling) {
-                    Label(String(localized: "定时跟进"), systemImage: "clock.arrow.circlepath")
+                    Label(AppLocalized("定时跟进"), systemImage: "clock.arrow.circlepath")
                 }
                 .accessibilityIdentifier("toolToggles.selfScheduling")
             } footer: {
-                Text(String(localized: "关掉的工具从下一轮起不再提供给 Agent。浏览器关掉后,shell 里的 minis-browser-use 也一起停用;子代理的角色在 设置 › 子代理 里管理;定时跟进让 Agent 在本会话里安排一次稍后的跟进,到点时 App 被唤醒才会运行,并会发一条提醒通知。"))
+                Text(AppLocalized("关掉的工具从下一轮起不再提供给 Agent。浏览器关掉后,shell 里的 minis-browser-use 也一起停用;子代理的角色在 设置 › 子代理 里管理;定时跟进让 Agent 在本会话里安排一次稍后的跟进,到点时 App 被唤醒才会运行,并会发一条提醒通知。"))
             }
         }
-        .navigationTitle(String(localized: "工具开关"))
+        .navigationTitle(AppLocalized("工具开关"))
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: browserUse) { _, _ in LeoHaptics.selection() }
         .onChange(of: subAgents) { _, _ in LeoHaptics.selection() }

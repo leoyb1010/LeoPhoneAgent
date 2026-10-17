@@ -283,9 +283,9 @@ final class MailWatcher {
 
     private func notify(rule: MailWatchRule, account: MailAccount, summary: IMAPMessageSummary) {
         let content = UNMutableNotificationContent()
-        content.title = String(localized: "新邮件 · \(rule.name)")
+        content.title = AppLocalized("新邮件 · \(rule.name)")
         let from = summary.from.first.map { $0.name.isEmpty ? $0.email : $0.name } ?? account.email
-        content.body = "\(from):\(summary.subject.isEmpty ? String(localized: "(无主题)") : summary.subject)"
+        content.body = "\(from):\(summary.subject.isEmpty ? AppLocalized("(无主题)") : summary.subject)"
         content.sound = .default
         content.threadIdentifier = "mail-watch"
         let request = UNNotificationRequest(identifier: "mail-\(account.email)-\(summary.uid)", content: content, trigger: nil)

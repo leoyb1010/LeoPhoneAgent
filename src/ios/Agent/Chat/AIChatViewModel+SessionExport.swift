@@ -133,11 +133,11 @@ extension AIChatViewModel {
             var out: [String] = [""]
             switch message.role {
             case .user:
-                out.append("## 👤 " + String(localized: "You"))
+                out.append("## 👤 " + AppLocalized("You"))
                 out.append("")
                 out.append(message.content)
             case .assistant:
-                out.append("## 🤖 " + String(localized: "Assistant"))
+                out.append("## 🤖 " + AppLocalized("Assistant"))
                 out.append("")
                 for block in message.blocks {
                     switch block.kind {

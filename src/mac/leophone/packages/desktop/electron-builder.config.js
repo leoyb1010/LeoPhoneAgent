@@ -830,6 +830,14 @@ export default {
             from: "resources/macos-window-bounds/zcode-window-bounds",
             to: "macos-window-bounds/zcode-window-bounds",
           },
+          // [leo][WP-60] 本地语音助手(scripts/build-leo-speech.mjs 编译 native/leo-speech)。
+          { from: "resources/leo-speech/leo-speech", to: "leo-speech/leo-speech" },
+          // [leo][WP-22] 随包 Peekaboo CLI(scripts/leo-fetch-peekaboo.mjs 下载并校验 sha256)。
+          // 不在 signIgnore 里:打包时与 App 一起用 LeoBot 的 Developer ID + hardened runtime 重签。
+          { from: "leo/bin", to: "leo/bin" },
+          // [leo] 菜单栏模板图标(docs/specs/leo-quick-entry.md);nativeImage 按同目录 @2x 自动取高清版。
+          { from: "build/trayTemplate.png", to: "trayTemplate.png" },
+          { from: "build/trayTemplate@2x.png", to: "trayTemplate@2x.png" },
         ]
       : []),
     {
@@ -858,11 +866,17 @@ export default {
           },
         ]
       : []),
-    {
-      // Windows 独立图标：开发态和打包态都统一走同一套任务栏/窗口图标资源。
-      from: "build/icon_windows.png",
-      to: "icon_windows.png",
-    },
+    // [leo] 修复：此条目原先没有平台守卫，Mac 包里也会带上 264KB 的 icon_windows.png。
+    // 只有 main/index.ts 在 process.platform === "win32" 时才读它，所以只给 win32 目标打包。
+    ...(targetPlatform.os === "win32"
+      ? [
+          {
+            // Windows 独立图标：开发态和打包态都统一走同一套任务栏/窗口图标资源。
+            from: "build/icon_windows.png",
+            to: "icon_windows.png",
+          },
+        ]
+      : []),
     ...(targetPlatform.os === "win32"
       ? [
           {
@@ -934,6 +948,8 @@ export default {
       // 缺失该 key 时 macOS 会静默拒绝 CoreBluetooth 枚举，内置浏览器 Web Bluetooth
       // 的设备选择器列表恒为空（实测 Chrome 有蓝牙隐私权限则正常）。
       NSBluetoothAlwaysUsageDescription: `${desktopProductIdentity.productName} needs Bluetooth access to list nearby devices when a website you open in the embedded browser requests one.`,
+      // [leo][WP-60] 按住快捷键说话:语音助手 leo-speech 用麦克风做本地听写(系统 SpeechAnalyzer,不上传)。
+      NSMicrophoneUsageDescription: `${desktopProductIdentity.productName} uses the microphone for push-to-talk dictation. Speech is transcribed on this Mac.`,
     },
     // 预签名脚本走的是原生 codesign，要求完整的 "Developer ID Application: ..." 身份串；
     // 但 electron-builder 的 mac.identity 在 26.x 下会拒绝带此前缀的名字。
@@ -1021,8 +1037,8 @@ export default {
     size: "3200m",
     // 使用自定义安装背景图。
     background: "build/dmg_background.png",
-    // 安装盘图标统一使用安装专用素材，避免复用应用图标导致安装识别度不足。
-    icon: "build/icon_installer.icns",
+    // [leo] 安装盘图标：原 icon_installer.icns 与 icon.icns 逐字节相同（md5 一致），合并为一份。
+    icon: "build/icon.icns",
     contents: [
       // 实验性调整：为隐藏资源文件显式指定图标坐标，尽量把它们移到角落区域。
       { x: 640, y: 56, type: "file", path: ".background.tiff" },

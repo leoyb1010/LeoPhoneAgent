@@ -20,9 +20,9 @@ struct GroupSlotPicker: View {
 
     private var selectedName: String {
         if let id = selection {
-            return store.group(for: id)?.name ?? String(localized: "Unavailable group")
+            return store.group(for: id)?.name ?? AppLocalized("Unavailable group")
         }
-        return String(localized: "None", comment: "No group selected")
+        return AppLocalized("None", comment: "No group selected")
     }
 
     var body: some View {
@@ -129,9 +129,9 @@ struct GroupSlotPicker: View {
     private static func suggestedName(for dir: VoiceDirection?, store: ProviderConfigStore) -> String {
         let base: String
         switch dir {
-        case .input:  base = String(localized: "Voice Input", comment: "Default voice input group name")
-        case .output: base = String(localized: "Voice Output", comment: "Default voice output group name")
-        case nil:     base = String(localized: "New Group", comment: "Default group name")
+        case .input:  base = AppLocalized("Voice Input", comment: "Default voice input group name")
+        case .output: base = AppLocalized("Voice Output", comment: "Default voice output group name")
+        case nil:     base = AppLocalized("New Group", comment: "Default group name")
         }
         let existing = Set(store.modelGroups.map(\.name))
         if !existing.contains(base) { return base }

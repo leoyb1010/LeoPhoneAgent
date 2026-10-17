@@ -47,8 +47,8 @@ struct MCPFormSheet: View {
 
         var label: String {
             switch self {
-            case .none: return String(localized: "None")
-            case .oauthStatic: return String(localized: "OAuth (Client ID + Secret)")
+            case .none: return AppLocalized("None")
+            case .oauthStatic: return AppLocalized("OAuth (Client ID + Secret)")
             }
         }
     }
@@ -150,11 +150,11 @@ struct MCPFormSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField(String(localized: "Server name"), text: $name)
+                    TextField(AppLocalized("Server name"), text: $name)
                         .disabled(isEditing)   // id is the key; renaming = delete+add
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
-                    Picker(String(localized: "Transport"), selection: $transport) {
+                    Picker(AppLocalized("Transport"), selection: $transport) {
                         ForEach(Transport.allCases) { t in
                             Text(t.rawValue).tag(t)
                         }
@@ -167,8 +167,8 @@ struct MCPFormSheet: View {
                     httpSection
                 }
 
-                Section(String(localized: "Note (shown to the agent)")) {
-                    TextField(String(localized: "Optional description"), text: $note, axis: .vertical)
+                Section(AppLocalized("Note (shown to the agent)")) {
+                    TextField(AppLocalized("Optional description"), text: $note, axis: .vertical)
                         .lineLimit(1...4)
                 }
             }
@@ -176,7 +176,7 @@ struct MCPFormSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { dismiss() }
+                    Button(AppLocalized("Cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -187,12 +187,12 @@ struct MCPFormSheet: View {
                             // so the tap appeared to do nothing.
                             DispatchQueue.main.async { copyJSON() }
                         } label: {
-                            Label(String(localized: "Copy JSON"), systemImage: "doc.on.doc")
+                            Label(AppLocalized("Copy JSON"), systemImage: "doc.on.doc")
                         }
                         Button {
                             DispatchQueue.main.async { shareJSON() }
                         } label: {
-                            Label(String(localized: "Share JSON"), systemImage: "square.and.arrow.up")
+                            Label(AppLocalized("Share JSON"), systemImage: "square.and.arrow.up")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -217,7 +217,7 @@ struct MCPFormSheet: View {
             // Self-dismissing "Copied" capsule, mirroring FileBrowserView.
             .overlay(alignment: .bottom) {
                 if copiedToast {
-                    Label(String(localized: "Copied"), systemImage: "checkmark.circle.fill")
+                    Label(AppLocalized("Copied"), systemImage: "checkmark.circle.fill")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
@@ -231,14 +231,14 @@ struct MCPFormSheet: View {
             .sheet(item: $shareURL) { url in
                 MCPConfigShareSheet(url: url)
             }
-            .alert(String(localized: "Replace existing server?"),
+            .alert(AppLocalized("Replace existing server?"),
                    isPresented: Binding(get: { pendingReplace != nil },
                                         set: { if !$0 { pendingReplace = nil } }),
                    presenting: pendingReplace) { action in
-                Button(String(localized: "Replace"), role: .destructive) { perform(action) }
-                Button(String(localized: "Cancel"), role: .cancel) {}
+                Button(AppLocalized("Replace"), role: .destructive) { perform(action) }
+                Button(AppLocalized("Cancel"), role: .cancel) {}
             } message: { _ in
-                Text(String(localized: "A server named \"\(name.trimmingCharacters(in: .whitespaces))\" already exists. Saving replaces its settings."))
+                Text(AppLocalized("A server named \"\(name.trimmingCharacters(in: .whitespaces))\" already exists. Saving replaces its settings."))
             }
             .onAppear(perform: populate)
         }
@@ -246,7 +246,7 @@ struct MCPFormSheet: View {
 
     private var httpSection: some View {
         Group {
-            Section(String(localized: "Server URL")) {
+            Section(AppLocalized("Server URL")) {
                 HStack {
                     TextField("https://…", text: $url)
                         .autocorrectionDisabled()
@@ -270,10 +270,10 @@ struct MCPFormSheet: View {
                     .foregroundStyle(.orange)
                 }
             }
-            Section(String(localized: "Custom Headers")) {
-                keyValueEditor($headers, keyPlaceholder: String(localized: "Header"),
-                               valuePlaceholder: String(localized: "Value"),
-                               deleteTitle: String(localized: "Delete this header?"),
+            Section(AppLocalized("Custom Headers")) {
+                keyValueEditor($headers, keyPlaceholder: AppLocalized("Header"),
+                               valuePlaceholder: AppLocalized("Value"),
+                               deleteTitle: AppLocalized("Delete this header?"),
                                showEnvPicker: true)
             }
             oauthSection
@@ -287,25 +287,25 @@ struct MCPFormSheet: View {
     @ViewBuilder
     private var oauthSection: some View {
         Section {
-            Picker(String(localized: "Authorization"), selection: $authMode) {
+            Picker(AppLocalized("Authorization"), selection: $authMode) {
                 ForEach(AuthMode.allCases) { m in
                     Text(m.label).tag(m)
                 }
             }
             if authMode == .oauthStatic {
-                TextField(String(localized: "Client ID"), text: $oauthClientId)
+                TextField(AppLocalized("Client ID"), text: $oauthClientId)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
-                SecureField(String(localized: "Client Secret (optional)"), text: $oauthClientSecret)
-                TextField(String(localized: "Authorization Endpoint (https://…/authorize)"), text: $oauthAuthEndpoint)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                TextField(String(localized: "Token Endpoint (https://…/token)"), text: $oauthTokenEndpoint)
+                SecureField(AppLocalized("Client Secret (optional)"), text: $oauthClientSecret)
+                TextField(AppLocalized("Authorization Endpoint (https://…/authorize)"), text: $oauthAuthEndpoint)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
-                TextField(String(localized: "Scopes (space-separated)"), text: $oauthScopes)
+                TextField(AppLocalized("Token Endpoint (https://…/token)"), text: $oauthTokenEndpoint)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                TextField(AppLocalized("Scopes (space-separated)"), text: $oauthScopes)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                 // [T-mcp-oauth-loopback] Default is the standardized loopback
@@ -320,17 +320,17 @@ struct MCPFormSheet: View {
 
                 HStack {
                     if isAuthorized {
-                        Label(String(localized: "Authorized"), systemImage: "checkmark.seal.fill")
+                        Label(AppLocalized("Authorized"), systemImage: "checkmark.seal.fill")
                             .foregroundStyle(.green)
                             .font(.subheadline)
                     } else {
-                        Label(String(localized: "Not authorized"), systemImage: "xmark.seal")
+                        Label(AppLocalized("Not authorized"), systemImage: "xmark.seal")
                             .foregroundStyle(.secondary)
                             .font(.subheadline)
                     }
                     Spacer()
                     if isAuthorized {
-                        Button(String(localized: "Sign Out"), role: .destructive) {
+                        Button(AppLocalized("Sign Out"), role: .destructive) {
                             MCPOAuthController.signOut(server: name.trimmingCharacters(in: .whitespaces))
                             isAuthorized = false
                         }
@@ -342,7 +342,7 @@ struct MCPFormSheet: View {
                         if isAuthorizing {
                             ProgressView()
                         } else {
-                            Text(isAuthorized ? String(localized: "Re-authorize") : String(localized: "Authorize…"))
+                            Text(isAuthorized ? AppLocalized("Re-authorize") : AppLocalized("Authorize…"))
                         }
                     }
                     .disabled(isAuthorizing || !canSave)
@@ -409,18 +409,18 @@ struct MCPFormSheet: View {
 
     private var stdioSection: some View {
         Group {
-            Section(String(localized: "Command")) {
+            Section(AppLocalized("Command")) {
                 TextField("npx", text: $command)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
-                TextField(String(localized: "Arguments (space-separated)"), text: $argsText)
+                TextField(AppLocalized("Arguments (space-separated)"), text: $argsText)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
             }
             Section {
-                keyValueEditor($env, keyPlaceholder: String(localized: "Name"),
-                               valuePlaceholder: String(localized: "Value"),
-                               deleteTitle: String(localized: "Delete this environment variable?"),
+                keyValueEditor($env, keyPlaceholder: AppLocalized("Name"),
+                               valuePlaceholder: AppLocalized("Value"),
+                               deleteTitle: AppLocalized("Delete this environment variable?"),
                                showEnvPicker: true)
             } header: {
                 Text("Environment Variables")
@@ -428,7 +428,7 @@ struct MCPFormSheet: View {
                 Text("Use the braces button to insert a reference to an App environment variable as $$NAME. Its value is filled in at runtime.")
             }
             Section {
-                TextField(String(localized: "Default 60"), text: $startupTimeoutText)
+                TextField(AppLocalized("Default 60"), text: $startupTimeoutText)
                     .keyboardType(.numberPad)
             } header: {
                 Text("Startup timeout (seconds)")
@@ -478,7 +478,7 @@ struct MCPFormSheet: View {
             Button {
                 pairs.wrappedValue.append(KeyValue())
             } label: {
-                Label(String(localized: "Add"), systemImage: "plus.circle")
+                Label(AppLocalized("Add"), systemImage: "plus.circle")
             }
         }
         .confirmationDialog(
@@ -486,10 +486,10 @@ struct MCPFormSheet: View {
             isPresented: deleteConfirmBinding(for: pairs),
             titleVisibility: .visible
         ) {
-            Button(String(localized: "Delete"), role: .destructive) {
+            Button(AppLocalized("Delete"), role: .destructive) {
                 confirmDelete(in: pairs)
             }
-            Button(String(localized: "Cancel"), role: .cancel) {
+            Button(AppLocalized("Cancel"), role: .cancel) {
                 pendingDeleteId = nil
             }
         }

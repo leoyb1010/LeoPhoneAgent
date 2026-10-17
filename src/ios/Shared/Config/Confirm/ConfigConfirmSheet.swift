@@ -144,12 +144,12 @@ private struct ConfigConfirmRow: View {
 
     private var verbLabel: String {
         switch item.verb.lowercased() {
-        case "remove", "delete": return String(localized: "删除")
-        case "add", "create":    return String(localized: "添加")
-        case "hide":             return String(localized: "隐藏")
-        case "show":             return String(localized: "显示")
-        case "revert":           return String(localized: "还原")
-        case "set", "update":    return String(localized: "修改")
+        case "remove", "delete": return AppLocalized("删除")
+        case "add", "create":    return AppLocalized("添加")
+        case "hide":             return AppLocalized("隐藏")
+        case "show":             return AppLocalized("显示")
+        case "revert":           return AppLocalized("还原")
+        case "set", "update":    return AppLocalized("修改")
         default:                 return item.verb.uppercased()
         }
     }

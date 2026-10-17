@@ -100,7 +100,7 @@ enum AgentActivityFailureClassifier {
     /// they were written with.
     static func isMissingModel(_ message: String?) -> Bool {
         guard let message, !message.isEmpty else { return false }
-        if message == String(localized: "No model configured. Add a provider in Settings.") { return true }
+        if message == AppLocalized("No model configured. Add a provider in Settings.") { return true }
         let text = message.lowercased()
         return text.contains("no model configured") || text.contains("未配置模型") || text.contains("未設定模型")
     }
@@ -266,27 +266,27 @@ enum AgentRunOutcome: String, Codable, Sendable {
     /// (`shortcutStatus` stays English: Shortcuts branch on it).
     var statusLabel: String {
         switch self {
-        case .succeeded: String(localized: "已完成")
-        case .failed: String(localized: "失败")
-        case .cancelled: String(localized: "已取消")
-        case .suspended: String(localized: "已暂停")
-        case .waitingForUser: String(localized: "等你处理")
-        case .awaitingApproval: String(localized: "等你批准")
-        case .running: String(localized: "进行中")
-        case .unknown: String(localized: "结果未知")
+        case .succeeded: AppLocalized("已完成")
+        case .failed: AppLocalized("失败")
+        case .cancelled: AppLocalized("已取消")
+        case .suspended: AppLocalized("已暂停")
+        case .waitingForUser: AppLocalized("等你处理")
+        case .awaitingApproval: AppLocalized("等你批准")
+        case .running: AppLocalized("进行中")
+        case .unknown: AppLocalized("结果未知")
         }
     }
 
     var summary: String {
         switch self {
-        case .succeeded: String(localized: "任务已完成。")
-        case .failed: String(localized: "任务失败，请打开对话查看原因。")
-        case .cancelled: String(localized: "任务已取消。")
-        case .suspended: String(localized: "任务已暂停，可回到应用继续。")
-        case .waitingForUser: String(localized: "任务需要你处理，请打开对话。")
-        case .awaitingApproval: String(localized: "任务正在等待审批。")
-        case .running: String(localized: "任务仍在运行，稍后可查看结果。")
-        case .unknown: String(localized: "暂时无法确认任务结果，请打开对话查看。")
+        case .succeeded: AppLocalized("任务已完成。")
+        case .failed: AppLocalized("任务失败，请打开对话查看原因。")
+        case .cancelled: AppLocalized("任务已取消。")
+        case .suspended: AppLocalized("任务已暂停，可回到应用继续。")
+        case .waitingForUser: AppLocalized("任务需要你处理，请打开对话。")
+        case .awaitingApproval: AppLocalized("任务正在等待审批。")
+        case .running: AppLocalized("任务仍在运行，稍后可查看结果。")
+        case .unknown: AppLocalized("暂时无法确认任务结果，请打开对话查看。")
         }
     }
 }
@@ -362,25 +362,25 @@ enum AgentToolPresentation {
 
     static func displayName(for toolName: String) -> String {
         switch toolName {
-        case "browser", "browser_use":          return String(localized: "Browser")
-        case "shell", "shell_execute":          return String(localized: "Shell")
-        case "file_read":                       return String(localized: "Read File")
-        case "file_write":                      return String(localized: "Write File")
-        case "file_edit":                       return String(localized: "Edit File")
-        case "read_image":                      return String(localized: "Read Image")
-        case "memory":                          return String(localized: "Memory")
-        case "treasury_search":                 return String(localized: "Search Treasury")
-        case "treasury_get":                    return String(localized: "Read Treasury")
-        case "treasury_save":                   return String(localized: "Save to Treasury")
-        case "treasury_update":                 return String(localized: "Update Treasury")
-        case "mail_search":                     return String(localized: "Search Mail")
-        case "mail_read":                       return String(localized: "Read Mail")
-        case "mail_folders", "mail_accounts":   return String(localized: "Mail")
-        case "text":                            return String(localized: "Responding")
-        case "thinking":                        return String(localized: "Thinking…")
-        case "code_interpret":                  return String(localized: "Code")
-        case "ask_user":                        return String(localized: "等你回答")
-        default:                                return String(localized: "Working")
+        case "browser", "browser_use":          return AppLocalized("Browser")
+        case "shell", "shell_execute":          return AppLocalized("Shell")
+        case "file_read":                       return AppLocalized("Read File")
+        case "file_write":                      return AppLocalized("Write File")
+        case "file_edit":                       return AppLocalized("Edit File")
+        case "read_image":                      return AppLocalized("Read Image")
+        case "memory":                          return AppLocalized("Memory")
+        case "treasury_search":                 return AppLocalized("Search Treasury")
+        case "treasury_get":                    return AppLocalized("Read Treasury")
+        case "treasury_save":                   return AppLocalized("Save to Treasury")
+        case "treasury_update":                 return AppLocalized("Update Treasury")
+        case "mail_search":                     return AppLocalized("Search Mail")
+        case "mail_read":                       return AppLocalized("Read Mail")
+        case "mail_folders", "mail_accounts":   return AppLocalized("Mail")
+        case "text":                            return AppLocalized("Responding")
+        case "thinking":                        return AppLocalized("Thinking…")
+        case "code_interpret":                  return AppLocalized("Code")
+        case "ask_user":                        return AppLocalized("等你回答")
+        default:                                return AppLocalized("Working")
         }
     }
 

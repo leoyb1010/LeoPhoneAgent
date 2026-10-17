@@ -178,7 +178,7 @@ extension AIChatViewModel {
             AppLogger(category: "ToolPreflight").warning(
                 "[ToolPreflight] BLOCKED tool=\(tu.name) id=\(tu.id) reason=\"\(preflightError)\" argsKeys=[\(tu.args.keys.sorted().joined(separator: ","))] chunkCount=\(chunkRing.count) lastChunkBytes=\(chunkRing.last?.utf8.count ?? 0)"
             )
-            let uiMessage = String(localized: "Blocked invalid tool call")
+            let uiMessage = AppLocalized("Blocked invalid tool call")
             let modelMessage = toolArgs[StreamToolArgsAccumulator.oversizeSentinelKey] != nil
                 ? "Error: Tool call rejected before execution. \(preflightError)"
                 : "Error: Tool call rejected before execution. \(preflightError) The arguments your client sent were empty or missing required fields — re-issue the call with all required parameters filled in. Do not retry with the same empty arguments."
@@ -268,7 +268,7 @@ extension AIChatViewModel {
                 // 拒绝原因决定话术:后台硬拒 / 等待超时 / 用户真的说了不。
                 // 之前是按"当前是不是前台"猜的,分级策略下必须按实际结果来。
                 let modelMessage = SensitiveToolGate.denialMessage(outcome, category: category, host: host)
-                let uiMessage = String(localized: "需要确认")
+                let uiMessage = AppLocalized("需要确认")
                 if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
                     messages[msgIdx].blocks[blockIdx].content = uiMessage
                     messages[msgIdx].blocks[blockIdx].toolStatus = .failed(message: uiMessage)

@@ -241,6 +241,8 @@ export default defineConfig(({ mode }) => {
           "cua-permission-panel": resolve(__dirname, "src/renderer/cua-permission-panel.html"),
           // 插件 UI 沙箱的受信 shell，经 zcode-sandbox:// 提供
           "plugin-sandbox": resolve(__dirname, "src/renderer/plugin-sandbox.html"),
+          // [leo] ⌥Space 快速派发浮窗(docs/specs/leo-quick-entry.md)
+          "leo-quick-panel": resolve(__dirname, "src/renderer/leo-quick-panel.html"),
         },
       },
     },

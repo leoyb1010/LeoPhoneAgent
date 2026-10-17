@@ -490,14 +490,14 @@ extension AIChatViewModel {
     /// user types next — there is no "auto-keep last N user turns" magic.
     func compactAll() {
         guard !isProcessing else {
-            appendSystemInfo(String(localized: "正在回复时不能压缩。"), icon: "arrow.down.right.and.arrow.up.left")
+            appendSystemInfo(AppLocalized("正在回复时不能压缩。"), icon: "arrow.down.right.and.arrow.up.left")
             return
         }
         let activeMessages = messages.filter {
             $0.role != .compactDivider && $0.role != .systemInfo && !$0.isCompactedHistory
         }
         guard activeMessages.count > 1 else {
-            appendSystemInfo(String(localized: "消息还不够多，不用压缩。"), icon: "arrow.down.right.and.arrow.up.left")
+            appendSystemInfo(AppLocalized("消息还不够多，不用压缩。"), icon: "arrow.down.right.and.arrow.up.left")
             return
         }
         guard let lastActive = activeMessages.last else { return }
@@ -685,7 +685,7 @@ extension AIChatViewModel {
         guard let sessionId else { return }
         guard !isProcessing else {
             logger.info("[Compact] revert refused: session is processing")
-            appendSystemInfo(String(localized: "正在回复时不能撤销压缩。"), icon: "arrow.uturn.backward")
+            appendSystemInfo(AppLocalized("正在回复时不能撤销压缩。"), icon: "arrow.uturn.backward")
             return
         }
         // A manual compaction runs without a live turn. Reverting under it
@@ -693,12 +693,12 @@ extension AIChatViewModel {
         // summarising the pre-revert context.
         guard !isCompacting else {
             logger.info("[Compact] revert refused: compaction in progress")
-            appendSystemInfo(String(localized: "正在压缩时不能撤销压缩。"), icon: "arrow.uturn.backward")
+            appendSystemInfo(AppLocalized("正在压缩时不能撤销压缩。"), icon: "arrow.uturn.backward")
             return
         }
         guard let marker = cachedLatestMarker else {
             logger.info("[Compact] revert: no marker to revert")
-            appendSystemInfo(String(localized: "这个对话没有压缩过，不用撤销。"), icon: "arrow.uturn.backward")
+            appendSystemInfo(AppLocalized("这个对话没有压缩过，不用撤销。"), icon: "arrow.uturn.backward")
             return
         }
 
@@ -707,7 +707,7 @@ extension AIChatViewModel {
         let deleted = await ChatStore.shared.deleteCompactMarker(id: marker.id)
         guard deleted else {
             logger.error("[Compact] revert: deleteCompactMarker returned false (marker.id=\(marker.id.prefix(8)))")
-            appendSystemInfo(String(localized: "撤销失败：找不到压缩标记。"), icon: "arrow.uturn.backward")
+            appendSystemInfo(AppLocalized("撤销失败：找不到压缩标记。"), icon: "arrow.uturn.backward")
             return
         }
 
@@ -748,7 +748,7 @@ extension AIChatViewModel {
                         allowDuringProcessing: Bool = false) async {
         guard allowDuringProcessing || !isProcessing else {
             logger.info("[Compact] Cannot compact while processing")
-            appendSystemInfo(String(localized: "正在回复时不能压缩。"), icon: "arrow.down.right.and.arrow.up.left")
+            appendSystemInfo(AppLocalized("正在回复时不能压缩。"), icon: "arrow.down.right.and.arrow.up.left")
             return
         }
         guard !isCompacting else {
@@ -823,7 +823,7 @@ extension AIChatViewModel {
             logger.info("[Compact] compactAll with no resolvable boundary — compacting full agentHistory (\(self.agentHistory.count) entries)")
         } else {
             logger.error("[Compact] firstKeptMessageId=\(firstKeptMessageId?.prefix(8) ?? "nil") not present in agentHistory (count=\(self.agentHistory.count))")
-            appendSystemInfo(String(localized: "无法压缩：找不到压缩的起点。"), icon: "arrow.down.right.and.arrow.up.left")
+            appendSystemInfo(AppLocalized("无法压缩：找不到压缩的起点。"), icon: "arrow.down.right.and.arrow.up.left")
             return
         }
 
@@ -888,7 +888,7 @@ extension AIChatViewModel {
         }
 
         // Insert a systemInfo loading message
-        let statusMsg = ChatMessage(role: .systemInfo, content: String(localized: "正在压缩对话…"))
+        let statusMsg = ChatMessage(role: .systemInfo, content: AppLocalized("正在压缩对话…"))
         statusMsg.systemIcon = "arrow.down.right.and.arrow.up.left"
         statusMsg.isCompactLoading = true
         messages.append(statusMsg)
@@ -928,7 +928,7 @@ extension AIChatViewModel {
                     logger.info("[Compact] prev marker found (v\(prev.version)); effectiveStartIdx=\(effectiveStartIdx) (prevAnchor/firstKept=\(prevId.prefix(8)) at idx=\(prevIdx))")
                 } else {
                     logger.info("[Compact] prev marker (id=\(prevId.prefix(8))) at idx=\(prevIdx) already covers our range (proposedStart=\(proposedStart) >= endExclusive=\(endExclusive)) — aborting")
-                    statusMsg.content = String(localized: "这之前的内容已经压缩过了。")
+                    statusMsg.content = AppLocalized("这之前的内容已经压缩过了。")
                     statusMsg.isCompactLoading = false
                     return
                 }
@@ -937,7 +937,7 @@ extension AIChatViewModel {
 
         guard effectiveStartIdx < endExclusive else {
             logger.info("[Compact] empty effective range — aborting (effectiveStartIdx=\(effectiveStartIdx) endExclusive=\(endExclusive))")
-            statusMsg.content = String(localized: "没有可压缩的内容。")
+            statusMsg.content = AppLocalized("没有可压缩的内容。")
             statusMsg.isCompactLoading = false
             return
         }
@@ -961,7 +961,7 @@ extension AIChatViewModel {
             try Task.checkCancellation()
         } catch is CancellationError {
             logger.info("[Compact] Cancelled by user")
-            statusMsg.content = String(localized: "已取消压缩。")
+            statusMsg.content = AppLocalized("已取消压缩。")
             statusMsg.isCompactLoading = false
             return
         } catch {
@@ -976,8 +976,8 @@ extension AIChatViewModel {
             typedErrorRetry = (error.localizedDescription, .compaction(chatMessageId, includesBoundary: includesBoundary))
             errorMessage = error.localizedDescription
             statusMsg.content = didSegment
-                ? String(localized: "压缩失败(已分段重试):\(error.localizedDescription)")
-                : String(localized: "压缩失败：\(error.localizedDescription)")
+                ? AppLocalized("压缩失败(已分段重试):\(error.localizedDescription)")
+                : AppLocalized("压缩失败：\(error.localizedDescription)")
             statusMsg.isCompactLoading = false
             return
         }
@@ -1018,7 +1018,7 @@ extension AIChatViewModel {
         }
         guard let lastCompactedMessageId = lcmIdResolved else {
             logger.error("[Compact] Cannot write v2 marker: no agentHistory entry in [0..\(endExclusive)) has a persisted dbMessageId. Aborting compact.")
-            statusMsg.content = String(localized: "压缩失败：没能把标记挂到已保存的消息上。")
+            statusMsg.content = AppLocalized("压缩失败：没能把标记挂到已保存的消息上。")
             statusMsg.isCompactLoading = false
             return
         }
@@ -1096,7 +1096,7 @@ extension AIChatViewModel {
         let compactedUICount = messages[0..<dividerInsertIdx].filter {
             $0.role != .systemInfo && !$0.isCompactedHistory
         }.count
-        let divider = ChatMessage(role: .compactDivider, content: String(localized: "已压缩 \(compactedUICount) 条消息"))
+        let divider = ChatMessage(role: .compactDivider, content: AppLocalized("已压缩 \(compactedUICount) 条消息"))
         divider.compactSummary = summary
         messages.insert(divider, at: dividerInsertIdx)
 
@@ -1224,7 +1224,7 @@ extension AIChatViewModel {
             let secondHalf = Array(messages[mid...])
 
             logger.info("[Compact] Retry segments: splitting \(messages.count) messages into \(firstHalf.count) + \(secondHalf.count) (depth=\(depth))")
-            statusMsg.content = String(localized: "正在压缩对话…(分段处理)")
+            statusMsg.content = AppLocalized("正在压缩对话…(分段处理)")
 
             // The previous marker's summary rides with the OLDER half only:
             // dropping it here (as the code used to) silently erased every
@@ -1305,7 +1305,7 @@ extension AIChatViewModel {
             do {
                 if idx > 0 {
                     logger.info("[Compact] falling back to candidate \(idx + 1)/\(candidates.count): \(entry.model.id)")
-                    statusMsg?.content = String(localized: "正在用 \(entry.model.displayName) 压缩对话…")
+                    statusMsg?.content = AppLocalized("正在用 \(entry.model.displayName) 压缩对话…")
                 }
                 return try await generateCompactSummaryOnce(conversationText: conversationText, entry: entry, statusMsg: statusMsg)
             } catch let error as LLMError where error.isFallbackable && !Self.isInputSizeRejection(error) {
@@ -1439,7 +1439,7 @@ extension AIChatViewModel {
                 switch chunk {
                 case .text(let delta):
                     text += delta
-                    statusMsg?.content = String(localized: "正在压缩对话…(\(text.count) 字)")
+                    statusMsg?.content = AppLocalized("正在压缩对话…(\(text.count) 字)")
                 case .finished, .usage, .started:
                     break
                 }

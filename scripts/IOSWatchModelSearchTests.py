@@ -5,6 +5,7 @@ No simulator, WatchConnectivity, live credentials or user preferences are used.
 The view typecheck uses inert adapters; the full app build remains a separate gate.
 """
 from pathlib import Path
+from ios_smoke_support import APP_LOCALIZED_SHIM, APP_LOCALIZATION_SOURCE
 import subprocess
 import tempfile
 
@@ -82,7 +83,7 @@ enum WatchStandalone {
 with tempfile.TemporaryDirectory(prefix='leo-watch-model-search-') as folder:
     folder = Path(folder)
     source = folder / 'Search.swift'
-    source.write_text(fixture)
+    source.write_text(APP_LOCALIZED_SHIM + fixture)
     binary = folder / 'search-tests'
     subprocess.run(['xcrun', 'swiftc', str(source), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
@@ -90,6 +91,6 @@ with tempfile.TemporaryDirectory(prefix='leo-watch-model-search-') as folder:
     stubs.write_text(adapters)
     sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True).strip()
     subprocess.run(['xcrun', 'swiftc', '-typecheck', '-swift-version', '5', '-sdk', sdk,
-                    '-target', 'arm64-apple-ios26.0', str(stubs),
-                    str(ROOT / 'src/ios/Views/Settings/WatchSettingsView.swift')], check=True)
+                    '-target', 'arm64-apple-ios27.0', str(stubs),
+                    str(ROOT / 'src/ios/Views/Settings/WatchSettingsView.swift'), str(APP_LOCALIZATION_SOURCE)], check=True)
     print('PASS complete WatchSettingsView iOS SDK typecheck with inert adapters; no device execution')

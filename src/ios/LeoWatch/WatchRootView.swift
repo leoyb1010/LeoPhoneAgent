@@ -668,13 +668,7 @@ final class WatchSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         guard audioActive else { return }
         audioActive = false
         let session = AVAudioSession.sharedInstance()
-        if #available(watchOS 27.0, *) {
-            session.deactivate(options: .notifyOthersOnDeactivation) { _, _ in }
-        } else {
-            DispatchQueue.global(qos: .utility).async {
-                try? session.setActive(false, options: .notifyOthersOnDeactivation)
-            }
-        }
+        session.deactivate(options: .notifyOthersOnDeactivation) { _, _ in }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {

@@ -74,18 +74,18 @@ actor BackupImporter {
         var skippedNotRun = false
 
         var summary: String {
-            if skippedNotRun { return String(localized: "未执行") }
-            if let failed { return String(localized: "失败并已撤销：\(failed)") }
+            if skippedNotRun { return AppLocalized("未执行") }
+            if let failed { return AppLocalized("失败并已撤销：\(failed)") }
             var parts: [String] = []
-            if imported > 0 { parts.append(String(localized: "新增 \(imported)")) }
-            if updated > 0 { parts.append(String(localized: "更新 \(updated)")) }
-            if keptLocal > 0 { parts.append(String(localized: "保留本地 \(keptLocal)")) }
-            if identical > 0 { parts.append(String(localized: "相同 \(identical)")) }
-            if filesWritten > 0 { parts.append(String(localized: "文件 \(filesWritten)")) }
-            if credentialsRestored > 0 { parts.append(String(localized: "密钥 \(credentialsRestored)")) }
-            if missingBlobs > 0 { parts.append(String(localized: "缺失 \(missingBlobs)")) }
-            if unreadable > 0 { parts.append(String(localized: "无法读取 \(unreadable)")) }
-            return parts.isEmpty ? String(localized: "无变化") : parts.joined(separator: "，")
+            if imported > 0 { parts.append(AppLocalized("新增 \(imported)")) }
+            if updated > 0 { parts.append(AppLocalized("更新 \(updated)")) }
+            if keptLocal > 0 { parts.append(AppLocalized("保留本地 \(keptLocal)")) }
+            if identical > 0 { parts.append(AppLocalized("相同 \(identical)")) }
+            if filesWritten > 0 { parts.append(AppLocalized("文件 \(filesWritten)")) }
+            if credentialsRestored > 0 { parts.append(AppLocalized("密钥 \(credentialsRestored)")) }
+            if missingBlobs > 0 { parts.append(AppLocalized("缺失 \(missingBlobs)")) }
+            if unreadable > 0 { parts.append(AppLocalized("无法读取 \(unreadable)")) }
+            return parts.isEmpty ? AppLocalized("无变化") : parts.joined(separator: "，")
         }
     }
 
@@ -119,17 +119,17 @@ actor BackupImporter {
 
         var errorDescription: String? {
             switch self {
-            case .passphraseRequired: return String(localized: "这个备份已加密，请输入备份密码")
-            case .integrityFailed(let n): return String(localized: "完整性校验失败（\(n) 个文件），备份包可能已损坏，未做任何修改")
-            case .sessionsRunning(let n): return String(localized: "有 \(n) 个相关对话正在运行，请等它们结束后再恢复")
+            case .passphraseRequired: return AppLocalized("这个备份已加密，请输入备份密码")
+            case .integrityFailed(let n): return AppLocalized("完整性校验失败（\(n) 个文件），备份包可能已损坏，未做任何修改")
+            case .sessionsRunning(let n): return AppLocalized("有 \(n) 个相关对话正在运行，请等它们结束后再恢复")
             case .insufficientSpace(let need, let have):
                 let n = ByteCountFormatter.string(fromByteCount: need, countStyle: .file)
                 let h = ByteCountFormatter.string(fromByteCount: have, countStyle: .file)
-                return String(localized: "空间不足：需要约 \(n)，当前可用 \(h)")
-            case .encryptedMembersWithoutManifest: return String(localized: "备份包含加密内容但清单未声明加密，可能被篡改，已拒绝")
-            case .manifestMismatch: return String(localized: "备份清单前后不一致，已拒绝")
-            case .nothingSelected: return String(localized: "未选择要恢复的类别")
-            case .providerStoreUnavailable: return String(localized: "服务商配置尚未加载完成，请稍后再试")
+                return AppLocalized("空间不足：需要约 \(n)，当前可用 \(h)")
+            case .encryptedMembersWithoutManifest: return AppLocalized("备份包含加密内容但清单未声明加密，可能被篡改，已拒绝")
+            case .manifestMismatch: return AppLocalized("备份清单前后不一致，已拒绝")
+            case .nothingSelected: return AppLocalized("未选择要恢复的类别")
+            case .providerStoreUnavailable: return AppLocalized("服务商配置尚未加载完成，请稍后再试")
             }
         }
     }
@@ -315,7 +315,7 @@ actor BackupImporter {
                     }
                 }
                 running = await target.runningSessionIds(sessions.map(\.session.id)).count
-                if running > 0 { plan.notes.append(String(localized: "\(running) 个相关对话正在运行，需要先停止")) }
+                if running > 0 { plan.notes.append(AppLocalized("\(running) 个相关对话正在运行，需要先停止")) }
             case .sharedFiles:
                 analyzeFiles(p, category: category, root: target.sharedFilesRoot(),
                              map: { Self.sharedComponents($0) }, into: &plan)
@@ -348,11 +348,11 @@ actor BackupImporter {
                     plan.total = ((backup["instances"] as? [Any]) ?? []).count
                     plan.newItems = r.stats.instancesAdded
                     plan.localKept = r.stats.instancesKept
-                    if r.stats.groupsAdded > 0 { plan.notes.append(String(localized: "新增 \(r.stats.groupsAdded) 个模型分组")) }
-                    if r.stats.groupsRenamed > 0 { plan.notes.append(String(localized: "\(r.stats.groupsRenamed) 个同名分组将加“（备份）”后缀")) }
+                    if r.stats.groupsAdded > 0 { plan.notes.append(AppLocalized("新增 \(r.stats.groupsAdded) 个模型分组")) }
+                    if r.stats.groupsRenamed > 0 { plan.notes.append(AppLocalized("\(r.stats.groupsRenamed) 个同名分组将加“（备份）”后缀")) }
                 }
                 if !p.hasSecrets {
-                    plan.notes.append(String(localized: "此备份不含 API 密钥，恢复后需要重新填写"))
+                    plan.notes.append(AppLocalized("此备份不含 API 密钥，恢复后需要重新填写"))
                 }
             case .environmentVariables:
                 let records = readEnvVars(p)
@@ -361,7 +361,7 @@ actor BackupImporter {
                 plan.newItems = add.count
                 plan.localKept = records.count - add.count
                 if !p.hasSecrets, !add.isEmpty {
-                    plan.notes.append(String(localized: "变量值未包含在备份中，恢复后为空值"))
+                    plan.notes.append(AppLocalized("变量值未包含在备份中，恢复后为空值"))
                 }
             case .mcpServers:
                 if let backup = jsonObject(p.dataDir.appendingPathComponent("mcp_servers.json")) {
@@ -372,7 +372,7 @@ actor BackupImporter {
                     plan.newerInBackup = m.plan.replaced.count
                     plan.localKept = m.plan.kept.count
                     if !m.plan.needsSecrets.isEmpty {
-                        plan.notes.append(String(localized: "\(m.plan.needsSecrets.count) 个服务器的密钥已在备份时移除，需重新填写"))
+                        plan.notes.append(AppLocalized("\(m.plan.needsSecrets.count) 个服务器的密钥已在备份时移除，需重新填写"))
                     }
                 }
             case .voiceCorrections:
@@ -381,17 +381,17 @@ actor BackupImporter {
             plans.append(plan)
         }
         if p.ignoredPlaintextSecrets {
-            warnings.append(String(localized: "备份包含未加密的密钥文件，出于安全考虑已忽略"))
+            warnings.append(AppLocalized("备份包含未加密的密钥文件，出于安全考虑已忽略"))
         }
         if p.manifest.limits.skippedFiles > 0 {
-            warnings.append(String(localized: "备份时有 \(p.manifest.limits.skippedFiles) 个文件因超出大小上限未被包含"))
+            warnings.append(AppLocalized("备份时有 \(p.manifest.limits.skippedFiles) 个文件因超出大小上限未被包含"))
         }
         if p.manifest.categories[BackupCategory.voiceCorrections.rawValue] != nil {
-            warnings.append(String(localized: "语音纠错数据不在恢复范围内，已忽略"))
+            warnings.append(AppLocalized("语音纠错数据不在恢复范围内，已忽略"))
         }
         if fm.fileExists(atPath: p.dataDir.appendingPathComponent("sub_agents.jsonl").path)
             || fm.fileExists(atPath: p.dataDir.appendingPathComponent("thinking_rules.jsonl").path) {
-            warnings.append(String(localized: "包内的子智能体 / 上游思考规则暂不支持恢复，已忽略"))
+            warnings.append(AppLocalized("包内的子智能体 / 上游思考规则暂不支持恢复，已忽略"))
         }
         return Plan(categories: plans, runningSessions: running, warnings: warnings)
     }
@@ -437,7 +437,7 @@ actor BackupImporter {
 
         var report = Report(backupId: p.manifest.backupId, createdAt: p.manifest.createdAt,
                             deviceName: p.manifest.deviceName, wasEncrypted: p.wasEncrypted)
-        say(String(localized: "开始恢复：\(selected.count) 个类别"), false)
+        say(AppLocalized("开始恢复：\(selected.count) 个类别"), false)
 
         for (index, category) in selected.enumerated() {
             if Task.isCancelled {
@@ -448,7 +448,7 @@ actor BackupImporter {
                 }
                 break
             }
-            say(String(localized: "正在恢复\(category.displayName)…"), false)
+            say(AppLocalized("正在恢复\(category.displayName)…"), false)
             var undo = UndoLog()
             do {
                 try journal.beginCategory(category)
@@ -457,7 +457,7 @@ actor BackupImporter {
                 r.notDownloadedInPackage = p.fileIndex.filter { $0.category == category.rawValue && $0.skipped == "not_downloaded" }.count
                 try journal.endCategory(category)
                 report.categories.append(r)
-                say(String(localized: "\(category.displayName)：\(r.summary)"), false)
+                say(AppLocalized("\(category.displayName)：\(r.summary)"), false)
             } catch {
                 let cancelled = error is CancellationError
                 logger.error("[Restore] category \(category.rawValue) failed; rolling back")
@@ -465,10 +465,10 @@ actor BackupImporter {
                 journal.rollback(category, roots: roots)
                 try? journal.endCategory(category)
                 var r = CategoryReport(category: category)
-                r.failed = cancelled ? String(localized: "已取消") : error.localizedDescription
+                r.failed = cancelled ? AppLocalized("已取消") : error.localizedDescription
                 r.rolledBack = true
                 report.categories.append(r)
-                say(String(localized: "\(category.displayName)恢复失败，已撤销该类别的改动"), false)
+                say(AppLocalized("\(category.displayName)恢复失败，已撤销该类别的改动"), false)
                 if cancelled {
                     report.cancelled = true
                     for rest in selected.dropFirst(index + 1) {
@@ -480,7 +480,7 @@ actor BackupImporter {
             }
         }
         if p.ignoredPlaintextSecrets {
-            report.warnings.append(String(localized: "备份包含未加密的密钥文件，出于安全考虑已忽略"))
+            report.warnings.append(AppLocalized("备份包含未加密的密钥文件，出于安全考虑已忽略"))
         }
         report.duration = Date().timeIntervalSince(started)
         logger.info("[Restore] done categories=\(report.categories.count) failed=\(report.categories.filter { $0.failed != nil }.count)")

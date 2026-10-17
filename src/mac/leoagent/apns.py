@@ -9,8 +9,15 @@
 
 设备登记在 ~/.leoagent/devices.json:
     {"device": {token: {bundle_id, environment, updated_at}},
-     "push_to_start": {...}}
+     "push_to_start": {...},
+     "activity_update": {token: {..., session_ids: [...]}}}
 APNs 回 410(BadDeviceToken/Unregistered)即自动摘除,不留幽灵 token。
+
+[WP-41] Live Activity 远程推送:`apns-push-type: liveactivity`,topic 是
+`<bundle>.push-type.liveactivity`。start 发给 push_to_start token(App 被杀也能拉起
+灵动岛),update/end 发给活动自己的 update token(第三桶 activity_update,按会话索引)。
+开关:apns.json 的 "live_activity_push": false 或环境变量
+LEOAGENT_LIVE_ACTIVITY_PUSH=0 → 只剩 App 本地更新(回退到本地模式)。
 """
 
 from __future__ import annotations
@@ -43,6 +50,11 @@ APNS_HOSTS = {
 
 TOKEN_TTL_S = 50 * 60
 
+KINDS = ("device", "push_to_start", "activity_update")
+LIVE_ACTIVITY_TOPIC_SUFFIX = ".push-type.liveactivity"
+# 一个 update token 最多关联多少个会话(一张卡最多 4 行,留余量)。
+MAX_SESSIONS_PER_TOKEN = 8
+
 
 class APNsPusher:
     """一个中继一个实例。没配 .p8 就整体静默禁用,不影响中继本体。"""
@@ -51,6 +63,7 @@ class APNsPusher:
         self.home = home or Path(os.path.expanduser("~/.leoagent"))
         self.devices_path = self.home / "devices.json"
         self.config = self._load_config()
+        self._live_flag = self._load_live_flag()
         self._token: Optional[str] = None
         self._token_at: float = 0.0
 
@@ -74,9 +87,28 @@ class APNsPusher:
             return None
         return {k: str(data[k]).strip() for k in needed}
 
+    def _load_live_flag(self) -> bool:
+        env = os.environ.get("LEOAGENT_LIVE_ACTIVITY_PUSH")
+        if env is not None:
+            return env.strip().lower() not in ("0", "false", "no", "off")
+        try:
+            data = json.loads((self.home / "apns.json").read_text())
+        except (OSError, json.JSONDecodeError):
+            return True
+        return data.get("live_activity_push", True) is not False
+
     @property
     def enabled(self) -> bool:
         return self.config is not None and jwt is not None and httpx is not None
+
+    @property
+    def live_activity_enabled(self) -> bool:
+        """APNs 可用且没被开关关掉。关掉时灵动岛只由 App 自己在前台/后台更新。"""
+        return self.enabled and self._live_flag
+
+    def _client(self):
+        # http2=True 是硬要求,不是优化(见文件头)。测试替换成假的客户端。
+        return httpx.AsyncClient(http2=True, timeout=20)
 
     def status(self) -> Dict[str, Any]:
         """给诊断用:为什么没启用,一眼看得出来。"""
@@ -85,6 +117,7 @@ class APNsPusher:
             "has_config": self.config is not None,
             "has_pyjwt": jwt is not None,
             "has_http2": httpx is not None,
+            "live_activity_push": self.live_activity_enabled,
             "devices": {k: len(v) for k, v in self._load_devices().items()},
         }
 
@@ -116,8 +149,8 @@ class APNsPusher:
         try:
             data = json.loads(self.devices_path.read_text())
         except (OSError, json.JSONDecodeError):
-            return {"device": {}, "push_to_start": {}}
-        for bucket in ("device", "push_to_start"):
+            return {kind: {} for kind in KINDS}
+        for bucket in KINDS:
             data.setdefault(bucket, {})
         return data
 
@@ -131,11 +164,22 @@ class APNsPusher:
         except OSError as exc:
             print(f"[apns] save devices failed: {exc}", flush=True)
 
-    def register(self, kind: str, token: str, bundle_id: str, environment: str) -> bool:
-        """登记一个 token。kind ∈ {device, push_to_start}。"""
+    def register(self, kind: str, token: str, bundle_id: str, environment: str,
+                 session_ids: Optional[List[str]] = None) -> bool:
+        """登记一个 token。kind ∈ {device, push_to_start, activity_update}。
+
+        activity_update 是某一个 Live Activity 的 update token,必须带上它卡上的
+        会话 id —— 中继按会话找 token,update/end 才知道发给哪张卡。
+        """
         token = (token or "").strip().lower()
-        if kind not in ("device", "push_to_start") or len(token) < 32:
+        if kind not in KINDS or len(token) < 32:
             return False
+        sids: List[str] = []
+        if kind == "activity_update":
+            sids = [str(s).strip()[:200] for s in (session_ids or []) if str(s).strip()]
+            sids = list(dict.fromkeys(sids))[:MAX_SESSIONS_PER_TOKEN]
+            if not sids:
+                return False
         if environment not in APNS_HOSTS:
             environment = "development"
         data = self._load_devices()
@@ -144,9 +188,19 @@ class APNsPusher:
             "environment": environment,
             "updated_at": time.time(),
         }
+        if sids:
+            data[kind][token]["session_ids"] = sids
         self._save_devices(data)
         print(f"[apns] registered {kind} token …{token[-8:]} ({environment})", flush=True)
         return True
+
+    def update_tokens_by_session(self) -> Dict[str, List[str]]:
+        """session_id -> 关注它的 Live Activity update token 列表。"""
+        out: Dict[str, List[str]] = {}
+        for token, meta in self._load_devices()["activity_update"].items():
+            for sid in meta.get("session_ids") or []:
+                out.setdefault(sid, []).append(token)
+        return out
 
     def _forget(self, kind: str, token: str) -> None:
         data = self._load_devices()
@@ -187,8 +241,7 @@ class APNsPusher:
         payload: Dict[str, Any] = {"aps": aps, **user_info}
 
         sent = 0
-        # http2=True 是硬要求,不是优化
-        async with httpx.AsyncClient(http2=True, timeout=20) as client:
+        async with self._client() as client:
             for token, meta in list(devices.items()):
                 host = APNS_HOSTS.get(meta.get("environment", "development"),
                                       APNS_HOSTS["development"])
@@ -231,6 +284,67 @@ class APNsPusher:
                     self._forget("device", token)
                 else:
                     print(f"[apns] {status} {text[:120]}", flush=True)
+        return sent
+
+
+    async def send_live_activity(self, push: Any, now: Optional[float] = None) -> int:
+        """发一条 Live Activity 推送(push 见 live_activity.LiveActivityPush)。返回成功条数。
+
+        start → 所有 push_to_start token;update/end → push.token 这一个 update token。
+        end 成功后摘掉那个 update token:活动已经结束,它不会再有用。
+        """
+        from .live_activity import aps_payload  # 局部导入:apns 本身不依赖它
+
+        if not self.live_activity_enabled:
+            return 0
+        auth = self._auth_token()
+        if not auth or self.config is None:
+            return 0
+        devices = self._load_devices()
+        if push.event == "start":
+            kind = "push_to_start"
+            targets = list(devices["push_to_start"].items())
+        else:
+            kind = "activity_update"
+            meta = devices["activity_update"].get(push.token or "")
+            targets = [(push.token, meta)] if meta else []
+        if not targets:
+            return 0
+        payload = aps_payload(push, now)
+        sent = 0
+        async with self._client() as client:
+            for token, meta in targets:
+                host = APNS_HOSTS.get(meta.get("environment", "development"), APNS_HOSTS["development"])
+                bundle = meta.get("bundle_id") or self.config["topic"]
+                headers = {
+                    "authorization": f"bearer {auth}",
+                    "apns-topic": bundle + LIVE_ACTIVITY_TOPIC_SUFFIX,
+                    "apns-push-type": "liveactivity",
+                    "apns-priority": str(push.priority),
+                }
+                status, text = 0, ""
+                for attempt in range(2):
+                    if attempt:
+                        await asyncio.sleep(0.5)
+                    try:
+                        status, text = await self._post(client, host, f"/3/device/{token}", headers, payload)
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"[apns] live activity send failed: {exc}", flush=True)
+                        status = 0
+                        continue
+                    # 429 = 这台设备的 Live Activity 预算用完:立即重试只会更糟,等下一次事件。
+                    if status < 500:
+                        break
+                if status == 200:
+                    sent += 1
+                    print(f"[apns] live activity {push.event} → …{token[-8:]}", flush=True)
+                    if push.event == "end" and kind == "activity_update":
+                        self._forget(kind, token)
+                elif status in (400, 410) and ("BadDeviceToken" in text or "Unregistered" in text
+                                               or "ExpiredToken" in text):
+                    self._forget(kind, token)
+                elif status:
+                    print(f"[apns] live activity {push.event} {status} {text[:120]}", flush=True)
         return sent
 
 

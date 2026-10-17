@@ -50,13 +50,13 @@ struct SubAgentDefinition: Identifiable, Codable, Hashable {
     /// Localized label for the settings list and editor. Only the built-in has
     /// one — a user-created agent is shown exactly as the user named it.
     var displayName: String {
-        isBuiltIn ? String(localized: "通用子代理") : name
+        isBuiltIn ? AppLocalized("通用子代理") : name
     }
 
     /// Localized description for the settings screen, mirroring `displayName`.
     var displayDescription: String {
         isBuiltIn
-            ? String(localized: "需要独立多轮工具循环的开放式工作:多轮检索代码库或网页、把大量输出消化成结论、并行跑互不依赖的分支。")
+            ? AppLocalized("需要独立多轮工具循环的开放式工作:多轮检索代码库或网页、把大量输出消化成结论、并行跑互不依赖的分支。")
             : description
     }
 

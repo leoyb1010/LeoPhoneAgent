@@ -65,6 +65,7 @@ import {
 } from "@/ChatMediaAttachmentPreviewDialog.js";
 import type { PdfViewerRangeSource } from "@/components/ui/pdf-viewer.js";
 import { MessageAction, MessageActions } from "@/components/ai-elements/message.js";
+import { LeoSpeakAction } from "@/leo/LeoSpeakAction.js";
 import {
   Reasoning,
   ReasoningContent,
@@ -1522,6 +1523,8 @@ export const ConversationAssistantTextActions = memo(function ConversationAssist
         label={copyLabel}
         tooltip={resolveTooltip(copyLabel)}
       />
+      {/* [leo][WP-60] 朗读这条回复（仅 macOS 桌面端）。 */}
+      <LeoSpeakAction text={text} />
       {entityId && onFeedbackChange ? (
         <>
           <MessageAction

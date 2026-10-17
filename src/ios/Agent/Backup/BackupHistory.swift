@@ -223,8 +223,8 @@ final class BackupHistory: ObservableObject {
             records[i].status = .failed
             records[i].finishedAt = records[i].finishedAt ?? Date()
             records[i].errorMessage = records[i].kind == .export
-                ? String(localized: "已中断：App 在备份完成前被关闭，请重新备份")
-                : String(localized: "已中断：App 在恢复完成前被关闭，未完成的部分已撤销，可重新恢复")
+                ? AppLocalized("已中断：App 在备份完成前被关闭，请重新备份")
+                : AppLocalized("已中断：App 在恢复完成前被关闭，未完成的部分已撤销，可重新恢复")
             changed = true
         }
         if changed { save() }

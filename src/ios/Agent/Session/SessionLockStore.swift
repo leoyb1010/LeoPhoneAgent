@@ -533,7 +533,7 @@ enum BiometricAuth {
         default:
             // Only reached when there is genuinely no biometric sensor
             // (biometryType == .none) — a passcode-only device.
-            name = String(localized: "Biometrics")
+            name = AppLocalized("Biometrics")
         }
         return (available, name)
     }

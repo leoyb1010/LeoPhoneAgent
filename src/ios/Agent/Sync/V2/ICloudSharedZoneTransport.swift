@@ -2154,7 +2154,7 @@ enum SyncTransportError: Error, LocalizedError {
         case .notStarted:    return "Transport not started"
         case .sendInFlight:  return "Another send is already in flight"
         case .fetchInFlight: return "Another fetch is already in flight"
-        case .retryDeferred(let until): return String(localized: "Retry available at \(until.formatted(date: .omitted, time: .standard))")
+        case .retryDeferred(let until): return AppLocalized("Retry available at \(until.formatted(date: .omitted, time: .standard))")
         }
     }
 }

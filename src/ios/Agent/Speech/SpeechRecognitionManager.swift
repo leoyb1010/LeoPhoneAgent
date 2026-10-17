@@ -74,11 +74,7 @@ final class SpeechRecognitionManager: ObservableObject {
     /// auto-fire path must not open a permission storm on launch).
     var permissionsAlreadyGranted: Bool {
         guard SFSpeechRecognizer.authorizationStatus() == .authorized else { return false }
-        if #available(iOS 17.0, *) {
-            return AVAudioApplication.shared.recordPermission == .granted
-        } else {
-            return AVAudioSession.sharedInstance().recordPermission == .granted
-        }
+        return AVAudioApplication.shared.recordPermission == .granted
     }
 
     /// Short label for the badge (e.g. "EN", "FR", or a CJK glyph for zh / ja / ko).
@@ -263,15 +259,7 @@ final class SpeechRecognitionManager: ObservableObject {
         }
 
         let audioStatus: Bool
-        if #available(iOS 17.0, *) {
-            audioStatus = await AVAudioApplication.requestRecordPermission()
-        } else {
-            audioStatus = await withCheckedContinuation { cont in
-                AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                    cont.resume(returning: granted)
-                }
-            }
-        }
+        audioStatus = await AVAudioApplication.requestRecordPermission()
         guard audioStatus else {
             logger.warning("Microphone permission not granted")
             return false

@@ -67,14 +67,14 @@ struct MCPIntegrationsView: View {
                         Button {
                             toolsServer = server
                         } label: {
-                            Label(String(localized: "Refresh Tools"), systemImage: "arrow.clockwise")
+                            Label(AppLocalized("Refresh Tools"), systemImage: "arrow.clockwise")
                         }
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
                         Button {
                             toolsServer = server
                         } label: {
-                            Label(String(localized: "Tools"), systemImage: "arrow.clockwise")
+                            Label(AppLocalized("Tools"), systemImage: "arrow.clockwise")
                         }
                         .tint(.blue)
                     }
@@ -85,18 +85,18 @@ struct MCPIntegrationsView: View {
                 }
             }
         }
-        .alert(String(localized: "Delete Server"), isPresented: Binding(
+        .alert(AppLocalized("Delete Server"), isPresented: Binding(
             get: { pendingDeleteServerId != nil },
             set: { if !$0 { pendingDeleteServerId = nil } }
         )) {
-            Button(String(localized: "Delete"), role: .destructive) {
+            Button(AppLocalized("Delete"), role: .destructive) {
                 if let id = pendingDeleteServerId { store.delete(id: id) }
                 pendingDeleteServerId = nil
             }
-            Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteServerId = nil }
+            Button(AppLocalized("Cancel"), role: .cancel) { pendingDeleteServerId = nil }
         } message: {
             Text(SyncedDeleteMessage.text(
-                String(localized: "Delete \"\(pendingDeleteServerId ?? "")\" and its saved credentials? This action cannot be undone."),
+                AppLocalized("Delete \"\(pendingDeleteServerId ?? "")\" and its saved credentials? This action cannot be undone."),
                 syncOn: iCloudSyncEnabled))
         }
         .navigationTitle(Text("MCP Integrations"))
@@ -126,17 +126,17 @@ struct MCPIntegrationsView: View {
                     Button {
                         showCatalog = true
                     } label: {
-                        Label(String(localized: "Recommended MCP directory"), systemImage: "square.grid.2x2")
+                        Label(AppLocalized("Recommended MCP directory"), systemImage: "square.grid.2x2")
                     }
                     Button {
                         showAddForm = true
                     } label: {
-                        Label(String(localized: "Add Server"), systemImage: "plus")
+                        Label(AppLocalized("Add Server"), systemImage: "plus")
                     }
                     Button {
                         showJSONImport = true
                     } label: {
-                        Label(String(localized: "Import JSON"), systemImage: "doc.text")
+                        Label(AppLocalized("Import JSON"), systemImage: "doc.text")
                     }
                 } label: {
                     Image(systemName: "plus")
@@ -485,7 +485,7 @@ private struct MCPCatalogSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "Done")) { dismiss() }
+                    Button(AppLocalized("Done")) { dismiss() }
                 }
             }
         }
@@ -557,7 +557,7 @@ struct MCPToolsSheet: View {
                     .accessibilityLabel(Text("Refresh tools"))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "Done")) { dismiss() }
+                    Button(AppLocalized("Done")) { dismiss() }
                 }
             }
             .task { await refresh() }

@@ -26,7 +26,7 @@ struct AskUserCardView: View {
                   center.isWaiting(id) || vm.dormantAskUserToolUseId == id {
             interactive(id: id, request: request)
         } else if isPreparing {
-            quietLine(icon: "questionmark.bubble", text: String(localized: "正在准备问题…"), progress: true)
+            quietLine(icon: "questionmark.bubble", text: AppLocalized("正在准备问题…"), progress: true)
         } else {
             expiredView(request)
         }
@@ -81,7 +81,7 @@ struct AskUserCardView: View {
                     }
                     if question.allowsOther {
                         if draft.otherOpen {
-                            textEntry(id: id, request: request, isOther: true, placeholder: String(localized: "写下你的答案"))
+                            textEntry(id: id, request: request, isOther: true, placeholder: AppLocalized("写下你的答案"))
                         } else {
                             Button {
                                 updateDraft(id) { $0.otherOpen = true }
@@ -109,7 +109,7 @@ struct AskUserCardView: View {
             case .text:
                 VStack(alignment: .leading, spacing: 8) {
                     textEntry(id: id, request: request, isOther: false,
-                              placeholder: String(localized: "你的回答"))
+                              placeholder: AppLocalized("你的回答"))
                     if let suggestion = question.defaultAnswer, draft.text.isEmpty {
                         Button {
                             updateDraft(id) { $0.text = suggestion }
@@ -283,7 +283,7 @@ struct AskUserCardView: View {
     }
 
     static func yesNoLabel(_ token: String) -> String {
-        token == "yes" ? String(localized: "是") : String(localized: "否")
+        token == "yes" ? AppLocalized("是") : AppLocalized("否")
     }
 
     // MARK: Resolved / expired
@@ -296,7 +296,7 @@ struct AskUserCardView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(answered ? ChatColors.accent : ChatColors.secondaryText)
                     .accessibilityHidden(true)
-                Text(answered ? String(localized: "已回答") : String(localized: "问题已关闭"))
+                Text(answered ? AppLocalized("已回答") : AppLocalized("问题已关闭"))
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(ChatColors.secondaryText)
                 if let note = sourceNote(decoded) {
@@ -327,8 +327,8 @@ struct AskUserCardView: View {
                         .lineLimit(2)
                 }
                 Text(decoded.reason == .superseded
-                     ? String(localized: "你发了新消息，这个问题就不再等了。")
-                     : String(localized: "任务停止了，问题没有回答。"))
+                     ? AppLocalized("你发了新消息，这个问题就不再等了。")
+                     : AppLocalized("任务停止了，问题没有回答。"))
                     .font(.footnote)
                     .foregroundStyle(ChatColors.tertiaryText)
             }
@@ -348,8 +348,8 @@ struct AskUserCardView: View {
         return VStack(alignment: .leading, spacing: 4) {
             quietLine(icon: "questionmark.bubble",
                       text: failed && request == nil
-                        ? String(localized: "问题格式不对，没有显示")
-                        : String(localized: "这个问题已失效"),
+                        ? AppLocalized("问题格式不对，没有显示")
+                        : AppLocalized("这个问题已失效"),
                       progress: false)
             if let prompt = request?.questions.first?.prompt {
                 Text(prompt)
@@ -383,8 +383,8 @@ struct AskUserCardView: View {
 
     private func sourceNote(_ decoded: AskUserResult.Decoded) -> String? {
         switch decoded.source {
-        case .notification: return String(localized: "在通知里回答")
-        case .typedMessage: return String(localized: "在输入框回复")
+        case .notification: return AppLocalized("在通知里回答")
+        case .typedMessage: return AppLocalized("在输入框回复")
         default: return nil
         }
     }

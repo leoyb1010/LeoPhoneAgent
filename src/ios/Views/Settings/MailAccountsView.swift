@@ -159,8 +159,8 @@ struct MailAccountEditor: View {
     private var smtpPlaceholder: String {
         var probe = MailAccount(presetId: presetId, label: "", email: trimmedEmail, username: "", host: host, port: 993)
         probe.smtpHost = nil
-        guard let server = probe.smtpServer else { return String(localized: "发信服务器(SMTP)") }
-        return String(localized: "发信服务器(留空用 \(server.host):\(server.port))")
+        guard let server = probe.smtpServer else { return AppLocalized("发信服务器(SMTP)") }
+        return AppLocalized("发信服务器(留空用 \(server.host):\(server.port))")
     }
     private var trimmedEmail: String { email.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var effectiveUsername: String {
@@ -232,7 +232,7 @@ struct MailAccountEditor: View {
                 Section {
                     ForEach(alwaysAllowed, id: \.self) { category in
                         Label(category == SensitiveToolGate.Category.mailSend.rawValue
-                              ? String(localized: "发送邮件:始终允许") : String(localized: "标记、移动、存草稿:始终允许"),
+                              ? AppLocalized("发送邮件:始终允许") : AppLocalized("标记、移动、存草稿:始终允许"),
                               systemImage: "checkmark.shield")
                     }
                     Button("撤销长期允许", role: .destructive) {
@@ -394,11 +394,11 @@ struct MailWatchRulesView: View {
     }
 
     private func ruleSummary(_ rule: MailWatchRule) -> String {
-        var parts: [String] = [rule.account ?? String(localized: "所有邮箱")]
-        if !rule.fromContains.isEmpty { parts.append(String(localized: "发件人含「\(rule.fromContains)」")) }
-        if !rule.subjectContains.isEmpty { parts.append(String(localized: "主题含「\(rule.subjectContains)」")) }
-        if rule.fromContains.isEmpty && rule.subjectContains.isEmpty { parts.append(String(localized: "所有新邮件")) }
-        if rule.triggerAutomation { parts.append(String(localized: "触发自动化")) }
+        var parts: [String] = [rule.account ?? AppLocalized("所有邮箱")]
+        if !rule.fromContains.isEmpty { parts.append(AppLocalized("发件人含「\(rule.fromContains)」")) }
+        if !rule.subjectContains.isEmpty { parts.append(AppLocalized("主题含「\(rule.subjectContains)」")) }
+        if rule.fromContains.isEmpty && rule.subjectContains.isEmpty { parts.append(AppLocalized("所有新邮件")) }
+        if rule.triggerAutomation { parts.append(AppLocalized("触发自动化")) }
         return parts.joined(separator: " · ")
     }
 }

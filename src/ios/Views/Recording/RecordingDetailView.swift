@@ -33,11 +33,11 @@ struct RecordingDetailView: View {
             if let meta {
                 content(meta)
             } else {
-                LeoEmptyState(systemImage: "waveform.slash", title: String(localized: "录音不存在"),
-                              message: String(localized: "它可能已经被删除了。"))
+                LeoEmptyState(systemImage: "waveform.slash", title: AppLocalized("录音不存在"),
+                              message: AppLocalized("它可能已经被删除了。"))
             }
         }
-        .navigationTitle(meta?.displayTitle ?? String(localized: "录音"))
+        .navigationTitle(meta?.displayTitle ?? AppLocalized("录音"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             reloadTranscript()
@@ -189,7 +189,7 @@ struct RecordingDetailView: View {
                         Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                             .font(.system(size: 48))
                     }
-                    .accessibilityLabel(Text(player.isPlaying ? String(localized: "暂停") : String(localized: "播放")))
+                    .accessibilityLabel(Text(player.isPlaying ? AppLocalized("暂停") : AppLocalized("播放")))
                     Button { player.skip(15) } label: { Image(systemName: "goforward.15").font(.title2) }
                         .accessibilityLabel(Text("前进 15 秒"))
                 }
@@ -211,7 +211,7 @@ struct RecordingDetailView: View {
             ForEach(meta.highlights.sorted { $0.time < $1.time }) { mark in
                 Button { player.seek(to: mark.time, play: true) } label: {
                     Label {
-                        Text(mark.note ?? String(localized: "重点"))
+                        Text(mark.note ?? AppLocalized("重点"))
                     } icon: {
                         Text(TranscriptAssembler.timestamp(mark.time)).monospacedDigit().font(.caption.weight(.semibold))
                     }
@@ -231,8 +231,8 @@ struct RecordingDetailView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("云端转写")
                     Text(meta.cloudTranscriptionEnabled
-                         ? String(localized: "音频会分段发送给「语音输入」里配置的服务商,时间戳为估算。")
-                         : String(localized: "关闭:在本机转写,音频不离开设备。"))
+                         ? AppLocalized("音频会分段发送给「语音输入」里配置的服务商,时间戳为估算。")
+                         : AppLocalized("关闭:在本机转写,音频不离开设备。"))
                         .font(.caption)
                         .foregroundStyle(LeoTheme.ColorToken.secondaryText)
                 }
@@ -258,7 +258,7 @@ struct RecordingDetailView: View {
         if let progress = controller.transcriptionProgress[recordingId] {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(meta.transcription.engine == .cloud ? String(localized: "正在云端转写") : String(localized: "正在本机转写"))
+                    Text(meta.transcription.engine == .cloud ? AppLocalized("正在云端转写") : AppLocalized("正在本机转写"))
                     Spacer()
                     Text("\(progress.done)/\(progress.total)").monospacedDigit()
                         .foregroundStyle(LeoTheme.ColorToken.secondaryText)
@@ -271,14 +271,14 @@ struct RecordingDetailView: View {
             switch meta.transcription.phase {
             case .none:
                 Button { controller.transcribe(recordingId) } label: {
-                    Label(meta.transcription.completedUnits.isEmpty ? String(localized: "开始转写") : String(localized: "继续转写"),
+                    Label(meta.transcription.completedUnits.isEmpty ? AppLocalized("开始转写") : AppLocalized("继续转写"),
                           systemImage: "text.bubble")
                 }
             case .running:
                 Button { controller.transcribe(recordingId) } label: { Label("继续转写", systemImage: "text.bubble") }
             case .needsAssets:
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(meta.transcription.errorMessage ?? String(localized: "本机缺少这个语言的转写资源。"))
+                    Text(meta.transcription.errorMessage ?? AppLocalized("本机缺少这个语言的转写资源。"))
                         .font(.footnote)
                         .foregroundStyle(LeoTheme.ColorToken.secondaryText)
                     HStack {
@@ -289,7 +289,7 @@ struct RecordingDetailView: View {
                     .buttonStyle(.borderless)
                 }
             case .failed:
-                LeoInlineError(message: meta.transcription.errorMessage ?? String(localized: "转写失败"),
+                LeoInlineError(message: meta.transcription.errorMessage ?? AppLocalized("转写失败"),
                                onRetry: { controller.transcribe(recordingId) })
             case .done:
                 if transcript.segments.isEmpty {
@@ -304,7 +304,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func speakerControls(_ meta: RecordingMetadata) -> some View {
         let speakers = TranscriptAssembler.speakers(in: transcript.segments)
-        if let busy = controller.busyText[recordingId], busy.contains(String(localized: "说话人")) {
+        if let busy = controller.busyText[recordingId], busy.contains(AppLocalized("说话人")) {
             HStack { ProgressView(); Text(busy).font(.footnote) }
         } else if speakers.isEmpty {
             Button {
@@ -389,7 +389,7 @@ struct RecordingDetailView: View {
                 .padding(.vertical, 2)
             }
             if template == .custom {
-                TextField(String(localized: "想怎么整理?例如:列出所有提到的数字和日期"), text: $customInstruction, axis: .vertical)
+                TextField(AppLocalized("想怎么整理?例如:列出所有提到的数字和日期"), text: $customInstruction, axis: .vertical)
                     .lineLimit(2...5)
             }
             Picker("模型分组", selection: $groupId) {
@@ -398,7 +398,7 @@ struct RecordingDetailView: View {
                     Text(g.name).tag(g.id)
                 }
             }
-            if let busy = controller.busyText[recordingId], !busy.contains(String(localized: "说话人")) {
+            if let busy = controller.busyText[recordingId], !busy.contains(AppLocalized("说话人")) {
                 HStack { ProgressView(); Text(busy).font(.footnote) }
             } else {
                 Button {
@@ -437,7 +437,7 @@ struct RecordingDetailView: View {
                               ? { text in Task { await saveToBrain(output: output, text: text) } } : nil,
                           onReminders: { text in
                               let items = MinutesActionItemParser.parse(text)
-                              if items.isEmpty { toast = String(localized: "纪要里没有找到待办。") }
+                              if items.isEmpty { toast = AppLocalized("纪要里没有找到待办。") }
                               else { reminderDraft = ReminderDraft(items: items, recordingTitle: meta.displayTitle) }
                           },
                           onExport: { text, pdf in
@@ -465,22 +465,22 @@ struct RecordingDetailView: View {
         let md = TranscriptAssembler.renderMarkdown(title: meta.displayTitle, date: meta.createdAt, duration: meta.duration,
                                                     segments: transcript.segments, names: meta.speakerNames,
                                                     speakersInferred: meta.speakersInferred, highlights: meta.highlights)
-        if let url = MinutesGenerator.exportFile(markdown: md, title: String(localized: "转写-\(meta.displayTitle)"), pdf: false) {
+        if let url = MinutesGenerator.exportFile(markdown: md, title: AppLocalized("转写-\(meta.displayTitle)"), pdf: false) {
             share = ShareItem(url: url)
         }
     }
 
     private func saveToTreasury(output: RecordingOutput, text: String) async {
         let ok = await MinutesGenerator.saveToTreasury(title: output.title, markdown: text)
-        toast = ok ? String(localized: "已存入藏宝阁") : nil
-        if !ok { controller.lastError = String(localized: "没能存入藏宝阁,请重试。") }
+        toast = ok ? AppLocalized("已存入藏宝阁") : nil
+        if !ok { controller.lastError = AppLocalized("没能存入藏宝阁,请重试。") }
     }
 
     /// [T-brain] 纪要 Markdown 送进资料库收件箱。
     private func saveToBrain(output: RecordingOutput, text: String) async {
         do {
             _ = try await BrainStore.shared.captureText(text, filename: BrainStore.markdownFileName(output.title))
-            toast = String(localized: "已送进资料库收件箱")
+            toast = AppLocalized("已送进资料库收件箱")
         } catch {
             controller.lastError = (error as? BrainError)?.message ?? BrainError.network.message
         }
@@ -489,9 +489,9 @@ struct RecordingDetailView: View {
     private func createReminders(_ items: [MinutesActionItem], title: String) async {
         guard !items.isEmpty else { return }
         if let count = await MinutesGenerator.createReminders(items, recordingTitle: title) {
-            toast = String(localized: "已添加 \(count) 条提醒事项")
+            toast = AppLocalized("已添加 \(count) 条提醒事项")
         } else {
-            controller.lastError = String(localized: "没有提醒事项权限。请在系统设置 › LeoBot 里允许访问提醒事项。")
+            controller.lastError = AppLocalized("没有提醒事项权限。请在系统设置 › LeoBot 里允许访问提醒事项。")
         }
     }
 }
@@ -623,8 +623,8 @@ private struct ReminderPickerSheet: View {
                             .foregroundStyle(LeoTheme.ColorToken.accent)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.title).foregroundStyle(LeoTheme.ColorToken.primaryText)
-                            let meta = [item.owner.map { String(localized: "负责人:\($0)") },
-                                        item.due.map { String(localized: "期限:\($0)") }].compactMap { $0 }
+                            let meta = [item.owner.map { AppLocalized("负责人:\($0)") },
+                                        item.due.map { AppLocalized("期限:\($0)") }].compactMap { $0 }
                             if !meta.isEmpty {
                                 Text(meta.joined(separator: " · "))
                                     .font(.caption)

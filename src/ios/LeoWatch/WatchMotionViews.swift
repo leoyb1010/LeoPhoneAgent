@@ -37,11 +37,7 @@ extension View {
 
 private struct ReducedResourceBridge: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(watchOS 27.0, *) {
-            content.modifier(Reader())
-        } else {
-            content
-        }
+        content.modifier(Reader())
     }
 
     @available(watchOS 27.0, *)

@@ -267,18 +267,18 @@ struct SceneSessionHost: View {
     }
 
     private func updateClosureConfirmation() {
-        guard #available(iOS 27, *), let scene = window?.windowScene else { return }
+        guard let scene = window?.windowScene else { return }
         guard let sid = runningId else {
             scene.closureConfirmation = nil
             return
         }
         let onScreen = sessionId
-        let stop = UIAlertAction(title: String(localized: "停止任务并关闭"), style: .default) { _ in
+        let stop = UIAlertAction(title: AppLocalized("停止任务并关闭"), style: .default) { _ in
             (ViewModelCache.shared.get(for: sid) ?? onScreen.flatMap { ViewModelCache.shared.get(for: $0) })?.cancel()
         }
         scene.closureConfirmation = UISceneClosureConfirmation(
-            title: String(localized: "这个窗口的任务还在运行"),
-            message: String(localized: "直接关闭，任务会在后台继续跑完并通知你；也可以先停止它。"),
+            title: AppLocalized("这个窗口的任务还在运行"),
+            message: AppLocalized("直接关闭，任务会在后台继续跑完并通知你；也可以先停止它。"),
             actions: [stop])
     }
 }

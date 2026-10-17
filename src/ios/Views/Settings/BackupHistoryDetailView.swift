@@ -24,7 +24,7 @@ struct BackupHistoryDetailView: View {
                         row("大小", ByteCountFormatter.string(fromByteCount: r.totalBytes, countStyle: .file))
                         if let name = r.packageName { row("文件名", name) }
                     }
-                    row("加密", r.encrypted ? String(localized: "是") : String(localized: "否"))
+                    row("加密", r.encrypted ? AppLocalized("是") : AppLocalized("否"))
                 }
                 if !r.categoryLines.isEmpty {
                     Section("类别") {
@@ -82,7 +82,7 @@ struct BackupHistoryDetailView: View {
             .navigationTitle(r.kind == .export ? "备份详情" : "恢复详情")
             .navigationBarTitleDisplayMode(.inline)
         } else {
-            LeoEmptyState(systemImage: "clock.badge.xmark", title: String(localized: "记录已删除"))
+            LeoEmptyState(systemImage: "clock.badge.xmark", title: AppLocalized("记录已删除"))
         }
     }
 

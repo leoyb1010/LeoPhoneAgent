@@ -50,8 +50,8 @@ enum SessionSpotlightIndexer {
         let attributes = CSSearchableItemAttributeSet(contentType: .content)
         attributes.title = session.title?.isEmpty == false
             ? session.title
-            : String(localized: "New Chat")
-        attributes.contentDescription = String(localized: "LeoBot conversation")
+            : AppLocalized("New Chat")
+        attributes.contentDescription = AppLocalized("LeoBot conversation")
         attributes.contentModificationDate = session.updatedAt
         attributes.keywords = ["LeoBot", "LeoPhoneAgent", "Agent", "chat"]
         // [F2-indexed-entity] Same item, now tied to the SessionEntity Shortcuts uses.
@@ -107,8 +107,8 @@ enum SessionSpotlightIndexer {
             let attributes = CSSearchableItemAttributeSet(contentType: .content)
             attributes.title = session.title?.isEmpty == false
                 ? session.title
-                : String(localized: "New Chat")
-            attributes.contentDescription = String(localized: "LeoBot conversation")
+                : AppLocalized("New Chat")
+            attributes.contentDescription = AppLocalized("LeoBot conversation")
             attributes.contentModificationDate = session.updatedAt
             attributes.keywords = ["LeoBot", "LeoPhoneAgent", "Agent", "chat"]
             attributes.associateAppEntity(SessionEntity(from: session))

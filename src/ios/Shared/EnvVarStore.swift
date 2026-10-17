@@ -311,13 +311,13 @@ final class EnvVarStore: ObservableObject {
 
         var errorDescription: String? {
             switch self {
-            case .invalidKey: return String(localized: "Enter a valid variable name.")
-            case .duplicateKey: return String(localized: "A variable with this name already exists. Choose another name.")
-            case .missingEntry: return String(localized: "This variable no longer exists. Your changes have not been saved.")
-            case .keychainWriteFailed: return String(localized: "Couldn't save the value to Keychain. Your changes are still here; try again.")
-            case .metadataWriteFailed: return String(localized: "Couldn't save the variable. Check available storage and try again.")
-            case .keychainReadFailed: return String(localized: "Couldn't read the previous value from Keychain. Nothing was changed. Try again.")
-            case .valueChangedMetadataWriteFailed: return String(localized: "The value changed, but its note could not be saved. The previous value could not be restored. Try saving again.")
+            case .invalidKey: return AppLocalized("Enter a valid variable name.")
+            case .duplicateKey: return AppLocalized("A variable with this name already exists. Choose another name.")
+            case .missingEntry: return AppLocalized("This variable no longer exists. Your changes have not been saved.")
+            case .keychainWriteFailed: return AppLocalized("Couldn't save the value to Keychain. Your changes are still here; try again.")
+            case .metadataWriteFailed: return AppLocalized("Couldn't save the variable. Check available storage and try again.")
+            case .keychainReadFailed: return AppLocalized("Couldn't read the previous value from Keychain. Nothing was changed. Try again.")
+            case .valueChangedMetadataWriteFailed: return AppLocalized("The value changed, but its note could not be saved. The previous value could not be restored. Try saving again.")
             }
         }
     }

@@ -2022,11 +2022,11 @@ enum SkillError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unterminatedFrontmatter:
-            return String(localized: "SKILL.md 开头的 --- 信息块没有结束的 ---，无法导入。")
+            return AppLocalized("SKILL.md 开头的 --- 信息块没有结束的 ---，无法导入。")
         case .invalidName:
-            return String(localized: "技能名称无效，请在 SKILL.md 的 name 里用字母、数字或短横线。")
+            return AppLocalized("技能名称无效，请在 SKILL.md 的 name 里用字母、数字或短横线。")
         case .duplicate(let name):
-            return String(localized: "已有同名技能「\(name)」。要替换它，请在技能详情里更新，或先删除原来的。")
+            return AppLocalized("已有同名技能「\(name)」。要替换它，请在技能详情里更新，或先删除原来的。")
         case .invalidURL: return "Invalid GitHub URL. Use a link to a SKILL.md file or directory."
         case .downloadFailed(let code): return "Download failed (HTTP \(code))."
         case .invalidContent: return "The downloaded file is empty or not valid text."
@@ -2220,9 +2220,7 @@ extension SkillStore {
     /// removed above — fakefs cleanup is a niceness, not a correctness
     /// requirement.
     private func removeFakefsPathIfPresent(_ linuxPath: String) {
-        if #available(iOS 17.0, *) {
-            RootfsManager.shared.removeFakefsPath(linuxPath)
-        }
+        RootfsManager.shared.removeFakefsPath(linuxPath)
     }
 
     // MARK: - Minimal ZIP Writer

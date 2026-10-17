@@ -245,7 +245,7 @@ struct HomeComposerBar: View {
                 if let onChooseModel {
                     Button(action: onChooseModel) {
                         HStack(spacing: 5) {
-                            Text(capsule.model ?? String(localized: "Choose Model"))
+                            Text(capsule.model ?? AppLocalized("Choose Model"))
                                 .font(.footnote.weight(.semibold))
                                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
                                 .multilineTextAlignment(.leading)
@@ -259,7 +259,7 @@ struct HomeComposerBar: View {
                         .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text("选择模型:\(capsule.model ?? String(localized: "默认"))"))
+                    .accessibilityLabel(Text("选择模型:\(capsule.model ?? AppLocalized("默认"))"))
                     .accessibilityIdentifier("home.model-picker")
                 }
     }

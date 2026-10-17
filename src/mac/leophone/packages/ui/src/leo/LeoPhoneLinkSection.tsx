@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button.js";
 import { logger } from "@/logger.js";
 import { SettingsGroupCard, SettingsRow } from "@/settings/SettingsRow.js";
 
+import { LeoScreenShareSettings } from "./LeoScreenShareSettings.js";
+
 /**
  * [leo-link] 设置 →「连接手机」页:这台 Mac 的中继连接状态 + 扫码加手机,下面接 Tailscale 直连。
  *
@@ -237,6 +239,7 @@ function LeoPhoneLinkSectionBody({
           pending={pending}
         />
       ) : null}
+      <LeoScreenShareSettings />
     </div>
   );
 }

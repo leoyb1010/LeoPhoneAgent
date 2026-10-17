@@ -224,8 +224,8 @@ struct LiveBackupStores: BackupExportSource, BackupRestoreTarget {
         case decode, rejected
         var errorDescription: String? {
             switch self {
-            case .decode: return String(localized: "备份中的服务商配置无法解析")
-            case .rejected: return String(localized: "服务商配置保存失败，已保留原配置")
+            case .decode: return AppLocalized("备份中的服务商配置无法解析")
+            case .rejected: return AppLocalized("服务商配置保存失败，已保留原配置")
             }
         }
     }

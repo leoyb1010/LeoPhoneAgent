@@ -24,14 +24,20 @@ private let lifecycleLog = AppLogger(category: "Lifecycle")
 private struct FgStepInterval {
     let name: StaticString
     let state: OSSignpostIntervalState
+    let startedAt: CFTimeInterval
 
-    func end() { LeoPerf.signposter.endInterval(name, state) }
+    func end() {
+        LeoPerf.signposter.endInterval(name, state)
+        // [WP-46] signpost 只有接着 Instruments 才看得到;耗时也记进账本,慢的回前台会落盘。
+        let ms = (CACurrentMediaTime() - startedAt) * 1000
+        if Thread.isMainThread { LeoPerf.fgLedger.add("\(name)", ms: ms) }
+    }
 }
 
 private enum FgStep {
     @inline(__always)
     static func begin(_ name: StaticString) -> FgStepInterval {
-        FgStepInterval(name: name, state: LeoPerf.signposter.beginInterval(name))
+        FgStepInterval(name: name, state: LeoPerf.signposter.beginInterval(name), startedAt: CACurrentMediaTime())
     }
 }
 
@@ -48,48 +54,6 @@ private struct FgStepChain {
     mutating func finish() {
         current?.end()
         current = nil
-    }
-}
-
-// MARK: - Bundle Language Override
-
-/// Overrides `Bundle.main.localizedString(forKey:value:table:)` so that
-/// `String(localized:)` and UIKit strings respect the in-app language setting
-/// without requiring an app restart.
-extension Bundle {
-    private static var overrideBundleKey: UInt8 = 0
-
-    /// The language-specific `.lproj` bundle currently in use, or `nil` for system default.
-    var languageBundle: Bundle? {
-        get { objc_getAssociatedObject(self, &Self.overrideBundleKey) as? Bundle }
-        set { objc_setAssociatedObject(self, &Self.overrideBundleKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
-    }
-
-    /// Call once at launch to swizzle `localizedString(forKey:value:table:)`.
-    static func enableLanguageOverride() {
-        let original = class_getInstanceMethod(Bundle.self, #selector(localizedString(forKey:value:table:)))!
-        let swizzled = class_getInstanceMethod(Bundle.self, #selector(overrideLocalizedString(forKey:value:table:)))!
-        method_exchangeImplementations(original, swizzled)
-    }
-
-    @objc private func overrideLocalizedString(forKey key: String, value: String?, table tableName: String?) -> String {
-        if self == Bundle.main, let bundle = languageBundle {
-            return bundle.overrideLocalizedString(forKey: key, value: value, table: tableName)
-        }
-        return overrideLocalizedString(forKey: key, value: value, table: tableName) // calls original (swizzled)
-    }
-
-    /// Sets the override language. Pass `nil` or `""` to revert to system language.
-    static func setLanguage(_ code: String?) {
-        guard let code, !code.isEmpty,
-              let path = Bundle.main.path(forResource: code, ofType: "lproj"),
-              let bundle = Bundle(path: path) else {
-            Bundle.main.languageBundle = nil
-            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
-            return
-        }
-        Bundle.main.languageBundle = bundle
-        UserDefaults.standard.set([code], forKey: "AppleLanguages")
     }
 }
 
@@ -187,7 +151,10 @@ struct MinisApp: App {
         #endif
         // Enable in-app language override for String(localized:) and UIKit strings
         Bundle.enableLanguageOverride()
-        let lang = UserDefaults.standard.string(forKey: "appLanguage") ?? ""
+        // WP-03:下架的半译语言(ja/ko/fr/de/ru)存量设置回落到「跟随系统」。
+        let storedLang = UserDefaults.standard.string(forKey: "appLanguage") ?? ""
+        let lang = LanguageOption.normalizedAppLanguage(storedLang)
+        if lang != storedLang { UserDefaults.standard.set(lang, forKey: "appLanguage") }
         Bundle.setLanguage(lang.isEmpty ? nil : lang)
         // [T-widget-localization] The widget extension is a separate process
         // and never sees the swizzle above; mirror the choice into the App
@@ -316,9 +283,7 @@ struct MinisApp: App {
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .quickTaskCatalogDidChange)) { _ in
-                    if #available(iOS 17.0, *) {
-                        MinisShortcutsProvider.updateAppShortcutParameters()
-                    }
+                    MinisShortcutsProvider.updateAppShortcutParameters()
                 }
                 .onAppear {
                     // [S5/S6] Only what the first frame (or launch routing)
@@ -359,12 +324,10 @@ struct MinisApp: App {
                     // feature flag is on (see SyncV2Bootstrap); v1 stays
                     // paused while v2 is active. When v2 is off, v1 boots
                     // exactly as before.
-                    if #available(iOS 17.0, *) {
-                        Task { @MainActor in
-                            await SyncV2Bootstrap.startIfEnabled()
-                            if !SyncV2Bootstrap.shouldPauseV1() {
-                                await CloudSyncEngine.shared.start()
-                            }
+                    Task { @MainActor in
+                        await SyncV2Bootstrap.startIfEnabled()
+                        if !SyncV2Bootstrap.shouldPauseV1() {
+                            await CloudSyncEngine.shared.start()
                         }
                     }
                     LeoPerf.afterNextFrame {
@@ -390,6 +353,7 @@ struct MinisApp: App {
     private static func runAfterForegroundFrame() {
         // [T-fg-attribution] 这一整段和 `fg.frame` 的记录跑在同一个显示链路 tick 里,先后顺序不定:
         // 它可能排在 fg.frame 的回调之前、被算进那 826 ms。按步骤记区间,看是不是它。
+        defer { LeoPerf.fgLedger.afterFrameFinished() }   // [WP-46] runs last (after every step ended)
         let fgAfterFrame = FgStep.begin("fg.step.afterFrame")
         defer { fgAfterFrame.end() }
         var fgSteps = FgStepChain()
@@ -406,6 +370,10 @@ struct MinisApp: App {
         fgSteps.next("fg.step.crashMarker")
         CrashReporter.shared.updateMarkerPhase(phase: "active")
 
+        fgSteps.next("fg.step.mcpCallLog")
+        DispatchQueue.global(qos: .utility).async {
+            MCPDaemonBridge.drainCallLog(in: AIChatViewModel.minisMcpServersPersistentDir)
+        }
         fgSteps.next("fg.step.liveActivityCleanup")
         AgentLiveActivityManager.shared.cleanupStaleActivities(source: "scenePhase.active")
         // [T-brain] devicectl 拷进来的资料库令牌文件:导入钥匙串后立即删除。
@@ -475,9 +443,7 @@ struct MinisApp: App {
             }
         }
         fgSteps.next("fg.step.skillNotifierDrain")
-        if #available(iOS 17.0, *) {
-            SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase active")
-        }
+        SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase active")
 
         // [T-widget-mirror] Keep the usage / memory widgets current.
         // Cheap (one SQL scan + one small file read) and only on
@@ -545,9 +511,7 @@ struct MinisApp: App {
         guard !didRunAfterFirstLaunchFrame else { return }
         didRunAfterFirstLaunchFrame = true
         // Register App Shortcuts with the system so Siri and Spotlight discover them
-        if #available(iOS 17.0, *) {
-            MinisShortcutsProvider.updateAppShortcutParameters()
-        }
+        MinisShortcutsProvider.updateAppShortcutParameters()
         // Monitor network changes to keep iSH DNS up to date (its first DNS
         // write and proxy probe run on the monitor's own queue).
         NetworkMonitor.shared.start()
@@ -704,18 +668,16 @@ struct MinisApp: App {
             // SKIP (local newer)` log spam plus continuous v1-side dirty
             // drain that competes with v2's send pipeline.
             fgSteps.next("fg.step.syncKick")
-            if #available(iOS 17.0, *) {
-                Task { @MainActor in
-                    // 墙钟区间:await 期间主线程是空的,和主线程耗时分开看。
-                    let syncKick = FgStep.begin("fg.step.syncKick.async")
-                    defer { syncKick.end() }
-                    if SyncV2Bootstrap.shouldPauseV1() {
-                        await SyncCore.shared.fetchNow(trigger: .foregroundTimer)
-                        await SyncCore.shared.sendNow(trigger: .foregroundTimer)
-                    } else {
-                        await CloudSyncEngine.shared.triggerFetch()
-                        await CloudSyncEngine.shared.triggerSend()
-                    }
+            Task { @MainActor in
+                // 墙钟区间:await 期间主线程是空的,和主线程耗时分开看。
+                let syncKick = FgStep.begin("fg.step.syncKick.async")
+                defer { syncKick.end() }
+                if SyncV2Bootstrap.shouldPauseV1() {
+                    await SyncCore.shared.fetchNow(trigger: .foregroundTimer)
+                    await SyncCore.shared.sendNow(trigger: .foregroundTimer)
+                } else {
+                    await CloudSyncEngine.shared.triggerFetch()
+                    await CloudSyncEngine.shared.triggerSend()
                 }
             }
 
@@ -742,6 +704,14 @@ struct MinisApp: App {
             let remaining = UIApplication.shared.backgroundTimeRemaining
             lifecycleLog.info("[Lifecycle] → Background (remaining: \(Self.formatTimeRemaining(remaining)))")
             CrashReporter.shared.updateMarkerPhase(phase: "background")
+            // [WP-46] MCP 守护进程:调用记录搬进诊断日志;没有会话在跑就让它退出
+            // (真机上它在后台从挂起恢复后空转到 87% CPU)。都在后台队列,不占退后台的这一帧。
+            let idleForMCP = SessionActivityTracker.shared.activeSessions.isEmpty && !ShellCommandRingBuffer.hasRunningCommand
+            DispatchQueue.global(qos: .utility).async {
+                let dir = AIChatViewModel.minisMcpServersPersistentDir
+                MCPDaemonBridge.drainCallLog(in: dir)
+                if idleForMCP { MCPDaemonBridge.requestShutdown(in: dir) }
+            }
             shareCoordinator.clearBufferIfStale()
             // Sync the app-icon badge to the current running-task count
             // on the way out — covers the case where the publisher in
@@ -752,9 +722,7 @@ struct MinisApp: App {
             // app is leaving the foreground — last chance to run the
             // heavier disk-scan + markDirty pass while we still have
             // CPU before iOS suspends us.
-            if #available(iOS 17.0, *) {
-                SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase background")
-            }
+            SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase background")
             // "Lock on exit" mode — drop every cached unlock
             // stamp so re-entering any locked session requires Face ID.
             // Per-session AIChatView observer only covers the session
@@ -826,6 +794,30 @@ struct MinisApp: App {
         if fm.fileExists(atPath: staleDir.path) {
             try? fm.removeItem(at: staleDir)
             lifecycleLog.info("[FileProvider] cleaned up stale workingSet directory")
+        }
+
+        // [WP-40] OpenMinis v1.14 FileProviderBootHealth: on iOS-app-on-Mac the
+        // appex can die pre-main and fileproviderd relaunches it in a tight loop.
+        // A registered domain is the only reason it tries, so after the appex has
+        // failed to report a boot `tripThreshold` registrations in a row on this
+        // build, withdraw the domain (unregister only; App Group data untouched).
+        // Self-healing: one successful boot, or a new build, clears it.
+        if FileProviderBootHealth.shouldWithholdRegistration() {
+            lifecycleLog.warning("[FileProvider] withholding domain registration — appex failed to boot \(FileProviderBootHealth.tripThreshold)x in a row on this build (\(FileProviderBootHealth.describe()))")
+            NSFileProviderManager.getDomainsWithCompletionHandler { domains, _ in
+                for d in domains {
+                    NSFileProviderManager.remove(d) { err in
+                        if let err {
+                            lifecycleLog.warning("[FileProvider] breaker deregister of \(d.identifier.rawValue) failed: \(err.localizedDescription)")
+                        }
+                    }
+                }
+            }
+            return
+        }
+        let pendingBoots = FileProviderBootHealth.noteRegistrationAttempt()
+        if pendingBoots > 1 {
+            lifecycleLog.warning("[FileProvider] appex has not reported a successful boot since \(pendingBoots) registration(s) on this build")
         }
 
         let defaults = UserDefaults.standard
@@ -1279,31 +1271,31 @@ private enum ApprovalAlertPresenter {
         // 风险只影响标题和说明,不减选项。
         let alert = UIAlertController(
             // [T-subagent] A sub agent's request names the agent in the title.
-            title: p.requester.map { String(localized: "\($0)需要确认") }
-                ?? (p.risk == .high ? String(localized: "高风险操作，需要确认") : String(localized: "需要确认")),
+            title: p.requester.map { AppLocalized("\($0)需要确认") }
+                ?? (p.risk == .high ? AppLocalized("高风险操作，需要确认") : AppLocalized("需要确认")),
             message: p.risk == .high
-                ? String(localized: "有一个任务想\(p.category.humanName)：\(p.host)。这条命令可能删除数据或改动系统,确认是你要它做的再允许。")
-                : String(localized: "有一个任务想\(p.category.humanName)：\(p.host)。"),   // host is a site, a command or a path
+                ? AppLocalized("有一个任务想\(p.category.humanName)：\(p.host)。这条命令可能删除数据或改动系统,确认是你要它做的再允许。")
+                : AppLocalized("有一个任务想\(p.category.humanName)：\(p.host)。"),   // host is a site, a command or a path
             preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: String(localized: "允许一次"), style: .default) { _ in
+        alert.addAction(UIAlertAction(title: AppLocalized("允许一次"), style: .default) { _ in
             gate.resolve(.allowOnce, requestId: p.id)
         })
-        alert.addAction(UIAlertAction(title: String(localized: "本次会话允许"), style: .default) { _ in
+        alert.addAction(UIAlertAction(title: AppLocalized("本次会话允许"), style: .default) { _ in
             gate.resolve(.allowSession, requestId: p.id)
         })
         // [T-mail-always] 邮件操作可以长期允许(按邮箱),设置 → 邮箱账户里可撤销。
         if p.category.supportsAlwaysAllow {
-            alert.addAction(UIAlertAction(title: String(localized: "始终允许（此邮箱）"), style: .default) { _ in
+            alert.addAction(UIAlertAction(title: AppLocalized("始终允许（此邮箱）"), style: .default) { _ in
                 gate.resolve(.allowAlways, requestId: p.id)
             })
         }
         if let sid = p.sessionId {
-            alert.addAction(UIAlertAction(title: String(localized: "拒绝并停止任务"), style: .destructive) { _ in
+            alert.addAction(UIAlertAction(title: AppLocalized("拒绝并停止任务"), style: .destructive) { _ in
                 gate.resolve(.deny, requestId: p.id)
                 ViewModelCache.shared.get(for: sid)?.cancel()
             })
         }
-        alert.addAction(UIAlertAction(title: String(localized: "拒绝"), style: .cancel) { _ in
+        alert.addAction(UIAlertAction(title: AppLocalized("拒绝"), style: .cancel) { _ in
             gate.resolve(.deny, requestId: p.id)
         })
         shown = alert

@@ -59,11 +59,11 @@ enum BackupCrypto {
 
         var errorDescription: String? {
             switch self {
-            case .unsupportedKDF(let a): return String(localized: "备份使用了不支持的密钥派生算法（\(a)），请更新 LeoBot")
-            case .unsupportedScheme(let s): return String(localized: "备份使用了不支持的加密方案（\(s)），请更新 LeoBot")
-            case .wrongPassphrase: return String(localized: "密码不正确")
-            case .corruptMember: return String(localized: "加密内容已损坏或被篡改")
-            case .manifestTampered: return String(localized: "备份清单校验失败，文件可能被修改过")
+            case .unsupportedKDF(let a): return AppLocalized("备份使用了不支持的密钥派生算法（\(a)），请更新 LeoBot")
+            case .unsupportedScheme(let s): return AppLocalized("备份使用了不支持的加密方案（\(s)），请更新 LeoBot")
+            case .wrongPassphrase: return AppLocalized("密码不正确")
+            case .corruptMember: return AppLocalized("加密内容已损坏或被篡改")
+            case .manifestTampered: return AppLocalized("备份清单校验失败，文件可能被修改过")
             }
         }
     }

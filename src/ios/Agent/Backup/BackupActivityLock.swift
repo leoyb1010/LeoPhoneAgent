@@ -15,8 +15,8 @@ actor BackupActivityLock {
         let current: Activity
         var errorDescription: String? {
             switch current {
-            case .export: return String(localized: "正在备份中，请等待完成后再试")
-            case .restore: return String(localized: "正在恢复中，请等待完成后再试")
+            case .export: return AppLocalized("正在备份中，请等待完成后再试")
+            case .restore: return AppLocalized("正在恢复中，请等待完成后再试")
             }
         }
     }

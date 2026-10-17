@@ -87,11 +87,10 @@ final class PushRegistrar {
         }
     }
 
-    /// [T-live-mission] push-to-start token:iOS 17.2+ 才有。拿到后中继
-    /// 就能在任务开跑时远程拉起灵动岛任务卡,不需要 app 在前台。
+    /// [T-live-mission] push-to-start token。拿到后中继就能在审批/开跑时远程拉起
+    /// 灵动岛任务卡,不需要 app 在前台。
     private func observePushToStart() {
         #if canImport(ActivityKit)
-        guard #available(iOS 17.2, *) else { return }
         guard AgentLiveActivityManager.isLiveActivitySupported else { return }
         Task {
             for await data in Activity<AgentActivityAttributes>.pushToStartTokenUpdates {
@@ -103,25 +102,51 @@ final class PushRegistrar {
                 }
             }
         }
+        // [WP-41] 中继远程拉起的卡:系统会把 App 叫醒交出这张卡的 update token,
+        // 登记上去,后续的 update / end 才有地方发。
+        Task {
+            for await activity in Activity<AgentActivityAttributes>.activityUpdates
+            where activity.attributes.origin == AgentActivityAttributes.relayOrigin {
+                Task { @MainActor in
+                    for await data in activity.pushTokenUpdates {
+                        let state = activity.content.state
+                        self.registerActivityUpdateToken(LiveActivityTokenRegistration.hex(data),
+                                                         sessions: state.sessions,
+                                                         privacyMode: state.privacyMode)
+                    }
+                }
+            }
+        }
         #endif
+    }
+
+    /// [WP-41] 一张 Live Activity 的 update token 连同卡上的会话登记到中继。
+    func registerActivityUpdateToken(_ token: String, sessions: [LiveSessionSnapshot], privacyMode: Bool) {
+        guard let payload = LiveActivityTokenRegistration.payload(
+            token: token, sessions: sessions, privacyMode: privacyMode,
+            bundleId: Bundle.main.bundleIdentifier ?? "", environment: Self.apsEnvironment) else { return }
+        Task { await self.send(payload) }
     }
 
     /// 把 token 送到中继。中继与全部 Mac 共用同一把钥匙,所以任取一台
     /// 已配置的主机的 client 即可;拿不到就跳过(没配 Mac 时本就不需要)。
     private func register(kind: String, token: String) async {
+        await send([
+            "kind": kind,
+            "token": token,
+            "bundle_id": Bundle.main.bundleIdentifier ?? "",
+            // development 证书发的 token 只能用沙盒网关推,中继据此选网关
+            "environment": Self.apsEnvironment,
+        ])
+    }
+
+    private func send(_ payload: [String: Any]) async {
         // 必须挑"配了中继"的主机:第一台若是直连 Mac(relayEventsURL 为
         // nil),token 会静默注册失败,整条 APNs 链路无声失效。
         // 其他三处调用点都已这么写,这里之前漏了。
         guard let client = GatewayHostStore.shared.activeHosts
             .compactMap({ GatewayHostStore.shared.client(for: $0) })
             .first(where: { $0.relayEventsURL != nil }) else { return }
-        let payload: [String: Any] = [
-            "kind": kind,
-            "token": token,
-            "bundle_id": Bundle.main.bundleIdentifier ?? "",
-            // development 证书发的 token 只能用沙盒网关推,中继据此选网关
-            "environment": Self.apsEnvironment,
-        ]
         await client.registerPushToken(payload)
     }
 

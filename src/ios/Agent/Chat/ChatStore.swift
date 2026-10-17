@@ -1983,7 +1983,7 @@ actor ChatStore {
         ChildSessionIndex.shared.remove(id)
         invalidateSessionListCache()  // FULL: row set changes
         Task { @MainActor in
-            if #available(iOS 17.0, *) { CloudSyncEngine.shared.removeSessionCache(id) }
+            CloudSyncEngine.shared.removeSessionCache(id)
             SessionBadgeStore.shared.clearAll(for: id)
             SessionActivityTracker.shared.setInactive(id, source: "sessionDeleted")
             AgentLiveActivityManager.shared.handleSessionDeleted(id)
@@ -2039,9 +2039,7 @@ actor ChatStore {
         }
         sqlite3_finalize(stmt)
         // Clean up per-session etag cache
-        if #available(iOS 17.0, *) {
-            Task { @MainActor in CloudSyncEngine.shared.removeSessionCache(id) }
-        }
+        Task { @MainActor in CloudSyncEngine.shared.removeSessionCache(id) }
         // [T-ios-session-paused-badge] Drop any badge state for a deleted session
         // so a stale "paused" badge can't linger in the persisted store.
         Task { @MainActor in SessionBadgeStore.shared.clearAll(for: id) }
@@ -4000,10 +3998,8 @@ actor ChatStore {
         pendingSyncSessionIds.removeAll()
         iCloudLogger.info("[iCloud] flushPendingSyncDirty: \(sessionCount) sessions, \(fileCount) files — scanFiles=\(String(format: "%.0f", (f1-f0)*1000))ms")
         // Trigger a single debounced send for all the dirty records
-        if #available(iOS 17.0, *) {
-            Task { @MainActor in
-                CloudSyncEngine.shared.scheduleSend()
-            }
+        Task { @MainActor in
+            CloudSyncEngine.shared.scheduleSend()
         }
     }
 
@@ -4818,14 +4814,12 @@ extension ChatStore {
         // Skip during agent processing (syncSendDeferred) — flushPendingSyncDirty
         // will trigger a single send when the agent loop finishes.
         if !syncSendDeferred, UploadPolicy.allowsRecordType(recordType) {
-            if #available(iOS 17.0, *) {
-                Task { @MainActor in
-                    // Drive whichever engine the user is currently on.
-                    if SyncV2Bootstrap.isAnyEnabled {
-                        SyncCore.shared.scheduleSend()
-                    } else {
-                        CloudSyncEngine.shared.scheduleSend()
-                    }
+            Task { @MainActor in
+                // Drive whichever engine the user is currently on.
+                if SyncV2Bootstrap.isAnyEnabled {
+                    SyncCore.shared.scheduleSend()
+                } else {
+                    CloudSyncEngine.shared.scheduleSend()
                 }
             }
         }
@@ -5596,7 +5590,7 @@ extension ChatStore {
         // The replay below goes through mergeRemoteMessage, which skips a chat
         // that is running here: pulling one would delete its rows and put nothing back.
         if SessionActivityTracker.isActiveThreadSafe(sessionId) {
-            return .failed(String(localized: "这个对话正在运行，停下后再拉取"))
+            return .failed(AppLocalized("这个对话正在运行，停下后再拉取"))
         }
         invalidateSessionListCache(sessionId: sessionId)  // PER-SESSION: one session's rows are swapped
         iCloudLogger.warning("[ForcePull] sid=\(sessionId.prefix(8)) START — pulling cloud first, local untouched")
@@ -5606,12 +5600,7 @@ extension ChatStore {
         //    can't be reached we treat it as a hard failure rather than
         //    "empty cloud" so the caller can distinguish.
         let pullResult: ([PortableRecord], Error?)
-        if #available(iOS 17.0, *) {
-            pullResult = await SyncCore.shared.fetchSessionPortables(sessionId: sessionId)
-        } else {
-            iCloudLogger.warning("[ForcePull] sid=\(sessionId.prefix(8)) iOS < 17 — pull unavailable")
-            return .failed(String(localized: "Force Pull requires iOS 17 or newer."))
-        }
+        pullResult = await SyncCore.shared.fetchSessionPortables(sessionId: sessionId)
         let portables = pullResult.0
         if let err = pullResult.1 {
             iCloudLogger.warning("[ForcePull] sid=\(sessionId.prefix(8)) transport err: \(err.localizedDescription) — keeping local intact")

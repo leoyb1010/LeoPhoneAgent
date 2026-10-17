@@ -11,10 +11,10 @@ enum MinutesTemplate: String, Codable, CaseIterable, Sendable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .meeting: return String(localized: "会议纪要")
-        case .communication: return String(localized: "沟通记录")
-        case .analysis: return String(localized: "录音分析")
-        case .custom: return String(localized: "自定义")
+        case .meeting: return AppLocalized("会议纪要")
+        case .communication: return AppLocalized("沟通记录")
+        case .analysis: return AppLocalized("录音分析")
+        case .custom: return AppLocalized("自定义")
         }
     }
 

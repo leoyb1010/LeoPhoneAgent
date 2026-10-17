@@ -45,14 +45,14 @@ enum OAuthSafariPresenter {
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene }).activeFirst,
               let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
-            throw LLMError.providerError(message: String(localized: "Could not present the authorization page."))
+            throw LLMError.providerError(message: AppLocalized("Could not present the authorization page."))
         }
         var topVC = root
         while let presented = topVC.presentedViewController { topVC = presented }
         // UIKit silently drops a presentation from a view controller that is
         // off screen or being dismissed (e.g. a sheet torn down mid-flow).
         guard topVC.viewIfLoaded?.window != nil, !topVC.isBeingDismissed else {
-            throw LLMError.providerError(message: String(localized: "Could not present the authorization page."))
+            throw LLMError.providerError(message: AppLocalized("Could not present the authorization page."))
         }
         let vc = SFSafariViewController(url: url)
         vc.delegate = delegate
@@ -92,7 +92,7 @@ final class OAuthCallbackServer: @unchecked Sendable {
     func start() throws {
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         guard fd >= 0 else {
-            throw LLMError.providerError(message: String(localized: "Could not start the sign-in callback listener."))
+            throw LLMError.providerError(message: AppLocalized("Could not start the sign-in callback listener."))
         }
 
         var reuse: Int32 = 1
@@ -112,12 +112,12 @@ final class OAuthCallbackServer: @unchecked Sendable {
             let err = errno
             close(fd)
             logger.error("[Server] bind port \(self.port) failed errno=\(err)")
-            throw LLMError.providerError(message: String(localized: "Port \(Int(port)) is in use. Close other sign-in windows and try again."))
+            throw LLMError.providerError(message: AppLocalized("Port \(Int(port)) is in use. Close other sign-in windows and try again."))
         }
 
         guard listen(fd, 4) == 0 else {
             close(fd)
-            throw LLMError.providerError(message: String(localized: "Could not start the sign-in callback listener."))
+            throw LLMError.providerError(message: AppLocalized("Could not start the sign-in callback listener."))
         }
 
         self.listenSocket = fd
@@ -136,7 +136,7 @@ final class OAuthCallbackServer: @unchecked Sendable {
             // arrives, so a timeout scheduled there would never run.
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) { [weak self] in
                 guard let self else { return }
-                if self.finish(resumingWith: LLMError.providerError(message: String(localized: "Sign-in timed out. Please try again."))) {
+                if self.finish(resumingWith: LLMError.providerError(message: AppLocalized("Sign-in timed out. Please try again."))) {
                     logger.error("[Server] Callback timeout after \(timeout)s")
                 }
             }
@@ -278,8 +278,8 @@ final class OAuthCallbackServer: @unchecked Sendable {
             let errorMsg = providerError ?? "no code"
             logger.error("[Server] Callback error: \(errorMsg)")
             sendErrorPage(fd: fd, message: errorMsg)
-            let reason = providerError ?? String(localized: "no authorization code")
-            continuation?.resume(throwing: LLMError.providerError(message: String(localized: "Sign-in was not completed (\(reason)).")))
+            let reason = providerError ?? AppLocalized("no authorization code")
+            continuation?.resume(throwing: LLMError.providerError(message: AppLocalized("Sign-in was not completed (\(reason)).")))
             continuation = nil
             return
         }

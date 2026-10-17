@@ -136,15 +136,15 @@ enum WatchStandalone {
     @MainActor
     static func toolRows() -> [ToolRow] {
         MCPStore.shared.servers.filter(\.isHTTP).map { server in
-            if !server.enabled { return ToolRow(id: server.id, usable: false, reason: String(localized: "在 iPhone 上已关闭")) }
+            if !server.enabled { return ToolRow(id: server.id, usable: false, reason: AppLocalized("在 iPhone 上已关闭")) }
             if server.oauth != nil {
-                return ToolRow(id: server.id, usable: false, reason: String(localized: "要登录授权(OAuth),只能经 iPhone 用"))
+                return ToolRow(id: server.id, usable: false, reason: AppLocalized("要登录授权(OAuth),只能经 iPhone 用"))
             }
             do {
                 _ = try NativeMCPClient.resolvedTransport(server)
                 return ToolRow(id: server.id, usable: true, reason: nil)
             } catch {
-                return ToolRow(id: server.id, usable: false, reason: String(localized: "缺少环境变量,先在 设置 → 环境变量 里补上"))
+                return ToolRow(id: server.id, usable: false, reason: AppLocalized("缺少环境变量,先在 设置 → 环境变量 里补上"))
             }
         }
     }
@@ -200,10 +200,10 @@ enum WatchStandalone {
 
         var explanation: String {
             switch self {
-            case .disabled: return String(localized: "已设成只经 iPhone 回答，手表上不留钥匙。")
-            case .noDefaultModel: return String(localized: "还没有默认模型分组。")
+            case .disabled: return AppLocalized("已设成只经 iPhone 回答，手表上不留钥匙。")
+            case .noDefaultModel: return AppLocalized("还没有默认模型分组。")
             case .noSupportedModel:
-                return String(localized: "默认分组里没有 API Key 方式、OpenAI 兼容或 Anthropic 接口的模型。订阅登录（OAuth）的模型只能经 iPhone 使用。")
+                return AppLocalized("默认分组里没有 API Key 方式、OpenAI 兼容或 Anthropic 接口的模型。订阅登录（OAuth）的模型只能经 iPhone 使用。")
             }
         }
     }
@@ -453,12 +453,12 @@ final class WatchBridge: NSObject, ObservableObject {
     /// Why a background configuration transfer cannot be queued. A temporarily
     /// unreachable but activated/paired/installed watch remains eligible.
     var watchUnreachableReason: String? {
-        guard let session else { return String(localized: "只有 iPhone 能配对 Apple Watch。") }
+        guard let session else { return AppLocalized("只有 iPhone 能配对 Apple Watch。") }
         #if os(iOS)
-        guard session.activationState == .activated else { return String(localized: "和手表的连接还没准备好，稍后再试。") }
-        if !session.isPaired { return String(localized: "这台 iPhone 还没有配对 Apple Watch。") }
+        guard session.activationState == .activated else { return AppLocalized("和手表的连接还没准备好，稍后再试。") }
+        if !session.isPaired { return AppLocalized("这台 iPhone 还没有配对 Apple Watch。") }
         if !session.isWatchAppInstalled {
-            return String(localized: "手表上还没装 LeoBot：在 iPhone 的 Watch App 里找到它并安装。")
+            return AppLocalized("手表上还没装 LeoBot：在 iPhone 的 Watch App 里找到它并安装。")
         }
         #endif
         return nil
@@ -681,7 +681,7 @@ final class WatchBridge: ObservableObject {
     static let shared = WatchBridge()
     @Published private(set) var connectionRevision: UInt = 0
     func refreshWatchState() { connectionRevision &+= 1 }
-    var watchUnreachableReason: String? { String(localized: "只有 iPhone 能配对 Apple Watch。") }
+    var watchUnreachableReason: String? { AppLocalized("只有 iPhone 能配对 Apple Watch。") }
     func activate() {}
     func pushStatus() {}
     func syncStandaloneConfigIfNeeded(force: Bool = false) {}

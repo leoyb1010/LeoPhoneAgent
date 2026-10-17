@@ -91,7 +91,7 @@ struct QuickTaskDefinition: Codable, Identifiable, Hashable, Sendable {
         guard isBuiltIn,
               let original = Self.builtIn(id: id),
               name == original.name else { return name }
-        return String(localized: String.LocalizationValue(name))
+        return AppLocalized(String.LocalizationValue(name))
     }
 
     init(

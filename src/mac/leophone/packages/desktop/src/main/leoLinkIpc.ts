@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 
 import { callLeo, LEO_HTTP_PORT, leoOAuthPageUrl, ownHostListening } from "./leoLinkHttp.js";
+import { leoScreenHostEnv, SCREEN_PRIVACY_URL, screenPermissionStatus } from "./leo/screenCapture.js";
 
 /**
  * [leo-link] 「连接手机」面板的通道:界面 → 主进程 → 本机 Leo 接口(带 Bearer)。
@@ -32,10 +33,11 @@ const LEO_UI_SECRET = randomBytes(24).toString("base64url");
 export const LEO_OAUTH_OPEN_CHANNEL = "leo:oauth:open";
 
 export function leoHostPairEnv(): Record<string, string> {
-  return { [LEO_PAIR_SECRET_ENV]: LEO_PAIR_SECRET, LEO_UI_SECRET };
+  // [WP-50] 看屏截图 socket 的地址与口令也经 fork 环境交给 Host(见 leo/screenCapture.ts)。
+  return { [LEO_PAIR_SECRET_ENV]: LEO_PAIR_SECRET, LEO_UI_SECRET, ...leoScreenHostEnv() };
 }
 
-function trustedSender(event: IpcMainInvokeEvent): boolean {
+export function isTrustedLeoSender(event: IpcMainInvokeEvent): boolean {
   const frame = event.senderFrame;
   if (!frame || frame !== event.sender.mainFrame) return false;
   // 只认应用窗口自己的页面:内嵌浏览器(webview 访客)里打开的本地 HTML 也是 file://。
@@ -46,18 +48,60 @@ function trustedSender(event: IpcMainInvokeEvent): boolean {
   return !app.isPackaged && /^http:\/\/(localhost|127\.0\.0\.1):\d+\//.test(url);
 }
 
+/**
+ * [leo] 菜单栏 / 快速派发调 Host:与出配对码一样要带内存口令(见 docs/specs/leo-quick-entry.md),
+ * 只有主进程能调;端口上不是我们自己的 Host 时口令不外交。
+ */
+export async function callLeoQuick(
+  path: "/api/leo/quick/summary" | "/api/leo/quick/dispatch",
+  body?: unknown,
+): Promise<import("./leoLinkHttp.js").LeoLinkIpcResult> {
+  if (!(await ownHostListening())) return { ok: false, error: "本机 Leo 服务还没启动" };
+  return callLeo(path, body === undefined ? "GET" : "POST", { "x-leo-pair": LEO_PAIR_SECRET }, body);
+}
+
 const PORT_TAKEN = `本机端口 ${LEO_HTTP_PORT} 被别的程序占着(比如旧版 LeoCodeBox),先关掉它再试`;
 
+/** [WP-50] 设置「连接手机 → 屏幕」:开关在 Host(要内存口令),屏幕录制权限状态在主进程。 */
+async function screenShareState(enabled?: boolean) {
+  const host = (await ownHostListening())
+    ? await callLeo(
+        "/api/leo/link/screen",
+        enabled === undefined ? "GET" : "POST",
+        { "x-leo-pair": LEO_PAIR_SECRET },
+        enabled === undefined ? undefined : { enabled },
+      )
+    : ({ ok: false, error: "本机 Leo 服务还没启动" } as const);
+  return {
+    enabled: host.ok ? host.data["enabled"] === true : false,
+    hostError: host.ok ? null : host.error,
+    permission: screenPermissionStatus(),
+  };
+}
+
 export function registerLeoLinkIpc(): void {
+  ipcMain.handle("leo:screen:status", (event) =>
+    isTrustedLeoSender(event) ? screenShareState() : { error: "forbidden" },
+  );
+  ipcMain.handle("leo:screen:set", (event, enabled: unknown) =>
+    isTrustedLeoSender(event) && typeof enabled === "boolean"
+      ? screenShareState(enabled)
+      : { error: "forbidden" },
+  );
+  ipcMain.handle("leo:screen:open-settings", async (event) => {
+    if (!isTrustedLeoSender(event)) return false;
+    await shell.openExternal(SCREEN_PRIVACY_URL);
+    return true;
+  });
   ipcMain.handle(LEO_OAUTH_OPEN_CHANNEL, async (event) => {
-    if (!trustedSender(event)) return { ok: false, error: "forbidden" };
+    if (!isTrustedLeoSender(event)) return { ok: false, error: "forbidden" };
     // 端口上不是我们的 Host(旧版 LeoCodeBox 等)时,带口令的地址不能交给它的页面。
     if (!(await ownHostListening())) return { ok: false, error: PORT_TAKEN };
     await shell.openExternal(leoOAuthPageUrl(LEO_HTTP_PORT, LEO_UI_SECRET));
     return { ok: true, data: {} };
   });
   ipcMain.handle("leo:link:direct", async (event, action: unknown, body: unknown) => {
-    if (!trustedSender(event) || !["pair", "configure", "revoke"].includes(String(action)))
+    if (!isTrustedLeoSender(event) || !["pair", "configure", "revoke"].includes(String(action)))
       return { ok: false, error: "forbidden" };
     if (!(await ownHostListening())) return { ok: false, error: PORT_TAKEN };
     return callLeo(
@@ -68,17 +112,17 @@ export function registerLeoLinkIpc(): void {
     );
   });
   ipcMain.handle(LEO_LINK_STATUS_CHANNEL, (event) =>
-    trustedSender(event)
+    isTrustedLeoSender(event)
       ? callLeo("/api/leo/link/status", "GET")
       : { ok: false, error: "forbidden" },
   );
   ipcMain.handle(LEO_LINK_PAIR_CHANNEL, async (event) => {
-    if (!trustedSender(event)) return { ok: false, error: "forbidden" };
+    if (!isTrustedLeoSender(event)) return { ok: false, error: "forbidden" };
     if (!(await ownHostListening())) return { ok: false, error: PORT_TAKEN };
     return callLeo("/api/leo/link/pair", "POST", { "x-leo-pair": LEO_PAIR_SECRET });
   });
   ipcMain.handle(LEO_LINK_REVOKE_CHANNEL, async (event, payload: unknown) => {
-    if (!trustedSender(event) || typeof payload !== "string")
+    if (!isTrustedLeoSender(event) || typeof payload !== "string")
       return { ok: false, error: "forbidden" };
     if (!(await ownHostListening())) return { ok: false, error: PORT_TAKEN };
     return callLeo(`/api/leo/link/pair?payload=${encodeURIComponent(payload)}`, "DELETE", {

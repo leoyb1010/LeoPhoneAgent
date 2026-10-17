@@ -12,10 +12,10 @@ enum BackupPackageReader {
 
         var errorDescription: String? {
             switch self {
-            case .missingManifest: return String(localized: "这不是 LeoBot 备份包（缺少 manifest.json）")
-            case .invalidManifest: return String(localized: "备份包的清单文件已损坏")
+            case .missingManifest: return AppLocalized("这不是 LeoBot 备份包（缺少 manifest.json）")
+            case .invalidManifest: return AppLocalized("备份包的清单文件已损坏")
             case .incompatibleFormat(let f):
-                return String(localized: "备份格式 \(f) 不受支持，请更新 LeoBot 后再试")
+                return AppLocalized("备份格式 \(f) 不受支持，请更新 LeoBot 后再试")
             }
         }
     }

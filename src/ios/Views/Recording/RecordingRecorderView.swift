@@ -27,8 +27,8 @@ struct RecordingRecorderView: View {
                 ProgressView("正在保存…")
                 Spacer()
             } else {
-                LeoEmptyState(systemImage: "mic.slash", title: String(localized: "没有在录音"),
-                              message: String(localized: "回到录音列表开始新的录音。"))
+                LeoEmptyState(systemImage: "mic.slash", title: AppLocalized("没有在录音"),
+                              message: AppLocalized("回到录音列表开始新的录音。"))
                 Spacer()
             }
         }
@@ -49,7 +49,7 @@ struct RecordingRecorderView: View {
 
     private func header(_ active: RecordingController.Active) -> some View {
         VStack(spacing: LeoTheme.Spacing.xs) {
-            TextField(String(localized: "给这段录音起个名字"), text: $title)
+            TextField(AppLocalized("给这段录音起个名字"), text: $title)
                 .font(.headline)
                 .multilineTextAlignment(.center)
                 .focused($titleFocused)
@@ -77,9 +77,9 @@ struct RecordingRecorderView: View {
     }
 
     private func statusText(_ active: RecordingController.Active) -> String {
-        if active.pausedByInterruption { return String(localized: "已因来电或其他 App 暂停") }
-        if active.isPaused { return String(localized: "已暂停 · 麦克风待命,不会录入") }
-        return String(localized: "正在录音 · 锁屏后继续")
+        if active.pausedByInterruption { return AppLocalized("已因来电或其他 App 暂停") }
+        if active.isPaused { return AppLocalized("已暂停 · 麦克风待命,不会录入") }
+        return AppLocalized("正在录音 · 锁屏后继续")
     }
 
     @ViewBuilder
@@ -117,18 +117,18 @@ struct RecordingRecorderView: View {
 
     private func controls(_ active: RecordingController.Active) -> some View {
         HStack(alignment: .center, spacing: LeoTheme.Spacing.xl) {
-            roundButton(systemImage: "flag.fill", title: String(localized: "标记重点"), size: 56,
+            roundButton(systemImage: "flag.fill", title: AppLocalized("标记重点"), size: 56,
                         fill: LeoTheme.ColorToken.surface, foreground: LeoTheme.ColorToken.warning) {
                 controller.markHighlight()
             }
             .disabled(active.isPaused)
-            roundButton(systemImage: "stop.fill", title: String(localized: "停止"), size: 76,
+            roundButton(systemImage: "stop.fill", title: AppLocalized("停止"), size: 76,
                         fill: LeoTheme.ColorToken.destructive, foreground: .white) {
                 confirmStop = true
             }
             .disabled(stopping)
             roundButton(systemImage: active.isPaused ? "play.fill" : "pause.fill",
-                        title: active.isPaused ? String(localized: "继续") : String(localized: "暂停"), size: 56,
+                        title: active.isPaused ? AppLocalized("继续") : AppLocalized("暂停"), size: 56,
                         fill: LeoTheme.ColorToken.surface, foreground: LeoTheme.ColorToken.primaryText) {
                 controller.togglePause()
             }

@@ -5,6 +5,7 @@ Exercises main-frame A→B, failures, redirects, subframes/new windows and file
 scope without a browser, simulator, network access or user data.
 """
 from pathlib import Path
+from ios_smoke_support import APP_LOCALIZED_SHIM, APP_LOCALIZATION_SOURCE
 import subprocess
 import tempfile
 
@@ -157,7 +158,7 @@ else:
 
 with tempfile.TemporaryDirectory(prefix='leo-web-preview-navigation-') as folder:
     path = Path(folder) / 'Navigation.swift'
-    path.write_text(swift)
+    path.write_text(APP_LOCALIZED_SHIM + swift)
     binary = Path(folder) / 'navigation-tests'
     subprocess.run(['xcrun', 'swiftc', str(path), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
@@ -198,7 +199,7 @@ struct WideSheetSizingModifier: ViewModifier {
 ''')
     sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True).strip()
     subprocess.run(['xcrun', 'swiftc', '-typecheck', '-swift-version', '5', '-sdk', sdk,
-                    '-target', 'arm64-apple-ios26.0', str(adapters),
+                    '-target', 'arm64-apple-ios27.0', str(adapters),
                     str(ROOT / 'src/ios/Views/Chat/WebLoadError.swift'),
-                    str(ROOT / 'src/ios/Views/Chat/WebPreviewSheet.swift')], check=True)
+                    str(ROOT / 'src/ios/Views/Chat/WebPreviewSheet.swift'), str(APP_LOCALIZATION_SOURCE)], check=True)
     print('PASS complete WebPreviewSheet/WebLoadError iOS SDK typecheck with inert app adapters')

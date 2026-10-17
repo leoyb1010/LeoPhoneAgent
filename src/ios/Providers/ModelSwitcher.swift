@@ -179,7 +179,7 @@ enum ModelSwitcher {
         if includeGroups {
             for group in store.modelGroups {
                 out.append(Choice(id: "group:\(group.id)", kind: .group,
-                                  title: group.name, subtitle: String(localized: "模型分组")))
+                                  title: group.name, subtitle: AppLocalized("模型分组")))
             }
         }
         for instance in store.instances where instance.isEnabled {

@@ -253,13 +253,13 @@ final class MountedFoldersManager {
 
         var errorDescription: String? {
             switch self {
-            case .invalidName: return String(localized: "Mount name is invalid.")
-            case .nameTaken: return String(localized: "A mount with this name already exists.")
-            case .scopeDenied: return String(localized: "Could not access the selected folder.")
+            case .invalidName: return AppLocalized("Mount name is invalid.")
+            case .nameTaken: return AppLocalized("A mount with this name already exists.")
+            case .scopeDenied: return AppLocalized("Could not access the selected folder.")
             case .bookmarkFailed(let msg): return msg
             case .limitReached(let max):
                 return String(
-                    format: String(localized: "Mount limit reached (%d). Remove an existing mount before adding a new one."),
+                    format: AppLocalized("Mount limit reached (%d). Remove an existing mount before adding a new one."),
                     max
                 )
             }
@@ -516,7 +516,7 @@ final class MountedFoldersManager {
     // MARK: - Failure backoff [T-mount-backoff]
 
     /// 退避期内被跳过的书签的状态文案(设置页和 `apple-files list` 都会读到)。
-    static var needsReauthorizationMessage: String { String(localized: "需要重新授权") }
+    static var needsReauthorizationMessage: String { AppLocalized("需要重新授权") }
 
     /// 记一次解析 / 授权失败并持久化:连续失败 +1,时间记为现在。
     /// 只在「这个挂载确实用不了」时调用;书签还能用(只是快过期)不算。
@@ -640,7 +640,7 @@ final class MountedFoldersManager {
             case .none:
                 let msg = "resolve timed out after 5s (FileProvider unresponsive)"
                 // Shown in Settings → Mount External Folders; the log keeps the English detail.
-                manager.activationStates[entry.id] = .failed(String(localized: "The app that stores this folder didn't respond in time. Open the folder once in the Files app, then come back."))
+                manager.activationStates[entry.id] = .failed(AppLocalized("The app that stores this folder didn't respond in time. Open the folder once in the Files app, then come back."))
                 manager.recordActivationFailure(id: entry.id)
                 mountLog.warning("activate '\(entry.name)' [\(idPrefix)] \(msg) (elapsed=\(elapsedMs)ms)")
             case .failure(let error):

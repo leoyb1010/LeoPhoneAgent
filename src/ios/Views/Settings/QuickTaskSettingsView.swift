@@ -33,7 +33,7 @@ struct QuickTaskSettingsView: View {
                             .buttonStyle(.plain)
                             .accessibilityLabel(
                                 String(
-                                    format: String(localized: "Remove %@ from Composer"),
+                                    format: AppLocalized("Remove %@ from Composer"),
                                     task.displayName
                                 )
                             )
@@ -191,7 +191,7 @@ struct QuickTaskSettingsView: View {
 
     private func export(_ task: QuickTaskDefinition) {
         guard let data = store.exportData(id: task.id) else {
-            exportError = String(localized: "The template could not be encoded.")
+            exportError = AppLocalized("The template could not be encoded.")
             return
         }
         let safeName = task.name

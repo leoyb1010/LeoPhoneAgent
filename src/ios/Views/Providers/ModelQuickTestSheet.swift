@@ -220,7 +220,7 @@ final class TestSession: ObservableObject {
             let resp = try await provider.sendMessage(
                 messages: messages, systemPrompt: nil, maxTokens: 128, temperature: nil)
             let text = resp.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return .text(text.isEmpty ? String(localized: "(empty reply)") : text)
+            return .text(text.isEmpty ? AppLocalized("(empty reply)") : text)
 
         case .imageGen:
             let provider: any LLMProvider
@@ -233,13 +233,13 @@ final class TestSession: ObservableObject {
                 provider = try await LLMProviderFactory.makeProvider(for: entry)
             }
             guard let openAI = provider as? OpenAIProvider else {
-                throw QuickTestError.unsupported(String(localized: "This model's provider doesn't support image generation via Quick Test."))
+                throw QuickTestError.unsupported(AppLocalized("This model's provider doesn't support image generation via Quick Test."))
             }
             let resp = try await openAI.generateImage(
                 prompt: "A friendly cute mascot logo for an app called LeoBot, minimalist, centered, soft colors",
                 n: 1, size: "1024x1024", quality: nil)
             guard let img = resp.mediaAttachments.first(where: { $0.type == .image }) else {
-                throw QuickTestError.noOutput(String(localized: "No image was returned."))
+                throw QuickTestError.noOutput(AppLocalized("No image was returned."))
             }
             return .image(img.data)
 
@@ -257,31 +257,31 @@ final class TestSession: ObservableObject {
                     input: sample,
                     model: voiceId, voice: voiceId, speed: nil, responseFormat: .wav)
                 let data = try await SystemVoiceProvider.shared.synthesize(req)
-                guard !data.isEmpty else { throw QuickTestError.noOutput(String(localized: "No audio was returned.")) }
+                guard !data.isEmpty else { throw QuickTestError.noOutput(AppLocalized("No audio was returned.")) }
                 return .audio(data)
             }
             guard let instance = onboardingInstance ?? ProviderConfigStore.shared.instance(for: entry.providerInstanceId),
                   let voice = VoiceProviderFactory.make(for: instance), voice.supportsVoiceOutput else {
-                throw QuickTestError.unsupported(String(localized: "This model can't be used for speech output."))
+                throw QuickTestError.unsupported(AppLocalized("This model can't be used for speech output."))
             }
             let req = VoiceOutputRequest(
                 input: "Hi! This is LeoBot testing text to speech.",
                 model: entry.model.id, voice: entry.model.id, speed: nil, responseFormat: .mp3)
             let data = try await voice.synthesize(req)
-            guard !data.isEmpty else { throw QuickTestError.noOutput(String(localized: "No audio was returned.")) }
+            guard !data.isEmpty else { throw QuickTestError.noOutput(AppLocalized("No audio was returned.")) }
             return .audio(data)
 
         case .transcription:
             guard let instance = onboardingInstance ?? ProviderConfigStore.shared.instance(for: entry.providerInstanceId),
                   let voice = VoiceProviderFactory.make(for: instance), voice.supportsVoiceInput else {
-                throw QuickTestError.unsupported(String(localized: "This model can't be used for transcription."))
+                throw QuickTestError.unsupported(AppLocalized("This model can't be used for transcription."))
             }
             let spoken = "Hello from LeoBot, testing speech to text."
             let wav = try await synthesizeTestWAV(spoken)
             let req = VoiceInputRequest(audioData: wav, model: entry.model.id, language: "en", responseFormat: .json, prompt: nil)
             let resp = try await voice.transcribe(req)
             let heard = resp.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return .transcript(spoken: spoken, heard: heard.isEmpty ? String(localized: "(empty transcription)") : heard, execution: resp.execution)
+            return .transcript(spoken: spoken, heard: heard.isEmpty ? AppLocalized("(empty transcription)") : heard, execution: resp.execution)
         }
     }
 

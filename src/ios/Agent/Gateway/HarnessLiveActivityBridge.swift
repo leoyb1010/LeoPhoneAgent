@@ -153,7 +153,8 @@ final class HarnessLiveActivityBridge {
         } else if !AgentLiveActivityManager.shared.hasLiveActivity {
             // start 仅前台合法;后台时跳过,didBecomeActive 会补。
             guard UIApplication.shared.applicationState != .background else { return }
-            AgentLiveActivityManager.shared.startActivity(sessions: snapshots)
+            // [WP-41] Mac 任务卡带 update token:App 被挂起/杀掉后,中继照样能推审批与完成。
+            AgentLiveActivityManager.shared.startActivity(sessions: snapshots, remotePush: true)
             startedByBridge = true
         }
         // 聊天 activity 在跑:什么都不做,让它先走。

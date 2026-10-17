@@ -4,6 +4,10 @@ import "./leoEarlyEnv.js";
 import { installLeoSessionGuard } from "./leoSessionGuard.js";
 import { registerLeoLinkIpc } from "./leoLinkIpc.js";
 import { installRequestSecurityDiagnostics } from "./request-security-edition/index.js";
+import { isLeoQuickPanelWindow, startLeoQuickEntry } from "./leo/quickEntry.js";
+import { registerImcpIpc } from "./leo/imcp.js";
+import { registerComputerUseIpc } from "./leo/computerUse.js";
+import { registerSpeechIpc } from "./leo/speech.js";
 import { createLocalTtftExporter } from "./localTtftExporter.js";
 /* eslint-disable max-lines */
 import "./desktopEarlyDataBaseDirBootstrap.js";
@@ -145,7 +149,6 @@ import { applyAppIcon } from "./desktopWindowChrome.js";
 import { resolveWindowsAppUserModelIdForFlavor } from "../../scripts/desktop-product-identity.mjs";
 import type { DesktopWindowSize } from "./desktopWindowSize.js";
 import { maybeWarnArchitectureMismatch } from "./desktopArchitectureGuard.js";
-import { maybeBlockStartupForForceUpdate } from "./forceUpdateGuard.js";
 import { createDesktopTray, updateWindowsDesktopTrayMenu } from "./desktopTray.js";
 import {
   createCloseToTrayCapabilityMonitor,
@@ -985,7 +988,6 @@ const webRemoteControlManager = createWebRemoteControlManager({
 });
 webRemoteControlManagerRef.current = webRemoteControlManager;
 
-let forceUpdateMainWindowCreationBlocked = false;
 
 function resolveExternalWorkspaceConfirmationCopy() {
   const effectiveLocale =
@@ -993,21 +995,6 @@ function resolveExternalWorkspaceConfirmationCopy() {
       ? resolveSystemApplicationLocale()
       : currentApplicationLocale;
   return resolveExternalWorkspaceOpenDialogCopy(effectiveLocale);
-}
-
-function focusForceUpdateGateWindow() {
-  const gateWindow = getApplicationWindowsExcludingCuaIndicator()[0];
-  if (!gateWindow) {
-    return;
-  }
-
-  if (gateWindow.isMinimized()) {
-    gateWindow.restore();
-  }
-  if (!gateWindow.isVisible()) {
-    gateWindow.show();
-  }
-  gateWindow.focus();
 }
 
 const primaryWindowCoordinator = createPrimaryWindowCoordinator({
@@ -1035,16 +1022,6 @@ const primaryWindowCoordinator = createPrimaryWindowCoordinator({
   },
   createWindow: (startupBootstrap) => {
     createWindowInstance(startupBootstrap);
-  },
-  canCreateWindow: (reason) => {
-    if (!forceUpdateMainWindowCreationBlocked) {
-      return true;
-    }
-
-    // 强制升级命中后，Dock/托盘/activate/deep link 不能绕过 app-ready gate 创建旧版主界面。
-    logger.warn(`[force-update] 已阻止主窗口创建入口：${reason}`);
-    focusForceUpdateGateWindow();
-    return false;
   },
   logger,
 });
@@ -1581,7 +1558,11 @@ function resolveFocusedDesktopZoomLevel(): number {
 
 function getApplicationWindowsExcludingCuaIndicator(): BrowserWindow[] {
   return BrowserWindow.getAllWindows().filter(
-    (win) => !win.isDestroyed() && !windowsCuaOperationIndicator.ownsWindow(win),
+    (win) =>
+      !win.isDestroyed() &&
+      !windowsCuaOperationIndicator.ownsWindow(win) &&
+      // [leo] ⌥Space 浮窗不是应用主窗口(见 leo/quickEntry.ts)。
+      !isLeoQuickPanelWindow(win),
   );
 }
 
@@ -1932,11 +1913,6 @@ registerDeepLinkProtocol(logger, { iconPath: linuxDesktopIntegrationIconPath });
 app.on("open-url", (event, url) => {
   event.preventDefault();
   const workspacePath = extractOpenWorkspacePathFromDeepLinkUrl(url);
-  if (workspacePath && forceUpdateMainWindowCreationBlocked) {
-    logger.warn("[force-update] 已忽略强制升级期间的 open-url workspace 请求");
-    focusForceUpdateGateWindow();
-    return;
-  }
   if (workspacePath && getApplicationWindowsExcludingCuaIndicator().length === 0) {
     // macOS 冷启动 Finder Service 会先触发 open-url，再创建首窗。
     // 把目标目录按 deep link 来源记录，首窗 bootstrap 前仍要走确认 gate。
@@ -1960,8 +1936,6 @@ app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
     handleSecondInstanceWorkspaceRequest({
       additionalData,
       argv,
-      focusForceUpdateGateWindow,
-      forceUpdateBlocked: forceUpdateMainWindowCreationBlocked,
       handleDeepLink: (url, options) => handleDeepLink(url, logger, options),
       handleOpenWorkspacePath: (path, options) =>
         handleOpenWorkspacePath(path, logger, {
@@ -1996,6 +1970,9 @@ app.whenReady().then(async () => {
   installLeoSessionGuard();
   // [leo-link] 「连接手机」面板经主进程转发到本机 Leo 接口。
   registerLeoLinkIpc();
+  registerImcpIpc();
+  registerComputerUseIpc();
+  registerSpeechIpc(logger);
   markMainLaunchAppReady();
   installRequestSecurityDiagnostics(session.defaultSession.webRequest, logger);
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {
@@ -2218,6 +2195,30 @@ app.whenReady().then(async () => {
       logger.warn("[desktop-tray] linux tray capability probe failed", error);
     });
   }
+  // [leo] macOS 菜单栏图标 + ⌥Space 快速派发(docs/specs/leo-quick-entry.md);其它平台内部直接返回。
+  startLeoQuickEntry({
+    logger,
+    trayIconPath: app.isPackaged
+      ? join(process.resourcesPath, "trayTemplate.png")
+      : join(import.meta.dirname, "../../build/trayTemplate.png"),
+    preloadPath: join(import.meta.dirname, "../preload/leoQuickPanel.cjs"),
+    rendererDir: join(import.meta.dirname, "../renderer"),
+    rendererDevUrl: process.env["ELECTRON_RENDERER_URL"],
+    showMainWindow: async () => {
+      await primaryWindowCoordinator.ensurePrimaryWindow("leo-quick-entry");
+      const window = getApplicationWindowsExcludingCuaIndicator()[0] ?? null;
+      if (window) {
+        if (window.isMinimized()) window.restore();
+        if (!window.isVisible()) window.show();
+        window.focus();
+      }
+      return window;
+    },
+    quitApp: () => {
+      markExplicitQuit("leo-tray-quit");
+      app.quit();
+    },
+  });
 
   registerPlatformIpcHandlers({
     fetchHelpConfig: readHelpConfig,
@@ -2420,33 +2421,8 @@ app.whenReady().then(async () => {
   });
   registerDesktopNetworkTelemetry(logger);
 
-  // 本地未打包 dev 构建（app.isPackaged === false）必须跳过远端强制升级 gate。
-  // 原因：force-update gate 只看 ZCODE_ENV === "production"，但 dev 构建（如 dev:desktop:cua
-  // 连真实后端测 computer use）虽指向 production 后端，版本号却滞后于线上 release（feature
-  // 分支不 bump 版本），会被 release minimalVersion 误判为"需强制升级"而启动秒退。force-update
-  // 是面向打包发布客户端的安全门，对未打包 dev 运行时无意义。打包版 app.isPackaged === true，
-  // gate 照常生效，对真实用户零影响。
-  const skipForceUpdateForLocalDevRuntime = !app.isPackaged;
-  const forceUpdateGuardResult =
-    ZCODE_PRODUCT_FLAVOR === "production" && !skipForceUpdateForLocalDevRuntime
-      ? await maybeBlockStartupForForceUpdate({
-          locale: currentApplicationLocale,
-          logger,
-          endpointOrigin: await resolveCurrentZCodeEndpointOrigin(),
-          onBlocked: () => {
-            forceUpdateMainWindowCreationBlocked = true;
-          },
-        })
-      : { blocked: false };
-  if (ZCODE_PRODUCT_FLAVOR !== "production") {
-    logger.info("[force-update] Preview 跳过远端强制升级检查");
-  } else if (skipForceUpdateForLocalDevRuntime) {
-    logger.info("[force-update] 本地 dev 构建（未打包）跳过远端强制升级检查");
-  }
-  if (forceUpdateGuardResult.blocked) {
-    return;
-  }
-
+  // [leo] 上游的远端强制升级 gate（forceUpdateGuard）已删除：它向 ZCode 官方 client config
+  // 取 minimalVersion，并弹「需要升级 ZCode」。本产品更新只走 leocodebox-updates，启动直接创建主窗口。
   logger.info("[startup] 创建主窗口");
   await primaryWindowCoordinator.ensurePrimaryWindow("app-ready");
 

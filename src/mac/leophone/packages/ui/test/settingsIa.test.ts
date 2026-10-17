@@ -28,9 +28,18 @@ test("desktop settings nav has four groups in iOS order", () => {
   assert.deepEqual(navIds(config), [
     ["providers", ["modelProvider"]],
     ["agent", ["memory", "subagents", "extensions"]],
-    ["devices", ["phone", "browser"]],
+    ["devices", ["phone", "browser", "computerUse"]],
     ["general", ["general", "appearance", "shortcuts", "usage"]],
   ]);
+});
+
+test("电脑操作 (Peekaboo) only shows on macOS desktop", () => {
+  const windows = createSettingsPageConfig({ isDesktop: true, isWindowsDesktop: true });
+  const devices = windows.settingsSectionGroups.find((group) => group.id === "devices");
+  assert.deepEqual(
+    devices?.sections.map((section) => section.id),
+    ["phone", "browser"],
+  );
 });
 
 test("web settings hide the desktop-only phone page", () => {

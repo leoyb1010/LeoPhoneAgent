@@ -342,7 +342,7 @@ extension SelectableMarkdownView {
             .paragraphStyle: para,
         ]
         let out = NSMutableAttributedString(attributedString: body)
-        out.append(NSAttributedString(string: "\n" + String(localized: "内容过长，以下部分按纯文本显示。") + "\n",
+        out.append(NSAttributedString(string: "\n" + AppLocalized("内容过长，以下部分按纯文本显示。") + "\n",
                                       attributes: noticeAttrs))
         out.append(NSAttributedString(string: split.overflow, attributes: [
             .font: UIFont.monospacedSystemFont(ofSize: size * 0.82, weight: .regular),
@@ -350,7 +350,7 @@ extension SelectableMarkdownView {
             .paragraphStyle: para,
         ]))
         if split.overflowTruncated {
-            out.append(NSAttributedString(string: "\n…\n" + String(localized: "其余内容未显示，复制整条消息可得到全文。"),
+            out.append(NSAttributedString(string: "\n…\n" + AppLocalized("其余内容未显示，复制整条消息可得到全文。"),
                                           attributes: noticeAttrs))
         }
         return out
@@ -1234,13 +1234,13 @@ fileprivate final class MarkdownNSRenderer {
             }) {
             case .allow: break
             case .dataURITooLarge:
-                return renderImageStandIn(source: source, alt: altText, attrs: attrs, note: String(localized: "图片过大，未显示"))
+                return renderImageStandIn(source: source, alt: altText, attrs: attrs, note: AppLocalized("图片过大，未显示"))
             case .fileOutsideSessionMedia:
-                return renderImageStandIn(source: source, alt: altText, attrs: attrs, note: String(localized: "图片不在本会话目录，未显示"))
+                return renderImageStandIn(source: source, alt: altText, attrs: attrs, note: AppLocalized("图片不在本会话目录，未显示"))
             }
             inlineImageCount += 1
             if inlineImageCount > MarkdownImagePolicy.maxImagesPerMessage {
-                return renderImageStandIn(source: source, alt: altText, attrs: attrs, note: String(localized: "图片"))
+                return renderImageStandIn(source: source, alt: altText, attrs: attrs, note: AppLocalized("图片"))
             }
             let ext = URL(string: source)?.pathExtension.lowercased() ?? ""
             imgLogger.verbose("[MinisImage][InlineParse] .image node src=\(ImageAttachment.shortSrc(source)) ext=\(ext)")
@@ -1402,18 +1402,6 @@ final class CodeBlockAttachment: NSTextAttachment {
 
     static let topMargin: CGFloat = 6
     static let bottomMargin: CGFloat = 4
-
-    /// Associated-object key retaining the iOS 16 copy-tap gesture target
-    /// for the button's lifetime (see makeView).
-    static var copyTapHandlerKey: UInt8 = 0
-
-    /// Target object for the iOS 16 fallback tap gesture on the copy button —
-    /// UITapGestureRecognizer needs an @objc target/action pair.
-    final class CodeCopyTapHandler: NSObject {
-        private let perform: () -> Void
-        init(perform: @escaping () -> Void) { self.perform = perform }
-        @objc func handleTap() { perform() }
-    }
 
     /// Cached content height from sizeThatFits, keyed by code hash + width.
     private var cachedContentHeight: (hash: Int, height: CGFloat)?
@@ -1586,22 +1574,6 @@ final class CodeBlockAttachment: NSTextAttachment {
             }
         }
         copyButton.addAction(UIAction { _ in performCopy() }, for: .touchUpInside)
-        // [T-ios16-codeblock-copy-regression] iOS 16 ONLY: also bind an
-        // independent tap gesture on the button. On iOS 16 the UIControl
-        // .touchUpInside event stopped firing for this button (regressed
-        // between TF26 and TF28; exact toucher unidentified — the host text
-        // view's gesture/interaction graph cancels the control's touches).
-        // A UITapGestureRecognizer attached to the button itself recognizes
-        // through the gesture system rather than the control-event path, so
-        // it survives the cancellation. Gated to <17: iOS 17+ button works,
-        // and double-binding there would just be dead weight.
-        if #unavailable(iOS 17.0) {
-            let tapHandler = CodeCopyTapHandler(perform: performCopy)
-            let tap = UITapGestureRecognizer(target: tapHandler, action: #selector(CodeCopyTapHandler.handleTap))
-            tap.cancelsTouchesInView = false
-            copyButton.addGestureRecognizer(tap)
-            objc_setAssociatedObject(copyButton, &Self.copyTapHandlerKey, tapHandler, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        }
         container.addSubview(copyButton)
 
         container.frame.origin.y = Self.topMargin
@@ -2401,7 +2373,7 @@ final class TableAttachment: NSTextAttachment {
             guard let self else { return }
             UIPasteboard.general.string = self.plainText()
             // [T-toast-feedback] Confirm the copy succeeded.
-            MinisToast.show(String(localized: "Table copied"))
+            MinisToast.show(AppLocalized("Table copied"))
         }
 
         // [T-ios-copy-table-image] Render the FULL table (all rows/cols, not
@@ -2459,7 +2431,7 @@ final class TableAttachment: NSTextAttachment {
             }
             UIPasteboard.general.image = image
             // [T-toast-feedback] Confirm the image copy succeeded.
-            MinisToast.show(String(localized: "Table image copied"))
+            MinisToast.show(AppLocalized("Table image copied"))
         }
 
         var yOffset: CGFloat = 0
@@ -2768,18 +2740,6 @@ private final class TableCellTextView: UITextView, UITextViewDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    // [T-ios-table-cell-image-menu] iOS 16 ONLY: drop the system
-    // UIContextMenuInteraction so a promoted table cell never pops the
-    // "Copy Image" / "Save to Camera Roll" preview menu for the cell's inline
-    // attachments. Same rationale as SelectableMarkdownTextView.addInteraction;
-    // iOS 17+ keeps the (handled) system menu.
-    override func addInteraction(_ interaction: any UIInteraction) {
-        if #unavailable(iOS 17.0), interaction is UIContextMenuInteraction {
-            return
-        }
-        super.addInteraction(interaction)
-    }
-
     override func becomeFirstResponder() -> Bool {
         let cv = findCollectionView()
         cv?.offsetLocked = true
@@ -2905,7 +2865,7 @@ private final class TableCellTextView: UITextView, UITextViewDelegate {
         if selectedRange.length > 0 {
             children.append(
                 UICommand(
-                    title: String(localized: "Add to Chat Input"),
+                    title: AppLocalized("Add to Chat Input"),
                     image: UIImage(systemName: "text.insert"),
                     action: #selector(addSelectionToChatInput(_:))
                 )
@@ -2914,7 +2874,7 @@ private final class TableCellTextView: UITextView, UITextViewDelegate {
         if copyTableAction != nil {
             children.append(
                 UICommand(
-                    title: String(localized: "Copy Table"),
+                    title: AppLocalized("Copy Table"),
                     image: UIImage(systemName: "tablecells"),
                     action: #selector(copyTable)
                 )
@@ -2923,7 +2883,7 @@ private final class TableCellTextView: UITextView, UITextViewDelegate {
             if copyTableImageAction != nil {
                 children.append(
                     UICommand(
-                        title: String(localized: "Copy Table Image"),
+                        title: AppLocalized("Copy Table Image"),
                         image: UIImage(systemName: "tablecells.badge.ellipsis"),
                         action: #selector(copyTableImage)
                     )
@@ -2934,7 +2894,7 @@ private final class TableCellTextView: UITextView, UITextViewDelegate {
         if selectedRange.length > 0 {
             children.append(
                 UICommand(
-                    title: String(localized: "Read Selected Aloud"),
+                    title: AppLocalized("Read Selected Aloud"),
                     image: UIImage(systemName: "speaker.wave.2"),
                     action: #selector(readSelectedAloud)
                 )
@@ -2942,7 +2902,7 @@ private final class TableCellTextView: UITextView, UITextViewDelegate {
         }
         children.append(
             UICommand(
-                title: String(localized: "Read All Aloud"),
+                title: AppLocalized("Read All Aloud"),
                 image: UIImage(systemName: "play.circle"),
                 action: #selector(readAllAloud)
             )
@@ -3152,10 +3112,10 @@ private final class TableCellLabel: UILabel, UIGestureRecognizerDelegate, UICont
         // Order matches buildMenu: Add to Chat Input → Copy Table → Copy Table
         // Image. [T-ios-copy-table-menu-order]
         UIMenuController.shared.menuItems = [
-            UIMenuItem(title: String(localized: "Add to Chat Input"), action: #selector(TableCellTextView.addSelectionToChatInput(_:))),
-            UIMenuItem(title: String(localized: "Copy Table"), action: #selector(TableCellTextView.copyTable)),
+            UIMenuItem(title: AppLocalized("Add to Chat Input"), action: #selector(TableCellTextView.addSelectionToChatInput(_:))),
+            UIMenuItem(title: AppLocalized("Copy Table"), action: #selector(TableCellTextView.copyTable)),
             // [T-ios-copy-table-image]
-            UIMenuItem(title: String(localized: "Copy Table Image"), action: #selector(TableCellTextView.copyTableImage)),
+            UIMenuItem(title: AppLocalized("Copy Table Image"), action: #selector(TableCellTextView.copyTableImage)),
         ]
 
         // Select all text after a run-loop turn so TextKit finishes layout.
@@ -4848,26 +4808,6 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         selectionDragTracker = tracker
     }
 
-    // [T-ios-table-cell-image-menu] iOS 16 ONLY: UITextView attaches a built-in
-    // UIContextMenuInteraction that, when an inline NSTextAttachment carries an
-    // image (our TableAttachment / CodeBlockAttachment / MathAttachment all use a
-    // transparent placeholder image for layout), long-press pops the system
-    // image preview menu — "Copy Image" / "Save to Camera Roll" over an all-black
-    // (transparent-placeholder) preview. There is no delegate hook to suppress
-    // it on iOS 16 (the UITextItem.menuConfiguration API is iOS 17+, which is why
-    // 17/18 are handled in menuConfigurationFor and 16 slipped through). We strip
-    // the system context-menu interaction as UIKit installs it; the app's own
-    // affordances don't depend on it — text selection/copy uses the edit menu
-    // (UIMenuController) and table cells promote to TableCellTextView with their
-    // own Copy Table / Copy Table Image menu. Gated to iOS <17 so 17+ keeps the
-    // (handled) system menu and link/text-item previews.
-    override func addInteraction(_ interaction: any UIInteraction) {
-        if #unavailable(iOS 17.0), interaction is UIContextMenuInteraction {
-            return
-        }
-        super.addInteraction(interaction)
-    }
-
     private weak var selectionDragTracker: UILongPressGestureRecognizer?
 
     private weak var inlineCodeTapGesture: UITapGestureRecognizer?
@@ -5450,19 +5390,19 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         // our own Read Selection / Read Reply entries.
         builder.remove(menu: .speech)
         let copyMd = UICommand(
-            title: String(localized: "Copy Markdown"),
+            title: AppLocalized("Copy Markdown"),
             image: UIImage(systemName: "text.quote"),
             action: #selector(copyMarkdown(_:))
         )
         let copyRtf = UICommand(
-            title: String(localized: "Copy Rich Text"),
+            title: AppLocalized("Copy Rich Text"),
             image: UIImage(systemName: "doc.richtext"),
             action: #selector(copyRichText(_:))
         )
         var extras: [UIMenuElement] = [copyMd, copyRtf]
         if onCopyScreenshot != nil {
             extras.append(UICommand(
-                title: String(localized: "Copy Screenshot"),
+                title: AppLocalized("Copy Screenshot"),
                 image: UIImage(systemName: "camera.viewfinder"),
                 action: #selector(copyScreenshotFromMenu(_:))
             ))
@@ -5474,14 +5414,14 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         // one feature: selection = plain speaker, whole reply = speaker+waves.
         if selectedRange.length > 0, onSpeakText != nil {
             extras.append(UICommand(
-                title: String(localized: "Read Selection"),
+                title: AppLocalized("Read Selection"),
                 image: UIImage(systemName: "speaker.wave.1"),
                 action: #selector(readSelectionFromMenu(_:))
             ))
         }
         if onReadAloud != nil {
             extras.append(UICommand(
-                title: String(localized: "Read from Start"),
+                title: AppLocalized("Read from Start"),
                 image: UIImage(systemName: "speaker.wave.2"),
                 action: #selector(readReplyFromMenu(_:))
             ))
@@ -5496,14 +5436,14 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         if selectedRange.length > 0 {
             let addToInput = UIMenu(title: "", options: .displayInline, children: [
                 UICommand(
-                    title: String(localized: "Add to Chat Input"),
+                    title: AppLocalized("Add to Chat Input"),
                     image: UIImage(systemName: "text.insert"),
                     action: #selector(addSelectionToChatInput(_:))
                 ),
                 // [T-quote-followup] Quote-and-ask: precise follow-up on a slice
                 // of a long reply.
                 UICommand(
-                    title: String(localized: "Quote & Ask"),
+                    title: AppLocalized("Quote & Ask"),
                     image: UIImage(systemName: "quote.opening"),
                     action: #selector(quoteSelectionFromMenu(_:))
                 )
@@ -8298,10 +8238,10 @@ struct SelectableMarkdownView: UIViewRepresentable {
         func textView(_ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? {
             switch textItem.content {
             case .link(let url):
-                let copyAction = UIAction(title: String(localized: "Copy Link"), image: UIImage(systemName: "doc.on.doc")) { _ in
+                let copyAction = UIAction(title: AppLocalized("Copy Link"), image: UIImage(systemName: "doc.on.doc")) { _ in
                     UIPasteboard.general.string = url.absoluteString
                 }
-                let openAction = UIAction(title: String(localized: "Open in Safari"), image: UIImage(systemName: "safari")) { _ in
+                let openAction = UIAction(title: AppLocalized("Open in Safari"), image: UIImage(systemName: "safari")) { _ in
                     UIApplication.shared.open(url)
                 }
                 let menu = UIMenu(children: [copyAction, openAction])
@@ -8320,7 +8260,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
                 // silently disappeared on current OSes. Unconditional now.
                 if let tableAttach = attachment as? TableAttachment {
                     let copyTableAction = UIAction(
-                        title: String(localized: "Copy Table"),
+                        title: AppLocalized("Copy Table"),
                         image: UIImage(systemName: "tablecells")
                     ) { _ in
                         UIPasteboard.general.string = tableAttach.plainText()
@@ -8333,10 +8273,10 @@ struct SelectableMarkdownView: UIViewRepresentable {
                     // 1×1 transparent placeholder) when no real image is loaded.
                     return UITextItem.MenuConfiguration(preview: nil, menu: UIMenu(children: []))
                 }
-                let copyAction = UIAction(title: String(localized: "Copy Image"), image: UIImage(systemName: "doc.on.doc")) { _ in
+                let copyAction = UIAction(title: AppLocalized("Copy Image"), image: UIImage(systemName: "doc.on.doc")) { _ in
                     UIPasteboard.general.image = image
                 }
-                let saveAction = UIAction(title: String(localized: "Save to Camera Roll"), image: UIImage(systemName: "square.and.arrow.down")) { _ in
+                let saveAction = UIAction(title: AppLocalized("Save to Camera Roll"), image: UIImage(systemName: "square.and.arrow.down")) { _ in
                     PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
                         guard status == .authorized || status == .limited else { return }
                         PHPhotoLibrary.shared().performChanges {
@@ -8358,13 +8298,13 @@ struct SelectableMarkdownView: UIViewRepresentable {
         func textView(_ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
             if interaction == .presentActions {
                 let alert = UIAlertController(title: URL.absoluteString, message: nil, preferredStyle: .actionSheet)
-                alert.addAction(UIAlertAction(title: String(localized: "Copy Link"), style: .default) { _ in
+                alert.addAction(UIAlertAction(title: AppLocalized("Copy Link"), style: .default) { _ in
                     UIPasteboard.general.string = URL.absoluteString
                 })
-                alert.addAction(UIAlertAction(title: String(localized: "Open in Safari"), style: .default) { _ in
+                alert.addAction(UIAlertAction(title: AppLocalized("Open in Safari"), style: .default) { _ in
                     UIApplication.shared.open(URL)
                 })
-                alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
+                alert.addAction(UIAlertAction(title: AppLocalized("Cancel"), style: .cancel))
                 // [B7] The tapped view's own scene, and its content window —
                 // not whichever window happens to be first (the app-lock one).
                 if let scene = textView.window?.windowScene

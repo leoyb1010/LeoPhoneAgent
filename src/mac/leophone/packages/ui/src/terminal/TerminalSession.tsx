@@ -3,7 +3,7 @@ import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { ClipboardPaste, Copy } from "lucide-react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ILink, ILinkHandler, ITheme, IWindowsPty } from "@xterm/xterm";
 import type { IServiceAccessor } from "@zcode/services";
 import type { IDisposable } from "@zcode/rpc";
@@ -30,6 +30,8 @@ import {
 import { normalizePowerShellReadlineRedraw } from "@/terminal/terminalDataTransform.js";
 import { getHttpLinksForTerminalBufferLine } from "@/terminal/terminalLinks.js";
 import { mergeTerminalTheme } from "@/terminal/terminalTheme.js";
+import { ensureTerminalEnhancements } from "@/terminal/terminalEnhancements.js";
+import { TerminalSearchBar } from "@/terminal/TerminalSearchBar.js";
 import {
   sidePaneTerminalSessionRegistry,
   type SidePaneTerminalSessionEntry,
@@ -122,6 +124,7 @@ export function TerminalSession({
   workspaceKey?: string;
 }) {
   const { intl } = useZCodeIntl();
+  const [searchOpen, setSearchOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -397,6 +400,8 @@ export function TerminalSession({
         fontSize: 13,
         fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
         theme: mergeTerminalTheme(terminalProfileThemeRef.current),
+        // [leo] unicode11 字宽与搜索高亮装饰属于 xterm 5 的 proposed API。
+        allowProposedApi: true,
         linkHandler: {
           allowNonHttpProtocols: false,
           activate(event, text) {
@@ -414,6 +419,7 @@ export function TerminalSession({
       term.loadAddon(fitAddon);
       term.loadAddon(new ClipboardAddon());
       term.open(hostEl);
+      ensureTerminalEnhancements(term);
 
       let initialTerminalSize: TerminalSize | null = null;
       if (isVisibleRef.current && hostEl.clientWidth > 0 && hostEl.clientHeight > 0) {
@@ -761,6 +767,8 @@ export function TerminalSession({
       fontSize: 13,
       fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
       theme: mergeTerminalTheme(terminalProfileThemeRef.current),
+      // [leo] unicode11 字宽与搜索高亮装饰属于 xterm 5 的 proposed API。
+      allowProposedApi: true,
       linkHandler: {
         allowNonHttpProtocols: false,
         activate(event, text) {
@@ -781,6 +789,7 @@ export function TerminalSession({
     // 接入 ClipboardAddon 以支持 OSC 52，并让 xterm 的 copy 事件把选区写入系统剪贴板。
     term.loadAddon(new ClipboardAddon());
     term.open(el);
+    ensureTerminalEnhancements(term);
     let initialTerminalSize: TerminalSize | null = null;
     if (isVisibleRef.current && el.clientWidth > 0 && el.clientHeight > 0) {
       try {
@@ -1102,23 +1111,44 @@ export function TerminalSession({
   };
 
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div
-          ref={containerRef}
-          className="terminal-xterm-shell h-full min-h-0 w-full overflow-hidden"
-        />
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onSelect={handleCopy}>
-          <Copy className="mr-2 h-4 w-4" />
-          {intl.formatMessage({ id: "terminal.contextMenu.copy" })}
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={handlePaste}>
-          <ClipboardPaste className="mr-2 h-4 w-4" />
-          {intl.formatMessage({ id: "terminal.contextMenu.paste" })}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+    <div
+      className="relative h-full min-h-0 w-full"
+      onKeyDownCapture={(event) => {
+        // [leo] ⌘F 在终端里打开终端自己的查找(全局「任务内查找」对终端焦点让路,见 useAppKeyboard)。
+        if (
+          event.key.toLowerCase() === "f" &&
+          event.metaKey !== event.ctrlKey &&
+          !event.altKey &&
+          !event.shiftKey &&
+          (event.target as HTMLElement | null)?.closest?.(".xterm")
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          setSearchOpen(true);
+        }
+      }}
+    >
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div
+            ref={containerRef}
+            className="terminal-xterm-shell h-full min-h-0 w-full overflow-hidden"
+          />
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem onSelect={handleCopy}>
+            <Copy className="mr-2 h-4 w-4" />
+            {intl.formatMessage({ id: "terminal.contextMenu.copy" })}
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={handlePaste}>
+            <ClipboardPaste className="mr-2 h-4 w-4" />
+            {intl.formatMessage({ id: "terminal.contextMenu.paste" })}
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      {searchOpen ? (
+        <TerminalSearchBar term={termRef.current} onClose={() => setSearchOpen(false)} />
+      ) : null}
+    </div>
   );
 }

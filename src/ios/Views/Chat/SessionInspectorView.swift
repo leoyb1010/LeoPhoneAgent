@@ -47,7 +47,7 @@ struct SessionInspectorView: View {
                 Section("Model") {
                     LabeledContent("Current model", value: currentModel.displayName)
                     if contextWindow > 0 {
-                        LabeledContent("Context window", value: String(localized: "\(compact(contextWindow)) tokens"))
+                        LabeledContent("Context window", value: AppLocalized("\(compact(contextWindow)) tokens"))
                     }
                 }
 
@@ -100,12 +100,12 @@ struct SessionInspectorView: View {
                 }
 
                 Section {
-                    statusRow(String(localized: "Memory injection"), isOn: vm.memoryEnabled,
-                              detail: vm.memoryEnabled ? String(localized: "GLOBAL.md and recent logs enter the prompt") : String(localized: "Not injected, and nothing is written for this session"))
-                    statusRow(String(localized: "Skills"), isOn: enabledSkillCount > 0,
-                              detail: enabledSkillCount > 0 ? String(localized: "\(enabledSkillCount) enabled") : String(localized: "None"))
-                    statusRow(String(localized: "MCP servers"), isOn: enabledMCPCount > 0,
-                              detail: enabledMCPCount > 0 ? String(localized: "\(enabledMCPCount) enabled") : String(localized: "None"))
+                    statusRow(AppLocalized("Memory injection"), isOn: vm.memoryEnabled,
+                              detail: vm.memoryEnabled ? AppLocalized("GLOBAL.md and recent logs enter the prompt") : AppLocalized("Not injected, and nothing is written for this session"))
+                    statusRow(AppLocalized("Skills"), isOn: enabledSkillCount > 0,
+                              detail: enabledSkillCount > 0 ? AppLocalized("\(enabledSkillCount) enabled") : AppLocalized("None"))
+                    statusRow(AppLocalized("MCP servers"), isOn: enabledMCPCount > 0,
+                              detail: enabledMCPCount > 0 ? AppLocalized("\(enabledMCPCount) enabled") : AppLocalized("None"))
                 } header: {
                     Text("What is feeding this session")
                 } footer: {

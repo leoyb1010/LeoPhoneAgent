@@ -29,10 +29,10 @@ enum MemoryUndoAction {
         }
         if removed {
             LeoHaptics.notification(.success)
-            MinisToast.show(String(localized: "已撤销这条记忆"))
+            MinisToast.show(AppLocalized("已撤销这条记忆"))
         } else {
             LeoHaptics.notification(.warning)
-            MinisToast.show(String(localized: "没找到这条记忆,可能已经删除或被修改"))
+            MinisToast.show(AppLocalized("没找到这条记忆,可能已经删除或被修改"))
         }
     }
 }

@@ -491,19 +491,8 @@ private struct DownloadPulseModifier: ViewModifier {
         if reduceMotion {
             content
                 .opacity(1)
-        } else if #available(iOS 17, *) {
-            content.symbolEffect(.pulse, options: .repeating, isActive: active)
         } else {
-            content
-                .opacity(active && legacyPulse ? 0.35 : 1.0)
-                .animation(active
-                           ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
-                           : .default,
-                           value: legacyPulse)
-                .onAppear { if active { legacyPulse = true } }
-                .onChange(of: active) { nowActive in
-                    legacyPulse = nowActive
-                }
+            content.symbolEffect(.pulse, options: .repeating, isActive: active)
         }
     }
 }
@@ -567,7 +556,7 @@ struct BrowserDownloadPanelSheet: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(String(localized: "Close")) { dismiss() }
+                    Button(AppLocalized("Close")) { dismiss() }
                 }
             }
         }
@@ -623,7 +612,7 @@ private struct BrowserDownloadPanelRow: View {
                         .progressViewStyle(.linear)
                         .tint(Color.accentColor)
                 case .completed(let sizeText):
-                    Text("\(sizeText) · \(String(localized: "Show in Files", comment: "Completed download row hint"))")
+                    Text("\(sizeText) · \(AppLocalized("Show in Files", comment: "Completed download row hint"))")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 case .failed(let reason):
@@ -664,7 +653,7 @@ private struct BrowserDownloadPanelRow: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if entry.state != .downloading {
                 Button(role: .destructive, action: onClear) {
-                    Label(String(localized: "Clear"), systemImage: "trash")
+                    Label(AppLocalized("Clear"), systemImage: "trash")
                 }
             }
         }
@@ -768,7 +757,7 @@ struct BrowserDownloadCardRow: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         case .completed(let sizeText):
-            Text("\(sizeText) · \(String(localized: "Tap to view", comment: "Completed download card"))")
+            Text("\(sizeText) · \(AppLocalized("Tap to view", comment: "Completed download card"))")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         case .failed(let reason):
@@ -783,11 +772,7 @@ struct BrowserDownloadCardRow: View {
 private extension View {
     /// Gentle pulse on the in-progress icon where the OS supports it.
     @ViewBuilder func symbolEffectPulseIfAvailable() -> some View {
-        if #available(iOS 17, *) {
-            self.symbolEffect(.pulse)
-        } else {
-            self
-        }
+        self.symbolEffect(.pulse)
     }
 }
 

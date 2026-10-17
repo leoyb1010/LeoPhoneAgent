@@ -73,7 +73,7 @@ enum BackupDelivery {
             let got = (try? fm.attributesOfItem(atPath: partial.path)[.size] as? Int64) ?? -2
             guard want == got else {
                 throw NSError(domain: "Backup", code: 1, userInfo: [
-                    NSLocalizedDescriptionKey: String(localized: "复制校验失败：目标文件大小与备份不一致"),
+                    NSLocalizedDescriptionKey: AppLocalized("复制校验失败：目标文件大小与备份不一致"),
                 ])
             }
         } catch {

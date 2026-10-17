@@ -79,7 +79,7 @@ class UsageStatsViewModel: ObservableObject {
                 default:          return p   // "Anthropic"/"OpenAI" already canonical
                 }
             }
-            return String(localized: "Other", comment: "Usage stats: unknown provider group")
+            return AppLocalized("Other", comment: "Usage stats: unknown provider group")
         }
         let modelLookup = staticLookup.merging(
             Dictionary(store.modelEntries.map { ($0.model.id, $0.model) }, uniquingKeysWith: { a, _ in a }),

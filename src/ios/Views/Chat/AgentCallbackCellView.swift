@@ -49,7 +49,7 @@ struct AgentCallbackCellView: View {
                 }
                 Spacer(minLength: 0)
                 if callback.body.count > 280 || callback.body.filter({ $0 == "\n" }).count > 5 {
-                    Button(expanded ? String(localized: "收起") : String(localized: "展开全部")) {
+                    Button(expanded ? AppLocalized("收起") : AppLocalized("展开全部")) {
                         expanded.toggle()
                     }
                     .font(.system(size: 12, weight: .medium))
@@ -68,7 +68,7 @@ struct AgentCallbackCellView: View {
     }
 
     private var headline: String {
-        let base = callback.kind == .finished ? String(localized: "子代理结果") : String(localized: "子代理进度")
+        let base = callback.kind == .finished ? AppLocalized("子代理结果") : AppLocalized("子代理进度")
         guard let agent = callback.agent, !agent.isEmpty, agent != SubAgentDefinition.builtInName else { return base }
         return "\(base) · \(agent)"
     }

@@ -48,7 +48,7 @@ struct CloudSyncSettingsV2View: View {
                 Toggle(isOn: Binding(
                     get: { v2Enabled },
                     set: { newValue in
-                        if #available(iOS 17.0, *) { SyncV2Bootstrap.setEnabled(newValue) }
+                        SyncV2Bootstrap.setEnabled(newValue)
                         v2Enabled = newValue
                     }
                 )) {
@@ -203,7 +203,7 @@ struct CloudSyncSettingsV2View: View {
 
                 if v2Enabled, let cloudProblem {
                     Section {
-                        Text(health.state == .degraded ? String(localized: "Some sync operations are waiting; other data can continue.") : String(localized: "Sync needs attention. Local changes are kept on this device."))
+                        Text(health.state == .degraded ? AppLocalized("Some sync operations are waiting; other data can continue.") : AppLocalized("Sync needs attention. Local changes are kept on this device."))
                             .foregroundStyle(.secondary)
                         DisclosureGroup("Sync diagnostics") {
                             Text(cloudProblem).font(.caption).textSelection(.enabled)
@@ -306,11 +306,7 @@ struct CloudSyncSettingsV2View: View {
                 return  // cancelled during sleep
             }
             let backgrounded: Bool
-            if #available(iOS 17.0, *) {
-                backgrounded = SyncCore.shared.isAppInBackground
-            } else {
-                backgrounded = false
-            }
+            backgrounded = SyncCore.shared.isAppInBackground
             if !backgrounded {
                 await refresh()
             }
@@ -319,19 +315,15 @@ struct CloudSyncSettingsV2View: View {
 
     @MainActor
     private func refresh() async {
-        if #available(iOS 17.0, *) {
-            v2Enabled = SyncV2Bootstrap.isEnabled
-        }
+        v2Enabled = SyncV2Bootstrap.isEnabled
         tailnetEnabled = SyncV2Bootstrap.isTailnetEnabled
         replicaHostID = SyncV2Bootstrap.selectedReplicaHostID
         replicaStatus = SyncV2Bootstrap.tailnetStatus
-        if #available(iOS 17.0, *) {
-            if let replica = SyncCore.shared.transports.first(where: { $0.name.hasPrefix("tailnet:") }) {
-                replicaStatus = "\(SyncV2Bootstrap.tailnetStatus) · \(replica.health.state.localizedLabel)"
-            }
-            deliveryFailures = ((try? await ChatStore.shared.syncDeliveryFailures()) ?? []).map {
-                "\($0.destination) · \($0.recordType): \($0.reason)"
-            }
+        if let replica = SyncCore.shared.transports.first(where: { $0.name.hasPrefix("tailnet:") }) {
+            replicaStatus = "\(SyncV2Bootstrap.tailnetStatus) · \(replica.health.state.localizedLabel)"
+        }
+        deliveryFailures = ((try? await ChatStore.shared.syncDeliveryFailures()) ?? []).map {
+            "\($0.destination) · \($0.recordType): \($0.reason)"
         }
         deviceName = UploadPolicy.customDeviceName ?? DeviceIdentity.deviceName
         for cat in UploadPolicy.Category.allCases {
@@ -343,7 +335,7 @@ struct CloudSyncSettingsV2View: View {
         let me = DeviceIdentity.deviceId
         let all = await ChatStore.shared.listSyncDevices()
         remoteDevices = all.filter { $0.id != me }.sorted { $0.lastSeen > $1.lastSeen }
-        if #available(iOS 17.0, *), v2Enabled || tailnetEnabled {
+        if v2Enabled || tailnetEnabled {
             health = v2Enabled ? SyncCore.shared.cloudHealth : (SyncCore.shared.transports.first { $0.name.hasPrefix("tailnet:") }?.health ?? SyncTransportHealth())
             let counts = await ChatStore.shared.countDirtyRecords()
             categoryPausedCount = counts.byType.filter { !UploadPolicy.allowsRecordType($0.key) }.values.reduce(0, +)
@@ -363,16 +355,16 @@ struct CloudSyncSettingsV2View: View {
                 cloudProblem = nil
             }
             statusText = health.state.localizedLabel
-            if SyncCore.shared.pausedUntil != nil { statusText = String(localized: "Paused") }
+            if SyncCore.shared.pausedUntil != nil { statusText = AppLocalized("Paused") }
         } else {
-            statusText = String(localized: "Off")
+            statusText = AppLocalized("Off")
         }
     }
 
     /// [T-ck15-explain] 一次最便宜的只读请求(列出本 App 的 iCloud 区域),看 iCloud 通不通。
     @MainActor
     private func checkCloud() async {
-        guard #available(iOS 17.0, *), v2Enabled, !checkingCloud else { return }
+        guard v2Enabled, !checkingCloud else { return }
         checkingCloud = true
         defer { checkingCloud = false }
         var problem: String?
@@ -391,9 +383,7 @@ struct CloudSyncSettingsV2View: View {
             recordType: "SyncDeviceV2",
             recordId: DeviceIdentity.deviceId
         )
-        if #available(iOS 17.0, *) {
-            SyncCore.shared.scheduleSend(delay: 1)
-        }
+        SyncCore.shared.scheduleSend(delay: 1)
     }
 
     private func iconName(for cat: UploadPolicy.Category) -> String {
@@ -421,18 +411,18 @@ struct CloudSyncSettingsV2View: View {
     }
 
     private func uploadTypesSummary(_ csv: [String]) -> String {
-        guard !csv.isEmpty else { return String(localized: "No categories enabled") }
+        guard !csv.isEmpty else { return AppLocalized("No categories enabled") }
         return csv.joined(separator: " · ")
     }
 
     private func relativeDate(_ d: Date) -> String {
         let secs = Int(Date().timeIntervalSince(d))
-        if secs < 60 { return String(localized: "Just now") }
+        if secs < 60 { return AppLocalized("Just now") }
         let mins = secs / 60
-        if mins < 60 { return String(localized: "\(mins) min ago") }
+        if mins < 60 { return AppLocalized("\(mins) min ago") }
         let hrs = mins / 60
-        if hrs < 24 { return String(localized: "\(hrs) hr ago") }
+        if hrs < 24 { return AppLocalized("\(hrs) hr ago") }
         let days = hrs / 24
-        return String(localized: "\(days) day ago")
+        return AppLocalized("\(days) day ago")
     }
 }

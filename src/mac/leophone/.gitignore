@@ -1,6 +1,6 @@
 node_modules/
 dist/
-# zcode-server-cli 发行包 staging 输出（spec §7.1），本地组装产物不入库。
+# 发行包 staging 输出（build-zcode 等），本地组装产物不入库。
 dist-release/
 # Bugfix: macOS CI 按架构隔离 electron-builder 输出目录，这些仍是构建产物。
 packages/desktop/dist-*/
@@ -80,3 +80,7 @@ packages/desktop/.e2e-cache/
 packages/desktop/.e2e-network-capture/
 .zcode-runtime/
 
+
+# [leo] 随包第三方二进制由 scripts/leo-fetch-peekaboo.mjs 下载并校验,不入库。
+packages/desktop/leo/bin/
+packages/desktop/resources/leo-speech/

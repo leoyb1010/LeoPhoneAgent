@@ -136,20 +136,20 @@ struct AgentCallback: Equatable {
 
     /// One-line stand-in for previews, where the raw XML would be noise.
     var previewLine: String {
-        let head = kind == .finished ? String(localized: "子代理结果") : String(localized: "子代理进度")
+        let head = kind == .finished ? AppLocalized("子代理结果") : AppLocalized("子代理进度")
         return "\(head) · \(title) · \(Self.localizedStatus(status))"
     }
 
     static func localizedStatus(_ status: String) -> String {
         switch status {
-        case "running": return String(localized: "运行中")
-        case "done", "completed": return String(localized: "已完成")
-        case "no_deliverable": return String(localized: "无结果")
-        case "cancelled": return String(localized: "已取消")
-        case "timeout": return String(localized: "已超时")
-        case "failed": return String(localized: "失败")
-        case "rejected": return String(localized: "被拒绝")
-        case "queued": return String(localized: "排队中")
+        case "running": return AppLocalized("运行中")
+        case "done", "completed": return AppLocalized("已完成")
+        case "no_deliverable": return AppLocalized("无结果")
+        case "cancelled": return AppLocalized("已取消")
+        case "timeout": return AppLocalized("已超时")
+        case "failed": return AppLocalized("失败")
+        case "rejected": return AppLocalized("被拒绝")
+        case "queued": return AppLocalized("排队中")
         default: return status
         }
     }

@@ -253,8 +253,8 @@ struct SettingsHomeView: View {
         let hits = groups.flatMap(\.entries).filter(matches)
         return VStack(spacing: 0) {
             if hits.isEmpty {
-                LeoEmptyState(systemImage: "magnifyingglass", title: String(localized: "没有匹配的设置项"),
-                              message: String(localized: "试试「模型」、「Mac」、「藏宝阁」或「权限」"))
+                LeoEmptyState(systemImage: "magnifyingglass", title: AppLocalized("没有匹配的设置项"),
+                              message: AppLocalized("试试「模型」、「Mac」、「藏宝阁」或「权限」"))
             } else {
                 ForEach(Array(hits.enumerated()), id: \.element.id) { index, entry in
                     SettingsRow(entry: entry)
@@ -441,55 +441,40 @@ private struct SettingsRow: View {
 
 struct ThinkingAndModelSlotsView: View {
     @State private var rules: [ThinkingRule] = ThinkingRuleStore.load()
-    @State private var newPrefix = ""
-    @State private var newMax: ThinkingLevel = .high
+    @State private var editing: ThinkingRule?
+    @State private var creating = false
     @ObservedObject private var store = ProviderConfigStore.shared
     @AppStorage(AgentModelSlots.compactKey) private var compactId = ""
     @AppStorage(IncrementalContextTrimmer.enabledKey) private var incrementalTrim = true
 
     var body: some View {
         List {
+            // [WP-40] 规则改成「列表 + 编辑页」:行里只显示摘要,点开编辑(命中预览、请求预览、
+            // 作用范围都在编辑页);顺序即优先级,可拖动排序。
             Section {
-                ForEach($rules) { $rule in
-                    VStack(alignment: .leading, spacing: 8) {
-                        TextField("模型 id 前缀", text: $rule.patternText)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        Picker("最高档", selection: $rule.ceilingLevel) {
-                            ForEach(ThinkingLevel.allCases.filter { $0 != .off }, id: \.self) { level in
-                                Text(level.displayName).tag(level)
-                            }
+                ForEach(rules) { rule in
+                    Button { editing = rule } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(rule.label).foregroundStyle(.primary)
+                            Text(summary(rule)).font(.caption).foregroundStyle(.secondary)
                         }
-                        // [T-thinking-rules-phase2] 可选:改写这类模型的思考参数发送方式
-                        // (只作用于 OpenAI 兼容接口)。「跟随内置」= 不覆盖内置厂商规则。
-                        Picker("思考参数", selection: Binding(
-                            get: { ThinkingWireChoice(rule.wireFormat) },
-                            set: { rule.wireFormat = $0.wireFormat }
-                        )) {
-                            ForEach(ThinkingWireChoice.allCases, id: \.self) { choice in
-                                Text(choice.title).tag(choice)
-                            }
-                        }
-                        // 「默认档」删掉了:存下来却没有任何地方读,选了等于没选。新会话沿用上一次的档位。
                     }
-                    .padding(.vertical, 4)
                 }
-                .onDelete { rules.remove(atOffsets: $0); ThinkingRuleStore.save(rules) }
-                HStack {
-                    TextField("新前缀，如 gpt-5.7", text: $newPrefix)
-                        .textInputAutocapitalization(.never)
-                    Button("添加") {
-                        let prefix = newPrefix.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !prefix.isEmpty else { return }
-                        rules.append(.ceiling(prefix: prefix, maxLevel: newMax))
-                        ThinkingRuleStore.save(rules)
-                        newPrefix = ""
-                    }
+                .onDelete { rules.remove(atOffsets: $0) }
+                .onMove { rules.move(fromOffsets: $0, toOffset: $1) }
+                Button {
+                    creating = true
+                } label: {
+                    Label("添加规则", systemImage: "plus")
                 }
             } header: {
-                Text("推理强度规则")
+                HStack {
+                    Text("推理强度规则")
+                    Spacer()
+                    if rules.count > 1 { EditButton().font(.caption) }
+                }
             } footer: {
-                Text("一行一个模型家族（前缀，支持 * 通配）。读不到内置档时在这里写最高档，否则界面显示未知，不会默默降级。「思考参数」用来纠正中转站对思考开关的写法，留在「跟随内置」最稳妥。")
+                Text("一行一个模型家族(前缀,支持 * 通配),从上往下先匹配先用。读不到内置档时在这里写最高档,否则界面显示未知,不会默默降级。")
             }
 
             Section {
@@ -511,6 +496,28 @@ struct ThinkingAndModelSlotsView: View {
         }
         .navigationTitle("推理与模型")
         .onChange(of: rules) { _ in ThinkingRuleStore.save(rules) }
+        .sheet(item: $editing) { rule in
+            ThinkingRuleEditorView(existing: rule) { updated in
+                if let next = try? ThinkingRuleEdits.replacing(updated, in: rules) { rules = next }
+            }
+        }
+        .sheet(isPresented: $creating) {
+            ThinkingRuleEditorView(existing: nil) { rule in
+                rules = ThinkingRuleEdits.inserting(rule, into: rules)
+            }
+        }
+        // minis-config 可能在别处改了规则:回到这一页时重读。
+        .onAppear { rules = ThinkingRuleStore.load() }
+    }
+
+    private func summary(_ rule: ThinkingRule) -> String {
+        var parts = [rule.patternText]
+        if let level = rule.maxLevel { parts.append("最高 \(level.displayName)") }
+        if let wire = rule.wireFormat { parts.append(wire.displaySummary) }
+        if let pid = rule.providerInstanceId {
+            parts.append(store.instances.first { $0.id == pid }?.label ?? "指定服务商")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -586,6 +593,8 @@ enum ThinkingWireChoice: Hashable, CaseIterable {
     case reasoningEffortNested
     case deepSeekSibling
     case qwenRootOnly
+    /// enable_thinking + thinking_budget,根级和 extra_body 各一份:只给 DashScope 本身用。
+    case qwenDual
     case omitEverything
 
     init(_ format: ThinkingWireFormat?) {
@@ -593,7 +602,8 @@ enum ThinkingWireChoice: Hashable, CaseIterable {
         case .reasoningEffort?: self = .reasoningEffort
         case .reasoningEffortNested?: self = .reasoningEffortNested
         case .deepSeekSibling?: self = .deepSeekSibling
-        case .qwenRootOnly?, .qwenDual?: self = .qwenRootOnly
+        case .qwenRootOnly?: self = .qwenRootOnly
+        case .qwenDual?: self = .qwenDual
         case .omitEverything?: self = .omitEverything
         default: self = .followBuiltIn
         }
@@ -606,6 +616,7 @@ enum ThinkingWireChoice: Hashable, CaseIterable {
         case .reasoningEffortNested: return .reasoningEffortNested(offValue: nil)
         case .deepSeekSibling: return .deepSeekSibling
         case .qwenRootOnly: return .qwenRootOnly
+        case .qwenDual: return .qwenDual
         case .omitEverything: return .omitEverything
         }
     }
@@ -617,6 +628,7 @@ enum ThinkingWireChoice: Hashable, CaseIterable {
         case .reasoningEffortNested: return "reasoning.effort（嵌套）"
         case .deepSeekSibling: return "DeepSeek（thinking + reasoning_effort）"
         case .qwenRootOnly: return "enable_thinking"
+        case .qwenDual: return "enable_thinking + 预算(仅 DashScope)"
         case .omitEverything: return "不发送思考参数"
         }
     }

@@ -121,21 +121,21 @@ struct ArtifactTrayView: View {
                     artifactList
                 }
             }
-            .navigationTitle(String(localized: "Artifacts"))
+            .navigationTitle(AppLocalized("Artifacts"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(viewModel.showsTrash ? String(localized: "Artifacts") : String(localized: "Trash")) {
+                    Button(viewModel.showsTrash ? AppLocalized("Artifacts") : AppLocalized("Trash")) {
                         viewModel.showsTrash.toggle()
                         Task { await viewModel.load() }
                     }
                     .accessibilityHint(viewModel.showsTrash
-                        ? String(localized: "Shows active artifacts")
-                        : String(localized: "Shows deleted artifacts"))
+                        ? AppLocalized("Shows active artifacts")
+                        : AppLocalized("Shows deleted artifacts"))
                 }
                 if !embedded {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button(String(localized: "Done")) { dismiss() }
+                        Button(AppLocalized("Done")) { dismiss() }
                     }
                 }
             }
@@ -153,7 +153,7 @@ struct ArtifactTrayView: View {
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .topBarTrailing) {
-                                Button(String(localized: "Done")) { previewURL = nil }
+                                Button(AppLocalized("Done")) { previewURL = nil }
                             }
                         }
                 }
@@ -164,24 +164,24 @@ struct ArtifactTrayView: View {
             .sheet(item: $versionHistory) { snapshot in
                 ArtifactVersionHistoryView(snapshot: snapshot)
             }
-            .alert(String(localized: "Delete Permanently?"), isPresented: Binding(
+            .alert(AppLocalized("Delete Permanently?"), isPresented: Binding(
                 get: { pendingPurge != nil },
                 set: { if !$0 { pendingPurge = nil } }
             )) {
-                Button(String(localized: "Delete Permanently"), role: .destructive) {
+                Button(AppLocalized("Delete Permanently"), role: .destructive) {
                     guard let item = pendingPurge else { return }
                     pendingPurge = nil
                     Task { await viewModel.purge(item) }
                 }
-                Button(String(localized: "Cancel"), role: .cancel) { pendingPurge = nil }
+                Button(AppLocalized("Cancel"), role: .cancel) { pendingPurge = nil }
             } message: {
-                Text(String(localized: "This removes the artifact and every local version. This action cannot be undone."))
+                Text(AppLocalized("This removes the artifact and every local version. This action cannot be undone."))
             }
-            .alert(String(localized: "Unable to Open Artifact"), isPresented: Binding(
+            .alert(AppLocalized("Unable to Open Artifact"), isPresented: Binding(
                 get: { actionError != nil },
                 set: { if !$0 { actionError = nil } }
             )) {
-                Button(String(localized: "OK"), role: .cancel) { actionError = nil }
+                Button(AppLocalized("OK"), role: .cancel) { actionError = nil }
             } message: {
                 Text(actionError ?? "")
             }
@@ -204,13 +204,13 @@ struct ArtifactTrayView: View {
                             .swipeActions(edge: .trailing, allowsFullSwipe: !viewModel.showsTrash) {
                                 if viewModel.showsTrash {
                                     Button(role: .destructive) { pendingPurge = snapshot } label: {
-                                        Label(String(localized: "Delete"), systemImage: "trash")
+                                        Label(AppLocalized("Delete"), systemImage: "trash")
                                     }
                                 } else {
                                     Button(role: .destructive) {
                                         Task { await viewModel.moveToTrash(snapshot) }
                                     } label: {
-                                        Label(String(localized: "Trash"), systemImage: "trash")
+                                        Label(AppLocalized("Trash"), systemImage: "trash")
                                     }
                                 }
                             }
@@ -219,7 +219,7 @@ struct ArtifactTrayView: View {
                                     Button {
                                         Task { await viewModel.restore(snapshot) }
                                     } label: {
-                                        Label(String(localized: "Restore"), systemImage: "arrow.uturn.backward")
+                                        Label(AppLocalized("Restore"), systemImage: "arrow.uturn.backward")
                                     }
                                     .tint(.blue)
                                 } else {
@@ -232,12 +232,12 @@ struct ArtifactTrayView: View {
                                             }
                                         }
                                     } label: {
-                                        Label(String(localized: "Save to Treasury"), systemImage: "archivebox")
+                                        Label(AppLocalized("Save to Treasury"), systemImage: "archivebox")
                                     }
                                     .tint(.orange)
                                     .disabled(viewModel.savedToTreasury.contains(snapshot.artifact.id))
                                     Button { open(snapshot, sharing: true) } label: {
-                                        Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
+                                        Label(AppLocalized("Share"), systemImage: "square.and.arrow.up")
                                     }
                                     .tint(.blue)
                                 }
@@ -245,8 +245,8 @@ struct ArtifactTrayView: View {
                     }
                 } footer: {
                     Text(viewModel.showsTrash
-                        ? String(localized: "Deleted artifacts remain on this device until you remove them permanently.")
-                        : String(localized: "Tap an artifact for Quick Look. Swipe to share or move it to Trash."))
+                        ? AppLocalized("Deleted artifacts remain on this device until you remove them permanently.")
+                        : AppLocalized("Tap an artifact for Quick Look. Swipe to share or move it to Trash."))
                 }
             }
         }
@@ -257,16 +257,16 @@ struct ArtifactTrayView: View {
     @ViewBuilder
     private func actions(for snapshot: ArtifactSnapshot) -> some View {
         Button { versionHistory = snapshot } label: {
-            Label(String(localized: "Version History"), systemImage: "clock.arrow.circlepath")
+            Label(AppLocalized("Version History"), systemImage: "clock.arrow.circlepath")
         }
         if viewModel.showsTrash {
             Button {
                 Task { await viewModel.restore(snapshot) }
             } label: {
-                Label(String(localized: "Restore"), systemImage: "arrow.uturn.backward")
+                Label(AppLocalized("Restore"), systemImage: "arrow.uturn.backward")
             }
             Button(role: .destructive) { pendingPurge = snapshot } label: {
-                Label(String(localized: "Delete Permanently"), systemImage: "trash")
+                Label(AppLocalized("Delete Permanently"), systemImage: "trash")
             }
         } else {
             Button {
@@ -280,23 +280,23 @@ struct ArtifactTrayView: View {
             } label: {
                 Label(
                     viewModel.savedToTreasury.contains(snapshot.artifact.id)
-                        ? String(localized: "Saved to Treasury")
-                        : String(localized: "Save to Treasury"),
+                        ? AppLocalized("Saved to Treasury")
+                        : AppLocalized("Save to Treasury"),
                     systemImage: viewModel.savedToTreasury.contains(snapshot.artifact.id)
                         ? "checkmark.circle" : "archivebox"
                 )
             }
             .disabled(viewModel.savedToTreasury.contains(snapshot.artifact.id))
             Button { open(snapshot, sharing: false) } label: {
-                Label(String(localized: "Quick Look"), systemImage: "eye")
+                Label(AppLocalized("Quick Look"), systemImage: "eye")
             }
             Button { open(snapshot, sharing: true) } label: {
-                Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
+                Label(AppLocalized("Share"), systemImage: "square.and.arrow.up")
             }
             Button(role: .destructive) {
                 Task { await viewModel.moveToTrash(snapshot) }
             } label: {
-                Label(String(localized: "Move to Trash"), systemImage: "trash")
+                Label(AppLocalized("Move to Trash"), systemImage: "trash")
             }
         }
     }
@@ -318,9 +318,9 @@ struct ArtifactTrayView: View {
     private var loadingState: some View {
         VStack(spacing: 14) {
             ProgressView()
-            Text(String(localized: "Loading Artifacts"))
+            Text(AppLocalized("Loading Artifacts"))
                 .font(.headline)
-            Text(String(localized: "Reading the local artifact index."))
+            Text(AppLocalized("Reading the local artifact index."))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -333,13 +333,13 @@ struct ArtifactTrayView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 34, weight: .regular))
                 .foregroundStyle(.orange)
-            Text(String(localized: "Artifacts Unavailable"))
+            Text(AppLocalized("Artifacts Unavailable"))
                 .font(.headline)
             Text(message)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button(String(localized: "Try Again")) {
+            Button(AppLocalized("Try Again")) {
                 Task { await viewModel.load() }
             }
             .buttonStyle(.glassProminent)
@@ -363,14 +363,14 @@ private struct ArtifactVersionHistoryView: View {
         NavigationStack {
             Group {
                 if isLoading {
-                    ProgressView(String(localized: "Loading Versions"))
+                    ProgressView(AppLocalized("Loading Versions"))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let errorMessage {
                     VStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.system(size: 34, weight: .regular))
                             .foregroundStyle(.orange)
-                        Text(String(localized: "Versions Unavailable"))
+                        Text(AppLocalized("Versions Unavailable"))
                             .font(.headline)
                         Text(errorMessage)
                             .font(.subheadline)
@@ -387,7 +387,7 @@ private struct ArtifactVersionHistoryView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "Done")) { dismiss() }
+                    Button(AppLocalized("Done")) { dismiss() }
                 }
             }
             .task { await load() }
@@ -399,7 +399,7 @@ private struct ArtifactVersionHistoryView: View {
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .topBarTrailing) {
-                                Button(String(localized: "Done")) { previewURL = nil }
+                                Button(AppLocalized("Done")) { previewURL = nil }
                             }
                         }
                 }
@@ -422,9 +422,9 @@ private struct ArtifactVersionHistoryView: View {
                         Image(systemName: "folder")
                     }
                 } header: {
-                    Text(String(localized: "Source"))
+                    Text(AppLocalized("Source"))
                 } footer: {
-                    Text(String(localized: "The original workspace file remains unchanged when an artifact is deleted."))
+                    Text(AppLocalized("The original workspace file remains unchanged when an artifact is deleted."))
                 }
             }
 
@@ -440,7 +440,7 @@ private struct ArtifactVersionHistoryView: View {
                                     Text("Version \(version.versionNumber)")
                                         .font(.body.weight(.medium))
                                     if version.id == snapshot.artifact.currentVersionId {
-                                        Text(String(localized: "Current"))
+                                        Text(AppLocalized("Current"))
                                             .font(.caption2.weight(.semibold))
                                             .foregroundStyle(.blue)
                                     }
@@ -463,16 +463,16 @@ private struct ArtifactVersionHistoryView: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         Button { open(version, sharing: false) } label: {
-                            Label(String(localized: "Quick Look"), systemImage: "eye")
+                            Label(AppLocalized("Quick Look"), systemImage: "eye")
                         }
                         Button { open(version, sharing: true) } label: {
-                            Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
+                            Label(AppLocalized("Share"), systemImage: "square.and.arrow.up")
                         }
                     }
-                    .accessibilityHint(String(localized: "Opens this version in Quick Look"))
+                    .accessibilityHint(AppLocalized("Opens this version in Quick Look"))
                 }
             } header: {
-                Text(String(localized: "Versions"))
+                Text(AppLocalized("Versions"))
             }
         }
         .listStyle(.insetGrouped)
@@ -537,7 +537,7 @@ private struct ArtifactRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityHint(String(localized: "Opens Quick Look"))
+        .accessibilityHint(AppLocalized("Opens Quick Look"))
     }
 }
 
@@ -549,11 +549,11 @@ private struct ArtifactEmptyState: View {
             Image(systemName: showsTrash ? "trash" : "shippingbox")
                 .font(.system(size: 34, weight: .regular))
                 .foregroundStyle(.secondary)
-            Text(showsTrash ? String(localized: "Trash Is Empty") : String(localized: "No Artifacts Yet"))
+            Text(showsTrash ? AppLocalized("Trash Is Empty") : AppLocalized("No Artifacts Yet"))
                 .font(.headline)
             Text(showsTrash
-                ? String(localized: "Artifacts moved to Trash will appear here.")
-                : String(localized: "Documents, media, and code created by tasks will appear here."))
+                ? AppLocalized("Artifacts moved to Trash will appear here.")
+                : AppLocalized("Documents, media, and code created by tasks will appear here."))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

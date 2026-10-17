@@ -130,25 +130,23 @@ private struct RecordingActivityControls: View {
     let state: RecordingActivityAttributes.ContentState
 
     var body: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            HStack(spacing: 10) {
-                Button(intent: RecordingMarkIntent()) {
-                    Label("标记", systemImage: "flag.fill")
-                }
-                .tint(.orange)
-                .disabled(state.isPaused)
-                Button(intent: RecordingTogglePauseIntent()) {
-                    Label(state.isPaused ? LocalizedStringKey("继续") : LocalizedStringKey("暂停"), systemImage: state.isPaused ? "play.fill" : "pause.fill")
-                }
-                .tint(.gray)
-                Button(intent: RecordingStopIntent()) {
-                    Label("停止", systemImage: "stop.fill")
-                }
-                .tint(.red)
+        HStack(spacing: 10) {
+            Button(intent: RecordingMarkIntent()) {
+                Label("标记", systemImage: "flag.fill")
             }
-            .font(.caption.weight(.semibold))
-            .buttonStyle(.bordered)
-            .labelStyle(.titleAndIcon)
+            .tint(.orange)
+            .disabled(state.isPaused)
+            Button(intent: RecordingTogglePauseIntent()) {
+                Label(state.isPaused ? LocalizedStringKey("继续") : LocalizedStringKey("暂停"), systemImage: state.isPaused ? "play.fill" : "pause.fill")
+            }
+            .tint(.gray)
+            Button(intent: RecordingStopIntent()) {
+                Label("停止", systemImage: "stop.fill")
+            }
+            .tint(.red)
         }
+        .font(.caption.weight(.semibold))
+        .buttonStyle(.bordered)
+        .labelStyle(.titleAndIcon)
     }
 }

@@ -59,7 +59,7 @@ final class TextFadeAnimator {
     /// thing to give up.
     static var isEnabled: Bool {
         if UIAccessibility.isReduceMotionEnabled { return false }
-        if #available(iOS 27, *), UIApplication.shared.systemPrefersReducedResourceUsage { return false }
+        if UIApplication.shared.systemPrefersReducedResourceUsage { return false }
         return true
     }
 

@@ -254,7 +254,7 @@ class RootfsManagementViewModel: ObservableObject {
 
     func install() {
         isProcessing = true
-        statusMessage = String(localized: "Installing rootfs...")
+        statusMessage = AppLocalized("Installing rootfs...")
         resultMessage = nil
 
         DispatchQueue.global(qos: .userInitiated).async {
@@ -264,14 +264,14 @@ class RootfsManagementViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self.isProcessing = false
                     self.lastOperationSuccess = true
-                    self.resultMessage = String(localized: "✅ Rootfs installed successfully")
+                    self.resultMessage = AppLocalized("✅ Rootfs installed successfully")
                     self.refresh()
                 }
             } catch {
                 DispatchQueue.main.async {
                     self.isProcessing = false
                     self.lastOperationSuccess = false
-                    self.resultMessage = String(localized: "❌ Installation failed: \(error.localizedDescription)")
+                    self.resultMessage = AppLocalized("❌ Installation failed: \(error.localizedDescription)")
                 }
             }
         }
@@ -279,7 +279,7 @@ class RootfsManagementViewModel: ObservableObject {
 
     func resetRootfs(keepUserData: Bool) {
         isProcessing = true
-        statusMessage = keepUserData ? String(localized: "Backing up and resetting...") : String(localized: "Resetting rootfs...")
+        statusMessage = keepUserData ? AppLocalized("Backing up and resetting...") : AppLocalized("Resetting rootfs...")
         resultMessage = nil
 
         DispatchQueue.global(qos: .userInitiated).async {
@@ -294,10 +294,10 @@ class RootfsManagementViewModel: ObservableObject {
 
                     if keepUserData {
                         self.resultMessage = backup != nil
-                            ? String(localized: "✅ Rootfs reset. /root was backed up on this device — restart the app, then tap Restore User Data.")
-                            : String(localized: "✅ Rootfs reset. There was no /root to back up.")
+                            ? AppLocalized("✅ Rootfs reset. /root was backed up on this device — restart the app, then tap Restore User Data.")
+                            : AppLocalized("✅ Rootfs reset. There was no /root to back up.")
                     } else {
-                        self.resultMessage = String(localized: "✅ Rootfs reset complete. Restart app to reinstall.")
+                        self.resultMessage = AppLocalized("✅ Rootfs reset complete. Restart app to reinstall.")
                     }
 
                     self.refresh()
@@ -306,7 +306,7 @@ class RootfsManagementViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self.isProcessing = false
                     self.lastOperationSuccess = false
-                    self.resultMessage = String(localized: "❌ Reset failed: \(error.localizedDescription)")
+                    self.resultMessage = AppLocalized("❌ Reset failed: \(error.localizedDescription)")
                 }
             }
         }
@@ -325,18 +325,18 @@ class RootfsManagementViewModel: ObservableObject {
 
     func restoreBackup() {
         guard let backupURL = backupURL else {
-            resultMessage = String(localized: "❌ No backup available")
+            resultMessage = AppLocalized("❌ No backup available")
             return
         }
 
         isProcessing = true
-        statusMessage = String(localized: "Restoring user data...")
+        statusMessage = AppLocalized("Restoring user data...")
         resultMessage = nil
 
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 if !RootfsManager.shared.isInstalled {
-                    DispatchQueue.main.async { self.statusMessage = String(localized: "Installing rootfs...") }
+                    DispatchQueue.main.async { self.statusMessage = AppLocalized("Installing rootfs...") }
                     try RootfsManager.shared.installIfNeeded()
                 }
                 try RootfsManager.shared.restoreUserData(from: backupURL)
@@ -344,14 +344,14 @@ class RootfsManagementViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self.isProcessing = false
                     self.lastOperationSuccess = true
-                    self.resultMessage = String(localized: "✅ /root restored. The backup is kept until you delete it.")
+                    self.resultMessage = AppLocalized("✅ /root restored. The backup is kept until you delete it.")
                     self.refresh()
                 }
             } catch {
                 DispatchQueue.main.async {
                     self.isProcessing = false
                     self.lastOperationSuccess = false
-                    self.resultMessage = String(localized: "❌ Restore failed: \(error.localizedDescription)")
+                    self.resultMessage = AppLocalized("❌ Restore failed: \(error.localizedDescription)")
                 }
             }
         }

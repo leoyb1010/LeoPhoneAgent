@@ -111,13 +111,13 @@ struct SessionMemoryView: View {
             let lineCount = content.components(separatedBy: "\n").count
             items.append(AutoItem(
                 name: "SOUL.md",
-                detail: String(localized: "\(lineCount) lines (full)"),
+                detail: AppLocalized("\(lineCount) lines (full)"),
                 icon: "person.fill",
                 content: content,
                 fileURL: soulURL
             ))
         } else {
-            items.append(AutoItem(name: "SOUL.md", detail: String(localized: "Empty"), icon: "person", content: String(localized: "(empty)"), fileURL: soulURL))
+            items.append(AutoItem(name: "SOUL.md", detail: AppLocalized("Empty"), icon: "person", content: AppLocalized("(empty)"), fileURL: soulURL))
         }
 
         // GLOBAL.md
@@ -128,13 +128,13 @@ struct SessionMemoryView: View {
             let lineCount = content.components(separatedBy: "\n").count
             items.append(AutoItem(
                 name: "GLOBAL.md",
-                detail: String(localized: "\(lineCount) lines (full)"),
+                detail: AppLocalized("\(lineCount) lines (full)"),
                 icon: "star.fill",
                 content: content,
                 fileURL: globalURL
             ))
         } else {
-            items.append(AutoItem(name: "GLOBAL.md", detail: String(localized: "Empty"), icon: "star", content: String(localized: "(empty)"), fileURL: globalURL))
+            items.append(AutoItem(name: "GLOBAL.md", detail: AppLocalized("Empty"), icon: "star", content: AppLocalized("(empty)"), fileURL: globalURL))
         }
 
         // Most recent 3 daily logs with content (matches system prompt injection logic)
@@ -156,12 +156,12 @@ struct SessionMemoryView: View {
                 let lineCount = content.components(separatedBy: "\n").count
                 let injected = min(lineCount, 200)
                 let detail = lineCount > 200
-                    ? String(localized: "\(injected)/\(lineCount) lines injected")
-                    : String(localized: "\(lineCount) lines (full)")
+                    ? AppLocalized("\(injected)/\(lineCount) lines injected")
+                    : AppLocalized("\(lineCount) lines (full)")
                 let label: String
                 switch dayOffset {
-                case 0: label = String(localized: "Today")
-                case 1: label = String(localized: "Yesterday")
+                case 0: label = AppLocalized("Today")
+                case 1: label = AppLocalized("Yesterday")
                 default: label = dateStr
                 }
                 items.append(AutoItem(
@@ -227,8 +227,8 @@ struct SessionMemoryView: View {
                     if let kw = keywords, !kw.isEmpty {
                         let matchCount = resultLines.filter { $0.hasPrefix("---") || $0.hasPrefix("## ") }.count
                         detail = matchCount > 0
-                            ? String(localized: "Search: \(kw) (\(matchCount) files)")
-                            : String(localized: "Search: \(kw)")
+                            ? AppLocalized("Search: \(kw) (\(matchCount) files)")
+                            : AppLocalized("Search: \(kw)")
                     } else {
                         detail = String((resultLines.first ?? "").prefix(100))
                     }
@@ -358,7 +358,7 @@ private struct MemoryWriteDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         if let written = item.writtenContent {
-                            SectionHeader(title: String(localized: "写入的内容"))
+                            SectionHeader(title: AppLocalized("写入的内容"))
                             Text(written)
                                 .font(.system(.caption, design: .monospaced))
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -366,7 +366,7 @@ private struct MemoryWriteDetailView: View {
                                 .textSelection(.enabled)
                         }
 
-                        SectionHeader(title: String(localized: "工具结果"))
+                        SectionHeader(title: AppLocalized("工具结果"))
                         Text(item.content)
                             .font(.system(.caption, design: .monospaced))
                             .foregroundStyle(.secondary)
@@ -494,7 +494,7 @@ private struct MemoryWriteDetailView: View {
 
     private func revokeEntry() -> (removed: Bool, message: String) {
         guard let written = item.writtenContent else {
-            return (false, String(localized: "这条没有写入的内容，不用撤销。"))
+            return (false, AppLocalized("这条没有写入的内容，不用撤销。"))
         }
 
         let fm = FileManager.default
@@ -549,15 +549,15 @@ private struct MemoryWriteDetailView: View {
 
                     do {
                         try newFileContent.write(to: fileURL, atomically: true, encoding: .utf8)
-                        return (true, String(localized: "已从 \(dateStr).md 移除"))
+                        return (true, AppLocalized("已从 \(dateStr).md 移除"))
                     } catch {
-                        return (false, String(localized: "写文件出错：\(error.localizedDescription)"))
+                        return (false, AppLocalized("写文件出错：\(error.localizedDescription)"))
                     }
                 }
             }
         }
 
-        return (false, String(localized: "最近两天的日志里没找到这一条。"))
+        return (false, AppLocalized("最近两天的日志里没找到这一条。"))
     }
 }
 

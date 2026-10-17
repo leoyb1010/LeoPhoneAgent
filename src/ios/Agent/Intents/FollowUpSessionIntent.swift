@@ -117,7 +117,7 @@ struct FollowUpSessionIntent: AppIntent {
         let promptPreview = String(prompt.prefix(50))
         ShortcutNotification.post(
             id: "shortcut-followup-\(sid)",
-            title: String(localized: "LeoBot：追问已发送"),
+            title: AppLocalized("LeoBot：追问已发送"),
             body: "\(modelName): \(promptPreview)\(prompt.count > 50 ? "…" : "")",
             sessionId: sid
         )
@@ -125,7 +125,7 @@ struct FollowUpSessionIntent: AppIntent {
         if waitForResult {
             let settled = await SendPromptIntent.settleRun(
                 sessionId: sid, runId: runId, pendingId: pendingId,
-                title: String(localized: "LeoBot 追问"), notificationId: "shortcut-followup-done")
+                title: AppLocalized("LeoBot 追问"), notificationId: "shortcut-followup-done")
             let responseText = settled.text
 
             let result = SendPromptResult(
@@ -140,7 +140,7 @@ struct FollowUpSessionIntent: AppIntent {
             )
             // [C11] 锁屏 + 隐私模式下不朗读正文;仅语音场景照常朗读。
             var voiceOnly = false
-            if #available(iOS 27, *) { voiceOnly = systemContext.isVoiceOnly }
+            voiceOnly = systemContext.isVoiceOnly
             let dialog = SiriReplyPrivacy.dialogText(
                 String(responseText.prefix(500)), deviceLocked: !UIApplication.shared.isProtectedDataAvailable,
                 privacyMode: SiriReplyPrivacy.privacyModeEnabled, voiceOnly: voiceOnly)
@@ -151,7 +151,7 @@ struct FollowUpSessionIntent: AppIntent {
         Task { @MainActor in
             _ = await SendPromptIntent.settleRun(
                 sessionId: sid, runId: runId, pendingId: pendingId,
-                title: String(localized: "LeoBot 追问"), notificationId: "shortcut-followup-done")
+                title: AppLocalized("LeoBot 追问"), notificationId: "shortcut-followup-done")
         }
 
         let result = SendPromptResult(

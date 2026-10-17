@@ -57,12 +57,12 @@ final class BackupRunController: ObservableObject {
                                      encrypted: encrypted)
         activity = .exporting
         lastError = nil
-        statusText = String(localized: "准备备份…")
+        statusText = AppLocalized("准备备份…")
 
         let progress = progressSink(recordId: recordId)
         task = Task { [weak self] in
             guard let self else { return }
-            let bg = self.beginBackground(name: "LeoBot backup", title: String(localized: "LeoBot 备份"))
+            let bg = self.beginBackground(name: "LeoBot backup", title: AppLocalized("LeoBot 备份"))
             defer { self.endBackground(bg, success: self.lastError == nil) }
             do {
                 let exporter = BackupExporter(source: LiveBackupStores(), workRoot: BackupDelivery.workRoot)
@@ -76,22 +76,22 @@ final class BackupRunController: ObservableObject {
                 let delivered = try await Task.detached(priority: .utility) {
                     try BackupDelivery.moveToVisibleStorage(packageURL)
                 }.value
-                var destinations = [String(localized: "文件 App › 我的 iPhone › LeoBot › Backups")]
+                var destinations = [AppLocalized("文件 App › 我的 iPhone › LeoBot › Backups")]
                 var failures: [String] = []
                 for folderId in request.mountedFolderIds {
                     guard let root = MountedFoldersManager.shared.resolvedURL(for: folderId) else {
-                        failures.append(String(localized: "挂载的文件夹不可用"))
+                        failures.append(AppLocalized("挂载的文件夹不可用"))
                         continue
                     }
                     let name = MountedFoldersManager.shared.entries.first { $0.id == folderId }?.name ?? root.lastPathComponent
-                    history.log(recordId, String(localized: "正在复制到「\(name)」…"))
+                    history.log(recordId, AppLocalized("正在复制到「\(name)」…"))
                     do {
                         _ = try await Task.detached(priority: .utility) {
                             try BackupDelivery.copyToMountedFolder(delivered, into: root)
                         }.value
-                        destinations.append(String(localized: "挂载文件夹「\(name)」"))
+                        destinations.append(AppLocalized("挂载文件夹「\(name)」"))
                     } catch {
-                        failures.append(String(localized: "复制到「\(name)」失败：\(error.localizedDescription)"))
+                        failures.append(AppLocalized("复制到「\(name)」失败：\(error.localizedDescription)"))
                         history.log(recordId, failures.last ?? "", isProblem: true)
                     }
                 }
@@ -107,7 +107,7 @@ final class BackupRunController: ObservableObject {
                                                 summary: summary, deliveryFailures: failures)
             } catch {
                 let cancelled = error is CancellationError || Task.isCancelled
-                let message = cancelled ? String(localized: "已取消，未生成备份包") : error.localizedDescription
+                let message = cancelled ? AppLocalized("已取消，未生成备份包") : error.localizedDescription
                 history.fail(recordId, message: message, cancelled: cancelled)
                 self.lastError = message
             }
@@ -119,16 +119,16 @@ final class BackupRunController: ObservableObject {
     }
 
     private static func exportLine(_ c: BackupCategory, _ s: BackupManifest.CategoryStat?) -> String {
-        guard let s else { return String(localized: "无数据") }
+        guard let s else { return AppLocalized("无数据") }
         let size = ByteCountFormatter.string(fromByteCount: s.bytes, countStyle: .file)
         switch c {
-        case .chats: return String(localized: "\(s.messages ?? 0) 条消息、\(s.files ?? 0) 个文件，\(size)")
-        case .skills: return String(localized: "\(s.entries) 个技能、\(s.files ?? 0) 个文件，\(size)")
+        case .chats: return AppLocalized("\(s.messages ?? 0) 条消息、\(s.files ?? 0) 个文件，\(size)")
+        case .skills: return AppLocalized("\(s.entries) 个技能、\(s.files ?? 0) 个文件，\(size)")
         case .providers:
             return s.includesCredentials == true
-                ? String(localized: "\(s.entries) 个服务商（含加密密钥）")
-                : String(localized: "\(s.entries) 个服务商（不含密钥）")
-        default: return String(localized: "\(s.entries) 项，\(size)")
+                ? AppLocalized("\(s.entries) 个服务商（含加密密钥）")
+                : AppLocalized("\(s.entries) 个服务商（不含密钥）")
+        default: return AppLocalized("\(s.entries) 项，\(size)")
         }
     }
 
@@ -143,14 +143,14 @@ final class BackupRunController: ObservableObject {
         let selected = BackupCategory.restoreOrder.filter(categories.contains)
         let recordId = history.begin(kind: .restore, backupId: prepared.manifest.backupId,
                                      categories: selected.map(\.rawValue), encrypted: prepared.wasEncrypted)
-        history.log(recordId, String(localized: "来源：\(prepared.packageName)"))
+        history.log(recordId, AppLocalized("来源：\(prepared.packageName)"))
         activity = .restoring
         lastError = nil
-        statusText = String(localized: "准备恢复…")
+        statusText = AppLocalized("准备恢复…")
         let progress = progressSink(recordId: recordId)
         task = Task { [weak self] in
             guard let self else { return }
-            let bg = self.beginBackground(name: "LeoBot restore", title: String(localized: "LeoBot 恢复"))
+            let bg = self.beginBackground(name: "LeoBot restore", title: AppLocalized("LeoBot 恢复"))
             var ok = false
             defer { self.endBackground(bg, success: ok) }
             do {
@@ -168,7 +168,7 @@ final class BackupRunController: ObservableObject {
                 completion(.success(report))
             } catch {
                 let cancelled = error is CancellationError
-                history.fail(recordId, message: cancelled ? String(localized: "已取消") : error.localizedDescription,
+                history.fail(recordId, message: cancelled ? AppLocalized("已取消") : error.localizedDescription,
                              cancelled: cancelled)
                 self.lastError = error.localizedDescription
                 completion(.failure(error))
@@ -183,7 +183,7 @@ final class BackupRunController: ObservableObject {
     /// Stop at the next checkpoint (per file / per session / per category).
     func stop() {
         task?.cancel()
-        statusText = String(localized: "正在停止…")
+        statusText = AppLocalized("正在停止…")
     }
 
     // MARK: - Plumbing
@@ -211,14 +211,14 @@ final class BackupRunController: ObservableObject {
         let key = "backup-\(UUID().uuidString)"
         continuedKey = key
         AgentContinuedProcessingManager.shared.begin(sessionKey: key, title: title,
-                                                     subtitle: String(localized: "正在处理…"),
+                                                     subtitle: AppLocalized("正在处理…"),
                                                      onExpiration: { [weak self] in self?.stop() })
         return BackgroundGrant(taskId: id, continuedKey: key)
     }
 
     private func endBackground(_ grant: BackgroundGrant, success: Bool) {
         AgentContinuedProcessingManager.shared.finish(sessionKey: grant.continuedKey, success: success,
-                                                      subtitle: success ? String(localized: "已完成") : String(localized: "未完成"))
+                                                      subtitle: success ? AppLocalized("已完成") : AppLocalized("未完成"))
         continuedKey = nil
         if grant.taskId != .invalid { UIApplication.shared.endBackgroundTask(grant.taskId) }
     }

@@ -125,7 +125,7 @@ enum ScheduledTaskRunner {
                 // reporting": a silent failure is indistinguishable from
                 // "never ran".
                 Self.notify(
-                    title: String(localized: "Scheduled task failed to start"),
+                    title: AppLocalized("Scheduled task failed to start"),
                     body: definition.displayName,
                     sessionId: nil)
             }
@@ -157,7 +157,7 @@ enum ScheduledTaskRunner {
             logger.info("follow-up \(task.id.prefix(8)) deferred — session busy")
             return false
         } catch ScheduledFollowUpDispatcher.DispatchError.sessionMissing {
-            store.expireFollowUp(id: task.id, reason: String(localized: "对应的会话已删除"), now: now)
+            store.expireFollowUp(id: task.id, reason: AppLocalized("对应的会话已删除"), now: now)
             ScheduledFollowUpDispatcher.cancelReminder(taskId: task.id)
             return false
         } catch {
@@ -165,7 +165,7 @@ enum ScheduledTaskRunner {
             store.recordOutcome(id: task.id, status: .failure, preview: error.localizedDescription)
             ScheduledFollowUpDispatcher.cancelReminder(taskId: task.id)
             logger.error("follow-up \(task.id.prefix(8)) failed to start")
-            Self.notify(title: String(localized: "定时跟进没能开始"), body: followUp.title, sessionId: followUp.sessionId)
+            Self.notify(title: AppLocalized("定时跟进没能开始"), body: followUp.title, sessionId: followUp.sessionId)
             return false
         }
     }

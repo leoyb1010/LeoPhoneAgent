@@ -162,12 +162,13 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     keywords: "browser 浏览器 chrome 网页 控制 证书 certificate cookie 导入 import",
     groupId: "devices",
   },
-  // 电脑控制与浏览器同属本机操控入口（当前隐藏，保留 id 供旧入口路由）。
+  // [leo][WP-22] 电脑操作：随包 Peekaboo 的权限状态与系统设置入口，只在 macOS 桌面端出现。
   {
     id: "computerUse",
     icon: Monitor,
     titleId: "settings.computerUse.title",
-    keywords: "computer use 电脑控制 屏幕 screen",
+    hintId: "settings.computerUse.hint",
+    keywords: "computer use 电脑操作 屏幕 screen 截图 辅助功能 peekaboo 权限",
     groupId: "devices",
   },
   {
@@ -244,9 +245,8 @@ export function createSettingsPageConfig({
   const hasDesktopPlatform = isDesktop || isMacDesktop || isWindowsDesktop;
   // settingsSections：所有可路由分区（含扩展的各 tab）；导航只展示 settingsSectionGroups。
   const settingsSections = BASE_SETTINGS_SECTIONS.filter((section) => {
-    if ((section.id === "computerUse" || section.id === "phone") && !hasDesktopPlatform) {
-      return false;
-    }
+    if (section.id === "phone" && !hasDesktopPlatform) return false;
+    if (section.id === "computerUse" && !isMacDesktop) return false; // [leo] Peekaboo 只有 macOS 版
     return isSettingsSectionEnabled(section.id);
   });
   const extensionSections = settingsSections.filter(

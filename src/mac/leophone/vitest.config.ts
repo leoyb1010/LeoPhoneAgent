@@ -31,9 +31,6 @@ const forkIsolatedTests = [
   "packages/services/test/mcpSyncService.test.ts",
   "packages/services/test/providerRuntimeResolver.test.ts",
   "packages/services/test/runtimeToolResolver.test.ts",
-  // 该集成测试会真实启动 tsx、Supervisor 与多代 Core；放在普通 threads 中时，
-  // 并行 worker 的进程启动压力会让 15 秒 ready barrier 偶发超时。
-  "packages/zcode-server-cli/test/runtimeUpdateIntegration.test.ts",
   // Bugfix: pdfjs-dist legacy build 在 threads worker 内偶发原生崩溃（0xC0000005，
   // 测试自身通过、worker 收尾时崩，会把整场全量跑拦腰截断）。隔离到 fork 池后崩溃
   // 波及面收敛到本文件，其余测试结果可完整收集；崩溃根因见

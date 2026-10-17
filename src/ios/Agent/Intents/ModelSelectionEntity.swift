@@ -146,42 +146,26 @@ struct ModelSelectionEntityQuery: EntityQuery, EntityStringQuery {
                 }
         }
 
-        if #available(iOS 16.4, *) {
-            var sections: [IntentItemSection<ModelSelectionEntity>] = []
+        var sections: [IntentItemSection<ModelSelectionEntity>] = []
 
-            if !groupItems.isEmpty {
-                sections.append(IntentItemSection(
-                    LocalizedStringResource("Model Groups"),
-                    items: groupItems
-                ))
-            }
-
-            for iid in orderedInstanceIds {
-                let items = providerItems(for: iid)
-                guard !items.isEmpty else { continue }
-                let label = store.instance(for: iid)?.label ?? "Unknown Provider"
-                sections.append(IntentItemSection(
-                    LocalizedStringResource(stringLiteral: label),
-                    items: items
-                ))
-            }
-
-            return IntentItemCollection(sections: sections)
-        } else {
-            var sections: [IntentItemSection<ModelSelectionEntity>] = []
-
-            if !groupItems.isEmpty {
-                sections.append(IntentItemSection(items: groupItems))
-            }
-
-            for iid in orderedInstanceIds {
-                let items = providerItems(for: iid)
-                guard !items.isEmpty else { continue }
-                sections.append(IntentItemSection(items: items))
-            }
-
-            return IntentItemCollection(sections: sections)
+        if !groupItems.isEmpty {
+            sections.append(IntentItemSection(
+                LocalizedStringResource("Model Groups"),
+                items: groupItems
+            ))
         }
+
+        for iid in orderedInstanceIds {
+            let items = providerItems(for: iid)
+            guard !items.isEmpty else { continue }
+            let label = store.instance(for: iid)?.label ?? "Unknown Provider"
+            sections.append(IntentItemSection(
+                LocalizedStringResource(stringLiteral: label),
+                items: items
+            ))
+        }
+
+        return IntentItemCollection(sections: sections)
     }
 
     @MainActor

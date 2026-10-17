@@ -2,32 +2,6 @@ import SwiftUI
 
 // MARK: - Appearance Settings Support
 
-struct AppIconOption: Identifiable {
-    let id: Int
-    let title: String
-    let subtitle: String
-    let iconName: String?  // nil = automatic (default asset catalog icon)
-    let imageName: String  // bundle image file name for preview
-}
-
-struct LanguageOption: Identifiable {
-    let id: String   // language code, "" = system
-    let name: String  // native name
-    let flag: String
-}
-
-let supportedLanguages: [LanguageOption] = [
-    LanguageOption(id: "",       name: "System", flag: ""),
-    LanguageOption(id: "en",     name: "English", flag: "🇺🇸"),
-    LanguageOption(id: "zh-Hans", name: "简体中文", flag: "🇨🇳"),
-    LanguageOption(id: "zh-Hant", name: "繁體中文", flag: "🇹🇼"),
-    LanguageOption(id: "ja",     name: "日本語", flag: "🇯🇵"),
-    LanguageOption(id: "ko",     name: "한국어", flag: "🇰🇷"),
-    LanguageOption(id: "fr",     name: "Français", flag: "🇫🇷"),
-    LanguageOption(id: "de",     name: "Deutsch", flag: "🇩🇪"),
-    LanguageOption(id: "ru",     name: "Русский", flag: "🇷🇺"),
-]
-
 struct FontScaleRow: View {
     let label: String
     @Binding var level: FontScaleLevel

@@ -445,7 +445,7 @@ extension AIChatViewModel {
         case "clear":
             // [#11] Same rule as the "…" menu's Clear Chat: not while a reply runs.
             if isProcessing {
-                appendSystemInfo(String(localized: "A reply is still running. Stop it before clearing the chat."),
+                appendSystemInfo(AppLocalized("A reply is still running. Stop it before clearing the chat."),
                                  icon: "trash.slash")
             } else {
                 clearChatConfirmRequested = true
@@ -465,10 +465,10 @@ extension AIChatViewModel {
             Task { @MainActor in
                 if on {
                     guard await BiometricAuth.authorizeLoweringProtection(
-                        reason: String(localized: "Turn on full-auto approvals")
+                        reason: AppLocalized("Turn on full-auto approvals")
                     ) else {
                         // B13: say why nothing changed instead of failing silently.
-                        self.appendSystemInfo(String(localized: "Verification didn't pass. Full auto stays off."),
+                        self.appendSystemInfo(AppLocalized("Verification didn't pass. Full auto stays off."),
                                               icon: "bolt.slash")
                         return
                     }

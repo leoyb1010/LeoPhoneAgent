@@ -40,9 +40,9 @@ final class GatewayRunDriver: ObservableObject {
     /// The typing row's words; `status` is the wire value.
     var statusLabel: String {
         switch status {
-        case "submitting": String(localized: "正在交给 Mac…")
-        case "waiting_for_approval": String(localized: "等你审批")
-        default: String(localized: "Mac 正在处理…")
+        case "submitting": AppLocalized("正在交给 Mac…")
+        case "waiting_for_approval": AppLocalized("等你审批")
+        default: AppLocalized("Mac 正在处理…")
         }
     }
     @Published private(set) var usage: GatewayUsage?
@@ -108,7 +108,7 @@ final class GatewayRunDriver: ObservableObject {
                         self.unsentPrompt = trimmed
                         self.fail(error.localizedDescription)
                     } else {
-                        self.fail(String(localized: "Couldn't confirm whether the Mac accepted this request. Check the Mac before sending it again.") + "\n" + error.localizedDescription)
+                        self.fail(AppLocalized("Couldn't confirm whether the Mac accepted this request. Check the Mac before sending it again.") + "\n" + error.localizedDescription)
                     }
                 }
             }
@@ -217,7 +217,7 @@ final class GatewayRunDriver: ObservableObject {
         // status is the only way back to the truth.
         await MainActor.run {
             self.reconnectCount += 1
-            self.note(String(localized: "Stream dropped — following the run by status instead."))
+            self.note(AppLocalized("Stream dropped — following the run by status instead."))
         }
         await pollUntilSettled(runId: runId)
     }
@@ -246,7 +246,7 @@ final class GatewayRunDriver: ObservableObject {
                     return
                 }
                 if attempt > maxReconnects {
-                    await MainActor.run { self.fail(String(localized: "Lost contact with that Mac.")) }
+                    await MainActor.run { self.fail(AppLocalized("Lost contact with that Mac.")) }
                     return
                 }
                 try? await Task.sleep(nanoseconds: Self.backoff(attempt))
@@ -272,7 +272,7 @@ final class GatewayRunDriver: ObservableObject {
                             choices: ["once", "deny"],
                             command: nil,
                             tool: nil,
-                            reason: String(localized: "Details were lost when the connection dropped."),
+                            reason: AppLocalized("Details were lost when the connection dropped."),
                             extras: [:])
                         self.status = snapshot.status
                         if let pending = self.pendingApproval { self.pushApprovalToWatch(pending) }
@@ -337,7 +337,7 @@ final class GatewayRunDriver: ObservableObject {
             pendingApproval = nil
             status = "running"
             if let choice {
-                note(String(localized: "Approval: \(GatewayApprovalRequest.title(forChoice: choice))"))
+                note(AppLocalized("Approval: \(GatewayApprovalRequest.title(forChoice: choice))"))
             }
 
         case .runCompleted(let output, let usage):
@@ -352,12 +352,12 @@ final class GatewayRunDriver: ObservableObject {
             isRunning = false
 
         case .runFailed(let message):
-            fail(message ?? String(localized: "The run failed."))
+            fail(message ?? AppLocalized("The run failed."))
 
         case .runCancelled:
             status = "cancelled"
             isRunning = false
-            note(String(localized: "Run stopped."))
+            note(AppLocalized("Run stopped."))
 
         case .unknown(let name, _):
             // Forward-compat: a newer gateway's event is shown, not swallowed.
@@ -398,10 +398,10 @@ final class GatewayRunDriver: ObservableObject {
             items.append(GatewayTranscriptItem(
                 kind: .failure,
                 text: snapshot.status == "cancelled"
-                    ? String(localized: "Run stopped.")
-                    : String(localized: "The run failed.")))
+                    ? AppLocalized("Run stopped.")
+                    : AppLocalized("The run failed.")))
         } else if reconnectCount > 0 {
-            note(String(localized: "Reconnected and recovered the result."))
+            note(AppLocalized("Reconnected and recovered the result."))
         }
     }
 

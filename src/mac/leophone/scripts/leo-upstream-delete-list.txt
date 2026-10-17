@@ -1,5 +1,5 @@
 # [leo] 上游同步时按删除处理的路径（相对 src/mac/leophone），由
-#   node scripts/leo-upstream-delete.mjs --generate aac4755666d09fdcd70272fcf063c077a639015f
+#   node scripts/leo-upstream-delete.mjs --generate refs/zcode/v3.15.1
 # 生成：上游该版本存在、我们树里不存在的文件；整个目录都没有时折叠成 `dir/`（以后上游在其中新增的文件也删）。
 # 执行：subtree merge 之后跑 --apply；收尾跑 --check。删除理由见 docs/mac-3.0/UPSTREAM.md。
 apps/zcode-cli/dependencies/native-search/bfs-v4.1.1-1/bfs-v4.1.1-1-x86_64-apple-darwin.tar.gz

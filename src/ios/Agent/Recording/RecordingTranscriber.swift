@@ -15,9 +15,9 @@ enum RecordingTranscriber {
         var errorDescription: String? {
             switch self {
             case .noCloudProvider:
-                return String(localized: "没有可用的云端语音识别服务。请先在设置 › 语音里配置语音输入服务商,或关闭云端转写改用本机转写。")
+                return AppLocalized("没有可用的云端语音识别服务。请先在设置 › 语音里配置语音输入服务商,或关闭云端转写改用本机转写。")
             case .unsupportedOS:
-                return String(localized: "本机转写需要 iOS 26 或更高版本。")
+                return AppLocalized("本机转写需要 iOS 26 或更高版本。")
             }
         }
     }
@@ -29,7 +29,6 @@ enum RecordingTranscriber {
                            localeIdentifier: String) async throws -> [TranscriptAssembler.LocalSegment] {
         switch engine {
         case .onDevice:
-            guard #available(iOS 26.0, *) else { throw TranscribeError.unsupportedOS }
             return try await AppleSpeechAnalyzer.transcribeWindow(url: fileURL, start: unit.localStart,
                                                                   duration: unit.duration,
                                                                   localeIdentifier: localeIdentifier)

@@ -415,7 +415,6 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
 
     /// Launch-time probe from AppDelegate; does not create the singleton.
     static func probeOrphanedLocationSessionAtLaunch() {
-        guard #available(iOS 17.0, *) else { return }
         lastOrphanProbeAt = Date()
         CLBackgroundActivitySession().invalidate()
     }
@@ -440,6 +439,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         if launchedInBackground {
             appIsInBackground = true
             logger.info("[BKA][Lifecycle] setup() observed background launch — seeding appIsInBackground=true")
+            // [WP-46] LeoPerf 的注释一直说这里会调,其实没调:后台拉起被当成冷启动(iPad 记过 2815 ms)。
+            // 真机 11 次判为后台拉起的,没有一次在 3 s 内转为 Active,不会误标。
+            LeoPerf.markBackgroundLaunch()
             // [T-ish-bg-cpu-governor] A background launch never receives
             // didEnterBackground, so arm the CPU governor here (idempotent).
             armCPUGovernorIfKernelBooted(caller: "setup.launchedInBackground")
@@ -936,8 +938,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// degrades to just the count, per spec — no extra time tracking is added.
     private static func privacyNotificationBody(isError: Bool, startedAt: Date?) -> String {
         let base = isError
-            ? String(localized: "1 task failed")
-            : String(localized: "1 task completed")
+            ? AppLocalized("1 task failed")
+            : AppLocalized("1 task completed")
         guard let startedAt else { return base }
         let elapsed = Date().timeIntervalSince(startedAt).rounded()
         guard elapsed > 0 else { return base }
@@ -968,15 +970,15 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         // A Face ID–locked session is always reported neutrally.
         let redact = liveActivityPrivacyMode || SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId)
         if redact && interrupted && !isError {
-            content.title = String(localized: "⏸ 任务中断")
-            content.body = String(localized: "回到 App 点「继续」")
+            content.title = AppLocalized("⏸ 任务中断")
+            content.body = AppLocalized("回到 App 点「继续」")
         } else if redact {
             // [T-ios-live-activity-privacy-mode] Neutral report only: no session
             // title, no reply summary. sessionId stays in userInfo below so the
             // tap-to-open jump keeps working, and the badge logic is untouched.
             content.title = isError
-                ? String(localized: "❌ Task failed")
-                : String(localized: "✅ Task completed")
+                ? AppLocalized("❌ Task failed")
+                : AppLocalized("✅ Task completed")
             content.body = Self.privacyNotificationBody(
                 isError: isError,
                 startedAt: AgentLiveActivityManager.shared.taskStartTime
@@ -1148,45 +1150,41 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     private func startBackgroundActivitySession() {
         guard liveUpdatesTask == nil else { return }
 
-        if #available(iOS 17.0, *) {
-            let session = CLBackgroundActivitySession()
-            bgActivitySession = session
-            logger.info("[BKA][LocationLA] CLBackgroundActivitySession created")
+        let session = CLBackgroundActivitySession()
+        bgActivitySession = session
+        logger.info("[BKA][LocationLA] CLBackgroundActivitySession created")
 
-            liveUpdatesTask = Task { @MainActor [weak self] in
-                guard let self else { return }
-                do {
-                    let updates = CLLocationUpdate.liveUpdates(.otherNavigation)
-                    for try await update in updates {
-                        guard !Task.isCancelled else { break }
-                        let now = Date()
-                        let elapsed = now.timeIntervalSince(self.lastLocationLAUpdate)
-                        guard elapsed >= Self.locationLAMinInterval else { continue }
-                        self.lastLocationLAUpdate = now
-                        let lat = update.location.map { Self.maskCoordinate($0.coordinate.latitude) } ?? "?"
-                        let lon = update.location.map { Self.maskCoordinate($0.coordinate.longitude) } ?? "?"
-                        logger.info("[BKA][LocationLA] tick (\(lat),\(lon)) — pushing LA update")
-                        self.updateLiveActivityIfNeeded(source: "locationLA")
-                    }
-                } catch {
-                    if !Task.isCancelled {
-                        logger.error("[BKA][LocationLA] liveUpdates stream error: \(error.localizedDescription)")
-                    }
+        liveUpdatesTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let updates = CLLocationUpdate.liveUpdates(.otherNavigation)
+                for try await update in updates {
+                    guard !Task.isCancelled else { break }
+                    let now = Date()
+                    let elapsed = now.timeIntervalSince(self.lastLocationLAUpdate)
+                    guard elapsed >= Self.locationLAMinInterval else { continue }
+                    self.lastLocationLAUpdate = now
+                    let lat = update.location.map { Self.maskCoordinate($0.coordinate.latitude) } ?? "?"
+                    let lon = update.location.map { Self.maskCoordinate($0.coordinate.longitude) } ?? "?"
+                    logger.info("[BKA][LocationLA] tick (\(lat),\(lon)) — pushing LA update")
+                    self.updateLiveActivityIfNeeded(source: "locationLA")
                 }
-                logger.info("[BKA][LocationLA] stream ended")
-                self.liveUpdatesTask = nil
+            } catch {
+                if !Task.isCancelled {
+                    logger.error("[BKA][LocationLA] liveUpdates stream error: \(error.localizedDescription)")
+                }
             }
-            logger.info("[BKA][LocationLA] liveUpdates stream started")
+            logger.info("[BKA][LocationLA] stream ended")
+            self.liveUpdatesTask = nil
         }
+        logger.info("[BKA][LocationLA] liveUpdates stream started")
     }
 
     private func stopBackgroundActivitySession() {
         let hadSomething = liveUpdatesTask != nil || bgActivitySession != nil
         liveUpdatesTask?.cancel()
         liveUpdatesTask = nil
-        if #available(iOS 17.0, *) {
-            (bgActivitySession as? CLBackgroundActivitySession)?.invalidate()
-        }
+        (bgActivitySession as? CLBackgroundActivitySession)?.invalidate()
         bgActivitySession = nil
         if hadSomething {
             logger.info("[BKA][LocationLA] stopped")
@@ -1214,7 +1212,6 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// run, the subsequent `evaluateBackgroundActivitySession()` recreates a
     /// fresh, owned session.
     private func retractOrphanedLocationSession(caller: String, force: Bool = false) {
-        guard #available(iOS 17.0, *) else { return }
         guard liveUpdatesTask == nil, bgActivitySession == nil else { return }
         let now = Date()
         guard force || now.timeIntervalSince(Self.lastOrphanProbeAt) >= Self.orphanProbeInterval else { return }
@@ -1637,7 +1634,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         } else if !displayName.isEmpty {
             status = displayName
         } else {
-            status = state == .running ? String(localized: "Working") : ""
+            status = state == .running ? AppLocalized("Working") : ""
         }
 
         let snapshot = AgentWidgetSnapshot(
@@ -1695,7 +1692,6 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     }
 
     private func buildSessionSnapshots() -> [LiveSessionSnapshot] {
-        guard #available(iOS 16.2, *) else { return [] }
         let tracker = SessionActivityTracker.shared
         return tracker.activeSessions.sorted().map { sid in
             let info = tracker.sessionToolInfo[sid]
@@ -1712,19 +1708,19 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             } else if tracker.sessionActivityPhases[sid] == .waitingForPermission {
                 // [T-la-approval] Parked on the permission gate: say so, not "Working…".
                 icon = LiveSessionSnapshot.approvalIcon
-                statusText = String(localized: "等你批准")
+                statusText = AppLocalized("等你批准")
             } else if tracker.sessionActivityPhases[sid] == .waitingForUser,
                       tracker.sessionActivityReasons[sid] == .userQuestion {
                 // [T-ask-user] The model asked a question: say so (never the question text).
                 icon = LiveSessionSnapshot.questionIcon
-                statusText = String(localized: "等你回答")
+                statusText = AppLocalized("等你回答")
             } else if tracker.sessionActivityPhases[sid] == .suspended {
                 // [T-la-honest-outcome] Parked in waitIfBackgroundSuspended: it
                 // carries on by itself once the app is back. Not done, not failed.
                 icon = "pause.circle.fill"
-                statusText = String(localized: "已暂停，回到 App 继续")
+                statusText = AppLocalized("已暂停，回到 App 继续")
             } else if toolName.isEmpty {
-                statusText = String(localized: "Working...")
+                statusText = AppLocalized("Working...")
             } else if toolStatus.isEmpty {
                 statusText = displayName
             } else {
@@ -1733,7 +1729,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             logger.info("[LiveActivity][snapshot] sid=\(sid.prefix(8)) toolName=\(toolName) icon=\(icon) status=\(statusText) titleLength=\(title.count)")
             return LiveSessionSnapshot(
                 sessionId: sid,
-                title: title.isEmpty ? String(localized: "Agent Task") : title,
+                title: title.isEmpty ? AppLocalized("Agent Task") : title,
                 toolIcon: icon,
                 toolStatus: statusText,
                 loopIteration: info?.loopIteration ?? 0

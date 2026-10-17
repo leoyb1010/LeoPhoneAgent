@@ -107,9 +107,9 @@ struct CapabilitiesView: View {
 
     private func categoryTitle(_ c: OffloadCommandCategory) -> String {
         switch c {
-        case .privacy: return String(localized: "Personal data & device")
-        case .media: return String(localized: "Content & media")
-        case .system: return String(localized: "System & tools")
+        case .privacy: return AppLocalized("Personal data & device")
+        case .media: return AppLocalized("Content & media")
+        case .system: return AppLocalized("System & tools")
         }
     }
 }

@@ -135,7 +135,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
         // 5. Validate state.
         guard result.state == state else {
             logger.error("State mismatch!")
-            throw LLMError.providerError(message: String(localized: "Sign-in could not be verified. Please try again."))
+            throw LLMError.providerError(message: AppLocalized("Sign-in could not be verified. Please try again."))
         }
 
         // 6. Exchange code for token.
@@ -164,7 +164,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
 
     func validAccessToken(instanceId: String) async throws -> String {
         guard var storage = ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: XAITokenStorage.self) else {
-            throw LLMError.invalidAPIKey(detail: String(localized: "Not signed in to xAI. Sign in again in Settings → Providers."))
+            throw LLMError.invalidAPIKey(detail: AppLocalized("Not signed in to xAI. Sign in again in Settings → Providers."))
         }
 
         let needsRefresh = storage.refreshToken != nil
@@ -175,7 +175,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
         }
 
         guard !storage.accessToken.isEmpty else {
-            throw LLMError.invalidAPIKey(detail: String(localized: "Not signed in to xAI. Sign in again in Settings → Providers."))
+            throw LLMError.invalidAPIKey(detail: AppLocalized("Not signed in to xAI. Sign in again in Settings → Providers."))
         }
         return storage.accessToken
     }
@@ -301,9 +301,9 @@ final class XAIOAuthManager: NSObject, ObservableObject {
             guard case .providerError(let message) = error else { throw error }
             let summary = OAuthRefreshErrorClassifier.userFacingSummary(error)
             if OAuthRefreshErrorClassifier.parseStatus(from: message) == 403 {
-                throw LLMError.providerError(message: String(localized: "xAI denied API access (\(summary)). Check that your SuperGrok or X Premium+ plan includes API access, or use an API key."))
+                throw LLMError.providerError(message: AppLocalized("xAI denied API access (\(summary)). Check that your SuperGrok or X Premium+ plan includes API access, or use an API key."))
             }
-            throw LLMError.providerError(message: String(localized: "xAI sign-in failed (\(summary)). Please try again."))
+            throw LLMError.providerError(message: AppLocalized("xAI sign-in failed (\(summary)). Please try again."))
         }
     }
 

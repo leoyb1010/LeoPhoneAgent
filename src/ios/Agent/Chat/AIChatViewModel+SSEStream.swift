@@ -7,7 +7,7 @@ private let logger = AppLogger(category: "AIChatVM")
 private struct StreamStallError: Error, LocalizedError {
     let seconds: Int
     var errorDescription: String? {
-        String(localized: "服务器 \(seconds) 秒没有回应，连接可能已经悄悄断开。请重试。")
+        AppLocalized("服务器 \(seconds) 秒没有回应，连接可能已经悄悄断开。请重试。")
     }
 }
 

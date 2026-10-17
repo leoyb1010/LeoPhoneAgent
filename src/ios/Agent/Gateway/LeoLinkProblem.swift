@@ -58,18 +58,18 @@ struct LeoLinkProblem: Equatable, Sendable {
             switch self {
             case .iPhone: return "iPhone"
             case .mac: return "Mac"
-            case .network: return String(localized: "网络")
-            case .relay: return String(localized: "中继")
+            case .network: return AppLocalized("网络")
+            case .relay: return AppLocalized("中继")
             }
         }
 
         /// 列表状态行用的一句话。
         var blame: String {
             switch self {
-            case .iPhone: return String(localized: "iPhone 的问题")
-            case .mac: return String(localized: "Mac 的问题")
-            case .network: return String(localized: "网络的问题")
-            case .relay: return String(localized: "中继的问题")
+            case .iPhone: return AppLocalized("iPhone 的问题")
+            case .mac: return AppLocalized("Mac 的问题")
+            case .network: return AppLocalized("网络的问题")
+            case .relay: return AppLocalized("中继的问题")
             }
         }
     }
@@ -86,12 +86,12 @@ struct LeoLinkProblem: Equatable, Sendable {
 
         var title: String {
             switch self {
-            case .retry: return String(localized: "重试")
-            case .openTailscale: return String(localized: "打开 Tailscale")
-            case .repairOnMac: return String(localized: "去 Mac 重新配对")
-            case .rescan: return String(localized: "重新扫码")
-            case .checkRelayAddress: return String(localized: "检查中继地址")
-            case .copyDiagnostics: return String(localized: "复制诊断信息")
+            case .retry: return AppLocalized("重试")
+            case .openTailscale: return AppLocalized("打开 Tailscale")
+            case .repairOnMac: return AppLocalized("去 Mac 重新配对")
+            case .rescan: return AppLocalized("重新扫码")
+            case .checkRelayAddress: return AppLocalized("检查中继地址")
+            case .copyDiagnostics: return AppLocalized("复制诊断信息")
             }
         }
     }
@@ -179,64 +179,64 @@ struct LeoLinkProblem: Equatable, Sendable {
         switch signal {
         case .phoneOffline:
             return make(.phoneOffline, .iPhone, .retry, retryable: true, pauses: false, detail,
-                        String(localized: "这台 iPhone 现在没有网络，联网后再试。"))
+                        AppLocalized("这台 iPhone 现在没有网络，联网后再试。"))
         case .timedOut:
             if tailnet { return tailscale(detail) }
             return make(.timeout, .network, .retry, retryable: true, pauses: false, detail,
-                        String(localized: "等了太久没有回应，网络可能不稳。"))
+                        AppLocalized("等了太久没有回应，网络可能不稳。"))
         case .connectFailed:
             if tailnet { return tailscale(detail) }
             return make(.relayUnreachable, .relay, .retry, retryable: true, pauses: false, detail,
-                        String(localized: "连不上中继，它可能暂时不可用。"))
+                        AppLocalized("连不上中继，它可能暂时不可用。"))
         case .hostNotFound:
             if tailnet { return tailscale(detail) }
             return make(.relayUnreachable, .network, .retry, retryable: true, pauses: false, detail,
-                        String(localized: "找不到中继，请检查网络是否正常。"))
+                        AppLocalized("找不到中继，请检查网络是否正常。"))
         case .tlsCertificate:
             return make(.tlsUntrusted, .network, .checkRelayAddress, retryable: false, pauses: true, detail,
-                        String(localized: "安全证书没通过校验，可能是代理在干扰，或地址不对。"))
+                        AppLocalized("安全证书没通过校验，可能是代理在干扰，或地址不对。"))
         case .tlsClock:
             return make(.tlsUntrusted, .iPhone, .copyDiagnostics, retryable: false, pauses: true, detail,
-                        String(localized: "这台 iPhone 的日期时间可能不对，证书校验没通过。"))
+                        AppLocalized("这台 iPhone 的日期时间可能不对，证书校验没通过。"))
         case .tlsHandshake:
             // 握手失败也可能只是瞬时:不暂停,沿用现有退避。
             return make(.tlsUntrusted, .network, .checkRelayAddress, retryable: true, pauses: false, detail,
-                        String(localized: "安全连接没建立起来，可能是代理或地址的问题。"))
+                        AppLocalized("安全连接没建立起来，可能是代理或地址的问题。"))
         case .badURL:
             return make(.badAddress, .iPhone, .checkRelayAddress, retryable: false, pauses: true, detail,
-                        String(localized: "地址不对：请到「设置 → 我的设备」检查地址（必须是完整的 https 地址）。"))
+                        AppLocalized("地址不对：请到「设置 → 我的设备」检查地址（必须是完整的 https 地址）。"))
         case .addressMissing:
             return make(.badAddress, .iPhone, .checkRelayAddress, retryable: false, pauses: true, detail,
-                        String(localized: "这台 Mac 还没填编码会话地址，请到「设置 → 我的设备」补上。"))
+                        AppLocalized("这台 Mac 还没填编码会话地址，请到「设置 → 我的设备」补上。"))
         case .notConfigured:
             return make(.notPaired, .iPhone, .rescan, retryable: false, pauses: true, detail,
-                        String(localized: "这台 iPhone 还没和这台 Mac 配对，请扫码配对。"))
+                        AppLocalized("这台 iPhone 还没和这台 Mac 配对，请扫码配对。"))
         case .unauthorized:
             return unauthorized(context, detail)
         case .malformed:
             switch context.operation {
             case .discovery:
                 return make(.badAddress, .relay, .checkRelayAddress, retryable: false, pauses: true, detail,
-                            String(localized: "中继返回的内容不对，请检查中继地址是否写对。"))
+                            AppLocalized("中继返回的内容不对，请检查中继地址是否写对。"))
             case .pairing:
                 return make(.notPaired, .iPhone, .rescan, retryable: false, pauses: true, detail,
-                            String(localized: "配对码无效，请让 Mac 重新出示。"))
+                            AppLocalized("配对码无效，请让 Mac 重新出示。"))
             case .session:
                 return make(.protocolMismatch, .mac, .copyDiagnostics, retryable: false, pauses: true, detail,
-                            String(localized: "收到的回应对不上这个 App，Mac 或中继的版本可能太旧或不匹配。"))
+                            AppLocalized("收到的回应对不上这个 App，Mac 或中继的版本可能太旧或不匹配。"))
             }
         case .eventsExpired:
             return make(.unknown, .mac, .retry, retryable: true, pauses: false, detail,
-                        String(localized: "Mac 上较早的事件已过期，会从可用的位置继续。"))
+                        AppLocalized("Mac 上较早的事件已过期，会从可用的位置继续。"))
         case .deliveryUnconfirmed:
             return make(.deliveryUnconfirmed, .network, .copyDiagnostics, retryable: false, pauses: false, detail,
-                        String(localized: "这条发出后没收到确认，结果未知。请先在 Mac 上核对，不要急着重发。"))
+                        AppLocalized("这条发出后没收到确认，结果未知。请先在 Mac 上核对，不要急着重发。"))
         case .cancelled:
             return make(.unknown, .iPhone, .retry, retryable: true, pauses: false, detail,
-                        String(localized: "已取消。"))
+                        AppLocalized("已取消。"))
         case .other:
             return make(.unknown, .network, .retry, retryable: true, pauses: false, detail,
-                        String(localized: "连接出了点问题，可以重试。"))
+                        AppLocalized("连接出了点问题，可以重试。"))
         case .http(let status, let serverMessage):
             return fromHTTP(status: status, serverMessage: serverMessage, context: context, detail: detail)
         }
@@ -245,7 +245,7 @@ struct LeoLinkProblem: Equatable, Sendable {
     /// 中继在线、但这台机器不在它的在线列表里(发现结果推出来的,不是某个请求失败)。
     static func macOffline(machineName: String? = nil, detail: String = "") -> LeoLinkProblem {
         make(.macOffline, .mac, .retry, retryable: true, pauses: false, detail,
-             String(localized: "\(who(machineName))当前不在线，它会自动重连，稍后再试。"))
+             AppLocalized("\(who(machineName))当前不在线，它会自动重连，稍后再试。"))
     }
 
     // MARK: HTTP 状态
@@ -265,12 +265,12 @@ struct LeoLinkProblem: Equatable, Sendable {
             // 403 不带原因 = 钥匙本身不被接受;带原因 = 钥匙对、但这台 Mac 不认 / 已撤销这台设备。
             if message.isEmpty { return unauthorized(context, detail) }
             return make(.macPairingRevoked, .mac, .repairOnMac, retryable: false, pauses: true, detail,
-                        String(localized: "\(subject)不再认这台 iPhone，需要在 Mac 上重新配对。"))
+                        AppLocalized("\(subject)不再认这台 iPhone，需要在 Mac 上重新配对。"))
         case 404:
             switch context.operation {
             case .discovery, .pairing:
                 return make(.badAddress, .iPhone, .checkRelayAddress, retryable: false, pauses: true, detail,
-                            String(localized: "中继地址或路径不对：请到「设置 → 我的设备」检查。"))
+                            AppLocalized("中继地址或路径不对：请到「设置 → 我的设备」检查。"))
             case .session:
                 if message.contains("不对手机开放") { return protocolMismatch(detail) }
                 return unknownHTTP(status: status, serverMessage: message, detail: detail)
@@ -279,7 +279,7 @@ struct LeoLinkProblem: Equatable, Sendable {
             return protocolMismatch(detail)
         case 408:
             return make(.timeout, .network, .retry, retryable: true, pauses: false, detail,
-                        String(localized: "等了太久没有回应，网络可能不稳。"))
+                        AppLocalized("等了太久没有回应，网络可能不稳。"))
         case 409:
             if context.operation == .pairing { return unauthorized(context, detail) }
             return unknownHTTP(status: status, serverMessage: message, detail: detail)
@@ -287,11 +287,11 @@ struct LeoLinkProblem: Equatable, Sendable {
             return from(signal: .eventsExpired, detail: detail, context: context)
         case 429:
             return make(.relayBusy, .relay, .retry, retryable: true, pauses: false, detail,
-                        String(localized: "请求太频繁，中继让稍等一会儿再试。"))
+                        AppLocalized("请求太频繁，中继让稍等一会儿再试。"))
         case 300..<400:
             // 授权凭据绝不跟随跳转(GatewayNoRedirect),看到 3xx 说明地址指向了别处。
             return make(.badAddress, .iPhone, .checkRelayAddress, retryable: false, pauses: true, detail,
-                        String(localized: "这个地址被重定向到了别处：请到「设置 → 我的设备」检查地址。"))
+                        AppLocalized("这个地址被重定向到了别处：请到「设置 → 我的设备」检查地址。"))
         case 502:
             // 中继转发不到 Mac(这台 Mac 当前不在线 / 转发到这台 Mac 失败)。SSE 失败时没有正文,也按这个处理;
             // 带着别的原因的 502(例如审批没能送达任务)是 Mac 自己的回应,不是离线。
@@ -301,13 +301,13 @@ struct LeoLinkProblem: Equatable, Sendable {
             return unknownHTTP(status: status, serverMessage: message, detail: detail)
         case 503:
             return make(.relayUnreachable, .relay, .retry, retryable: true, pauses: false, detail,
-                        String(localized: "中继暂时不可用，稍后再试。"))
+                        AppLocalized("中继暂时不可用，稍后再试。"))
         case 504:
             return make(.timeout, .mac, .retry, retryable: true, pauses: false, detail,
-                        String(localized: "\(subject)没有按时响应，它可能在休眠或忙不过来。"))
+                        AppLocalized("\(subject)没有按时响应，它可能在休眠或忙不过来。"))
         case 500..<600:
             return make(.relayUnreachable, .relay, .retry, retryable: true, pauses: false, detail,
-                        String(localized: "中继暂时出了问题，稍后再试。"))
+                        AppLocalized("中继暂时出了问题，稍后再试。"))
         default:
             return unknownHTTP(status: status, serverMessage: message, detail: detail)
         }
@@ -316,15 +316,15 @@ struct LeoLinkProblem: Equatable, Sendable {
     private static func unauthorized(_ context: Context, _ detail: String) -> LeoLinkProblem {
         if context.operation == .pairing {
             return make(.notPaired, .iPhone, .rescan, retryable: false, pauses: true, detail,
-                        String(localized: "配对码已过期或无效，请让 Mac 重新出示。"))
+                        AppLocalized("配对码已过期或无效，请让 Mac 重新出示。"))
         }
         return make(.relayAuthFailed, .relay, .rescan, retryable: false, pauses: true, detail,
-                    String(localized: "访问密钥被拒绝，可能已过期或被撤销，需要重新配对。"))
+                    AppLocalized("访问密钥被拒绝，可能已过期或被撤销，需要重新配对。"))
     }
 
     private static func protocolMismatch(_ detail: String) -> LeoLinkProblem {
         make(.protocolMismatch, .mac, .copyDiagnostics, retryable: false, pauses: true, detail,
-             String(localized: "Mac 或中继不认这个请求，版本可能太旧或不匹配。"))
+             AppLocalized("Mac 或中继不认这个请求，版本可能太旧或不匹配。"))
     }
 
     /// 业务类的错误(400/404/409/422 …):原样再试没有意义,也不该停下整条链路,把服务端的话带出来。
@@ -332,8 +332,8 @@ struct LeoLinkProblem: Equatable, Sendable {
         let clientError = (400..<500).contains(status)
         let shown = sanitize(serverMessage, limit: 60)
         let text = shown.isEmpty
-            ? String(localized: "Mac 返回了错误（HTTP \(status)），详情见技术细节。")
-            : String(localized: "Mac 返回了错误（HTTP \(status)）：\(shown)")
+            ? AppLocalized("Mac 返回了错误（HTTP \(status)），详情见技术细节。")
+            : AppLocalized("Mac 返回了错误（HTTP \(status)）：\(shown)")
         return make(.unknown, .mac, clientError ? .copyDiagnostics : .retry,
                     retryable: !clientError, pauses: false, detail, text)
     }
@@ -345,7 +345,7 @@ struct LeoLinkProblem: Equatable, Sendable {
 
     private static func tailscale(_ detail: String) -> LeoLinkProblem {
         make(.tailscaleOffOrUnreachable, .network, .openTailscale, retryable: true, pauses: false, detail,
-             String(localized: "连不上：这台 iPhone 的 Tailscale 可能没开，或 Mac 不在同一个 tailnet。"))
+             AppLocalized("连不上：这台 iPhone 的 Tailscale 可能没开，或 Mac 不在同一个 tailnet。"))
     }
 
     private static func make(_ kind: Kind, _ owner: Owner, _ action: PrimaryAction,
@@ -357,7 +357,7 @@ struct LeoLinkProblem: Equatable, Sendable {
 
     private static func who(_ machineName: String?) -> String {
         let name = machineName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return name.isEmpty ? String(localized: "这台 Mac") : "「\(name)」"
+        return name.isEmpty ? AppLocalized("这台 Mac") : "「\(name)」"
     }
 
     // MARK: Tailscale 地址

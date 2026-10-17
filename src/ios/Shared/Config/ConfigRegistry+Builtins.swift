@@ -339,6 +339,11 @@ extension ConfigRegistry {
         r.register(ModelsCollection())
         r.register(GroupsCollection())
         r.register(EnvVarsCollection())
+        // [WP-40] OpenMinis v1.14:子代理与思考规则也能被 minis-config 读写。
+        r.register(SubAgentsCollection())
+        r.register(SubAgentsCollection.orderField())
+        r.register(ThinkingRulesCollection())
+        r.register(ThinkingRulesCollection.orderField())
 
         // Aggregate read-only summary so `minis-config get providers`
         // returns a useful list of configured instances. Credentials
@@ -695,12 +700,7 @@ extension ConfigRegistry {
             min: 0, max: 100_000_000
         ))
 
-        if #available(iOS 17.0, *) {
-            syncFields.forEach { r.register($0) }
-        } else {
-            let reason = "iCloud Sync requires iOS 17 or later and is unavailable on this device. There is no sync settings screen on this iOS version either."
-            syncFields.forEach { r.register(UnavailableField(base: $0, reason: reason)) }
-        }
+        syncFields.forEach { r.register($0) }
     }
 
     // MARK: Rootfs mirrors (alpine / pip / npm)
@@ -777,18 +777,10 @@ extension ConfigRegistry {
             cases: ["system", "light", "dark"],
             defaultIndex: 0
         ))
-        r.register(AppStorageIntCodedEnumField(
-            path: "appearance.appIcon",
-            displayName: "App icon",
-            description: "Home screen icon variant.",
-            userDefaultsKey: "appIconMode",
-            cases: ["auto", "light", "dark", "legacy_light", "legacy_dark"],
-            defaultIndex: 0
-        ))
         r.register(AppStorageStringField(
             path: "appearance.language",
             displayName: "App language",
-            description: "BCP-47 code (zh-Hans, en, ja, …) or empty for system.",
+            description: "BCP-47 code (en, zh-Hans, zh-Hant) or empty for system.",
             userDefaultsKey: "appLanguage",
             defaultValue: "",
             maxLength: 16

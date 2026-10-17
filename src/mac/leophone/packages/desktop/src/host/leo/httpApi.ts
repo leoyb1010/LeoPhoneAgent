@@ -23,6 +23,8 @@ import {
   OAuthRequestError,
   startOAuthLogin,
 } from "./oauthRuntime.js";
+import { QuickDispatchError, type LeoQuickEntry } from "./quickEntry.js";
+import { screenSharingEnabled, setScreenSharingEnabled } from "./link/screen/hostCapture.js";
 import { executeTreasuryTool, TREASURY_TOOLS } from "./treasuryTools.js";
 import type { TreasuryStore } from "./treasuryStore.js";
 
@@ -133,6 +135,8 @@ export function startLeoHttpApi(deps: {
   onListening: () => void;
   /** 端口被别的窗口的 Host 占着。 */
   onPortBusy: () => void;
+  /** 菜单栏 / ⌥Space 快速派发(只有主进程能调,见 docs/specs/leo-quick-entry.md)。 */
+  quick?: LeoQuickEntry;
 }): Server {
   const isMainKey = secretMatcher(`Bearer ${leoLocalKey()}`);
   const isTreasuryKey = secretMatcher(`Bearer ${leoTreasuryKey()}`);
@@ -305,6 +309,29 @@ export function startLeoHttpApi(deps: {
       await handleChatCompletions(req, res, body);
       return;
     }
+    // 菜单栏摘要与快速派发:除主钥匙外还要主进程内存里的口令。主钥匙文件本机进程都读得到,
+    // 只凭它就能派任务的话,一个被注入的 agent 可以自己给自己开新任务。
+    if (url.pathname.startsWith("/api/leo/quick/")) {
+      if (!deps.quick || !isPairSecret(req.headers["x-leo-pair"] as string | undefined)) {
+        json(res, 403, { error: "forbidden" });
+        return;
+      }
+      if (url.pathname === "/api/leo/quick/summary" && req.method === "GET") {
+        json(res, 200, await deps.quick.summary());
+        return;
+      }
+      if (url.pathname === "/api/leo/quick/dispatch" && req.method === "POST") {
+        try {
+          json(res, 202, await deps.quick.dispatch(await readJsonBody(req, 256 * 1024)));
+        } catch (error) {
+          if (!(error instanceof QuickDispatchError)) throw error;
+          json(res, error.status, { error: error.message });
+        }
+        return;
+      }
+      json(res, 404, { error: "not found" });
+      return;
+    }
     if (url.pathname === "/api/leo/link/status" && req.method === "GET") {
       json(res, 200, leoLinkStatus());
       return;
@@ -332,6 +359,26 @@ export function startLeoHttpApi(deps: {
       } catch (cause) {
         json(res, 400, { error: cause instanceof Error ? cause.message : "直连操作失败" });
       }
+      return;
+    }
+    // [WP-50]「允许手机查看屏幕」开关:与直连授权一样只能在 LeoBot 界面上改(要内存口令)。
+    if (url.pathname === "/api/leo/link/screen") {
+      if (!isPairSecret(req.headers["x-leo-pair"] as string | undefined)) {
+        json(res, 403, { error: "看屏开关只能在 LeoBot 界面上修改" });
+        return;
+      }
+      if (req.method === "POST") {
+        const body = await readJsonBody(req, 4096);
+        if (typeof body["enabled"] !== "boolean") {
+          json(res, 400, { error: "enabled is required" });
+          return;
+        }
+        await setScreenSharingEnabled(body["enabled"]);
+      } else if (req.method !== "GET") {
+        json(res, 405, { error: "method not allowed" });
+        return;
+      }
+      json(res, 200, { enabled: await screenSharingEnabled() });
       return;
     }
     // 出码 / 作废码:除了主钥匙,还要主进程内存里的口令 —— 只有界面上点了才会经 IPC 带上。

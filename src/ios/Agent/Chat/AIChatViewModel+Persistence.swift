@@ -589,7 +589,7 @@ extension AIChatViewModel {
             let compactedUICount = insertIdx
             logger.info("[Compact] UI: insertIdx=\(insertIdx) compactedUI=\(compactedUICount) totalUI=\(loadedUIMessages.count)")
 
-            let divider = ChatMessage(role: .compactDivider, content: String(localized: "已压缩 \(compactedUICount) 条消息"))
+            let divider = ChatMessage(role: .compactDivider, content: AppLocalized("已压缩 \(compactedUICount) 条消息"))
             divider.compactSummary = marker.summary
             loadedUIMessages.insert(divider, at: insertIdx)
             for i in 0..<insertIdx {
@@ -1185,7 +1185,7 @@ extension AIChatViewModel {
         // Same binding the in-chat picker writes (ModelSwitcher.apply's direct entry).
         if initialEntryKey != nil {
             guard let entry = resolveInitialEntry(store: store) else {
-                errorMessage = String(localized: "This model is no longer available. Choose another model.")
+                errorMessage = AppLocalized("This model is no longer available. Choose another model.")
                 return
             }
             var subSource: SessionModelSource? = nil
@@ -1209,7 +1209,7 @@ extension AIChatViewModel {
         let overrideGroupId = initialGroupId
         let explicitGroupEntry = overrideGroupId == nil ? nil : resolveInitialEntry(store: store)
         if overrideGroupId != nil, explicitGroupEntry == nil {
-            errorMessage = String(localized: "This group has no available models. Check its members and provider sign-in.")
+            errorMessage = AppLocalized("This group has no available models. Check its members and provider sign-in.")
             return
         }
         // Tier 1 — default group (current behaviour).

@@ -11,7 +11,7 @@ private enum ProviderOnboardingValidationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noModels:
-            return String(localized: "The provider returned no model that can be tested.")
+            return AppLocalized("The provider returned no model that can be tested.")
         }
     }
 }
@@ -272,7 +272,7 @@ struct AddProviderView: View {
         .fileImporter(isPresented: $showImportFile, allowedContentTypes: [.json]) { result in
             handleImport(result)
         }
-        .alert(String(localized: "Import"), isPresented: $showImportResult) {
+        .alert(AppLocalized("Import"), isPresented: $showImportResult) {
             Button("OK") {
                 if importSucceeded { dismiss() }
             }
@@ -291,22 +291,22 @@ struct AddProviderView: View {
         switch result {
         case .success(let url):
             guard url.startAccessingSecurityScopedResource() else {
-                importMessage = String(localized: "Cannot access the selected file.")
+                importMessage = AppLocalized("Cannot access the selected file.")
                 showImportResult = true
                 return
             }
             defer { url.stopAccessingSecurityScopedResource() }
             guard let data = try? Data(contentsOf: url),
                   let json = String(data: data, encoding: .utf8) else {
-                importMessage = String(localized: "Failed to read file.")
+                importMessage = AppLocalized("Failed to read file.")
                 showImportResult = true
                 return
             }
             if let label = store.importInstanceJSON(json) {
-                importMessage = String(localized: "Imported provider \"\(label)\" successfully.")
+                importMessage = AppLocalized("Imported provider \"\(label)\" successfully.")
                 importSucceeded = true
             } else {
-                importMessage = String(localized: "Invalid provider configuration file.")
+                importMessage = AppLocalized("Invalid provider configuration file.")
             }
             showImportResult = true
         case .failure:
@@ -316,11 +316,11 @@ struct AddProviderView: View {
 
     private var navigationTitle: String {
         if let type = selectedType, selectedCredential != nil {
-            return String(localized: "Configure \(type.displayName)")
+            return AppLocalized("Configure \(type.displayName)")
         } else if selectedType != nil {
-            return String(localized: "Auth Method")
+            return AppLocalized("Auth Method")
         }
-        return String(localized: "Add Provider")
+        return AppLocalized("Add Provider")
     }
 
     // MARK: - Step 1: Pick Provider Type
@@ -562,7 +562,7 @@ struct AddProviderView: View {
             if selectedType == .openCodeGo {
                 Section {
                     Link(destination: OpenCodeGo.keyPageURL) {
-                        Label(String(localized: "Get a Key from OpenCode"), systemImage: "safari")
+                        Label(AppLocalized("Get a Key from OpenCode"), systemImage: "safari")
                     }
                 } footer: {
                     Text("Official OpenCode Go API (opencode.ai). Sign in on the OpenCode site, create an API key, then paste it below.")
@@ -889,7 +889,7 @@ struct AddProviderView: View {
         } catch {
             ProviderKeychainHelper.deleteAPIKey(instanceId: candidate.instance.id)
             guard validationGeneration == attempt, !Task.isCancelled else { return }
-            errorMessage = String(localized: "Connection test failed: \(error.localizedDescription)")
+            errorMessage = AppLocalized("Connection test failed: \(error.localizedDescription)")
             pendingSaveKind = .apiKey
         }
     }
@@ -909,7 +909,7 @@ struct AddProviderView: View {
             dismiss()
         } catch {
             guard validationGeneration == attempt, !Task.isCancelled else { return }
-            errorMessage = String(localized: "Connection test failed: \(error.localizedDescription)")
+            errorMessage = AppLocalized("Connection test failed: \(error.localizedDescription)")
             pendingSaveKind = .oauth
         }
     }
@@ -936,7 +936,7 @@ struct AddProviderView: View {
         } catch {
             ProviderKeychainHelper.deleteOAuthString(instanceId: instance.id, account: "manual-oauth-token")
             guard validationGeneration == attempt, !Task.isCancelled else { return }
-            errorMessage = String(localized: "Connection test failed: \(error.localizedDescription)")
+            errorMessage = AppLocalized("Connection test failed: \(error.localizedDescription)")
             pendingSaveKind = .manualOAuth
         }
     }
@@ -1143,15 +1143,15 @@ struct AddProviderView: View {
     // MARK: - Helpers
 
     private var oauthSignInLabel: String {
-        guard let type = selectedType else { return String(localized: "Sign In") }
+        guard let type = selectedType else { return AppLocalized("Sign In") }
         switch type {
-        case .anthropic, .gemini, .openCodeGo: return String(localized: "Sign In") // Not reachable — API key only
-        case .openAI: return String(localized: "Sign in with OpenAI")
-        case .openRouter: return String(localized: "Sign in with OpenRouter")
-        case .openAIResponses: return String(localized: "Sign In") // Not reachable — API key only
-        case .xAI: return String(localized: "Sign in with xAI")
-        case .kimiCode: return String(localized: "Sign in with Kimi Code")
-        case .unsupported: return String(localized: "Sign In")
+        case .anthropic, .gemini, .openCodeGo: return AppLocalized("Sign In") // Not reachable — API key only
+        case .openAI: return AppLocalized("Sign in with OpenAI")
+        case .openRouter: return AppLocalized("Sign in with OpenRouter")
+        case .openAIResponses: return AppLocalized("Sign In") // Not reachable — API key only
+        case .xAI: return AppLocalized("Sign in with xAI")
+        case .kimiCode: return AppLocalized("Sign in with Kimi Code")
+        case .unsupported: return AppLocalized("Sign In")
         }
     }
 
@@ -1172,15 +1172,15 @@ struct AddProviderView: View {
 
     private func providerPickerLabel(_ type: ProviderType) -> String {
         switch type {
-        case .anthropic: return String(localized: "Anthropic / Compatible API")
-        case .openAI:    return String(localized: "OpenAI / Compatible API")
+        case .anthropic: return AppLocalized("Anthropic / Compatible API")
+        case .openAI:    return AppLocalized("OpenAI / Compatible API")
         case .gemini:    return type.displayName
         case .openCodeGo: return type.displayName
         case .openRouter: return "OpenRouter"
         case .openAIResponses: return "Responses API"
         case .xAI: return "xAI (Grok)"
         case .kimiCode: return "Kimi Code"
-        case .unsupported: return String(localized: "Unsupported")
+        case .unsupported: return AppLocalized("Unsupported")
         }
     }
 
@@ -1205,29 +1205,29 @@ struct AddProviderView: View {
     private func credentialDescription(type: ProviderType, credential: ProviderCredential) -> String {
         switch (type, credential) {
         case (.openAI, .apiKey):
-            return String(localized: "Supports OpenAI official API and third-party services like OpenRouter, MiniMax, etc.")
+            return AppLocalized("Supports OpenAI official API and third-party services like OpenRouter, MiniMax, etc.")
         case (.openAIResponses, .apiKey):
-            return String(localized: "Use an API key for a Responses API endpoint")
+            return AppLocalized("Use an API key for a Responses API endpoint")
         case (.kimiCode, .apiKey):
-            return String(localized: "Use a Kimi Coding API key.")
+            return AppLocalized("Use a Kimi Coding API key.")
         case (.openCodeGo, .apiKey):
-            return String(localized: "Use an API key from opencode.ai (official OpenCode Go API).")
+            return AppLocalized("Use an API key from opencode.ai (official OpenCode Go API).")
         case (_, .apiKey):
-            return String(localized: "Use an API key from your \(type.displayName) account")
+            return AppLocalized("Use an API key from your \(type.displayName) account")
         case (.anthropic, .oauth), (.gemini, .oauth), (.openCodeGo, .oauth):
             return "" // Not reachable — API key only
         case (.openAI, .oauth):
-            return String(localized: "Sign in with OpenAI Codex")
+            return AppLocalized("Sign in with OpenAI Codex")
         case (.openRouter, .oauth):
-            return String(localized: "Sign in with your OpenRouter account")
+            return AppLocalized("Sign in with your OpenRouter account")
         case (.openAIResponses, .oauth):
             return "" // Not reachable — API key only
         case (.xAI, .oauth):
-            return String(localized: "Sign in with your SuperGrok / X Premium+ subscription. xAI may restrict API access on some plans — if you hit HTTP 403, switch to an API key.")
+            return AppLocalized("Sign in with your SuperGrok / X Premium+ subscription. xAI may restrict API access on some plans — if you hit HTTP 403, switch to an API key.")
         case (.kimiCode, .oauth):
-            return String(localized: "Sign in with your Kimi Code / Coding Plan subscription.")
+            return AppLocalized("Sign in with your Kimi Code / Coding Plan subscription.")
         case (.unsupported, _):
-            return String(localized: "This provider isn't supported in this app version.")
+            return AppLocalized("This provider isn't supported in this app version.")
         }
     }
 

@@ -91,14 +91,14 @@ enum BackupCategory: String, Codable, CaseIterable, Sendable {
 
     var displayName: String {
         switch self {
-        case .chats: return String(localized: "对话")
-        case .sharedFiles: return String(localized: "共享文件")
-        case .skills: return String(localized: "技能")
-        case .memory: return String(localized: "记忆")
-        case .providers: return String(localized: "服务商与模型分组")
-        case .mcpServers: return String(localized: "MCP 服务器")
-        case .voiceCorrections: return String(localized: "语音纠错")
-        case .environmentVariables: return String(localized: "环境变量")
+        case .chats: return AppLocalized("对话")
+        case .sharedFiles: return AppLocalized("共享文件")
+        case .skills: return AppLocalized("技能")
+        case .memory: return AppLocalized("记忆")
+        case .providers: return AppLocalized("服务商与模型分组")
+        case .mcpServers: return AppLocalized("MCP 服务器")
+        case .voiceCorrections: return AppLocalized("语音纠错")
+        case .environmentVariables: return AppLocalized("环境变量")
         }
     }
 
@@ -719,9 +719,9 @@ enum BackupError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .stagingFailed(let m): return String(localized: "备份准备失败：\(m)")
-        case .writeFailed(let m): return String(localized: "备份写入失败：\(m)")
-        case .cancelled: return String(localized: "已取消")
+        case .stagingFailed(let m): return AppLocalized("备份准备失败：\(m)")
+        case .writeFailed(let m): return AppLocalized("备份写入失败：\(m)")
+        case .cancelled: return AppLocalized("已取消")
         case .busy(let m): return m
         }
     }

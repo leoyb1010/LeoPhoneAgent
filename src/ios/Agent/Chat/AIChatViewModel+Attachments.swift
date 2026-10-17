@@ -740,7 +740,7 @@ extension AIChatViewModel {
         case .needsCompact where autoCompactEnabled || sessionSource == "shortcut":
             break // send() compacts and sends without asking
         case .needsCompact, .exhausted:
-            transientNotice = String(localized: "Context is almost full. Compact the conversation first, then try again.")
+            transientNotice = AppLocalized("Context is almost full. Compact the conversation first, then try again.")
             return
         }
         withComposerSetAside {
@@ -752,7 +752,7 @@ extension AIChatViewModel {
     /// Transfer the complete composer only after photo loading has settled.
     func takeComposerForTransfer() -> ViewModelCache.PendingTransfer? {
         guard !hasLoadingAttachments else {
-            transientNotice = String(localized: "Attachments are still loading. Try moving them again when loading finishes.")
+            transientNotice = AppLocalized("Attachments are still loading. Try moving them again when loading finishes.")
             return nil
         }
         guard !currentComposerDraft.isEmpty else { return nil }

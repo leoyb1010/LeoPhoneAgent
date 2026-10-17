@@ -36,6 +36,10 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         os_log("FileProviderExtension init — domain: %{public}@, providerRoot: %{public}@",
                log: Self.log, type: .info,
                domain.identifier.rawValue, root.path)
+        // [WP-40] Liveness heartbeat for the main app's boot-loop breaker
+        // (FileProviderBootHealth): reaching here means dyld bound the entry stub
+        // and our code runs — exactly what the pre-main SIGILL launches never do.
+        FileProviderBootHealth.recordSuccessfulBoot()
 
         let resolvedRoot = root.resolvingSymlinksInPath().path
         var rootSummaries: [String] = []

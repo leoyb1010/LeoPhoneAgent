@@ -4973,7 +4973,7 @@ export class ProductProjection {
     }
 
     // compacting 进出 activeWorks（guard 同源派生：compactOperationLock /
-    // compactingAcceptsFutureInput 由此驱动，与 formal-proof evaluateCompacting 对齐）。
+    // compactingAcceptsFutureInput 由此驱动，与历史形式化模型（已移除）的 evaluateCompacting 对齐）。
     const otherWorks = this.snapshot.control.activeWorks.filter((work) => work.kind !== "compact");
     if (status === "running") {
       deltas.push({

@@ -12,9 +12,9 @@ enum OffloadPermissionLevel: Int, CaseIterable {
     /// 设置页的选项名。必须走本地化:`Text(String)` 不查字符串表,原来中文界面里会露出英文。
     var displayName: String {
         switch self {
-        case .bypass: return String(localized: "Bypass")
-        case .askOnce: return String(localized: "Ask Once")
-        case .notAllowed: return String(localized: "Not Allowed")
+        case .bypass: return AppLocalized("Bypass")
+        case .askOnce: return AppLocalized("Ask Once")
+        case .notAllowed: return AppLocalized("Not Allowed")
         }
     }
 }
@@ -117,9 +117,9 @@ struct OffloadCommandInfo {
     private let labelKey: String
     private let descriptionKey: String
 
-    var displayLabel: String { String(localized: String.LocalizationValue(labelKey)) }
+    var displayLabel: String { AppLocalized(String.LocalizationValue(labelKey)) }
     var description: String {
-        descriptionKey.isEmpty ? "" : String(localized: String.LocalizationValue(descriptionKey))
+        descriptionKey.isEmpty ? "" : AppLocalized(String.LocalizationValue(descriptionKey))
     }
 
     init(
@@ -169,62 +169,62 @@ struct OffloadCommandInfo {
 
     var actions: [String] {
         switch name {
-        case "apple-healthkit": return [String(localized: "Read health metrics"), String(localized: "Log supported samples"), String(localized: "Summarize trends")]
-        case "apple-calendar": return [String(localized: "List events"), String(localized: "Check availability"), String(localized: "Create or update events")]
-        case "apple-reminders": return [String(localized: "List reminders"), String(localized: "Create tasks"), String(localized: "Complete or reschedule items")]
-        case "apple-photos": return [String(localized: "Search and inspect media"), String(localized: "Import or export files"), String(localized: "Delete only after explicit request")]
-        case "apple-location": return [String(localized: "Read current location"), String(localized: "Resolve coordinates"), String(localized: "Use location in an Agent task")]
-        case "apple-homekit": return [String(localized: "List homes and accessories"), String(localized: "Read device state"), String(localized: "Control supported accessories")]
-        case "apple-clipboard": return [String(localized: "Read clipboard on request"), String(localized: "Write text or images")]
-        case "apple-nfc": return [String(localized: "Read NDEF or supported tags"), String(localized: "Write NDEF tags"), String(localized: "Inspect supported smart cards")]
-        case "apple-bluetooth": return [String(localized: "Scan nearby devices"), String(localized: "Connect to BLE peripherals"), String(localized: "Exchange supported data")]
-        case "apple-speak": return [String(localized: "Speak Agent responses with system voices")]
-        case "apple-speech": return [String(localized: "Transcribe microphone or audio input")]
-        case "apple-player", "apple-media": return [String(localized: "Inspect media"), String(localized: "Control supported playback"), String(localized: "Work with the media library")]
-        case "apple-device": return [String(localized: "Read safe device metadata and system state")]
-        case "apple-notification": return [String(localized: "Schedule local notifications"), String(localized: "Remove pending notifications")]
-        case "apple-alarm": return [String(localized: "Create and manage supported alarms")]
-        case "apple-open": return [String(localized: "Open approved URLs and system destinations")]
-        case "apple-maps": return [String(localized: "Search places"), String(localized: "Build routes"), String(localized: "Open map results")]
-        case "apple-weather": return [String(localized: "Read current conditions and forecasts")]
-        case "apple-nlp": return [String(localized: "Detect language"), String(localized: "Tokenize and analyze text")]
-        case "apple-vision": return [String(localized: "OCR images"), String(localized: "Read barcodes"), String(localized: "Classify visual content")]
-        case "apple-contacts": return [String(localized: "Search contacts"), String(localized: "Read contact details"), String(localized: "Create or update only with confirmation")]
-        case "apple-files": return [String(localized: "List granted folders"), String(localized: "Ask you to pick a folder or file"), String(localized: "Re-authorize stale grants")]
-        case "apple-camera": return [String(localized: "Open the camera for you to shoot"), String(localized: "Scan barcodes and QR codes"), String(localized: "Scan multi-page documents")]
-        case "apple-motion": return [String(localized: "Read live step counts"), String(localized: "Summarize walking/driving activity")]
-        case "apple-shortcuts": return [String(localized: "Run a shortcut by name"), String(localized: "Keep a registry of your shortcuts")]
+        case "apple-healthkit": return [AppLocalized("Read health metrics"), AppLocalized("Log supported samples"), AppLocalized("Summarize trends")]
+        case "apple-calendar": return [AppLocalized("List events"), AppLocalized("Check availability"), AppLocalized("Create or update events")]
+        case "apple-reminders": return [AppLocalized("List reminders"), AppLocalized("Create tasks"), AppLocalized("Complete or reschedule items")]
+        case "apple-photos": return [AppLocalized("Search and inspect media"), AppLocalized("Import or export files"), AppLocalized("Delete only after explicit request")]
+        case "apple-location": return [AppLocalized("Read current location"), AppLocalized("Resolve coordinates"), AppLocalized("Use location in an Agent task")]
+        case "apple-homekit": return [AppLocalized("List homes and accessories"), AppLocalized("Read device state"), AppLocalized("Control supported accessories")]
+        case "apple-clipboard": return [AppLocalized("Read clipboard on request"), AppLocalized("Write text or images")]
+        case "apple-nfc": return [AppLocalized("Read NDEF or supported tags"), AppLocalized("Write NDEF tags"), AppLocalized("Inspect supported smart cards")]
+        case "apple-bluetooth": return [AppLocalized("Scan nearby devices"), AppLocalized("Connect to BLE peripherals"), AppLocalized("Exchange supported data")]
+        case "apple-speak": return [AppLocalized("Speak Agent responses with system voices")]
+        case "apple-speech": return [AppLocalized("Transcribe microphone or audio input")]
+        case "apple-player", "apple-media": return [AppLocalized("Inspect media"), AppLocalized("Control supported playback"), AppLocalized("Work with the media library")]
+        case "apple-device": return [AppLocalized("Read safe device metadata and system state")]
+        case "apple-notification": return [AppLocalized("Schedule local notifications"), AppLocalized("Remove pending notifications")]
+        case "apple-alarm": return [AppLocalized("Create and manage supported alarms")]
+        case "apple-open": return [AppLocalized("Open approved URLs and system destinations")]
+        case "apple-maps": return [AppLocalized("Search places"), AppLocalized("Build routes"), AppLocalized("Open map results")]
+        case "apple-weather": return [AppLocalized("Read current conditions and forecasts")]
+        case "apple-nlp": return [AppLocalized("Detect language"), AppLocalized("Tokenize and analyze text")]
+        case "apple-vision": return [AppLocalized("OCR images"), AppLocalized("Read barcodes"), AppLocalized("Classify visual content")]
+        case "apple-contacts": return [AppLocalized("Search contacts"), AppLocalized("Read contact details"), AppLocalized("Create or update only with confirmation")]
+        case "apple-files": return [AppLocalized("List granted folders"), AppLocalized("Ask you to pick a folder or file"), AppLocalized("Re-authorize stale grants")]
+        case "apple-camera": return [AppLocalized("Open the camera for you to shoot"), AppLocalized("Scan barcodes and QR codes"), AppLocalized("Scan multi-page documents")]
+        case "apple-motion": return [AppLocalized("Read live step counts"), AppLocalized("Summarize walking/driving activity")]
+        case "apple-shortcuts": return [AppLocalized("Run a shortcut by name"), AppLocalized("Keep a registry of your shortcuts")]
         default: return []
         }
     }
 
     var examplePrompt: String {
         switch name {
-        case "apple-healthkit": return String(localized: "Summarize my step count for the last seven days.")
-        case "apple-calendar": return String(localized: "Find a free hour tomorrow afternoon and create a focus block.")
-        case "apple-reminders": return String(localized: "Create a reminder to review this project tomorrow at 9 AM.")
-        case "apple-photos": return String(localized: "Find the latest screenshots and export them to this workspace.")
-        case "apple-location": return String(localized: "What useful places are near my current location?")
-        case "apple-homekit": return String(localized: "Show the current state of my living room accessories.")
-        case "apple-clipboard": return String(localized: "Summarize the text currently on my clipboard.")
-        case "apple-nfc": return String(localized: "Read this NFC tag and explain its records.")
-        case "apple-bluetooth": return String(localized: "List nearby Bluetooth devices I can connect to.")
-        case "apple-speak": return String(localized: "Read the final answer aloud.")
-        case "apple-speech": return String(localized: "Start voice input for a new task.")
-        case "apple-player", "apple-media": return String(localized: "Pause the current audio and show what is playing.")
-        case "apple-device": return String(localized: "Show storage and battery information available to the app.")
-        case "apple-notification": return String(localized: "Notify me in twenty minutes to check this task.")
-        case "apple-alarm": return String(localized: "Create an alarm for 7:30 tomorrow morning.")
-        case "apple-open": return String(localized: "Open the settings page for background tasks.")
-        case "apple-maps": return String(localized: "Plan a walking route to the nearest station.")
-        case "apple-weather": return String(localized: "Will it rain here this evening?")
-        case "apple-nlp": return String(localized: "Detect the language and key names in this text.")
-        case "apple-vision": return String(localized: "Extract all text and QR codes from this image.")
-        case "apple-contacts": return String(localized: "Find Zhang Wei's phone number in my contacts.")
-        case "apple-files": return String(localized: "Ask me for a folder and organize the documents inside.")
-        case "apple-camera": return String(localized: "Scan this receipt and extract the total.")
-        case "apple-motion": return String(localized: "How many steps have I taken today?")
-        case "apple-shortcuts": return String(localized: "Run my Good Morning shortcut.")
+        case "apple-healthkit": return AppLocalized("Summarize my step count for the last seven days.")
+        case "apple-calendar": return AppLocalized("Find a free hour tomorrow afternoon and create a focus block.")
+        case "apple-reminders": return AppLocalized("Create a reminder to review this project tomorrow at 9 AM.")
+        case "apple-photos": return AppLocalized("Find the latest screenshots and export them to this workspace.")
+        case "apple-location": return AppLocalized("What useful places are near my current location?")
+        case "apple-homekit": return AppLocalized("Show the current state of my living room accessories.")
+        case "apple-clipboard": return AppLocalized("Summarize the text currently on my clipboard.")
+        case "apple-nfc": return AppLocalized("Read this NFC tag and explain its records.")
+        case "apple-bluetooth": return AppLocalized("List nearby Bluetooth devices I can connect to.")
+        case "apple-speak": return AppLocalized("Read the final answer aloud.")
+        case "apple-speech": return AppLocalized("Start voice input for a new task.")
+        case "apple-player", "apple-media": return AppLocalized("Pause the current audio and show what is playing.")
+        case "apple-device": return AppLocalized("Show storage and battery information available to the app.")
+        case "apple-notification": return AppLocalized("Notify me in twenty minutes to check this task.")
+        case "apple-alarm": return AppLocalized("Create an alarm for 7:30 tomorrow morning.")
+        case "apple-open": return AppLocalized("Open the settings page for background tasks.")
+        case "apple-maps": return AppLocalized("Plan a walking route to the nearest station.")
+        case "apple-weather": return AppLocalized("Will it rain here this evening?")
+        case "apple-nlp": return AppLocalized("Detect the language and key names in this text.")
+        case "apple-vision": return AppLocalized("Extract all text and QR codes from this image.")
+        case "apple-contacts": return AppLocalized("Find Zhang Wei's phone number in my contacts.")
+        case "apple-files": return AppLocalized("Ask me for a folder and organize the documents inside.")
+        case "apple-camera": return AppLocalized("Scan this receipt and extract the total.")
+        case "apple-motion": return AppLocalized("How many steps have I taken today?")
+        case "apple-shortcuts": return AppLocalized("Run my Good Morning shortcut.")
         default: return ""
         }
     }
@@ -235,9 +235,9 @@ struct OffloadCommandInfo {
              "apple-location", "apple-homekit", "apple-clipboard", "apple-nfc",
              "apple-bluetooth", "apple-speech", "apple-media", "apple-player",
              "apple-contacts", "apple-files", "apple-camera", "apple-motion":
-            return String(localized: "Read on device. Results enter the current Agent conversation and are sent to its selected AI provider only when needed to answer the request.")
+            return AppLocalized("Read on device. Results enter the current Agent conversation and are sent to its selected AI provider only when needed to answer the request.")
         default:
-            return String(localized: "Processed on device. The selected AI provider receives only the tool result needed for the current task.")
+            return AppLocalized("Processed on device. The selected AI provider receives only the tool result needed for the current task.")
         }
     }
 }
@@ -425,7 +425,7 @@ final class OffloadPermissionManager: ObservableObject {
         }
         // [T-smart-approve] 智能批准:只读、不碰个人数据的能力直接放行(同样只对正在跑的回合)。
         if FullAutoGate.mode == .smart, invocation.isSmartApprovable, sid != nil, turnActive {
-            FullAutoGate.announce(String(localized: "智能批准 · \(command) \(invocation.action)"), sessionId: sid)
+            FullAutoGate.announce(AppLocalized("智能批准 · \(command) \(invocation.action)"), sessionId: sid)
             return .allowed
         }
         if level == .bypass || invocation.isStatusOnly { return .allowed }

@@ -288,13 +288,13 @@ struct HelperModelIdentity: Equatable, Codable {
         }
         switch origin {
         case "pinned":
-            return named(String(localized: "固定模型组"))
+            return named(AppLocalized("固定模型组"))
         case "inherited":
-            return String(localized: "自动 · 与本对话相同")
+            return AppLocalized("自动 · 与本对话相同")
         case "default_group":
-            return named(String(localized: "自动 · 默认模型组"))
+            return named(AppLocalized("自动 · 默认模型组"))
         case "sub_group":
-            return named(String(localized: "自动 · 轻量模型组"))
+            return named(AppLocalized("自动 · 轻量模型组"))
         default:
             return origin
         }

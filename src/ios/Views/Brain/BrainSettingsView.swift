@@ -32,10 +32,10 @@ struct BrainSettingsView: View {
                         .font(.footnote)
                     Button {
                         if store.connect(pending) {
-                            message = String(localized: "已连接资料库")
+                            message = AppLocalized("已连接资料库")
                             Task { await store.refreshHealth() }
                         } else {
-                            message = String(localized: "令牌格式不对,没有保存。")
+                            message = AppLocalized("令牌格式不对,没有保存。")
                         }
                     } label: { Label("使用这枚令牌连接", systemImage: "checkmark.shield") }
                     Button("忽略", role: .destructive) { store.pendingConnect = nil }
@@ -78,12 +78,12 @@ struct BrainSettingsView: View {
                     let token = tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                     if store.connect(BrainConnectRequest(token: token, scopes: nil)) {
                         tokenDraft = ""
-                        message = String(localized: "已连接资料库")
+                        message = AppLocalized("已连接资料库")
                         Task { await store.refreshHealth() }
                     } else {
-                        message = String(localized: "令牌格式不对,没有保存。")
+                        message = AppLocalized("令牌格式不对,没有保存。")
                     }
-                } label: { Label(store.isConfigured ? String(localized: "替换令牌") : String(localized: "保存令牌并连接"), systemImage: "key.fill") }
+                } label: { Label(store.isConfigured ? AppLocalized("替换令牌") : AppLocalized("保存令牌并连接"), systemImage: "key.fill") }
                 .disabled(tokenDraft.isEmpty)
             } header: { Text("设备令牌") } footer: {
                 Text("令牌只存在本机钥匙串,不同步、不进备份。也可以由 Mac 用 devicectl 把令牌文件拷进 App,启动时自动导入并删除文件。")
@@ -98,16 +98,16 @@ struct BrainSettingsView: View {
                     .textInputAutocapitalization(.never)
                     .accessibilityLabel(Text("Cloudflare Access Client Secret"))
                 Button(store.hasAccessCredentials && accessIdDraft.isEmpty && accessSecretDraft.isEmpty
-                       ? String(localized: "清除 Access 凭据") : String(localized: "保存 Access 凭据")) {
+                       ? AppLocalized("清除 Access 凭据") : AppLocalized("保存 Access 凭据")) {
                     store.saveAccessCredentials(id: accessIdDraft, secret: accessSecretDraft)
                     accessIdDraft = ""
                     accessSecretDraft = ""
-                    message = store.hasAccessCredentials ? String(localized: "Access 凭据已保存") : String(localized: "Access 凭据已清除")
+                    message = store.hasAccessCredentials ? AppLocalized("Access 凭据已保存") : AppLocalized("Access 凭据已清除")
                 }
                 .disabled(!store.hasAccessCredentials && (accessIdDraft.isEmpty || accessSecretDraft.isEmpty))
             } header: { Text("Cloudflare Access(可选)") } footer: {
-                Text(store.hasAccessCredentials ? String(localized: "已保存在钥匙串,每次请求都会带上。")
-                     : String(localized: "网关前面加了 Access 服务令牌时才需要填。"))
+                Text(store.hasAccessCredentials ? AppLocalized("已保存在钥匙串,每次请求都会带上。")
+                     : AppLocalized("网关前面加了 Access 服务令牌时才需要填。"))
             }
 
             if store.isConfigured {
@@ -149,7 +149,7 @@ struct BrainSettingsView: View {
             Button("断开", role: .destructive) {
                 store.disconnect()
                 audit = []
-                message = String(localized: "已断开,令牌已从本机删除。")
+                message = AppLocalized("已断开,令牌已从本机删除。")
             }
             Button("取消", role: .cancel) {}
         }
@@ -167,13 +167,13 @@ struct BrainSettingsView: View {
         if store.checking {
             HStack { ProgressView(); Text("正在检测…") }
         } else if let health = store.health {
-            Label(health.ok ? String(localized: "已连接") : String(localized: "网关异常"), systemImage: health.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+            Label(health.ok ? AppLocalized("已连接") : AppLocalized("网关异常"), systemImage: health.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .foregroundStyle(health.ok ? LeoTheme.ColorToken.success : LeoTheme.ColorToken.warning)
             LabeledContent("文件", value: health.files.map(String.init) ?? "—")
             LabeledContent("知识卡", value: health.cards.map(String.init) ?? "—")
             LabeledContent("语义检索", value: health.semanticReady
-                           ? String(localized: "已就绪")
-                           : String(localized: "未就绪(先用关键词检索)"))
+                           ? AppLocalized("已就绪")
+                           : AppLocalized("未就绪(先用关键词检索)"))
         } else if let error = store.statusError {
             Label(error, systemImage: "wifi.exclamationmark")
                 .foregroundStyle(LeoTheme.ColorToken.warning)
@@ -183,7 +183,7 @@ struct BrainSettingsView: View {
     private func saveBaseURL() {
         if store.saveBaseURL(baseURLDraft) {
             baseURLDraft = store.baseURLString
-            message = String(localized: "地址已保存")
+            message = AppLocalized("地址已保存")
             Task { await store.refreshHealth() }
         } else {
             message = BrainError.invalidBaseURL.message
@@ -195,7 +195,7 @@ struct BrainSettingsView: View {
         defer { loadingAudit = false }
         do {
             audit = try await store.requireClient().audit(limit: 30).items
-            auditError = audit.isEmpty ? String(localized: "还没有访问记录。") : nil
+            auditError = audit.isEmpty ? AppLocalized("还没有访问记录。") : nil
         } catch {
             auditError = (error as? BrainError)?.message ?? BrainError.network.message
         }

@@ -313,3 +313,14 @@ enum LongTextCollapse {
         }
     }
 }
+
+// MARK: - [WP-46] 折叠生效日志
+
+extension LongTextCollapse {
+    /// 折叠生效时的一行日志:总长度、首屏长度、相当于几屏、拆分耗时。只有数字,不带原文。
+    /// (1.69 加入折叠后一直不打日志,真机取证无法确认它触发过没有。)
+    static func logLine(totalChars: Int, headChars: Int, ms: Double) -> String {
+        let pages = headChars > 0 ? Int((Double(totalChars) / Double(headChars)).rounded(.up)) : 0
+        return "[LongTextCollapse] collapsed chars=\(totalChars) head=\(headChars) pages≈\(pages) split=\(String(format: "%.1f", ms))ms"
+    }
+}

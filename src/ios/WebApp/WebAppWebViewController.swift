@@ -51,19 +51,13 @@ final class WebAppWebViewController: UIViewController, WKNavigationDelegate, WKU
         // gives each shortcut its own on-disk store keyed by its UUID, so two
         // shortcuts never share a session; older OSes fall back to the shared
         // default store (still persistent, but not isolated).
-        if #available(iOS 17.0, *) {
-            cfg.websiteDataStore = WKWebsiteDataStore(forIdentifier: UUID(uuidString: shortcut.id) ?? UUID())
-        } else {
-            cfg.websiteDataStore = .default()
-        }
+        cfg.websiteDataStore = WKWebsiteDataStore(forIdentifier: UUID(uuidString: shortcut.id) ?? UUID())
         cfg.suppressesIncrementalRendering = false
         cfg.allowsInlineMediaPlayback = true
         // No JS bridge: leave userContentController bare. Don't register
         // any WKScriptMessageHandler, don't inject a WKUserScript that
         // exposes native APIs.
-        if #available(iOS 14.0, *) {
-            cfg.defaultWebpagePreferences.allowsContentJavaScript = true
-        }
+        cfg.defaultWebpagePreferences.allowsContentJavaScript = true
 
         let wv = WKWebView(frame: view.bounds, configuration: cfg)
         wv.translatesAutoresizingMaskIntoConstraints = false

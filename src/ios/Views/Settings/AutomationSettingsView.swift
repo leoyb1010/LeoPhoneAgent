@@ -53,14 +53,14 @@ struct AutomationSettingsView: View {
         .navigationTitle(Text("Automations"))
         .sheet(isPresented: $showEditor) { AutomationEditSheet(existing: nil) }
         .sheet(item: $editingRule) { rule in AutomationEditSheet(existing: rule) }
-        .alert(String(localized: "Delete this automation?"),
+        .alert(AppLocalized("Delete this automation?"),
                isPresented: Binding(get: { pendingDeleteIds != nil },
                                     set: { if !$0 { pendingDeleteIds = nil } })) {
-            Button(String(localized: "Delete"), role: .destructive) {
+            Button(AppLocalized("Delete"), role: .destructive) {
                 for id in pendingDeleteIds ?? [] { store.delete(id: id) }
                 pendingDeleteIds = nil
             }
-            Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteIds = nil }
+            Button(AppLocalized("Cancel"), role: .cancel) { pendingDeleteIds = nil }
         }
         .onAppear { AutomationEngine.shared.reloadMonitoring() }
     }
@@ -127,11 +127,11 @@ private struct AutomationEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(String(localized: "Name")) {
-                    TextField(String(localized: "e.g. Office arrival briefing"), text: $model.name)
+                Section(AppLocalized("Name")) {
+                    TextField(AppLocalized("e.g. Office arrival briefing"), text: $model.name)
                 }
-                Section(String(localized: "Trigger")) {
-                    Picker(String(localized: "Type"), selection: $model.triggerKind) {
+                Section(AppLocalized("Trigger")) {
+                    Picker(AppLocalized("Type"), selection: $model.triggerKind) {
                         Text("Arriving at current location").tag(TriggerKind.arriveHere)
                         Text("Leaving current location").tag(TriggerKind.leaveHere)
                         Text("Before calendar events").tag(TriggerKind.beforeEvent)
@@ -150,8 +150,8 @@ private struct AutomationEditSheet: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if model.triggerKind == .arriveHere || model.triggerKind == .leaveHere {
-                        LabeledContent(String(localized: "Place name")) {
-                            TextField(String(localized: "Office / Home…"), text: $model.placeName)
+                        LabeledContent(AppLocalized("Place name")) {
+                            TextField(AppLocalized("Office / Home…"), text: $model.placeName)
                                 .multilineTextAlignment(.trailing)
                         }
                         if model.capturedLocation == nil {
@@ -174,7 +174,7 @@ private struct AutomationEditSheet: View {
                         }
                     }
                     if model.triggerKind == .beforeEvent {
-                        Stepper(String(localized: "\(model.minutesBefore) minutes before"),
+                        Stepper(AppLocalized("\(model.minutesBefore) minutes before"),
                                 value: $model.minutesBefore, in: 5...120, step: 5)
                         if !model.calendarAuthorized {
                             Text("没有完整的日历权限,这条规则不会触发。")
@@ -193,19 +193,19 @@ private struct AutomationEditSheet: View {
                 } footer: {
                     Text("只记录:写进诊断日志,不执行。准备:执行,结果放进会话列表,不打扰。跑完通知:执行,完成后推送通知。")
                 }
-                Section(String(localized: "Action")) {
-                    Picker(String(localized: "Run"), selection: $model.useQuickTask) {
+                Section(AppLocalized("Action")) {
+                    Picker(AppLocalized("Run"), selection: $model.useQuickTask) {
                         Text("Quick task").tag(true)
                         Text("Custom prompt").tag(false)
                     }
                     if model.useQuickTask {
-                        Picker(String(localized: "Task"), selection: $model.quickTaskId) {
+                        Picker(AppLocalized("Task"), selection: $model.quickTaskId) {
                             ForEach(QuickTaskStore.shared.tasks) { task in
                                 Text(task.displayName).tag(task.id)
                             }
                         }
                     } else {
-                        TextField(String(localized: "What should Leo do?"), text: $model.prompt, axis: .vertical)
+                        TextField(AppLocalized("What should Leo do?"), text: $model.prompt, axis: .vertical)
                             .lineLimit(3...6)
                     }
                 }
@@ -214,10 +214,10 @@ private struct AutomationEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { dismiss() }
+                    Button(AppLocalized("Cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "Save")) {
+                    Button(AppLocalized("Save")) {
                         model.save()
                         dismiss()
                     }

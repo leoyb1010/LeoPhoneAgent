@@ -224,6 +224,8 @@ test("a phone-created task streams mapped v0.4 events with continuous seq", asyn
       [
         "session.created",
         "user.message",
+        // [WP-41] 开跑也是一条事件(推给中继拉起灵动岛)。
+        "run.started",
         "reasoning.available",
         "message.delta",
         "tool.started",
@@ -233,23 +235,23 @@ test("a phone-created task streams mapped v0.4 events with continuous seq", asyn
     );
     assert.deepEqual(
       events.map((e) => e["seq"]),
-      [1, 2, 3, 4, 5, 6, 7],
+      [1, 2, 3, 4, 5, 6, 7, 8],
     );
-    assert.equal(events[2]?.["text"], "想一下");
-    assert.equal(events[3]?.["delta"], "在的");
-    assert.equal(events[4]?.["preview"], "ls -la");
-    assert.equal(events[5]?.["tool"], "Bash");
-    assert.equal(events[5]?.["error"], false);
-    assert.deepEqual(events[6]?.["usage"], { input_tokens: 3, output_tokens: 4, total_tokens: 7 });
+    assert.equal(events[3]?.["text"], "想一下");
+    assert.equal(events[4]?.["delta"], "在的");
+    assert.equal(events[5]?.["preview"], "ls -la");
+    assert.equal(events[6]?.["tool"], "Bash");
+    assert.equal(events[6]?.["error"], false);
+    assert.deepEqual(events[7]?.["usage"], { input_tokens: 3, output_tokens: 4, total_tokens: 7 });
     assert.ok(events.every((e) => e["session_id"] === id));
 
     // 从中间续传:只拿到之后的,不重复
-    const resumed = await collect(bridge, id, 5, (all) =>
+    const resumed = await collect(bridge, id, 6, (all) =>
       all.some((e) => e.event === "run.completed"),
     );
     assert.deepEqual(
       resumed.map((e) => e["seq"]),
-      [6, 7],
+      [7, 8],
     );
 
     const list = (await bridge.handle(req("GET", "/harness/sessions"))).body as {
@@ -1273,5 +1275,22 @@ test("full-auto off reports failure when the local leoagent errors, but not when
     // 默认指向没人听的端口:leoagent 没在运行,没有要切的任务。
     const off = await bridge.handle(req("POST", "/harness/full-auto", { enabled: false }, iphone));
     assert.equal(off.status, 200);
+  });
+});
+
+test("[WP-41] run.started is announced once per run and handed to the relay push path for phone turns", async () => {
+  await withBridge(async ({ bridge, zcode, dir, pushed }) => {
+    const id = await createSession(bridge, dir, { prompt: "跑一下" });
+    zcode.fire(id, { type: "task_run_started", startedAt: 1 });
+    zcode.fire(id, { type: "task_run_started", startedAt: 2 });
+    zcode.fire(id, { type: "task_complete", stopReason: "success" });
+    const events = await collect(bridge, id, 0, (all) => all.some((e) => e.event === "run.completed"));
+    assert.equal(events.filter((e) => e.event === "run.started").length, 1);
+    // 推送在日志落盘后才交出去:等一会儿。
+    for (let i = 0; i < 40 && !pushed.some((e) => e.event === "run.started"); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const started = pushed.find((e) => e.event === "run.started");
+    assert.equal(started?.["session_id"], id);
   });
 });

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run actual selection/default-group methods without reading user preferences."""
 from pathlib import Path
+from ios_smoke_support import APP_LOCALIZED_SHIM, APP_LOCALIZATION_SOURCE
 import subprocess, tempfile
 root = Path(__file__).resolve().parents[1]
 def method(file, marker):
@@ -64,7 +65,7 @@ require(store.group(for: previous)!.memberEntryIds == [system + "/system-asr-onl
 print("PASS actual ASR selection: explicit Auto/Offline/Online, ordered group, provider identity, safe defaults and existing preferences")
 '''
 with tempfile.TemporaryDirectory(prefix='leophone-speech-selection-') as folder:
-    file = Path(folder) / 'main.swift'; file.write_text(code)
+    file = Path(folder) / 'main.swift'; file.write_text(APP_LOCALIZED_SHIM + code)
     binary = Path(folder) / 'smoke'
     subprocess.run(['swiftc', str(file), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)

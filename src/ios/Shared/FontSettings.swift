@@ -151,7 +151,6 @@ final class FontSettings: ObservableObject {
     /// Override the preferred content size category on all connected UIWindows.
     /// This affects UIKit views, SwiftUI sheets, and any presented view controllers.
     func applyAppScaleToAllWindows() {
-        guard #available(iOS 17.0, *) else { return }
         // Skip if default — no need to override system traits
         guard appBaseScale != .default else {
             // Remove any previous override

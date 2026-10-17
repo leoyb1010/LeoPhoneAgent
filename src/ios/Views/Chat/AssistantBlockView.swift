@@ -117,7 +117,7 @@ struct AssistantBlockView: View {
             // Truncate middle if more than 9 reason lines
             let displayReasons: [String] = {
                 if reasonLines.count <= 9 { return reasonLines }
-                return Array(reasonLines.prefix(4)) + [String(localized: "⋯ \(reasonLines.count - 8) more")] + Array(reasonLines.suffix(4))
+                return Array(reasonLines.prefix(4)) + [AppLocalized("⋯ \(reasonLines.count - 8) more")] + Array(reasonLines.suffix(4))
             }()
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(Array(displayReasons.enumerated()), id: \.offset) { _, line in
@@ -148,7 +148,7 @@ struct AssistantBlockView: View {
                 Button {
                     UIPasteboard.general.string = block.content
                 } label: {
-                    Label(String(localized: "Copy Error"), systemImage: "doc.on.doc")
+                    Label(AppLocalized("Copy Error"), systemImage: "doc.on.doc")
                 }
             }
         }
@@ -490,7 +490,7 @@ struct ToolCapsuleView: View {
                     Button {
                         UIPasteboard.general.string = toolDetailsClipboard
                     } label: {
-                        Label(String(localized: "Copy Tool Details"), systemImage: "doc.on.doc")
+                        Label(AppLocalized("Copy Tool Details"), systemImage: "doc.on.doc")
                     }
                     // [T-ios-retry-hide-when-processing] Only expose the
                     // destructive Re-run action when the agent loop is idle.
@@ -502,7 +502,7 @@ struct ToolCapsuleView: View {
                         // [F2-memory-undo] memory_write → 撤销这条记忆(只删这一条)。
                         if MemoryUndoAction.canUndo(block) {
                             Button(role: .destructive) { MemoryUndoAction.undo(block) } label: {
-                                Label(String(localized: "撤销这条记忆"), systemImage: "arrow.uturn.backward")
+                                Label(AppLocalized("撤销这条记忆"), systemImage: "arrow.uturn.backward")
                             }
                         }
                         Divider()
@@ -519,7 +519,7 @@ struct ToolCapsuleView: View {
                                 userInfo: ["blockId": block.id]
                             )
                         } label: {
-                            Label(String(localized: "Re-run From Here"), systemImage: "arrow.clockwise")
+                            Label(AppLocalized("Re-run From Here"), systemImage: "arrow.clockwise")
                         }
                     }
                 }
@@ -539,15 +539,15 @@ struct ToolCapsuleView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.leading, 6)
-                .accessibilityLabel(Text(String(localized: "Background suspension info")))
+                .accessibilityLabel(Text(AppLocalized("Background suspension info")))
             }
             Spacer(minLength: 0)
         }
         .alert(
-            String(localized: "Task may have been paused"),
+            AppLocalized("Task may have been paused"),
             isPresented: $showBgHintAlert
         ) {
-            Button(String(localized: "Go Enable")) {
+            Button(AppLocalized("Go Enable")) {
                 // Deep-link to Settings → Permissions → Background, nudging the
                 // recommended rows ON — they highlight only while still OFF
                 // (= leophoneagent://settings/background?focus=…:true,…:true). Location
@@ -557,9 +557,9 @@ struct ToolCapsuleView: View {
                     rawQueryValue: "enhancedBackgroundExecution:true,backgroundSpeakEnabled:true,locationTrackingEnabled:true")
                 DeepLinkCoordinator.shared.pendingSettingsTarget = .background
             }
-            Button(String(localized: "Maybe Later"), role: .cancel) {}
+            Button(AppLocalized("Maybe Later"), role: .cancel) {}
         } message: {
-            Text(String(localized: "This tool may have been paused by the system while running in the background. Enable enhanced background execution to improve background task reliability."))
+            Text(AppLocalized("This tool may have been paused by the system while running in the background. Enable enhanced background execution to improve background task reliability."))
         }
         .onChange(of: isStreaming) { streaming in
             dotsActive = streaming
@@ -685,26 +685,26 @@ struct ChatRewindConfirmation: ViewModifier {
             presenting: pending
         ) { rewind in
             Button(actionTitle(rewind.kind), role: .destructive) { rewind.perform() }
-            Button(String(localized: "Cancel"), role: .cancel) {}
+            Button(AppLocalized("Cancel"), role: .cancel) {}
         } message: { rewind in
             Text(rewind.kind == .edit
-                 ? String(localized: "Sending the edited message deletes the \(rewind.laterTurns) later turns in this chat. This can't be undone.")
-                 : String(localized: "This deletes the \(rewind.laterTurns) later turns in this chat. This can't be undone."))
+                 ? AppLocalized("Sending the edited message deletes the \(rewind.laterTurns) later turns in this chat. This can't be undone.")
+                 : AppLocalized("This deletes the \(rewind.laterTurns) later turns in this chat. This can't be undone."))
         }
     }
 
     private var title: String {
         switch pending?.kind {
-        case .edit: String(localized: "Edit and Discard Later Turns?")
-        default: String(localized: "Discard Later Turns?")
+        case .edit: AppLocalized("Edit and Discard Later Turns?")
+        default: AppLocalized("Discard Later Turns?")
         }
     }
 
     private func actionTitle(_ kind: PendingChatRewind.Kind) -> String {
         switch kind {
-        case .retry: String(localized: "Retry and Delete Later Turns")
-        case .rerun: String(localized: "Re-run and Delete Later Turns")
-        case .edit: String(localized: "Edit Anyway")
+        case .retry: AppLocalized("Retry and Delete Later Turns")
+        case .rerun: AppLocalized("Re-run and Delete Later Turns")
+        case .edit: AppLocalized("Edit Anyway")
         }
     }
 }
@@ -808,8 +808,8 @@ struct ThinkingBlockView: View {
                     .foregroundStyle(.secondary)
                 // [T-thinking-duration] "思考了 12 秒" once it's done — how long
                 // it took is what you want to know; reloaded history keeps the old label.
-                Text(block.toolDuration.map { String(localized: "思考了 \(LeoDuration.short($0))") }
-                     ?? String(localized: "Deep Thinking"))
+                Text(block.toolDuration.map { AppLocalized("思考了 \(LeoDuration.short($0))") }
+                     ?? AppLocalized("Deep Thinking"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .contentTransition(.numericText())
@@ -1012,7 +1012,7 @@ struct ThinkingLevelSheetView: View {
                     }
                 }
             }
-            .navigationTitle(String(localized: "Thinking Intensity"))
+            .navigationTitle(AppLocalized("Thinking Intensity"))
             .navigationBarTitleDisplayMode(.inline)
         }
     }

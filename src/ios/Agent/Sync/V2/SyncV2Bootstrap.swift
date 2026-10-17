@@ -153,7 +153,6 @@ enum SyncV2Bootstrap {
 
     @MainActor
     private static func reconcile() async {
-        guard #available(iOS 17.0, *) else { return }
         // Preserve inherited opt-in before pausing V1; its setter also persists
         // cloudSync.enabled, which must not alter the V2 user's choice.
         if UserDefaults.standard.object(forKey: "cloudSync.v2.enabled") == nil {
@@ -167,7 +166,7 @@ enum SyncV2Bootstrap {
             await purgeReplicaDestinations(keeping: nil)
             await SyncCore.shared.replaceTransports([])
             SyncDirtyScanner.shared.stop()
-            tailnetStatus = String(localized: "Off")
+            tailnetStatus = AppLocalized("Off")
             return
         }
         // Before first unlock the Keychain is unreadable and the device id is
@@ -203,7 +202,7 @@ enum SyncV2Bootstrap {
         }
         var replicaName: String?
         if isTailnetEnabled {
-            tailnetStatus = String(localized: "正在连接同步副本…")
+            tailnetStatus = AppLocalized("正在连接同步副本…")
             if let host = GatewayHostStore.shared.activeHosts.first(where: { $0.id == selectedReplicaHostID }),
                let client = GatewayHostStore.shared.client(for: host),
                await client.replicaReady(),
@@ -213,11 +212,11 @@ enum SyncV2Bootstrap {
                     selected.append(transport)
                     replicaName = transport.name
                     tailnetStatus = host.name
-                } catch { tailnetStatus = String(localized: "无法初始化同步副本") }
+                } catch { tailnetStatus = AppLocalized("无法初始化同步副本") }
             } else {
-                tailnetStatus = String(localized: "请选择已授权同步副本的 Mac；请先在设备页面完成配对")
+                tailnetStatus = AppLocalized("请选择已授权同步副本的 Mac；请先在设备页面完成配对")
             }
-        } else { tailnetStatus = String(localized: "Off") }
+        } else { tailnetStatus = AppLocalized("Off") }
         guard !Task.isCancelled else { return }
         // A replica the user turned off or replaced must stop pinning dirty rows.
         // An unreachable one keeps its queue until it comes back.

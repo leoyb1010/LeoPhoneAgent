@@ -71,17 +71,17 @@ struct RemoteHostSettingsView: View {
         .sheet(item: $sheetItem) { item in
             RemoteHostEditSheet(sheetId: item.id, host: item.host)
         }
-        .alert(String(localized: "Delete this host?"),
+        .alert(AppLocalized("Delete this host?"),
                isPresented: Binding(get: { pendingDelete != nil },
                                     set: { if !$0 { pendingDelete = nil } }),
                presenting: pendingDelete) { host in
-            Button(String(localized: "Delete"), role: .destructive) {
+            Button(AppLocalized("Delete"), role: .destructive) {
                 store.delete(id: host.id)
                 pendingDelete = nil
             }
-            Button(String(localized: "Cancel"), role: .cancel) { pendingDelete = nil }
+            Button(AppLocalized("Cancel"), role: .cancel) { pendingDelete = nil }
         } message: { host in
-            Text(String(localized: "\(host.name) and its saved password will be removed from this device."))
+            Text(AppLocalized("\(host.name) and its saved password will be removed from this device."))
         }
     }
 
@@ -194,7 +194,7 @@ private final class HostEditModel: ObservableObject {
 
     func fetchHostKeyFromPairedMac() {
         guard let host = pairedGatewayHost, let client = GatewayHostStore.shared.client(for: host) else {
-            hostKeyFetchResult = String(localized: "所属设备尚未配对或已停用，无法读取。")
+            hostKeyFetchResult = AppLocalized("所属设备尚未配对或已停用，无法读取。")
             return
         }
         fetchingHostKey = true
@@ -212,17 +212,17 @@ private final class HostEditModel: ObservableObject {
                     return first
                 }
                 guard let key = keys.first(where: { $0.hasPrefix("ssh-ed25519 ") }) ?? keys.first else {
-                    hostKeyFetchResult = String(localized: "这台 Mac 的 LeoBot 版本还不提供 SSH 公钥，请升级到 1.3.5 或手工粘贴。")
+                    hostKeyFetchResult = AppLocalized("这台 Mac 的 LeoBot 版本还不提供 SSH 公钥，请升级到 1.3.5 或手工粘贴。")
                     return
                 }
                 trustedHostKey = key
                 fetchedHostKey = key
-                hostKeyFetchResult = String(localized: "已从 \(host.name) 读取公钥，保存时确认即可。")
+                hostKeyFetchResult = AppLocalized("已从 \(host.name) 读取公钥，保存时确认即可。")
             } catch {
                 let reason = (error as? URLError)?.code == .timedOut
-                    ? String(localized: "15 秒内没有回应：检查手机网络，或那台 Mac 是否在线。")
+                    ? AppLocalized("15 秒内没有回应：检查手机网络，或那台 Mac 是否在线。")
                     : error.localizedDescription
-                hostKeyFetchResult = String(localized: "读取失败：\(reason)")
+                hostKeyFetchResult = AppLocalized("读取失败：\(reason)")
             }
         }
     }
@@ -254,14 +254,14 @@ private struct RemoteHostEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(String(localized: "Host")) {
-                    TextField(String(localized: "Name (e.g. My Mac)"), text: $model.name)
-                    TextField(String(localized: "Address (IP or hostname)"), text: $model.address)
+                Section(AppLocalized("Host")) {
+                    TextField(AppLocalized("Name (e.g. My Mac)"), text: $model.name)
+                    TextField(AppLocalized("Address (IP or hostname)"), text: $model.address)
                         .autocorrectionDisabled().textInputAutocapitalization(.never)
                         .keyboardType(.URL)
-                    TextField(String(localized: "Port"), text: $model.port)
+                    TextField(AppLocalized("Port"), text: $model.port)
                         .keyboardType(.numberPad)
-                    TextField(String(localized: "Username"), text: $model.username)
+                    TextField(AppLocalized("Username"), text: $model.username)
                         .autocorrectionDisabled().textInputAutocapitalization(.never)
                 }
                 Section {
@@ -302,9 +302,9 @@ private struct RemoteHostEditSheet: View {
                     Text("上面选了所属设备时，可直接从那台 Mac 的已配对加密通道读取；否则在目标电脑的可信终端读取 /etc/ssh/ssh_host_ed25519_key.pub，核对后粘贴整行公钥。直连目前仅支持 Ed25519；网关 OpenSSH 仍可校验其他有效公钥。不要粘贴私钥。留空会保留主机配置，但禁止 SSH 连接。")
                 }
                 Section {
-                    SecureField(String(localized: "Password (optional — leave empty for key auth)"), text: $model.password)
+                    SecureField(AppLocalized("Password (optional — leave empty for key auth)"), text: $model.password)
                     if model.hasStoredPassword {
-                        Button(String(localized: "Forget saved password"), role: .destructive) {
+                        Button(AppLocalized("Forget saved password"), role: .destructive) {
                             model.forgetPassword()
                         }
                     }
@@ -364,7 +364,7 @@ private struct RemoteHostEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) {
+                    Button(AppLocalized("Cancel")) {
                         // A pre-save Test stored the typed password under the
                         // draft id; cancelling must not strand it in Keychain.
                         if !model.isEditing { RemoteHostStore.deletePassword(hostId: model.draftId) }
@@ -372,7 +372,7 @@ private struct RemoteHostEditSheet: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "Save")) {
+                    Button(AppLocalized("Save")) {
                         if model.needsTrustConfirmation { confirmingTrust = true }
                         else { model.save(); dismiss() }
                     }

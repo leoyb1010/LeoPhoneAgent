@@ -63,7 +63,7 @@ struct BackupRestoreView: View {
                 Section {
                     HStack(spacing: LeoTheme.Spacing.sm) {
                         ProgressView()
-                        Text(runner.statusText.isEmpty ? String(localized: "正在恢复…") : runner.statusText)
+                        Text(runner.statusText.isEmpty ? AppLocalized("正在恢复…") : runner.statusText)
                             .font(.subheadline).foregroundStyle(LeoTheme.ColorToken.secondaryText).lineLimit(2)
                     }
                     Button("停止", role: .destructive) { runner.stop() }
@@ -78,7 +78,7 @@ struct BackupRestoreView: View {
         .toolbar {
             if let onClose {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(isRunning ? String(localized: "后台继续") : String(localized: "关闭")) {
+                    Button(isRunning ? AppLocalized("后台继续") : AppLocalized("关闭")) {
                         cleanup()
                         onClose()
                     }
@@ -126,7 +126,7 @@ struct BackupRestoreView: View {
             row("创建时间", m.createdAt.formatted(date: .abbreviated, time: .shortened))
             row("App 版本", "\(m.app.platform) \(m.app.version) (\(m.app.build))")
             row("大小", ByteCountFormatter.string(fromByteCount: peek.fileSize, countStyle: .file))
-            row("加密", m.encryption == nil ? String(localized: "未加密") : String(localized: "已加密"))
+            row("加密", m.encryption == nil ? AppLocalized("未加密") : AppLocalized("已加密"))
         }
         Section("包含内容") {
             ForEach(m.knownCategories, id: \.self) { c in
@@ -213,9 +213,9 @@ struct BackupRestoreView: View {
     @ViewBuilder
     private func doneSections(_ report: BackupImporter.Report) -> some View {
         Section {
-            Label(report.cancelled ? String(localized: "恢复已停止")
-                  : report.hasFailures ? String(localized: "部分内容恢复失败，已撤销失败的类别")
-                  : String(localized: "恢复完成"),
+            Label(report.cancelled ? AppLocalized("恢复已停止")
+                  : report.hasFailures ? AppLocalized("部分内容恢复失败，已撤销失败的类别")
+                  : AppLocalized("恢复完成"),
                   systemImage: report.hasFailures || report.cancelled ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                 .foregroundStyle(report.hasFailures || report.cancelled ? LeoTheme.ColorToken.warning : LeoTheme.ColorToken.success)
         }
@@ -272,7 +272,7 @@ struct BackupRestoreView: View {
         Task {
             let staged = await Task.detached(priority: .userInitiated) { BackupOpenRouter.stage(url) }.value
             guard let staged else {
-                error = String(localized: "无法读取这个备份文件")
+                error = AppLocalized("无法读取这个备份文件")
                 phase = .pick
                 return
             }
@@ -339,7 +339,7 @@ struct BackupRestoreView: View {
                 }
             }
         }
-        if started { phase = .running(prepared) } else { error = String(localized: "已有备份或恢复在进行中") }
+        if started { phase = .running(prepared) } else { error = AppLocalized("已有备份或恢复在进行中") }
     }
 
     private func cleanup() {
@@ -358,22 +358,22 @@ struct BackupRestoreView: View {
 
     static func statText(_ c: BackupCategory, _ s: BackupManifest.CategoryStat) -> String {
         switch c {
-        case .chats: return String(localized: "\(s.messages ?? s.entries) 条消息 · \(s.files ?? 0) 个文件")
-        case .skills: return String(localized: "\(s.entries) 个")
+        case .chats: return AppLocalized("\(s.messages ?? s.entries) 条消息 · \(s.files ?? 0) 个文件")
+        case .skills: return AppLocalized("\(s.entries) 个")
         case .providers:
-            let creds = s.includesCredentials == true ? String(localized: "含密钥") : String(localized: "不含密钥")
-            return String(localized: "\(s.entries) 个 · \(creds)")
-        case .sharedFiles: return String(localized: "\(s.entries) 个文件")
-        default: return String(localized: "\(s.entries) 项")
+            let creds = s.includesCredentials == true ? AppLocalized("含密钥") : AppLocalized("不含密钥")
+            return AppLocalized("\(s.entries) 个 · \(creds)")
+        case .sharedFiles: return AppLocalized("\(s.entries) 个文件")
+        default: return AppLocalized("\(s.entries) 项")
         }
     }
 
     static func planText(_ p: BackupImporter.CategoryPlan) -> String {
         var parts: [String] = []
-        if p.newItems > 0 { parts.append(String(localized: "新增 \(p.newItems)")) }
-        if p.newerInBackup > 0 { parts.append(String(localized: "更新 \(p.newerInBackup)")) }
-        if p.localKept > 0 { parts.append(String(localized: "保留本地 \(p.localKept)")) }
-        if p.identical > 0 { parts.append(String(localized: "相同 \(p.identical)")) }
-        return parts.isEmpty ? String(localized: "无需变更") : parts.joined(separator: " · ")
+        if p.newItems > 0 { parts.append(AppLocalized("新增 \(p.newItems)")) }
+        if p.newerInBackup > 0 { parts.append(AppLocalized("更新 \(p.newerInBackup)")) }
+        if p.localKept > 0 { parts.append(AppLocalized("保留本地 \(p.localKept)")) }
+        if p.identical > 0 { parts.append(AppLocalized("相同 \(p.identical)")) }
+        return parts.isEmpty ? AppLocalized("无需变更") : parts.joined(separator: " · ")
     }
 }

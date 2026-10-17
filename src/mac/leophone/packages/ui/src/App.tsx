@@ -2,6 +2,7 @@ import { PluginUiWorkspaceProvider } from "@/plugin-ui/index.js";
 /* eslint-disable max-lines -- App 当前集中编排 workspace 级状态、导航、Git 派生数据和 shell wiring；已将新增 side pane memory 桥接抽出，剩余拆分需要按 shell 边界单独重构。 */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LeoHomeProvider } from "@/leo/LeoHomeContext.js";
+import { useLeoQuickOpenTask } from "@/leo/useLeoQuickOpenTask.js";
 import { useShallow } from "zustand/react/shallow";
 import { resolveWorkspaceKey, type GitChangeSourceId, type WorkspacePurpose } from "@zcode/shared";
 import { useZCodeStore } from "@/store/StoreProvider.js";
@@ -850,6 +851,8 @@ export function App({
     },
     [handleOpenAutomations],
   );
+  // [leo] 菜单栏 / ⌥Space 快速派发定位任务(docs/specs/leo-quick-entry.md)。
+  useLeoQuickOpenTask(handleSelectTask);
   const handleOpenPluginStoreForScope = useCallback(
     (_target: PluginStoreOpenTarget = {}) => {
       // Workspace Marketplace 已收敛为全局入口。兼容旧事件中的 Workspace key，但返回

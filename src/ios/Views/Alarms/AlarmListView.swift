@@ -63,9 +63,9 @@ struct AlarmItem: Identifiable {
             guard let d = fireDate else { return "" }
             return LeoFormatters.date(dateStyle: .medium, timeStyle: .none).string(from: d)
         case "relative":
-            return String(localized: "每天")
+            return AppLocalized("每天")
         case "timer":
-            return String(localized: "计时器")
+            return AppLocalized("计时器")
         default:
             return ""
         }
@@ -81,11 +81,11 @@ struct AlarmItem: Identifiable {
 
         if scheduleType == "relative", let days = repeatDays, !days.isEmpty {
             if days.count == 7 {
-                return String(localized: "每天")
+                return AppLocalized("每天")
             } else if days == weekdays {
-                return String(localized: "工作日")
+                return AppLocalized("工作日")
             } else if days == ["Sat", "Sun"] || days == ["Sun", "Sat"] {
-                return String(localized: "周末")
+                return AppLocalized("周末")
             } else {
                 return allDays.filter { days.contains($0) }.map(name).joined(separator: "、")
             }
@@ -105,7 +105,6 @@ class AlarmListViewModel: ObservableObject {
     @Published private(set) var cancellingIDs: Set<String> = []
 
     func load() {
-        guard #available(iOS 26.0, *) else { return }
         error = nil
         isLoading = true
         _loadImpl()
@@ -130,7 +129,7 @@ class AlarmListViewModel: ObservableObject {
     }
 
     func delete(id: String) {
-        guard #available(iOS 26.0, *), alarms.contains(where: { $0.id == id }),
+        guard alarms.contains(where: { $0.id == id }),
               cancellingIDs.insert(id).inserted else { return }
         error = nil
         _cancelImpl(id: id)
@@ -145,7 +144,7 @@ class AlarmListViewModel: ObservableObject {
                 if succeeded, failure == nil {
                     self.alarms.removeAll { $0.id == id }
                 } else {
-                    self.error = String(localized: "The alarm could not be cancelled. It is still scheduled. Try again.")
+                    self.error = AppLocalized("The alarm could not be cancelled. It is still scheduled. Try again.")
                         + (failure.map { "\n" + $0.localizedDescription } ?? "")
                 }
             }
@@ -193,7 +192,7 @@ class AlarmListViewModel: ObservableObject {
 
         // Repeating / timer alarms first
         if !undated.isEmpty {
-            sections.append((title: String(localized: "重复与计时器"), alarms: undated))
+            sections.append((title: AppLocalized("重复与计时器"), alarms: undated))
         }
 
         for weekStart in sortedWeeks {
@@ -201,9 +200,9 @@ class AlarmListViewModel: ObservableObject {
             let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
             let title: String
             if weekStart == startOfThisWeek {
-                title = String(localized: "本周")
+                title = AppLocalized("本周")
             } else if weekStart == calendar.date(byAdding: .weekOfYear, value: 1, to: startOfThisWeek) {
-                title = String(localized: "下周")
+                title = AppLocalized("下周")
             } else {
                 title = "\(dateFormatter.string(from: weekStart)) – \(dateFormatter.string(from: weekEnd))"
             }
@@ -333,14 +332,9 @@ private struct AlarmRowView: View {
     private var stateIndicator: some View {
         switch alarm.state {
         case "alerting":
-            if #available(iOS 17.0, *) {
-                Image(systemName: "bell.fill")
-                    .foregroundStyle(.orange)
-                    .symbolEffect(.pulse)
-            } else {
-                Image(systemName: "bell.fill")
-                    .foregroundStyle(.orange)
-            }
+            Image(systemName: "bell.fill")
+                .foregroundStyle(.orange)
+                .symbolEffect(.pulse)
         case "countdown":
             Image(systemName: "timer")
                 .foregroundStyle(.blue)

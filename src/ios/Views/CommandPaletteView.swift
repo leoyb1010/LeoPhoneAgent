@@ -38,27 +38,27 @@ struct CommandPaletteView: View {
         var all: [Item] = []
         for session in sessions.prefix(12) {
             all.append(Item(id: "s-" + session.id, title: session.title,
-                            subtitle: String(localized: "Session"), symbol: "bubble.left.and.bubble.right") {
+                            subtitle: AppLocalized("Session"), symbol: "bubble.left.and.bubble.right") {
                 openSession(session.id)
             })
         }
         for task in QuickTaskStore.shared.tasks {
             all.append(Item(id: "q-" + task.id, title: task.displayName,
-                            subtitle: String(localized: "Quick task"), symbol: task.symbolName) {
+                            subtitle: AppLocalized("Quick task"), symbol: task.symbolName) {
                 runQuickTask(task.id)
             })
         }
         var surfaces: [(String, SettingsDeepLinkTarget, String, String)] = [
-            ("automations", .automations, String(localized: "Automations"), "bolt.badge.clock"),
-            ("mac", .macConsole, String(localized: "Mac 控制台"), "desktopcomputer"),
-            ("timeline", .timeline, String(localized: "Agent Timeline"), "list.bullet.rectangle.portrait"),
-            ("scheduled", .scheduledTasks, String(localized: "Scheduled Tasks"), "clock.badge.checkmark"),
+            ("automations", .automations, AppLocalized("Automations"), "bolt.badge.clock"),
+            ("mac", .macConsole, AppLocalized("Mac 控制台"), "desktopcomputer"),
+            ("timeline", .timeline, AppLocalized("Agent Timeline"), "list.bullet.rectangle.portrait"),
+            ("scheduled", .scheduledTasks, AppLocalized("Scheduled Tasks"), "clock.badge.checkmark"),
         ]
         // [F-mac-fleet-advanced] Mac 舰队没打开时不列 Mac 控制台。
         if !MacFleetFeature.isEnabled() { surfaces.removeAll { $0.0 == "mac" } }
         for (key, target, title, symbol) in surfaces {
             all.append(Item(id: "p-" + key, title: title,
-                            subtitle: String(localized: "Open"), symbol: symbol) {
+                            subtitle: AppLocalized("Open"), symbol: symbol) {
                 openSurface(target)
             })
         }
@@ -117,7 +117,7 @@ struct CommandPaletteView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { close() }
+                    Button(AppLocalized("Cancel")) { close() }
                         .keyboardShortcut(.cancelAction)   // Esc; iPadOS 26 doesn't bind it for sheets
                 }
             }

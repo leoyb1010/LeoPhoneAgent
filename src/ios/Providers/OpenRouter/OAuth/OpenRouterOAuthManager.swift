@@ -147,7 +147,7 @@ final class OpenRouterOAuthManager: NSObject, ObservableObject {
             let responseBody = String(data: data, encoding: .utf8) ?? ""
             let summary = OAuthRefreshErrorClassifier.userFacingSummary(LLMError.providerError(
                 message: OAuthRefreshErrorClassifier.makeErrorMessage(status: statusCode, body: responseBody)))
-            throw LLMError.providerError(message: String(localized: "OpenRouter sign-in failed (\(summary)). Please try again."))
+            throw LLMError.providerError(message: AppLocalized("OpenRouter sign-in failed (\(summary)). Please try again."))
         }
 
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]

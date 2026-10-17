@@ -45,10 +45,10 @@ struct SyncTransportHealth {
 
         var localizedLabel: String {
             switch self {
-            case .starting: return String(localized: "Starting")
-            case .healthy: return String(localized: "Sync available")
-            case .degraded: return String(localized: "Some sync operations need attention")
-            case .unavailable: return String(localized: "Sync connection unavailable")
+            case .starting: return AppLocalized("Starting")
+            case .healthy: return AppLocalized("Sync available")
+            case .degraded: return AppLocalized("Some sync operations need attention")
+            case .unavailable: return AppLocalized("Sync connection unavailable")
             }
         }
     }

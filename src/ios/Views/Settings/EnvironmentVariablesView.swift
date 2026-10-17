@@ -76,18 +76,18 @@ struct EnvironmentVariablesView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .alert(String(localized: "Delete Variable"), isPresented: Binding(
+        .alert(AppLocalized("Delete Variable"), isPresented: Binding(
             get: { pendingDelete != nil },
             set: { if !$0 { pendingDelete = nil } }
         )) {
-            Button(String(localized: "Delete"), role: .destructive) {
+            Button(AppLocalized("Delete"), role: .destructive) {
                 if let id = pendingDelete?.id { store.delete(id: id) }
                 pendingDelete = nil
             }
-            Button(String(localized: "Cancel"), role: .cancel) { pendingDelete = nil }
+            Button(AppLocalized("Cancel"), role: .cancel) { pendingDelete = nil }
         } message: {
             // 值存在可同步的钥匙串里:不管 App 的 iCloud 同步开没开,删掉都会跟着 iCloud 钥匙串同步到别的设备。
-            Text(String(localized: "Delete \(pendingDelete?.key ?? "")? This can't be undone. With iCloud Keychain on, the value is also removed on your other devices."))
+            Text(AppLocalized("Delete \(pendingDelete?.key ?? "")? This can't be undone. With iCloud Keychain on, the value is also removed on your other devices."))
         }
         .searchable(text: $searchText, prompt: "Filter by name")
         .navigationTitle("Environment Variables")
@@ -138,15 +138,15 @@ struct EnvironmentVariablesView: View {
         }
         .alert(
             overwriteConfirm?.currentIsEmpty == true
-                ? String(localized: "Set value from link?")
-                : String(localized: "Replace existing value?"),
+                ? AppLocalized("Set value from link?")
+                : AppLocalized("Replace existing value?"),
             isPresented: Binding(
                 get: { overwriteConfirm != nil },
                 set: { if !$0 { overwriteConfirm = nil } }
             ),
             presenting: overwriteConfirm
         ) { request in
-            Button(request.currentIsEmpty ? String(localized: "Save") : String(localized: "Replace"),
+            Button(request.currentIsEmpty ? AppLocalized("Save") : AppLocalized("Replace"),
                    role: .destructive) {
                 switch store.update(id: request.entryId, key: request.key, value: request.newValue) {
                 case .success:
@@ -157,12 +157,12 @@ struct EnvironmentVariablesView: View {
                     saveError = error.localizedDescription
                 }
             }
-            Button(String(localized: "Cancel"), role: .cancel) {}
+            Button(AppLocalized("Cancel"), role: .cancel) {}
         } message: { request in
             // The new value is a secret: never shown in clear here.
             Text(request.currentIsEmpty
-                 ? String(localized: "\"\(request.key)\" has no value yet. Set it to the value from the link?")
-                 : String(localized: "\"\(request.key)\" already has a value. Replace it with the value from the link?"))
+                 ? AppLocalized("\"\(request.key)\" has no value yet. Set it to the value from the link?")
+                 : AppLocalized("\"\(request.key)\" already has a value. Replace it with the value from the link?"))
         }
         .sheet(item: $editingEntry) { entry in
             EnvVarFormSheet(
@@ -332,7 +332,7 @@ private struct EnvVarFormSheet: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel(showValue ? String(localized: "Hide value") : String(localized: "Show value"))
+                        .accessibilityLabel(showValue ? AppLocalized("Hide value") : AppLocalized("Show value"))
                     }
                 }
 
@@ -389,16 +389,16 @@ private struct EnvVarFormSheet: View {
         }
         .presentationDetents([.medium, .large])
         .alert(
-            String(localized: "Delete this variable?"),
+            AppLocalized("Delete this variable?"),
             isPresented: $showingDeleteConfirm
         ) {
-            Button(String(localized: "Delete"), role: .destructive) {
+            Button(AppLocalized("Delete"), role: .destructive) {
                 onDelete?()
                 dismiss()
             }
-            Button(String(localized: "Cancel"), role: .cancel) {}
+            Button(AppLocalized("Cancel"), role: .cancel) {}
         } message: {
-            Text(String(localized: "This can't be undone. With iCloud Keychain on, the value is also removed on your other devices."))
+            Text(AppLocalized("This can't be undone. With iCloud Keychain on, the value is also removed on your other devices."))
         }
         .onAppear {
             key = initialKey
@@ -435,6 +435,6 @@ private struct EnvVarFormSheet: View {
 /// confirmations append a line saying so. Callers pass whether that applies.
 enum SyncedDeleteMessage {
     static func text(_ base: String, syncOn: Bool) -> String {
-        syncOn ? base + "\n" + String(localized: "iCloud sync is on, so it's also deleted on your other devices.") : base
+        syncOn ? base + "\n" + AppLocalized("iCloud sync is on, so it's also deleted on your other devices.") : base
     }
 }

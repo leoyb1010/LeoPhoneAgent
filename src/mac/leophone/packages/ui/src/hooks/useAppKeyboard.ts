@@ -39,8 +39,15 @@ export function useAppKeyboard(handlers: AppKeyboardHandlers) {
       // 纯 Shift+可打印键绑定（如 Shift+f）与「输入大写字母」是同一物理事件，
       // 焦点在可编辑元素（聊天输入框/搜索框/终端）时跳过这类绑定，否则用户打不出对应大写字母。
       const editableTarget = isEditableShortcutEventTarget(event.target);
+      // [leo] 焦点在终端里时「任务内查找」让路:终端自己的 ⌘F 搜索(TerminalSession)接管,
+      // 否则两边同时打开、终端里永远搜不了输出。
+      const terminalTarget =
+        event.target instanceof Element && event.target.closest(".xterm") !== null;
       for (const entry of SHORTCUT_COMMANDS) {
         if (entry.channel !== "window") {
+          continue;
+        }
+        if (terminalTarget && entry.id === "findInTask") {
           continue;
         }
         // composer 作用域命令由输入框的 Lexical 插件消费，全局分发零感知

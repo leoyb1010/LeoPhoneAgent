@@ -123,11 +123,11 @@ final class RecordingController: ObservableObject {
         installObservers()
         switch VoiceActivityDetector.microphonePermission {
         case .denied:
-            lastError = String(localized: "没有麦克风权限。请在系统设置 › LeoBot 里打开麦克风。")
+            lastError = AppLocalized("没有麦克风权限。请在系统设置 › LeoBot 里打开麦克风。")
             return false
         case .undetermined:
             guard await VoiceActivityDetector.requestMicrophonePermission() else {
-                lastError = String(localized: "没有麦克风权限。请在系统设置 › LeoBot 里打开麦克风。")
+                lastError = AppLocalized("没有麦克风权限。请在系统设置 › LeoBot 里打开麦克风。")
                 return false
             }
         case .granted:
@@ -136,7 +136,7 @@ final class RecordingController: ObservableObject {
         var meta = RecordingMetadata(title: title, localeIdentifier: VoiceLanguages.lastUsed)
         meta.state = .recording
         do { try store.create(meta) } catch {
-            lastError = String(localized: "无法创建录音文件:\(error.localizedDescription)")
+            lastError = AppLocalized("无法创建录音文件:\(error.localizedDescription)")
             return false
         }
         // 真实的 `.record` 会话:锁屏后继续录靠它(已有的 audio 后台模式),不靠静音保活。
@@ -176,12 +176,12 @@ final class RecordingController: ObservableObject {
         }
         session.onLevel = { [weak self] level in self?.live.level = level }
         session.onWriteFailure = { [weak self] message in
-            self?.lastError = String(localized: "录音写入失败:\(message)")
+            self?.lastError = AppLocalized("录音写入失败:\(message)")
         }
         session.onEngineLost = { [weak self] in
             guard let self, self.active?.id == id else { return }
             self.pause(byInterruption: true)
-            self.lastError = String(localized: "麦克风断开了,录音已暂停。点继续接着录。")
+            self.lastError = AppLocalized("麦克风断开了,录音已暂停。点继续接着录。")
         }
     }
 
@@ -302,8 +302,7 @@ final class RecordingController: ObservableObject {
 
     private func startLiveCaptions(localeIdentifier: String) {
         live.captionsAvailable = false
-        guard #available(iOS 26.0, *),
-              UserDefaults.standard.object(forKey: VoiceExperiencePreferences.liveCaptionsKey) as? Bool ?? true else { return }
+        guard UserDefaults.standard.object(forKey: VoiceExperiencePreferences.liveCaptionsKey) as? Bool ?? true else { return }
         let id = active?.id
         Task { @MainActor [weak self] in
             await AppleLiveTranscriber.prewarm(localeIdentifier: localeIdentifier)
@@ -322,7 +321,7 @@ final class RecordingController: ObservableObject {
 
     private func stopLiveCaptions() {
         session?.liveSamples = nil
-        if #available(iOS 26.0, *), let t = liveTranscriber as? AppleLiveTranscriber { t.cancel() }
+        if let t = liveTranscriber as? AppleLiveTranscriber { t.cancel() }
         liveTranscriber = nil
         live.captionsAvailable = false
     }
@@ -342,7 +341,7 @@ final class RecordingController: ObservableObject {
             MainActor.assumeIsolated {
                 guard let self, self.active != nil, self.active?.isPaused == false else { return }
                 self.pause(byInterruption: true)
-                self.lastError = String(localized: "系统音频服务重启了,录音已暂停。点继续接着录。")
+                self.lastError = AppLocalized("系统音频服务重启了,录音已暂停。点继续接着录。")
             }
         }
         for name in [RecordingActivityBridge.togglePauseNotification, RecordingActivityBridge.stopNotification,
@@ -388,7 +387,7 @@ final class RecordingController: ObservableObject {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let attributes = RecordingActivityPayload.attributes(recordingId: meta.id, title: meta.displayTitle)
         let state = RecordingActivityPayload.state(isPaused: false, elapsed: 0, level: 0, highlightCount: 0,
-                                                   statusText: String(localized: "录音中"))
+                                                   statusText: AppLocalized("录音中"))
         do {
             activity = try Activity.request(attributes: attributes, content: .init(state: state, staleDate: nil), pushType: nil)
         } catch {
@@ -408,9 +407,9 @@ final class RecordingController: ObservableObject {
         lastPushedLevel = level
         let status: String
         if a.isPaused {
-            status = a.pausedByInterruption ? String(localized: "已因来电暂停") : String(localized: "已暂停")
+            status = a.pausedByInterruption ? AppLocalized("已因来电暂停") : AppLocalized("已暂停")
         } else {
-            status = String(localized: "录音中")
+            status = AppLocalized("录音中")
         }
         let state = RecordingActivityPayload.state(isPaused: a.isPaused, elapsed: session.elapsed, level: level,
                                                    highlightCount: a.highlights, statusText: status)
@@ -488,7 +487,7 @@ final class RecordingController: ObservableObject {
         transcriptionTasks[id]?.cancel()
         transcriptionTasks[id] = nil
         do { try store.delete(id: id) } catch {
-            lastError = String(localized: "删除失败:\(error.localizedDescription)")
+            lastError = AppLocalized("删除失败:\(error.localizedDescription)")
             return
         }
         recordings.removeAll { $0.id == id }
@@ -531,7 +530,7 @@ final class RecordingController: ObservableObject {
             store.applyBackupExclusion(id: meta.id)
         } catch {
             try? store.delete(id: meta.id)
-            lastError = String(localized: "导入失败:\(error.localizedDescription)")
+            lastError = AppLocalized("导入失败:\(error.localizedDescription)")
             logger.error("[Recording] import failed: \(error.localizedDescription)")
             return nil
         }
@@ -667,11 +666,11 @@ final class RecordingController: ObservableObject {
     func inferSpeakers(_ id: String, groupId: String?) async {
         guard busyText[id] == nil, let meta = metadata(id) else { return }
         var transcript = transcript(id)
-        busyText[id] = String(localized: "正在识别说话人…")
+        busyText[id] = AppLocalized("正在识别说话人…")
         defer { busyText[id] = nil }
         do {
             transcript.segments = try await MinutesGenerator.inferSpeakers(segments: transcript.segments, groupId: groupId) { [weak self] done, total in
-                self?.busyText[id] = String(localized: "正在识别说话人 \(min(done + 1, total))/\(total)")
+                self?.busyText[id] = AppLocalized("正在识别说话人 \(min(done + 1, total))/\(total)")
             }
             try store.saveTranscript(transcript, id: id)
             update(id) { $0.speakersInferred = true }
@@ -696,7 +695,7 @@ final class RecordingController: ObservableObject {
     func generate(_ id: String, template: MinutesTemplate, customInstruction: String?, groupId: String?) async -> RecordingOutput? {
         guard busyText[id] == nil, let meta = metadata(id) else { return nil }
         let transcript = transcript(id)
-        busyText[id] = String(localized: "正在准备…")
+        busyText[id] = AppLocalized("正在准备…")
         defer { busyText[id] = nil }
         do {
             let started = try await MinutesGenerator.generate(
@@ -745,16 +744,16 @@ final class RecordingController: ObservableObject {
             if active != nil { return (true, watchStatus()) }
             // iOS 不允许后台的 App 新开麦克风录音:手机在后台时请你在手机上点开。
             guard UIApplication.shared.applicationState != .background else {
-                return (false, watchStatus(message: String(localized: "请先在 iPhone 上打开 LeoBot")))
+                return (false, watchStatus(message: AppLocalized("请先在 iPhone 上打开 LeoBot")))
             }
             let ok = await startRecording()
             return (ok, watchStatus(message: ok ? nil : lastError))
         case .stop:
-            guard active != nil else { return (false, watchStatus(message: String(localized: "没有在录音"))) }
+            guard active != nil else { return (false, watchStatus(message: AppLocalized("没有在录音"))) }
             let id = await stopRecording()
-            return (true, watchStatus(message: id == nil ? String(localized: "太短,没有保存") : String(localized: "已保存,正在转写")))
+            return (true, watchStatus(message: id == nil ? AppLocalized("太短,没有保存") : AppLocalized("已保存,正在转写")))
         case .mark:
-            guard active != nil else { return (false, watchStatus(message: String(localized: "没有在录音"))) }
+            guard active != nil else { return (false, watchStatus(message: AppLocalized("没有在录音"))) }
             markHighlight()
             return (true, watchStatus())
         case .pause:

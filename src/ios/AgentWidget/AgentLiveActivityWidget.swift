@@ -97,26 +97,14 @@ private struct AgentStatusWidgetContainer: View {
 
     @ViewBuilder
     var body: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            if isAccessory {
-                AgentStatusWidgetView(entry: entry)
-                    .containerBackground(.clear, for: .widget)
-                    .widgetURL(entry.snapshot.destinationURL)
-            } else {
-                AgentStatusWidgetView(entry: entry)
-                    .containerBackground(.fill.tertiary, for: .widget)
-                    .widgetURL(entry.snapshot.destinationURL)
-            }
+        if isAccessory {
+            AgentStatusWidgetView(entry: entry)
+                .containerBackground(.clear, for: .widget)
+                .widgetURL(entry.snapshot.destinationURL)
         } else {
-            if isAccessory {
-                AgentStatusWidgetView(entry: entry)
-                    .widgetURL(entry.snapshot.destinationURL)
-            } else {
-                AgentStatusWidgetView(entry: entry)
-                    .padding()
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .widgetURL(entry.snapshot.destinationURL)
-            }
+            AgentStatusWidgetView(entry: entry)
+                .containerBackground(.fill.tertiary, for: .widget)
+                .widgetURL(entry.snapshot.destinationURL)
         }
     }
 }
@@ -145,9 +133,7 @@ private struct AgentStatusWidgetView: View {
 
     private var accessoryCircularView: some View {
         ZStack {
-            if #available(iOSApplicationExtension 16.0, *) {
-                AccessoryWidgetBackground()
-            }
+            AccessoryWidgetBackground()
             VStack(spacing: 1) {
                 Image(systemName: entry.snapshot.state.symbol)
                     .font(.system(size: 15, weight: .semibold))
@@ -653,16 +639,10 @@ struct AudioTogglePill: View {
     }
 
     var body: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            Button(intent: AudioTogglePlaybackIntent()) {
-                glyph
-            }
-            .buttonStyle(.plain)
-        } else {
-            // Pre-17 has no interactive Live Activity; a tappable-looking
-            // glyph would be a dead control.
-            EmptyView()
+        Button(intent: AudioTogglePlaybackIntent()) {
+            glyph
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -684,17 +664,11 @@ struct StopTasksPill: View {
     }
 
     var body: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            Button(intent: StopAllTasksFromWidgetIntent()) {
-                glyph
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Stop all tasks")
-        } else {
-            // Pre-17 has no interactive Live Activity; showing a dead button
-            // would be worse than showing nothing.
-            EmptyView()
+        Button(intent: StopAllTasksFromWidgetIntent()) {
+            glyph
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Stop all tasks")
     }
 }
 
@@ -873,13 +847,15 @@ struct MinimalIconView: View {
 struct CompactTrailingView: View {
     let state: AgentActivityAttributes.ContentState
     var isStale = false
+    /// [WP-41] iOS 27 横屏/多活动时灵动岛变窄:图标降一号,别把左侧计数挤掉。
+    @Environment(\.isDynamicIslandLimitedInWidth) private var limited
 
     var body: some View {
         // Waiting for your OK beats whatever the carousel is on.
         let session = state.sessions.first(where: \.needsApproval) ?? state.currentSession
         let icon = isStale && !state.allCompleted ? LiveActivityStale.symbol : (session?.toolIcon ?? "ellipsis.circle")
         Image(systemName: icon)
-            .font(.body)
+            .font(limited ? .footnote : .body)
             .foregroundStyle(isStale && !state.allCompleted ? .gray : (session?.liveTint ?? .blue))
             .id(icon)
             .transition(.opacity.animation(.easeInOut(duration: 0.35)))
@@ -892,15 +868,10 @@ struct CompactLeadingView: View {
     let state: AgentActivityAttributes.ContentState
 
     var body: some View {
-        if #available(iOS 27, *) {
-            LimitedWidthCompactLeading(state: state)
-        } else {
-            CompactLeadingContent(state: state, showsGlyph: true)
-        }
+        LimitedWidthCompactLeading(state: state)
     }
 }
 
-@available(iOS 27, *)
 private struct LimitedWidthCompactLeading: View {
     let state: AgentActivityAttributes.ContentState
     @Environment(\.isDynamicIslandLimitedInWidth) private var limited
@@ -1045,13 +1016,7 @@ private struct QuickTasksWidgetContainer: View {
 
     @ViewBuilder
     var body: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            inner.containerBackground(.fill.tertiary, for: .widget)
-        } else {
-            inner
-                .padding()
-                .background(Color(uiColor: .secondarySystemBackground))
-        }
+        inner.containerBackground(.fill.tertiary, for: .widget)
     }
 
     @ViewBuilder
@@ -1059,7 +1024,7 @@ private struct QuickTasksWidgetContainer: View {
         if family == .systemSmall {
             // The small family has no room for per-task controls, so the whole
             // tile runs the first task on iOS 17+ and deep-links otherwise.
-            if #available(iOSApplicationExtension 17.0, *), let first = entry.tasks.first, !first.needsApp {
+            if let first = entry.tasks.first, !first.needsApp {
                 Button(intent: RunQuickTaskFromWidgetIntent(taskId: first.id)) {
                     QuickTasksSmallView(entry: entry)
                 }
@@ -1159,7 +1124,7 @@ private struct QuickTaskChip: View {
     var body: some View {
         // [F2-widget-background] A task that needs the app (input slots,
         // clipboard) deep-links instead of failing silently in the background.
-        if #available(iOSApplicationExtension 17.0, *), !task.needsApp {
+        if !task.needsApp {
             Button(intent: RunQuickTaskFromWidgetIntent(taskId: task.id)) {
                 chipLabel
             }
@@ -1261,14 +1226,8 @@ private struct RecentSessionsWidgetContainer: View {
 
     @ViewBuilder
     var body: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            RecentSessionsView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
-        } else {
-            RecentSessionsView(entry: entry)
-                .padding()
-                .background(Color(uiColor: .secondarySystemBackground))
-        }
+        RecentSessionsView(entry: entry)
+            .containerBackground(.fill.tertiary, for: .widget)
     }
 }
 
@@ -1377,14 +1336,8 @@ private struct BriefingWidgetContainer: View {
 
     @ViewBuilder
     var body: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            BriefingWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
-        } else {
-            BriefingWidgetView(entry: entry)
-                .padding()
-                .background(Color(uiColor: .secondarySystemBackground))
-        }
+        BriefingWidgetView(entry: entry)
+            .containerBackground(.fill.tertiary, for: .widget)
     }
 }
 
@@ -1448,22 +1401,15 @@ private struct BriefingWidgetView: View {
 
     @ViewBuilder
     private var regenerateControl: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            Button(intent: RunQuickTaskFromWidgetIntent(taskId: Self.briefingTaskId)) {
-                Label("Generate", systemImage: "arrow.clockwise")
-                    .font(.caption2.weight(.semibold))
-                    .labelStyle(.titleAndIcon)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(Color.accentColor.opacity(0.15), in: Capsule())
-            }
-            .buttonStyle(.plain)
-        } else {
-            Link(destination: quickTaskURL(Self.briefingTaskId)) {
-                Label("Generate", systemImage: "arrow.clockwise")
-                    .font(.caption2.weight(.semibold))
-            }
+        Button(intent: RunQuickTaskFromWidgetIntent(taskId: Self.briefingTaskId)) {
+            Label("Generate", systemImage: "arrow.clockwise")
+                .font(.caption2.weight(.semibold))
+                .labelStyle(.titleAndIcon)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Color.accentColor.opacity(0.15), in: Capsule())
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -1518,16 +1464,9 @@ private struct TodayWidgetContainer: View {
 
     @ViewBuilder
     var body: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            TodayWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
-                .widgetURL(URL(string: "leophoneagent://settings/usage")!)
-        } else {
-            TodayWidgetView(entry: entry)
-                .padding()
-                .background(Color(uiColor: .secondarySystemBackground))
-                .widgetURL(URL(string: "leophoneagent://settings/usage")!)
-        }
+        TodayWidgetView(entry: entry)
+            .containerBackground(.fill.tertiary, for: .widget)
+            .widgetURL(URL(string: "leophoneagent://settings/usage")!)
     }
 }
 
@@ -1655,16 +1594,9 @@ private struct MemoryWidgetContainer: View {
 
     @ViewBuilder
     var body: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            MemoryWidgetView(entry: entry)
-                .containerBackground(isAccessory ? AnyShapeStyle(.clear) : AnyShapeStyle(.fill.tertiary), for: .widget)
-                .widgetURL(URL(string: "leophoneagent://settings/memory")!)
-        } else {
-            MemoryWidgetView(entry: entry)
-                .padding(isAccessory ? 0 : 16)
-                .background(isAccessory ? Color.clear : Color(uiColor: .secondarySystemBackground))
-                .widgetURL(URL(string: "leophoneagent://settings/memory")!)
-        }
+        MemoryWidgetView(entry: entry)
+            .containerBackground(isAccessory ? AnyShapeStyle(.clear) : AnyShapeStyle(.fill.tertiary), for: .widget)
+            .widgetURL(URL(string: "leophoneagent://settings/memory")!)
     }
 }
 
@@ -1758,14 +1690,8 @@ private struct ConsoleWidgetContainer: View {
 
     @ViewBuilder
     var body: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            ConsoleWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
-        } else {
-            ConsoleWidgetView(entry: entry)
-                .padding()
-                .background(Color(uiColor: .secondarySystemBackground))
-        }
+        ConsoleWidgetView(entry: entry)
+            .containerBackground(.fill.tertiary, for: .widget)
     }
 }
 
@@ -1859,26 +1785,15 @@ private struct ConsoleWidgetView: View {
 
     @ViewBuilder
     private var stopControl: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            Button(intent: StopAllTasksFromWidgetIntent()) {
-                Label("Stop", systemImage: "stop.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.red, in: Capsule())
-            }
-            .buttonStyle(.plain)
-        } else {
-            Link(destination: newChatURL) {
-                Label("New Chat", systemImage: "plus.message.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.accentColor, in: Capsule())
-            }
+        Button(intent: StopAllTasksFromWidgetIntent()) {
+            Label("Stop", systemImage: "stop.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.red, in: Capsule())
         }
+        .buttonStyle(.plain)
     }
 
     // Top-right: six runnable tasks.
@@ -2072,24 +1987,17 @@ private struct ConsoleWidgetView: View {
     @ViewBuilder
     private var briefingGenerateControl: some View {
         let taskId = briefingTask?.id ?? "morningBriefing"
-        if #available(iOSApplicationExtension 17.0, *) {
-            Button(intent: RunQuickTaskFromWidgetIntent(taskId: taskId)) {
-                Label(briefingTaskIsRunning ? LeoWidgetLanguage.string("Generating") : LeoWidgetLanguage.string("Generate"),
-                      systemImage: briefingTaskIsRunning ? "hourglass" : "arrow.clockwise")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.accentColor.opacity(0.15), in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(briefingTaskIsRunning)
-        } else {
-            Link(destination: quickTaskURL(taskId)) {
-                Label("Generate", systemImage: "arrow.clockwise")
-                    .font(.caption2.weight(.semibold))
-            }
+        Button(intent: RunQuickTaskFromWidgetIntent(taskId: taskId)) {
+            Label(briefingTaskIsRunning ? LeoWidgetLanguage.string("Generating") : LeoWidgetLanguage.string("Generate"),
+                  systemImage: briefingTaskIsRunning ? "hourglass" : "arrow.clockwise")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.accentColor.opacity(0.15), in: Capsule())
         }
+        .buttonStyle(.plain)
+        .disabled(briefingTaskIsRunning)
     }
 
     private func paneHeader(_ title: String, systemImage: String) -> some View {
@@ -2209,14 +2117,8 @@ private struct ArtifactsWidgetContainer: View {
 
     @ViewBuilder
     var body: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            ArtifactsWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
-        } else {
-            ArtifactsWidgetView(entry: entry)
-                .padding()
-                .background(Color(uiColor: .secondarySystemBackground))
-        }
+        ArtifactsWidgetView(entry: entry)
+            .containerBackground(.fill.tertiary, for: .widget)
     }
 }
 

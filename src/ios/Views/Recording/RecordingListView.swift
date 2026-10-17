@@ -30,9 +30,9 @@ struct RecordingListView: View {
 
             if controller.recordings.filter({ $0.id != controller.active?.id }).isEmpty {
                 LeoEmptyState(systemImage: "waveform",
-                              title: String(localized: "还没有录音"),
-                              message: String(localized: "录下会议、访谈或一次沟通,停止后自动转写,一键整理成纪要。"),
-                              actionTitle: String(localized: "导入音频"),
+                              title: AppLocalized("还没有录音"),
+                              message: AppLocalized("录下会议、访谈或一次沟通,停止后自动转写,一键整理成纪要。"),
+                              actionTitle: AppLocalized("导入音频"),
                               actionSystemImage: "square.and.arrow.down",
                               action: { showImporter = true },
                               actionIdentifier: "recordings.empty.import")
@@ -145,7 +145,7 @@ struct RecordingListView: View {
                     Text(active.title)
                         .font(.headline)
                         .lineLimit(1)
-                    RecordingElapsedText(prefix: active.isPaused ? String(localized: "已暂停") : String(localized: "正在录音"))
+                    RecordingElapsedText(prefix: active.isPaused ? AppLocalized("已暂停") : AppLocalized("正在录音"))
                 }
             }
             .padding(.vertical, LeoTheme.Spacing.xs)
@@ -190,7 +190,7 @@ struct RecordingRow: View {
     private var statusChip: some View {
         let text: String
         if let progress, progress.total > 0 {
-            text = String(localized: "转写 \(progress.done)/\(progress.total)")
+            text = AppLocalized("转写 \(progress.done)/\(progress.total)")
         } else {
             text = meta.statusLabel
         }

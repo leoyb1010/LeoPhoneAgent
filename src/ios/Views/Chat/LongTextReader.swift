@@ -1,6 +1,8 @@
 import SwiftUI
 import UIKit
 
+private let longTextLogger = AppLogger(category: "LongText")
+
 // [T-long-reply-collapse] 超长回复的视图部分:折叠块的缓存、「展开全文」一行、全文阅读器。
 // 切分规则全在 LongTextCollapse(纯逻辑,有单测);这里只负责把它接到界面上。
 
@@ -96,8 +98,14 @@ final class LongTextCollapseCache {
             return slot.collapse
         }
         let content = block.content
+        let started = CACurrentMediaTime()
         let collapse = LongTextCollapse.split(markdown: content).map {
             Collapse(head: $0.head, totalCount: content.count, utf8Count: utf8Count, contentHash: hash)
+        }
+        if let collapse {
+            longTextLogger.info(LongTextCollapse.logLine(totalChars: collapse.totalCount,
+                                                        headChars: collapse.head.count,
+                                                        ms: (CACurrentMediaTime() - started) * 1000))
         }
         slots[block.id] = Slot(utf8Count: utf8Count, contentHash: hash, collapse: collapse)
         touch(block.id)
@@ -126,7 +134,7 @@ struct LongTextExpandRow: View {
     let onExpand: () -> Void
 
     var body: some View {
-        let title = String(localized: "展开全文（共 \(characterCount.formatted()) 字）")
+        let title = AppLocalized("展开全文（共 \(characterCount.formatted()) 字）")
         Button {
             LeoHaptics.selection()
             onExpand()
@@ -218,7 +226,7 @@ struct LongTextReaderView: View {
                     VStack(spacing: 0) {
                         Text("全文").font(.headline)
                         if let characterCount {
-                            Text(verbatim: String(localized: "\(characterCount.formatted()) 字"))
+                            Text(verbatim: AppLocalized("\(characterCount.formatted()) 字"))
                                 .font(.caption2)
                                 .foregroundStyle(LeoTheme.ColorToken.secondaryText)
                         }
@@ -251,7 +259,7 @@ struct LongTextReaderView: View {
         let wantsMarkdown = UserDefaults.standard.string(forKey: "leo.copyFormat") == "markdown"
         UIPasteboard.general.string = wantsMarkdown ? markdown : WatchTextSanitizer.plain(markdown)
         LeoHaptics.content(.copied)
-        MinisToast.show(String(localized: "Copied"))
+        MinisToast.show(AppLocalized("Copied"))
     }
 }
 

@@ -65,8 +65,8 @@ struct ToolStepGroupRow: View {
         let seconds = group?.elapsed ?? 0
         let expanded = group.map { state.expanded.contains($0.expansionKey) } ?? false
         let headline = seconds > 0
-            ? String(localized: "已运行 \(count) 个工具 · \(LeoDuration.short(seconds))")
-            : String(localized: "已运行 \(count) 个工具")
+            ? AppLocalized("已运行 \(count) 个工具 · \(LeoDuration.short(seconds))")
+            : AppLocalized("已运行 \(count) 个工具")
         Button(action: onToggle) {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle")
@@ -105,7 +105,7 @@ struct ToolStepGroupRow: View {
         .padding(.horizontal, 16)
         .opacity(message.isCompactedHistory ? 0.5 : 1.0)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(group?.lastSummary.map { String(localized: "\(headline)。最后一步：\($0)") } ?? headline))
+        .accessibilityLabel(Text(group?.lastSummary.map { AppLocalized("\(headline)。最后一步：\($0)") } ?? headline))
         .accessibilityHint(expanded ? Text("收起这些步骤") : Text("展开这些步骤"))
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("assistantToolGroupRow")

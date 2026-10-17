@@ -26,28 +26,28 @@ enum GatewayError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .uncertainAfterDirectAttempt:
-            return String(localized: "直连已发出但没有收到回应，中继也连不上；这条的结果未确认。")
+            return AppLocalized("直连已发出但没有收到回应，中继也连不上；这条的结果未确认。")
         case .notConfigured:
-            return String(localized: "No Mac is connected.")
+            return AppLocalized("No Mac is connected.")
         case .harnessNotConfigured:
             // The engine and the harness service listen on different ports;
             // pointing harness traffic at the engine used to 404 (or worse,
             // read as "no CLI installed"). Now it is a named setup step.
-            return String(localized: "This Mac has no harness address set. Edit the Mac and fill in the LeoAgent service address (port 8647).")
+            return AppLocalized("This Mac has no harness address set. Edit the Mac and fill in the LeoAgent service address (port 8647).")
         case .badURL:
-            return String(localized: "That Mac address is not a valid URL.")
+            return AppLocalized("That Mac address is not a valid URL.")
         case .unauthorized:
             // Deliberately no key echo — this string reaches logs and UI.
-            return String(localized: "密钥被拒绝。在那台 Mac 的终端里运行 cat ~/.leoagent/key,把结果重新粘贴到「设置 → 远程机器」。")
+            return AppLocalized("密钥被拒绝。在那台 Mac 的终端里运行 cat ~/.leoagent/key,把结果重新粘贴到「设置 → 远程机器」。")
         case .http(let status, let message):
             if let message, !message.isEmpty {
-                return String(localized: "LeoAgent error \(status): \(message)")
+                return AppLocalized("LeoAgent error \(status): \(message)")
             }
-            return String(localized: "LeoAgent error \(status)")
+            return AppLocalized("LeoAgent error \(status)")
         case .resumeGap:
-            return String(localized: "Remote events expired; resyncing from the available watermark.")
+            return AppLocalized("Remote events expired; resyncing from the available watermark.")
         case .malformedResponse(let detail):
-            return String(localized: "Unexpected response from LeoAgent: \(detail)")
+            return AppLocalized("Unexpected response from LeoAgent: \(detail)")
         }
     }
 }

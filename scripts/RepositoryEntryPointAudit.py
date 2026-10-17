@@ -17,7 +17,9 @@ assert "`src/mac/leophone/`（当前 1.x 主线）" in intro
 workflow = (ROOT / ".github/workflows/ios-tests.yml").read_text()
 assert "working-directory: src/mac/leophone" in workflow
 assert "cache-dependency-path: src/mac/leophone/pnpm-lock.yaml" in workflow
-android = (ROOT / ".github/workflows/android.yml").read_text()
-assert "packages: 'platform-tools'" in android
-assert ":app:testStandardDebugUnitTest" in android and ":app:testPowerDebugUnitTest" in android
-print(f"RepositoryEntryPointAudit: iOS {version} ({build}), active Mac {mac['version']}, Android dual-flavor CI entry points passed")
+# WP-03(2026-10):Android / Harmony 冻结,代码留在 archive/android-harmony 分支,CI 入口必须已移除,
+# 防止有人把它们当活跃工程又挂回来却没人维护。
+for frozen in ("android.yml", "android-product-ui.yml"):
+    assert not (ROOT / ".github/workflows" / frozen).exists(), f"{frozen} should stay frozen (WP-03)"
+assert "harmony-source-tests" not in workflow, "Harmony CI job should stay frozen (WP-03)"
+print(f"RepositoryEntryPointAudit: iOS {version} ({build}), active Mac {mac['version']}, Android/Harmony CI frozen")

@@ -165,7 +165,7 @@ struct FileBrowserView: View {
         // [T-ios-copy-abs-path-copied-toast] Self-dismissing "Copied" capsule.
         .overlay(alignment: .bottom) {
             if copiedToast {
-                Label(String(localized: "Copied"), systemImage: "checkmark.circle.fill")
+                Label(AppLocalized("Copied"), systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
@@ -224,7 +224,7 @@ struct FileBrowserView: View {
             }
         } message: {
             if let item = itemToDelete, item.isSymlink, FileBrowserViewModel.isMountRootLink(item.url) {
-                Text(String(localized: "\"\(item.name)\" is a mounted folder. To remove it, unmount it in Settings → Mount External Folders. Its files are not touched."))
+                Text(AppLocalized("\"\(item.name)\" is a mounted folder. To remove it, unmount it in Settings → Mount External Folders. Its files are not touched."))
             } else if let item = itemToDelete, item.isSymlink {
                 let target = SymlinkSafeDelete.linkDestination(of: item.url) ?? item.url.resolvingSymlinksInPath().path
                 Text("Only this link is removed. The original at \(target) is kept.")
@@ -241,7 +241,7 @@ struct FileBrowserView: View {
             }.value
             let size = ByteCountFormatter.string(fromByteCount: summary.bytes, countStyle: .file)
             deleteSizeText = item.isDirectory
-                ? String(localized: "\(summary.files) files, \(size)")
+                ? AppLocalized("\(summary.files) files, \(size)")
                 : size
         }
         .sheet(item: $previewingFile) { file in
@@ -261,17 +261,17 @@ struct FileBrowserView: View {
                     rootLabel: viewModel.rootLabel,
                     initialPath: initial,
                     excludedURL: item.url,
-                    title: moveOrCopyMode == .move ? String(localized: "Move to…") : String(localized: "Copy to…")
+                    title: moveOrCopyMode == .move ? AppLocalized("Move to…") : AppLocalized("Copy to…")
                 ) { destinationDir in
                     let destName = viewModel.displayPath(for: destinationDir)
                     if moveOrCopyMode == .move {
                         if viewModel.moveItem(item, to: destinationDir) {
-                            successMessage = String(localized: "Moved \"\(item.name)\" to \(destName)")
+                            successMessage = AppLocalized("Moved \"\(item.name)\" to \(destName)")
                             showSuccess = true
                         }
                     } else {
                         if viewModel.copyItem(item, to: destinationDir) {
-                            successMessage = String(localized: "Copied \"\(item.name)\" to \(destName)")
+                            successMessage = AppLocalized("Copied \"\(item.name)\" to \(destName)")
                             showSuccess = true
                         }
                     }
@@ -799,7 +799,7 @@ private struct FileBrowserRow: View {
                     LeoHaptics.impact(.light)
                     onCopiedPath()
                 } label: {
-                    Label(String(localized: "Copy Absolute Path"), systemImage: "document.on.clipboard")
+                    Label(AppLocalized("Copy Absolute Path"), systemImage: "document.on.clipboard")
                 }
                 Button { onCopy() } label: {
                     Label("Copy to…", systemImage: "doc.on.doc")
@@ -978,7 +978,7 @@ struct DocumentExportView: View {
                 staged = copy
             } catch {
                 guard !Task.isCancelled else { return }
-                stagingError = String(localized: "Couldn't prepare this file for sharing. The original is unchanged. Try again.")
+                stagingError = AppLocalized("Couldn't prepare this file for sharing. The original is unchanged. Try again.")
             }
         }
     }
@@ -1184,7 +1184,7 @@ class FileBrowserViewModel: ObservableObject {
             if item.isSymlink || SymlinkSafeDelete.isSymlink(logicalURL) {
                 let linkURL = SymlinkSafeDelete.isSymlink(logicalURL) ? logicalURL : item.url
                 if Self.isMountRootLink(linkURL) {
-                    errorMessage = String(localized: "\"\(item.name)\" is a mounted folder. To remove it, unmount it in Settings → Mount External Folders. Its files are not touched.")
+                    errorMessage = AppLocalized("\"\(item.name)\" is a mounted folder. To remove it, unmount it in Settings → Mount External Folders. Its files are not touched.")
                     showError = true
                     return
                 }
@@ -1219,7 +1219,7 @@ class FileBrowserViewModel: ObservableObject {
             Self.queueSessionFileCloudDelete(forRemovedURL: removedURL)
             loadItems()
         } catch {
-            errorMessage = String(localized: "Cannot delete \"\(item.name)\": \(error.localizedDescription)")
+            errorMessage = AppLocalized("Cannot delete \"\(item.name)\": \(error.localizedDescription)")
             showError = true
         }
     }
@@ -1319,9 +1319,7 @@ class FileBrowserViewModel: ObservableObject {
             // upsert event recorded just before the user-driven delete
             // doesn't race the explicit op=delete row we just queued.
             _ = await SessionFileChangeTracker.shared.drainSession(sid)
-            if #available(iOS 17.0, *) {
-                await MainActor.run { SyncCore.shared.scheduleSend() }
-            }
+            await MainActor.run { SyncCore.shared.scheduleSend() }
         }
     }
 
@@ -1360,7 +1358,7 @@ class FileBrowserViewModel: ObservableObject {
         let destURL = resolvedDest.appendingPathComponent(item.name)
         do {
             if fm.fileExists(atPath: destURL.path) {
-                errorMessage = String(localized: "A file named \"\(item.name)\" already exists in the destination.")
+                errorMessage = AppLocalized("A file named \"\(item.name)\" already exists in the destination.")
                 showError = true
                 return false
             }
@@ -1374,7 +1372,7 @@ class FileBrowserViewModel: ObservableObject {
             loadItems()
             return true
         } catch {
-            errorMessage = String(localized: "Cannot move \"\(item.name)\": \(error.localizedDescription)")
+            errorMessage = AppLocalized("Cannot move \"\(item.name)\": \(error.localizedDescription)")
             showError = true
             return false
         }
@@ -1387,7 +1385,7 @@ class FileBrowserViewModel: ObservableObject {
         let destURL = resolvedDest.appendingPathComponent(item.name)
         do {
             if fm.fileExists(atPath: destURL.path) {
-                errorMessage = String(localized: "A file named \"\(item.name)\" already exists in the destination.")
+                errorMessage = AppLocalized("A file named \"\(item.name)\" already exists in the destination.")
                 showError = true
                 return false
             }
@@ -1398,7 +1396,7 @@ class FileBrowserViewModel: ObservableObject {
             loadItems()
             return true
         } catch {
-            errorMessage = String(localized: "Cannot copy \"\(item.name)\": \(error.localizedDescription)")
+            errorMessage = AppLocalized("Cannot copy \"\(item.name)\": \(error.localizedDescription)")
             showError = true
             return false
         }
@@ -1482,7 +1480,7 @@ class FileBrowserViewModel: ObservableObject {
             }
         }
         if failCount > 0 {
-            errorMessage = String(localized: "Failed to import \(failCount) file(s).")
+            errorMessage = AppLocalized("Failed to import \(failCount) file(s).")
             showError = true
         }
         loadItems()

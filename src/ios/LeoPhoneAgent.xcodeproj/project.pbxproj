@@ -135,7 +135,11 @@
         E5HFA001 /* HarnessFullAuto.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HFA003 /* HarnessFullAuto.swift */; };
         E5HFA002 /* HarnessFullAuto.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HFA003 /* HarnessFullAuto.swift */; };
         E5DGR001 /* DiagnosticRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DGR003 /* DiagnosticRing.swift */; };
+        E5PSN46B1 /* PerfSanity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PSN46R /* PerfSanity.swift */; };
+        E5CMP46B1 /* CrashMarkerPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CMP46R /* CrashMarkerPolicy.swift */; };
         E5DGR002 /* DiagnosticRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DGR003 /* DiagnosticRing.swift */; };
+        E5PSN46B2 /* PerfSanity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PSN46R /* PerfSanity.swift */; };
+        E5CMP46B2 /* CrashMarkerPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CMP46R /* CrashMarkerPolicy.swift */; };
         E5LRP001 /* LLMRetryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LRP003 /* LLMRetryPolicy.swift */; };
         E5LRP002 /* LLMRetryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LRP003 /* LLMRetryPolicy.swift */; };
         E5SSHT001 /* RemoteSSHTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SSHT003 /* RemoteSSHTrust.swift */; };
@@ -238,7 +242,9 @@
 		E5CUR0021 /* PromptCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0022 /* PromptCacheKey.swift */; };
 		E5CUR0023 /* PromptCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0022 /* PromptCacheKey.swift */; };
 		E5UPT01A /* ThinkingRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT01R /* ThinkingRule.swift */; };
+		LF01781932A1 /* ThinkingRuleEdits.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFD0F7135974 /* ThinkingRuleEdits.swift */; };
 		E5UPT01T /* ThinkingRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT01R /* ThinkingRule.swift */; };
+		LF3C6E67E5DD /* ThinkingRuleEdits.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFD0F7135974 /* ThinkingRuleEdits.swift */; };
 		E5UPT02A /* ThinkingWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT02R /* ThinkingWireFormat.swift */; };
 		E5UPT02T /* ThinkingWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT02R /* ThinkingWireFormat.swift */; };
 		E5UPT03A /* ThinkingRuleCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT03R /* ThinkingRuleCoding.swift */; };
@@ -366,6 +372,8 @@
 		E5CFG000F /* ModelsCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CFG001F /* ModelsCollection.swift */; };
 		E5CFG0020 /* GroupsCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CFG0030 /* GroupsCollection.swift */; };
 		E5CFG0021 /* EnvVarsCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CFG0031 /* EnvVarsCollection.swift */; };
+		LFE21EB38E90 /* ThinkingRulesCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB34E3964AA /* ThinkingRulesCollection.swift */; };
+		LFBE82F38C13 /* SubAgentsCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFEA5A676C05 /* SubAgentsCollection.swift */; };
 		E5CKB0001 /* CookieBackupStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CKB0002 /* CookieBackupStore.swift */; };
 		E5CR00001 /* ShellCommandRingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CR00011 /* ShellCommandRingBuffer.swift */; };
 		LFCB3E5FA251 /* KernelBootCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF31AB8B297 /* KernelBootCoalescer.swift */; };
@@ -395,6 +403,7 @@
 		E5D00023 /* ModelGroupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00033 /* ModelGroupsView.swift */; };
 		E5D00024 /* ModelGroupDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00034 /* ModelGroupDetailView.swift */; };
 		E5D00025 /* SessionModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00035 /* SessionModelPicker.swift */; };
+		LF6BB8CB896E /* ThinkingRuleEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF67E084A31A /* ThinkingRuleEditorView.swift */; };
 		E5D00026 /* OnboardingModelSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00036 /* OnboardingModelSelectionView.swift */; };
 		E5D00037 /* AgentLoopModelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00038 /* AgentLoopModelsView.swift */; };
 		E5D00050 /* models-dev-api.json in Resources */ = {isa = PBXBuildFile; fileRef = E5D00060 /* models-dev-api.json */; };
@@ -449,7 +458,10 @@
 		E5FP00009 /* MinisFileProvider.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E5FP00010 /* MinisFileProvider.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E5FP00100 /* AppGroupChangeWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FP00101 /* AppGroupChangeWatcher.swift */; };
 		E5L3AWPB /* AppGroupWatchPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3AWPR /* AppGroupWatchPlanner.swift */; };
+		LFACF6CB1428 /* FileProviderBootHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1935A1F7E9 /* FileProviderBootHealth.swift */; };
+		LFFPBOOTH0001 /* FileProviderBootHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1935A1F7E9 /* FileProviderBootHealth.swift */; };
 		E5L3AWPT /* AppGroupWatchPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3AWPR /* AppGroupWatchPlanner.swift */; };
+		LF4D5D36600C /* FileProviderBootHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1935A1F7E9 /* FileProviderBootHealth.swift */; };
 		E5FP00200 /* FPSyncTraceLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FP00201 /* FPSyncTraceLog.swift */; };
 		E5G000001 /* BackgroundKeepAliveManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000011 /* BackgroundKeepAliveManager.swift */; };
 		E5G000002 /* AgentLiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000012 /* AgentLiveActivityManager.swift */; };
@@ -475,10 +487,18 @@
 		E5J000040 /* AttributeQueryRecorder.m in Sources */ = {isa = PBXBuildFile; fileRef = E5J000041 /* AttributeQueryRecorder.m */; };
 		E5JB00001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB00002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LF904607C9DF /* MCPDaemonBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1CC96DB1CD /* MCPDaemonBridge.swift */; };
+		LF135C33AF5C /* LiveActivityRemotePush.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF6973892068 /* LiveActivityRemotePush.swift */; };
+		LF8FF39531B5 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFCFE968014F /* AppLocalization.swift */; };
+		LF09A3D5AF16 /* AppLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7490DDBA85 /* AppLanguages.swift */; };
 		E5JB00003 /* jieba.dict.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00014 /* jieba.dict.utf8 */; };
 		E5JB00004 /* hmm_model.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00015 /* hmm_model.utf8 */; };
 		E5JB10001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB10002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LF65D01EB9C8 /* MCPDaemonBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1CC96DB1CD /* MCPDaemonBridge.swift */; };
+		LF2651E7E07A /* LiveActivityRemotePush.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF6973892068 /* LiveActivityRemotePush.swift */; };
+		LF39CB9C995A /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFCFE968014F /* AppLocalization.swift */; };
+		LFD3285375CA /* AppLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7490DDBA85 /* AppLanguages.swift */; };
 		E5JB10003 /* jieba.dict.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00014 /* jieba.dict.utf8 */; };
 		E5JB10004 /* hmm_model.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00015 /* hmm_model.utf8 */; };
 		E5K000001 /* SelectableMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5K000011 /* SelectableMarkdownView.swift */; };
@@ -1141,6 +1161,8 @@
         E5HOUB003 /* HarnessOutbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/HarnessOutbox.swift; sourceTree = SOURCE_ROOT; };
         E5HFA003 /* HarnessFullAuto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/HarnessFullAuto.swift; sourceTree = SOURCE_ROOT; };
         E5DGR003 /* DiagnosticRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics/DiagnosticRing.swift; sourceTree = SOURCE_ROOT; };
+        E5PSN46R /* PerfSanity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics/PerfSanity.swift; sourceTree = SOURCE_ROOT; };
+        E5CMP46R /* CrashMarkerPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics/CrashMarkerPolicy.swift; sourceTree = SOURCE_ROOT; };
         E5LRP003 /* LLMRetryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/LLMRetryPolicy.swift; sourceTree = SOURCE_ROOT; };
         E5SSHT003 /* RemoteSSHTrust.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Session/RemoteSSHTrust.swift; sourceTree = SOURCE_ROOT; };
         E5CKIJ003 /* CloudKitInboundJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Sync/V2/CloudKitInboundJournal.swift; sourceTree = SOURCE_ROOT; };
@@ -1180,61 +1202,6 @@
 		AA26BD0F2F2E5FA500AECF2D /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		AA26BD112F2E5FAF00AECF2D /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		AA26BD132F2E5FB800AECF2D /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
-		AA26BD152F2E651900AECF2D /* slirp.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = slirp.0.framework; path = ../../build/frameworks/slirp.0.framework; sourceTree = "<group>"; };
-		AA26BD162F2E651900AECF2D /* ffi.8.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ffi.8.framework; path = ../../build/frameworks/ffi.8.framework; sourceTree = "<group>"; };
-		AA26BD172F2E651900AECF2D /* gmodule-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gmodule-2.0.0.framework"; path = "../../build/frameworks/gmodule-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD182F2E651900AECF2D /* pixman-1.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "pixman-1.0.framework"; path = "../../build/frameworks/pixman-1.0.framework"; sourceTree = "<group>"; };
-		AA26BD192F2E651900AECF2D /* zstd.1.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = zstd.1.framework; path = ../../build/frameworks/zstd.1.framework; sourceTree = "<group>"; };
-		AA26BD1A2F2E651900AECF2D /* iconv.2.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = iconv.2.framework; path = ../../build/frameworks/iconv.2.framework; sourceTree = "<group>"; };
-		AA26BD1B2F2E651900AECF2D /* gio-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gio-2.0.0.framework"; path = "../../build/frameworks/gio-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD1C2F2E651900AECF2D /* intl.8.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = intl.8.framework; path = ../../build/frameworks/intl.8.framework; sourceTree = "<group>"; };
-		AA26BD1D2F2E651900AECF2D /* gthread-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gthread-2.0.0.framework"; path = "../../build/frameworks/gthread-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD1E2F2E651900AECF2D /* qemu-aarch64-softmmu.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "qemu-aarch64-softmmu.framework"; path = "../../build/frameworks/qemu-aarch64-softmmu.framework"; sourceTree = "<group>"; };
-		AA26BD1F2F2E651900AECF2D /* gobject-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gobject-2.0.0.framework"; path = "../../build/frameworks/gobject-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD202F2E651900AECF2D /* glib-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "glib-2.0.0.framework"; path = "../../build/frameworks/glib-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD2E2F2E65AB00AECF2D /* gthread-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gthread-2.0.0.framework"; path = "../../build/frameworks/gthread-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD2F2F2E65AB00AECF2D /* gio-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gio-2.0.0.framework"; path = "../../build/frameworks/gio-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD302F2E65AB00AECF2D /* glib-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "glib-2.0.0.framework"; path = "../../build/frameworks/glib-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD312F2E65AB00AECF2D /* pixman-1.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "pixman-1.0.framework"; path = "../../build/frameworks/pixman-1.0.framework"; sourceTree = "<group>"; };
-		AA26BD322F2E65AB00AECF2D /* iconv.2.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = iconv.2.framework; path = ../../build/frameworks/iconv.2.framework; sourceTree = "<group>"; };
-		AA26BD332F2E65AB00AECF2D /* slirp.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = slirp.0.framework; path = ../../build/frameworks/slirp.0.framework; sourceTree = "<group>"; };
-		AA26BD342F2E65AB00AECF2D /* qemu-aarch64-softmmu.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "qemu-aarch64-softmmu.framework"; path = "../../build/frameworks/qemu-aarch64-softmmu.framework"; sourceTree = "<group>"; };
-		AA26BD352F2E65AB00AECF2D /* ffi.8.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ffi.8.framework; path = ../../build/frameworks/ffi.8.framework; sourceTree = "<group>"; };
-		AA26BD362F2E65AB00AECF2D /* gobject-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gobject-2.0.0.framework"; path = "../../build/frameworks/gobject-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD372F2E65AB00AECF2D /* zstd.1.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = zstd.1.framework; path = ../../build/frameworks/zstd.1.framework; sourceTree = "<group>"; };
-		AA26BD382F2E65AB00AECF2D /* intl.8.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = intl.8.framework; path = ../../build/frameworks/intl.8.framework; sourceTree = "<group>"; };
-		AA26BD392F2E65AB00AECF2D /* gmodule-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gmodule-2.0.0.framework"; path = "../../build/frameworks/gmodule-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD462F2E663600AECF2D /* jpeg.62.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = jpeg.62.framework; path = ../../build/frameworks/jpeg.62.framework; sourceTree = "<group>"; };
-		AA26BD472F2E663600AECF2D /* gstnet-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstnet-1.0.0.framework"; path = "../../build/frameworks/gstnet-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD482F2E663700AECF2D /* opus.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = opus.0.framework; path = ../../build/frameworks/opus.0.framework; sourceTree = "<group>"; };
-		AA26BD492F2E663700AECF2D /* gstcheck-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstcheck-1.0.0.framework"; path = "../../build/frameworks/gstcheck-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD4A2F2E663700AECF2D /* gstcontroller-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstcontroller-1.0.0.framework"; path = "../../build/frameworks/gstcontroller-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD4B2F2E663700AECF2D /* png16.16.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = png16.16.framework; path = ../../build/frameworks/png16.16.framework; sourceTree = "<group>"; };
-		AA26BD4C2F2E663700AECF2D /* json-glib-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "json-glib-1.0.0.framework"; path = "../../build/frameworks/json-glib-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD4D2F2E663700AECF2D /* gcrypt.20.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = gcrypt.20.framework; path = ../../build/frameworks/gcrypt.20.framework; sourceTree = "<group>"; };
-		AA26BD4E2F2E663700AECF2D /* virglrenderer.1.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = virglrenderer.1.framework; path = ../../build/frameworks/virglrenderer.1.framework; sourceTree = "<group>"; };
-		AA26BD4F2F2E663700AECF2D /* gstbase-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstbase-1.0.0.framework"; path = "../../build/frameworks/gstbase-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD502F2E663700AECF2D /* ssl.1.1.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ssl.1.1.framework; path = ../../build/frameworks/ssl.1.1.framework; sourceTree = "<group>"; };
-		AA26BD512F2E663700AECF2D /* gstrtsp-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstrtsp-1.0.0.framework"; path = "../../build/frameworks/gstrtsp-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD522F2E663700AECF2D /* EGL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EGL.framework; path = ../../build/frameworks/EGL.framework; sourceTree = "<group>"; };
-		AA26BD542F2E663700AECF2D /* gstreamer-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstreamer-1.0.0.framework"; path = "../../build/frameworks/gstreamer-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD552F2E663700AECF2D /* gstsdp-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstsdp-1.0.0.framework"; path = "../../build/frameworks/gstsdp-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD562F2E663700AECF2D /* epoxy.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = epoxy.0.framework; path = ../../build/frameworks/epoxy.0.framework; sourceTree = "<group>"; };
-		AA26BD572F2E663700AECF2D /* crypto.1.1.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = crypto.1.1.framework; path = ../../build/frameworks/crypto.1.1.framework; sourceTree = "<group>"; };
-		AA26BD582F2E663700AECF2D /* gstvideo-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstvideo-1.0.0.framework"; path = "../../build/frameworks/gstvideo-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD592F2E663700AECF2D /* swtpm.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = swtpm.0.framework; path = ../../build/frameworks/swtpm.0.framework; sourceTree = "<group>"; };
-		AA26BD5A2F2E663700AECF2D /* phodav-3.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "phodav-3.0.0.framework"; path = "../../build/frameworks/phodav-3.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD5B2F2E663700AECF2D /* gstfft-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstfft-1.0.0.framework"; path = "../../build/frameworks/gstfft-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD5C2F2E663700AECF2D /* gstaudio-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstaudio-1.0.0.framework"; path = "../../build/frameworks/gstaudio-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD5E2F2E663700AECF2D /* gstpbutils-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstpbutils-1.0.0.framework"; path = "../../build/frameworks/gstpbutils-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD5F2F2E663700AECF2D /* gstallocators-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstallocators-1.0.0.framework"; path = "../../build/frameworks/gstallocators-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD602F2E663700AECF2D /* gstapp-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstapp-1.0.0.framework"; path = "../../build/frameworks/gstapp-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD612F2E663700AECF2D /* gpg-error.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gpg-error.0.framework"; path = "../../build/frameworks/gpg-error.0.framework"; sourceTree = "<group>"; };
-		AA26BD622F2E663700AECF2D /* gstrtp-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstrtp-1.0.0.framework"; path = "../../build/frameworks/gstrtp-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD632F2E663700AECF2D /* gstriff-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstriff-1.0.0.framework"; path = "../../build/frameworks/gstriff-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD642F2E663700AECF2D /* GLESv2.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GLESv2.framework; path = ../../build/frameworks/GLESv2.framework; sourceTree = "<group>"; };
-		AA26BD652F2E663700AECF2D /* gsttag-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gsttag-1.0.0.framework"; path = "../../build/frameworks/gsttag-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD662F2E663700AECF2D /* soup-3.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "soup-3.0.0.framework"; path = "../../build/frameworks/soup-3.0.0.framework"; sourceTree = "<group>"; };
 		AA26CCB62F31067900AECF2D /* alpine-rootfs.zip */ = {isa = PBXFileReference; lastKnownFileType = archive.zip; name = "alpine-rootfs.zip"; path = "../../deps/resources/alpine-rootfs.zip"; sourceTree = SOURCE_ROOT; };
 		AA26CCB82F31070A00AECF2D /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		AA26CCBB2F31080100AECF2D /* ISHKernel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ISHKernel.m; sourceTree = "<group>"; };
@@ -1280,6 +1247,7 @@
 		E5JV00002 /* Jev.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Jev/Jev.swift"; sourceTree = SOURCE_ROOT; };
 		E5CUR0022 /* PromptCacheKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/OpenAI/PromptCacheKey.swift"; sourceTree = SOURCE_ROOT; };
 		E5UPT01R /* ThinkingRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingRule.swift"; sourceTree = SOURCE_ROOT; };
+		LFD0F7135974 /* ThinkingRuleEdits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/Thinking/ThinkingRuleEdits.swift; sourceTree = SOURCE_ROOT; };
 		E5UPT02R /* ThinkingWireFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingWireFormat.swift"; sourceTree = SOURCE_ROOT; };
 		E5UPT03R /* ThinkingRuleCoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingRuleCoding.swift"; sourceTree = SOURCE_ROOT; };
 		E5UPT04R /* ThinkingRuleResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingRuleResolver.swift"; sourceTree = SOURCE_ROOT; };
@@ -1415,6 +1383,8 @@
 		E5CFG001F /* ModelsCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ModelsCollection.swift; path = Config/Collections/ModelsCollection.swift; sourceTree = "<group>"; };
 		E5CFG0030 /* GroupsCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupsCollection.swift; path = Config/Collections/GroupsCollection.swift; sourceTree = "<group>"; };
 		E5CFG0031 /* EnvVarsCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EnvVarsCollection.swift; path = Config/Collections/EnvVarsCollection.swift; sourceTree = "<group>"; };
+		LFB34E3964AA /* ThinkingRulesCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ThinkingRulesCollection.swift; path = Config/Collections/ThinkingRulesCollection.swift; sourceTree = "<group>"; };
+		LFEA5A676C05 /* SubAgentsCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SubAgentsCollection.swift; path = Config/Collections/SubAgentsCollection.swift; sourceTree = "<group>"; };
 		E5CKB0002 /* CookieBackupStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieBackupStore.swift; sourceTree = "<group>"; };
 		E5CAL0002 /* CookieAuditLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieAuditLogger.swift; sourceTree = "<group>"; };
 		E5CR00011 /* ShellCommandRingBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellCommandRingBuffer.swift; sourceTree = "<group>"; };
@@ -1444,6 +1414,7 @@
 		E5D00033 /* ModelGroupsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelGroupsView.swift; sourceTree = "<group>"; };
 		E5D00034 /* ModelGroupDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelGroupDetailView.swift; sourceTree = "<group>"; };
 		E5D00035 /* SessionModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionModelPicker.swift; sourceTree = "<group>"; };
+		LF67E084A31A /* ThinkingRuleEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingRuleEditorView.swift; sourceTree = "<group>"; };
 		E5D00036 /* OnboardingModelSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingModelSelectionView.swift; sourceTree = "<group>"; };
 		E5D00038 /* AgentLoopModelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLoopModelsView.swift; sourceTree = "<group>"; };
 		E5D00060 /* models-dev-api.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "models-dev-api.json"; path = "Resources/models-dev-api.json"; sourceTree = "<group>"; };
@@ -1490,6 +1461,7 @@
 		E5FP00015 /* FileProvider.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FileProvider.entitlements; sourceTree = "<group>"; };
 		E5FP00101 /* AppGroupChangeWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupChangeWatcher.swift; sourceTree = "<group>"; };
 		E5L3AWPR /* AppGroupWatchPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupWatchPlanner.swift; sourceTree = "<group>"; };
+		LF1935A1F7E9 /* FileProviderBootHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileProviderBootHealth.swift; sourceTree = "<group>"; };
 		E5FP00201 /* FPSyncTraceLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FPSyncTraceLog.swift; sourceTree = "<group>"; };
 		E5G000011 /* BackgroundKeepAliveManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundKeepAliveManager.swift; sourceTree = "<group>"; };
 		E5G000012 /* AgentLiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivityManager.swift; sourceTree = "<group>"; };
@@ -1509,12 +1481,7 @@
 		E5AS00012 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/AppShortcuts.strings"; sourceTree = "<group>"; };
 		E5AS00013 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/AppShortcuts.strings"; sourceTree = "<group>"; };
 		E5IP00012 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
-		E5IP00013 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/InfoPlist.strings; sourceTree = "<group>"; };
-		E5IP00014 /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ko; path = ko.lproj/InfoPlist.strings; sourceTree = "<group>"; };
-		E5IP00015 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/InfoPlist.strings; sourceTree = "<group>"; };
-		E5IP00016 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		E5IP00017 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
-		E5IP00018 /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		E5J000011 /* LoggingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggingManager.swift; sourceTree = "<group>"; };
 		E5J000012 /* LogManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogManagementView.swift; sourceTree = "<group>"; };
 		E5J000013 /* ConfigAuditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigAuditView.swift; sourceTree = "<group>"; };
@@ -1529,6 +1496,10 @@
 		E5JB00011 /* JiebaWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JiebaWrapper.h; sourceTree = "<group>"; };
 		E5JB00012 /* JiebaWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = JiebaWrapper.mm; sourceTree = "<group>"; };
 		E5JB00013 /* TextSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSegmenter.swift; sourceTree = "<group>"; };
+		LF1CC96DB1CD /* MCPDaemonBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPDaemonBridge.swift; sourceTree = "<group>"; };
+		LF6973892068 /* LiveActivityRemotePush.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityRemotePush.swift; sourceTree = "<group>"; };
+		LFCFE968014F /* AppLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalization.swift; sourceTree = "<group>"; };
+		LF7490DDBA85 /* AppLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguages.swift; sourceTree = "<group>"; };
 		E5JB00014 /* jieba.dict.utf8 */ = {isa = PBXFileReference; lastKnownFileType = text; name = jieba.dict.utf8; path = Resources/jieba.dict.utf8; sourceTree = "<group>"; };
 		E5JB00015 /* hmm_model.utf8 */ = {isa = PBXFileReference; lastKnownFileType = text; name = hmm_model.utf8; path = Resources/hmm_model.utf8; sourceTree = "<group>"; };
 		E5K000011 /* SelectableMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableMarkdownView.swift; sourceTree = "<group>"; };
@@ -2036,64 +2007,9 @@
 				AA26CCC42F31090100AECF2D /* libresolv.tbd */,
 				AA26CCC22F31090000AECF2D /* SystemConfiguration.framework */,
 				E5S000015 /* CloudKit.framework */,
-				AA26BD162F2E651900AECF2D /* ffi.8.framework */,
-				AA26BD1B2F2E651900AECF2D /* gio-2.0.0.framework */,
-				AA26BD202F2E651900AECF2D /* glib-2.0.0.framework */,
-				AA26BD172F2E651900AECF2D /* gmodule-2.0.0.framework */,
-				AA26BD1F2F2E651900AECF2D /* gobject-2.0.0.framework */,
-				AA26BD1D2F2E651900AECF2D /* gthread-2.0.0.framework */,
-				AA26BD1A2F2E651900AECF2D /* iconv.2.framework */,
-				AA26BD1C2F2E651900AECF2D /* intl.8.framework */,
-				AA26BD182F2E651900AECF2D /* pixman-1.0.framework */,
-				AA26BD1E2F2E651900AECF2D /* qemu-aarch64-softmmu.framework */,
-				AA26BD152F2E651900AECF2D /* slirp.0.framework */,
-				AA26BD192F2E651900AECF2D /* zstd.1.framework */,
 				AA26BD132F2E5FB800AECF2D /* QuartzCore.framework */,
 				AA26BD112F2E5FAF00AECF2D /* MetalKit.framework */,
 				AA26BD0F2F2E5FA500AECF2D /* Metal.framework */,
-				AA26BD352F2E65AB00AECF2D /* ffi.8.framework */,
-				AA26BD2F2F2E65AB00AECF2D /* gio-2.0.0.framework */,
-				AA26BD302F2E65AB00AECF2D /* glib-2.0.0.framework */,
-				AA26BD392F2E65AB00AECF2D /* gmodule-2.0.0.framework */,
-				AA26BD362F2E65AB00AECF2D /* gobject-2.0.0.framework */,
-				AA26BD2E2F2E65AB00AECF2D /* gthread-2.0.0.framework */,
-				AA26BD322F2E65AB00AECF2D /* iconv.2.framework */,
-				AA26BD382F2E65AB00AECF2D /* intl.8.framework */,
-				AA26BD312F2E65AB00AECF2D /* pixman-1.0.framework */,
-				AA26BD342F2E65AB00AECF2D /* qemu-aarch64-softmmu.framework */,
-				AA26BD332F2E65AB00AECF2D /* slirp.0.framework */,
-				AA26BD372F2E65AB00AECF2D /* zstd.1.framework */,
-				AA26BD572F2E663700AECF2D /* crypto.1.1.framework */,
-				AA26BD522F2E663700AECF2D /* EGL.framework */,
-				AA26BD562F2E663700AECF2D /* epoxy.0.framework */,
-				AA26BD4D2F2E663700AECF2D /* gcrypt.20.framework */,
-				AA26BD642F2E663700AECF2D /* GLESv2.framework */,
-				AA26BD612F2E663700AECF2D /* gpg-error.0.framework */,
-				AA26BD5F2F2E663700AECF2D /* gstallocators-1.0.0.framework */,
-				AA26BD602F2E663700AECF2D /* gstapp-1.0.0.framework */,
-				AA26BD5C2F2E663700AECF2D /* gstaudio-1.0.0.framework */,
-				AA26BD4F2F2E663700AECF2D /* gstbase-1.0.0.framework */,
-				AA26BD492F2E663700AECF2D /* gstcheck-1.0.0.framework */,
-				AA26BD4A2F2E663700AECF2D /* gstcontroller-1.0.0.framework */,
-				AA26BD5B2F2E663700AECF2D /* gstfft-1.0.0.framework */,
-				AA26BD472F2E663600AECF2D /* gstnet-1.0.0.framework */,
-				AA26BD5E2F2E663700AECF2D /* gstpbutils-1.0.0.framework */,
-				AA26BD542F2E663700AECF2D /* gstreamer-1.0.0.framework */,
-				AA26BD632F2E663700AECF2D /* gstriff-1.0.0.framework */,
-				AA26BD622F2E663700AECF2D /* gstrtp-1.0.0.framework */,
-				AA26BD512F2E663700AECF2D /* gstrtsp-1.0.0.framework */,
-				AA26BD552F2E663700AECF2D /* gstsdp-1.0.0.framework */,
-				AA26BD652F2E663700AECF2D /* gsttag-1.0.0.framework */,
-				AA26BD582F2E663700AECF2D /* gstvideo-1.0.0.framework */,
-				AA26BD462F2E663600AECF2D /* jpeg.62.framework */,
-				AA26BD4C2F2E663700AECF2D /* json-glib-1.0.0.framework */,
-				AA26BD482F2E663700AECF2D /* opus.0.framework */,
-				AA26BD5A2F2E663700AECF2D /* phodav-3.0.0.framework */,
-				AA26BD4B2F2E663700AECF2D /* png16.16.framework */,
-				AA26BD662F2E663700AECF2D /* soup-3.0.0.framework */,
-				AA26BD502F2E663700AECF2D /* ssl.1.1.framework */,
-				AA26BD592F2E663700AECF2D /* swtpm.0.framework */,
-				AA26BD4E2F2E663700AECF2D /* virglrenderer.1.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -2211,6 +2127,7 @@
 				LF366817653A /* ModelCloudPrune.swift */,
 				E5TLC0002 /* ThinkingLevelCatalog.swift */,
 				E5UPT01R /* ThinkingRule.swift */,
+				LFD0F7135974 /* ThinkingRuleEdits.swift */,
 				E5UPT02R /* ThinkingWireFormat.swift */,
 				E5UPT03R /* ThinkingRuleCoding.swift */,
 				E5UPT04R /* ThinkingRuleResolver.swift */,
@@ -2556,6 +2473,8 @@
 				E5CFG001F /* ModelsCollection.swift */,
 				E5CFG0030 /* GroupsCollection.swift */,
 				E5CFG0031 /* EnvVarsCollection.swift */,
+				LFB34E3964AA /* ThinkingRulesCollection.swift */,
+				LFEA5A676C05 /* SubAgentsCollection.swift */,
 				E5S000011 /* DeviceIdentity.swift */,
 				F1S00010 /* Environment */,
 				E5P000011 /* EnvVarStore.swift */,
@@ -2570,6 +2489,10 @@
 				E5JB00011 /* JiebaWrapper.h */,
 				E5JB00012 /* JiebaWrapper.mm */,
 				E5JB00013 /* TextSegmenter.swift */,
+				LF1CC96DB1CD /* MCPDaemonBridge.swift */,
+				LF6973892068 /* LiveActivityRemotePush.swift */,
+				LFCFE968014F /* AppLocalization.swift */,
+				LF7490DDBA85 /* AppLanguages.swift */,
 				E5VC00013 /* SentenceSplitter.swift */,
 				E5KVC0014 /* SafeKVCSetTrue.h */,
 				E5KVC0013 /* SafeKVCSetTrue.m */,
@@ -2614,6 +2537,7 @@
 				E5FP00015 /* FileProvider.entitlements */,
 				E5FP00101 /* AppGroupChangeWatcher.swift */,
 				E5L3AWPR /* AppGroupWatchPlanner.swift */,
+				LF1935A1F7E9 /* FileProviderBootHealth.swift */,
 				E5FP00201 /* FPSyncTraceLog.swift */,
 			);
 			path = FileProvider;
@@ -2813,6 +2737,8 @@
                 E5HOUB003 /* HarnessOutbox.swift */,
                 E5HFA003 /* HarnessFullAuto.swift */,
                 E5DGR003 /* DiagnosticRing.swift */,
+                E5PSN46R /* PerfSanity.swift */,
+                E5CMP46R /* CrashMarkerPolicy.swift */,
                 E5LRP003 /* LLMRetryPolicy.swift */,
                 E5SSHT003 /* RemoteSSHTrust.swift */,
                 E5CKIJ003 /* CloudKitInboundJournal.swift */,
@@ -3221,6 +3147,7 @@
 				E5SVP0031 /* ShadowVoiceProviderDetailView.swift */,
 				E3C8BDAC6686E9822D1B75A2 /* SystemSpeechResourcesView.swift */,
 				E5D00035 /* SessionModelPicker.swift */,
+				LF67E084A31A /* ThinkingRuleEditorView.swift */,
 				E5UMP0011 /* UnifiedModelPicker.swift */,
 				E5MDT0011 /* ModelDisplayTraits.swift */,
 				0ED149397BEA7E0408C92688 /* GroupVoiceModelsView.swift */,
@@ -3727,6 +3654,8 @@
                 E5HOUB002 /* HarnessOutbox.swift in Sources */,
                 E5HFA002 /* HarnessFullAuto.swift in Sources */,
                 E5DGR002 /* DiagnosticRing.swift in Sources */,
+                E5PSN46B2 /* PerfSanity.swift in Sources */,
+                E5CMP46B2 /* CrashMarkerPolicy.swift in Sources */,
                 E5LRP002 /* LLMRetryPolicy.swift in Sources */,
                 E5SSHT002 /* RemoteSSHTrust.swift in Sources */,
 				E5TRP001 /* CollectionStore.swift in Sources */,
@@ -3744,6 +3673,7 @@
 				E5STG9003 /* SensitiveToolGate.swift in Sources */,
 				E5CUR0023 /* PromptCacheKey.swift in Sources */,
 				E5UPT01T /* ThinkingRule.swift in Sources */,
+				LF3C6E67E5DD /* ThinkingRuleEdits.swift in Sources */,
 				E5UPT02T /* ThinkingWireFormat.swift in Sources */,
 				E5UPT03T /* ThinkingRuleCoding.swift in Sources */,
 				E5UPT04T /* ThinkingRuleResolver.swift in Sources */,
@@ -3807,6 +3737,7 @@
 				LFB093608F05 /* MountActivationBackoff.swift in Sources */,
 				E5L3WRCT /* WidgetReloadCoalescer.swift in Sources */,
 				E5L3AWPT /* AppGroupWatchPlanner.swift in Sources */,
+				LF4D5D36600C /* FileProviderBootHealth.swift in Sources */,
 				E5L3LLPT /* LogLinePipeline.swift in Sources */,
 				LFEDD8663B14 /* LogNoiseControl.swift in Sources */,
 				LFDBA0D05082 /* LogContentDigest.swift in Sources */,
@@ -3835,6 +3766,10 @@
 				LF0B67AADDC6 /* LongTextCollapse.swift in Sources */,
 				E5R3R0003 /* NSTextContainerSetSizeGuard.m in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
+				LF65D01EB9C8 /* MCPDaemonBridge.swift in Sources */,
+				LF2651E7E07A /* LiveActivityRemotePush.swift in Sources */,
+				LF39CB9C995A /* AppLocalization.swift in Sources */,
+				LFD3285375CA /* AppLanguages.swift in Sources */,
 				E5VC1000A /* SentenceSplitter.swift in Sources */,
 				E5VTS1001 /* VoiceTextSanitizer.swift in Sources */,
 				E5VLL0001 /* VoiceLiveLogic.swift in Sources */,
@@ -3945,6 +3880,7 @@
 				E54000AC1 /* DebugSkillGenerated.swift in Sources */,
 				E5FP00100 /* AppGroupChangeWatcher.swift in Sources */,
 				E5L3AWPB /* AppGroupWatchPlanner.swift in Sources */,
+				LFACF6CB1428 /* FileProviderBootHealth.swift in Sources */,
 				AA0838A02F3B941A00049557 /* AboutView.swift in Sources */,
 				E5LEO0028 /* LeoReleaseNotesView.swift in Sources */,
 				E5LEO0001 /* LeoDesignSystem.swift in Sources */,
@@ -3965,6 +3901,7 @@
 				E5JV00001 /* Jev.swift in Sources */,
 				E5CUR0021 /* PromptCacheKey.swift in Sources */,
 				E5UPT01A /* ThinkingRule.swift in Sources */,
+				LF01781932A1 /* ThinkingRuleEdits.swift in Sources */,
 				E5UPT02A /* ThinkingWireFormat.swift in Sources */,
 				E5UPT03A /* ThinkingRuleCoding.swift in Sources */,
 				E5UPT04A /* ThinkingRuleResolver.swift in Sources */,
@@ -3982,6 +3919,10 @@
 				AA26CCBA2F31080100AECF2D /* ISHKernel.m in Sources */,
 				E5JB00001 /* JiebaWrapper.mm in Sources */,
 				E5JB00002 /* TextSegmenter.swift in Sources */,
+				LF904607C9DF /* MCPDaemonBridge.swift in Sources */,
+				LF135C33AF5C /* LiveActivityRemotePush.swift in Sources */,
+				LF8FF39531B5 /* AppLocalization.swift in Sources */,
+				LF09A3D5AF16 /* AppLanguages.swift in Sources */,
 				E5VC00001 /* VoiceCorrectionDB.swift in Sources */,
 				E5VC0000D /* VoiceCorrectionDiff.swift in Sources */,
 				E5CADM01 /* CorrectionAdmission.swift in Sources */,
@@ -4343,6 +4284,7 @@
 				E5QT00001 /* ModelQuickTestSheet.swift in Sources */,
 				E5D00024 /* ModelGroupDetailView.swift in Sources */,
 				E5D00025 /* SessionModelPicker.swift in Sources */,
+				LF6BB8CB896E /* ThinkingRuleEditorView.swift in Sources */,
 				E5UMP0001 /* UnifiedModelPicker.swift in Sources */,
 				E5MDT0001 /* ModelDisplayTraits.swift in Sources */,
 				E5D00026 /* OnboardingModelSelectionView.swift in Sources */,
@@ -4448,6 +4390,8 @@
 				E5CFG000F /* ModelsCollection.swift in Sources */,
 				E5CFG0020 /* GroupsCollection.swift in Sources */,
 				E5CFG0021 /* EnvVarsCollection.swift in Sources */,
+				LFE21EB38E90 /* ThinkingRulesCollection.swift in Sources */,
+				LFBE82F38C13 /* SubAgentsCollection.swift in Sources */,
 				E5Q000001 /* BPETokenizer.swift in Sources */,
 				E5MDS0003 /* MarkdownStripper.swift in Sources */,
 				E5Q000003 /* AppLogger.swift in Sources */,
@@ -4509,6 +4453,8 @@
                 E5HOUB001 /* HarnessOutbox.swift in Sources */,
                 E5HFA001 /* HarnessFullAuto.swift in Sources */,
                 E5DGR001 /* DiagnosticRing.swift in Sources */,
+                E5PSN46B1 /* PerfSanity.swift in Sources */,
+                E5CMP46B1 /* CrashMarkerPolicy.swift in Sources */,
                 E5LRP001 /* LLMRetryPolicy.swift in Sources */,
                 E5SSHT001 /* RemoteSSHTrust.swift in Sources */,
                 E5CKIJ001 /* CloudKitInboundJournal.swift in Sources */,
@@ -4591,6 +4537,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				LFFPBOOTH0001 /* FileProviderBootHealth.swift in Sources */,
 				E5FP00001 /* FileProviderExtension.swift in Sources */,
 				E5FP00002 /* FileProviderEnumerator.swift in Sources */,
 				E5FP00003 /* FileProviderItem.swift in Sources */,
@@ -4659,11 +4606,6 @@
 				E5IP00011 /* en */,
 				E5IP00012 /* zh-Hans */,
 				E5IP00017 /* zh-Hant */,
-				E5IP00013 /* ja */,
-				E5IP00014 /* ko */,
-				E5IP00015 /* fr */,
-				E5IP00016 /* de */,
-				E5IP00018 /* ru */,
 			);
 			name = InfoPlist.strings;
 			sourceTree = "<group>";
@@ -4683,7 +4625,7 @@
 					"$(inherited)",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 1.74.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -4703,7 +4645,7 @@
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 1.74.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -4734,7 +4676,7 @@
 					"$(SRCROOT)/../../deps/frameworks/FFmpeg.framework/Headers",
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 1.74.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -4761,7 +4703,7 @@
 					"$(SRCROOT)/../../deps/frameworks/FFmpeg.framework/Headers",
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 1.74.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -4827,7 +4769,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -4889,7 +4831,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -4914,7 +4856,6 @@
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
-					"$(SRCROOT)/../../build/frameworks",
 					"$(SRCROOT)/../../deps/frameworks",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
@@ -4933,7 +4874,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = "Launch Screen";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -4970,7 +4911,6 @@
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
-					"$(SRCROOT)/../../build/frameworks",
 					"$(SRCROOT)/../../deps/frameworks",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
@@ -4989,7 +4929,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = "Launch Screen";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -5022,7 +4962,7 @@
 				INFOPLIST_FILE = ShareExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Share to LeoBot";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -5049,7 +4989,7 @@
 				INFOPLIST_FILE = ShareExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Share to LeoBot";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -5076,7 +5016,7 @@
 				INFOPLIST_FILE = FileProvider/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "LeoBot Files";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -5103,7 +5043,7 @@
 				INFOPLIST_FILE = FileProvider/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "LeoBot Files";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -5130,7 +5070,7 @@
 				INFOPLIST_FILE = AgentWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Agent Activity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -5157,7 +5097,7 @@
 				INFOPLIST_FILE = AgentWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Agent Activity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -5195,7 +5135,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+				WATCHOS_DEPLOYMENT_TARGET = 27.0;
 			};
 			name = Debug;
 		};
@@ -5220,7 +5160,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+				WATCHOS_DEPLOYMENT_TARGET = 27.0;
 			};
 			name = Release;
 		};

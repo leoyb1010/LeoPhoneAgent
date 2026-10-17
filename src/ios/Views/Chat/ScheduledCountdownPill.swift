@@ -41,17 +41,17 @@ struct ScheduledCountdownPill: View {
         .contentShape(Capsule())
         .contextMenu {
             Button { Self.runNow(task) } label: {
-                Label(String(localized: "立即运行"), systemImage: "play.fill")
+                Label(AppLocalized("立即运行"), systemImage: "play.fill")
             }
             if task.isFollowUp {
                 Button(role: .destructive) { Self.cancel(task) } label: {
-                    Label(String(localized: "取消这条跟进"), systemImage: "xmark.circle")
+                    Label(AppLocalized("取消这条跟进"), systemImage: "xmark.circle")
                 }
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityHint(Text(String(localized: "长按可立即运行")))
-        .accessibilityAction(named: Text(String(localized: "立即运行"))) { Self.runNow(task) }
+        .accessibilityHint(Text(AppLocalized("长按可立即运行")))
+        .accessibilityAction(named: Text(AppLocalized("立即运行"))) { Self.runNow(task) }
     }
 
     @MainActor
@@ -60,8 +60,8 @@ struct ScheduledCountdownPill: View {
         Task { @MainActor in
             let started = await ScheduledTaskRunner.runDueTasks(reason: "runNow", forceTaskId: task.id)
             MinisToast.show(started > 0
-                            ? String(localized: "已开始运行")
-                            : String(localized: "现在没能运行,会话可能正忙,稍后再试"))
+                            ? AppLocalized("已开始运行")
+                            : AppLocalized("现在没能运行,会话可能正忙,稍后再试"))
         }
     }
 

@@ -153,7 +153,7 @@ final class KernelLazyBootWiringTests: XCTestCase {
         XCTAssertFalse(terminal.contains("installIfNeeded()"))
         XCTAssertFalse(terminal.contains("applyDefaultMountOverlay()"))
         // 启动中的状态:沿用「Booting Kernel」文案,慢于 300 ms 才出现。
-        XCTAssertTrue(terminal.contains("String(localized: \"Booting Kernel\")"))
+        XCTAssertTrue(terminal.contains("AppLocalized(\"Booting Kernel\")"))
         XCTAssertTrue(terminal.contains("try? await Task.sleep(nanoseconds: 300_000_000)"))
         // 失败后下次出现可重试。
         XCTAssertTrue(terminal.contains("isShellStarted = false"))

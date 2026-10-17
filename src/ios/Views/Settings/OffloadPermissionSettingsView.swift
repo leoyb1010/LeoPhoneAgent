@@ -56,13 +56,13 @@ struct OffloadPermissionSettingsView: View {
             }
 
             Section {
-                Toggle(String(localized: "Collect voice correction data",
+                Toggle(AppLocalized("Collect voice correction data",
                               comment: "Permissions: toggle for voice-correction learning data collection"),
                        isOn: $correctionConsent.isEnabled)
                 Button(role: .destructive) {
                     showClearCorrectionConfirm = true
                 } label: {
-                    Label(String(localized: "Clear Collected Data",
+                    Label(AppLocalized("Clear Collected Data",
                                  comment: "Permissions: wipe voice-correction learning data"),
                           systemImage: "trash")
                 }
@@ -72,12 +72,12 @@ struct OffloadPermissionSettingsView: View {
                 Text("When enabled, your manual fixes to voice transcripts (original → corrected pairs), accepted/rejected AI corrections, and frequently typed terms are stored in a local on-device database to make future voice corrections smarter. Nothing is uploaded. Default is off; existing data stays until you clear it.")
             }
             .confirmationDialog(
-                String(localized: "Clear all collected voice correction data?",
+                AppLocalized("Clear all collected voice correction data?",
                        comment: "Permissions: confirm wipe of correction learning data"),
                 isPresented: $showClearCorrectionConfirm,
                 titleVisibility: .visible
             ) {
-                Button(String(localized: "Clear All", comment: "Confirm clearing correction data"),
+                Button(AppLocalized("Clear All", comment: "Confirm clearing correction data"),
                        role: .destructive) {
                     Task {
                         if let db = VoiceCorrectionDB.shared {
@@ -88,9 +88,9 @@ struct OffloadPermissionSettingsView: View {
                         correctionDataCleared = true
                     }
                 }
-                Button(String(localized: "Cancel", comment: "Cancel"), role: .cancel) {}
+                Button(AppLocalized("Cancel", comment: "Cancel"), role: .cancel) {}
             }
-            .alert(String(localized: "Voice correction data cleared",
+            .alert(AppLocalized("Voice correction data cleared",
                           comment: "Permissions: wipe done confirmation"),
                    isPresented: $correctionDataCleared) {
                 Button("OK") {}
@@ -107,7 +107,7 @@ struct OffloadPermissionSettingsView: View {
             Button("全部自动允许", role: .destructive) {
                 Task { @MainActor in
                     guard await BiometricAuth.authorizeLoweringProtection(
-                        reason: String(localized: "Allow every capability without asking")
+                        reason: AppLocalized("Allow every capability without asking")
                     ) else { return }
                     manager.setAllBypass()
                     // The minis-config master switch is a separate
@@ -143,14 +143,14 @@ private enum CapabilityAuthorizationState: Equatable {
 
     var title: String {
         switch self {
-        case .authorized: return String(localized: "Authorized")
-        case .limited: return String(localized: "Limited")
-        case .notDetermined: return String(localized: "Ask When Used")
-        case .denied: return String(localized: "Denied")
-        case .unavailable: return String(localized: "Unavailable")
-        case .ready: return String(localized: "Integrated")
-        case .managed: return String(localized: "Per-Item Access")
-        case .unknown: return String(localized: "Checked on Use")
+        case .authorized: return AppLocalized("Authorized")
+        case .limited: return AppLocalized("Limited")
+        case .notDetermined: return AppLocalized("Ask When Used")
+        case .denied: return AppLocalized("Denied")
+        case .unavailable: return AppLocalized("Unavailable")
+        case .ready: return AppLocalized("Integrated")
+        case .managed: return AppLocalized("Per-Item Access")
+        case .unknown: return AppLocalized("Checked on Use")
         }
     }
 
@@ -228,33 +228,19 @@ private final class NativeCapabilityProbe: ObservableObject {
         next["widget"] = .ready
         next["icloud"] = FileManager.default.ubiquityIdentityToken == nil ? .limited : .ready
         next["files-share"] = .ready
-        if #available(iOS 26.0, *) {
-            next["background-processing"] = .ready
-        } else {
-            next["background-processing"] = .limited
-        }
+        next["background-processing"] = .ready
 
         states = next
         isRefreshing = false
     }
 
     private func eventState(_ status: EKAuthorizationStatus) -> CapabilityAuthorizationState {
-        if #available(iOS 17.0, *) {
-            switch status {
-            case .notDetermined: return .notDetermined
-            case .restricted, .denied: return .denied
-            case .fullAccess: return .authorized
-            case .writeOnly: return .limited
-            @unknown default: return .limited
-            }
-        } else {
-            switch status {
-            case .notDetermined: return .notDetermined
-            case .restricted, .denied: return .denied
-            case .authorized, .fullAccess: return .authorized
-            case .writeOnly: return .limited
-            @unknown default: return .limited
-            }
+        switch status {
+        case .notDetermined: return .notDetermined
+        case .restricted, .denied: return .denied
+        case .fullAccess: return .authorized
+        case .writeOnly: return .limited
+        @unknown default: return .limited
         }
     }
 
@@ -344,10 +330,10 @@ private struct SupplementalCapability: Identifiable {
     private let actionKeys: [String]
     private let destinationKey: String
 
-    var title: String { String(localized: String.LocalizationValue(titleKey)) }
-    var summary: String { String(localized: String.LocalizationValue(summaryKey)) }
-    var actions: [String] { actionKeys.map { String(localized: String.LocalizationValue($0)) } }
-    var dataDestination: String { String(localized: String.LocalizationValue(destinationKey)) }
+    var title: String { AppLocalized(String.LocalizationValue(titleKey)) }
+    var summary: String { AppLocalized(String.LocalizationValue(summaryKey)) }
+    var actions: [String] { actionKeys.map { AppLocalized(String.LocalizationValue($0)) } }
+    var dataDestination: String { AppLocalized(String.LocalizationValue(destinationKey)) }
 
     init(id: String, title: String, systemImage: String, summary: String,
          actions: [String], dataDestination: String) {
@@ -409,7 +395,7 @@ private struct NativeCapabilitiesCenterView: View {
                     } label: {
                         NativeCapabilityRow(
                             title: capability.displayLabel,
-                            subtitle: capability.description.isEmpty ? capability.actions.first ?? String(localized: "本机能力") : capability.description,
+                            subtitle: capability.description.isEmpty ? capability.actions.first ?? AppLocalized("本机能力") : capability.description,
                             systemImage: capability.systemImage,
                             state: probe.state(for: capability.name)
                         )

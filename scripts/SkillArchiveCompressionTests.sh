@@ -11,7 +11,7 @@ FILES=("$SYNC/SyncFileSafety.swift" "$SYNC/SafeSkillArchive.swift" "$ROOT/script
 if [[ "$(uname -s)" == "Darwin" ]]; then
   SWIFTC="$(xcrun --find swiftc)"
   "$SWIFTC" -typecheck -parse-as-library -swift-version 5 \
-    -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -target arm64-apple-ios26.0-simulator \
+    -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -target arm64-apple-ios27.0-simulator \
     -module-cache-path "$WORK/modules-ios" "${FILES[@]}"
   "$SWIFTC" -parse-as-library -swift-version 5 -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
     -module-cache-path "$WORK/modules-mac" "${FILES[@]}" -o "$WORK/compression-tests"

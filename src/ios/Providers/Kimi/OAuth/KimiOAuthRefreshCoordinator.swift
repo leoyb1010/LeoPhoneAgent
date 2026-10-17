@@ -83,7 +83,7 @@ enum KimiOAuthRefreshCoordinator {
             // explicit sign-out removes the blob.
             log?("Refresh token invalid, marking instance for re-login (credentials kept): \(summary)")
             markNeedsReauth()
-            throw LLMError.invalidAPIKey(detail: String(localized: "\(providerName) sign-in has expired. Please sign in again.") + " (\(summary))")
+            throw LLMError.invalidAPIKey(detail: AppLocalized("\(providerName) sign-in has expired. Please sign in again.") + " (\(summary))")
         }
 
         // Non-fatal (network / transient). Prefer whatever is now stored (a
@@ -93,7 +93,7 @@ enum KimiOAuthRefreshCoordinator {
         log?("Refresh failed, keeping existing token: \(summary)")
         if fallback.isExpired {
             log?("Existing token is also expired — re-auth required")
-            throw LLMError.invalidAPIKey(detail: String(localized: "Could not renew the \(providerName) sign-in right now. Check your connection and try again.") + " (\(summary))")
+            throw LLMError.invalidAPIKey(detail: AppLocalized("Could not renew the \(providerName) sign-in right now. Check your connection and try again.") + " (\(summary))")
         }
         return fallback
     }
