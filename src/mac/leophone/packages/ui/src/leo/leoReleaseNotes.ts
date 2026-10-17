@@ -13,6 +13,18 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.11.1",
+    date: "2026-10-17",
+    items: [
+      "手机远程用 Mac 上的 CLI 彻底打通：grok 改用 grok agent stdio（ACP），Claude Code、Codex、Gemini、opencode 都能从 iPhone 开会话；Mac 上装在 ~/.local/bin、~/.grok/bin、nvm、Homebrew 等位置的 CLI 都能找到。",
+      "手机上直接登录 Mac 上的 CLI：哪个 agent 没登录，iPhone 上点「登录」弹网页授权（grok / Codex 设备码、Claude 长期令牌、Gemini / opencode 粘贴 Key），不用再去 Mac 上操作。",
+      "修复：从手机建的 LeoBot 任务不会再被悄悄转给 Claude Code；这台 Mac 没配模型时直接告诉你去哪里添加。",
+      "外部 CLI 自动使用 Mac 的系统代理（Clash 等），不再因为连不上外网卡住；Claude Code 支持长期令牌，不依赖钥匙串登录。",
+      "Gemini 用独立的精简配置运行，不会被你自己的钩子和 MCP 卡住；Codex 适配器随包，不再临时用 npx 下载。",
+      "出错说人话：哪个 agent、什么原因、怎么修；没有任何输出的回合不再显示成「完成」。",
+    ],
+  },
+  {
     version: "1.11.0",
     date: "2026-10-17",
     items: [
