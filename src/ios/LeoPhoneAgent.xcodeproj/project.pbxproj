@@ -487,6 +487,7 @@
 		E5J000040 /* AttributeQueryRecorder.m in Sources */ = {isa = PBXBuildFile; fileRef = E5J000041 /* AttributeQueryRecorder.m */; };
 		E5JB00001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB00002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LF64333B68E8 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
 		LF2ED9FD3235 /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
 		LFCB4BB98193 /* WatchMacStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7295E2414A /* WatchMacStatus.swift */; };
 		LFD51A292015 /* LeoMotionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2025E8D5E2 /* LeoMotionPolicy.swift */; };
@@ -498,6 +499,7 @@
 		E5JB00004 /* hmm_model.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00015 /* hmm_model.utf8 */; };
 		E5JB10001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB10002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LF714387EFE1 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
 		LFD1F84A10FA /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
 		LF186F089B19 /* WatchMacStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7295E2414A /* WatchMacStatus.swift */; };
 		LFB522B634C4 /* LeoMotionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2025E8D5E2 /* LeoMotionPolicy.swift */; };
@@ -690,6 +692,8 @@
 		E5TPZ0001 /* TreasuryPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TPZ0002 /* TreasuryPresentation.swift */; };
 		E5LBV0001 /* LocalBrainSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LBV0002 /* LocalBrainSettingsView.swift */; };
 		E5LBR0001 /* LocalBrain.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LBR0002 /* LocalBrain.swift */; };
+		LF7FC4AF2C94 /* LocalBrain+Tools.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB939B423FC /* LocalBrain+Tools.swift */; };
+		LFBD7C990B1B /* ChatCompletionsLanguageModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7E48769126 /* ChatCompletionsLanguageModel.swift */; };
 		E5SNP0001 /* FleetSnippets.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SNP0002 /* FleetSnippets.swift */; };
 		E5PSH0001 /* PushRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PSH0002 /* PushRegistrar.swift */; };
 		E5RLY0001 /* RelayEventCatchUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RLY0002 /* RelayEventCatchUp.swift */; };
@@ -813,6 +817,7 @@
 		E5T00000A /* RetryRunIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5T00001A /* RetryRunIntent.swift */; };
 		E5T00000B /* UserMessageEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5T00001B /* UserMessageEntity.swift */; };
 		E5T0000A1 /* AskMinisIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5T0000A2 /* AskMinisIntent.swift */; };
+		LF6861F473A2 /* LocalBrainIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF36C28B79AA /* LocalBrainIntents.swift */; };
 		E5TLC0001 /* ThinkingLevelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TLC0002 /* ThinkingLevelCatalog.swift */; };
 		E5UMP0001 /* UnifiedModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UMP0011 /* UnifiedModelPicker.swift */; };
 		E5V000002 /* AlternateIcons in Resources */ = {isa = PBXBuildFile; fileRef = E5V000012 /* AlternateIcons */; };
@@ -1527,6 +1532,7 @@
 		E5JB00011 /* JiebaWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JiebaWrapper.h; sourceTree = "<group>"; };
 		E5JB00012 /* JiebaWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = JiebaWrapper.mm; sourceTree = "<group>"; };
 		E5JB00013 /* TextSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSegmenter.swift; sourceTree = "<group>"; };
+		LFB3AA038DDA /* ChatCompletionsWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCompletionsWire.swift; sourceTree = "<group>"; };
 		LFE35BAC8FC5 /* ShareMacTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareMacTarget.swift; sourceTree = "<group>"; };
 		LF7295E2414A /* WatchMacStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMacStatus.swift; sourceTree = "<group>"; };
 		LF2025E8D5E2 /* LeoMotionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoMotionPolicy.swift; sourceTree = "<group>"; };
@@ -1703,6 +1709,8 @@
 		E5TPZ0002 /* TreasuryPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/TreasuryPresentation.swift"; sourceTree = SOURCE_ROOT; };
 		E5LBV0002 /* LocalBrainSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/LocalBrainSettingsView.swift"; sourceTree = SOURCE_ROOT; };
 		E5LBR0002 /* LocalBrain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/LocalIntelligence/LocalBrain.swift"; sourceTree = SOURCE_ROOT; };
+		LFB939B423FC /* LocalBrain+Tools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/LocalIntelligence/LocalBrain+Tools.swift"; sourceTree = SOURCE_ROOT; };
+		LF7E48769126 /* ChatCompletionsLanguageModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/LocalIntelligence/ChatCompletionsLanguageModel.swift; sourceTree = SOURCE_ROOT; };
 		E5SNP0002 /* FleetSnippets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Intents/FleetSnippets.swift"; sourceTree = SOURCE_ROOT; };
 		E5PSH0002 /* PushRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/PushRegistrar.swift"; sourceTree = SOURCE_ROOT; };
 		E5RLY0002 /* RelayEventCatchUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/RelayEventCatchUp.swift"; sourceTree = SOURCE_ROOT; };
@@ -1791,6 +1799,7 @@
 		E5T00001A /* RetryRunIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetryRunIntent.swift; sourceTree = "<group>"; };
 		E5T00001B /* UserMessageEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserMessageEntity.swift; sourceTree = "<group>"; };
 		E5T0000A2 /* AskMinisIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskMinisIntent.swift; sourceTree = "<group>"; };
+		LF36C28B79AA /* LocalBrainIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBrainIntents.swift; sourceTree = "<group>"; };
 		E5TLC0002 /* ThinkingLevelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingLevelCatalog.swift; sourceTree = "<group>"; };
 		E5TT0002 /* ThinkingTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingTypes.swift; sourceTree = "<group>"; };
 		LFF3D490AADF /* ThinkingOffStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingOffStyle.swift; sourceTree = "<group>"; };
@@ -2538,6 +2547,7 @@
 				E5JB00011 /* JiebaWrapper.h */,
 				E5JB00012 /* JiebaWrapper.mm */,
 				E5JB00013 /* TextSegmenter.swift */,
+				LFB3AA038DDA /* ChatCompletionsWire.swift */,
 				LFE35BAC8FC5 /* ShareMacTarget.swift */,
 				LF7295E2414A /* WatchMacStatus.swift */,
 				LF2025E8D5E2 /* LeoMotionPolicy.swift */,
@@ -2703,6 +2713,7 @@
 				E5T000012 /* ListSessionsIntent.swift */,
 				E5T000013 /* SendPromptIntent.swift */,
 				E5T0000A2 /* AskMinisIntent.swift */,
+				LF36C28B79AA /* LocalBrainIntents.swift */,
 				E5F200016 /* ModelSelectionEntity.swift */,
 				E5T000014 /* OpenSessionIntent.swift */,
 				E5T000015 /* MinisShortcutsProvider.swift */,
@@ -2744,6 +2755,8 @@
 				E5TPZ0002 /* TreasuryPresentation.swift */,
 				E5LBV0002 /* LocalBrainSettingsView.swift */,
 				E5LBR0002 /* LocalBrain.swift */,
+				LFB939B423FC /* LocalBrain+Tools.swift */,
+				LF7E48769126 /* ChatCompletionsLanguageModel.swift */,
 				F1R3LIPF /* LocalIntelligencePolicies.swift */,
 				E5SNP0002 /* FleetSnippets.swift */,
 				E5PSH0002 /* PushRegistrar.swift */,
@@ -3859,6 +3872,7 @@
 				LF0B67AADDC6 /* LongTextCollapse.swift in Sources */,
 				E5R3R0003 /* NSTextContainerSetSizeGuard.m in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
+				LF714387EFE1 /* ChatCompletionsWire.swift in Sources */,
 				LFD1F84A10FA /* ShareMacTarget.swift in Sources */,
 				LF186F089B19 /* WatchMacStatus.swift in Sources */,
 				LFB522B634C4 /* LeoMotionPolicy.swift in Sources */,
@@ -4015,6 +4029,7 @@
 				AA26CCBA2F31080100AECF2D /* ISHKernel.m in Sources */,
 				E5JB00001 /* JiebaWrapper.mm in Sources */,
 				E5JB00002 /* TextSegmenter.swift in Sources */,
+				LF64333B68E8 /* ChatCompletionsWire.swift in Sources */,
 				LF2ED9FD3235 /* ShareMacTarget.swift in Sources */,
 				LFCB4BB98193 /* WatchMacStatus.swift in Sources */,
 				LFD51A292015 /* LeoMotionPolicy.swift in Sources */,
@@ -4146,6 +4161,7 @@
 				E5T000002 /* ListSessionsIntent.swift in Sources */,
 				E5T000003 /* SendPromptIntent.swift in Sources */,
 				E5T0000A1 /* AskMinisIntent.swift in Sources */,
+				LF6861F473A2 /* LocalBrainIntents.swift in Sources */,
 				E5F200006 /* ModelSelectionEntity.swift in Sources */,
 				E5T000004 /* OpenSessionIntent.swift in Sources */,
 				E5W000031 /* WebAppShortcut.swift in Sources */,
@@ -4189,6 +4205,8 @@
 				E5TPZ0001 /* TreasuryPresentation.swift in Sources */,
 				E5LBV0001 /* LocalBrainSettingsView.swift in Sources */,
 				E5LBR0001 /* LocalBrain.swift in Sources */,
+				LF7FC4AF2C94 /* LocalBrain+Tools.swift in Sources */,
+				LFBD7C990B1B /* ChatCompletionsLanguageModel.swift in Sources */,
 				E5SNP0001 /* FleetSnippets.swift in Sources */,
 				E5PSH0001 /* PushRegistrar.swift in Sources */,
 				E5RLY0001 /* RelayEventCatchUp.swift in Sources */,
