@@ -3,7 +3,7 @@
 #
 #   scripts/leo-link-switch.sh            切换:备份 leoagent 的 plist → 去掉中继地址与中继钥匙
 #                                         (它就不再注册中继)→ 重载 → 打开桥接开关
-#   scripts/leo-link-switch.sh --rollback 回滚:关桥接开关(App 15 秒内让出机器名)→ 恢复 plist 备份 → 重载
+#   scripts/leo-link-switch.sh --rollback 已不可用:旧 relay_client 通路在 leoagent 0.2.1 退役
 #   scripts/leo-link-switch.sh --status   只看现状
 #
 # 钥匙不打印、不进命令行参数:plist 用 Python plistlib 就地改。
@@ -93,26 +93,9 @@ case "${1:-}" in
     status
     ;;
   --rollback)
-    # 只认还带中继地址的备份:连着切换两次时,较新的备份可能已经是切换后的版本。
-    backup=""
-    for candidate in $(ls -t "$PLIST".bak-link-* 2>/dev/null); do
-      if has_relay "$candidate"; then backup=$candidate; break; fi
-    done
-    [[ -n "$backup" ]] || { echo "找不到带中继地址的 plist 备份($PLIST.bak-link-*),不动任何东西" >&2; exit 1; }
-    umask 077
-    print '{"enabled": false}' > "$SWITCH"
-    echo "桥接开关已关,等 App 让出机器名…"
-    sleep 20
-    unpin_machine "$backup"
-    cp "$backup" "$PLIST"
-    echo "已恢复 $backup"
-    if ! reload_leoagent; then
-      # leoagent 起不来就把机器名还给桥接,手机至少还有一条路。
-      print '{"enabled": true}' > "$SWITCH"
-      echo "leoagent 没起来,已重新打开桥接开关" >&2
-      exit 1
-    fi
-    status
+    # [wp-02] leoagent 自带的 relay_client 已退役,桥接是唯一通路,没有可回滚的旧路径。
+    echo "旧的 relay_client 通路已在 leoagent 0.2.1 退役，没有回滚目标" >&2
+    exit 1
     ;;
   "")
     [[ -f "$PLIST" ]] || { echo "没有 $PLIST" >&2; exit 1; }

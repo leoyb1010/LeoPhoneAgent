@@ -161,7 +161,7 @@ src/android/            Android 主 app(Kotlin/Compose)+ PRoot/Accessibility/Shi
 src/harmony/            HarmonyOS 7 瘦控制面(ArkTS)：协议层 + DevEco 工程
 src/mac/leophone/       当前 LeoPhoneAgent · Mac 1.x:桌面、CLI/runtime、Leo Link、同步副本
 src/mac/leoagent/       Mac 常驻服务:server.py(harness 会话)、relay.py(中继)、
-                        relay_client.py(出站注册)、harness.py(CLI 方言翻译)
+                        harness.py(CLI 方言翻译)
                         ※ 当前桌面主线为 leophone；leoagent 保留作灰度回退，relay.py 继续服役
 deps/  docs/  scripts/  原生依赖构建、文档、工具
 ```

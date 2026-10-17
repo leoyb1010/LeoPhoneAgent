@@ -27,7 +27,6 @@ except ModuleNotFoundError:
 from . import relay as relay_module
 from .harness import HARNESSES, HarnessSession
 from .relay import Machine, Relay
-from .relay_client import RelayClient
 
 
 class RelayRejectedLogTests(unittest.TestCase):
@@ -508,41 +507,6 @@ class RelayTreasurySyncTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(snapshot["payload"]["items"][0]["id"], "legacy-file-item")
 
 
-class RelayClientOutboxTests(unittest.IsolatedAsyncioTestCase):
-    """一帧发不出去,不能把它后面所有帧一起堵死。"""
-
-    async def test_unserializable_frame_is_dropped_instead_of_blocking_the_queue(self):
-        client = RelayClient("https://relay.example/relay/agent", "k" * 16, 38473, "local")
-        sent = []
-
-        class FakeWs:
-            async def send_json(self, frame):
-                # 真实 ws.send_json 对不可序列化的内容抛 TypeError
-                json.dumps(frame)
-                sent.append(frame)
-
-        client._wake = asyncio.Event()
-        client._outbox = [
-            {"type": "event", "event": {"bad": object()}},   # 毒药帧
-            {"type": "event", "event": {"ok": 1}},
-            {"type": "event", "event": {"ok": 2}},
-        ]
-        client._wake.set()
-        sender = asyncio.create_task(client._sender_loop(FakeWs()))
-        await asyncio.sleep(0)
-        for _ in range(20):
-            if not client._outbox:
-                break
-            await asyncio.sleep(0.01)
-        sender.cancel()
-        await asyncio.wait({sender})
-
-        # 毒药帧被丢掉,后面的审批/终态/推送照常外推;旧实现会把它留在队首,
-        # 之后**所有**外推永久静默。
-        self.assertEqual(client._outbox, [])
-        self.assertEqual([f["event"] for f in sent], [{"ok": 1}, {"ok": 2}])
-
-
 class HarnessStopTests(unittest.IsolatedAsyncioTestCase):
     """run.cancelled 必须在进入"等进程退出"之前就落进日志。"""
 
@@ -663,21 +627,6 @@ class RelayJoinTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(captured["status"], 409)
 
 
-class RelayClientCallerTests(unittest.TestCase):
-    """[A3] 纯 Python 的 Mac:中继帧里的调用方类别带给本机服务,手机自己改不了这个头。"""
-
-    def test_caller_kind_is_forwarded_and_missing_reads_as_unknown(self):
-        client = RelayClient("https://relay.example/relay/agent", "k" * 16, 8646, "local-key")
-        self.assertEqual(client._headers(), {"Authorization": "Bearer local-key"})
-        self.assertEqual(client._headers({"caller": {"kind": "iphone", "device_id": "d1"}})
-                         ["X-Leo-Caller-Kind"], "iphone")
-        # 中继 0.1 不带 caller;乱填的值也不能原样进头
-        self.assertEqual(client._headers({"method": "POST"})["X-Leo-Caller-Kind"], "unknown")
-        self.assertEqual(client._headers({"caller": {"kind": "iphone\r\nX-Evil: 1"}})
-                         ["X-Leo-Caller-Kind"], "unknown")
-
-
-@unittest.skipUnless(HAS_AIOHTTP, "aiohttp not installed")
 class ServerFullAutoTests(unittest.IsolatedAsyncioTestCase):
     """[A1/A3] 本机 leoagent:全自动只接认得出的调用方;认不出时 403 带机器可读的修复步骤。"""
 

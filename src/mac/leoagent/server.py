@@ -35,7 +35,7 @@ from aiohttp import web
 from . import harness
 from .harness import HarnessManager, available_harnesses
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8646
 # 事件流空闲保活间隔:与 relay_client / Mac 桥接约定的 25 秒一致。
@@ -595,35 +595,15 @@ def main(argv: Optional[list] = None) -> int:
     if args.host not in ("127.0.0.1", "localhost", "::1"):
         bonjour = _register_bonjour(args.port)
 
-    # relay:主通路。配置了 LEOAGENT_RELAY_URL 就出站挂上去,手机从任何
-    # 网络经 relay 找到这台机器——Mac 端不需要公网、不需要 VPN。
-    relay_url = os.getenv("LEOAGENT_RELAY_URL", "").strip()
-
+    # 审批 / 完成事件交给 Mac 桥接,由它经中继推给手机(旧的 relay_client 直连中继已退役)。
     app = server.build_app()
-    if relay_url:
-        from .relay_client import RelayClient
+    sink = MacBridgeEventSink(os.getenv("LEOAGENT_MAC_EVENT_URL", "").strip()
+                              or "http://127.0.0.1:38473/api/leo/link/leoagent-event", key)
+    harness.set_event_sink(sink.push)
 
-        async def _start_relay(started: web.Application) -> None:
-            client = RelayClient(relay_url,
-                                 os.getenv("LEOAGENT_RELAY_KEY", "").strip() or key,
-                                 args.port, key,
-                                 # 绑在具体 LAN IP 时 127.0.0.1 上没有监听,
-                                 # relay 回打必须走真实绑定地址。
-                                 local_host=args.host)
-            # [T-leophone-push] 把 harness 的关键事件接到中继通道上:
-            # 手机没连着时,这是审批请求唯一的触达路径。
-            harness.set_event_sink(client.push_event)
-            started["_relay_task"] = asyncio.get_event_loop().create_task(client.run_forever())
-        app.on_startup.append(_start_relay)
-    else:
-        # 切到 Mac 桥接后不再自己注册中继:审批 / 完成事件交给 Mac,由它经中继推给手机。
-        sink = MacBridgeEventSink(os.getenv("LEOAGENT_MAC_EVENT_URL", "").strip()
-                                  or "http://127.0.0.1:38473/api/leo/link/leoagent-event", key)
-        harness.set_event_sink(sink.push)
-
-        async def _start_sink(started: web.Application) -> None:
-            started["_mac_sink_task"] = asyncio.get_event_loop().create_task(sink.run_forever())
-        app.on_startup.append(_start_sink)
+    async def _start_sink(started: web.Application) -> None:
+        started["_mac_sink_task"] = asyncio.get_event_loop().create_task(sink.run_forever())
+    app.on_startup.append(_start_sink)
     print(f"LeoAgent {VERSION} listening on http://{args.host}:{args.port}", flush=True)
     try:
         web.run_app(app, host=args.host, port=args.port, print=None)

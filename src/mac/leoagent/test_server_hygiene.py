@@ -127,3 +127,15 @@ class ApprovalNeedsIdentifiedCaller(_Home):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeviceStepsParityTests(unittest.TestCase):
+    """[wp-02] server.py 与 Mac 桥接 linkPolicy.ts 的修复步骤必须是同一份文案。"""
+
+    def test_steps_match_link_policy(self):
+        import re
+        from pathlib import Path
+        from .server import DEVICE_NOT_RECOGNIZED_STEPS
+        ts = (Path(__file__).resolve().parent.parent / "leophone/packages/desktop/src/host/leo/link/linkPolicy.ts").read_text()
+        block = ts.split("export const DEVICE_NOT_RECOGNIZED_STEPS = [", 1)[1].split("];", 1)[0]
+        self.assertEqual(re.findall(r'"([^"]+)"', block), DEVICE_NOT_RECOGNIZED_STEPS)
