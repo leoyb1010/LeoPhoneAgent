@@ -58,6 +58,8 @@ jobs:
           run_check ./scripts/IOSReleaseReadinessAudit.sh
           run_check ./scripts/IOSAccessibilityMotionAudit.sh
           run_check ./scripts/IOSVisibleControlAudit.sh
+          # LeoBot Design token 单一来源(WP-30):生成文件与 design/tokens.json 不一致就红。
+          run_check node design/gen-tokens.mjs --check
           run_check python3 scripts/RepositoryEntryPointAudit.py
           run_check ./scripts/RunCoreSecurityTests.sh
           run_check python3 scripts/CoreExecutionSmoke.py -v

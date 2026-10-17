@@ -1,13 +1,17 @@
-# ZCode Design System
+# LeoBot Design
 
-Portable design system for AI-assisted UI work in this repository.
+Design system for LeoBot on Mac (this Electron app) and iPhone / iPad / Watch (`src/ios`).
+It is meant for coding agents: when generating or editing UI, follow this file before inventing new visual rules.
 
-This document is the single source of truth for design rules and token intent.
-Theme values are defined in [styles.css](packages/ui/src/styles.css), including the
-fallback themes and active Zai Light / Zai Dark overrides; do not maintain a separate
-copy of their numeric color values in documentation.
+**Single source of truth for values**: `design/tokens.json` at the repository root. `node design/gen-tokens.mjs`
+generates `packages/ui/src/leo/skin/leo-tokens.css` (CSS custom properties, imported by `styles.css`),
+`packages/ui/src/leo/skin/leoTokens.generated.ts` (motion/react values) and `src/ios/Shared/LeoTokens.generated.swift`.
+`node design/gen-tokens.mjs --check` (also `pnpm leo:tokens:check`, run at the head of `leo:bundle:mac` and in iOS CI)
+fails when a generated file is stale. Never edit generated files by hand; never copy token values into components.
 
-This file is meant for coding agents. When generating or editing UI in this repo, follow this file before inventing new visual rules.
+Theme surfaces beyond the tokens below (borders, hover, popover, tooltip…) are defined in
+[styles.css](packages/ui/src/styles.css) and the Leo skin [leo-skin.css](packages/ui/src/leo/skin/leo-skin.css)
+for the active light / dark themes (internally named `theme-zai-light` / `theme-zai-dark`).
 
 ## Highest-priority UI constraint
 
@@ -24,7 +28,7 @@ Treat violations of this section as design-system defects, not stylistic prefere
 
 ## Product Character
 
-ZCode is a desktop-first and web-compatible AI workspace. The interface should feel calm, dense, and operational rather than decorative.
+LeoBot is a desktop-first AI workspace with phone, tablet and watch companions. The interface should feel calm, dense, and operational rather than decorative: a quiet workbench with one teal accent.
 
 Design for:
 
@@ -35,7 +39,7 @@ Design for:
 - desktop and web parity
 - macOS, Windows, and Linux compatibility
 - internationalization and variable text length
-- light and dark themes, plus Zai variants already supported by the codebase
+- light and dark themes (the active pair is internally named Zai Light / Zai Dark)
 
 Avoid:
 
@@ -48,13 +52,13 @@ Avoid:
 
 ### Full-page desktop overlays
 
-Login, Coding Plan upgrade, and Rewards surfaces must keep minimize, maximize/restore,
+Full-page surfaces (login, onboarding) must keep minimize, maximize/restore,
 and close-window controls reachable at the top right on Windows and Linux. Reuse
 `DesktopWindowControls` and the existing platform CSS variants. Keep the controls
 outside scrolling content and above page decoration, with a non-draggable hit area.
 The embedded website's close-page action remains separate from close-window.
 macOS keeps native traffic lights; ordinary Web and mobile Web hide desktop controls.
-Verify all three surfaces in both themes, including narrow windows, maximize/restore,
+Verify these surfaces in both themes, including narrow windows, maximize/restore,
 minimize, and close-page versus close-window behavior.
 
 User-facing theme choices are:
@@ -64,6 +68,82 @@ User-facing theme choices are:
 - Dark Theme, backed by Zai Dark
 
 Default light and dark CSS variables still exist as fallback foundations, but new UI should be validated against Zai Light and Zai Dark as the active light/dark experiences.
+
+## LeoBot Design tokens
+
+Values below are copied from `design/tokens.json` for reading convenience; the JSON wins if they ever differ.
+Mac and iOS keep the values they already shared; only gaps were filled and Mac's separate workflow timing set was merged in.
+
+### Color
+
+| Token | Dark | Light | Mac | iOS |
+| --- | --- | --- | --- | --- |
+| `brand` | `#2E9C9C` | `#2A8282` | `--leo-brand` (→ `--color-brand`, `--color-primary`) | `AccentColor` asset |
+| `brandSoft` | `rgba(46,156,156,.14)` | `rgba(42,130,130,.10)` | `--leo-brand-soft` | `accent.opacity(.14 / .10)` |
+| `attention` | `#F0B86E` | `#B86E12` | `--leo-attention` | approval / waiting states (replaces `.systemOrange`) |
+| `bg` / `panel` / `sidebar` / `card` | `#131315` / `#18181B` / `#111113` / `#1F1F22` | `#FAFAFA` / `#FFFFFF` / `#F4F4F5` / `#FFFFFF` | `--leo-bg` … `--leo-card` (→ `--color-background` …) | system dynamic colors; only self-drawn surfaces (e.g. the Mac screen view) use these values |
+| `success` / `destructive` / `warning` | system green / red / orange | same | `--color-success` … | system colors |
+
+Brand color is an accent, never a large fill. `attention` marks "needs you" (approval, waiting); `destructive` marks irreversible risk.
+
+### Type
+
+`text-ui-*` on Mac (see the constraint above) maps to Dynamic Type on iOS:
+
+| Mac | Default px | iOS |
+| --- | ---: | --- |
+| `text-ui-xl` | 18 | `.title3` |
+| `text-ui-lg` | 16 | `.headline` |
+| `text-ui-base` | 14 | `.body` |
+| `text-ui-caption` | 13 | `.subheadline` |
+| `text-ui-sm` | 12 | `.footnote` |
+| `text-ui-xs` | 10 | `.caption2` |
+
+Monospace: Mac system mono stack (CJK never falls back to a serif); iOS `.system(.body, design: .monospaced)`.
+
+### Spacing and radius
+
+- Spacing steps `space.1…6` = 4 / 8 / 12 / 16 / 24 / 32 px (`--leo-space-*`; Tailwind's 4px grid on Mac, `LeoTheme.Spacing` on iOS).
+- Radius: `field` 12, `surface` 16, `bubble` 18, `composer` 26, `pill` 9999 (iOS values). Mac windows are denser, so Mac uses
+  composer 16, card 12, button 8, toast 16 (`--leo-radius-mac-*`) within the container hierarchy described under **Radius**.
+
+### Elevation
+
+| Token | Dark | Light |
+| --- | --- | --- |
+| `shadow.composer` | `inset 0 1px 0 rgba(255,255,255,.03), 0 12px 32px -16px rgba(0,0,0,.7)` | `0 1px 2px rgba(0,0,0,.04), 0 10px 28px -16px rgba(0,0,0,.18)` |
+| `shadow.card` | `0 18px 48px -20px rgba(0,0,0,.75)` | `0 18px 44px -22px rgba(0,0,0,.24)` |
+
+iOS control layers use Liquid Glass instead of shadows; cards get a shadow only in light mode.
+
+### Motion
+
+| Token | Value | Mac | iOS |
+| --- | --- | --- | --- |
+| `dur.1` / `dur.2` / `dur.3` / `dur.4` | 120 / 200 / 280 / 350 ms | `--leo-dur-1…4`, `LEO_DURATION` | `LeoMotion.quick / standard / panel / emphasis` |
+| `beat` | 1.6 s | `--leo-beat` | `LeoMotion.beat` (thinking pulse, typing indicator) |
+| `ease.out` (default) | `cubic-bezier(.22,1,.36,1)` | `--leo-ease` | `.snappy(duration:)` |
+| `ease.settle` (layout settling only) | `cubic-bezier(.22,.61,.36,1)` | `--leo-ease-settle` | `.smooth(duration:)` |
+| `spring` | response .30, damping .82 | `LEO_SPRING` = `{ type: "spring", visualDuration: .30, bounce: .18 }` | `.spring(response: .30, dampingFraction: .82)` |
+| `press` | scale .97, 80 ms | `--leo-press-scale`, `--leo-press-dur` | system button press |
+
+The former workflow-only timing tokens (`--wf-t-*`, `--wf-ease`, `--wf-beat`) are retired: fast/base → `dur.1`, enter → `dur.2`,
+ink → `dur.4`, ease → `ease.settle`, beat → `beat`.
+
+### Haptics
+
+| Token | iOS | Watch | Mac equivalent |
+| --- | --- | --- | --- |
+| `tap` | `impact(.light)` | `.click` | press scale `.97` for 80 ms |
+| `select` | `selection` | `.click` | none |
+| `success` / `warning` / `error` | `notification(.success / .warning / .error)` | `.success` / `.retry` / `.failure` | none |
+
+All haptics go through `LeoHaptics` (respects the user's haptics setting).
+
+### Reduced motion
+
+Every animation checks `prefers-reduced-motion` (Mac) / `accessibilityReduceMotion` (iOS). Under reduced motion there is
+**no positional motion**: entrances become opacity fades of at most `dur.1`, loops stop on a still frame, springs become fades.
 
 ## Color Palette
 
@@ -435,6 +515,20 @@ Control size and primary/secondary action emphasis do not independently change r
 
 ## Components
 
+### LeoBot component rules
+
+- **Buttons, three levels**: primary (brand fill, white foreground; one per surface), secondary (surface / border), text (plain, no
+  container). On iOS: `.glassProminent` tinted with accent / `.glass` / `.plain`. Minimum hit target 44pt on touch, `h-7` on Mac.
+  Disabled = 40% opacity, never a different color.
+- **Card skeleton** (tool calls, tasks, approvals — same on Mac and iOS): 2px left status bar, title row, right-aligned meta
+  (duration / count), body that expands below. Status bar: running = `brand` breathing on `beat`, success = `success`,
+  failure = `destructive`, waiting for the user = `attention`.
+- **Approval card**: risk is the left bar color — `attention` for medium risk, `destructive` for high risk (guarded mode's
+  dangerous-command prompt uses the same card). Enter with `translateY 8px → 0` over `dur.3`.
+- **Agent badge**: small pill (`brandSoft` background, `text-ui-xs`) naming the agent (LeoBot / Claude Code / Codex / Gemini / opencode).
+- **Three states for every data surface**: empty (one line of copy + one action), loading (skeleton bars, never a spinner
+  alone for > 300ms), error (what failed + retry). No blank panels.
+
 ### Buttons
 
 Preferred button system matches `packages/ui/src/components/ui/button.tsx`.
@@ -536,7 +630,7 @@ Overlay rules:
 
 ## Elevation and Depth
 
-ZCode should use restrained depth. Layer primarily through background contrast, borders, and radius before relying on heavy shadows.
+LeoBot uses restrained depth. Layer primarily through background contrast, borders, and radius before relying on heavy shadows.
 
 Recommended elevation levels:
 
@@ -553,10 +647,11 @@ Depth rules:
 
 ## Motion
 
-- Keep transitions fast and low-drama.
-- Favor subtle fade, zoom, and directional slide for overlays.
-- Motion should clarify state change, not decorate the screen.
-- Avoid long, springy, or playful animations in the main workspace.
+- Use only the motion tokens above; no ad-hoc durations or curves.
+- Keep transitions fast and low-drama. Favor subtle fade, zoom, and short directional slide (≤ 8px) for overlays.
+- Motion should clarify state change, not decorate the screen. Never animate streaming text character by character.
+- Layout changes (expand / collapse, list insertions) use motion/react `layout` with `LEO_SPRING`; colors and opacity use `dur.2`.
+- Avoid long, springy, or playful animations in the main workspace; celebration effects are iOS-only and one-shot.
 
 ## Workspace layout
 

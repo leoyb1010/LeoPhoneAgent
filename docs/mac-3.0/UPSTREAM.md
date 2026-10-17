@@ -214,6 +214,7 @@ node scripts/leo-upstream-delete.mjs --generate <新 commit>   # 收尾:按「�
 | `scripts/native-search-tools-config.mjs` + `apps/zcode-cli/dependencies/native-search/` | 只留 darwin-arm64 归档(22M→2.7M),启用平台只剩 darwin-arm64 |
 | `packages/desktop/electron-builder.config.js` | computer-use 插件不随包,未 stage 时跳过 CUA koffi 校验(否则 afterPack 失败) |
 | `scripts/leo-redline-check.mjs` | 红线闸:`leo:bundle:mac` 打包前扫源码、打包后扫产物;app.asar 按索引逐条目扫,包内第三方 node_modules(pi-ai、tokenlens 的供应商目录)与磁盘产物同一排除规则 |
+| `packages/ui/src/styles.css`(WP-30) | 工作流运动词汇 `--wf-t-*` / `--wf-ease` / `--wf-beat` 换成 LeoBot Design token(`--leo-dur-*` / `--leo-ease-settle` / `--leo-beat`,源 `design/tokens.json`);同步上游时新出现的 `--wf-t-*` 按同一映射替换;顶部 `@import "./leo/skin/leo-tokens.css"` 保留 |
 
 **删除面(随合并)**:`packages/server`、`packages/web`、`packages/android`、`packages/web-share`、`packages/share-ui`、
 `packages/stream-animate`;SSH/WSL/Docker/server 远程工作区(desktop host / main / preload / UI 恢复与重连 / 远端资产脚本);

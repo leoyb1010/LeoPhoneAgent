@@ -4,6 +4,8 @@
 @import "shadcn/tailwind.css";
 @import "@xterm/xterm/css/xterm.css";
 @import "katex/dist/katex.min.css";
+/* [leo] LeoBot Design token（生成文件，源在仓库根 design/tokens.json）。 */
+@import "./leo/skin/leo-tokens.css";
 @source "../../../node_modules/streamdown/dist/*.js"; /* 感觉这行也是不好使呢*/
 
 @plugin "@tailwindcss/typography";
@@ -1399,7 +1401,7 @@ html[data-document-hidden] *::after {
 }
 @media (prefers-reduced-motion: no-preference) {
   .wf-stream-flow {
-    animation: wf-stream-flow 1.2s var(--wf-ease, ease-in-out) infinite;
+    animation: wf-stream-flow 1.2s var(--leo-ease-settle) infinite;
   }
 }
 
@@ -1427,37 +1429,31 @@ html[data-document-hidden] *::after {
 /* 工作流时间线·运动词汇（docs/dynamic-workflow/presentation.md「The pill」）：四个时长
  * 一条曲线，卡片、确认窗与侧栏清单共用。到场 / 弹入 / 展开 / 换词只动 opacity 与 transform，
  * 灯与墨迹只动颜色；从不动布局属性。reduced-motion 下全部归零，循环停在静止帧。 */
-.wf-motion {
-  --wf-t-fast: 120ms;
-  --wf-t-base: 160ms;
-  --wf-t-enter: 200ms;
-  --wf-t-ink: 320ms;
-  --wf-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
-  /* 正在运行的灯的心跳周期；脊线与卡共用。 */
-  --wf-beat: 1.6s;
-}
+/* [leo] 时长 / 曲线 / 心跳统一取 LeoBot Design token（design/tokens.json → leo/skin/leo-tokens.css）：
+ * 原工作流专用的四档时长、归位曲线与心跳已收编：fast/base → dur-1，enter → dur-2，ink → dur-4，
+ * 曲线 → --leo-ease-settle（只用于布局归位），心跳 → --leo-beat。 */
 .wf-pill {
   box-shadow: inset 0 0 0 1px transparent;
   transition:
-    background-color var(--wf-t-base) var(--wf-ease),
-    box-shadow var(--wf-t-base) var(--wf-ease),
-    transform var(--wf-t-fast) var(--wf-ease);
+    background-color var(--leo-dur-1) var(--leo-ease-settle),
+    box-shadow var(--leo-dur-1) var(--leo-ease-settle),
+    transform var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-pill-avatar {
   transition:
-    transform var(--wf-t-base) var(--wf-ease),
-    background-color var(--wf-t-base) var(--wf-ease);
+    transform var(--leo-dur-1) var(--leo-ease-settle),
+    background-color var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-pill-name {
-  transition: color var(--wf-t-base) var(--wf-ease);
+  transition: color var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-pill-go {
   opacity: 0;
   transform: scale(0.6);
   transition:
-    opacity var(--wf-t-base) var(--wf-ease),
-    transform var(--wf-t-base) var(--wf-ease),
-    color var(--wf-t-base) var(--wf-ease);
+    opacity var(--leo-dur-1) var(--leo-ease-settle),
+    transform var(--leo-dur-1) var(--leo-ease-settle),
+    color var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-pill-open:hover,
 .wf-pill-open:focus-visible {
@@ -1492,8 +1488,8 @@ html[data-document-hidden] *::after {
  * 放大——形状说「什么」，不抢颜色说「谁」的戏。 */
 .wf-pill-tile {
   transition:
-    background-color var(--wf-t-base) var(--wf-ease),
-    color var(--wf-t-base) var(--wf-ease);
+    background-color var(--leo-dur-1) var(--leo-ease-settle),
+    color var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-pill-open:hover .wf-pill-tile,
 .wf-pill-open:focus-visible .wf-pill-tile {
@@ -1514,7 +1510,7 @@ html[data-document-hidden] *::after {
 .wf-more-face {
   border-radius: 35%;
   box-shadow: 0 0 0 1.5px var(--color-background);
-  transition: margin-left var(--wf-t-base) var(--wf-ease);
+  transition: margin-left var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-more-deck > * + * {
   margin-left: -5px;
@@ -1529,7 +1525,7 @@ html[data-document-hidden] *::after {
 }
 /* 迷你量条（追记「阶段名册」）的段宽随计数过渡，读作「又结算了几个」。 */
 .wf-meter-seg {
-  transition: flex-grow var(--wf-t-ink) var(--wf-ease);
+  transition: flex-grow var(--leo-dur-4) var(--leo-ease-settle);
 }
 /* 完成卡的产物瓦片（docs/dynamic-workflow/transcript-and-notifications.md「Artifact tiles」）：悬停时预览框的边
  * 抬到 hover 色、说明行的 kind 瓦片与名字转前景、尾槽里 ↗ 顶替版本号——与药丸同一套语法，
@@ -1549,8 +1545,8 @@ html[data-document-hidden] *::after {
 }
 .wf-tile-frame {
   transition:
-    border-color var(--wf-t-base) var(--wf-ease),
-    transform var(--wf-t-fast) var(--wf-ease);
+    border-color var(--leo-dur-1) var(--leo-ease-settle),
+    transform var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-tile:has(.wf-tile-open:hover) .wf-tile-frame,
 .wf-tile:has(.wf-tile-open:focus-visible) .wf-tile-frame {
@@ -1580,10 +1576,10 @@ html[data-document-hidden] *::after {
  * 与药丸同一套语法，只是没有底色也没有描边：一行文字的抬起只需要一层填色。「还有 N 个」那一行是
  * 一扇门，↗ 不等悬停就在（wf-pill-go-rest）。 */
 .wf-line {
-  transition: background-color var(--wf-t-base) var(--wf-ease);
+  transition: background-color var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-line-icon {
-  transition: color var(--wf-t-base) var(--wf-ease);
+  transition: color var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-line-open:hover,
 .wf-line-open:focus-visible {
@@ -1616,16 +1612,16 @@ html[data-document-hidden] *::after {
   transform-origin: top left;
   padding: 22px 26px;
   overflow: hidden;
-  animation: wf-arrive var(--wf-t-ink, 320ms) var(--wf-ease, ease);
+  animation: wf-arrive var(--leo-dur-4) var(--leo-ease-settle);
 }
 .wf-station {
-  transition: color var(--wf-t-base) var(--wf-ease);
+  transition: color var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-lamp {
   transition:
-    background-color var(--wf-t-ink) var(--wf-ease),
-    border-color var(--wf-t-ink) var(--wf-ease),
-    box-shadow var(--wf-t-base) var(--wf-ease);
+    background-color var(--leo-dur-4) var(--leo-ease-settle),
+    border-color var(--leo-dur-4) var(--leo-ease-settle),
+    box-shadow var(--leo-dur-1) var(--leo-ease-settle);
 }
 /* 正在运行的灯（presentation.md「Lamps」）：常亮的 3px 光晕，加每 1.6s 一下心跳（wf-beat）——灯鼓到 1.12 倍
  * 再落回，同时从光晕边缘放出一圈环，涨到灯外 8px 时淡尽。环是第二层 box-shadow，静止时透明；灯是页面上
@@ -1662,7 +1658,7 @@ html[data-document-hidden] *::after {
   stroke-dashoffset: 1;
   opacity: 0;
   transition:
-    opacity 160ms var(--wf-ease),
+    opacity 160ms var(--leo-ease-settle),
     stroke-dashoffset 0s linear 160ms,
     stroke 0s linear 160ms,
     stroke-width 0s linear 160ms;
@@ -1671,13 +1667,13 @@ html[data-document-hidden] *::after {
   opacity: 1;
   stroke-dashoffset: 0;
   transition:
-    stroke-dashoffset 420ms var(--wf-ease),
+    stroke-dashoffset 420ms var(--leo-ease-settle),
     opacity 0s;
 }
 .wf-fill-frame-fresh {
   stroke: var(--color-warning);
   stroke-width: 1.5;
-  animation: wf-fill-stroke 420ms var(--wf-ease);
+  animation: wf-fill-stroke 420ms var(--leo-ease-settle);
 }
 @keyframes wf-fill-stroke {
   from {
@@ -1688,7 +1684,7 @@ html[data-document-hidden] *::after {
   }
 }
 .wf-fill-head {
-  transition: color var(--wf-t-base) var(--wf-ease);
+  transition: color var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-station-open:hover .wf-lamp[data-lamp="pending"] {
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-foreground) 10%, transparent);
@@ -1701,32 +1697,32 @@ html[data-document-hidden] *::after {
 }
 .wf-ink {
   transition:
-    stroke var(--wf-t-ink) var(--wf-ease),
-    fill var(--wf-t-ink) var(--wf-ease),
-    border-color var(--wf-t-ink) var(--wf-ease);
+    stroke var(--leo-dur-4) var(--leo-ease-settle),
+    fill var(--leo-dur-4) var(--leo-ease-settle),
+    border-color var(--leo-dur-4) var(--leo-ease-settle);
 }
 /* 入场动画不带 fill：只声明 from 帧，播完即交还给悬停过渡（标记让位、按下缩放）。 */
 .wf-arrive {
-  animation: wf-arrive var(--wf-t-enter) var(--wf-ease);
+  animation: wf-arrive var(--leo-dur-2) var(--leo-ease-settle);
 }
 .wf-mark {
   transform-origin: center;
-  animation: wf-mark 180ms var(--wf-ease);
+  animation: wf-mark 180ms var(--leo-ease-settle);
   transition:
-    opacity var(--wf-t-base) var(--wf-ease),
-    transform var(--wf-t-base) var(--wf-ease);
+    opacity var(--leo-dur-1) var(--leo-ease-settle),
+    transform var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-unfold {
-  animation: wf-unfold var(--wf-t-enter) var(--wf-ease);
+  animation: wf-unfold var(--leo-dur-2) var(--leo-ease-settle);
 }
 .wf-swap {
   display: inline-block;
-  animation: wf-swap var(--wf-t-enter) var(--wf-ease);
+  animation: wf-swap var(--leo-dur-2) var(--leo-ease-settle);
 }
 .wf-draw {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: wf-draw 420ms var(--wf-ease) forwards;
+  animation: wf-draw 420ms var(--leo-ease-settle) forwards;
 }
 .wf-caret {
   animation: wf-caret 1s step-end infinite;
@@ -1734,20 +1730,20 @@ html[data-document-hidden] *::after {
 /* 草稿的笔（追记「书写效果」）：轨道段从左伸出、灯落地，然后名字逐字写出。 */
 .wf-rail-grow {
   transform-origin: left center;
-  animation: wf-rail-grow var(--wf-t-base) var(--wf-ease);
+  animation: wf-rail-grow var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-land {
-  animation: wf-land var(--wf-t-enter) var(--wf-ease);
+  animation: wf-land var(--leo-dur-2) var(--leo-ease-settle);
 }
 /* 补全的生长（docs/dynamic-workflow/presentation.md「Holes on the timeline」的「Growth」）：插入列右侧的站
  * 从 −插入宽度（`--wf-slide`）滑到布局位置，320ms；播完即是布局位置，无需再提交。 */
 .wf-slide {
-  animation: wf-slide 320ms var(--wf-ease);
+  animation: wf-slide 320ms var(--leo-ease-settle);
 }
 /* 轮尾摘要（追记「轮尾摘要」）：展开 / 收起时外框高度在两个值之间过渡；展开时药丸挂载、依次
  * 落地（wf-arrive + 30 ms 错位），收起时只收高度。 */
 .wf-digest-plot {
-  transition: height var(--wf-t-ink) var(--wf-ease);
+  transition: height var(--leo-dur-4) var(--leo-ease-settle);
 }
 /* 边檐（docs/dynamic-workflow/presentation.md「Overflow: the ledge」）：时间线自由滚动，原生滚动条隐藏；
  * 折到檐上的站在内容里淡出（160 ms 后 visibility 才切，淡出期间不可点也不可聚焦）；檐上的灯悬停
@@ -1760,18 +1756,18 @@ html[data-document-hidden] *::after {
 }
 .wf-foldable {
   transition:
-    opacity var(--wf-t-base) var(--wf-ease),
+    opacity var(--leo-dur-1) var(--leo-ease-settle),
     visibility 0s linear 0s;
 }
 .wf-folded {
   opacity: 0;
   visibility: hidden;
   transition:
-    opacity var(--wf-t-base) var(--wf-ease),
-    visibility 0s linear var(--wf-t-base);
+    opacity var(--leo-dur-1) var(--leo-ease-settle),
+    visibility 0s linear var(--leo-dur-1);
 }
 .wf-ledge-lamp {
-  transition: transform var(--wf-t-base) var(--wf-ease);
+  transition: transform var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-ledge-lamp:hover,
 .wf-ledge-lamp:focus-visible {
@@ -1780,8 +1776,8 @@ html[data-document-hidden] *::after {
 .wf-sb {
   opacity: 0;
   transition:
-    opacity var(--wf-t-base) var(--wf-ease),
-    height var(--wf-t-fast) var(--wf-ease);
+    opacity var(--leo-dur-1) var(--leo-ease-settle),
+    height var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-timeline:hover .wf-sb,
 .wf-sb[data-scrolling="true"],
@@ -1794,7 +1790,7 @@ html[data-document-hidden] *::after {
 }
 @media (prefers-reduced-motion: no-preference) {
   .wf-lamp-running {
-    animation: wf-beat var(--wf-beat, 1.6s) var(--wf-ease, ease-in-out) infinite;
+    animation: wf-beat var(--leo-beat) var(--leo-ease-settle) infinite;
   }
 }
 /* 工作区 transcript（docs/dynamic-workflow/presentation.md「The pill」视觉修订）：
@@ -1803,14 +1799,14 @@ html[data-document-hidden] *::after {
  * 运行中的动词扫光；状态词换值时旧词退场新词进场（wf-swap）。全部只动 opacity / transform /
  * background-color；reduced-motion 下到场、落点与扫光都归零。 */
 .wf-ws-entry {
-  transition: background-color var(--wf-t-base) var(--wf-ease);
+  transition: background-color var(--leo-dur-1) var(--leo-ease-settle);
 }
 .wf-ws-landed {
-  animation: wf-ws-land 1.4s var(--wf-ease) 1;
+  animation: wf-ws-land 1.4s var(--leo-ease-settle) 1;
 }
 /* 详情页的落点（追记「五枚药丸与一扇门」）：节头到位后底色持 400 ms 再用 800 ms 退回，一次。 */
 .wf-landed {
-  animation: wf-land 1.2s var(--wf-ease) 1;
+  animation: wf-land 1.2s var(--leo-ease-settle) 1;
 }
 @keyframes wf-land {
   0%,
@@ -1827,10 +1823,10 @@ html[data-document-hidden] *::after {
   }
 }
 .wf-ws-body {
-  animation: wf-unfold var(--wf-t-enter) var(--wf-ease);
+  animation: wf-unfold var(--leo-dur-2) var(--leo-ease-settle);
 }
 .wf-ws-peek {
-  animation: wf-unfold var(--wf-t-enter) var(--wf-ease);
+  animation: wf-unfold var(--leo-dur-2) var(--leo-ease-settle);
   -webkit-mask-image:
     linear-gradient(180deg, rgba(0, 0, 0, 0.35), #000 40%),
     linear-gradient(90deg, #000 82%, transparent);
@@ -1842,7 +1838,7 @@ html[data-document-hidden] *::after {
 }
 .wf-ws-rule {
   transform-origin: left center;
-  animation: wf-rail-grow var(--wf-t-ink) var(--wf-ease);
+  animation: wf-rail-grow var(--leo-dur-4) var(--leo-ease-settle);
 }
 .wf-ws-shine {
   color: transparent;

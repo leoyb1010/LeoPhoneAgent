@@ -12,36 +12,27 @@
    1.9.0 起圆角回到内核默认(之前整体放大一档,28px 按钮接近胶囊,整体显得"大"和"软")。 */
 html[data-leo-skin] {
   /* 所有 transition 默认用同一条收尾曲线:起步干脆、落地轻(与 iOS LeoMotion 同一组档位) */
-  --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --leo-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --leo-dur-1: 120ms;
-  --leo-dur-2: 200ms;
-  --leo-dur-3: 280ms;
-  --leo-dur-4: 350ms;
+  /* 时长、曲线等节奏 token 来自 leo-tokens.css（design/tokens.json 生成），这里只把内核的默认曲线指过去。 */
+  --default-transition-timing-function: var(--leo-ease);
+  --ease-out: var(--leo-ease);
 }
 
 /* ── 深色:中性石墨 + 青绿(与 iOS 同一个 #2E9C9C) ─────────────
    1.9.0:去掉暖色调。之前灰阶和边框都带奶油色 rgba(255,244,228),主按钮是米白,
    和上游没覆盖到的冷灰变量混在一起显得发黄发脏;现在灰阶全中性,青绿是唯一强调色。 */
 html[data-leo-skin].theme-zai-dark {
-  --leo-brand: #2e9c9c;
-  --leo-brand-soft: rgba(46, 156, 156, 0.14);
-  --leo-attention: #f0b86e;
+  /* 强调色、提醒色、四级背景与阴影来自 leo-tokens.css（与 iOS 同一份 design/tokens.json）。 */
   --leo-mark-from: #e4e4e7;
   --leo-mark-to: #2e9c9c;
-  --leo-shadow-composer:
-    inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 32px -16px rgba(0, 0, 0, 0.7);
-  --leo-shadow-card: 0 18px 48px -20px rgba(0, 0, 0, 0.75);
 
   --color-brand: var(--leo-brand);
-  --color-background: #131315;
+  --color-background: var(--leo-bg);
   --color-background-win-alt: #232326;
   --color-background-alt: color-mix(in oklab, #232326 60%, transparent);
   --color-header: #18181b;
-  --color-panel: #18181b;
-  --color-sidebar: #111113;
-  --color-card: #1f1f22;
+  --color-panel: var(--leo-panel);
+  --color-sidebar: var(--leo-sidebar);
+  --color-card: var(--leo-card);
   --color-card-border: var(--color-border);
   --color-popover: #1f1f22;
   --color-popover-header: #18181b;
@@ -81,22 +72,18 @@ html[data-leo-skin].theme-zai-dark {
    1.9.0:去掉米黄。之前背景 #f7f6f3、侧栏 #f0eeea、分割线棕色 rgba(40,32,20),
    再叠上窗口毛玻璃的 70% 暖白,整个界面发黄;现在全部换成中性灰阶。 */
 html[data-leo-skin].theme-zai-light {
-  --leo-brand: #2a8282;
-  --leo-brand-soft: rgba(42, 130, 130, 0.1);
-  --leo-attention: #b86e12;
+  /* 强调色、提醒色、四级背景与阴影来自 leo-tokens.css（与 iOS 同一份 design/tokens.json）。 */
   --leo-mark-from: #2a8282;
   --leo-mark-to: #1d5f5f;
-  --leo-shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px -16px rgba(0, 0, 0, 0.18);
-  --leo-shadow-card: 0 18px 44px -22px rgba(0, 0, 0, 0.24);
 
   --color-brand: var(--leo-brand);
-  --color-background: #fafafa;
+  --color-background: var(--leo-bg);
   --color-background-win-alt: #ececee;
   --color-background-alt: color-mix(in oklab, #fafafa 72%, transparent);
   --color-header: #ffffff;
-  --color-panel: #ffffff;
-  --color-sidebar: #f4f4f5;
-  --color-card: #ffffff;
+  --color-panel: var(--leo-panel);
+  --color-sidebar: var(--leo-sidebar);
+  --color-card: var(--leo-card);
   --color-popover: #ffffff;
   --color-popover-header: #fafafa;
   --color-input: #ffffff;
