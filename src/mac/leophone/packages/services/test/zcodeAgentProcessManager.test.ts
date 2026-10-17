@@ -41,6 +41,9 @@ const FAKE_ACP_ENTRY = "/fake/claude-agent-acp/dist/index.js";
 vi.mock("../src/acp-agent/acpRegistry.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/acp-agent/acpRegistry.js")>()),
   hostClaudeAgentAcpEntry: () => FAKE_ACP_ENTRY,
+  // [fix-remote] codex-acp 同样由宿主注入；这里不注入，断言保持只看 claude 入口。
+  hostCodexAcpEntry: () => undefined,
+  resolveStagedCodexAcpEntry: () => undefined,
 }));
 
 function createDeferred<T>() {

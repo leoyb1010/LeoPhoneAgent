@@ -1,5 +1,6 @@
 // [leo][WP-21] ACP 外部 agent 的启动命令。检测逻辑与 UI 共用（@zcode/shared/acp-detect）。
-import { delimiter } from "node:path";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
 import type { AcpAgentId } from "@zcode/shared/acp";
 import { systemProxyEnabled, withSystemProxy } from "@zcode/shared/system-proxy";
 import {
@@ -13,6 +14,7 @@ import {
   geminiEnvFromDotEnv,
   readClaudeOAuthToken,
   resolveClaudeAgentAcpEntry,
+  resolveCodexAcpEntry,
   type AcpEnvironment,
   type AcpLaunchSpec,
 } from "@zcode/shared/acp-detect";
@@ -68,17 +70,22 @@ export function resolveAcpLaunch(
       };
     }
     case "codex": {
-      const adapter = findExecutable("codex-acp", env);
-      if (adapter) {
-        return { command: adapter, args: [], env: { ...base, ...(status.cliPath ? { CODEX_PATH: status.cliPath } : {}) } };
+      const codexPath: Record<string, string> = status.cliPath ? { CODEX_PATH: status.cliPath } : {};
+      // [fix-remote] 优先用随包的 codex-acp（钉版本、随包 Node 跑），不再依赖运行时 npx 安装：
+      // 有的 Mac 的 npm 缓存目录不可写（外接盘），npx 一拉就失败。CODEX_PATH 指本机 codex（登录态是用户自己的）。
+      const bundled = status.cliPath ? (environment.resolveCodexAcpEntry ?? resolveCodexAcpEntry)() : undefined;
+      if (bundled) {
+        return { command: nodePath, args: [bundled], env: { ...base, ...codexPath, ELECTRON_RUN_AS_NODE: "1" } };
       }
-      // codex-acp 不随包（体积大）：首次用 npx 拉取钉死版本，CODEX_PATH 指向本机 codex。
+      const adapter = findExecutable("codex-acp", env);
+      if (adapter) return { command: adapter, args: [], env: { ...base, ...codexPath } };
+      // 最后兜底：npx 拉钉死版本，npm 缓存放到临时目录（用户的缓存目录可能不可写）。
       const npx = findExecutable("npx", env);
       if (!npx) return undefined;
       return {
         command: npx,
         args: ["-y", `${CODEX_ACP_PACKAGE}@${CODEX_ACP_VERSION}`],
-        env: { ...base, ...(status.cliPath ? { CODEX_PATH: status.cliPath } : {}) },
+        env: { ...base, ...codexPath, npm_config_cache: join(tmpdir(), "leobot-npm-cache") },
       };
     }
     case "gemini": {

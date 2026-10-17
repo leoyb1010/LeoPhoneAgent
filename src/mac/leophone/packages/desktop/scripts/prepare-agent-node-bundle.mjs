@@ -424,6 +424,32 @@ stageBundledSkillPack();
 stageKoffiForCuaPlugin();
 stageSharpForNodeReplPlugin();
 stageClaudeAgentAcp();
+stageCodexAcp();
+
+// [fix-remote] Codex 的 ACP 适配器（@agentclientprotocol/codex-acp，Apache-2.0，版本在 packages/desktop/package.json
+// 钉死）同样随包到 glm/acp/node_modules，用随包 Node 运行；以前靠 npx 运行时安装，npm 缓存目录不可写的 Mac 上起不来。
+// Codex 本体用本机的 codex（CODEX_PATH），所以 @openai/codex 及其各平台原生包（每个 300MB+）一律不带。
+function stageCodexAcp() {
+  const packageName = "@agentclientprotocol/codex-acp";
+  const lookupRoots = [desktopRoot, repoRoot];
+  const entries = collectRuntimeModuleClosureEntries([packageName], lookupRoots).filter(
+    (entry) => !/^@openai\/codex(-|$)/.test(entry.moduleName),
+  );
+  const root = entries.find((entry) => entry.moduleName === packageName);
+  if (!root?.sourceModulePath) {
+    throw new Error(`[prepare:agent-bundle] ${packageName} 未安装（pnpm install）`);
+  }
+  const targetRoot = resolve(glmDir, "acp", "node_modules");
+  for (const entry of entries) {
+    if (!entry.sourceModulePath) continue;
+    cpSync(entry.sourceModulePath, resolve(targetRoot, entry.moduleName), {
+      recursive: true,
+      dereference: true,
+      filter: (source) => !/[\\/]node_modules[\\/]\.bin([\\/]|$)/.test(source),
+    });
+  }
+  console.log(`[prepare:agent-bundle] staged ${packageName} (${entries.length} packages) into ${targetRoot}`);
+}
 
 // [leo][WP-21] Claude Code 的 ACP 适配器（@agentclientprotocol/claude-agent-acp，Apache-2.0，版本在
 // packages/desktop/package.json 钉死）随包到 glm/acp/node_modules。Claude Code 本体用用户本机安装的

@@ -1,7 +1,7 @@
 // [leo][WP-21] ACP 外部 agent 的本机检测（node-only：读 PATH 与文件系统）。
 // UI 状态（services）、Leo Link capabilities 与 CLI 启动（adapters/acp）共用同一份判断。
 import { execFile, spawnSync } from "node:child_process";
-import { accessSync, constants, readdirSync, readFileSync } from "node:fs";
+import { accessSync, constants, readdirSync, readFileSync, statSync } from "node:fs";
 import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
@@ -41,6 +41,8 @@ export interface AcpEnvironment {
   nodePath?: string;
   /** 测试注入：解析随包 claude-agent-acp 的入口。 */
   resolveClaudeAgentAcpEntry?: () => string | undefined;
+  /** 测试注入：解析随包 codex-acp 的入口。 */
+  resolveCodexAcpEntry?: () => string | undefined;
 }
 
 let loginShellPathCache: string[] | undefined;
@@ -133,13 +135,41 @@ export function findExecutable(name: string, env: NodeJS.ProcessEnv = process.en
   return undefined;
 }
 
+/**
+ * [fix-remote] 同名 CLI 装了好几份时（nvm 里的旧 npm 版 + 官方安装器的新版）取最新装的那份（按真实文件修改时间）：
+ * 旧版 codex 读不了新版写的 config.toml，按 PATH 顺序会先撞上 nvm 里的旧版。
+ */
+export function findNewestExecutable(name: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  let best: { path: string; mtime: number } | undefined;
+  for (const dir of acpSearchPath(env)) {
+    const candidate = join(dir, name);
+    try {
+      accessSync(candidate, constants.X_OK);
+      const mtime = statSync(candidate).mtimeMs;
+      if (!best || mtime > best.mtime) best = { path: candidate, mtime };
+    } catch {
+      // keep looking
+    }
+  }
+  return best?.path;
+}
+
 /** 随包 claude-agent-acp 的入口：桌面端经 LEO_CLAUDE_AGENT_ACP_ENTRY 传入，开发态从 node_modules 解析。 */
 export function resolveClaudeAgentAcpEntry(): string | undefined {
-  const override = process.env.LEO_CLAUDE_AGENT_ACP_ENTRY?.trim();
+  return resolveAdapterEntry(CLAUDE_AGENT_ACP_PACKAGE, process.env.LEO_CLAUDE_AGENT_ACP_ENTRY);
+}
+
+/** [fix-remote] 随包 codex-acp 的入口：桌面端经 LEO_CODEX_ACP_ENTRY 传入，开发态从 node_modules 解析。 */
+export function resolveCodexAcpEntry(): string | undefined {
+  return resolveAdapterEntry(CODEX_ACP_PACKAGE, process.env.LEO_CODEX_ACP_ENTRY);
+}
+
+function resolveAdapterEntry(packageName: string, overrideValue: string | undefined): string | undefined {
+  const override = overrideValue?.trim();
   if (override) return override;
   try {
     const require = createRequire(import.meta.url);
-    const manifestPath = require.resolve(`${CLAUDE_AGENT_ACP_PACKAGE}/package.json`);
+    const manifestPath = require.resolve(`${packageName}/package.json`);
     const manifest = require(manifestPath) as { bin?: string | Record<string, string> };
     const bin =
       typeof manifest.bin === "string" ? manifest.bin : Object.values(manifest.bin ?? {})[0];
@@ -284,7 +314,7 @@ export function detectAcpAgent(id: AcpAgentId, environment: AcpEnvironment = {})
         : { id, available: false, unavailableReason: notInstalled("claude") };
     }
     case "codex": {
-      const cliPath = findExecutable("codex", env);
+      const cliPath = findNewestExecutable("codex", env);
       const adapter = findExecutable("codex-acp", env);
       if (!cliPath && !adapter) return { id, available: false, unavailableReason: notInstalled("codex") };
       return { id, available: true, ...(cliPath ? { cliPath } : {}), loginCommand: "codex login" };

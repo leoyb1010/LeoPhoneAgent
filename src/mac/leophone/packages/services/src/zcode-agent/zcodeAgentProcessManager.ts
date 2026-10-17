@@ -1,7 +1,9 @@
 import { localRuntimeNetworkCapture } from "#src/zcode-agent/localRuntimeNetworkCapture.js";
 import {
   hostClaudeAgentAcpEntry,
+  hostCodexAcpEntry,
   resolveStagedClaudeAgentAcpEntry,
+  resolveStagedCodexAcpEntry,
 } from "#src/acp-agent/acpRegistry.js";
 import { systemProxyAdditions } from "@zcode/shared/system-proxy";
 import { resolveZCodeAgentSpawnCwd } from "#src/zcode-agent/zcodeAgentSpawnCwd.js";
@@ -450,7 +452,9 @@ function resolveElectronRuntimeZCodeAgentCommand(
 
 function withClaudeAgentAcpEntry(bundlePath: string): Record<string, string> {
   const entry = resolveStagedClaudeAgentAcpEntry(bundlePath);
-  return entry ? { LEO_CLAUDE_AGENT_ACP_ENTRY: entry } : {};
+  // [fix-remote] 随包的 codex-acp 也由宿主告诉 CLI（不再 npx 运行时安装）。
+  const codex = resolveStagedCodexAcpEntry(bundlePath);
+  return { ...(entry ? { LEO_CLAUDE_AGENT_ACP_ENTRY: entry } : {}), ...(codex ? { LEO_CODEX_ACP_ENTRY: codex } : {}) };
 }
 
 /** [leo][WP-21] 开发态 CLI 跑的是 CJS 包，自己解析不到 node_modules 里的适配器：统一由宿主告诉它。 */
@@ -460,9 +464,17 @@ function withAcpAdapterEnv(command: ZCodeAgentCommand | null): ZCodeAgentCommand
   // 用户 env 已有代理时不动；设置页可关（见 @zcode/shared/system-proxy）。
   const proxy = systemProxyAdditions({ ...process.env, ...command.env });
   const withProxy = Object.keys(proxy).length > 0 ? { ...command, env: { ...command.env, ...proxy } } : command;
-  if (withProxy.env?.LEO_CLAUDE_AGENT_ACP_ENTRY) return withProxy;
-  const entry = hostClaudeAgentAcpEntry();
-  return entry ? { ...withProxy, env: { ...withProxy.env, LEO_CLAUDE_AGENT_ACP_ENTRY: entry } } : withProxy;
+  const claude = withProxy.env?.LEO_CLAUDE_AGENT_ACP_ENTRY ? undefined : hostClaudeAgentAcpEntry();
+  const codex = withProxy.env?.LEO_CODEX_ACP_ENTRY ? undefined : hostCodexAcpEntry();
+  if (!claude && !codex) return withProxy;
+  return {
+    ...withProxy,
+    env: {
+      ...withProxy.env,
+      ...(claude ? { LEO_CLAUDE_AGENT_ACP_ENTRY: claude } : {}),
+      ...(codex ? { LEO_CODEX_ACP_ENTRY: codex } : {}),
+    },
+  };
 }
 
 export function resolveDefaultZCodeAgentCommand(

@@ -442,3 +442,33 @@ test("K: auth method choice follows local login state", () => {
   writeFileSync(join(home, ".gemini", "settings.json"), JSON.stringify({ security: { auth: { selectedType: "vertex-ai" } } }));
   assert.deepEqual(geminiAuthPreference({ HOME: home }), ["vertex-ai"]);
 });
+
+test("[fix-remote] L: codex runs the bundled codex-acp with the bundled Node and the newest local codex", async () => {
+  const { utimesSync } = await import("node:fs");
+  const home = mkdtempSync(join(tmpdir(), "leo-acp-codex-"));
+  const old = makeExecutable(join(home, ".nvm", "versions", "node", "v20.0.0", "bin"), "codex");
+  const fresh = makeExecutable(join(home, ".local", "bin"), "codex");
+  utimesSync(old, new Date(), new Date(Date.now() + 60_000));
+  utimesSync(fresh, new Date(), new Date(Date.now() + 120_000));
+  const launch = resolveAcpLaunch("codex", {
+    env: { PATH: join(home, ".nvm", "versions", "node", "v20.0.0", "bin"), HOME: home },
+    nodePath: "/fake/node",
+    resolveCodexAcpEntry: () => "/fake/codex-acp/dist/index.js",
+  });
+  assert.equal(launch?.command, "/fake/node");
+  assert.deepEqual(launch?.args, ["/fake/codex-acp/dist/index.js"]);
+  assert.equal(launch?.env.CODEX_PATH, fresh, "PATH 里先排到的旧版 codex 读不了新版 config.toml");
+  assert.equal(launch?.env.ELECTRON_RUN_AS_NODE, "1");
+});
+
+test("[fix-remote] L: without the bundled adapter, npx is the last resort with a writable temp npm cache", () => {
+  const home = mkdtempSync(join(tmpdir(), "leo-acp-npx-"));
+  makeExecutable(join(home, "bin"), "codex");
+  makeExecutable(join(home, "bin"), "npx");
+  const launch = resolveAcpLaunch("codex", {
+    env: { PATH: join(home, "bin"), HOME: home },
+    resolveCodexAcpEntry: () => undefined,
+  });
+  assert.match(launch?.command ?? "", /npx$/);
+  assert.match(launch?.env.npm_config_cache ?? "", /leobot-npm-cache$/);
+});

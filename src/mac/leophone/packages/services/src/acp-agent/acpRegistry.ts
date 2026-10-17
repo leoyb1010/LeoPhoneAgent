@@ -8,8 +8,10 @@ import { dirname, join } from "node:path";
 import { ACP_AGENTS, type AcpAgentId } from "@zcode/shared/acp";
 import {
   CLAUDE_AGENT_ACP_PACKAGE,
+  CODEX_ACP_PACKAGE,
   detectAcpAgents,
   resolveClaudeAgentAcpEntry,
+  resolveCodexAcpEntry,
   type AcpAgentStatus,
 } from "@zcode/shared/acp-detect";
 
@@ -26,10 +28,21 @@ export function resolveStagedClaudeAgentAcpEntry(agentBundlePath: string): strin
   return existsSync(entry) ? entry : undefined;
 }
 
+/** [fix-remote] 打包态：codex-acp 同样 stage 在 glm/acp/node_modules 下（dist/index.js）。 */
+export function resolveStagedCodexAcpEntry(agentBundlePath: string): string | undefined {
+  const entry = join(dirname(agentBundlePath), "acp", "node_modules", ...CODEX_ACP_PACKAGE.split("/"), "dist", "index.js");
+  return existsSync(entry) ? entry : undefined;
+}
+
 /** 宿主进程里能找到的适配器入口：打包态在 CLI bundle 旁边，开发态从 node_modules 解析。 */
 export function hostClaudeAgentAcpEntry(): string | undefined {
   const bundle = findZCodeAgentRuntimeNodeBundle();
   return (bundle ? resolveStagedClaudeAgentAcpEntry(bundle) : undefined) ?? resolveClaudeAgentAcpEntry();
+}
+
+export function hostCodexAcpEntry(): string | undefined {
+  const bundle = findZCodeAgentRuntimeNodeBundle();
+  return (bundle ? resolveStagedCodexAcpEntry(bundle) : undefined) ?? resolveCodexAcpEntry();
 }
 
 export interface AcpAgentListing extends AcpAgentStatus {

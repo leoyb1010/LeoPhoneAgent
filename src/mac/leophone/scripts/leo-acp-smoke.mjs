@@ -7,8 +7,8 @@
 // 探测路径与 LeoBot 一致（packages/shared/src/acp-detect.ts）：进程 PATH + 登录 shell 的 PATH + 常见用户级安装目录。
 // 退出码：0 = agent 回了话且正常结束；1 = 启动/握手/回合失败；2 = 用法错误或本机没装。
 import { spawn, spawnSync } from "node:child_process";
-import { accessSync, constants, existsSync, readdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { createInterface } from "node:readline";
 
@@ -118,6 +118,33 @@ function systemProxyEnv(env) {
   };
 }
 
+/** 与 LeoBot 一致：codex 装了好几份时取最新装的（旧版读不了新版的 config.toml）。 */
+function newest(name) {
+  let best;
+  for (const dir of searchPath) {
+    const candidate = join(dir, name);
+    try {
+      accessSync(candidate, constants.X_OK);
+      const mtime = statSync(candidate).mtimeMs;
+      if (!best || mtime > best.mtime) best = { path: candidate, mtime };
+    } catch {
+      // keep looking
+    }
+  }
+  return best?.path;
+}
+
+function codexAdapterEntry() {
+  const suffix = "@agentclientprotocol/codex-acp/dist/index.js";
+  const candidates = [
+    process.env.LEO_CODEX_ACP_ENTRY,
+    `/Applications/LeoBot.app/Contents/Resources/glm/acp/node_modules/${suffix}`,
+    join(home, `Applications/LeoBot.app/Contents/Resources/glm/acp/node_modules/${suffix}`),
+    new URL(`../node_modules/${suffix}`, import.meta.url).pathname,
+  ].filter(Boolean);
+  return candidates.find((candidate) => existsSync(candidate));
+}
+
 function resolveLaunch(id) {
   const env = { ...process.env, PATH: searchPath.join(delimiter) };
   Object.assign(env, systemProxyEnv(env));
@@ -142,13 +169,21 @@ function resolveLaunch(id) {
       };
     }
     case "codex": {
-      const cli = which("codex");
-      const adapter = which("codex-acp");
-      if (adapter) return { cli, command: adapter, args: [], env: { ...env, ...(cli ? { CODEX_PATH: cli } : {}) } };
-      const npx = which("npx");
+      const cli = newest("codex");
       if (!cli) return { error: "没有找到 codex 命令" };
-      if (!npx) return { error: "没有 codex-acp，也没有 npx 可以拉取它" };
-      return { cli, command: npx, args: ["-y", "@agentclientprotocol/codex-acp@2.2.2"], env: { ...env, CODEX_PATH: cli } };
+      // 与 LeoBot 一致：优先随包的 codex-acp（随包 Node 跑），其次 PATH 上的 codex-acp，最后 npx（npm 缓存放临时目录）。
+      const bundled = codexAdapterEntry();
+      if (bundled) return { cli, command: process.execPath, args: [bundled], env: { ...env, CODEX_PATH: cli } };
+      const adapter = which("codex-acp");
+      if (adapter) return { cli, command: adapter, args: [], env: { ...env, CODEX_PATH: cli } };
+      const npx = which("npx");
+      if (!npx) return { error: "没有随包的 codex-acp，也没有 npx 可以拉取它" };
+      return {
+        cli,
+        command: npx,
+        args: ["-y", "@agentclientprotocol/codex-acp@2.2.2"],
+        env: { ...env, CODEX_PATH: cli, npm_config_cache: join(tmpdir(), "leobot-npm-cache") },
+      };
     }
     case "gemini": {
       const cli = which("gemini");
