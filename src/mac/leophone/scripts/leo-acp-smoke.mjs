@@ -7,7 +7,7 @@
 // 探测路径与 LeoBot 一致（packages/shared/src/acp-detect.ts）：进程 PATH + 登录 shell 的 PATH + 常见用户级安装目录。
 // 退出码：0 = agent 回了话且正常结束；1 = 启动/握手/回合失败；2 = 用法错误或本机没装。
 import { spawn, spawnSync } from "node:child_process";
-import { accessSync, constants, existsSync, readdirSync } from "node:fs";
+import { accessSync, constants, existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
 import { createInterface } from "node:readline";
@@ -86,8 +86,23 @@ function claudeAdapterEntry() {
   return candidates.find((candidate) => existsSync(candidate));
 }
 
+function claudeToken() {
+  // 与 LeoBot 一致：<ZCODE_HOME 或 ~/.leophoneagent>/acp/claude-oauth-token（claude setup-token 的长期令牌）。
+  const root = process.env.ZCODE_HOME?.trim() || join(home, ".leophoneagent");
+  try {
+    const token = readFileSync(join(root, "acp", "claude-oauth-token"), "utf8").trim();
+    return token && !/\s/.test(token) ? token : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function resolveLaunch(id) {
   const env = { ...process.env, PATH: searchPath.join(delimiter) };
+  // 宿主自己是 Claude Code 会话时的变量会让子进程 claude 走错鉴权路径。
+  for (const key of ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_SSE_PORT", "CLAUDE_AGENT_SDK_VERSION"]) {
+    delete env[key];
+  }
   switch (id) {
     case "claude":
     case "claude-code": {
@@ -95,7 +110,14 @@ function resolveLaunch(id) {
       const entry = claudeAdapterEntry();
       if (!cli) return { error: "没有找到 claude 命令" };
       if (!entry) return { error: "没有找到 claude-agent-acp 适配器（装了 LeoBot.app 吗？或设置 LEO_CLAUDE_AGENT_ACP_ENTRY）" };
-      return { cli, command: process.execPath, args: [entry], env: { ...env, CLAUDE_CODE_EXECUTABLE: cli } };
+      const token = claudeToken();
+      if (token) console.log("· 令牌     使用数据根里的 Claude Code 长期令牌");
+      return {
+        cli,
+        command: process.execPath,
+        args: [entry],
+        env: { ...env, CLAUDE_CODE_EXECUTABLE: cli, ...(token ? { CLAUDE_CODE_OAUTH_TOKEN: token } : {}) },
+      };
     }
     case "codex": {
       const cli = which("codex");
