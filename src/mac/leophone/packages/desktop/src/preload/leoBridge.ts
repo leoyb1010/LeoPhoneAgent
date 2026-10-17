@@ -15,6 +15,9 @@ contextBridge.exposeInMainWorld("leoLink", {
   /** [WP-50]「允许手机查看屏幕」开关与屏幕录制权限状态。 */
   screenStatus: () => ipcRenderer.invoke("leo:screen:status"),
   setScreenEnabled: (enabled: boolean) => ipcRenderer.invoke("leo:screen:set", enabled),
+  /** [WP-51/52] 改「只走 Tailscale」/「允许手机操控」。 */
+  setScreenOptions: (patch: { enabled?: boolean; tailnet_only?: boolean; control?: boolean }) =>
+    ipcRenderer.invoke("leo:screen:set", patch),
   openScreenSettings: () => ipcRenderer.invoke("leo:screen:open-settings"),
 });
 
