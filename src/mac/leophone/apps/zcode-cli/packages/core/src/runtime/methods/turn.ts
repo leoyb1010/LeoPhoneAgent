@@ -65,7 +65,7 @@ import {
   disposeProjectMemoryRecallPrefetch,
   startProjectMemoryRecallPrefetch,
 } from "../helpers/project-memory-recall.js";
-import { ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH } from "../../memory/project-memory-retrieval-branch.js";
+import { getProjectMemoryRetrievalBranch } from "../../memory/project-memory-retrieval-branch.js";
 import { scheduleProjectMemoryExtraction } from "../helpers/project-memory-extraction.js";
 import { appendBrowserTurnScreenshot } from "./browser-turn-screenshot.js";
 import { clearBrowserTurnState } from "../../repl/browser-turn-state.js";
@@ -600,7 +600,7 @@ export async function executeTurnCommand(
             traceContext: turnTraceContext,
             turnAbortSignal,
           },
-          ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH,
+          getProjectMemoryRetrievalBranch(this),
         );
         loopState = {
           activeTurn,

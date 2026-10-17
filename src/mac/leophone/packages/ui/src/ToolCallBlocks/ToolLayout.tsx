@@ -1,5 +1,6 @@
 import { memo, type ReactNode, useEffect, useRef, useState } from "react";
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible.js";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { Collapsible } from "@/components/ui/collapsible.js";
 import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
 import { CheckIcon, CopyIcon } from "lucide-react";
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/tooltip.js";
 import { ToolSummaryRow, type ToolSummaryAction } from "@/ToolCallBlocks/ToolSummaryRow.js";
 import { uiMemoryDiagnosticsRegistry } from "@/lib/memoryDiagnostics.js";
+import { LEO_DURATION, LEO_EASE_OUT, LEO_SPRING } from "@/leo/skin/leoTokens.generated.js";
 
 const toolLayoutOpenState = new Map<string, boolean>();
 // 内存诊断计数器：该表按 toolId 只增不减，先落日志。
@@ -104,6 +106,7 @@ function ToolLayoutComponent({
   summaryAction,
 }: ToolLayoutProps) {
   const { intl } = useZCodeIntl();
+  const reducedMotion = useReducedMotion();
   const resolvedPersistOpenKey = persistOpenKey ?? toolId;
   const [isOpen, setIsOpen] = useState(
     () => toolLayoutOpenState.get(resolvedPersistOpenKey) ?? false,
@@ -344,12 +347,33 @@ function ToolLayoutComponent({
         toolId={toolId}
       />
       {!hasSummaryAction && canToggle ? (
-        <CollapsibleContent className={TOOL_CONTENT_SHELL_CLASSNAME}>
-          {/* padding 直接挂在高度动画节点上时，主体归零后仍会停在 8px，
-              直到延迟卸载切换 display:none 才瞬间消失。放入内部后会被外层 overflow
-              随动画高度连续裁切到 0，保留原间距且不改变 300ms 的测量保护。 */}
-          <div className={TOOL_CONTENT_SPACING_CLASSNAME}>{resolvedContent}</div>
-        </CollapsibleContent>
+        // [leo][wp-31] 展开/收起改由 motion 驱动:高度走 LEO_SPRING,透明度 dur.2;
+        // 减弱动态下只做 ≤dur.1 的淡入淡出,不动高度。AnimatePresence 在退出动画期间保留
+        // 最后一次渲染的内容,不会出现 Radix 那种「先卸载子内容、高度变量继承外层」的空白块。
+        <AnimatePresence initial={false}>
+          {isExpanded ? (
+            <motion.div
+              key="tool-layout-content"
+              data-slot="collapsible-content"
+              data-state="open"
+              className={cn(TOOL_CONTENT_SHELL_CLASSNAME, "overflow-hidden")}
+              initial={reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+              animate={reducedMotion ? { opacity: 1 } : { height: "auto", opacity: 1 }}
+              exit={reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+              transition={
+                reducedMotion
+                  ? { duration: LEO_DURATION.d1 }
+                  : {
+                      height: LEO_SPRING,
+                      opacity: { duration: LEO_DURATION.d2, ease: LEO_EASE_OUT },
+                    }
+              }
+            >
+              {/* padding 放在内层:外层高度归零时内容随 overflow 一起被连续裁切。 */}
+              <div className={TOOL_CONTENT_SPACING_CLASSNAME}>{resolvedContent}</div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       ) : !hasSummaryAction && forceOpen ? (
         <div className={cn(TOOL_CONTENT_SHELL_CLASSNAME, TOOL_CONTENT_SPACING_CLASSNAME)}>
           {resolvedContent}

@@ -351,6 +351,10 @@ export interface AppSettings {
   nativeSearchEnhancementsEnabled?: boolean;
   /** 新建或冷恢复 Session 是否启用 Memory；默认关闭。 */
   memoryEnabled?: boolean;
+  /** [leo][wp-61] 记忆召回：项目记忆语义召回；默认开。 */
+  memorySemanticRecallEnabled?: boolean;
+  /** [leo][wp-61] 记忆召回：每回合从藏宝阁召回；默认开。 */
+  memoryTreasuryRecallEnabled?: boolean;
   onboardingOccupation?:
     | "office"
     | "developer"

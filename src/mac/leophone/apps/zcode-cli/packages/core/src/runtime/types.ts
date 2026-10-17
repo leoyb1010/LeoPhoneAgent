@@ -317,7 +317,11 @@ export interface MemoryRuntimeConfig {
   enabled?: boolean;
   /** 是否调度成功 Main turn 后的自动 Extraction；缺省按 true 处理。 */
   extractionEnabled?: boolean;
+  /** [leo][wp-61] 项目记忆语义召回；仅显式 true 时开启（模型须支持 JSON Schema 输出）。 */
+  semanticRecall?: boolean;
   storageRoot?: string;
+  /** [leo][wp-61] 每回合从藏宝阁召回相关条目；缺省 true（需要 leo-treasury MCP 在线）。 */
+  treasuryRecall?: boolean;
   use?: boolean;
   workspaceIdentity?: string;
 }

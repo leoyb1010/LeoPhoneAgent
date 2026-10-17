@@ -20,6 +20,11 @@ import {
 } from "@/ToolCallBlocks/shared.js";
 import type { MessageFileLinkTarget } from "@/components/ai-elements/message.js";
 import type { ConversationCuaGroupEvent } from "@/v4/conversationCuaGroups.js";
+import {
+  hasLeoToolElapsed,
+  LeoToolElapsed,
+  resolveLeoToolChromeState,
+} from "@/leo/leoToolChrome.js";
 
 const NESTED_TOOLCALL_CONTAINER_CLASS =
   "ml-2 space-y-2 border-border border-l pl-3.5 border-border";
@@ -369,9 +374,13 @@ function ToolCallBlockComponent({
   if (!showTodoToolCalls && identity.family === "todo") {
     return null;
   }
+  // [leo][wp-31] 统一卡片骨架:左侧状态条(皮肤层画)+ 标题行右侧耗时。
+  const showElapsed = hasLeoToolElapsed(toolCall.startedAt, toolCall.endedAt, isRunning);
   return (
     <div
       className="w-full"
+      data-leo-tool-state={resolveLeoToolChromeState(toolCall.status, isRunning)}
+      data-leo-tool-has-elapsed={showElapsed ? "true" : undefined}
       data-testid={testId(TID_CHAT_TOOL_CALL_BLOCK, toolCall.toolId)}
       data-tool-call-id={toolCall.toolId}
       data-tool-name={toolCall.toolName ?? toolCall.kind ?? ""}
@@ -388,6 +397,13 @@ function ToolCallBlockComponent({
       ) : (
         <ToolCallRenderer {...renderContext} />
       )}
+      {showElapsed ? (
+        <LeoToolElapsed
+          startedAt={toolCall.startedAt}
+          endedAt={toolCall.endedAt}
+          running={isRunning}
+        />
+      ) : null}
     </div>
   );
 }

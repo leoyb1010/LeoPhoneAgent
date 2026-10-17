@@ -1,4 +1,5 @@
 /* oxlint-disable eslint(max-lines) */
+import { LeoMemoryRecallSources } from "@/leo/LeoMemoryRecallSources.js";
 import { ArrowLeft, type LucideIcon } from "lucide-react";
 import {
   useCallback,
@@ -1711,6 +1712,18 @@ export function SettingsPage({
                               onMemoryEnabledChange={handleMemoryEnabledChange}
                               projectMemoryViewerAvailable={Boolean(isDesktop)}
                               workspaceDisplayNames={memoryWorkspaceDisplayNames}
+                              recallSources={
+                                <LeoMemoryRecallSources
+                                  memoryEnabled={memoryEnabled}
+                                  semanticRecallEnabled={
+                                    sharedSettings?.memorySemanticRecallEnabled !== false
+                                  }
+                                  treasuryRecallEnabled={
+                                    sharedSettings?.memoryTreasuryRecallEnabled !== false
+                                  }
+                                  onChange={(patch) => void updateSharedSettings(patch)}
+                                />
+                              }
                             />
                           </ServiceProvider>
                         ) : activeSection === "plugin" ? (

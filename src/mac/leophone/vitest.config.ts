@@ -44,6 +44,7 @@ const leoNodeTestFiles = [
   "packages/ui/test/internalPluginHidden.test.ts",
   "packages/ui/test/leoStatusRows.test.ts",
   "packages/ui/test/leoUiAudit.test.ts",
+  "packages/ui/test/leoWp31Chrome.test.ts",
   "packages/ui/test/modelPickerQuickAccess.test.ts",
   "packages/ui/test/modelSearchScorer.test.ts",
   "packages/ui/test/newTaskDraftFill.test.ts",

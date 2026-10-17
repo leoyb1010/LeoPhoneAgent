@@ -125,7 +125,8 @@ html[data-leo-skin] .chat-composer-input-surface form > .rounded-2xl {
     box-shadow var(--leo-dur-3) var(--leo-ease);
 }
 
-/* 任务在跑:输入卡顶边一条很细的青色光带缓慢流过(停止按钮在场 = 在跑) */
+/* 任务在跑:输入卡顶边一条很细的青色色带按 beat 节拍呼吸(停止按钮在场 = 在跑)。
+   [wp-31] 原来是 2.4s 的横向扫光,和状态点 / 工具卡的呼吸不同拍;统一到 --leo-beat。 */
 html[data-leo-skin] .chat-composer-region:has([data-testid="v4-stop"]) form > .rounded-2xl::before {
   position: absolute;
   inset: 0 0 auto 0;
@@ -139,36 +140,27 @@ html[data-leo-skin] .chat-composer-region:has([data-testid="v4-stop"]) form > .r
     color-mix(in oklab, var(--leo-brand) 85%, transparent) 50%,
     transparent 100%
   );
-  background-size: 40% 100%;
-  background-repeat: no-repeat;
-  animation: leo-running-band 2.4s var(--leo-ease) infinite;
+  animation: leo-beat-breathe var(--leo-beat) ease-in-out infinite;
 }
 
-@keyframes leo-running-band {
-  0% {
-    background-position: -40% 0;
-    opacity: 0;
-  }
-  15% {
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
+@keyframes leo-beat-breathe {
+  0%,
   100% {
-    background-position: 140% 0;
-    opacity: 0;
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
-/* 发送按钮:青色实心,悬停略提亮 */
+/* 发送按钮:青色实心,悬停略提亮;按压用 press token(scale .97 / 80ms) */
 html[data-leo-skin] [data-testid="v4-composer-send"]:not(:disabled) {
   transition:
     background-color var(--leo-dur-1) var(--leo-ease),
-    transform var(--leo-dur-1) var(--leo-ease);
+    transform var(--leo-press-dur) var(--leo-ease);
 }
 html[data-leo-skin] [data-testid="v4-composer-send"]:not(:disabled):active {
-  transform: scale(0.94);
+  transform: scale(var(--leo-press-scale));
 }
 
 /* ── 审批卡:从输入框的位置滑入 ─────────────────────────── */
@@ -179,7 +171,7 @@ html[data-leo-skin] [data-leo-approval] {
 @keyframes leo-approval-in {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -189,6 +181,7 @@ html[data-leo-skin] [data-leo-approval] {
 
 /* ── 首页(草稿态) ───────────────────────────────────────── */
 .leo-home-hero,
+.leo-home-recent,
 .leo-home-status {
   animation: leo-rise var(--leo-dur-4, 350ms) var(--leo-ease, ease-out) both;
 }
@@ -212,7 +205,7 @@ html[data-leo-skin] [data-leo-approval] {
 }
 .leo-status-dot[data-state="running"] {
   background: var(--leo-brand, #2a8282);
-  animation: leo-breathe 1.8s ease-in-out infinite;
+  animation: leo-breathe var(--leo-beat) ease-in-out infinite;
 }
 .leo-status-dot[data-state="error"] {
   background: var(--color-destructive);
@@ -265,6 +258,7 @@ html[data-leo-skin] [data-leo-approval] {
 @media (prefers-reduced-motion: reduce) {
   html[data-leo-skin] [data-leo-approval],
   .leo-home-hero,
+  .leo-home-recent,
   .leo-home-status,
   .leo-whats-new-card,
   .leo-whats-new-scrim,
@@ -297,5 +291,123 @@ html[data-leo-skin] [data-leo-approval] {
   }
   to {
     --leo-fade-size: 0px;
+  }
+}
+
+/* ── [wp-31] 工具卡骨架:左 2px 状态条 + 右侧耗时 ─────────────────
+   状态来自 ToolCallBlock 外壳的 data-leo-tool-state(running / success / failed),
+   颜色过渡 dur.2;运行中按 beat 呼吸。条画在内容左侧留出的 12px 槽里,不压正文。 */
+html[data-leo-skin] [data-leo-tool-state] {
+  position: relative;
+  padding-left: var(--leo-space-3);
+}
+html[data-leo-skin] [data-leo-tool-state]::before {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: 2px;
+  border-radius: var(--leo-radius-pill);
+  pointer-events: none;
+  content: "";
+  background: color-mix(in oklab, var(--color-foreground) 14%, transparent);
+  transition: background-color var(--leo-dur-2) var(--leo-ease);
+}
+html[data-leo-skin] [data-leo-tool-state="running"]::before {
+  background: var(--leo-brand);
+  animation: leo-beat-breathe var(--leo-beat) ease-in-out infinite;
+}
+html[data-leo-skin] [data-leo-tool-state="success"]::before {
+  background: color-mix(in oklab, var(--color-success) 70%, transparent);
+}
+html[data-leo-skin] [data-leo-tool-state="failed"]::before {
+  background: var(--color-destructive);
+}
+/* 嵌套子工具已经有自己的左边线,不再叠第二根条。 */
+html[data-leo-skin] [data-leo-tool-state] [data-leo-tool-state] {
+  padding-left: 0;
+}
+html[data-leo-skin] [data-leo-tool-state] [data-leo-tool-state]::before {
+  content: none;
+}
+html[data-leo-skin] [data-leo-tool-state][data-leo-tool-has-elapsed] {
+  padding-right: calc(var(--leo-space-6) + var(--leo-space-4));
+}
+.leo-tool-elapsed {
+  position: absolute;
+  top: 0;
+  right: 0;
+  line-height: 24px;
+  pointer-events: none;
+}
+html:not([data-leo-skin]) .leo-tool-elapsed {
+  display: none;
+}
+
+/* ── [wp-31] 审批卡风险条:中 attention、高 destructive,与卡片左缘对齐 ── */
+html[data-leo-skin] [data-leo-approval-risk] > :first-child {
+  position: relative;
+}
+html[data-leo-skin] [data-leo-approval-risk="medium"] > :first-child::before,
+html[data-leo-skin] [data-leo-approval-risk="high"] > :first-child::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  pointer-events: none;
+  content: "";
+}
+html[data-leo-skin] [data-leo-approval-risk="medium"] > :first-child::before {
+  background: var(--leo-attention);
+}
+html[data-leo-skin] [data-leo-approval-risk="high"] > :first-child::before {
+  background: var(--color-destructive);
+}
+
+/* ── [wp-31] 新回合进入:opacity + translateY 6px,dur.2(只在新回合首次挂载时播一次) ── */
+[data-leo-turn-enter] {
+  animation: leo-turn-in var(--leo-dur-2) var(--leo-ease) both;
+}
+@keyframes leo-turn-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── [wp-31] diff 文件切换:crossfade dur.1 ── */
+.leo-diff-swap {
+  animation: leo-fade-in var(--leo-dur-1) var(--leo-ease) both;
+}
+
+/* ── [wp-31] 首页最近工作区卡:hover 上浮 2px,dur.1 ── */
+.leo-recent-card {
+  transition:
+    transform var(--leo-dur-1) var(--leo-ease),
+    border-color var(--leo-dur-1) var(--leo-ease),
+    background-color var(--leo-dur-1) var(--leo-ease);
+}
+.leo-recent-card:hover {
+  transform: translateY(-2px);
+}
+.leo-recent-card:active {
+  transform: scale(var(--leo-press-scale));
+  transition-duration: var(--leo-press-dur);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-leo-skin] [data-leo-tool-state="running"]::before {
+    animation: none;
+  }
+  /* 减弱动态:进入只剩不超过 dur.1 的淡入,没有位移。 */
+  [data-leo-turn-enter] {
+    animation: leo-fade-in var(--leo-dur-1) linear both;
+  }
+  .leo-recent-card:hover,
+  .leo-recent-card:active {
+    transform: none;
   }
 }

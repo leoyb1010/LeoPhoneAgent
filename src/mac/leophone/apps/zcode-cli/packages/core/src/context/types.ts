@@ -1,3 +1,4 @@
+import type { ProjectMemoryRetrievalBranch } from "../memory/project-memory-retrieval-branch.js";
 // ============================================================
 // Context Builder Types
 // ============================================================
@@ -111,6 +112,8 @@ export interface ContextBuilderConfig {
   projectContext?: ProjectContext;
   memoryRoot?: string;
   memoryIndexContent?: string;
+  /** [leo][wp-61] 运行时记忆检索分支；缺省按 default-index（系统提示带 MEMORY.md 指引）。 */
+  memoryRetrievalBranch?: ProjectMemoryRetrievalBranch;
   skills?: SkillLoadOutcome;
   agentProfiles?: readonly AgentProfile[];
   embeddedSearchEnabled?: boolean;

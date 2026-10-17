@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type IMemoryService, type ProjectMemoryWorkspaceSummary } from "@zcode/services";
 import { TID_SETTINGS_MEMORY_SWITCH } from "@zcode/shared";
 import { runUserAction, runUserActionAsync } from "@/lib/userActionTelemetry.js";
@@ -49,12 +49,15 @@ export function MemorySettingsSection({
   onMemoryEnabledChange,
   projectMemoryViewerAvailable,
   workspaceDisplayNames = [],
+  recallSources,
 }: {
   memoryEnabled: boolean;
   memoryService: MemoryCatalogService;
   onMemoryEnabledChange: (enabled: boolean) => Promise<void>;
   projectMemoryViewerAvailable: boolean;
   workspaceDisplayNames?: readonly string[];
+  /** [leo][wp-61] 召回来源与开关（项目记忆语义召回 / 藏宝阁），放在总开关下方。 */
+  recallSources?: ReactNode;
 }) {
   const { intl } = useZCodeIntl();
   const catalogRequestIdRef = useRef(0);
@@ -175,6 +178,8 @@ export function MemorySettingsSection({
           }
         />
       </SettingsGroupCard>
+
+      {recallSources}
 
       {!projectMemoryViewerAvailable ? (
         <div className="rounded-xl border border-dashed border-border bg-transparent px-4 py-8 text-center text-ui-base text-foreground-subtle">

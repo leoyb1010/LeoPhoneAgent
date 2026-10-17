@@ -2071,6 +2071,11 @@ export const zcodeSessionRuntimePreferencesResultSchema = z
     nativeSearchEnhancementsEnabled: z.boolean(),
     subagentRuntimeConfigEnabled: z.boolean().optional(),
     memoryEnabled: z.boolean().default(false),
+    // [leo][wp-61] 记忆召回来源开关；旧 Host 不带时 CLI 按默认（都开）处理。
+    memoryRecall: z
+      .object({ semantic: z.boolean(), treasury: z.boolean() })
+      .strict()
+      .optional(),
     askUserQuestionAutoResolutionEnabled: z.boolean().default(true),
     integratedTerminalShell: integratedTerminalShellSelectionSchema.optional(),
     // 兼容旧 Host：缺少字段时在协议解析边界使用当前默认策略。

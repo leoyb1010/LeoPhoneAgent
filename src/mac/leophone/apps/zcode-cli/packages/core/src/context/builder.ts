@@ -20,7 +20,6 @@ import { buildSkillsSection } from "./sections/skills.js";
 import { buildRequestUserContextSection } from "./sections/request-user-context.js";
 import { buildCurrentDateSection } from "./sections/current-date.js";
 import { buildMemorySection } from "./sections/memory.js";
-import { ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH } from "../memory/project-memory-retrieval-branch.js";
 import { buildDesktopContextSection } from "./sections/desktop.js";
 import {
   buildContextManagementSection,
@@ -153,7 +152,7 @@ export class ContextBuilder {
       if (this.config.memoryRoot) {
         const memorySection = buildMemorySection(
           this.config.memoryRoot,
-          ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH,
+          this.config.memoryRetrievalBranch ?? "default-index",
         );
         if (memorySection) {
           sections.push(memorySection);
