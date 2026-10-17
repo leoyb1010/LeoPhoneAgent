@@ -451,8 +451,12 @@ export class LinkSession {
   }
 
   /** 任务表里的一行:重启后靠它认回手机上已有的任务。 */
+  /** [WP-21] 手机端 harness key 与显示名：LeoBot 自己是 zcode，ACP 外部 agent 是 claude / codex / …。 */
+  harness = "zcode";
+  harnessName = "LeoBot";
+
   indexEntry(): Record<string, unknown> {
-    return { task_id: this.sessionId, cwd: this.cwd, title: this.title, mode: this.mode, created_at: this.createdAt, phone_session_id: this.phoneSessionId ?? undefined };
+    return { task_id: this.sessionId, cwd: this.cwd, title: this.title, mode: this.mode, created_at: this.createdAt, phone_session_id: this.phoneSessionId ?? undefined, harness: this.harness, harness_name: this.harnessName };
   }
 
   /**
@@ -468,8 +472,8 @@ export class LinkSession {
   summary(): Record<string, unknown> {
     return {
       session_id: this.sessionId,
-      harness: "zcode",
-      name: "LeoBot",
+      harness: this.harness,
+      name: this.harnessName,
       cwd: this.cwd,
       status: this.reportedStatus(),
       title: this.title,

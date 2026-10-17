@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { hostClaudeAgentAcpEntry, listAcpAgents } from "@zcode/services/acp-agent";
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 
@@ -365,6 +366,12 @@ export async function startLeoLink(deps: {
     leoagent: { url: LEOAGENT_URL, key: leoagentKey },
     // [WP-50] 看屏 R0:截图在主进程,开关 / scope / 限频在这里(docs/specs/leo-screen.md)。
     screen: createScreenSnapshotService({ capture: captureViaMain, enabled: screenSharingEnabled }),
+    // [WP-21] 手机开 Claude / Codex / Gemini / opencode 会话走 ACP(LeoBot 运行时托管)。
+    acpAgents: () => listAcpAgents({ claudeAgentAcpEntry: hostClaudeAgentAcpEntry() }),
+    // [WP-23] 旧 leoagent harness 转发默认关(link.json {"harness":{"legacy":true}} 或 LEO_HARNESS_LEGACY=1 打开)。
+    legacyHarness: () =>
+      process.env.LEO_HARNESS_LEGACY === "1" ||
+      (readJson(leoPath("link.json"))?.["harness"] as { legacy?: unknown } | undefined)?.legacy === true,
     recentWorkspaces: async () => {
       const settings = await deps.settingService?.get();
       return (settings?.lastWorkspaceSession ?? [])

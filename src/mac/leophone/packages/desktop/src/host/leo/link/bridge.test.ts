@@ -9,7 +9,7 @@ import test from "node:test";
 import type { IZCodeTaskService } from "@zcode/services";
 import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 
-import { LinkBridge, readSSHHostKeys, type LinkRequest } from "./bridge.js";
+import { LinkBridge, readSSHHostKeys, type LinkBridgeDeps, type LinkRequest } from "./bridge.js";
 import type { HarnessEvent } from "./journal.js";
 import type { Caller } from "./session.js";
 
@@ -104,6 +104,8 @@ async function withBridge(
     recentWorkspaces?: string[];
     device?: LeoDeviceDescriptor;
     sshHostKeys?: () => Promise<string[]>;
+    legacyHarness?: boolean;
+    acpAgents?: LinkBridgeDeps["acpAgents"];
   } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(path.join(os.tmpdir(), "leo-link-")));
@@ -125,6 +127,8 @@ async function withBridge(
       ? { recentWorkspaces: async () => options.recentWorkspaces! }
       : {}),
     sshHostKeys: options.sshHostKeys ?? (async () => []),
+    legacyHarness: () => options.legacyHarness ?? false,
+    ...(options.acpAgents ? { acpAgents: options.acpAgents } : {}),
   });
   try {
     await run({ bridge, zcode, dir, pushed });
@@ -653,7 +657,8 @@ test("claude / codex / grok go to the local leoagent with its own key; the phone
         assert.ok(seen.every((r) => r.auth === "Bearer local-key-0123456789"));
         assert.equal(JSON.parse(seen.find((r) => r.method === "POST")!.body).prompt, "x");
       },
-      { leoagentUrl: `http://127.0.0.1:${port}` },
+      // [WP-23] 旧 leoagent 转发只在 legacy 开关打开时生效。
+      { leoagentUrl: `http://127.0.0.1:${port}`, legacyHarness: true },
     );
   } finally {
     server.close();
@@ -709,10 +714,10 @@ test("tasks opened on the Mac desktop show up on the phone and are adopted on fi
         sessions: Record<string, unknown>[];
       };
       assert.equal(again.sessions.filter((s) => s["session_id"] === "desk-1").length, 1);
-      // 没列过的 id 不会被当成桌面任务:转给 leoagent,它没在运行就是 503(手机对 502/503/504 一视同仁)
+      // 没列过的 id 不会被当成桌面任务。[WP-23] 旧 leoagent 转发默认关:直接 404,不再转发。
       assert.equal(
         (await bridge.handle(req("POST", "/harness/sessions/nope/send", { text: "x" }))).status,
-        503,
+        404,
       );
     },
     { recentWorkspaces: [workspace] },
@@ -1266,7 +1271,8 @@ test("full-auto off reports failure when the local leoagent errors, but not when
         // 以前一律回 ok:手机以为都关了,leoagent 那边的任务还在免审批地跑。
         assert.equal(off.status, 502);
       },
-      { leoagentUrl: `http://127.0.0.1:${port}` },
+      // [WP-23] 旧 leoagent 转发只在 legacy 开关打开时生效。
+      { leoagentUrl: `http://127.0.0.1:${port}`, legacyHarness: true },
     );
   } finally {
     server.close();
@@ -1293,4 +1299,57 @@ test("[WP-41] run.started is announced once per run and handed to the relay push
     const started = pushed.find((e) => e.event === "run.started");
     assert.equal(started?.["session_id"], id);
   });
+});
+
+
+test("[WP-21] ACP agents are the phone's harnesses; sessions run as LeoBot tasks on the ACP model", async () => {
+  const leoagentCalls: string[] = [];
+  const server: Server = createServer((request, response) => {
+    leoagentCalls.push(`${request.method} ${request.url}`);
+    response.end(JSON.stringify({ harnesses: [{ key: "grok", name: "Grok" }] }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as AddressInfo).port;
+  try {
+    await withBridge(
+      async ({ bridge, zcode }) => {
+        const capabilities = (await bridge.handle(req("GET", "/v1/capabilities"))).body as {
+          harnesses: Record<string, unknown>[];
+        };
+        assert.deepEqual(
+          capabilities.harnesses.map((harness) => harness["key"]),
+          ["zcode", "claude"],
+        );
+        const created = await bridge.handle(
+          req("POST", "/harness/sessions", { harness: "claude", cwd: os.tmpdir(), prompt: "" }),
+        );
+        assert.equal(created.status, 202);
+        assert.equal((created.body as Record<string, unknown>)["harness"], "claude");
+        const [createParams] = zcode.named("createTask") as Record<string, unknown>[];
+        assert.deepEqual(createParams?.["modelSelection"], {
+          providerId: "acp",
+          modelId: "claude-code",
+          options: { reasoningLevel: "default" },
+        });
+        const listed = (await bridge.handle(req("GET", "/harness/sessions"))).body as {
+          sessions: Record<string, unknown>[];
+        };
+        assert.equal(listed.sessions[0]?.["harness"], "claude");
+        assert.equal(listed.sessions[0]?.["name"], "Claude Code");
+        // [WP-23] 旧 leoagent harness 默认不转发
+        const grok = await bridge.handle(req("POST", "/harness/sessions", { harness: "grok", prompt: "hi" }));
+        assert.equal(grok.status, 400);
+        assert.deepEqual(leoagentCalls, []);
+      },
+      {
+        leoagentUrl: `http://127.0.0.1:${port}`,
+        acpAgents: () => [
+          { id: "claude-code", name: "Claude Code", harnessKey: "claude", available: true },
+          { id: "codex", name: "Codex", harnessKey: "codex", available: false },
+        ],
+      },
+    );
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 });

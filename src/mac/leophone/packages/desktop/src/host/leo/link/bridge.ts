@@ -12,6 +12,7 @@ import type { HarnessEvent } from "./journal.js";
 import { DirectGrants } from "./directGrants.js";
 import { OperationReceipts } from "./operationReceipts.js";
 import { LeoagentForwarder } from "./leoagentForward.js";
+import { acpModelSelection, type AcpAgentId } from "@zcode/shared/acp";
 import {
   deviceNotRecognized,
   error,
@@ -64,6 +65,13 @@ export type LinkBridgeDeps = {
   screen?: (req: ScreenRequest) => Promise<LinkResponse>;
   /** 本机 sshd 公钥(仅公钥),手机经已配对的加密通道读取后固定 SSH 身份;默认读 /etc/ssh。 */
   sshHostKeys?: () => Promise<string[]>;
+  /** [WP-21] 本机可用的 ACP 外部 agent:手机端的 harness 列表与开会话都走它(LeoBot 运行时托管)。 */
+  acpAgents?: () => ReadonlyArray<{ id: AcpAgentId; name: string; harnessKey: string; available: boolean }>;
+  /**
+   * [WP-23] 旧的 leoagent(Python)harness 转发,默认关:ACP 接管手机开 Claude / Codex 会话后不再转发。
+   * 打开方式:~/.leoagent/link.json 的 {"harness": {"legacy": true}} 或 LEO_HARNESS_LEGACY=1(harness.py 下个版本删)。
+   */
+  legacyHarness?: () => boolean;
 };
 
 /** [E5] 手机侧会话 id(可选):只当不透明标签,随审批 / 终态推送带回手机。 */
@@ -153,6 +161,8 @@ export class LinkBridge {
       if (!taskId || !cwd || this.sessions.has(taskId)) continue;
       const session = this.newSession(taskId, cwd, entry["mode"] === "yolo" ? "yolo" : "build");
       session.title = typeof entry["title"] === "string" ? entry["title"] : "";
+      if (typeof entry["harness"] === "string") session.harness = entry["harness"];
+      if (typeof entry["harness_name"] === "string") session.harnessName = entry["harness_name"];
       if (typeof entry["phone_session_id"] === "string") session.phoneSessionId = entry["phone_session_id"];
       if (typeof entry["created_at"] === "number") session.createdAt = entry["created_at"];
       // 最后活动时间从创建时间起算,open() 再按日志最后一条事件往后推。以前这里取的是「现在」:
@@ -296,7 +306,7 @@ export class LinkBridge {
     if (!validSessionId(sessionId)) return;
     const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
     if (!session) {
-      await this.leoagent.stream(url.pathname + url.search, emit, signal);
+      if (this.legacyEnabled()) await this.leoagent.stream(url.pathname + url.search, emit, signal);
       return;
     }
     const parsed = Number.parseInt(url.searchParams.get("after") ?? "0", 10);
@@ -365,7 +375,10 @@ export class LinkBridge {
     // 清理不接管桌面任务:没接过来的本来就不在手机的「进行中」里。
     if (match[2] === "archive") return this.archive(sessionId, url.pathname, req.body);
     const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
-    if (!session) return this.leoagent.request("POST", url.pathname, req.body, req.caller);
+    if (!session) {
+      if (this.legacyEnabled()) return this.leoagent.request("POST", url.pathname, req.body, req.caller);
+      return error(404, "这台 Mac 上没有这个任务");
+    }
     const body = record(req.body);
     switch (match[2]) {
       case "send":
@@ -437,12 +450,32 @@ export class LinkBridge {
     return recent?.cwd ?? os.homedir();
   }
 
+  private legacyEnabled(): boolean {
+    return this.deps.legacyHarness?.() ?? false;
+  }
+
+  private availableAcpAgents() {
+    return (this.deps.acpAgents?.() ?? []).filter((agent) => agent.available);
+  }
+
   private async capabilities(): Promise<LinkResponse> {
-    const upstream = await this.leoagent.request("GET", "/v1/capabilities");
-    const legacy =
-      upstream.status === 200
-        ? ((record(upstream.body)["harnesses"] as unknown[] | undefined) ?? [])
-        : [];
+    const acp = this.availableAcpAgents().map((agent) => ({
+      key: agent.harnessKey,
+      name: agent.name,
+      executable: agent.name,
+      runtime: "acp",
+    }));
+    let legacy: unknown[] = [];
+    if (this.legacyEnabled()) {
+      const upstream = await this.leoagent.request("GET", "/v1/capabilities");
+      const taken = new Set(acp.map((agent) => agent.key));
+      legacy =
+        upstream.status === 200
+          ? (((record(upstream.body)["harnesses"] as unknown[] | undefined) ?? []).filter(
+              (entry) => !taken.has(String(record(entry)["key"] ?? "")),
+            ))
+          : [];
+    }
     return {
       status: 200,
       body: {
@@ -465,7 +498,7 @@ export class LinkBridge {
           artifacts: false,
           exact_window: false,
         },
-        harnesses: [{ key: ZCODE, name: "LeoBot", executable: "LeoBot" }, ...legacy],
+        harnesses: [{ key: ZCODE, name: "LeoBot", executable: "LeoBot" }, ...acp, ...legacy],
       },
     };
   }
@@ -489,11 +522,14 @@ export class LinkBridge {
       pending_approvals: [],
     }));
     ours.push(...desktop);
-    const upstream = await this.leoagent.request("GET", "/harness/sessions");
-    const theirs =
-      upstream.status === 200
-        ? ((record(upstream.body)["sessions"] as unknown[] | undefined) ?? [])
-        : [];
+    let theirs: unknown[] = [];
+    if (this.legacyEnabled()) {
+      const upstream = await this.leoagent.request("GET", "/harness/sessions");
+      theirs =
+        upstream.status === 200
+          ? ((record(upstream.body)["sessions"] as unknown[] | undefined) ?? [])
+          : [];
+    }
     return { status: 200, body: { sessions: [...ours, ...theirs] } };
   }
 
@@ -506,8 +542,18 @@ export class LinkBridge {
     const fullAuto = body["full_auto"] === true;
     if (fullAuto && !mayUseFullAuto(req.caller))
       return deviceNotRecognized("认不出是哪台设备发来的，不能开全自动；按步骤在 Mac 上处理后再试");
-    // claude / codex / grok 跑在本机 leoagent:全自动由它直接应答 CLI 的审批;调用方类别一并带过去。
-    if (harness !== ZCODE) return this.leoagent.request("POST", "/harness/sessions", req.body, req.caller);
+    // [WP-21] claude / codex / gemini / opencode 走 ACP:仍是一个 LeoBot 任务,模型选择是对应的外部 agent。
+    const acpAgent =
+      harness === ZCODE
+        ? undefined
+        : this.availableAcpAgents().find((agent) => agent.harnessKey === harness || agent.id === harness);
+    if (harness !== ZCODE && !acpAgent) {
+      // [WP-23] 旧 leoagent harness(如 grok)只在显式打开 legacy 时转发。
+      if (this.legacyEnabled())
+        return this.leoagent.request("POST", "/harness/sessions", req.body, req.caller);
+      return error(400, `这台 Mac 上没有可用的「${harness}」`);
+    }
+    const modelSelection = acpAgent ? acpModelSelection(acpAgent.id) : undefined;
     const phoneSessionId = phoneSessionIdOf(body);
     const cwd =
       typeof checkpoint?.["cwd"] === "string"
@@ -518,7 +564,7 @@ export class LinkBridge {
     let taskId = typeof checkpoint?.["taskId"] === "string" ? checkpoint["taskId"] : "";
     if (taskId && checkpoint?.["stage"] === "ready") {
       // ready 在任何 send admission 之前落盘。CLI 重启会丢弃空 draft，可复用仍存在的 draft 或安全重建。
-      const restored = await taskService.createTask({ workspacePath: cwd, draftSessionId: taskId, v4Create: true, mode: fullAuto ? "yolo" : "build", operationId: this.receipts.operationId(req, "create") });
+      const restored = await taskService.createTask({ workspacePath: cwd, draftSessionId: taskId, v4Create: true, mode: fullAuto ? "yolo" : "build", ...(modelSelection ? { modelSelection } : {}), operationId: this.receipts.operationId(req, "create") });
       if (restored.taskId !== taskId) {
         await this.sessions.get(taskId)?.close();
         this.sessions.delete(taskId);
@@ -535,6 +581,7 @@ export class LinkBridge {
             workspacePath: cwd,
             v4Create: true,
             mode: fullAuto ? "yolo" : "build",
+            ...(modelSelection ? { modelSelection } : {}),
             ...(req.requestId ? { operationId: this.receipts.operationId(req, "create") } : {}),
           })
         ).taskId;
@@ -551,6 +598,10 @@ export class LinkBridge {
     let session = this.sessions.get(taskId);
     if (!session) {
       session = this.newSession(taskId, cwd, fullAuto ? "yolo" : "build");
+      if (acpAgent) {
+        session.harness = acpAgent.harnessKey;
+        session.harnessName = acpAgent.name;
+      }
       session.lastCaller = req.caller;
       this.sessions.set(taskId, session);
       try {
@@ -563,7 +614,7 @@ export class LinkBridge {
           `Mac 上打开任务日志失败：${cause instanceof Error ? cause.message : String(cause)}`,
         );
       }
-      session.emit({ event: "session.created", harness: ZCODE, cwd, full_auto: fullAuto });
+      session.emit({ event: "session.created", harness: session.harness, cwd, full_auto: fullAuto });
     }
     if (phoneSessionId) session.phoneSessionId = phoneSessionId;
     // taskId 回执与会话索引都在首发之前落盘，崩溃后不得再次创建另一条任务。
@@ -588,7 +639,7 @@ export class LinkBridge {
     await this.saveIndex();
     return {
       status: 202,
-      body: { session_id: taskId, harness: ZCODE, status: session.status, full_auto: fullAuto },
+      body: { session_id: taskId, harness: session.harness, status: session.status, full_auto: fullAuto },
     };
   }
 
@@ -679,6 +730,7 @@ export class LinkBridge {
     if (!session) {
       if (this.desktopTasks.has(sessionId))
         return { status: 200, body: { ok: true, archived: false } };
+      if (!this.legacyEnabled()) return { status: 200, body: { ok: true, archived: false } };
       return this.leoagent.request("POST", pathname, body);
     }
     if (session.status === "running" || session.status === "waiting_for_approval") {
@@ -713,6 +765,7 @@ export class LinkBridge {
     }
     if (switched.length > 0) void this.saveIndex().catch(() => undefined);
     // 本机 leoagent 里的 claude / codex / grok 全自动任务一并切回;老版本没有这条路(404),忽略。
+    if (!this.legacyEnabled()) return { status: 200, body: { ok: true, sessions: switched } };
     const upstream = await this.leoagent.request("POST", "/harness/full-auto", { enabled: false }, req.caller);
     const theirs = upstream.status === 200 ? record(upstream.body)["sessions"] : undefined;
     if (Array.isArray(theirs)) switched.push(...theirs.filter((id): id is string => typeof id === "string"));
