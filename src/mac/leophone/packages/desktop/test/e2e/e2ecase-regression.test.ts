@@ -8,7 +8,7 @@ import {
   TID_SETTINGS_BACK_BUTTON,
   TID_SETTINGS_PAGE,
   TID_SETTINGS_SECTION_NAV,
-  TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON,
+  TID_SIDEBAR_USAGE_BUTTON,
   TID_TASK_SETTINGS_BUTTON,
   testId,
 } from "@zcode/shared";
@@ -238,7 +238,7 @@ async function openUsageStatsFromProfileMenu() {
     timeout: 15000,
     timeoutMsg: "没有找到可见的头像菜单入口",
   });
-  await clickVisibleTestIdByDom(TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON, {
+  await clickVisibleTestIdByDom(TID_SIDEBAR_USAGE_BUTTON, {
     timeout: 15000,
     timeoutMsg: "头像菜单没有出现可见的使用统计入口",
   });
