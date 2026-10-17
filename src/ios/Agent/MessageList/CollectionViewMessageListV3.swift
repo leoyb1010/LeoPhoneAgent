@@ -3031,6 +3031,18 @@ extension CollectionViewMessageListV3 {
                     }
                 }
                 syncScrollFlags()
+                // [WP-42] 发送飞入:刚发的那条用户消息插进来了，把输入框快照飞到它的气泡上。
+                if let flightItem = inserted.last(where: { item in
+                       guard case .wholeMessage(let id) = item, let idx = messageIndex[id], idx < messages.count else { return false }
+                       return messages[idx].role == .user
+                   }),
+                   let flight = SendFlightAnimator.shared.claim(vmId: String(vm.vmInstanceId)) {
+                    let source = dataSource
+                    SendFlightAnimator.shared.run(flight) { [weak cv] in
+                        guard let cv, let ip = source?.indexPath(for: flightItem) else { return nil }
+                        return cv.cellForItem(at: ip)
+                    }
+                }
             } else {
                 snapshotLayout?.suppressContentOffsetAdjustment = false
                 isFlushing = false

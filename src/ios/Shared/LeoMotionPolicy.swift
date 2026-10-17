@@ -48,3 +48,58 @@ enum LeoMotionPolicy {
         hasAppeared && !wasFinished && isFinished
     }
 }
+
+/// 「发送飞入」的时序判定(UIKit 实现在 SendFlightAnimator)。
+///
+/// 发送时把输入框文字区域截一张快照，挂在窗口层;新用户气泡的 cell 布局好之后，用 spring
+/// (response .30 / damping .82，和 LeoMotion.spring 一致)把快照飞到气泡位置，然后淡出、
+/// 露出真实的 cell。消息是异步插入的：cell 可能还没建好、还没量好高度、还在屏幕外。
+/// 等最多几帧;还不行就退化成淡入，不能让快照飞向错误的位置或者一直挂着。
+enum SendFlightPolicy {
+    static let springResponse: Double = 0.30
+    static let springDamping: Double = 0.82
+    /// 快照淡出 / 真实 cell 淡入的时长(token `dur.2`)。
+    static let fadeDuration: Double = 0.18
+    /// 发送之后这么久内插进来的那条用户消息才算「刚发的」(排队消息、同步来的消息不飞)。
+    static let maxArmAge: TimeInterval = 1.2
+    /// 等 cell 布局的最多帧数，超出就淡入。
+    static let maxLayoutWaits = 3
+
+    enum Decision: Equatable {
+        case fly(to: CGRect)
+        case fadeIn
+        case wait
+    }
+
+    static func isFresh(armedAt: Date, now: Date) -> Bool {
+        let age = now.timeIntervalSince(armedAt)
+        return age >= 0 && age <= maxArmAge
+    }
+
+    /// - source: 快照在窗口里的位置(nil = 没截到)。
+    /// - cellFrame: 新气泡 cell 在窗口里的位置(nil = 还没有 cell)。
+    /// - waits: 已经等了几帧。
+    static func decide(source: CGRect?, cellFrame: CGRect?, window: CGRect,
+                       reduceMotion: Bool, waits: Int) -> Decision {
+        if reduceMotion { return .fadeIn }
+        guard let source, source.width >= 1, source.height >= 1, window.intersects(source) else { return .fadeIn }
+        guard let cell = cellFrame, cell.width >= 1, cell.height >= 1, window.intersects(cell) else {
+            return waits < maxLayoutWaits ? .wait : .fadeIn
+        }
+        return .fly(to: landingRect(source: source, cell: cell))
+    }
+
+    /// 用户气泡贴在 cell 的右上角:快照落在 cell 的右上角，宽高不超过 cell 本身。
+    static func landingRect(source: CGRect, cell: CGRect) -> CGRect {
+        let width = min(source.width, cell.width)
+        let height = min(source.height, cell.height)
+        return CGRect(x: cell.maxX - width, y: cell.minY, width: width, height: height)
+    }
+}
+
+extension SendFlightPolicy {
+    /// SwiftUI `spring(response:dampingFraction:)` 换成 UIKit 质量-弹簧参数(质量 1):
+    /// 刚度 = (2π / response)²,阻尼 = 4π · dampingFraction / response。
+    static var springStiffness: Double { pow(2 * Double.pi / springResponse, 2) }
+    static var springDampingCoefficient: Double { 4 * Double.pi * springDamping / springResponse }
+}

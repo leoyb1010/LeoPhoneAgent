@@ -4856,6 +4856,8 @@ struct AIChatView: View {
     private func performSend(runPolicy: LeoRunPolicy? = nil) {
         // Intercept slash commands — execute instead of sending to LLM
         if vm.tryExecuteInputAsSlashCommand() { return }
+        // [WP-42] 发送飞入:趁文字还在输入框里、键盘还没收起，先截快照。
+        SendFlightAnimator.shared.arm(vmId: String(vm.vmInstanceId))
 
         minisLogger.info("🔑DRAFT performSend vm=\(vm.vmInstanceId) vm.sessionId=\(vm.sessionId ?? "nil") draftId=\(draftId ?? "nil") input=[\(LogContentDigest(vm.inputText).fields)] isProcessing=\(vm.isProcessing)")
         // Keep SwiftUI focus when a hardware keyboard is connected — dropping

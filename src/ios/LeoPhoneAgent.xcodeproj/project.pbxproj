@@ -487,6 +487,7 @@
 		E5J000040 /* AttributeQueryRecorder.m in Sources */ = {isa = PBXBuildFile; fileRef = E5J000041 /* AttributeQueryRecorder.m */; };
 		E5JB00001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB00002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LF3E14F93A3B /* PinnedSessionOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF9E8272F01 /* PinnedSessionOrder.swift */; };
 		LF43FE8FE20C /* CommandPaletteCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF837AD530A8 /* CommandPaletteCatalog.swift */; };
 		LF64333B68E8 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
 		LF2ED9FD3235 /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
@@ -501,6 +502,7 @@
 		E5JB00004 /* hmm_model.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00015 /* hmm_model.utf8 */; };
 		E5JB10001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB10002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LFA0A1B535C5 /* PinnedSessionOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF9E8272F01 /* PinnedSessionOrder.swift */; };
 		LFAB889B1927 /* CommandPaletteCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF837AD530A8 /* CommandPaletteCatalog.swift */; };
 		LF714387EFE1 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
 		LFD1F84A10FA /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
@@ -831,6 +833,7 @@
 		E5MHC0001 /* MessageHeightCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MHC0011 /* MessageHeightCache.swift */; };
 		E5MHC0002 /* MessageHeightCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MHC0011 /* MessageHeightCache.swift */; };
 		E5V300001 /* CollectionViewMessageListV3.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5V300011 /* CollectionViewMessageListV3.swift */; };
+		E5SFA42B1 /* SendFlightAnimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SFA42R /* SendFlightAnimator.swift */; };
 		E5VC00001 /* VoiceCorrectionDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VC00011 /* VoiceCorrectionDB.swift */; };
 		E5VC00002 /* PhoneticNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VC00012 /* PhoneticNormalizer.swift */; };
 		E5VC00003 /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VC00013 /* SentenceSplitter.swift */; };
@@ -1540,6 +1543,7 @@
 		E5JB00011 /* JiebaWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JiebaWrapper.h; sourceTree = "<group>"; };
 		E5JB00012 /* JiebaWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = JiebaWrapper.mm; sourceTree = "<group>"; };
 		E5JB00013 /* TextSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSegmenter.swift; sourceTree = "<group>"; };
+		LFF9E8272F01 /* PinnedSessionOrder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedSessionOrder.swift; sourceTree = "<group>"; };
 		LF837AD530A8 /* CommandPaletteCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPaletteCatalog.swift; sourceTree = "<group>"; };
 		LFB3AA038DDA /* ChatCompletionsWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCompletionsWire.swift; sourceTree = "<group>"; };
 		LFE35BAC8FC5 /* ShareMacTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareMacTarget.swift; sourceTree = "<group>"; };
@@ -1820,6 +1824,7 @@
 		E5V100011 /* MessageListLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListLayout.swift; sourceTree = "<group>"; };
 		E5MHC0011 /* MessageHeightCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageHeightCache.swift; sourceTree = "<group>"; };
 		E5V300011 /* CollectionViewMessageListV3.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionViewMessageListV3.swift; sourceTree = "<group>"; };
+		E5SFA42R /* SendFlightAnimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendFlightAnimator.swift; sourceTree = "<group>"; };
 		E5VC00011 /* VoiceCorrectionDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCorrectionDB.swift; sourceTree = "<group>"; };
 		E5VC00012 /* PhoneticNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneticNormalizer.swift; sourceTree = "<group>"; };
 		E5VC00013 /* SentenceSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceSplitter.swift; sourceTree = "<group>"; };
@@ -2559,6 +2564,7 @@
 				E5JB00011 /* JiebaWrapper.h */,
 				E5JB00012 /* JiebaWrapper.mm */,
 				E5JB00013 /* TextSegmenter.swift */,
+				LFF9E8272F01 /* PinnedSessionOrder.swift */,
 				LF837AD530A8 /* CommandPaletteCatalog.swift */,
 				LFB3AA038DDA /* ChatCompletionsWire.swift */,
 				LFE35BAC8FC5 /* ShareMacTarget.swift */,
@@ -2953,6 +2959,7 @@
 			isa = PBXGroup;
 			children = (
 				E5V300011 /* CollectionViewMessageListV3.swift */,
+				E5SFA42R /* SendFlightAnimator.swift */,
 				F1A00021 /* MessageListInfrastructure.swift */,
 				E5ASK0004F /* ToolStepGrouping.swift */,
 				E5V100011 /* MessageListLayout.swift */,
@@ -3889,6 +3896,7 @@
 				LF0B67AADDC6 /* LongTextCollapse.swift in Sources */,
 				E5R3R0003 /* NSTextContainerSetSizeGuard.m in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
+				LFA0A1B535C5 /* PinnedSessionOrder.swift in Sources */,
 				LFAB889B1927 /* CommandPaletteCatalog.swift in Sources */,
 				LF714387EFE1 /* ChatCompletionsWire.swift in Sources */,
 				LFD1F84A10FA /* ShareMacTarget.swift in Sources */,
@@ -4048,6 +4056,7 @@
 				AA26CCBA2F31080100AECF2D /* ISHKernel.m in Sources */,
 				E5JB00001 /* JiebaWrapper.mm in Sources */,
 				E5JB00002 /* TextSegmenter.swift in Sources */,
+				LF3E14F93A3B /* PinnedSessionOrder.swift in Sources */,
 				LF43FE8FE20C /* CommandPaletteCatalog.swift in Sources */,
 				LF64333B68E8 /* ChatCompletionsWire.swift in Sources */,
 				LF2ED9FD3235 /* ShareMacTarget.swift in Sources */,
@@ -4175,6 +4184,7 @@
 				F1W0E101 /* WebLoadError.swift in Sources */,
 				F1T00011 /* ToolLiveSheet.swift in Sources */,
 				E5V300001 /* CollectionViewMessageListV3.swift in Sources */,
+				E5SFA42B1 /* SendFlightAnimator.swift in Sources */,
 				F1A00020 /* MessageListInfrastructure.swift in Sources */,
 				E5V100001 /* MessageListLayout.swift in Sources */,
 				E5MHC0001 /* MessageHeightCache.swift in Sources */,
