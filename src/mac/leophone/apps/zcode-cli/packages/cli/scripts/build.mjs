@@ -157,6 +157,9 @@ export const resolveBuildAliases = ({
     rootDirectory,
     "../../packages/shared/src/model-selection.ts",
   ),
+  // [leo][WP-21] 外部 agent（ACP）的共享定义与本机检测。
+  "@zcode/shared/acp-detect": resolve(rootDirectory, "../../packages/shared/src/acp-detect.ts"),
+  "@zcode/shared/acp": resolve(rootDirectory, "../../packages/shared/src/acp.ts"),
   // 共享 Model Schema 新增的子路径不能被通用 alias 拼到 index.ts 后面。
   "@zcode/shared/model-config": resolve(rootDirectory, "../../packages/shared/src/model-config.ts"),
   // 进程异常边界在 bootstrap 之前使用该轻量契约，不能落入 shared 的通用前缀 alias。

@@ -44,3 +44,6 @@ vi.mock("node:os", async (importOriginal) => {
     },
   };
 });
+
+// [leo][WP-21] 外部 agent（ACP）列表不随开发机安装了哪些 CLI 而变。
+process.env.LEO_ACP_AGENTS = "off";

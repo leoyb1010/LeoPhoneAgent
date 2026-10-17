@@ -89,6 +89,10 @@
     "./tools": {
       "types": "./dist/tools/index.d.ts",
       "import": "./dist/tools/index.js"
+    },
+    "./acp": {
+      "types": "./dist/acp/index.d.ts",
+      "import": "./dist/acp/index.js"
     }
   },
   "scripts": {
@@ -101,6 +105,7 @@
     "lint:fix": "oxlint --write src"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^1.9.0",
     "@ai-sdk/anthropic": "3.0.81",
     "@ai-sdk/openai": "^3.0.58",
     "@ai-sdk/openai-compatible": "^2.0.58",

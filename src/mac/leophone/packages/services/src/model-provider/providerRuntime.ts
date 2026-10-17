@@ -1,3 +1,5 @@
+import { createAcpRegistryProvider } from "@zcode/provider";
+import { hostClaudeAgentAcpEntry, listAvailableAcpAgentIds } from "#src/acp-agent/acpRegistry.js";
 import {
   NodeModelSelectionConfigRepository,
   createNodeModelSelectionFacade,
@@ -96,6 +98,12 @@ export class ProviderRuntime {
     this.registryService = new ProviderRegistryService({
       configSource: this.configService,
       accountSource,
+     // [leo][WP-21] 外部 agent（ACP）作为合成 Provider 出现在模型选择里。
+      // 只列出这台 Mac 上能启动的 agent（随包适配器 + 本机 CLI）。
+      extraRegistryProviders: () => {
+        const ids = listAvailableAcpAgentIds({ claudeAgentAcpEntry: hostClaudeAgentAcpEntry() });
+        return ids.length > 0 ? [createAcpRegistryProvider(ids)] : [];
+      },
     });
     const mutations = createSettingsMutationTarget(
       this.#configRuntime,

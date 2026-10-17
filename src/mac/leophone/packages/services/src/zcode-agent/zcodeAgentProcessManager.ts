@@ -1,4 +1,5 @@
 import { localRuntimeNetworkCapture } from "#src/zcode-agent/localRuntimeNetworkCapture.js";
+import { resolveStagedClaudeAgentAcpEntry } from "#src/acp-agent/acpRegistry.js";
 import { resolveZCodeAgentSpawnCwd } from "#src/zcode-agent/zcodeAgentSpawnCwd.js";
 import type { ZCodeAgentStorageStartupSnapshot } from "#src/zcode-agent/zcodeAgent.js";
 /* eslint-disable max-lines -- zcodeAgentProcessManager 集中维护 agent 子进程启动、复用、超时回收和 runtime identity，拆分会扩大进程生命周期状态同步面 */
@@ -435,8 +436,17 @@ function resolveElectronRuntimeZCodeAgentCommand(
     storagePreparationEntry: bundlePath,
     cwd: context.workspacePath,
     // 关键：必须以纯 Node 模式启动，否则子进程会被当成 Electron/Chromium 子进程卡在 GPU 初始化。
-    env: { ELECTRON_RUN_AS_NODE: "1" },
+    env: {
+      ELECTRON_RUN_AS_NODE: "1",
+      // [leo][WP-21] 随包的 Claude Code ACP 适配器（CJS 包里解析不到 node_modules）。
+      ...withClaudeAgentAcpEntry(bundlePath),
+    },
   };
+}
+
+function withClaudeAgentAcpEntry(bundlePath: string): Record<string, string> {
+  const entry = resolveStagedClaudeAgentAcpEntry(bundlePath);
+  return entry ? { LEO_CLAUDE_AGENT_ACP_ENTRY: entry } : {};
 }
 
 export function resolveDefaultZCodeAgentCommand(

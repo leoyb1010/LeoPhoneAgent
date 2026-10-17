@@ -6,6 +6,7 @@ import { registerLeoLinkIpc } from "./leoLinkIpc.js";
 import { installRequestSecurityDiagnostics } from "./request-security-edition/index.js";
 import { isLeoQuickPanelWindow, startLeoQuickEntry } from "./leo/quickEntry.js";
 import { registerImcpIpc } from "./leo/imcp.js";
+import { registerAcpIpc } from "./leo/acp.js";
 import { registerComputerUseIpc } from "./leo/computerUse.js";
 import { registerSpeechIpc } from "./leo/speech.js";
 import { createLocalTtftExporter } from "./localTtftExporter.js";
@@ -1971,6 +1972,7 @@ app.whenReady().then(async () => {
   // [leo-link] 「连接手机」面板经主进程转发到本机 Leo 接口。
   registerLeoLinkIpc();
   registerImcpIpc();
+  registerAcpIpc(); // [leo][WP-21] 外部 agent 列表与登录
   registerComputerUseIpc();
   registerSpeechIpc(logger);
   markMainLaunchAppReady();

@@ -17,6 +17,7 @@ import { runCommand } from "../../../scripts/spawn-command.mjs";
 import { stageAgentBundle } from "./stage-agent-bundle.mjs";
 import { isSharpRequiredByComputerUse, stageSharpIntoBundledAgents } from "./sharp-package-assets.mjs";
 import { stageKoffiIntoBundledAgents } from "./koffi-package-assets.mjs";
+import { collectRuntimeModuleClosureEntries } from "./runtime-dependency-closure.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = resolve(scriptDir, "..");
@@ -422,3 +423,29 @@ stageOfficialPlugins();
 stageBundledSkillPack();
 stageKoffiForCuaPlugin();
 stageSharpForNodeReplPlugin();
+stageClaudeAgentAcp();
+
+// [leo][WP-21] Claude Code 的 ACP 适配器（@agentclientprotocol/claude-agent-acp，Apache-2.0，版本在
+// packages/desktop/package.json 钉死）随包到 glm/acp/node_modules。Claude Code 本体用用户本机安装的
+// claude（CLAUDE_CODE_EXECUTABLE），所以 claude-agent-sdk 的各平台原生二进制包（每个 ~240MB）一律不带。
+function stageClaudeAgentAcp() {
+  const packageName = "@agentclientprotocol/claude-agent-acp";
+  const lookupRoots = [desktopRoot, repoRoot];
+  const entries = collectRuntimeModuleClosureEntries([packageName], lookupRoots).filter(
+    (entry) => !/^@anthropic-ai\/claude-agent-sdk-/.test(entry.moduleName),
+  );
+  const root = entries.find((entry) => entry.moduleName === packageName);
+  if (!root?.sourceModulePath) {
+    throw new Error(`[prepare:agent-bundle] ${packageName} 未安装（pnpm install）`);
+  }
+  const targetRoot = resolve(glmDir, "acp", "node_modules");
+  for (const entry of entries) {
+    if (!entry.sourceModulePath) continue;
+    cpSync(entry.sourceModulePath, resolve(targetRoot, entry.moduleName), {
+      recursive: true,
+      dereference: true,
+      filter: (source) => !/[\\/]node_modules[\\/]\.bin([\\/]|$)/.test(source),
+    });
+  }
+  console.log(`[prepare:agent-bundle] staged ${packageName} (${entries.length} packages) into ${targetRoot}`);
+}

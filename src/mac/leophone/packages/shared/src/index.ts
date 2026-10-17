@@ -344,3 +344,4 @@ export {
   isRequestSecurityFailure,
 } from "./request-security-edition/policy.js";
 export * from "./request-security-edition/verification-policy.js";
+export * from "./acp.js"; // [leo][WP-21]

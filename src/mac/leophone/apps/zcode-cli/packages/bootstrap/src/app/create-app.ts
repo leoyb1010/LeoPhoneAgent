@@ -18,6 +18,7 @@ import { createNodeSessionMailboxAdapter } from "@zcode/adapters/mailbox";
 import { createNodeContextSourceAdapter } from "@zcode/adapters/context";
 import { createNodeSkillAdapter } from "@zcode/adapters/skills";
 import { createMcpAdapter } from "@zcode/adapters/mcp";
+import { getAcpSessionManager, registerAcpTool, wrapModelFactoryForAcp } from "./leo/acp.js";
 import {
   AgentRuntime,
   normalizeAgentProfiles,
@@ -604,7 +605,12 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     // model factory 提前到三条 workflow child 装配线之前构造：script workflow bridge、dwf actor
     // runtime 与 expert workflow facade 都**共享**父会话这一份 factory——Registry 视图更新后
     // 新建的 Model 才看得到，child 不各自冻结一份。
-    const modelFactory = providerModelRuntime.modelFactory;
+    // [leo][WP-21] providerId = "acp" 的选择交给外部 agent（Claude Code / Codex / Gemini / opencode）。
+    const modelFactory = wrapModelFactoryForAcp(providerModelRuntime.modelFactory, {
+      sessionId,
+      workingDirectory: () => workingDirectory,
+      logger,
+    });
     const scriptWorkflowFacade = createScriptWorkflowBridge({
       agentTelemetry: modelTelemetry.agentExecution,
       appOptions: options,
@@ -887,6 +893,8 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       appVersion,
       traceContext,
     });
+    // [leo][WP-21] 外部 agent 的一步操作（对模型不可见，只由 AcpModel 发出）。
+    registerAcpTool(runtime.getToolRegistry(), logger);
     markRuntimeConstructed({
       hasInjectedModelAdapter: options.modelAdapter !== undefined,
       sessionId,
@@ -1230,6 +1238,8 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
           await closeSession?.();
         } finally {
           try {
+            // [leo][WP-21] 会话关闭时收掉它的外部 agent 进程（下次打开用 session/load 接上）。
+            getAcpSessionManager(logger).dispose(sessionId);
             providerModelRuntime?.dispose();
           } finally {
             await modelTelemetry.shutdown();

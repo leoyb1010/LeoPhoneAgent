@@ -106,3 +106,8 @@ export function isAmendWorkflowToolCall(source: WorkflowToolNameSource): boolean
 export function isFillWorkflowHoleToolCall(source: WorkflowToolNameSource): boolean {
   return matchesToolName(source, "fillworkflowhole");
 }
+
+/** [leo][WP-21] 外部 agent（ACP）的一步操作。 */
+export function isAcpToolCall(source: WorkflowToolNameSource): boolean {
+  return matchesToolName(source, "acptoolcall");
+}

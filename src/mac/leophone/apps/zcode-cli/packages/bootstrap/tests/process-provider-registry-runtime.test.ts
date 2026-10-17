@@ -41,7 +41,9 @@ afterEach(async () => {
 });
 
 describe("process provider registry runtime", () => {
-  it("Standalone 长生命周期下载 URL Release 后跟进 Registry；Managed Worker 不下载", async () => {
+  // [leo] 不再从官方 {ZCODE_BASE_URL}/api/v1/client/configs 与 CDN 远程拉取内置供应商目录：
+  // fetchRelease 恒返回 null（src/app/process-provider-registry-runtime.ts），只用随包 zcode-builtin.json。
+  it("Standalone 不远程下载内置目录：refresh 报 missing，Registry 与 active 文件保持随包版本", async () => {
     const root = await temporaryDirectory();
     const builtin = JSON.parse(
       await readFile(
@@ -53,23 +55,8 @@ describe("process provider registry runtime", () => {
     const active = join(root, "active.json");
     await writeFile(bundled, JSON.stringify(builtin));
     await writeFile(active, JSON.stringify(builtin));
-    builtin.revision += 1;
-    let releaseDownload!: () => void;
-    const wait = new Promise<void>((resolve) => {
-      releaseDownload = resolve;
-    });
-    const request = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      expect(init?.headers).toBeUndefined();
-      if (String(url).includes("/api/v1/client/configs?"))
-        return new Response(
-          JSON.stringify({
-            code: 0,
-            data: { configs: { builtin_provider_config_json: "https://cdn.example.com/new.json" } },
-          }),
-        );
-      await wait;
-      return new Response(JSON.stringify(builtin));
-    });
+    const request = vi.fn(async () => new Response("unexpected", { status: 500 }));
+    const refreshEvents: Array<{ result: string }> = [];
     const credentialStore = createSharedZCodeCredentialStore({
       env: { ZCODE_DATA_BASE_DIR: root },
     });
@@ -83,31 +70,17 @@ describe("process provider registry runtime", () => {
         credentialStore,
         request,
         legacyCliUserConfigFilePath: join(root, "absent.json"),
+        onBuiltinRefreshResult: (event) => refreshEvents.push(event),
       },
     });
     const old = runtime.runtime.registryService.getSnapshot()!;
     try {
-      await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+      await vi.waitFor(() => expect(refreshEvents).toContainEqual({ result: "missing" }));
+      expect(request).not.toHaveBeenCalled();
       expect(runtime.runtime.registryService.getSnapshot()).toBe(old);
-      releaseDownload();
-      await vi.waitFor(() =>
-        expect(runtime.runtime.registryService.getSnapshot()!.config.zcodeBuiltinRevision).toMatch(
-          `zcode-builtin:${builtin.revision}:`,
-        ),
-      );
-      const next = runtime.runtime.registryService.getSnapshot()!;
-      expect(next.account.basedOnZCodeBuiltinRevision).toBe(next.config.zcodeBuiltinRevision);
       expect(JSON.parse(await readFile(active, "utf8")).revision).toBe(builtin.revision);
-      expect(JSON.parse(await readFile(bundled, "utf8")).revision).toBe(builtin.revision - 1);
-      const worker = await startProcessProviderRegistryRuntime(env);
-      try {
-        expect(worker.snapshot.config.zcodeBuiltinRevision).toBe(next.config.zcodeBuiltinRevision);
-        expect(request).toHaveBeenCalledTimes(2);
-      } finally {
-        worker.dispose();
-      }
+      expect(JSON.parse(await readFile(bundled, "utf8")).revision).toBe(builtin.revision);
     } finally {
-      releaseDownload();
       runtime.dispose();
     }
   });
@@ -395,7 +368,7 @@ describe("process provider registry runtime", () => {
       [ZCODE_PERSONAL_PROVIDER_CONFIG_FILE_ENV]: personalFilePath,
     });
 
-    expect(started?.snapshot.registry.providers).toHaveLength(1);
+    expect(configuredProviders(started?.snapshot.registry.providers)).toHaveLength(1);
     expect(started?.runtime.registryService.getModel("personal-api", "model-a")).toBeDefined();
     started?.accountSource.replace(
       {
@@ -680,14 +653,14 @@ describe("process provider registry runtime", () => {
       ...env,
       [ZCODE_PERSONAL_PROVIDER_CONFIG_FILE_ENV]: join(root, "protocol-personal.json"),
     });
-    expect(protocolRuntime?.snapshot.registry.providers).toEqual([]);
+    expect(configuredProviders(protocolRuntime?.snapshot.registry.providers)).toEqual([]);
     expect(protocolRuntime?.configuredDefaultModelSelection).toBeUndefined();
     protocolRuntime?.dispose();
 
     const standaloneRuntime = await startProcessProviderRegistryRuntime(env, {
       standalone: { legacyCliUserConfigFilePath: legacyFilePath },
     });
-    expect(standaloneRuntime?.snapshot.registry.providers.map((entry) => entry.providerId)).toEqual(
+    expect(configuredProviders(standaloneRuntime?.snapshot.registry.providers).map((entry) => entry.providerId)).toEqual(
       ["custom"],
     );
     expect(JSON.parse(await readFile(personalFilePath, "utf8"))).toMatchObject({
@@ -740,7 +713,7 @@ describe("process provider registry runtime", () => {
     const restarted = await startProcessProviderRegistryRuntime(env, {
       standalone: { legacyCliUserConfigFilePath: legacyFilePath },
     });
-    expect(restarted?.snapshot.registry.providers.map((entry) => entry.providerId)).toEqual([
+    expect(configuredProviders(restarted?.snapshot.registry.providers).map((entry) => entry.providerId)).toEqual([
       "custom",
     ]);
     expect(restarted?.configuredDefaultModelSelection).toEqual({
@@ -829,4 +802,9 @@ function personalRelease(providerRules: readonly unknown[]) {
       modelConfigRules: { providerModelRules: [], manualProviderModelRules: [] },
     },
   };
+}
+
+// [leo][WP-21] Registry 末尾固定追加外部 agent（ACP）合成 Provider；这些用例只关心配置文件产出的 Provider。
+function configuredProviders<T extends { providerId: string }>(providers: readonly T[] | undefined): T[] {
+  return (providers ?? []).filter((provider) => provider.providerId !== "acp");
 }

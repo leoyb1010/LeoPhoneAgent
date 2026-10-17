@@ -22,7 +22,9 @@ import { ListWorkflowRunsToolCallBlock } from "@/ToolCallBlocks/renderers/list-w
 import { ResumeWorkflowRunToolCallBlock } from "@/ToolCallBlocks/renderers/resume-workflow-run.js";
 import { ResolveWorkflowQuestionToolCallBlock } from "@/ToolCallBlocks/renderers/resolve-workflow-question.js";
 import { SaveWorkflowToolCallBlock } from "@/ToolCallBlocks/renderers/save-workflow.js";
+import { AcpToolCallBlock } from "@/ToolCallBlocks/renderers/acp-tool-call.js";
 import {
+  isAcpToolCall,
   isEscalateToolCall,
   isEvalWorkflowSnippetToolCall,
   isGetWorkflowRunToolCall,
@@ -67,6 +69,11 @@ export function resolveToolCallRenderer(context: ToolCallBlockRenderContext) {
   }
   if (isCuaToolCall(context.toolCallNode.toolCall)) {
     return CuaToolCallBlock;
+  }
+
+  // [leo][WP-21] 外部 agent 的一步操作按名认领（不在已知工具表里，否则落到 raw JSON 兜底卡）。
+  if (isAcpToolCall(context.toolCallNode.toolCall)) {
+    return AcpToolCallBlock;
   }
 
   const identity = resolveToolCallIdentity(context.toolCallNode.toolCall);

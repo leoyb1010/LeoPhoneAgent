@@ -1,3 +1,4 @@
+import { createAcpRegistryProvider } from "@zcode/provider";
 import {
   ProviderRegistryService,
   MutableAccountProviderConfigSource,
@@ -35,6 +36,8 @@ export class NodeProviderRegistryRuntime {
     this.registryService = new ProviderRegistryService({
       configSource: this.configService,
       accountSource: this.#accountSource,
+     // [leo][WP-21] 外部 agent（ACP）作为合成 Provider 出现在模型选择里。
+      extraRegistryProviders: () => [createAcpRegistryProvider()],
     });
   }
 

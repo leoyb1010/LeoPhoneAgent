@@ -42,6 +42,8 @@ export interface ProviderRegistryServiceDependencies {
   readonly configSource: ProviderSource<ProviderConfigSnapshot>;
   readonly accountSource: ProviderSource<AccountProviderConfigSnapshot>;
   readonly resolver?: ProviderConfigResolver;
+  /** [leo][WP-21] 追加到 Registry 的合成 Provider（外部 agent / ACP），不进设置页的解析结果。 */
+  readonly extraRegistryProviders?: () => readonly Provider[];
 }
 
 interface RefreshWaiter {
@@ -54,6 +56,7 @@ export class ProviderRegistryService {
   readonly #configSource: ProviderSource<ProviderConfigSnapshot>;
   readonly #accountSource: ProviderSource<AccountProviderConfigSnapshot>;
   readonly #resolver: ProviderConfigResolver;
+  readonly #extraRegistryProviders: () => readonly Provider[];
   readonly #registry = new ProviderRegistry();
   readonly #changeListeners = new Set<(event: ProviderRegistryServiceChangedEvent) => void>();
   readonly #errorListeners = new Set<(event: ProviderRegistryServiceRefreshErrorEvent) => void>();
@@ -71,6 +74,7 @@ export class ProviderRegistryService {
     this.#configSource = dependencies.configSource;
     this.#accountSource = dependencies.accountSource;
     this.#resolver = dependencies.resolver ?? new ProviderConfigResolver();
+    this.#extraRegistryProviders = dependencies.extraRegistryProviders ?? (() => []);
   }
 
   async start(): Promise<void> {
@@ -229,7 +233,14 @@ export class ProviderRegistryService {
           accountStates: account.states,
           personalProviderOrder: config.personalProviderOrder,
         });
-        this.#registry.replace(resolution.registryProviders, [...reasons].join(","));
+        const extras = this.#extraRegistryProviders().filter(
+          (extra) =>
+            !resolution.registryProviders.some((provider) => provider.providerId === extra.providerId),
+        );
+        this.#registry.replace(
+          extras.length > 0 ? [...resolution.registryProviders, ...extras] : resolution.registryProviders,
+          [...reasons].join(","),
+        );
         const snapshot = Object.freeze({
           sourceRevisions: Object.freeze({
             config: config.revision,

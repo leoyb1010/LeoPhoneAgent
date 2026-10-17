@@ -11,3 +11,8 @@ export {
   type LeoReadLineFormat,
 } from "./model-profile.js";
 export { getLeoEditMatchStats, resetLeoEditMatchStats } from "./edit-match-stats.js";
+export {
+  createAcpToolCallEntry,
+  resolveAcpToolPermissionCapability,
+  type AcpToolPort,
+} from "./acp-tool-call.js"; // [leo][WP-21]

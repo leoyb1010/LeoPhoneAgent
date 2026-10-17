@@ -610,7 +610,11 @@ describe("@zcode/provider-node", () => {
     expect(await runtime.start()).toBeUndefined();
     const snapshot = runtime.registryService.getSnapshot()!;
 
-    expect(snapshot.registry.providers).toHaveLength(1);
+    // [leo][WP-21] Registry 末尾固定追加外部 agent（ACP）合成 Provider，配置文件里的只有 1 个。
+    expect(snapshot.registry.providers.map((provider) => provider.providerId)).toEqual([
+      "zcodeBuiltin",
+      "acp",
+    ]);
     expect(
       runtime.registryService.getModel("zcodeBuiltin", "model-a")?.config.properties,
     ).toMatchObject({

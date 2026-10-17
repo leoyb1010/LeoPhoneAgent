@@ -42,6 +42,14 @@ if (process.platform === "darwin") {
   });
 }
 
+/** [leo][WP-21] 外部 agent（ACP）：本机可用列表与「在终端登录」。 */
+if (process.platform === "darwin") {
+  contextBridge.exposeInMainWorld("leoAcp", {
+    list: () => ipcRenderer.invoke("leo:acp:list"),
+    login: (agentId: string) => ipcRenderer.invoke("leo:acp:login", agentId),
+  });
+}
+
 /** [leo][WP-22] 设置「电脑操作」:随包 Peekaboo 的权限状态与系统设置入口。 */
 if (process.platform === "darwin") {
   contextBridge.exposeInMainWorld("leoComputerUse", {
