@@ -11,7 +11,14 @@ import { leoPath } from "../leoPaths.js";
 import { LinkBridge } from "./bridge.js";
 import { DirectGrants } from "./directGrants.js";
 import { startDirectServer } from "./directServer.js";
-import { captureViaMain, screenSharingEnabled } from "./screen/hostCapture.js";
+import {
+  captureViaMain,
+  peerViaMain,
+  readTurnConfigFile,
+  screenSettings,
+  screenSharingEnabled,
+} from "./screen/hostCapture.js";
+import { createScreenSessionService } from "./screen/session.js";
 import { createScreenSnapshotService } from "./screen/snapshot.js";
 import { directConfig } from "./directSettings.js";
 export { configureLeoDirect } from "./directSettings.js";
@@ -365,6 +372,12 @@ export async function startLeoLink(deps: {
     leoagent: { url: LEOAGENT_URL, key: leoagentKey },
     // [WP-50] 看屏 R0:截图在主进程,开关 / scope / 限频在这里(docs/specs/leo-screen.md)。
     screen: createScreenSnapshotService({ capture: captureViaMain, enabled: screenSharingEnabled }),
+    // [WP-51] 看屏 R1:WebRTC 在主进程的隐藏窗口里,信令策略在这里。
+    screenSession: createScreenSessionService({
+      peer: peerViaMain,
+      settings: screenSettings,
+      turnConfig: readTurnConfigFile,
+    }),
     recentWorkspaces: async () => {
       const settings = await deps.settingService?.get();
       return (settings?.lastWorkspaceSession ?? [])

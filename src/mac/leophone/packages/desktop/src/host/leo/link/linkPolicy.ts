@@ -20,6 +20,8 @@ export function isLinkPath(pathname: string): boolean {
     pathname === "/harness/full-auto" ||
     pathname === "/harness/sessions" ||
     pathname === "/screen/snapshot" ||
+    // [WP-51] R1 视频信令:/screen/session、/screen/session/<id>、/screen/session/<id>/ice。
+    /^\/screen\/session(\/[^/]+(\/ice)?)?$/.test(pathname) ||
     /^\/harness\/sessions\/[^/]+\/(events|send|approval|stop|archive)$/.test(pathname)
   );
 }
