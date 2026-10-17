@@ -12,6 +12,10 @@ contextBridge.exposeInMainWorld("leoLink", {
   revoke: (payload: string) => ipcRenderer.invoke("leo:link:revoke", payload),
   /** 在系统浏览器里打开订阅账号登录页(主进程带上本次启动的口令与实际端口)。 */
   openOAuthPage: () => ipcRenderer.invoke("leo:oauth:open"),
+  /** [WP-50]「允许手机查看屏幕」开关与屏幕录制权限状态。 */
+  screenStatus: () => ipcRenderer.invoke("leo:screen:status"),
+  setScreenEnabled: (enabled: boolean) => ipcRenderer.invoke("leo:screen:set", enabled),
+  openScreenSettings: () => ipcRenderer.invoke("leo:screen:open-settings"),
 });
 
 /** [leo] 菜单栏与 ⌥Space 快速派发的设置(macOS;主进程持有,见 docs/specs/leo-quick-entry.md)。 */

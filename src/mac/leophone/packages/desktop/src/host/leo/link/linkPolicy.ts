@@ -19,6 +19,7 @@ export function isLinkPath(pathname: string): boolean {
     pathname === "/v1/grok/token" ||
     pathname === "/harness/full-auto" ||
     pathname === "/harness/sessions" ||
+    pathname === "/screen/snapshot" ||
     /^\/harness\/sessions\/[^/]+\/(events|send|approval|stop|archive)$/.test(pathname)
   );
 }

@@ -23,6 +23,7 @@ import {
 } from "./linkPolicy.js";
 import { resumeEnvelope } from "./resumeEnvelope.js";
 import { APPROVAL_CHOICES, LinkSession, type ApprovalChoice, type Caller } from "./session.js";
+import type { ScreenRequest } from "./screen/snapshot.js";
 
 export type LinkRequest = {
   method: string;
@@ -31,8 +32,16 @@ export type LinkRequest = {
   caller: Caller;
   requestId?: string;
   transport?: "direct" | "relay";
+  /** [WP-50] 直连带过来的 If-None-Match(中继不转发请求头,走 if_none_match 查询参数)。 */
+  ifNoneMatch?: string;
 };
-export type LinkResponse = { status: number; body: unknown };
+/** binary / headers 只有直连能用(看屏的 JPEG);中继只认 JSON body。 */
+export type LinkResponse = {
+  status: number;
+  body: unknown;
+  binary?: { data: Buffer; contentType: string };
+  headers?: Record<string, string>;
+};
 type Logger = {
   info: (msg: string, meta?: unknown) => void;
   warn: (msg: string, meta?: unknown) => void;
@@ -51,6 +60,8 @@ export type LinkBridgeDeps = {
   leoagent: { url: string; key: () => string | null };
   /** Mac 上最近打开的本机工作区(设置里的 lastWorkspaceSession);手机据此看到桌面上开的任务。 */
   recentWorkspaces?: () => Promise<string[]>;
+  /** [WP-50] 看屏截图(docs/specs/leo-screen.md);没有就是 404。 */
+  screen?: (req: ScreenRequest) => Promise<LinkResponse>;
   /** 本机 sshd 公钥(仅公钥),手机经已配对的加密通道读取后固定 SSH 身份;默认读 /etc/ssh。 */
   sshHostKeys?: () => Promise<string[]>;
 };
@@ -332,6 +343,16 @@ export class LinkBridge {
     if (pathname === "/v1/grok/token" && method === "GET")
       return this.leoagent.request("GET", url.pathname);
     if (pathname === "/harness/full-auto" && method === "POST") return this.fullAutoOff(req);
+    if (pathname === "/screen/snapshot") {
+      if (method !== "GET") return error(405, "Method not allowed");
+      if (!this.deps.screen) return error(404, "这台 Mac 不支持看屏");
+      return this.deps.screen({
+        caller: req.caller,
+        transport: req.transport ?? "relay",
+        query: url.searchParams,
+        ...(req.ifNoneMatch ? { ifNoneMatch: req.ifNoneMatch } : {}),
+      });
+    }
     if (pathname === "/harness/sessions") {
       if (method === "GET") return this.list();
       if (method === "POST") return this.create(req);

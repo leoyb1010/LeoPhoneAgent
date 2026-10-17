@@ -6,11 +6,27 @@ import type { DirectGrants } from "./directGrants.js";
 import { isLinkPath, record } from "./linkPolicy.js";
 
 function reply(res: ServerResponse, result: LinkResponse): void {
-  res.writeHead(result.status, {
-    "content-type": "application/json",
+  const base = {
     "cache-control": "no-store",
     "x-content-type-options": "nosniff",
-  });
+    ...result.headers,
+  };
+  // [WP-50] 看屏:直连回原始 JPEG;304 不带正文。
+  if (result.binary) {
+    res.writeHead(result.status, {
+      ...base,
+      "content-type": result.binary.contentType,
+      "content-length": result.binary.data.length,
+    });
+    res.end(result.binary.data);
+    return;
+  }
+  if (result.status === 304) {
+    res.writeHead(304, base);
+    res.end();
+    return;
+  }
+  res.writeHead(result.status, { ...base, "content-type": "application/json" });
   res.end(JSON.stringify(result.body));
 }
 async function jsonBody(req: IncomingMessage): Promise<unknown> {
@@ -109,6 +125,9 @@ export async function startDirectServer(args: {
         transport: "direct",
         requestId: typeof requestId === "string" ? requestId : undefined,
         body: req.method === "POST" ? await jsonBody(req) : undefined,
+        ...(typeof req.headers["if-none-match"] === "string"
+          ? { ifNoneMatch: req.headers["if-none-match"] }
+          : {}),
       };
       if (req.method === "GET" && /^\/harness\/sessions\/[^/]+\/events$/.test(url.pathname)) {
         const controller = new AbortController();

@@ -198,3 +198,63 @@ test("failed relay batch revocation denies every direct token and stream, then p
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("[WP-50] /screen/snapshot over direct: raw JPEG with ETag, 304 on If-None-Match, real bridge policy", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "leo-direct-screen-"));
+  const grants = new DirectGrants(path.join(dir, "grants.json"), "target");
+  await grants.restore();
+  const grant = await grants.issue({ kind: "iphone", deviceId: "phone" });
+  const { createScreenSnapshotService } = await import("./screen/snapshot.js");
+  let enabled = true;
+  const bridge = new LinkBridge({
+    taskService: {} as LinkBridgeDeps["taskService"],
+    logger: { info: () => {}, warn: () => {} },
+    push: () => {},
+    appVersion: null,
+    journalDir: path.join(dir, "journals"),
+    leoagent: { url: "http://127.0.0.1:9", key: () => null },
+    directGrants: grants,
+    screen: createScreenSnapshotService({
+      enabled: () => enabled,
+      capture: async () => ({
+        ok: true,
+        frame: {
+          jpeg: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+          width: 2,
+          height: 1,
+          displayId: "1",
+          capturedAt: 5,
+        },
+      }),
+    }),
+  });
+  const device = {
+    schemaVersion: 1,
+    deviceId: "target",
+    name: "Mac",
+    platform: "macos",
+    endpoints: [],
+    capabilities: [],
+  } satisfies LeoDeviceDescriptor;
+  const server = await startDirectServer({ bridge, grants, device, port: 0 });
+  const url = `http://127.0.0.1:${server.port}/screen/snapshot?max_edge=640`;
+  const headers = { Authorization: `Bearer ${grant.token}`, "X-Leo-Device-ID": "target" };
+  try {
+    const first = await fetch(url, { headers });
+    assert.equal(first.status, 200);
+    assert.equal(first.headers.get("content-type"), "image/jpeg");
+    assert.equal(first.headers.get("x-leo-screen-width"), "2");
+    assert.deepEqual([...new Uint8Array(await first.arrayBuffer())], [0xff, 0xd8, 0xff, 0xd9]);
+    const etag = first.headers.get("etag")!;
+    const second = await fetch(url, { headers: { ...headers, "If-None-Match": etag } });
+    assert.equal(second.status, 304);
+    assert.equal((await second.arrayBuffer()).byteLength, 0);
+    enabled = false;
+    const off = await fetch(url, { headers });
+    assert.equal(off.status, 403);
+    assert.equal(((await off.json()) as { error: { code: string } }).error.code, "screen_disabled");
+  } finally {
+    await server.stop();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

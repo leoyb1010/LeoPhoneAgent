@@ -11,6 +11,8 @@ import { leoPath } from "../leoPaths.js";
 import { LinkBridge } from "./bridge.js";
 import { DirectGrants } from "./directGrants.js";
 import { startDirectServer } from "./directServer.js";
+import { captureViaMain, screenSharingEnabled } from "./screen/hostCapture.js";
+import { createScreenSnapshotService } from "./screen/snapshot.js";
 import { directConfig } from "./directSettings.js";
 export { configureLeoDirect } from "./directSettings.js";
 import { loadDeviceIdentity } from "./deviceIdentity.js";
@@ -361,6 +363,8 @@ export async function startLeoLink(deps: {
     appVersion: deps.appVersion,
     journalDir: leoPath("link", "journals"),
     leoagent: { url: LEOAGENT_URL, key: leoagentKey },
+    // [WP-50] 看屏 R0:截图在主进程,开关 / scope / 限频在这里(docs/specs/leo-screen.md)。
+    screen: createScreenSnapshotService({ capture: captureViaMain, enabled: screenSharingEnabled }),
     recentWorkspaces: async () => {
       const settings = await deps.settingService?.get();
       return (settings?.lastWorkspaceSession ?? [])

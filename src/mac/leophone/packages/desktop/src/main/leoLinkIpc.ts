@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 
 import { callLeo, LEO_HTTP_PORT, leoOAuthPageUrl, ownHostListening } from "./leoLinkHttp.js";
+import { leoScreenHostEnv, SCREEN_PRIVACY_URL, screenPermissionStatus } from "./leo/screenCapture.js";
 
 /**
  * [leo-link] 「连接手机」面板的通道:界面 → 主进程 → 本机 Leo 接口(带 Bearer)。
@@ -32,7 +33,8 @@ const LEO_UI_SECRET = randomBytes(24).toString("base64url");
 export const LEO_OAUTH_OPEN_CHANNEL = "leo:oauth:open";
 
 export function leoHostPairEnv(): Record<string, string> {
-  return { [LEO_PAIR_SECRET_ENV]: LEO_PAIR_SECRET, LEO_UI_SECRET };
+  // [WP-50] 看屏截图 socket 的地址与口令也经 fork 环境交给 Host(见 leo/screenCapture.ts)。
+  return { [LEO_PAIR_SECRET_ENV]: LEO_PAIR_SECRET, LEO_UI_SECRET, ...leoScreenHostEnv() };
 }
 
 export function isTrustedLeoSender(event: IpcMainInvokeEvent): boolean {
@@ -60,7 +62,37 @@ export async function callLeoQuick(
 
 const PORT_TAKEN = `本机端口 ${LEO_HTTP_PORT} 被别的程序占着(比如旧版 LeoCodeBox),先关掉它再试`;
 
+/** [WP-50] 设置「连接手机 → 屏幕」:开关在 Host(要内存口令),屏幕录制权限状态在主进程。 */
+async function screenShareState(enabled?: boolean) {
+  const host = (await ownHostListening())
+    ? await callLeo(
+        "/api/leo/link/screen",
+        enabled === undefined ? "GET" : "POST",
+        { "x-leo-pair": LEO_PAIR_SECRET },
+        enabled === undefined ? undefined : { enabled },
+      )
+    : ({ ok: false, error: "本机 Leo 服务还没启动" } as const);
+  return {
+    enabled: host.ok ? host.data["enabled"] === true : false,
+    hostError: host.ok ? null : host.error,
+    permission: screenPermissionStatus(),
+  };
+}
+
 export function registerLeoLinkIpc(): void {
+  ipcMain.handle("leo:screen:status", (event) =>
+    isTrustedLeoSender(event) ? screenShareState() : { error: "forbidden" },
+  );
+  ipcMain.handle("leo:screen:set", (event, enabled: unknown) =>
+    isTrustedLeoSender(event) && typeof enabled === "boolean"
+      ? screenShareState(enabled)
+      : { error: "forbidden" },
+  );
+  ipcMain.handle("leo:screen:open-settings", async (event) => {
+    if (!isTrustedLeoSender(event)) return false;
+    await shell.openExternal(SCREEN_PRIVACY_URL);
+    return true;
+  });
   ipcMain.handle(LEO_OAUTH_OPEN_CHANNEL, async (event) => {
     if (!isTrustedLeoSender(event)) return { ok: false, error: "forbidden" };
     // 端口上不是我们的 Host(旧版 LeoCodeBox 等)时,带口令的地址不能交给它的页面。
