@@ -44,6 +44,8 @@ struct GatewayHost: Codable, Identifiable, Hashable {
     var relayServices: GatewayRelayServices? = nil
     /// Local queue ownership; discovery enrichment must not orphan pending input.
     var outboxIdentity: String? = nil
+    /// [fix-remote] 这台 Mac 上次报的可开任务类型（/v1/capabilities），菜单据此列出；nil = 还没问过。
+    var harnesses: [HarnessKind]? = nil
 
     var isAndroidBody: Bool { platform == "android" || server == "minis" }
     /// Mac 1.2 起由 LeoPhoneAgent 自己接中继(`info.server = leophoneagent`):
@@ -81,11 +83,34 @@ final class GatewayHostStore: ObservableObject {
         } else {
             hosts = []
         }
+        migrateRelayRoots()
         // [T-link-problem] 回到前台也算用户回来了:解除所有主机的暂停(见 LeoLinkProblemBook.resumeAll)。
         NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.resumeAllLinks() }
         }
+    }
+
+    /// [fix-remote] 中继换了主入口（Cloudflare 隧道替代 Funnel）：已保存的每台主机一次性改到主入口，
+    /// 设备描述符里列出的其他中继入口学进 RelayRootRouter（请求失败时在同组入口间回落）。
+    /// 只是同一个中继换了门牌：保留队列归属（outboxIdentity）与设备信息，不当成换了主机。
+    private func migrateRelayRoots(router: RelayRootRouter = .shared) {
+        let roots = LeoRelayConfig.apiRoots
+        var changed = false
+        for index in hosts.indices {
+            let host = hosts[index]
+            if let migrated = RelayRootRouter.migratedHarnessURL(host.harnessURL, primaryRoot: roots.first, group: roots) {
+                hosts[index].outboxIdentity = host.outboxIdentity
+                    ?? HarnessOutboxIdentity.initial(hostId: host.id, endpoint: host.harnessURL)
+                hosts[index].harnessURL = migrated
+                if let root = RelayMachinesClient.apiRoot(fromHarnessURL: migrated) {
+                    hosts[index].relayServices = GatewayRelayServices(apiRoot: root)
+                }
+                changed = true
+            }
+            router.learn(device: hosts[index].device, currentHarnessURL: hosts[index].harnessURL)
+        }
+        if changed { persist() }
     }
 
     /// True when the feature should appear at all. Everything gateway-related
@@ -138,6 +163,7 @@ final class GatewayHostStore: ObservableObject {
                     hosts[index].outboxIdentity = outboxIdentity
                     changed = true
                 }
+                RelayRootRouter.shared.learn(device: machine.device, currentHarnessURL: harness)
                 if let device = machine.device, hosts[index].device != device {
                     hosts[index].device = device
                     clients.removeValue(forKey: id)
@@ -273,6 +299,12 @@ final class GatewayHostStore: ObservableObject {
             hosts[index].device = device
             persist()
         }
+    }
+
+    func recordHarnesses(_ kinds: [HarnessKind], for id: String) {
+        guard let index = hosts.firstIndex(where: { $0.id == id }), hosts[index].harnesses != kinds else { return }
+        hosts[index].harnesses = kinds
+        persist()
     }
 
     func markSeen(id: String) {

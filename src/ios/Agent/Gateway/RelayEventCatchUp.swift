@@ -302,7 +302,7 @@ extension LeoAgentClient {
         }
 
         if kind == "body" {
-            let (data, response) = try await session.data(for: request(start: 0))
+            let (data, response) = try await RelayRootRouter.shared.perform(request(start: 0)) { try await session.data(for: $0) }
             guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             if http.statusCode == 202 { return .pending }
             if http.statusCode == 410 { return .unavailable }
@@ -320,12 +320,16 @@ extension LeoAgentClient {
             return .ready
         }
 
-        var (bytes, response) = try await session.bytes(for: request(start: offset))
+        var (bytes, response) = try await RelayRootRouter.shared.perform(request(start: offset), discard: { $0.task.cancel() }) {
+            try await session.bytes(for: $0)
+        }
         guard var http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if http.statusCode == 416 && offset > 0 {
             removePartial()
             offset = 0
-            (bytes, response) = try await session.bytes(for: request(start: 0))
+            (bytes, response) = try await RelayRootRouter.shared.perform(request(start: 0), discard: { $0.task.cancel() }) {
+                try await session.bytes(for: $0)
+            }
             guard let retry = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             http = retry
         }
@@ -487,7 +491,7 @@ extension LeoAgentClient {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
         request.timeoutInterval = 25
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await RelayRootRouter.shared.perform(request) { try await session.data(for: $0) }
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         return (data, http)
     }
@@ -790,7 +794,9 @@ extension LeoAgentClient {
         var req = URLRequest(url: url)
         req.setValue("Bearer \(apiKeyForRelay)", forHTTPHeaderField: "Authorization")
         req.timeoutInterval = 20
-        let (bytes, response) = try await session.bytes(for: req)
+        let (bytes, response) = try await RelayRootRouter.shared.perform(req, discard: { $0.task.cancel() }) {
+            try await session.bytes(for: $0)
+        }
         guard let http = response as? HTTPURLResponse else {
             throw GatewayError.malformedResponse("not an HTTP response")
         }

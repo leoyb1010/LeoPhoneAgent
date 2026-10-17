@@ -122,7 +122,8 @@ extension LeoAgentClient {
         }
         let start = Date()
         do {
-            let result = try await session.data(for: original)
+            // [fix-remote] 中继有多个入口：按更快的发，入口坏了换同组另一个（RelayRootRouter）。
+            let result = try await RelayRootRouter.shared.perform(original) { try await session.data(for: $0) }
             await reportRoute(direct: false, start: start)
             return result
         } catch let error as URLError where directAttempted && mutating {
@@ -145,7 +146,9 @@ extension LeoAgentClient {
             }
         }
         if directOnly { throw URLError(.cannotConnectToHost) }
-        return try await session.bytes(for: original)
+        return try await RelayRootRouter.shared.perform(original, discard: { $0.task.cancel() }) {
+            try await session.bytes(for: $0)
+        }
     }
 }
 

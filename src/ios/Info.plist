@@ -10,6 +10,8 @@
 	</array>
 	<key>LeoRelayApiRoot</key>
 	<string>$(LEO_RELAY_API_ROOT)</string>
+	<key>LeoRelayApiRootFallback</key>
+	<string>$(LEO_RELAY_API_ROOT_FALLBACK)</string>
 	<key>LeoRelayFleet</key>
 	<string>$(LEO_RELAY_FLEET)</string>
 	<key>LeoRelaySSHTarget</key>

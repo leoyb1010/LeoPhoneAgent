@@ -36,6 +36,19 @@ enum LeoRelayConfig {
         let machine: String
     }
     static var apiRoot: String? { normalizedApiRoot(info("LeoRelayApiRoot")) }
+    /// [fix-remote] 同一个中继的备用入口（主入口不通时自动回落，见 RelayRootRouter）。
+    static var fallbackApiRoot: String? { normalizedApiRoot(info("LeoRelayApiRootFallback")) }
+    /// 主入口在前；与主入口相同的备用入口去掉。
+    static var apiRoots: [String] { roots(primary: apiRoot, fallback: fallbackApiRoot) }
+
+    static func roots(primary: String?, fallback: String?) -> [String] {
+        var out: [String] = []
+        for root in [primary, fallback].compactMap({ $0 })
+        where !out.contains(where: { RelayMachinesClient.sameApiRoot($0, root) }) {
+            out.append(root)
+        }
+        return out
+    }
     static var fleet: [Machine] { parseFleet(info("LeoRelayFleet")) }
     /// 取密钥命令的 SSH 目标（形如 user@host），为空则不提供复制命令。
     static var sshTarget: String? {
@@ -113,7 +126,8 @@ enum RelayMachinesClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["token": trimmed])
         req.timeoutInterval = 12
-        let (data, response) = try await URLSession.shared.data(for: req)
+        // 配对码只能用一次：没连上才换入口（RelayRootRouter.neverSent），不会把一次成功的兑换重放。
+        let (data, response) = try await RelayRootRouter.shared.perform(req) { try await URLSession.shared.data(for: $0) }
         guard let http = response as? HTTPURLResponse else { throw RelayDiscoveryError.malformed }
         if http.statusCode == 401 || http.statusCode == 403 { throw RelayDiscoveryError.unauthorized }
         guard (200..<300).contains(http.statusCode) else { throw RelayDiscoveryError.http(http.statusCode) }
@@ -138,7 +152,7 @@ enum RelayMachinesClient {
         req.setValue("Bearer \(trimmed)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.timeoutInterval = 12
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await RelayRootRouter.shared.perform(req) { try await URLSession.shared.data(for: $0) }
         guard let http = response as? HTTPURLResponse else {
             throw RelayDiscoveryError.malformed
         }

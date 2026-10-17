@@ -3,6 +3,10 @@
 //
 // 中继 API 根地址（必须 https），例如 https:/$()/relay-host.example.ts.net/leoagent-relay/relay/api
 LEO_RELAY_API_ROOT =
+// 同一中继的备用入口（可选，必须 https）：主入口连不上 / 超时 / 5xx 时自动回落，App 记住更快的那个（10 分钟）。
+// 例如主入口用 Cloudflare 隧道 https:/$()/relay.example.com/relay/api，备用用 Tailscale Funnel
+// https:/$()/relay-host.example.ts.net/leoagent-relay/relay/api。已保存的设备地址会一次性迁到主入口。
+LEO_RELAY_API_ROOT_FALLBACK =
 // 一键添加的设备预设：`显示名=机器名;显示名=机器名`，留空则只显示中继发现的设备。
 LEO_RELAY_FLEET =
 // 取中继密钥命令的 SSH 目标（user@host），留空则不显示"复制取密钥命令"。

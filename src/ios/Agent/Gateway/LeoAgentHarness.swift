@@ -17,12 +17,6 @@
 import Foundation
 import QuartzCore
 
-struct HarnessKind: Sendable, Identifiable, Hashable {
-    let key: String
-    let name: String
-    var id: String { key }
-}
-
 struct HarnessSessionSummary: Sendable, Identifiable, Hashable {
     let id: String
     let harness: String
@@ -64,11 +58,12 @@ extension LeoAgentClient {
     /// has not installed never appears as a choice that would fail on use.
     func harnessKinds() async throws -> [HarnessKind] {
         let obj = try await getJSON("/v1/capabilities", service: .harness)
-        let rows = obj["harnesses"] as? [[String: Any]] ?? []
-        return rows.compactMap { row in
-            guard let key = row["key"] as? String else { return nil }
-            return HarnessKind(key: key, name: row["name"] as? String ?? key)
+        // [fix-remote] 以 Mac 为准，不过滤；记到主机上，对话框的「指挥 Mac」菜单也用这份。
+        let kinds = HarnessCatalog.parse(obj["harnesses"] as? [[String: Any]] ?? [])
+        if let hostId, !kinds.isEmpty {
+            await GatewayHostStore.shared.recordHarnesses(kinds, for: hostId)
         }
+        return kinds
     }
 
     func harnessSessions() async throws -> [HarnessSessionSummary] {

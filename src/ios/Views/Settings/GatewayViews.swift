@@ -1186,16 +1186,28 @@ struct HarnessLauncherView: View {
                         Button {
                             selected = kind
                         } label: {
-                            HStack {
-                                Image(systemName: "terminal")
-                                Text(kind.name)
+                            HStack(alignment: .firstTextBaseline) {
+                                Image(systemName: kind.symbol)
+                                    .frame(width: 20)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(kind.displayName)
+                                    // 装不上的照样列出，灰显并写明 Mac 给的原因（怎么装、装在哪）。
+                                    if let line = kind.statusLine {
+                                        Text(line)
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
                                 Spacer()
                                 if selected?.key == kind.key {
                                     Image(systemName: "checkmark").foregroundStyle(.tint)
                                 }
                             }
+                            .opacity(kind.available ? 1 : 0.45)
                         }
                         .buttonStyle(.plain)
+                        .disabled(!kind.available)
                     }
                 }
                 if let linkProblem {
@@ -1274,7 +1286,7 @@ struct HarnessLauncherView: View {
         let store = GatewayHostStore.shared
         do {
             kinds = try await client.harnessKinds()
-            selected = kinds.first
+            selected = kinds.first(where: \.available)
             store.recordLinkProblem(nil, for: host.id)
         } catch {
             if !LeoLinkProblem.isCancellation(error) {
@@ -1501,8 +1513,9 @@ struct ComposerMacTarget: Identifiable {
 
     /// 这台机器能开的任务类型:Android 机身只有它自己的 Agent;升级到 LeoPhoneAgent 1.2 的 Mac 把它自己的 Agent 排第一。
     static func clis(for host: GatewayHost) -> [(String, String)] {
-        if host.isAndroidBody { return [("minis", "LeoBot")] }
-        return host.runsLeoPhoneAgent ? [("zcode", "LeoBot")] + clis : clis
+        // [fix-remote] 以 Mac 上次报的列表为准（opencode / gemini / grok 都在），还没问过才用旧默认。
+        HarnessCatalog.menuOptions(known: host.harnesses, runsLeoPhoneAgent: host.runsLeoPhoneAgent,
+                                   isAndroidBody: host.isAndroidBody)
     }
     let host: GatewayHost
     let cliKey: String

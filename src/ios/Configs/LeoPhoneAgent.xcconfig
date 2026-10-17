@@ -5,6 +5,7 @@
 // 再在 LocalRelay.xcconfig（已被 .gitignore 忽略）里填写真实值。
 // 文件缺失时下面的空默认值生效，App 中继功能显示"未配置中继地址"，不会发出中继请求。
 LEO_RELAY_API_ROOT =
+LEO_RELAY_API_ROOT_FALLBACK =
 LEO_RELAY_FLEET =
 LEO_RELAY_SSH_TARGET =
 
