@@ -5,19 +5,21 @@
 // 形态仿 native/macos-window-bounds:无 bundle 的命令行程序,stdout 一行一个 JSON,父进程逐行读。
 //
 // 用法:
-//   leo-speech listen [--locale zh-CN] [--file <音频>]   麦克风流式听写;stdin 收到一行 "stop" 或 EOF 时收尾并退出。
-//                                           --file 用音频文件按实时速度代替麦克风(开发态端到端验证用,不碰麦克风权限)
-//   leo-speech transcribe <音频文件> [--locale zh-CN]   转写一个音频文件(验证 / 调试用)
+//   leo-speech serve [--locale zh-CN] [--no-vocab]   常驻:先把识别模型与分析器备好(不碰麦克风),再按 stdin 指令逐段听写。
+//       stdin 每行一个 JSON 指令:{"cmd":"start"} 开麦 | {"cmd":"start","file":"<音频>"} 用文件按实时速度代替麦克风
+//       (开发态端到端验证用,不碰麦克风权限)| {"cmd":"stop"} 收尾出 final | {"cmd":"cancel"} 丢弃 | EOF 退出。
+//   leo-speech transcribe <音频文件> [--locale zh-CN] [--no-vocab]   转写一个音频文件(验证 / 调试 / 词表对比用)
 //   leo-speech speak [--rate 0.5] [--voice <identifier>]  朗读 stdin 里的全部文字,读完退出
 //   leo-speech status [--locale zh-CN]      语言是否支持、资源是否已装、麦克风授权状态
 //
 // 输出(每行一个 JSON):
+//   {"type":"warm","locale":"zh_CN"}                serve:模型已就绪,可以随时 start(每段结束后会自动备好下一段)
 //   {"type":"ready","locale":"zh_CN"}               开始收音
 //   {"type":"installing"}                            正在下载该语言的系统语音资源
 //   {"type":"partial","text":"…"}                    当前完整文本(已定稿 + 正在变化的部分),随时可能被下一条覆盖
 //   {"type":"final","text":"…"}                      整段最终文本
 //   {"type":"error","code":"…","message":"…"}        code: mic_denied | unsupported_locale | asset_unavailable | audio | failed
-//   {"type":"done"}                                  正常结束
+//   {"type":"done"}                                  这一段结束(serve 进程继续常驻;其余子命令随后退出)
 
 import AVFoundation
 import Foundation
@@ -71,31 +73,53 @@ final class TranscriptAccumulator: @unchecked Sendable {
     }
 }
 
+/// 中英混说时系统模型常把技术词听成同音中文(「提交一个 PR」→「提交一个皮二」)。
+/// AnalysisContext.contextualStrings 给识别器一份偏好词表;--no-vocab 关掉,用来做前后对比。
+let vocabulary = [
+    "pull request", "PR", "commit", "push", "pull", "merge", "rebase", "branch", "main", "diff",
+    "Claude", "Claude Code", "Codex", "LeoBot", "GitHub", "Git", "README", "API", "SDK", "MCP",
+    "token", "prompt", "bug", "debug", "build", "deploy", "release", "npm", "pnpm", "TypeScript",
+    "Swift", "Xcode", "iOS", "macOS", "Electron", "JSON", "terminal", "worktree", "agent",
+]
+
 @available(macOS 26, *)
-func makeTranscriber() async -> SpeechTranscriber {
-    guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requestedLocale) else {
-        fail("unsupported_locale", "系统语音识别不支持 \(requestedLocale.identifier)")
+func makeContext() -> AnalysisContext {
+    let context = AnalysisContext()
+    if !CommandLine.arguments.contains("--no-vocab") {
+        context.contextualStrings[.general] = vocabulary
     }
-    let transcriber = SpeechTranscriber(
+    return context
+}
+
+@available(macOS 26, *)
+func makeTranscriber(_ locale: Locale) -> SpeechTranscriber {
+    SpeechTranscriber(
         locale: locale,
         transcriptionOptions: [],
         reportingOptions: [.volatileResults, .fastResults],
         attributeOptions: []
     )
-    // 语言资源由系统统一管理:没装就请求安装(只需联网一次),装好后离线可用。
+}
+
+/// 选定语言并确保系统语言资源已装(没装就请求安装,只需联网一次,装好后离线可用)。
+@available(macOS 26, *)
+func resolveLocale() async -> Locale {
+    guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requestedLocale) else {
+        fail("unsupported_locale", "系统语音识别不支持 \(requestedLocale.identifier)")
+    }
     do {
-        if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+        if let request = try await AssetInventory.assetInstallationRequest(supporting: [makeTranscriber(locale)]) {
             emit(["type": "installing"])
             try await request.downloadAndInstall()
         }
     } catch {
         fail("asset_unavailable", "语音资源安装失败:\(error.localizedDescription)")
     }
-    return transcriber
+    return locale
 }
 
 @available(macOS 26, *)
-func consume(_ transcriber: SpeechTranscriber, into accumulator: TranscriptAccumulator) -> Task<Void, Error> {
+func consumeTranscriber(_ transcriber: SpeechTranscriber, into accumulator: TranscriptAccumulator) -> Task<Void, Error> {
     Task {
         for try await result in transcriber.results {
             let text = String(result.text.characters)
@@ -107,11 +131,12 @@ func consume(_ transcriber: SpeechTranscriber, into accumulator: TranscriptAccum
 
 @available(macOS 26, *)
 func transcribeFile(_ path: String) async {
-    let transcriber = await makeTranscriber()
+    let transcriber = makeTranscriber(await resolveLocale())
     let accumulator = TranscriptAccumulator()
     let analyzer = SpeechAnalyzer(modules: [transcriber])
-    let results = consume(transcriber, into: accumulator)
+    let results = consumeTranscriber(transcriber, into: accumulator)
     do {
+        try await analyzer.setContext(makeContext())
         let file = try AVAudioFile(forReading: URL(fileURLWithPath: path))
         if let end = try await analyzer.analyzeSequence(from: file) {
             try await analyzer.finalizeAndFinish(through: end)
@@ -212,43 +237,173 @@ final class MicrophoneFeed: @unchecked Sendable {
     }
 }
 
+/// 一段听写所需的、可以提前备好的东西。分析器结束(finish)后不能复用,所以每段用完立刻备下一套。
 @available(macOS 26, *)
-func listen() async {
-    let testFile = option("--file")
-    if testFile == nil, !(await microphoneAuthorized()) {
-        fail("mic_denied", "没有麦克风权限:系统设置 > 隐私与安全性 > 麦克风 里允许 LeoBot")
+struct PreparedAnalyzer: Sendable {
+    let analyzer: SpeechAnalyzer
+    let transcriber: SpeechTranscriber
+    /// 实测(本机 macOS 27,开头无静音的音频按实时喂入):SpeechTranscriber 首字 ~1.05s,预热也压不下去(模型自身攒音频);
+    /// DictationTranscriber 首字 ~0.53s 但中英混说明显更差。两个模块挂在同一个分析器上:
+    /// SpeechTranscriber 出字之前先显示 Dictation 的临时文字,出字后整段换成 SpeechTranscriber 的,最终文本只用它的。
+    let early: DictationTranscriber?
+    let format: AVAudioFormat
+}
+
+/// [WP-60 预热] 之前每次按键才拉起进程、装资源、建分析器、加载模型(~1.2s,这段时间说的话会丢)。
+/// 现在这些都在按键前做完;模型用 processLifetime 留在内存里,下一套分析器几乎零成本。
+@available(macOS 26, *)
+func prepareAnalyzer(_ locale: Locale, early earlyLocale: Locale?) async throws -> PreparedAnalyzer {
+    let transcriber = makeTranscriber(locale)
+    let early = earlyLocale.map {
+        DictationTranscriber(
+            locale: $0, contentHints: [], transcriptionOptions: [.punctuation],
+            reportingOptions: [.volatileResults], attributeOptions: []
+        )
     }
-    let transcriber = await makeTranscriber()
-    guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
-        fail("audio", "没有可用的音频格式")
+    let modules: [any SpeechModule] = [transcriber] + (early.map { [$0] } ?? [])
+    let analyzer = SpeechAnalyzer(
+        modules: modules,
+        options: .init(priority: .userInitiated, modelRetention: .processLifetime)
+    )
+    try await analyzer.setContext(makeContext())
+    guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: modules) else {
+        throw CocoaError(.featureUnsupported)
     }
-    let accumulator = TranscriptAccumulator()
-    let analyzer = SpeechAnalyzer(modules: [transcriber])
-    let feed = MicrophoneFeed()
-    let results = consume(transcriber, into: accumulator)
+    try await analyzer.prepareToAnalyze(in: format)
+    return PreparedAnalyzer(analyzer: analyzer, transcriber: transcriber, early: early, format: format)
+}
+
+/// Dictation 模块的资源装不上就不用它(只是首字慢一点),不影响听写本身。
+@available(macOS 26, *)
+func resolveEarlyLocale() async -> Locale? {
+    guard let locale = await DictationTranscriber.supportedLocale(equivalentTo: requestedLocale) else { return nil }
+    let probe = DictationTranscriber(
+        locale: locale, contentHints: [], transcriptionOptions: [], reportingOptions: [], attributeOptions: []
+    )
     do {
-        try await analyzer.prepareToAnalyze(in: format)
-        if let testFile { try feed.startFile(testFile, format: format) } else { try feed.start(format: format) }
-        try await analyzer.start(inputSequence: feed.stream)
-    } catch {
-        fail("audio", "麦克风启动失败:\(error.localizedDescription)")
-    }
-    emit(["type": "ready", "locale": transcriber.selectedLocales.first?.identifier ?? requestedLocale.identifier])
-    // 父进程松开快捷键时写 "stop";父进程没了(stdin EOF)也收尾。
-    await Task.detached {
-        while let line = readLine() {
-            if line.trimmingCharacters(in: .whitespaces) == "stop" { break }
+        if let request = try await AssetInventory.assetInstallationRequest(supporting: [probe]) {
+            try await request.downloadAndInstall()
         }
-    }.value
-    feed.stop()
-    do {
-        try await analyzer.finalizeAndFinishThroughEndOfInput()
-        try await results.value
+        return locale
     } catch {
-        fail("failed", error.localizedDescription)
+        return nil
     }
-    emit(["type": "final", "text": accumulator.full])
-    emit(["type": "done"])
+}
+
+/// 一段听写的两路结果:SpeechTranscriber 有字就用它,否则先用 Dictation 的。
+@available(macOS 26, *)
+func consume(_ prepared: PreparedAnalyzer, into main: TranscriptAccumulator) -> Task<Void, Error> {
+    let early = TranscriptAccumulator()
+    let report = { emit(["type": "partial", "text": main.full.isEmpty ? early.full : main.full]) }
+    let earlyTask = prepared.early.map { module in
+        Task {
+            for try await result in module.results {
+                _ = early.apply(text: String(result.text.characters), isFinal: result.isFinal)
+                if main.full.isEmpty { report() }
+            }
+        }
+    }
+    return Task {
+        for try await result in prepared.transcriber.results {
+            _ = main.apply(text: String(result.text.characters), isFinal: result.isFinal)
+            report()
+        }
+        _ = try await earlyTask?.value
+        if main.full.isEmpty { _ = main.apply(text: early.full, isFinal: true) }
+    }
+}
+
+struct ServeCommand {
+    let cmd: String
+    let file: String?
+
+    init?(_ line: String) {
+        guard let data = line.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let cmd = object["cmd"] as? String
+        else { return nil }
+        self.cmd = cmd
+        file = object["file"] as? String
+    }
+}
+
+@available(macOS 26, *)
+func serve() async {
+    let locale = await resolveLocale()
+    let earlyLocale = await resolveEarlyLocale()
+    let (commands, sink) = AsyncStream.makeStream(of: ServeCommand.self)
+    Task.detached {
+        while let line = readLine() {
+            if let command = ServeCommand(line) { sink.yield(command) }
+        }
+        sink.finish()
+    }
+    var next = Task { try await prepareAnalyzer(locale, early: earlyLocale) }
+    do {
+        _ = try await next.value
+    } catch {
+        fail("failed", "语音模型准备失败:\(error.localizedDescription)")
+    }
+    emit(["type": "warm", "locale": locale.identifier])
+    var iterator = commands.makeAsyncIterator()
+    var micChecked = false
+    while let command = await iterator.next() {
+        guard command.cmd == "start" else { continue }
+        if command.file == nil, !micChecked {
+            guard await microphoneAuthorized() else {
+                emit(["type": "error", "code": "mic_denied", "message": "没有麦克风权限:系统设置 > 隐私与安全性 > 麦克风 里允许 LeoBot"])
+                emit(["type": "done"])
+                continue
+            }
+            micChecked = true
+        }
+        let prepared: PreparedAnalyzer
+        do {
+            prepared = try await next.value
+        } catch {
+            fail("failed", "语音模型准备失败:\(error.localizedDescription)")
+        }
+        let accumulator = TranscriptAccumulator()
+        let feed = MicrophoneFeed()
+        let results = consume(prepared, into: accumulator)
+        do {
+            if let file = command.file {
+                try feed.startFile(file, format: prepared.format)
+            } else {
+                try feed.start(format: prepared.format)
+            }
+            try await prepared.analyzer.start(inputSequence: feed.stream)
+        } catch {
+            feed.stop()
+            await prepared.analyzer.cancelAndFinishNow()
+            emit(["type": "error", "code": "audio", "message": "麦克风启动失败:\(error.localizedDescription)"])
+            emit(["type": "done"])
+            next = Task { try await prepareAnalyzer(locale, early: earlyLocale) }
+            continue
+        }
+        emit(["type": "ready", "locale": locale.identifier])
+        // 等 stop / cancel;父进程没了(EOF)也收尾。
+        var cancelled = false
+        while let inner = await iterator.next() {
+            if inner.cmd == "stop" { break }
+            if inner.cmd == "cancel" { cancelled = true; break }
+        }
+        feed.stop()
+        if cancelled {
+            await prepared.analyzer.cancelAndFinishNow()
+            results.cancel()
+        } else {
+            do {
+                try await prepared.analyzer.finalizeAndFinishThroughEndOfInput()
+                try await results.value
+                emit(["type": "final", "text": accumulator.full])
+            } catch {
+                emit(["type": "error", "code": "failed", "message": error.localizedDescription])
+            }
+        }
+        emit(["type": "done"])
+        next = Task { try await prepareAnalyzer(locale, early: earlyLocale) }
+    }
 }
 
 /// 朗读:AVSpeechSynthesizer 的代理回调在主线程,用 RunLoop 等它读完。
@@ -320,8 +475,8 @@ guard #available(macOS 26, *) else {
 }
 
 switch command {
-case "listen":
-    await listen()
+case "serve":
+    await serve()
 case "transcribe":
     guard CommandLine.arguments.count > 2 else { fail("failed", "用法:leo-speech transcribe <音频文件>") }
     await transcribeFile(CommandLine.arguments[2])
@@ -330,5 +485,5 @@ case "speak":
 case "status":
     await status()
 default:
-    fail("failed", "未知子命令 \(command);可用:listen | transcribe | speak | status")
+    fail("failed", "未知子命令 \(command);可用:serve | transcribe | speak | status")
 }

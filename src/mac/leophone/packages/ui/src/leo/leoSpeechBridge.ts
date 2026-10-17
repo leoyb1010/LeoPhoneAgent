@@ -26,6 +26,8 @@ export type LeoSpeechEvent =
 interface LeoSpeechBridge {
   getSettings(): Promise<LeoSpeechSettingsResult>;
   setSettings(patch: Partial<LeoSpeechSettings>): Promise<LeoSpeechSettingsResult>;
+  /** 进输入框时调用:主进程把常驻听写助手拉起并备好模型(重复调用只是续期)。 */
+  prewarm(): Promise<boolean>;
   start(): Promise<{ ok: boolean; error?: string }>;
   stop(): Promise<boolean>;
   onEvent(callback: (event: LeoSpeechEvent) => void): () => void;

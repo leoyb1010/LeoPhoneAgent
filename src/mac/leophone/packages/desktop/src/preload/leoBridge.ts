@@ -22,13 +22,20 @@ contextBridge.exposeInMainWorld("leoLink", {
 if (process.platform === "darwin") {
   contextBridge.exposeInMainWorld("leoQuick", {
     getSettings: () => ipcRenderer.invoke("leo:quick:settings:get"),
-    setSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke("leo:quick:settings:set", patch),
+    setSettings: (patch: Record<string, unknown>) =>
+      ipcRenderer.invoke("leo:quick:settings:set", patch),
     /** 菜单栏点任务 / 浮窗「派发并打开」:主进程让主窗口定位到这个任务。 */
     onOpenTask: (
-      callback: (target: { taskId: string; workspacePath: string; workspaceIdentity?: string }) => void,
+      callback: (target: {
+        taskId: string;
+        workspacePath: string;
+        workspaceIdentity?: string;
+      }) => void,
     ) => {
-      const listener = (_event: unknown, target: { taskId: string; workspacePath: string; workspaceIdentity?: string }) =>
-        callback(target);
+      const listener = (
+        _event: unknown,
+        target: { taskId: string; workspacePath: string; workspaceIdentity?: string },
+      ) => callback(target);
       ipcRenderer.on("leo:quick:open-task", listener);
       return () => ipcRenderer.removeListener("leo:quick:open-task", listener);
     },
@@ -59,7 +66,9 @@ if (process.platform === "darwin") {
   };
   contextBridge.exposeInMainWorld("leoSpeech", {
     getSettings: () => ipcRenderer.invoke("leo:speech:settings:get"),
-    setSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke("leo:speech:settings:set", patch),
+    setSettings: (patch: Record<string, unknown>) =>
+      ipcRenderer.invoke("leo:speech:settings:set", patch),
+    prewarm: () => ipcRenderer.invoke("leo:speech:prewarm"),
     start: () => ipcRenderer.invoke("leo:speech:start"),
     stop: () => ipcRenderer.invoke("leo:speech:stop"),
     onEvent: subscribe("leo:speech:event"),

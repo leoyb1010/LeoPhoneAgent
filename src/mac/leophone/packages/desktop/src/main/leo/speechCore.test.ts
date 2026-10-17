@@ -22,6 +22,7 @@ test("helper lines become typed events; garbage is dropped", () => {
     },
   );
   assert.deepEqual(parseSpeechLine('{"type":"done"}'), { type: "done" });
+  assert.deepEqual(parseSpeechLine('{"locale":"zh_CN","type":"warm"}'), { type: "warm" });
   for (const line of ["", "hello", '{"type":"partial"}', '{"type":"weird"}', "[]", "null"]) {
     assert.equal(parseSpeechLine(line), null, line);
   }
