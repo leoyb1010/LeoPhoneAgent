@@ -41,12 +41,13 @@ import os
 import secrets
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
 from aiohttp import WSMsgType, web
 
 from .apns import build_pusher
+from .live_activity import LiveActivityPlanner
 from .relay_identity import valid_registry
 
 VERSION = "0.2.1"
@@ -122,6 +123,23 @@ def _close_stream(queue: "asyncio.Queue[Dict[str, Any]]", close: Dict[str, Any])
         queue.get_nowait()
     queue.put_nowait(close)
 
+
+def _device_push_tokens(device: Dict[str, Any]) -> List[Tuple[str, str]]:
+    """一台设备名下登记过的所有 (kind, token)。兼容只记了一条的旧格式 "push"。"""
+    out: List[Tuple[str, str]] = []
+    tokens = device.get("push_tokens")
+    if isinstance(tokens, dict):
+        for kind, items in tokens.items():
+            for token in items if isinstance(items, list) else []:
+                if token:
+                    out.append((str(kind), str(token)))
+    push = device.get("push")
+    if isinstance(push, dict) and push.get("token"):
+        pair = (str(push.get("kind") or "device"), str(push.get("token")))
+        if pair not in out:
+            out.append(pair)
+    return out
+
 class Relay:
     def __init__(self, key: str, extra_keys: Optional[list] = None,
                  rejected_log: Optional[str] = None,
@@ -164,6 +182,8 @@ class Relay:
         # [T-live-mission] APNs 推送器。没配 ~/.leoagent/apns.json 就整体
         # 禁用,中继本体照常工作(降级而非报错)。
         self.apns = build_pusher()
+        # [WP-41] Live Activity 远程推送:记住每张卡上各会话的样子(见 live_activity.py)。
+        self.live_planner = LiveActivityPlanner()
         # 后台任务引用集(防 GC,见 _push_apns 调用处)
         self._bg_tasks: set = set()
         # Phase 4 Treasury sync: metadata changes are append-only and items are
@@ -1176,14 +1196,15 @@ class Relay:
         if device is None and device_id not in self.revoked_devices:
             return web.json_response({"error": {"message": "unknown device"}}, status=404)
         self.revoked_devices.add(device_id)
-        push = (device or {}).get("push")
-        if isinstance(push, dict) and push.get("token"):
-            forget = getattr(self.apns, "_forget", None)
+        forget = getattr(self.apns, "_forget", None)
+        for kind, token in _device_push_tokens(device or {}):
             if callable(forget):
                 try:
-                    forget(str(push.get("kind") or "device"), str(push.get("token")))
+                    forget(kind, token)
                 except Exception:  # noqa: BLE001
                     pass
+            if kind == "activity_update":
+                self.live_planner.forget(token)
         self._reindex_devices()
         # 授权先在内存失效并关掉活跃订阅；落盘失败也不能继续泄露排队/合并中的内容。
         for machine in list(self.machines.values()):
@@ -1439,6 +1460,23 @@ class Relay:
                 )
         except Exception as exc:  # noqa: BLE001
             print(f"[relay] apns push failed: {exc}", flush=True)
+        await self._push_live_activity(machine_name, event)
+
+    async def _push_live_activity(self, machine_name: str, event: Dict[str, Any]) -> None:
+        """[WP-41] 同一事件再驱动一次灵动岛:有 update token 就 update/end 那张卡,
+        没有就在审批/开跑时 push-to-start 拉起一张。开关关掉时什么都不做(回到 App 本地更新)。"""
+        if not getattr(self.apns, "live_activity_enabled", False):
+            return
+        try:
+            pushes = self.live_planner.plan(
+                str(event.get("event") or ""), machine_name, event,
+                self.apns.update_tokens_by_session())
+            for push in pushes:
+                sent = await self.apns.send_live_activity(push)
+                if push.event == "end" and push.token and sent:
+                    self.live_planner.forget(push.token)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[relay] live activity push failed: {exc}", flush=True)
 
     async def put_collections(self, request: web.Request) -> web.Response:
         """Compatibility adapter for clients that still send a whole snapshot.
@@ -1612,8 +1650,10 @@ class Relay:
         })
 
     async def register_device(self, request: web.Request) -> web.Response:
-        """手机登记推送 token。kind ∈ {device, push_to_start}。
+        """手机登记推送 token。kind ∈ {device, push_to_start, activity_update}。
 
+        activity_update(WP-41)是某张 Live Activity 的 update token,附带
+        session_ids(卡上的 Mac 会话)和可选的 sessions [{session_id, title}]。
         设备钥匙调用时,token 记在这台设备名下:撤销设备就一并删掉它的推送。
         """
         caller = self._caller(request)
@@ -1623,19 +1663,36 @@ class Relay:
             body = await request.json()
         except Exception:  # noqa: BLE001
             return web.json_response({"error": {"message": "invalid json"}}, status=400)
-        if caller.device_id and caller.device_id in self.devices:
-            self.devices[caller.device_id]["push"] = {
-                "kind": str(body.get("kind") or "device"), "token": str(body.get("token") or ""),
-            }
-            self._save_state()
+        kind = str(body.get("kind") or "device")
+        token = str(body.get("token") or "")
+        raw_sids = body.get("session_ids")
+        session_ids = [str(s) for s in raw_sids] if isinstance(raw_sids, list) else None
+        kwargs: Dict[str, Any] = {}
+        if kind == "activity_update":
+            kwargs["session_ids"] = session_ids
         ok = self.apns.register(
-            kind=str(body.get("kind") or "device"),
-            token=str(body.get("token") or ""),
+            kind=kind,
+            token=token,
             bundle_id=str(body.get("bundle_id") or ""),
             environment=str(body.get("environment") or "development"),
+            **kwargs,
         )
         if not ok:
             return web.json_response({"error": {"message": "bad token payload"}}, status=400)
+        if kind == "activity_update":
+            raw_sessions = body.get("sessions")
+            sessions = [s for s in raw_sessions if isinstance(s, dict)] if isinstance(raw_sessions, list) else []
+            if not sessions and session_ids:
+                sessions = [{"session_id": sid} for sid in session_ids]
+            self.live_planner.bind(token.strip().lower(), sessions)
+        if caller.device_id and caller.device_id in self.devices:
+            device = self.devices[caller.device_id]
+            # 每类 token 各记一份(activity_update 可有多张卡):撤销设备时全部摘除。
+            tokens = device.setdefault("push_tokens", {})
+            bucket = [t for t in tokens.get(kind, []) if t != token][-7:]
+            tokens[kind] = bucket + [token]
+            device["push"] = {"kind": kind, "token": token}
+            self._save_state()
         return web.json_response({"ok": True, "apns": self.apns.status()})
 
     async def push_status(self, request: web.Request) -> web.Response:
