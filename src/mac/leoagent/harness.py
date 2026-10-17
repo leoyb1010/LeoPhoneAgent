@@ -57,6 +57,7 @@ EVENT_APPROVAL_REQUEST = "approval.request"
 EVENT_APPROVAL_RESPONDED = "approval.responded"
 EVENT_USER_MESSAGE = "user.message"
 EVENT_SESSION_CREATED = "session.created"
+EVENT_RUN_STARTED = "run.started"
 EVENT_RUN_COMPLETED = "run.completed"
 EVENT_RUN_FAILED = "run.failed"
 EVENT_RUN_CANCELLED = "run.cancelled"
@@ -283,6 +284,8 @@ TRANSLATORS = {
 # 这类进度帧量大且无行动价值,推了只会刷屏、烧配额。
 PUSHABLE_EVENTS = {
     EVENT_APPROVAL_REQUEST,
+    # [WP-41] 一轮开跑:中继据此 push-to-start / 更新灵动岛(App 被杀也能拉起)。
+    EVENT_RUN_STARTED,
     EVENT_RUN_COMPLETED,
     EVENT_RUN_FAILED,
     EVENT_RUN_CANCELLED,
@@ -329,6 +332,7 @@ class HarnessSession:
     # tool_use_id → tool name, so completions can carry the same name the
     # start event did (clients correlate the two to close a running card).
     _tool_names: Dict[str, str] = field(default_factory=dict)
+    _run_announced: bool = False
     # codex app-server 方言的会话态:JSON-RPC id 计数、threadId、以及
     # threadId 就绪前排队的用户输入;_outbox 是 translator(同步)托 pump
     # (异步)代写 stdin 的帧队列。
@@ -392,12 +396,15 @@ class HarnessSession:
             if not self.pending_approvals:
                 self.status = "running"
         elif name in (EVENT_RUN_COMPLETED, EVENT_RUN_FAILED):
+            self._run_announced = False
             # stream-json CLIs stay alive between turns; a finished turn means
             # "idle and steerable", not "session over". Terminal statuses are
             # only set by process exit (_pump_stdout) and stop().
             if self.process is not None and self.process.returncode is None \
                     and self.status not in ("cancelled", "completed", "failed"):
                 self.status = "idle"
+        if name == EVENT_RUN_CANCELLED:
+            self._run_announced = False
         if name in PUSHABLE_EVENTS and self.phone_session_id:
             event["phone_session_id"] = self.phone_session_id
 
@@ -877,6 +884,7 @@ class HarnessSession:
             if self.status == "idle":
                 self.status = "running"
             self._emit({"event": EVENT_USER_MESSAGE, "text": text})
+            self._announce_run()
             return
         if self.spec.dialect == "claude_stream_json":
             payload = {
@@ -899,6 +907,13 @@ class HarnessSession:
         # exists only on whichever client happened to type it, and a reconnect
         # replays a transcript of answers with no questions.
         self._emit({"event": EVENT_USER_MESSAGE, "text": text})
+        self._announce_run()
+
+    def _announce_run(self) -> None:
+        """[WP-41] 每轮第一条输入后报一次 run.started;轮中追加的指令不重报,一轮结束时复位。"""
+        if not self._run_announced:
+            self._run_announced = True
+            self._emit({"event": EVENT_RUN_STARTED})
 
     def _rpc_error_event(self, error: Any) -> Dict[str, Any]:
         """Before the CLI has a thread (Codex) / session (Grok) an RPC error is
