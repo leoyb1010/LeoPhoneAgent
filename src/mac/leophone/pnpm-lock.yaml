@@ -1257,9 +1257,6 @@ importers:
       '@xterm/xterm':
         specifier: ^5.5.0
         version: 5.5.0
-      '@xyflow/react':
-        specifier: ^12.10.1
-        version: 12.10.2(@types/react@19.2.14)(immer@11.1.8)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@zcode/provider':
         specifier: workspace:*
         version: link:../provider
@@ -6020,12 +6017,6 @@ packages:
   '@xterm/xterm@5.5.0':
     resolution: {integrity: sha512-hqJHYaQb5OptNunnyAnkHyM8aCjZ1MEIDTQu1iIbbTD/xops91NB5yq1ZK/dC2JDbVWtF23zUtl9JE2NqwT87A==}
 
-  '@xyflow/react@12.10.2':
-    resolution: {integrity: sha512-CgIi6HwlcHXwlkTpr0fxLv/0sRVNZ8IdwKLzzeCscaYBwpvfcH1QFOCeaTCuEn1FQEs/B8CjnTSjhs8udgmBgQ==}
-    peerDependencies:
-      react: 19.2.7
-      react-dom: 19.2.7
-
   '@xyflow/react@12.11.2':
     resolution: {integrity: sha512-eLAlDWJfWnQEhJwGMjlWdAXO9eYllKpliUmPQlAmOLxz6mExXuzMVDUKLMquixgkrtmMFFtug3jGKmYYld12cA==}
     peerDependencies:
@@ -6038,9 +6029,6 @@ packages:
         optional: true
       '@types/react-dom':
         optional: true
-
-  '@xyflow/system@0.0.76':
-    resolution: {integrity: sha512-hvwvnRS1B3REwVDlWexsq7YQaPZeG3/mKo1jv38UmnpWmxihp14bW6VtEOuHEwJX2FvzFw8k77LyKSk/wiZVNA==}
 
   '@xyflow/system@0.0.79':
     resolution: {integrity: sha512-czLyOh91NF0hIzbNzwi8I6GlqG23BHh2435OddfI6uiaLH3xdrdygO93gqgH1Bv9mhy8XPFQJOBn1FTq4LvEWA==}
@@ -16176,7 +16164,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.0.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.7(patch_hash=11fdb66aa985e1d77e68752deeb7c1130ae33c9a4e2968f23aae8adaf8bc9ba0)(@opentelemetry/api@1.9.1)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.7)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.13.3(@types/node@24.12.2)(typescript@6.0.2))(vite@8.0.8(@types/node@24.12.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+      vitest: 4.1.7(patch_hash=11fdb66aa985e1d77e68752deeb7c1130ae33c9a4e2968f23aae8adaf8bc9ba0)(@opentelemetry/api@1.9.1)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.7)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.13.3(@types/node@24.12.2)(typescript@5.9.3))(vite@8.0.8(@types/node@24.12.2)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
 
   '@vitest/expect@4.1.4':
     dependencies:
@@ -16425,17 +16413,6 @@ snapshots:
 
   '@xterm/xterm@5.5.0': {}
 
-  '@xyflow/react@12.10.2(@types/react@19.2.14)(immer@11.1.8)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
-    dependencies:
-      '@xyflow/system': 0.0.76
-      classcat: 5.0.5
-      react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
-      zustand: 4.5.7(@types/react@19.2.14)(immer@11.1.8)(react@19.2.7)
-    transitivePeerDependencies:
-      - '@types/react'
-      - immer
-
   '@xyflow/react@12.11.2(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(immer@11.1.8)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@xyflow/system': 0.0.79
@@ -16448,18 +16425,6 @@ snapshots:
       '@types/react-dom': 19.2.3(@types/react@19.2.14)
     transitivePeerDependencies:
       - immer
-
-  '@xyflow/system@0.0.76':
-    dependencies:
-      '@types/d3-drag': 3.0.7
-      '@types/d3-interpolate': 3.0.4
-      '@types/d3-selection': 3.0.11
-      '@types/d3-transition': 3.0.9
-      '@types/d3-zoom': 3.0.8
-      d3-drag: 3.0.0
-      d3-interpolate: 3.0.1
-      d3-selection: 3.0.0
-      d3-zoom: 3.0.0
 
   '@xyflow/system@0.0.79':
     dependencies:

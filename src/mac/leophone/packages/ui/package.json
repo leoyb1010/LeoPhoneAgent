@@ -46,7 +46,6 @@
     "@xterm/addon-unicode11": "^0.8.0",
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0",
-    "@xyflow/react": "^12.10.1",
     "@zcode/provider": "workspace:*",
     "@zcode/rpc": "workspace:*",
     "@zcode/services": "workspace:*",
