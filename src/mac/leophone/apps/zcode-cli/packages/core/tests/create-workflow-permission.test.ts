@@ -250,7 +250,16 @@ describe("CreateWorkflow run confirmation", () => {
 
   // 第 2 轮用户复议：workflow 是一大块执行 + 模型调用，任何模式都要问。yolo 的直通
   // 放行和 plan 的 readOnly 放行都压不过 alwaysAsk。
-  for (const mode of ["yolo", "plan", "edit"] as const) {
+  // [leo] yolo / guarded 在 Leo 里跳过 alwaysAsk（src/permission/service.ts 的 [leo] 分支），这里只验其余档位；
+  // yolo 直接放行见下方「[leo] yolo 模式不弹窗直接跑」。
+  it("[leo] yolo 模式不弹窗直接跑", async () => {
+    const outcome = await run({ mode: "yolo", name: "create-workflow-leo-yolo", script: cleanScript("leo-yolo") });
+    expect(outcome.permissionRequested).toHaveLength(0);
+    expect(outcome.result.success).toBe(true);
+    expect((outcome.result.output as CreateWorkflowOutput).ok).toBe(true);
+  });
+
+  for (const mode of ["plan", "edit"] as const) {
     it(`${mode} 模式同样弹窗并携带预览`, async () => {
       const script = cleanScript(`mode-${mode}`);
       analyzedScripts.length = 0;
@@ -296,7 +305,8 @@ describe("CreateWorkflow run confirmation", () => {
 
     const outcome = await run({
       hookRunner,
-      mode: "yolo",
+      // [leo] 原用 yolo；Leo 的 yolo 本就跳过 alwaysAsk，换成 edit 才验得到「hook 的 allow 抹不掉确认」。
+      mode: "edit",
       name: "create-workflow-pretooluse-allow",
       script: cleanScript("pretooluse"),
     });
@@ -1154,7 +1164,8 @@ describe("CreateWorkflow settings adjusted in the confirmation window", () => {
     expect("adjustable_settings" in input).toBe(false);
   });
 
-  it.each(["build", "guarded"] as const)(
+  // [leo] guarded 在 Leo 里不弹这道确认窗（alwaysAsk 放行），窗内调整只对 build 等档成立。
+  it.each(["build"] as const)(
     "%s：窗里改的模型与上界在 handler 之前落进入参，端口收到的就是它们，文案先把调整说出来",
     async (mode) => {
       const { port, submits } = stubRunPort("dwfrun-adjusted", 13);

@@ -56,7 +56,7 @@ const DIRECT_BRANCH_EXPECTED_PROVIDER_TOOL_ORDER = [
   "Write",
   "SendMessage",
   "ReadSessionContext",
-  "ReplyToChannel",
+  // [leo] ReplyToChannel 不注册（机器人频道已删，见 src/tool/handlers/index.ts）。
   "CreateWorkflow",
   // 修订入口紧随 CreateWorkflow 注册（docs/dynamic-workflow/launch.md「The `AmendWorkflow` tool」）。
   "AmendWorkflow",
@@ -79,8 +79,19 @@ const DIRECT_BRANCH_EXPECTED_PROVIDER_TOOL_ORDER = [
   "ListModels",
 ] as const;
 
+// [leo] 刻意差异：非共享工具（上面 "Write" 之后那段）在 Leo 里也按码点排序，不取决于注册先后，
+// 让工具列表逐字节稳定、命中 prompt cache（src/tool/provider-visible-order.ts 的 [leo] 段）。
+// 上游注册序仍写在上面作参照，断言用排序后的版本。
+const LEO_SHARED_TOOL_COUNT = DIRECT_BRANCH_EXPECTED_PROVIDER_TOOL_ORDER.indexOf("Write") + 1;
+const LEO_DIRECT_BRANCH_EXPECTED_PROVIDER_TOOL_ORDER = [
+  ...DIRECT_BRANCH_EXPECTED_PROVIDER_TOOL_ORDER.slice(0, LEO_SHARED_TOOL_COUNT),
+  ...DIRECT_BRANCH_EXPECTED_PROVIDER_TOOL_ORDER.slice(LEO_SHARED_TOOL_COUNT).toSorted((a, b) =>
+    a === b ? 0 : a < b ? -1 : 1,
+  ),
+];
+
 const EMBEDDED_SEARCH_EXPECTED_PROVIDER_TOOL_ORDER =
-  DIRECT_BRANCH_EXPECTED_PROVIDER_TOOL_ORDER.filter(
+  LEO_DIRECT_BRANCH_EXPECTED_PROVIDER_TOOL_ORDER.filter(
     (toolName) => toolName !== "Glob" && toolName !== "Grep",
   );
 
@@ -140,7 +151,7 @@ describe("tool contract declarations", () => {
     expect(directRegistry.list().slice(0, 3)).toEqual(["Read", "Write", "Edit"]);
     expect(
       orderProviderVisibleToolContracts(directRegistry.toContracts()).map((tool) => tool.name),
-    ).toEqual(DIRECT_BRANCH_EXPECTED_PROVIDER_TOOL_ORDER);
+    ).toEqual(LEO_DIRECT_BRANCH_EXPECTED_PROVIDER_TOOL_ORDER);
 
     const embeddedRegistry = createToolRegistry();
     registerBuiltInTools(embeddedRegistry, {
@@ -164,7 +175,8 @@ describe("tool contract declarations", () => {
         { name: "Read" },
         { name: "ReadSessionContext" },
       ]).map((tool) => tool.name),
-    ).toEqual(["Bash", "Read", "TodoRead", "TodoWrite", "Task", "ReadSessionContext"]);
+      // [leo] 非共享工具同样按码点排序（见上方 LEO_DIRECT_BRANCH_EXPECTED_PROVIDER_TOOL_ORDER）。
+    ).toEqual(["Bash", "Read", "TodoRead", "TodoWrite", "ReadSessionContext", "Task"]);
   });
 
   it("orders optional Workflow with the shared provider tool partition when it is present", () => {

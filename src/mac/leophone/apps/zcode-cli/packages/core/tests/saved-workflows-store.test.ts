@@ -294,7 +294,8 @@ describe("saved workflow store", () => {
     const roots = savedWorkflowRoots(cwd, { homeDir: home });
     expect(roots).toHaveLength(2);
     expect(roots[0]).toEqual({ scope: "project", dir: join(cwd, ".zcode/workflows") });
-    expect(roots[1]).toEqual({ scope: "global", dir: join(home, ".zcode/workflows") });
+    // [leo] 全局档在 Leo 的数据根。
+    expect(roots[1]).toEqual({ scope: "global", dir: join(home, ".leophoneagent/workflows") });
 
     saveSavedWorkflow({ cwd, name: "shadowed", meta: { description: "project" }, script: SCRIPT });
     const resolved = resolveSavedWorkflow({ cwd, name: "shadowed" });
@@ -319,7 +320,7 @@ describe("saved workflow global scope", () => {
     });
 
     expect(written.scope).toBe("global");
-    expect(written.path).toBe(join(home, ".zcode/workflows/research.dwf.ts"));
+    expect(written.path).toBe(join(home, ".leophoneagent/workflows/research.dwf.ts"));
 
     const resolved = resolveSavedWorkflow({ cwd, name: "research", homeDir: home });
     expect(resolved.ok).toBe(true);

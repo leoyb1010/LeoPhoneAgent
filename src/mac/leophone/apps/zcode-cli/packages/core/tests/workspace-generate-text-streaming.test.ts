@@ -240,7 +240,7 @@ describe("workspace generateText streaming aggregation", () => {
     });
 
     expect(receivedRequest?.messages).toEqual([
-      { role: "system", content: "You are ZCode connectivity probe." },
+      { role: "system", content: "You are LeoBot connectivity probe." }, // [leo] 产品名
       { role: "user", content: "hi" },
     ]);
     expect(receivedRequest?.tools).toBeUndefined();

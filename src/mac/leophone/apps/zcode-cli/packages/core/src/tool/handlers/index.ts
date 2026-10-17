@@ -1,4 +1,3 @@
-import { replyToChannelToolEntry } from "./reply-to-channel.js";
 // ============================================================
 // Built-in Tool Handlers
 // ============================================================
@@ -110,7 +109,7 @@ export const builtInTools: ToolEntry[] = [
   taskOutputToolEntry,
   taskStopToolEntry,
   readSessionContextToolEntry,
-  replyToChannelToolEntry,
+  // [leo] 机器人频道（飞书 / 企业微信群聊）已整体删除，ReplyToChannel 永远无处可发，不再暴露给模型。
   agentToolEntry,
   taskToolEntry,
   skillToolEntry,

@@ -71,7 +71,8 @@ afterEach(() => {
 
 /** 全局档落点（HOME 已被 beforeEach 指到 testHome）。 */
 function globalSavedPath(name: string): string {
-  return join(testHome, ".zcode/workflows", `${name}.dwf.ts`);
+  // [leo] 全局档在 Leo 的数据根 ~/.leophoneagent/workflows（项目档仍是 .zcode/workflows）。
+  return join(testHome, ".leophoneagent/workflows", `${name}.dwf.ts`);
 }
 
 // 记忆槽是单槽、按脚本原文取键，所以每个用例用自己的脚本；否则上一个用例存下的分析

@@ -1072,7 +1072,9 @@ describe("PermissionService alwaysAsk", () => {
   }
 
   // 宽松度设置一律压不过 alwaysAsk：yolo 直通、plan 的 readOnly 直通、edit/build 都要问。
-  for (const mode of ["yolo", "plan", "build", "edit", "default"] as const) {
+  // [leo] yolo / guarded 在 Leo 里直接跳过 alwaysAsk（src/permission/service.ts 的 [leo] 分支，
+  // 见文件末尾「Leo yolo/guarded alwaysAsk bypass」），所以上游这组断言只对其余档位成立。
+  for (const mode of ["plan", "build", "edit", "default"] as const) {
     it(`asks in ${mode} mode`, () => {
       expect(check(mode)).toMatchObject({
         allowed: false,
@@ -1153,7 +1155,9 @@ describe("PermissionService session grant", () => {
     );
   }
 
-  for (const mode of ["yolo", "plan", "build", "edit", "default"] as const) {
+  // [leo] yolo / guarded 在 Leo 里直接跳过 alwaysAsk（src/permission/service.ts 的 [leo] 分支，
+  // 见文件末尾「Leo yolo/guarded alwaysAsk bypass」），所以上游这组断言只对其余档位成立。
+  for (const mode of ["plan", "build", "edit", "default"] as const) {
     it(`lifts the alwaysAsk gate in ${mode} mode once the session grant is in place`, () => {
       const service = new PermissionService();
       expect(check(mode, service).decision).toBe("ask");
@@ -1254,7 +1258,9 @@ describe("PermissionService workflow owner rule", () => {
     );
   }
 
-  for (const mode of ["yolo", "plan", "build", "edit", "default"] as const) {
+  // [leo] yolo / guarded 在 Leo 里直接跳过 alwaysAsk（src/permission/service.ts 的 [leo] 分支，
+  // 见文件末尾「Leo yolo/guarded alwaysAsk bypass」），所以上游这组断言只对其余档位成立。
+  for (const mode of ["plan", "build", "edit", "default"] as const) {
     it(`lifts the gate in ${mode} mode for an amend of a run this session started`, () => {
       expect(checkAmend(new PermissionService(), owned, mode)).toMatchObject({
         allowed: true,
@@ -1334,5 +1340,34 @@ describe("PermissionService workflow owner rule", () => {
         { deny: [{ toolName: "AmendWorkflow" }], version: 1 },
       ),
     ).toMatchObject({ decision: "deny", ruleId: "rule.project.deny" });
+  });
+});
+
+// [leo] 刻意差异：yolo 与 guarded（Leo 默认档）不再为 alwaysAsk 工具弹确认；阻断分支仍优先，plan 仍要问。
+describe("Leo yolo/guarded alwaysAsk bypass", () => {
+  for (const mode of ["yolo", "guarded"] as const) {
+    it(`allows alwaysAsk tools in ${mode} mode`, () => {
+      expect(
+        new PermissionService().checkPermission(
+          { input: { script: "return 1;" }, mode, riskLevel: "low", toolName: "CreateWorkflow" },
+          alwaysAskCapability,
+        ),
+      ).toMatchObject({ allowed: true, decision: "allow", ruleId: `mode.${mode}` });
+    });
+  }
+
+  it("still asks when plan is enabled on top of yolo", () => {
+    expect(
+      new PermissionService().checkPermission(
+        {
+          input: { script: "return 1;" },
+          mode: "yolo",
+          planEnabled: true,
+          riskLevel: "low",
+          toolName: "CreateWorkflow",
+        },
+        alwaysAskCapability,
+      ).decision,
+    ).toBe("ask");
   });
 });
