@@ -197,11 +197,9 @@ struct ChatInspectorPanel: View {
         .animation(LeoMotion.standardEase(reduceMotion: UIAccessibility.isReduceMotionEnabled), value: mode.wrappedValue)
     }
 
-    /// [WP-43] Reserved for WP-50 (the Mac's screen, polled snapshots).
+    /// [WP-50 R0] The Mac's screen (polled snapshots while this column is on screen).
     private var macScreenPanel: some View {
-        LeoEmptyState(systemImage: "display", title: "Mac 画面",
-                      message: "Mac 开启看屏后，这里会显示它的屏幕。")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        MacScreenColumn()
     }
 
     private var detailsPanel: some View {

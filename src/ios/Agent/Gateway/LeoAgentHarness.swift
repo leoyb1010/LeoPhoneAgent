@@ -1090,6 +1090,9 @@ extension LeoAgentClient {
 }
 
 extension HarnessSessionDriver {
+    /// [WP-50] The Mac this task runs on, for the task page's 「Mac 画面」 card.
+    var macScreenClient: LeoAgentClient { client }
+
     /// [WP-44] Remember this Mac task as the share sheet's "发给 Mac 当前任务" target
     /// (App Group: where to send; App Group keychain: the keys). Called when its console
     /// is on screen, so the most recently opened Mac task wins.
