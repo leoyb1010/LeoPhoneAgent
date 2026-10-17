@@ -18,7 +18,8 @@ describe("createProviderEndpointRoutingSourceHeaders", () => {
       join(tmpdir(), "zcode-routing-source-headers-"),
     );
     tempDirs.push(dataBaseDir);
-    const stateDir = join(dataBaseDir, ".zcode", "v2");
+    // [leo] 用户级数据根是 ~/.leophoneagent（不是 ~/.zcode），telemetry-state.json 跟随数据根。
+    const stateDir = join(dataBaseDir, ".leophoneagent", "v2");
     await mkdir(stateDir, { recursive: true });
     await writeFile(
       join(stateDir, "telemetry-state.json"),
@@ -67,7 +68,8 @@ describe("createProviderEndpointRoutingSourceHeaders", () => {
     });
 
     expect(headers).toMatchObject({
-      "HTTP-Referer": "https://zcode.z.ai",
+      // [leo] 官方端点被中和为死端口 http://127.0.0.1:9（packages/shared/src/zcodeEndpoint.ts）。
+      "HTTP-Referer": "http://127.0.0.1:9",
       "User-Agent": "ZCode/2.0.0",
       "X-Release-Channel": "production",
       "X-Title": "Z Code@cli",

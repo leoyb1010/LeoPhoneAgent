@@ -879,7 +879,9 @@ describe("v4 原生 sendText", () => {
     );
   });
 
-  it("Bot delivery target 仅在当前 turn 可见，并在 turn 结束后恢复", async () => {
+  // [leo] Bot/渠道入站被移除：sendText 携带的 botDeliveryTarget 不再进入 session record
+  // （src/zcode-protocol-v4/commands/prompt-turn.ts），turn 期间与结束后都不可见。
+  it("Bot delivery target 不再暴露到 session record（Leo 移除了 Bot 渠道）", async () => {
     let releaseTurn!: () => void;
     const turnGate = new Promise<void>((resolve) => {
       releaseTurn = resolve;
@@ -903,10 +905,11 @@ describe("v4 原生 sendText", () => {
     await new V4CommandExecutor(host).execute(
       envelope("sendText", { text: "创建提醒", botDeliveryTarget }),
     );
-    expect(record.activeBotDeliveryTarget).toEqual(botDeliveryTarget);
+    expect(app.sendInput).toHaveBeenCalled();
+    expect(record).not.toHaveProperty("activeBotDeliveryTarget");
     releaseTurn();
     await settle();
-    expect(record.activeBotDeliveryTarget).toBeUndefined();
+    expect(record).not.toHaveProperty("activeBotDeliveryTarget");
   });
 
   it("off-peak sendText 保留本轮归因与独立创建限制，普通后续轮不继承", async () => {

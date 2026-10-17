@@ -14,6 +14,16 @@ import { createRegistryBackedTestApp as createZCodeApp } from "./helpers/registr
 
 const roots: string[] = [];
 
+// [leo] Leo 默认启用随包 superpowers 插件，其 SessionStart hook（受信任的插件来源）会在每个会话
+// 启动时执行；本文件只验证项目级 workspace Hook 的 Trust 准入，因此在用户配置里关掉该插件，
+// 让 commands 只反映项目 hook。
+function userConfigJson(storageRoot: string): string {
+  return JSON.stringify({
+    storage: { dir: storageRoot },
+    plugins: { enabledPlugins: { "superpowers@zcode-plugins-official": false } },
+  });
+}
+
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
 });
@@ -28,7 +38,7 @@ describe("createZCodeApp workspace Hook admission", () => {
     await mkdir(join(workspace, ".git"), { recursive: true });
     await mkdir(join(workspace, ".zcode"), { recursive: true });
     await mkdir(join(root, "home"), { recursive: true });
-    await writeFile(userConfigPath, JSON.stringify({ storage: { dir: storageRoot } }));
+    await writeFile(userConfigPath, userConfigJson(storageRoot));
     await writeFile(
       join(workspace, ".zcode", "config.json"),
       JSON.stringify({
@@ -144,7 +154,7 @@ describe("createZCodeApp workspace Hook admission", () => {
     await mkdir(join(workspace, ".git"), { recursive: true });
     await mkdir(join(workspace, ".zcode"), { recursive: true });
     await mkdir(join(root, "home"), { recursive: true });
-    await writeFile(userConfigPath, JSON.stringify({ storage: { dir: storageRoot } }));
+    await writeFile(userConfigPath, userConfigJson(storageRoot));
     await writeFile(
       join(workspace, ".zcode", "config.json"),
       JSON.stringify({
@@ -226,7 +236,7 @@ describe("createZCodeApp workspace Hook admission", () => {
     await mkdir(join(workspace, ".git"), { recursive: true });
     await mkdir(join(workspace, ".zcode"), { recursive: true });
     await mkdir(join(root, "home"), { recursive: true });
-    await writeFile(userConfigPath, JSON.stringify({ storage: { dir: storageRoot } }));
+    await writeFile(userConfigPath, userConfigJson(storageRoot));
     await writeFile(
       join(workspace, ".zcode", "config.json"),
       JSON.stringify({
@@ -351,7 +361,7 @@ describe("createZCodeApp workspace Hook admission", () => {
     await mkdir(join(workspace, ".git"), { recursive: true });
     await mkdir(join(workspace, ".zcode"), { recursive: true });
     await mkdir(join(root, "home"), { recursive: true });
-    await writeFile(userConfigPath, JSON.stringify({ storage: { dir: storageRoot } }));
+    await writeFile(userConfigPath, userConfigJson(storageRoot));
     await writeFile(
       join(workspace, ".zcode", "config.json"),
       JSON.stringify({
@@ -444,7 +454,7 @@ describe("createZCodeApp workspace Hook admission", () => {
     await mkdir(join(workspace, ".git"), { recursive: true });
     await mkdir(join(workspace, ".zcode"), { recursive: true });
     await mkdir(join(root, "home"), { recursive: true });
-    await writeFile(userConfigPath, JSON.stringify({ storage: { dir: storageRoot } }));
+    await writeFile(userConfigPath, userConfigJson(storageRoot));
     await writeFile(
       join(workspace, ".zcode", "config.json"),
       JSON.stringify({

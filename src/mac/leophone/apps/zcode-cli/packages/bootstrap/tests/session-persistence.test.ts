@@ -22,7 +22,11 @@ import {
 } from "@zcode/adapters/storage";
 import { createNodeWorkflowStore } from "@zcode/adapters/workflow";
 import { DEFAULT_EXPERT_WORKFLOW_STRATEGY } from "@zcode/core";
-import { createNodeProviderRuntimePathEnv } from "@zcode/provider-node";
+import {
+  createNodeProviderRuntimePathEnv,
+  encodeProviderConfigFile,
+} from "@zcode/provider-node";
+import { ModelConfigRules, ProviderConfigMap } from "@zcode/provider";
 import {
   LogLevel,
   SESSION_ENTRY_BASH_SHELL_SELECTION,
@@ -42,6 +46,7 @@ import {
 } from "@zcode/contracts";
 import { resolveLatestSession, runZCodeProtocolAgent } from "../src/index.js";
 import { ProductProjection } from "../src/zcode-protocol-v4/product-projection.js";
+import { writeWorkspaceConfigWithoutSuperpowers } from "./helpers/leo-bundled-plugins.js";
 import { synthesizeEventsFromMessages } from "../src/zcode-protocol-v4/transcript-hydration.js";
 import {
   createRegistryBackedTestApp as createZCodeApp,
@@ -1474,7 +1479,12 @@ describe("session persistence", () => {
           output,
         }),
       ).rejects.toThrow(/SQLite migration checksum mismatch for 0001_base_session_store/);
-      expect(output.output()).toBe("");
+      const messages = expectOnlyStartupStorageStateOutput(output.output());
+      expect(messages.at(-1)?.params).toMatchObject({
+        phase: "failed",
+        errorCode: "checksum_mismatch",
+        migrationId: "0001_base_session_store",
+      });
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
@@ -1509,7 +1519,7 @@ describe("session persistence", () => {
 
       expect(startupCompletedIndex).toBeGreaterThanOrEqual(0);
       expect(retentionScheduledIndex).toBeGreaterThan(startupCompletedIndex);
-      expect(output.output()).toBe("");
+      expectOnlyStartupStorageStateOutput(output.output());
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
@@ -1544,7 +1554,7 @@ describe("session persistence", () => {
         });
       }
 
-      expect(output.output()).toBe("");
+      expectOnlyStartupStorageStateOutput(output.output());
       const logEntries = await readLogEntries(logDir);
       expect(logEntries.some((entry) => entry.event === "model.sdk.warning")).toBe(true);
     } finally {
@@ -1880,6 +1890,8 @@ describe("session persistence", () => {
 
   it("registers submitPrompt live event handlers only for the active turn", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "zcode-submit-live-events-"));
+    // [leo] 随包 superpowers 的 SessionStart hook 会多出 hook 事件与上下文消息，这里只测上游会话行为。
+    await writeWorkspaceConfigWithoutSuperpowers(tempRoot);
     const dbPath = join(tempRoot, "session.sqlite");
     const logDir = join(tempRoot, "log");
     const responses = [
@@ -2341,6 +2353,9 @@ describe("session persistence", () => {
 
   it("hydrates persisted history when resuming a session in a fresh app", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "zcode-resume-history-"));
+    // [leo] 随包 superpowers 的 SessionStart hook 会多出 hook 事件与上下文消息，这里只测上游会话行为。
+    await writeWorkspaceConfigWithoutSuperpowers(tempRoot);
+    await writeWorkspaceConfigWithoutSuperpowers(join(tempRoot, "different-cwd"));
     const dbPath = join(tempRoot, "session.sqlite");
     const store = createSqliteSessionStore({ dbPath });
     const sessionId = createSessionId("resume-history");
@@ -2399,7 +2414,9 @@ describe("session persistence", () => {
       const storedMessages = await store.messages({ sessionID: sessionId });
 
       expect(result.response).toBe("second answer");
-      expect(storedMessages).toHaveLength(4);
+      // 上游测试漂移：首轮会把 Agent 工具可用类型的 system-reminder（agent_listing_delta）
+      // 作为持久消息落库，冷恢复时随历史一起回放。
+      expect(storedMessages).toHaveLength(5);
       expect(capturedMessages.map((message) => message.role)).toEqual([
         "system",
         "system",
@@ -2407,16 +2424,18 @@ describe("session persistence", () => {
         "user",
         "user",
         "user",
+        "user",
         "assistant",
         "user",
       ]);
       expect(capturedMessages.map((message) => message.content)).toEqual([
-        expect.stringContaining("You are ZCode"),
+        expect.stringContaining("You are LeoBot"), // [leo] 产品身份
         // 修复原因：resume 使用现行 static # Harness + dynamic # Environment prompt 布局。
         expect.stringContaining("# Harness"),
         expect.stringContaining("# Environment"),
         expect.stringContaining("The following skills are available"),
         expect.stringContaining("<system-reminder>"),
+        expect.stringContaining("Available agent types for the Agent tool"),
         "first prompt",
         "first answer",
         "second prompt",
@@ -2429,6 +2448,9 @@ describe("session persistence", () => {
 
   it("can explicitly hydrate a resumed app before the next prompt", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "zcode-explicit-resume-"));
+    // [leo] 随包 superpowers 的 SessionStart hook 会多出 hook 事件与上下文消息，这里只测上游会话行为。
+    await writeWorkspaceConfigWithoutSuperpowers(tempRoot);
+    await writeWorkspaceConfigWithoutSuperpowers(join(tempRoot, "different-cwd"));
     const dbPath = join(tempRoot, "session.sqlite");
     const store = createSqliteSessionStore({ dbPath });
     const sessionId = createSessionId("explicit-resume");
@@ -2491,8 +2513,9 @@ describe("session persistence", () => {
       });
       const result = await secondApp.submitPrompt("second prompt");
 
-      expect(resume.messageCount).toBe(2);
-      expect(resume.appliedMessageCount).toBe(2);
+      // 上游测试漂移：持久历史含首轮落库的 agent_listing_delta system-reminder。
+      expect(resume.messageCount).toBe(3);
+      expect(resume.appliedMessageCount).toBe(3);
       expect(result.response).toBe("second answer");
       // 冷恢复会先补齐持久标题事件，再发布 SessionResumed。
       expect(liveEventTypes).toEqual([
@@ -2500,11 +2523,12 @@ describe("session persistence", () => {
         SessionEventType.SessionResumed,
       ]);
       expect(capturedMessages.map((message) => message.content)).toEqual([
-        expect.stringContaining("You are ZCode"),
+        expect.stringContaining("You are LeoBot"), // [leo] 产品身份
         expect.stringContaining("# Harness"),
         expect.stringContaining("# Communicating with the user"),
         expect.stringContaining("The following skills are available"),
         expect.stringContaining("<system-reminder>"),
+        expect.stringContaining("Available agent types for the Agent tool"),
         "first prompt",
         "first answer",
         "second prompt",
@@ -2836,24 +2860,45 @@ interface AiSdkWarningGlobal {
   AI_SDK_LOG_WARNINGS?: false | ((options: Record<string, unknown>) => void);
 }
 
+// 上游测试漂移：启动期会在协议连接建立前通过 startup/storageState 通知报告数据库检查进度
+// （以及失败原因）；除此之外 stdout 上不得出现任何协议消息或日志。
+function expectOnlyStartupStorageStateOutput(
+  raw: string,
+): Array<{ method?: string; params?: Record<string, unknown> }> {
+  const messages = raw
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as { method?: string; params?: Record<string, unknown> });
+  expect(messages.length).toBeGreaterThan(0);
+  expect(messages.every((message) => message.method === "startup/storageState")).toBe(true);
+  return messages;
+}
+
 async function createProtocolProviderEnv(root: string): Promise<Record<string, string>> {
   const zcodeBuiltinFilePath = join(root, "zcode-builtin.json");
   const personalFilePath = join(root, "provider-personal.json");
+  // 上游测试漂移：Built-in Release 与 Personal Config 的正式结构已改为 rule 分组（schemaVersion 1）；
+  // 此处测试启动/存储顺序，不测试旧版迁移，使用当前正式结构。
   const emptyBuiltinRelease = JSON.stringify({
-    // 此处测试启动/存储顺序，不测试旧版 Release 迁移；使用当前正式结构。
-    schemaVersion: 3,
+    schemaVersion: 1,
     revision: 1,
     config: {
-      providers: {},
-      providerTemplates: {},
-      modelConfigRules: { matchRules: [], templateModelRules: [], providerModelRules: [] },
+      providerConfigRules: { templateRules: [], providerRules: [] },
+      modelConfigRules: {
+        modelRules: [],
+        modelApiRules: [],
+        providerSiteRules: [],
+        templateModelRules: [],
+        builtinProviderModelRules: [],
+      },
     },
   });
-  const emptyPersonalConfig = JSON.stringify({
-    schemaVersion: 1,
-    providers: {},
-    modelConfigRules: [],
-  });
+  const emptyPersonalConfig = JSON.stringify(
+    encodeProviderConfigFile({
+      providers: ProviderConfigMap.empty(),
+      models: ModelConfigRules.empty(),
+    }),
+  );
   await Promise.all([
     writeFile(zcodeBuiltinFilePath, emptyBuiltinRelease),
     writeFile(personalFilePath, emptyPersonalConfig),

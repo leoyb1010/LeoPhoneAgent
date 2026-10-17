@@ -33,20 +33,22 @@ beforeAll(async () => {
 
 afterAll(() => source.dispose());
 
+// 上游测试漂移：Provider 名称与 templateId 已从 ProviderConfig 外移到 ProviderConfigMap rule
+// （providerName / templateId），Idle plan 的内置成员已换成 GLM-5.3 系列；上游源码同样如此。
 describe("真实 ZCode Built-in Config 到 Active Model", () => {
   it("API Key Personal Overlay 经 Registry 原样装配到 Adapter", () => {
     const providerId = "zai-api";
-    const modelId = "glm-5.3";
+    const modelId = "GLM-5.3";
     const registry = resolveOneBuiltinProvider(providerId, {
       personalProviders: new ProviderConfigMap([
-        [
+        {
           providerId,
-          new ProviderConfig({
-            templateId: "zai-api",
+          templateId: "zai-api",
+          config: new ProviderConfig({
             group: "standard-personal",
             access: new ApiKeyAccessConfig({ apiKey: "test-zai-api-key" }),
           }),
-        ],
+        },
       ]),
     });
     const capture = captureRuntime(registry);
@@ -87,7 +89,7 @@ describe("真实 ZCode Built-in Config 到 Active Model", () => {
         ],
       ]),
       personalProviders: new ProviderConfigMap([
-        [providerId, new ProviderConfig({ label: "Personal final label" })],
+        { providerId, providerName: "Personal final label", config: new ProviderConfig({}) },
       ]),
     });
     const capture = captureRuntime(registry);
@@ -99,8 +101,8 @@ describe("真实 ZCode Built-in Config 到 Active Model", () => {
     expect(registry.getProvider(providerId)?.models.map(({ modelId: id }) => id)).toEqual([
       modelId,
     ]);
+    expect(registry.getProvider(providerId)?.providerName).toBe("Personal final label");
     expect(capture.created[0]?.providerConfig).toMatchObject({
-      label: "Personal final label",
       access: {
         type: "zhipu-account",
         accountType: "zai",
@@ -112,7 +114,7 @@ describe("真实 ZCode Built-in Config 到 Active Model", () => {
 
   it("隐藏 Request Auth Provider 仍由普通 Registry 精确创建 Model", () => {
     const providerId = "account:zai-offpeak-idle-plan";
-    const modelId = "GLM-5.2";
+    const modelId = "GLM-5.3";
     const registry = resolveOneBuiltinProvider(providerId, {
       accountProviders: new ProviderConfigMap([
         [

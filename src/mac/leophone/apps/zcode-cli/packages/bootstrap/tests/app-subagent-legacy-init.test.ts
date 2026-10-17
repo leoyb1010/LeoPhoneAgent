@@ -62,7 +62,8 @@ describe("App 初始化旧 Subagent 身份", () => {
             name: "user-legacy",
             modelSelection: {
               providerId: "account:zai-individual-coding-plan",
-              modelId: "glm-4.6",
+              // 上游测试漂移：单向迁移入口经 normalizeOfficialGlmModelId 规范为官方大小写。
+              modelId: "GLM-4.6",
               options: { reasoningLevel: "high" },
             },
           }),
@@ -83,14 +84,17 @@ describe("App 初始化旧 Subagent 身份", () => {
       expect(await readFile(join(userRoot, "user.md"), "utf8")).toBe(
         markdown
           .replace("name: legacy", "name: user-legacy")
-          .replace("model: builtin:zai-coding-plan", "model: account:zai-individual-coding-plan"),
+          .replace(
+            "model: builtin:zai-coding-plan/glm-4.6",
+            "model: account:zai-individual-coding-plan/GLM-4.6",
+          ),
       );
       expect(await readFile(file, "utf8")).toBe(markdown);
       expect(
         JSON.parse(await readFile(stateFile, "utf8")).builtInModelSelectionOverrides.Explore,
       ).toEqual({
         providerId: "account:zai-individual-coding-plan",
-        modelId: "glm-4.6",
+        modelId: "GLM-4.6",
         options: { reasoningLevel: "high" },
       });
     } finally {

@@ -13,6 +13,26 @@ function encoded(update: { providers: ProviderConfigMap; models: ModelConfigRule
   };
 }
 
+// [leo] 上游测试漂移：ProviderConfigMap.toJSON 已改为 rule 数组（providerId/providerName/templateId
+// 在 rule 外层，config 内不再有 label），ModelConfigRules.toJSON 已改为按规则类别分组的对象。
+// 上游 3.15.1 源码同样如此，断言按当前序列化形状改写。
+function modelRuleList(update: { models: ModelConfigRules }): any[] {
+  return Object.values(update.models.toJSON() as Record<string, unknown[]>).flat();
+}
+
+function providerIds(update: { providers: ProviderConfigMap }): string[] {
+  return update.providers.toJSON().map((rule) => rule.providerId);
+}
+
+const EMPTY_MODEL_RULES = {
+  builtinProviderModelRules: [],
+  manualProviderModelRules: [],
+  modelApiRules: [],
+  modelRules: [],
+  providerSiteRules: [],
+  templateModelRules: [],
+};
+
 describe("importLegacyCliPersonalProviderConfig", () => {
   it("Standalone 与 Desktop 一样丢弃内置套餐配置，API 只迁 Key", () => {
     const update = importLegacyCliPersonalProviderConfig({
@@ -46,9 +66,12 @@ describe("importLegacyCliPersonalProviderConfig", () => {
       },
     });
     expect(update.providers.keys()).toEqual(["bigmodel-api"]);
+    expect(update.providers.getRule("bigmodel-api")).toMatchObject({
+      providerId: "bigmodel-api",
+      templateId: "bigmodel-api",
+    });
     expect(update.providers.get("bigmodel-api")?.toJSON()).toEqual({
       group: "standard-personal",
-      templateId: "bigmodel-api",
       access: { type: "api-key", apiKey: "kept" },
     });
   });
@@ -110,31 +133,36 @@ describe("importLegacyCliPersonalProviderConfig", () => {
 
     expect(encoded(update)).toEqual({
       schemaVersion: 1,
-      providers: {
-        custom: {
-          group: "standard-personal",
-          label: "Custom API",
-          access: { type: "api-key", apiKey: "secret" },
-          api: {
-            type: "openai-chat-completions",
-            baseUrl: "https://custom.example.com/v1",
-          },
-          personalModelIds: ["model-a"],
-          modelOrder: ["model-a"],
-        },
-      },
-      models: [
+      providers: [
         {
-          type: "provider-model",
           providerId: "custom",
-          modelId: "model-a",
+          providerName: "Custom API",
           config: {
-            properties: {
-              contextWindow: 128_000,
+            group: "standard-personal",
+            access: { type: "api-key", apiKey: "secret" },
+            api: {
+              type: "openai-chat-completions",
+              baseUrl: "https://custom.example.com/v1",
             },
+            personalModelIds: ["model-a"],
+            modelOrder: ["model-a"],
           },
         },
       ],
+      models: {
+        ...EMPTY_MODEL_RULES,
+        builtinProviderModelRules: [
+          {
+            providerId: "custom",
+            modelId: "model-a",
+            config: {
+              properties: {
+                contextWindow: 128_000,
+              },
+            },
+          },
+        ],
+      },
     });
   });
 
@@ -145,8 +173,8 @@ describe("importLegacyCliPersonalProviderConfig", () => {
 
     expect(encoded(update)).toEqual({
       schemaVersion: 1,
-      providers: {},
-      models: [],
+      providers: [],
+      models: EMPTY_MODEL_RULES,
     });
   });
 
@@ -168,7 +196,7 @@ describe("importLegacyCliPersonalProviderConfig", () => {
       },
     });
 
-    expect(Object.keys(encoded(update).providers)).toEqual(["custom"]);
+    expect(providerIds(update)).toEqual(["custom"]);
   });
 
   it("忽略旧 model options 中没有正式语义的任意字段", () => {
@@ -200,8 +228,8 @@ describe("importLegacyCliPersonalProviderConfig", () => {
       },
     });
 
-    expect(encoded(update).models[0]?.config).not.toHaveProperty("requestParameters");
-    expect(encoded(update).models).toHaveLength(1);
+    expect(modelRuleList(update)[0]?.config).not.toHaveProperty("requestParameters");
+    expect(modelRuleList(update)).toHaveLength(1);
   });
 
   it("不迁移历史 model options 中的输出上限", () => {
@@ -229,7 +257,7 @@ describe("importLegacyCliPersonalProviderConfig", () => {
       },
     });
 
-    expect(encoded(update).models).toEqual([]);
+    expect(modelRuleList(update)).toEqual([]);
   });
 
   it("忽略没有生产消费方的 reasoning replay 元数据", () => {
@@ -253,8 +281,8 @@ describe("importLegacyCliPersonalProviderConfig", () => {
       },
     });
 
-    expect(encoded(update).providers).toHaveProperty("custom");
-    expect(encoded(update).models).toHaveLength(0);
+    expect(providerIds(update)).toContain("custom");
+    expect(modelRuleList(update)).toHaveLength(0);
   });
 
   it("忽略旧 Provider Schema 接受但运行时没有消费的扩展字段", () => {
@@ -276,7 +304,7 @@ describe("importLegacyCliPersonalProviderConfig", () => {
       },
     });
 
-    expect(encoded(update).providers).toHaveProperty("custom");
+    expect(providerIds(update)).toContain("custom");
   });
 
   it("无 API Key Provider 在正式类型建立前继续留在兼容链路", () => {

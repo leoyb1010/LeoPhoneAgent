@@ -1,10 +1,25 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { inspectZCodeSkill, listZCodeSkills } from "../src/skills.js";
 
 describe("inspectZCodeSkill", () => {
+  // 用户级 skill 根取 os.homedir()（~/.leophoneagent/skills、~/.agents/skills）；不隔离 HOME 时
+  // 开发机家目录里的技能（含格式不合规的）会混进 diagnostics，结果依赖机器。
+  let home = "";
+  let prevHome: string | undefined;
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), "zcode-bootstrap-skill-home-"));
+    prevHome = process.env.HOME;
+    process.env.HOME = home;
+  });
+  afterEach(async () => {
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    await rm(home, { force: true, recursive: true });
+  });
+
   it("loads one discovered skill through the configured skill adapter", async () => {
     const dir = await mkdtemp(join(tmpdir(), "zcode-bootstrap-skill-"));
     const skillDir = join(dir, ".zcode", "skills", "demo");
@@ -83,6 +98,7 @@ describe("inspectZCodeSkill", () => {
     }
   });
 
+  // [leo] 文档四件套（docx/pdf/pptx/xlsx）不随包；默认启用的随包内容插件是 browser-use 与 superpowers。
   it("discovers bundled content skills through default-enabled official plugins", async () => {
     const dir = await mkdtemp(join(tmpdir(), "zcode-bootstrap-document-skills-"));
 
@@ -94,42 +110,27 @@ describe("inspectZCodeSkill", () => {
         workingDirectory: dir,
       });
       const bundledSkills = outcome.skills.filter((skill) =>
-        ["control-browser", "docx", "pdf", "pptx", "web-gui-tester", "xlsx"].includes(skill.name),
+        ["control-browser", "docx", "pdf", "pptx", "using-superpowers", "web-gui-tester", "xlsx"].includes(
+          skill.name,
+        ),
       );
 
       expect(bundledSkills.map((skill) => skill.name).toSorted()).toEqual([
         "control-browser",
-        "docx",
-        "pdf",
-        "pptx",
+        "using-superpowers",
         "web-gui-tester",
-        "xlsx",
       ]);
-      expect(bundledSkills.map((skill) => skill.scope)).toEqual([
-        "system",
-        "system",
-        "system",
-        "system",
-        "system",
-        "system",
-      ]);
-      expect(bundledSkills.map((skill) => skill.source)).toEqual([
-        "plugin",
-        "plugin",
-        "plugin",
-        "plugin",
-        "plugin",
-        "plugin",
-      ]);
+      expect(bundledSkills.map((skill) => skill.scope)).toEqual(["system", "system", "system"]);
+      expect(bundledSkills.map((skill) => skill.source)).toEqual(["plugin", "plugin", "plugin"]);
       expect(outcome.diagnostics).toEqual([]);
 
-      const pptxInspection = await inspectZCodeSkill({
+      const superpowersInspection = await inspectZCodeSkill({
         env,
-        name: "pptx",
+        name: "using-superpowers",
         skipUserConfig: true,
         workingDirectory: dir,
       });
-      expect(pptxInspection.skill.content).toContain("pptxgenjs");
+      expect(superpowersInspection.skill.content).toContain("SUBAGENT-STOP");
     } finally {
       await rm(dir, { force: true, recursive: true });
     }

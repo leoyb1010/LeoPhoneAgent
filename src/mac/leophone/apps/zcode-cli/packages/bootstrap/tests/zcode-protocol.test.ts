@@ -3864,15 +3864,23 @@ describe("ZCodeProtocolAgentServer", () => {
         }
         if (message.method === zcodeProtocolMethods.subagentsReadRuntimeConfig) {
           reads.push(message.params);
+          // 上游测试漂移：subagents/readRuntimeConfig 结果已改为 Host 端解析好的
+          // subagentRuntimeConfigSchema（kind: ready + profiles），不再回传原始 Markdown。
           void server.handleMessage({
             id: message.id,
             result: {
-              documents: [{ path: "/agents/reviewer.md", source: "user", content }],
-              state: {
-                disabledAgentIds: [],
-                builtInModelSelectionOverrides: {},
-                pluginAgentModelSelectionOverrides: {},
-              },
+              kind: "ready",
+              profiles: [
+                {
+                  name: "reviewer",
+                  description: "Reviewer",
+                  source: "user",
+                  systemPrompt: content,
+                  path: "/agents/reviewer.md",
+                },
+              ],
+              builtInModelSelectionOverrides: {},
+              pluginAgentModelSelectionOverrides: {},
             },
           });
         }
@@ -3898,9 +3906,11 @@ describe("ZCodeProtocolAgentServer", () => {
         signal: new AbortController().signal,
         traceContext: { traceId: createTraceId(), sessionId: options[0]!.sessionId! },
       };
-      expect((await reader!(input)).documents[0]?.content).toBe("old");
+      const first = await reader!(input);
+      expect(first.kind === "ready" ? first.profiles[0]?.systemPrompt : undefined).toBe("old");
       content = "new";
-      expect((await reader!(input)).documents[0]?.content).toBe("new");
+      const second = await reader!(input);
+      expect(second.kind === "ready" ? second.profiles[0]?.systemPrompt : undefined).toBe("new");
       expect(reads).toEqual([
         { sessionId: options[0]!.sessionId },
         { sessionId: options[0]!.sessionId },
@@ -4814,12 +4824,16 @@ describe("ZCodeProtocolAgentServer", () => {
     expect(snapshot?.revision).toBe("account-1");
     expect(snapshot?.basedOnZCodeBuiltinRevision).toBe("zcode-builtin:1");
     expect(snapshot?.states?.["account:zai-individual-coding-plan"].current).toBe(false);
-    expect(snapshot?.providers.toJSON()).toEqual({
-      "account:zai-individual-coding-plan": {
-        access: { type: "zhipu-account", entitled: true },
-        builtinModelIds: ["GLM-5.2"],
+    // 上游测试漂移：ProviderConfigMap.toJSON 已改为 rule 数组。
+    expect(snapshot?.providers.toJSON()).toEqual([
+      {
+        providerId: "account:zai-individual-coding-plan",
+        config: {
+          access: { type: "zhipu-account", entitled: true },
+          builtinModelIds: ["GLM-5.2"],
+        },
       },
-    });
+    ]);
   });
 
   it("workspace presentation rejects legacy runtimeModel", async () => {

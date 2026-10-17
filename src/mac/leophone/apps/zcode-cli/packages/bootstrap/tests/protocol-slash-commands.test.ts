@@ -13,7 +13,7 @@ describe("protocol slash command surface", () => {
     const workspace = join(tempRoot, "workspace");
     const home = join(tempRoot, "home");
     const projectCommands = join(workspace, ".zcode", "commands");
-    const userCommands = join(home, ".zcode", "commands");
+    const userCommands = join(home, ".leophoneagent", "commands"); // [leo] 用户级命令根是 ~/.leophoneagent
 
     try {
       await mkdir(projectCommands, { recursive: true });
@@ -75,7 +75,7 @@ describe("protocol slash command surface", () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "zcode-custom-command-prompt-"));
     const workspace = join(tempRoot, "workspace");
     const home = join(tempRoot, "home");
-    const userCommands = join(home, ".zcode", "commands");
+    const userCommands = join(home, ".leophoneagent", "commands"); // [leo] 用户级命令根是 ~/.leophoneagent
 
     try {
       await mkdir(workspace, { recursive: true });
@@ -114,7 +114,7 @@ describe("protocol slash command surface", () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "zcode-builtin-workflow-"));
     const workspace = join(tempRoot, "workspace");
     const home = join(tempRoot, "home");
-    const userCommands = join(home, ".zcode", "commands");
+    const userCommands = join(home, ".leophoneagent", "commands"); // [leo] 用户级命令根是 ~/.leophoneagent
     try {
       await mkdir(workspace, { recursive: true });
       await mkdir(userCommands, { recursive: true });
@@ -262,7 +262,7 @@ describe("protocol slash command surface", () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "zcode-command-shell-missing-context-"));
     const workspace = join(tempRoot, "workspace");
     const home = join(tempRoot, "home");
-    const userCommands = join(home, ".zcode", "commands");
+    const userCommands = join(home, ".leophoneagent", "commands"); // [leo] 用户级命令根是 ~/.leophoneagent
     let executionCalled = false;
     const executionPort: ExecutionPort = {
       async run() {

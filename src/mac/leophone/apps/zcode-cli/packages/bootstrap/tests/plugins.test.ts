@@ -67,6 +67,11 @@ const IOS_SIMULATOR_MCP_ID = "plugin:ios-simulator:ios-simulator";
 const ANDROID_EMULATOR_MCP_ID = "plugin:android-emulator:android-emulator";
 const BROWSER_USE_PLUGIN_ID = "browser-use@zcode-plugins-official";
 const DOCUMENTS_PLUGIN_ID = "documents@zcode-plugins-official";
+const SUPERPOWERS_PLUGIN_ID = "superpowers@zcode-plugins-official";
+// [leo] 官方 CDN/市场端点被中和为死端口（packages/shared/src/zcodeEndpoint.ts）；内置官方插件为 10 个
+// （文档四件套与 image-search 不随包，新增随包 superpowers）。
+const LEO_OFFICIAL_CDN_ORIGIN = "http://127.0.0.1:9";
+const LEO_OFFICIAL_PLUGIN_COUNT = 10;
 const RESTORE_LEGACY_SESSIONS_PLUGIN_ID = "restore-legacy-sessions@zcode-plugins-official";
 const SKILL_CREATOR_PLUGIN_ID = "skill-creator@zcode-plugins-official";
 const ZCODE_GUIDE_PLUGIN_ID = "zcode-guide@zcode-plugins-official";
@@ -184,7 +189,7 @@ describe("ZCode plugins", () => {
           await readFile(join(marketplaceRoot, "marketplace.json"), "utf8"),
         ) as { plugins: Array<{ icon?: string }> };
         expect(saved.plugins[0]?.icon).toBe(
-          "https://cdn-zcode.z.ai/zcode/official-plugin/assets/figma/icon.png",
+          `${LEO_OFFICIAL_CDN_ORIGIN}/zcode/official-plugin/assets/figma/icon.png`,
         );
       });
     } finally {
@@ -236,31 +241,6 @@ describe("ZCode plugins", () => {
         ...OFFICIAL_BROWSER_USE_REQUIRED_SEED_PATHS.slice(0, -1).map((path) => ({ path })),
       ]),
     ).toEqual([OFFICIAL_BROWSER_USE_REQUIRED_SEED_PATHS.at(-1)]);
-  });
-
-  // [leo] 文档四件套与 image-search 不随包（official-plugin-definitions.ts），本用例不适用。
-  it.skip("can disable one document plugin without disabling the other formats or search", async () => {
-    const root = await mkdtemp(join(tmpdir(), "zcode-document-toggle-"));
-    try {
-      const userConfigPath = join(root, "config.json");
-      await writeFile(
-        userConfigPath,
-        JSON.stringify({
-          plugins: { enabledPlugins: { "documents@zcode-plugins-official": false } },
-        }),
-      );
-      const outcome = resolveZCodePlugins({
-        env: {},
-        pluginStorageRoot: join(root, "plugins"),
-        userConfigPath,
-        workingDirectory: root,
-      });
-      expect(outcome.plugins.find((plugin) => plugin.name === "documents")?.enabled).toBe(false);
-      for (const name of ["pdf", "presentations", "spreadsheets", "image-search"])
-        expect(outcome.plugins.find((plugin) => plugin.name === name)?.enabled).toBe(true);
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
   });
 
   it("keeps same-name marketplace listings isolated by stable plugin id", async () => {
@@ -630,10 +610,10 @@ describe("ZCode plugins", () => {
             id: "zcode-plugins-official",
             isOfficial: true,
             name: "zcode-plugins-official",
-            pluginCount: 14,
+            pluginCount: LEO_OFFICIAL_PLUGIN_COUNT,
             source: {
               source: "url",
-              url: "https://cdn-zcode.z.ai/zcode/official-plugin/marketplace.json",
+              url: `${LEO_OFFICIAL_CDN_ORIGIN}/zcode/official-plugin/marketplace.json`,
             },
           }),
           expect.objectContaining({
@@ -1306,11 +1286,12 @@ describe("ZCode plugins", () => {
     }
   });
 
+  // [leo] documents 不随包，同 id 内置插件改用 skill-creator 覆盖同一条清除 suppression 逻辑。
   it("clears stale builtin suppression when an official CDN entry with the same id is installed", async () => {
     const root = await mkdtemp(join(tmpdir(), "zcode-bootstrap-cdn-suppression-"));
     const pluginStorageRoot = join(root, "plugins");
     const userConfigPath = join(root, "config.json");
-    const cdnSourceRoot = join(root, "cdn-documents");
+    const cdnSourceRoot = join(root, "cdn-skill-creator");
 
     try {
       await writeFile(
@@ -1318,7 +1299,7 @@ describe("ZCode plugins", () => {
         JSON.stringify({
           plugins: {
             enabled: true,
-            suppressedBuiltins: [DOCUMENTS_PLUGIN_ID],
+            suppressedBuiltins: [SKILL_CREATOR_PLUGIN_ID],
           },
         }),
       );
@@ -1326,17 +1307,17 @@ describe("ZCode plugins", () => {
       await writeFile(
         join(cdnSourceRoot, ".zcode-plugin", "plugin.json"),
         JSON.stringify({
-          name: "documents",
+          name: "skill-creator",
           version: "1.0.0",
           skills: "skills",
         }),
       );
-      await mkdir(join(cdnSourceRoot, "skills", "documents"), {
+      await mkdir(join(cdnSourceRoot, "skills", "skill-creator"), {
         recursive: true,
       });
       await writeFile(
-        join(cdnSourceRoot, "skills", "documents", "SKILL.md"),
-        "# Document Skills\n",
+        join(cdnSourceRoot, "skills", "skill-creator", "SKILL.md"),
+        "# Skill Creator\n",
       );
 
       resolveZCodePlugins({
@@ -1353,7 +1334,7 @@ describe("ZCode plugins", () => {
       const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
         plugins: Array<Record<string, unknown>>;
       };
-      const entry = manifest.plugins.find((plugin) => plugin.name === "documents");
+      const entry = manifest.plugins.find((plugin) => plugin.name === "skill-creator");
       expect(entry).toBeDefined();
       entry!.source = { source: "directory", path: cdnSourceRoot };
       entry!.version = "1.0.0";
@@ -1361,7 +1342,7 @@ describe("ZCode plugins", () => {
 
       const result = await installZCodeMarketplacePlugin({
         marketplace: "zcode-plugins-official",
-        pluginName: "documents",
+        pluginName: "skill-creator",
         pluginStorageRoot,
         userConfigPath,
         workingDirectory: root,
@@ -1371,7 +1352,7 @@ describe("ZCode plugins", () => {
       const config = JSON.parse(await readFile(userConfigPath, "utf8")) as {
         plugins?: { suppressedBuiltins?: string[] };
       };
-      expect(config.plugins?.suppressedBuiltins ?? []).not.toContain(DOCUMENTS_PLUGIN_ID);
+      expect(config.plugins?.suppressedBuiltins ?? []).not.toContain(SKILL_CREATOR_PLUGIN_ID);
       expect(existsSync(join(pluginStorageRoot, "installed_plugins.json"))).toBe(true);
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -2389,10 +2370,10 @@ describe("ZCode plugins", () => {
       expect(
         overview.marketplaces.find((marketplace) => marketplace.id === "zcode-plugins-official"),
       ).toMatchObject({
-        pluginCount: 14,
+        pluginCount: LEO_OFFICIAL_PLUGIN_COUNT,
         source: {
           source: "url",
-          url: "https://cdn-zcode.z.ai/zcode/official-plugin/marketplace.json",
+          url: `${LEO_OFFICIAL_CDN_ORIGIN}/zcode/official-plugin/marketplace.json`,
         },
       });
       expect(overview.diagnostics).toEqual(
@@ -2626,18 +2607,21 @@ describe("ZCode plugins", () => {
       const plugin = outcome.plugins.find((item) => item.id === SKILL_CREATOR_PLUGIN_ID);
       const browserUsePlugin = outcome.plugins.find((item) => item.id === BROWSER_USE_PLUGIN_ID);
       const documentPlugin = outcome.plugins.find((item) => item.id === DOCUMENTS_PLUGIN_ID);
+      const superpowersPlugin = outcome.plugins.find((item) => item.id === SUPERPOWERS_PLUGIN_ID);
       expect(plugin).toMatchObject({
         enabled: true,
         name: "skill-creator",
         skillCount: 1,
         skillRootCount: 1,
       });
-      expect(documentPlugin).toMatchObject({
+      // [leo] documents 不随包；Leo 随包且默认启用 superpowers（official-plugin-definitions.ts）。
+      expect(documentPlugin).toBeUndefined();
+      expect(superpowersPlugin).toMatchObject({
         enabled: true,
-        name: "documents",
-        skillCount: 1,
+        name: "superpowers",
         skillRootCount: 1,
       });
+      expect(superpowersPlugin?.skillCount).toBeGreaterThan(0);
       // 回归原因：启动发现链路与 overview 使用同一份 browser-use 内置内容，
       // web-gui-tester 加入后这里也必须稳定报告两个 skill。
       expect(browserUsePlugin).toMatchObject({

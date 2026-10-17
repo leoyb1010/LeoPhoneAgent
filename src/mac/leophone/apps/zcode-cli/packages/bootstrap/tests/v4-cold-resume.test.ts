@@ -2500,7 +2500,9 @@ describe("v4 冷恢复（集成：真 sqlite + server + binder）", () => {
         sessionID: SESSION_ID,
         type: SESSION_ENTRY_MODEL_SELECTION,
         time: { created: 5, updated: 5 },
-        data: { modelId: "glm-4.6", providerId: "glm", thoughtLevel: "deep" },
+        // 上游测试漂移：session store port 现在只接受逻辑 ModelSelection（options.reasoningLevel），
+        // 旧平铺 thoughtLevel 只由 0020 迁移导入，不再在读取时解释。
+        data: { modelId: "glm-4.6", providerId: "glm", options: { reasoningLevel: "deep" } },
       });
     } finally {
       seedStore.close();
@@ -2641,9 +2643,11 @@ describe("v4 冷恢复（集成：真 sqlite + server + binder）", () => {
         takeInitialFrameParams(server, "subscribe-legacy-fork-thought"),
       );
       if (frame.payload.kind !== "snapshot") throw new Error("Expected snapshot frame");
+      // 上游测试漂移：transcript → Session 选择的推断只在 0020/0022 迁移时回填一次；迁移之后写入的
+      // 旧消息不再在冷恢复读取时被解释，会话保持未绑定，更不会借用相邻消息的档位。
       expect(frame.payload.snapshot.config).toMatchObject({
-        model: "glm-4-air",
-        provider: "glm",
+        model: "",
+        provider: "",
         thought: "",
       });
     } finally {
@@ -2731,11 +2735,13 @@ describe("v4 冷恢复（集成：真 sqlite + server + binder）", () => {
         takeInitialFrameParams(server, "subscribe-legacy-thought"),
       );
       if (frame.payload.kind !== "snapshot") throw new Error("Expected snapshot frame");
+      // 上游测试漂移：无 durable selection 时冷恢复保持未绑定（transcript 推断只在迁移时回填），
+      // task-index 的 resumeThoughtLevel 提示同样不会被采用。
       expect(frame.payload.snapshot.config).toMatchObject({
-        model: "glm-4-air",
-        provider: "glm",
+        model: "",
+        provider: "",
         thought: "",
-        thoughtLevels: ["medium", "deep"],
+        thoughtLevels: [],
       });
     } finally {
       await close();

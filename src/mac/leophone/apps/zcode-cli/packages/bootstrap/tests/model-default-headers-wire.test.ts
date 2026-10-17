@@ -188,7 +188,8 @@ describe("模型请求默认 Header：Bootstrap → Adapter → 真实 SDK", () 
         expect(headers.get("user-agent")).toContain(`ZCode/${CLIENT_VERSION}`);
         expect(headers.get("x-zcode-app-version")).toBe(CLIENT_VERSION);
         expect(headers.get("x-title")).toBe("Z Code@electron");
-        expect(headers.get("http-referer")).toBe("https://zcode.z.ai");
+        // [leo] 模型请求不再带 HTTP-Referer（会把每次请求归因到官方站点），见 src/model-config.ts。
+        expect(headers.get("http-referer")).toBeNull();
         expect(headers.get("x-zcode-agent")).toBe("glm");
         expect(headers.get("x-release-channel")).toBe("production");
         for (const key of [
@@ -263,7 +264,9 @@ describe("模型请求默认 Header：Bootstrap → Adapter → 真实 SDK", () 
     expect(requests[0]!.headers.get("x-title")).toBe(`Z Code@${options.sourceTitle}`);
   });
 
-  it("真实 Runtime 标题 sidecar 沿公共工厂携带版本、other 类型和会话追踪", async () => {
+  // 上游测试漂移：core runtime-model.ts 已把会话类型统一绑定在模型句柄上（标题 sidecar 不再覆写为
+  // other），interactive 会话的标题请求沿用宿主分类 main。
+  it("真实 Runtime 标题 sidecar 沿公共工厂携带版本、宿主会话类型和会话追踪", async () => {
     const { model, requests } = createFixture();
     const sessionId = createSessionId("header-title-session");
     const updateSession = vi.fn(async (input) => input);
@@ -302,7 +305,7 @@ describe("模型请求默认 Header：Bootstrap → Adapter → 真实 SDK", () 
     );
     expect(requests).toHaveLength(1);
     expect(requests[0]!.headers.get("x-zcode-app-version")).toBe(CLIENT_VERSION);
-    expect(requests[0]!.headers.get("x-zcode-session-type")).toBe("other");
+    expect(requests[0]!.headers.get("x-zcode-session-type")).toBe("main");
     // 既有请求归因会去掉内部 sess_ 前缀；本次不改变服务端看到的会话身份格式。
     expect(requests[0]!.headers.get("x-session-id")).toBe("header-title-session");
     expect(requests[0]!.headers.get("x-zcode-trace-id")).toBeTruthy();

@@ -305,7 +305,9 @@ describe("createProtocolAutomationPort", () => {
     expect(listed[0]?.scheduleRule).toMatchObject({ unit: "hourly", interval: 200, minute: 49 });
   });
 
-  it("将当前 Bot turn 的回推目标注入 automation/create，普通模型输入不能自行指定", async () => {
+  // [leo] Bot/渠道（飞书/企微）入站被移除，session record 不再有 activeBotDeliveryTarget；
+  // 即使 record 上残留旧字段，automation/create 也不得透传回推目标。
+  it("不再把 Bot 回推目标注入 automation/create（Leo 移除了 Bot 渠道）", async () => {
     const requestClient = vi.fn(async (method: string) => {
       if (method === zcodeProtocolMethods.automationCheckTaskBinding) return { bound: false };
       if (method === zcodeProtocolMethods.automationCreate) {
@@ -354,9 +356,13 @@ describe("createProtocolAutomationPort", () => {
 
     expect(requestClient).toHaveBeenCalledWith(
       zcodeProtocolMethods.automationCreate,
-      expect.objectContaining({ botDeliveryTarget }),
+      expect.objectContaining({ targetTaskId: "session-1", title: "Bot 日报" }),
       expect.anything(),
     );
+    const createCall = requestClient.mock.calls.find(
+      ([method]) => method === zcodeProtocolMethods.automationCreate,
+    ) as unknown[] | undefined;
+    expect(createCall?.[1]).not.toHaveProperty("botDeliveryTarget");
   });
 
   it("旧 Host 缺少归属查询方法时回退 automation/list，并允许未绑定会话 CronCreate", async () => {

@@ -79,7 +79,9 @@ function resolve(resume: boolean, modelSelection?: ModelSelection, registry = cr
 }
 
 describe("Runtime 创建与未绑定恢复的边界", () => {
-  it("新建空白会话没有 configured default 时保持未绑定，等待显式提交选择", () => {
+  // 上游测试漂移：@zcode/provider resolveInitialModelSelection 现在对全新草稿按 Registry 顺序给出
+  // registry-fallback 初始推荐（最高档），不再保持未绑定；恢复路径仍不补齐（见下方用例）。
+  it("新建空白会话没有 configured default 时按 Registry 顺序给出初始推荐", () => {
     const config = resolveAppRuntimeConfig({
       cliStorageRoot: "/test/cli",
       configResult: createConfig({ env: {}, skipUserConfig: true, workingDirectory: "/test" }),
@@ -87,7 +89,7 @@ describe("Runtime 创建与未绑定恢复的边界", () => {
       subagentOutputRootDir: "/test/agents",
       workingDirectory: "/test",
     });
-    expect(config.runtimeConfig.modelSelection).toBeUndefined();
+    expect(config.runtimeConfig.modelSelection).toEqual(complete);
   });
   it.each([
     undefined,

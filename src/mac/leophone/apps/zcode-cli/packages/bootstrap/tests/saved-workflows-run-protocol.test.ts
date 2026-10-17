@@ -66,7 +66,8 @@ function projectDir() {
 }
 
 function globalDir() {
-  return join(home, ".zcode", "workflows");
+  // [leo] 用户级（全局）档落在 ~/.leophoneagent/workflows；项目档仍是 <cwd>/.zcode/workflows。
+  return join(home, ".leophoneagent", "workflows");
 }
 
 async function seed(dir: string, name: string, script: string, description = "已有") {

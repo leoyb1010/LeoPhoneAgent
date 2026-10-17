@@ -284,6 +284,10 @@ function createWorkflowChildRuntime(
     options.childSessionId,
     {
       ...deps.runtimeConfig,
+      // [leo] fix: deps.runtimeConfig 是建 App 时的配置快照，不含父 runtime 在首次执行边界才落定的
+      // Bash shell snapshot；子会话必须沿用父会话那一份，否则模型看到的 Shell 退回 $SHELL。
+      bashShellSelection:
+        deps.runtime.getSessionShellSelection() ?? deps.runtimeConfig.bashShellSelection,
       agentName: options.workflowKind === "expert" ? "zcode-expert" : "zcode-workflow",
       // workflow child 不在 Guarded 合同内；只隔离父任务模式，不继承审批。
       mode: "yolo",

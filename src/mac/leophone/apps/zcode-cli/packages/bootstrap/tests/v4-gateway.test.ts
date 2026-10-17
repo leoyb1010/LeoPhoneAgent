@@ -4118,6 +4118,16 @@ describe("v4/command 收口", () => {
     await vi.waitFor(() => expect(sendInput).toHaveBeenCalledTimes(1));
     await expect(sending).resolves.toMatchObject({ status: "accepted" });
     expect(sendSettled).toBe(true);
+    // 上游测试漂移：admission ACK 本身不推进 projection revision（mock sendInput 不产事件），
+    // 旧 revision 只有在 Core 的 durable TurnStarted 投影到达后才过期；这里显式补上该事件。
+    gateway.ingest(
+      "session-1",
+      log.push(
+        SessionEventType.TurnStarted,
+        { turnNumber: 2, input: "你好", inputId: "cmd-new", messageId: "msg-user-new" },
+        { turnId: "turn-new" },
+      ),
+    );
 
     const staleRetry = gateway.handleCommand(
       commandParams({

@@ -36,7 +36,8 @@ describe("createWorkspaceHookRuntimeSecurity reloadTrust", () => {
       await rm(homeDir, { recursive: true, force: true });
     });
     const { mkdir } = await import("node:fs/promises");
-    const securityDir = join(homeDir, ".zcode", "security");
+    // [leo] 用户级数据根是 ~/.leophoneagent（adapters storage/workspace-hook-trust-store.ts）。
+    const securityDir = join(homeDir, ".leophoneagent", "security");
     await mkdir(securityDir, { recursive: true });
     const storePath = join(securityDir, "workspace-hook-trust-v1.json");
     await writeFile(storePath, JSON.stringify({ schemaVersion: 1, records: [] }), "utf8");
@@ -89,8 +90,8 @@ describe("createWorkspaceHookRuntimeSecurity reloadTrust", () => {
   it("reloads externally granted trust into the live admission and re-emits state", async () => {
     const { homeDir, storePath } = await tempHome();
     // userConfigPath 指向临时 home 下的空配置：readUserConfig 找不到文件时按空配置处理，
-    // store 路径 = <homeDir>/.zcode/security/workspace-hook-trust-v1.json。
-    const userConfigPath = join(homeDir, ".zcode", "cli", "config.json");
+    // store 路径 = <homeDir>/.leophoneagent/security/workspace-hook-trust-v1.json。
+    const userConfigPath = join(homeDir, ".leophoneagent", "cli", "config.json");
 
     const emitted: Array<{ pendingCount: number }> = [];
     const security = createWorkspaceHookRuntimeSecurity({
@@ -163,7 +164,7 @@ describe("createWorkspaceHookRuntimeSecurity reloadTrust", () => {
       runtimeRoot: { enabled: true },
       sessionId: "sess_test",
       snapshot: snapshot(),
-      userConfigPath: join(homeDir, ".zcode", "cli", "config.json"),
+      userConfigPath: join(homeDir, ".leophoneagent", "cli", "config.json"),
       workspaceHookTrustEnabled: false,
       workingDirectory: "/workspace",
     });

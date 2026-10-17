@@ -307,10 +307,11 @@ describe("bundled official plugin cache resilience", () => {
         severity: "warning",
       }),
     ]);
-    const documentSkills = outcome.plugins.find(
-      (plugin) => plugin.id === "documents@zcode-plugins-official",
+    // [leo] documents 不随包；用 Leo 默认启用的随包插件 superpowers 证明其余插件不受影响。
+    const superpowers = outcome.plugins.find(
+      (plugin) => plugin.id === "superpowers@zcode-plugins-official",
     );
-    expect(documentSkills?.enabled).toBe(true);
+    expect(superpowers?.enabled).toBe(true);
     expect(logger.warn).toHaveBeenCalledWith(
       "Official plugin cache operation degraded",
       expect.objectContaining({

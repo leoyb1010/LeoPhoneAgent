@@ -134,6 +134,10 @@ export function createScriptWorkflowAgentRuntime(input: {
     input.childSessionId,
     {
       ...inheritedConfig,
+      // [leo] fix: 继承的 runtimeConfig 是建 App 时的快照，不含父会话首次执行边界才落定的 Bash
+      // shell snapshot；子会话沿用父会话那一份，模型看到的 Shell 与实际执行 shell 保持一致。
+      bashShellSelection:
+        input.deps.runtime.getSessionShellSelection() ?? inheritedConfig.bashShellSelection,
       ...(systemPrompt === undefined ? {} : { systemPrompt }),
       agentName: input.request.opts?.agentType ?? "zcode-workflow",
       maxTurns: input.request.opts?.maxTurns ?? input.deps.runtimeConfig.maxTurns,

@@ -8,12 +8,15 @@ import {
   createRegistryBackedTestApp,
   createTestProviderRegistry,
 } from "./helpers/registry-backed-test-app.js";
+import { writeWorkspaceConfigWithoutSuperpowers } from "./helpers/leo-bundled-plugins.js";
 
 describe("guarded workflow runtime ingress", () => {
   it.each(["expert", "script"] as const)(
     "%s child stays YOLO while its parent remains guarded",
     async (kind) => {
       const root = await mkdtemp(join(tmpdir(), "guarded-workflow-"));
+      // [leo] superpowers 的 SessionStart hook 也走 ExecutionPort，会让 execute 计数失真。
+      await writeWorkspaceConfigWithoutSuperpowers(root);
       const store = createSqliteSessionStore({ dbPath: ":memory:" });
       const selection = {
         providerId: "parent",

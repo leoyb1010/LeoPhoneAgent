@@ -16,8 +16,9 @@ describe("listRegistryBackedModels", () => {
     const registry = new ProviderRegistry([
       {
         providerId: "provider-a",
+        // 上游测试漂移：Provider 名称已从 ProviderConfig.label 外移到 Registry 条目的 providerName。
+        providerName: "Provider A",
         config: createApiKeyProviderConfig({
-          label: "Provider A",
           models: ["model-a", "model-b"],
         }),
         models: [

@@ -158,9 +158,10 @@ describe("plugins/referenceCatalog protocol", () => {
       const zcodeGuide = result.plugins.find(
         (entry) => entry.pluginId === "zcode-guide@zcode-plugins-official",
       );
-      expect(zcodeGuide?.icon).toBe(
-        "https://cdn-zcode.z.ai/zcode/official-plugin/assets/zcode-guide/icon.png",
-      );
+      // [leo] 内置插件 listing 不带 icon（原先指向官方 CDN，会让设置页自动请求官方服务器），
+      // 见 src/app/official-plugin-definitions.ts。
+      expect(zcodeGuide).toBeDefined();
+      expect(zcodeGuide?.icon).toBeUndefined();
       // 内置 seed listing 的本地化显示名沿 display-only 通道进入 catalog，
       // 供 Picker 中文搜索/展示（插件 @ 引用中文搜索）。
       expect(zcodeGuide?.category).toBeUndefined();
@@ -178,8 +179,9 @@ describe("plugins/referenceCatalog protocol", () => {
         result.plugins.map((x) => x.pluginId),
       );
       expect(() => zcodePluginsReferenceCatalogResultSchema.parse(enriched)).not.toThrow();
-      expect(zcodeGuide?.displayName).toBe("ZCode Guide");
-      expect(zcodeGuide?.displayNameI18n?.["zh-CN"]).toBe("ZCode 使用指南");
+      // [leo] 产品名 LeoBot。
+      expect(zcodeGuide?.displayName).toBe("LeoBot Guide");
+      expect(zcodeGuide?.displayNameI18n?.["zh-CN"]).toBe("LeoBot 使用指南");
       expect(zcodeGuide?.description).toEqual(expect.any(String));
       expect(zcodeGuide?.descriptionI18n?.["zh-CN"]).toEqual(expect.any(String));
       expect(

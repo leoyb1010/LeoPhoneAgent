@@ -16,6 +16,8 @@ import { createWorkspaceZCodeApp } from "../src/zcode-protocol/workspace-model-r
 
 const VISUALIZE_PLUGIN_ID = "visualize@zcode-plugins-official";
 const VISUALIZE_SKILL = "visualize:visualize";
+// [leo] 文档插件（pdf 等）不随包；用随包默认启用的 browser-use 技能 control-browser 作为
+// 「其余随包技能不受 visualize 门禁影响」的哨兵。
 const logger = {
   debug() {},
   info() {},
@@ -44,7 +46,7 @@ describe("visualize protocol-only skill discovery", () => {
       expect(outcome.skills.some((skill) => skill.pluginId === VISUALIZE_PLUGIN_ID)).toBe(
         includeVisualize === true,
       );
-      expect(outcome.skills.some((skill) => skill.name === "pdf")).toBe(true);
+      expect(outcome.skills.some((skill) => skill.name === "control-browser")).toBe(true);
       for (const name of ["visualize", VISUALIZE_SKILL]) {
         if (includeVisualize) {
           const result = await inspectZCodeSkill({ ...options, name });
@@ -81,7 +83,7 @@ describe("visualize protocol-only skill discovery", () => {
         expect(outcome.skills.some((skill) => skill.pluginId === VISUALIZE_PLUGIN_ID)).toBe(
           includeVisualize === true,
         );
-        expect(outcome.skills.some((skill) => skill.name === "pdf")).toBe(true);
+        expect(outcome.skills.some((skill) => skill.name === "control-browser")).toBe(true);
       }
     },
   );

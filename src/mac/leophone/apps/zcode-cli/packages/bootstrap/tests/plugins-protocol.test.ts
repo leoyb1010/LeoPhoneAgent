@@ -214,7 +214,7 @@ describe("plugins protocol contracts", () => {
   it("keeps the User projection independent from Workspace enable overrides", async () => {
     const root = await mkdtemp(join(tmpdir(), "zcode-plugin-config-view-"));
     const pluginId = "skill-creator@zcode-plugins-official";
-    const userConfigPath = join(FAKE_HOME, ".zcode", "cli", "config.json");
+    const userConfigPath = join(FAKE_HOME, ".leophoneagent", "cli", "config.json");
     try {
       await writeTestFile(
         userConfigPath,
@@ -266,7 +266,7 @@ describe("plugins protocol contracts", () => {
     const root = await mkdtemp(join(tmpdir(), "zcode-plugin-option-source-view-"));
     const pluginRoot = join(root, "user-plugin");
     const pluginId = "option-source-view@inline";
-    const userConfigPath = join(FAKE_HOME, ".zcode", "cli", "config.json");
+    const userConfigPath = join(FAKE_HOME, ".leophoneagent", "cli", "config.json");
     try {
       await writeTestFile(
         join(pluginRoot, ".claude-plugin", "plugin.json"),
@@ -553,11 +553,11 @@ describe("updatePlugin handler diagnostics", () => {
 // restoreBuiltinPlugin / overview 走真实 bootstrap 路径：storageRoot 由 ZCODE_STORAGE_DIR
 // 锚定（storage.dir 以 "cli" 结尾时 getCliStorageRoot 原样返回，pluginStorageRoot =
 // <storageDir>/plugins）；suppressedBuiltins 必须写到 handler 实际解析的 user config，即
-// ~/.zcode/cli/config.json（文件头部已把 homedir 重定向到 FAKE_HOME，故落在隔离目录）。
+// ~/.leophoneagent/cli/config.json（[leo] 用户配置数据根，见 adapters config/file-config.adapter.ts；文件头部已把 homedir 重定向到 FAKE_HOME，故落在隔离目录）。
 describe("restoreBuiltinPlugin handler", () => {
   const noopContext = {} as unknown as ZCodeProtocolAgentServerContext;
   const builtinId = "skill-creator@zcode-plugins-official";
-  const userConfigPath = join(FAKE_HOME, ".zcode", "cli", "config.json");
+  const userConfigPath = join(FAKE_HOME, ".leophoneagent", "cli", "config.json");
   let previousStorageDir: string | undefined;
 
   beforeEach(() => {
