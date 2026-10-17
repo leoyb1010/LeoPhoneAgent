@@ -513,24 +513,24 @@ describe("NodeHttpClientAdapter", () => {
     });
   });
 
-  it("blocks public egress requests through ordinary proxies", async () => {
+  // [leo] 用户自己配置的代理（Clash 等）在代理侧解析域名；本地 DNS 预检既证明不了最终 IP，在只有代理
+  // 能出网的机器上还会把每次 WebFetch 卡到超时。走代理时只保留 URL 字面量层面的私网/本机阻断，
+  // 不再整体拒绝（上游 3.15.1 拒绝）。见 adapters/src/http/index.ts 的 [leo] 注释。
+  it("[leo] lets public egress through user proxies without local DNS precheck", async () => {
     const dnsLookup = vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]);
     const adapter = createNodeHttpClientAdapter({
       dnsLookup,
       proxyUrl: "http://127.0.0.1:9",
     });
 
+    // 代理端口不监听，请求以网络错误失败，但不是 egress_blocked。
     await expect(
       adapter.request({
         egressPolicy: "public",
         timeoutMs: 100,
         url: "https://public.example/page",
       }),
-    ).rejects.toMatchObject({
-      code: "egress_blocked",
-      message: expect.stringContaining("proxy"),
-      url: "https://public.example/page",
-    });
+    ).rejects.not.toMatchObject({ code: "egress_blocked" });
     expect(dnsLookup).not.toHaveBeenCalled();
   });
 
