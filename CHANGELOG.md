@@ -1,5 +1,12 @@
 # LeoPhoneAgent 更新记录
 
+## Mac 1.11.1 · iOS 1.75.1 (174) · 手机远程用 Mac 上的 CLI - 2026-10-17
+
+- 根因：1.11.0 关掉 leoagent 旧转发后 grok 无路可走；LeoBot 任务在没配模型的 Mac 上默认落到 ACP Claude Code；LeoBot 由 launchd 启动时 PATH 短、没有代理变量，CLI 找不到或连不上外网；Claude 钥匙串登录过期；Gemini 被用户钩子 / MCP 卡住；iOS 端 harness 白名单不显示 opencode。
+- Mac：grok 走 ACP（grok agent stdio）；统一 CLI 探测路径；LeoBot 任务只用非 ACP 模型，无模型返回 409；外部 CLI 注入系统代理；Claude 长期令牌（<数据根>/acp/claude-oauth-token）；Gemini API Key 模式用独立配置目录；codex-acp 随包；ACP authenticate 与分阶段超时；空回合按失败报；手机发起的网页登录接口；capabilities 广播 ssh 目标与全部 agent 状态。
+- iOS：harness 列表以 Mac 为准；手机上网页登录 Mac 上的 agent；路由 直连 → 中继（Cloudflare relay.leoyuan.top，Funnel 备用）→ SSH 兜底，显示路径与延迟；代理劫持 ts.net 时给小火箭规则。
+- 运维：Studio、Air 补模型供应商；Air 接入 Leo Link 与 Tailscale Serve；Mac mini Cloudflare 隧道新增 relay.leoyuan.top；四台 Gemini 改走 cliproxy；Studio opencode 换 opencode-go。
+
 ## Mac 1.11.0 · iOS 1.75.0 (173) · 全端升级 - 2026-10-17
 
 - Mac 内核 ZCode 3.14.3 → 3.15.1（subtree 同步，补丁表见 docs/mac-3.0/UPSTREAM.md）：修三处静默失效（自动更新开关、官方地址回流、网络兜底被抓包顶掉），红线检查脚本挂在打包链首；新任务默认 guarded 档。
