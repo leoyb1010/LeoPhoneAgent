@@ -1,5 +1,13 @@
 # LeoPhoneAgent 更新记录
 
+## Mac 1.11.0 · iOS 1.75.0 (173) · 全端升级 - 2026-10-17
+
+- Mac 内核 ZCode 3.14.3 → 3.15.1（subtree 同步，补丁表见 docs/mac-3.0/UPSTREAM.md）：修三处静默失效（自动更新开关、官方地址回流、网络兜底被抓包顶掉），红线检查脚本挂在打包链首；新任务默认 guarded 档。
+- Mac 新能力：外部 Agent（ACP，Claude Code / Codex / Gemini / opencode）与斜杠命令、并行方案（git worktree）、菜单栏 + ⌥Space 快速派发、Peekaboo 电脑操作、本机语音输入与朗读、手机看屏（截图 + WebRTC 硬编视频）与操控（leo-input）、记忆召回（项目记忆 + 藏宝阁）、iMCP 一键添加、终端 ⌘F/分屏/WebGL、LeoBot Design token 单一来源。
+- iOS 新能力：部署目标 27；Mac 画面查看与操控；Live Activity 远程推送；Watch 复杂功能 / Mac 状态页；分享直发 Mac；Liquid Glass 与动效；iPad 三栏；Foundation Models 27 与长任务 Intent；应用内切语言即时生效；真机取证 7 项缺陷修复。
+- relay：Live Activity 推送（start/update/end），旧收藏导入路径跟随数据目录；leoagent 退役 relay_client，harness 推 run.started。
+- 清理：删除约 1.2 万行零引用代码与上游已删模块，Android/Harmony 冻结（代码留 archive/android-harmony，移出 CI）；所有测试改为隔离 HOME，不再写真实数据目录。
+
 ## iOS 1.74.0 (172) · iCloud 拉取拒收已下架模型的旧副本 - 2026-10-15
 
 - 1.73 实机复查：iPhone 刷新后 Mac mini 实例 `before=64 after=64 cloud deletes=0`（本机早已是 64，没有可删的），紧接着 `fetchRecentV2` 拉到 493 条 `ProviderModelEntryV3`，其中 107 条属于该实例被重新写入，本机回到 160（95 个 `cursor/`）。本机刷新只能删自己手上的条目，云端那几百份旧记录够不着。
