@@ -319,7 +319,6 @@ import { ISubagentsService } from "./subagents/subagents.js";
 import { ICommandsService } from "./commands/commands.js";
 import { IHooksService } from "./hooks/hooks.js";
 import { IMemoryService } from "./memory/memory.js";
-import { IOutputStyleService } from "./output-style/outputStyle.js";
 import { ISettingsSyncService } from "./settings-sync/settingsSync.js";
 import { IPromptAttachmentTransferService } from "./prompt-attachment-transfer/promptAttachmentTransfer.js";
 import { createFileService } from "./file/fileService.js";
@@ -417,7 +416,6 @@ import { createSubagentsService } from "./subagents/subagentsService.js";
 import { createCommandsService } from "./commands/commandsService.js";
 import { createHooksService } from "./hooks/hooksService.js";
 import { createMemoryService } from "./memory/memoryService.js";
-import { createOutputStyleService } from "./output-style/outputStyleService.js";
 import { createSettingsSyncService } from "./settings-sync/settingsSyncService.js";
 import { createLocalPromptAttachmentTransferService } from "./prompt-attachment-transfer/promptAttachmentTransferService.js";
 import { createNodeApiClient } from "./providers/api/nodeApiClient.js";
@@ -2394,7 +2392,8 @@ export function createLocalServices(options: {
       }),
     )
     .register(IMemoryService, createMemoryService())
-    .register(IOutputStyleService, createOutputStyleService())
+    // [leo] 输出风格服务（读写 ~/.claude/settings.json 与 ~/.claude/output-styles）不注册：上游此版界面未接入，
+    // LeoBot 不写别家应用的配置。
     .register(ISettingsSyncService, createSettingsSyncService({ settingService }))
     .register(IPromptAttachmentTransferService, createLocalPromptAttachmentTransferService());
 
