@@ -72,6 +72,8 @@ final class HarnessLiveActivityBridge {
         if let sid = driver.sessionId {
             SessionActivityTracker.shared.setActive(sid, source: "HarnessLiveActivityBridge")
         }
+        // [WP-44] Most recently opened Mac task = the share sheet's "发给 Mac 当前任务".
+        driver.publishShareTarget(hostName: hostName ?? "Mac")
         refresh()
     }
 

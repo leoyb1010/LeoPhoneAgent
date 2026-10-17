@@ -99,6 +99,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         }
 
         // [T-watch-companion] Inert unless a watch app is installed.
+        // [WP-44] Mac task summary for the watch (set before the first status push).
+        WatchBridge.macStatusProvider = { MacLiveSessionsStore.shared.watchStatus }
         WatchBridge.shared.activate()
         // [V-rec] Close out a recording a killed process left open, end its stale
         // Live Activity, and listen for the Live Activity's pause/stop buttons.

@@ -66,6 +66,13 @@ class ShareViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "⭐️ 收藏", style: .default) { [weak self] _ in
             self?.collect()
         })
+        // [WP-44] Straight into the Mac task last opened on this phone (text / links only).
+        if let target = ShareMacTarget.load(), target.isFresh(), ShareMacTargetSecrets.load() != nil,
+           !(vm?.macShareText.isEmpty ?? true) {
+            alert.addAction(UIAlertAction(title: "🖥 发给 Mac:\(target.title)", style: .default) { [weak self] _ in
+                self?.sendToMac(target)
+            })
+        }
         alert.addAction(UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in
             self?.finish()
         })
@@ -93,6 +100,47 @@ class ShareViewController: UIViewController {
         let count = CollectionStore.ingest(vm.builtShare())
         NSLog("[ShareExt] collected %d item(s)", count)
         finish()
+    }
+
+    private func sendToMac(_ target: ShareMacTarget) {
+        guard let vm, let secrets = ShareMacTargetSecrets.load() else { return finish() }
+        let requests = target.requests(text: vm.macShareText, secrets: secrets)
+        Task { @MainActor [weak self] in
+            let outcome = await Self.deliver(requests)
+            guard let self else { return }
+            let alert = UIAlertController(title: outcome.title, message: outcome.detail, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "好", style: .default) { [weak self] _ in self?.finish() })
+            self.present(alert, animated: true)
+        }
+    }
+
+    /// Direct first, then relay (queued when the Mac is offline). Same request id on both,
+    /// so a direct attempt that timed out after reaching the Mac is not delivered twice.
+    private static func deliver(_ requests: [URLRequest]) async -> (title: String, detail: String?) {
+        let started = Date()
+        var lastError = "没有可用的连接"
+        for request in requests {
+            var req = request
+            let remaining = ShareMacTarget.totalBudget - Date().timeIntervalSince(started)
+            guard remaining > 1 else { break }
+            req.timeoutInterval = min(req.timeoutInterval, remaining)
+            do {
+                let (data, response) = try await URLSession.shared.data(for: req)
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if (200..<300).contains(status) {
+                    let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                    return (obj?["queued"] as? Bool) == true
+                        ? ("已排队", "Mac 现在不在线,上线后按顺序送达。")
+                        : ("已发给 Mac", nil)
+                }
+                if status == 401 || status == 403 { return ("Mac 拒绝了这次发送", "打开 LeoBot 重新连接这台 Mac 后再试。") }
+                if ![502, 503, 504].contains(status) { return ("没发出去", "Mac 返回 \(status)。") }
+                lastError = "Mac 返回 \(status)"
+            } catch {
+                lastError = error.localizedDescription
+            }
+        }
+        return ("没发出去", lastError)
     }
 
     private func finish() {

@@ -150,7 +150,19 @@ final class MacLiveSessionsStore: ObservableObject {
             if a.isWaiting != b.isWaiting { return a.isWaiting }
             return a.session.seq > b.session.seq
         }
-        if collected != rows { rows = collected }
+        if collected != rows {
+            rows = collected
+            // [WP-44] Mirror to the watch's Mac page / complications.
+            WatchBridge.shared.pushStatus()
+        }
+    }
+
+    /// [WP-44] What the watch shows: counts plus the first few rows, waiting first.
+    var watchStatus: WatchMacStatus {
+        WatchMacStatus.summarize(rows.map { row in
+            (id: row.id, title: "\(row.hostName) · \(row.session.name)", status: row.statusText,
+             waiting: row.isWaiting, running: ["running", "starting"].contains(row.session.status))
+        })
     }
 
     private func isDismissed(_ row: Row) -> Bool {

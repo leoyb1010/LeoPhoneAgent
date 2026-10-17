@@ -16,6 +16,7 @@ import Foundation
 import UserNotifications
 import WatchConnectivity
 import WatchKit
+import WidgetKit
 
 enum WatchAskState: Equatable {
     case idle
@@ -61,6 +62,8 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     @Published private(set) var status: String = ""
     /// Tasks running on the phone right now (from its status push).
     @Published private(set) var activeCount = 0
+    /// [WP-44] Leo Link Mac tasks as mirrored by the phone (Mac page + complications).
+    @Published private(set) var macStatus: WatchMacStatus = .empty
     @Published private(set) var updatedAt: Date = .distantPast
     @Published private(set) var isPhoneReachable = false
     @Published private(set) var lastActionMessage: String?
@@ -68,7 +71,7 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     @Published var askState: WatchAskState = .idle
     /// [T-leogateway] A remote gateway run is blocked waiting for a yes/no.
     /// The wrist is the fastest place to unblock it. Nil when nothing pends.
-    @Published var pendingApproval: WatchApproval?
+    @Published var pendingApproval: WatchApproval? { didSet { if (oldValue == nil) != (pendingApproval == nil) { refreshComplications() } } }
     /// Bumps when a reply lands, for the settle-in animation.
     @Published private(set) var replyPulse = 0
     /// The last reply was an error message, not an answer: shown, not spoken.
@@ -438,6 +441,20 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         if let data = try? JSONEncoder().encode(history) {
             UserDefaults.standard.set(data, forKey: Self.historyKey)
         }
+        refreshComplications()
+    }
+
+    /// [WP-44] Hand the complications / Smart Stack a fresh snapshot (App Group) and
+    /// reload their timelines — only when something they show actually changed.
+    func refreshComplications() {
+        let latest = history.first
+        let snapshot = WatchWidgetSnapshot(
+            macRunning: macStatus.running,
+            macWaiting: max(macStatus.waiting, pendingApproval == nil ? 0 : 1),
+            lastQuestion: String((latest?.question ?? "").prefix(60)),
+            lastAnswer: String((latest?.answer ?? "").prefix(120)),
+            updatedAt: Date())
+        if snapshot.save() { WidgetCenter.shared.reloadAllTimelines() }
     }
 
     /// A question within 20 minutes of the last answer continues that thread.
@@ -512,6 +529,10 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         activeCount = (context["activeCount"] as? Int) ?? 0
         if let ts = context["updatedAt"] as? TimeInterval {
             updatedAt = Date(timeIntervalSince1970: ts)
+        }
+        if let mac = WatchMacStatus.decode(fromContext: context[WatchMacStatus.contextKey]), mac != macStatus {
+            macStatus = mac
+            refreshComplications()
         }
         // Fallback delivery for an ask answer that missed the live message.
         if case .waiting(let id, _) = askState,

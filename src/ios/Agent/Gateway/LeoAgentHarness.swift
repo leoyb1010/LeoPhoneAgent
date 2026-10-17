@@ -1077,3 +1077,33 @@ final class HarnessSessionDriver: ObservableObject {
         pendingApprovals = []
     }
 }
+
+// MARK: - [WP-44] Share extension target
+
+extension LeoAgentClient {
+    /// The direct route the share extension may try first (endpoint, device id, short-lived
+    /// grant). nil when there is no valid direct route right now.
+    func shareDirectRoute() -> (base: String, deviceId: String, token: String, expiresAt: TimeInterval)? {
+        guard let route = directRoute, let base = route.endpoint() else { return nil }
+        return (base.absoluteString, route.device.deviceId, route.grant.token, route.grant.expiresAt)
+    }
+}
+
+extension HarnessSessionDriver {
+    /// [WP-44] Remember this Mac task as the share sheet's "发给 Mac 当前任务" target
+    /// (App Group: where to send; App Group keychain: the keys). Called when its console
+    /// is on screen, so the most recently opened Mac task wins.
+    func publishShareTarget(hostName: String) {
+        guard let sessionId, let relayBase = client.harnessBaseURLForRelay?.absoluteString else { return }
+        let relayKey = client.apiKeyForRelay
+        let title = "\(hostName) · \(harness.name)"
+        let client = self.client
+        Task {
+            let direct = await client.shareDirectRoute()
+            ShareMacTargetSecrets.save(.init(relayKey: relayKey, directToken: direct?.token))
+            ShareMacTarget(sessionId: sessionId, title: title, hostName: hostName, relayBase: relayBase,
+                           directBase: direct?.base, directDeviceId: direct?.deviceId,
+                           directExpiresAt: direct?.expiresAt, updatedAt: Date()).save()
+        }
+    }
+}

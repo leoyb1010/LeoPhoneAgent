@@ -292,6 +292,9 @@ final class WatchBridge: NSObject, ObservableObject {
     }
 
     private var lastPushedSignature: String = ""
+    /// [WP-44] Leo Link Mac task summary for the watch's Mac page and complications.
+    /// Set by the app (MacLiveSessionsStore lives in the app target only).
+    static var macStatusProvider: (@MainActor () -> WatchMacStatus)?
     /// Cheap fingerprint of what the standalone config depends on; the keychain
     /// is only read when it changes.
     private var lastStandaloneInputs: String = ""
@@ -425,7 +428,8 @@ final class WatchBridge: NSObject, ObservableObject {
         syncStandaloneConfigIfNeeded()
 
         let snapshot = AgentWidgetSnapshotStore.load()
-        let context: [String: Any] = [
+        let mac = Self.macStatusProvider?() ?? .empty
+        var context: [String: Any] = [
             WatchPayloadKey.kind: WatchPayloadKey.kindStatus,
             WatchPayloadKey.state: snapshot.state.rawValue,
             WatchPayloadKey.title: snapshot.title,
@@ -436,9 +440,10 @@ final class WatchBridge: NSObject, ObservableObject {
             "askReplySessionId": pendingAskReply?.sessionId ?? "",
             WatchPayloadKey.updatedAt: snapshot.updatedAt.timeIntervalSince1970,
         ]
+        if let encoded = mac.encodedForContext() { context[WatchMacStatus.contextKey] = encoded }
         // The reply id is part of the signature: the fallback delivery of an
         // answer must go out even when the agent state itself didn't change.
-        let signature = "\(snapshot.state.rawValue)|\(snapshot.activeCount)|\(snapshot.title)|\(snapshot.status)|\(pendingAskReply?.id ?? "")"
+        let signature = "\(snapshot.state.rawValue)|\(snapshot.activeCount)|\(snapshot.title)|\(snapshot.status)|\(pendingAskReply?.id ?? "")|\(mac.signature)"
         guard signature != lastPushedSignature else { return }
         lastPushedSignature = signature
 

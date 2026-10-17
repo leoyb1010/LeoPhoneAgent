@@ -10,6 +10,14 @@ final class ShareViewModel {
     /// [V-rec] 分享进来的音频(暂存名 `rec-xxxxxxxx_原名`)。可以转成录音纪要,也可以照常发到对话。
     private(set) var audioFileNames: [String] = []
     var hasAudio: Bool { !audioFileNames.isEmpty }
+    /// [WP-44] What "发给 Mac 当前任务" sends: the shared text / URLs (files and images
+    /// stay on the phone — the Mac task is a text conversation).
+    var macShareText: String {
+        pendingItems.filter { $0.kind == .inlineText }.map(\.value)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+    }
     static let pendingRecordingImportsKey = "recording.pendingImports"
 
     /// Process all extension items from the share context.
