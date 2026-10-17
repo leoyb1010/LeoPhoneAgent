@@ -79,7 +79,7 @@ struct OnboardingModelSelectionView: View {
                 .disabled(selectedModelEntryIds.isEmpty)
                 .accessibilityIdentifier("onboarding-models.next")
                 .padding(.horizontal).padding(.vertical, 8)
-                .background(.regularMaterial)
+                .glassEffect(.regular, in: .rect)
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {

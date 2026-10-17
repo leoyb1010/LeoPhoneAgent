@@ -118,6 +118,7 @@ struct HomeComposerHost: View {
     let onSlash: () -> Void
     let onMic: () -> Void
     let onCancelBusy: () -> Void
+    var glassNamespace: Namespace.ID? = nil
 
     var body: some View {
         HomeComposerBar(
@@ -132,7 +133,8 @@ struct HomeComposerHost: View {
             onSubmit: onSubmit,
             onSlash: onSlash,
             onMic: onMic,
-            onCancelBusy: onCancelBusy
+            onCancelBusy: onCancelBusy,
+            glassNamespace: glassNamespace
         )
     }
 }
@@ -152,6 +154,8 @@ struct HomeComposerBar: View {
     let onSlash: () -> Void
     let onMic: () -> Void
     let onCancelBusy: () -> Void
+    /// [WP-42] Shared with the result banner above (same GlassEffectContainer).
+    var glassNamespace: Namespace.ID? = nil
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -210,7 +214,7 @@ struct HomeComposerBar: View {
         }
         .padding(.horizontal, LeoComposerMetrics.horizontalPadding)
         .padding(.vertical, LeoComposerMetrics.verticalPadding)
-        .leoComposerChrome()
+        .leoComposerChrome(glassID: "home.composer", in: glassNamespace)
         .padding(.horizontal, LeoComposerMetrics.outerPadding)
         .padding(.bottom, 6)
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: trimmedEmpty)
@@ -311,6 +315,8 @@ struct HomeResultBanner: View {
     enum Tone { case success, info, error }
     let text: String
     let tone: Tone
+    /// [WP-42] Same GlassEffectContainer as the composer: the banner grows out of it.
+    var glassNamespace: Namespace.ID? = nil
     let onClose: () -> Void
 
     var body: some View {
@@ -338,6 +344,7 @@ struct HomeResultBanner: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .glassEffect(.regular, in: .rect(cornerRadius: 18, style: .continuous))
+        .leoGlassID("home.banner", in: glassNamespace)
         .padding(.horizontal, 12)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }

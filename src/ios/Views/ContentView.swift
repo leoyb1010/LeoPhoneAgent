@@ -233,6 +233,8 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// [T-home-zoom-transition] Session row ↔ session page zoom (iPhone stack).
     @Namespace private var zoomNS
+    /// [WP-42] Home composer + result banner glass morphing.
+    @Namespace private var homeComposerGlassNS
     /// [T-home-sensory-feedback] Same key as `LeoHaptics`, so the declarative
     /// `.sensoryFeedback` pulses below honour the in-app haptics toggle too.
     @AppStorage(LeoHaptics.enabledDefaultsKey) private var hapticsEnabled: Bool = true
@@ -632,7 +634,7 @@ struct ContentView: View {
                     Label("正在同步接力的会话…", systemImage: "arrow.triangle.2.circlepath")
                         .font(.footnote.weight(.semibold))
                         .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(.regularMaterial, in: Capsule())
+                        .glassEffect(.regular, in: .capsule)
                         .padding(.top, 6)
                         .accessibilityIdentifier("handoff.syncing")
                 }
@@ -1035,7 +1037,7 @@ struct ContentView: View {
                             }
                         }
                         .padding(24)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                        .glassEffect(.regular, in: .rect(cornerRadius: 16))
                     }
                     .transition(.opacity)
                     .animation(LeoMotion.standardEase(), value: isExporting)
@@ -2145,6 +2147,28 @@ struct ContentView: View {
                                 )
                                 .equatable()
                             }
+                            // [WP-42] iOS 27 list swipe: leading = pin, trailing = archive / delete
+                            // (delete still goes through the confirmation the menu uses).
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                Button { menuActions.send(.togglePin(session.id)) } label: {
+                                    Label(session.isPinned ? "取消置顶" : "置顶",
+                                          systemImage: session.isPinned ? "pin.slash" : "pin")
+                                }
+                                .tint(LeoTheme.ColorToken.accent)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button { menuActions.send(.delete(session.id)) } label: {
+                                    Label("删除", systemImage: "trash")
+                                }
+                                .tint(.red)
+                                let archived = sessionExtras.archived.contains(session.id)
+                                Button {
+                                    menuActions.send(archived ? .unarchive(session.id) : .archive(session.id))
+                                } label: {
+                                    Label(archived ? "取消归档" : "归档", systemImage: "archivebox")
+                                }
+                                .tint(.gray)
+                            }
                         }
                         }  // if let session
                     }
@@ -3251,12 +3275,17 @@ struct ContentView: View {
 
     /// 结果条 + 玻璃输入栏:iPhone 首页底部和 iPad 首页工作台共用这一条。
     private var homeComposerStack: some View {
+        // [WP-42] Banner and composer share one GlassEffectContainer: the banner's glass
+        // emerges from the composer shell and merges back when dismissed.
+        GlassEffectContainer(spacing: LeoComposerGlass.containerSpacing) {
         VStack(spacing: 8) {
             if let homeRoutingError {
-                HomeResultBanner(text: homeRoutingError, tone: .error) { self.homeRoutingError = nil }
+                HomeResultBanner(text: homeRoutingError, tone: .error,
+                                 glassNamespace: homeComposerGlassNS) { self.homeRoutingError = nil }
             } else if let result = homeNativeResult {
                 HomeResultBanner(text: result.text,
-                                 tone: result.outcome == .succeeded ? .success : .info) { homeNativeResult = nil }
+                                 tone: result.outcome == .succeeded ? .success : .info,
+                                 glassNamespace: homeComposerGlassNS) { homeNativeResult = nil }
             }
             HomeComposerHost(
                 draft: homeDraft,
@@ -3272,8 +3301,10 @@ struct ContentView: View {
                     showHomeActions = true
                 },
                 onMic: { startHomeChatAction(.startVoice) },
-                onCancelBusy: { homeNativeTask?.cancel() }
+                onCancelBusy: { homeNativeTask?.cancel() },
+                glassNamespace: homeComposerGlassNS
             )
+        }
         }
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeNativeResult?.text)
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeRoutingError)
@@ -4201,7 +4232,7 @@ struct ContentView: View {
             .disabled(selectedIds.isEmpty)
         }
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
+        .glassEffect(.regular, in: .rect)
     }
 
     /// Force-sync the given sessions: bumps each session, its messages,

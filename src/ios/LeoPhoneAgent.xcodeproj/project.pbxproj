@@ -487,6 +487,7 @@
 		E5J000040 /* AttributeQueryRecorder.m in Sources */ = {isa = PBXBuildFile; fileRef = E5J000041 /* AttributeQueryRecorder.m */; };
 		E5JB00001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB00002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LFD51A292015 /* LeoMotionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2025E8D5E2 /* LeoMotionPolicy.swift */; };
 		LF904607C9DF /* MCPDaemonBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1CC96DB1CD /* MCPDaemonBridge.swift */; };
 		LF135C33AF5C /* LiveActivityRemotePush.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF6973892068 /* LiveActivityRemotePush.swift */; };
 		LF8FF39531B5 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFCFE968014F /* AppLocalization.swift */; };
@@ -495,6 +496,7 @@
 		E5JB00004 /* hmm_model.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00015 /* hmm_model.utf8 */; };
 		E5JB10001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB10002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LFB522B634C4 /* LeoMotionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2025E8D5E2 /* LeoMotionPolicy.swift */; };
 		LF65D01EB9C8 /* MCPDaemonBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1CC96DB1CD /* MCPDaemonBridge.swift */; };
 		LF2651E7E07A /* LiveActivityRemotePush.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF6973892068 /* LiveActivityRemotePush.swift */; };
 		LF39CB9C995A /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFCFE968014F /* AppLocalization.swift */; };
@@ -1496,6 +1498,7 @@
 		E5JB00011 /* JiebaWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JiebaWrapper.h; sourceTree = "<group>"; };
 		E5JB00012 /* JiebaWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = JiebaWrapper.mm; sourceTree = "<group>"; };
 		E5JB00013 /* TextSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSegmenter.swift; sourceTree = "<group>"; };
+		LF2025E8D5E2 /* LeoMotionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoMotionPolicy.swift; sourceTree = "<group>"; };
 		LF1CC96DB1CD /* MCPDaemonBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPDaemonBridge.swift; sourceTree = "<group>"; };
 		LF6973892068 /* LiveActivityRemotePush.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityRemotePush.swift; sourceTree = "<group>"; };
 		LFCFE968014F /* AppLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalization.swift; sourceTree = "<group>"; };
@@ -2489,6 +2492,7 @@
 				E5JB00011 /* JiebaWrapper.h */,
 				E5JB00012 /* JiebaWrapper.mm */,
 				E5JB00013 /* TextSegmenter.swift */,
+				LF2025E8D5E2 /* LeoMotionPolicy.swift */,
 				LF1CC96DB1CD /* MCPDaemonBridge.swift */,
 				LF6973892068 /* LiveActivityRemotePush.swift */,
 				LFCFE968014F /* AppLocalization.swift */,
@@ -3766,6 +3770,7 @@
 				LF0B67AADDC6 /* LongTextCollapse.swift in Sources */,
 				E5R3R0003 /* NSTextContainerSetSizeGuard.m in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
+				LFB522B634C4 /* LeoMotionPolicy.swift in Sources */,
 				LF65D01EB9C8 /* MCPDaemonBridge.swift in Sources */,
 				LF2651E7E07A /* LiveActivityRemotePush.swift in Sources */,
 				LF39CB9C995A /* AppLocalization.swift in Sources */,
@@ -3919,6 +3924,7 @@
 				AA26CCBA2F31080100AECF2D /* ISHKernel.m in Sources */,
 				E5JB00001 /* JiebaWrapper.mm in Sources */,
 				E5JB00002 /* TextSegmenter.swift in Sources */,
+				LFD51A292015 /* LeoMotionPolicy.swift in Sources */,
 				LF904607C9DF /* MCPDaemonBridge.swift in Sources */,
 				LF135C33AF5C /* LiveActivityRemotePush.swift in Sources */,
 				LF8FF39531B5 /* AppLocalization.swift in Sources */,

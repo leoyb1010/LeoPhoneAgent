@@ -725,8 +725,7 @@ struct BrowserDownloadCardRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+        .glassEffect(.regular, in: .rect(cornerRadius: 14))
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }
     }

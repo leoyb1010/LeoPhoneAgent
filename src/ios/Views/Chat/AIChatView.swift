@@ -294,6 +294,8 @@ struct AIChatView: View {
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
     @State private var showMoveToSheet = false
+    /// [WP-42] Composer shell + floating glass morphing (GlassEffectContainer ids).
+    @Namespace private var chatComposerGlassNS
     @State private var showClearChatConfirm = false
     @State private var showForcePullConfirm = false
     // [inline-voice] Inline voice input mode: the composer's text area becomes a
@@ -629,6 +631,9 @@ struct AIChatView: View {
         .environment(\.chatSessionId, vm.sessionId)
         .modifier(NavBarStyleModifier(topSafeAreaInset: $topSafeAreaInset))
         .navigationBarTitleDisplayMode(.inline)
+        // [WP-42] iOS 27: the nav bar shrinks away while reading down a long conversation and
+        // comes back on scroll-up, so the transcript gets the whole screen.
+        .toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)
         // [T-ios-navbar-toolbar-host] The ENTIRE toolbar now lives inside an
         // equatable-gated host child. Root cause of the mid-streaming "..."
         // menu refresh (4th attempt, this one from instrumentation): with
@@ -2656,8 +2661,7 @@ struct AIChatView: View {
                         .foregroundStyle(.primary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 7)
-                        .background(.regularMaterial, in: Capsule())
-                        .overlay(Capsule().stroke(Color.gray.opacity(0.35), lineWidth: 0.5))
+                        .glassEffect(.regular.interactive(), in: .capsule)
                         .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
                         // 44pt hit area around the ~32pt visual capsule.
                         .frame(minHeight: 44)
@@ -2824,7 +2828,7 @@ struct AIChatView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
+            .glassEffect(.regular, in: .rect)
         }
     }
     #endif
@@ -3898,6 +3902,9 @@ struct AIChatView: View {
                 )
             }
 
+            // [WP-42] One GlassEffectContainer for the composer shell and the glass that
+            // floats with it ("Move to…" pill): they blend / morph instead of stacking panes.
+            GlassEffectContainer(spacing: LeoComposerGlass.containerSpacing) {
             VStack(spacing: 5) {
                 // [T-motion-effects] The chat's own "working" heartbeat: three
                 // breathing dots by the composer while a reply is in flight.
@@ -3964,7 +3971,8 @@ struct AIChatView: View {
                             .foregroundStyle(ChatColors.secondaryText)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(.ultraThinMaterial)
+                            .glassEffect(.regular.interactive(), in: .capsule)
+                            .leoGlassID("chat.moveTo", in: chatComposerGlassNS)
                             .clipShape(Capsule())
                     }
                     .disabled(vm.hasLoadingAttachments)
@@ -3990,7 +3998,8 @@ struct AIChatView: View {
                     .fill(ChatColors.inputBg)
             )
             .clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous))
-            .leoComposerChrome()
+            .leoComposerChrome(glassID: "chat.composer", in: chatComposerGlassNS)
+            }
             .frame(maxWidth: maxContentWidth)
             .padding(.horizontal, LeoComposerMetrics.outerPadding)
             .padding(.vertical, 8)

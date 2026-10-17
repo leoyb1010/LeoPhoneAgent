@@ -355,7 +355,7 @@ private struct ImportSkillSheet: View {
                 if isImporting {
                     ProgressView("Importing…")
                         .padding()
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .glassEffect(.regular, in: .rect(cornerRadius: 12))
                 }
             }
             .sheet(isPresented: $showFilePicker) {
@@ -966,7 +966,7 @@ private struct SkillFileDetailView: View {
                         .foregroundStyle(.red)
                         .font(.caption)
                         .padding(8)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        .glassEffect(.regular, in: .rect(cornerRadius: 8))
                         .padding()
                 }
             }

@@ -513,7 +513,7 @@ struct UnifiedModelPicker: View {
                 .disabled(validSelectedOrder.isEmpty)
                 .accessibilityIdentifier("model-picker.add-selected")
                 .padding(.horizontal).padding(.vertical, 8)
-                .background(.regularMaterial)
+                .glassEffect(.regular, in: .rect)
             }
         }
         .toolbar { toolbarContent }
