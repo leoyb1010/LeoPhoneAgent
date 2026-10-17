@@ -12,6 +12,7 @@ import {
   writeClaudeOAuthToken,
 } from "@zcode/shared/acp-detect";
 import { listAcpAgents } from "@zcode/services/acp-agent";
+import { readSystemProxy, setSystemProxyEnabled, systemProxyEnabled } from "@zcode/shared/system-proxy";
 
 import { isTrustedLeoSender } from "../leoLinkIpc.js";
 
@@ -65,6 +66,13 @@ export function registerAcpIpc(): void {
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "保存失败" };
     }
+  });
+  // [fix-remote] 「外部 agent 使用系统代理」：开关 + 当前系统代理（只给地址，界面用来说明）。
+  ipcMain.handle("leo:acp:proxy", (event, enabled: unknown) => {
+    if (!isTrustedLeoSender(event)) return { enabled: true, proxy: null };
+    if (typeof enabled === "boolean") setSystemProxyEnabled(enabled);
+    const proxy = readSystemProxy();
+    return { enabled: systemProxyEnabled(), proxy: proxy.https ?? proxy.http ?? proxy.socks ?? null };
   });
   ipcMain.handle("leo:acp:login", async (event, agentId: unknown) => {
     if (!isTrustedLeoSender(event) || !isAcpAgentId(agentId) || process.platform !== "darwin") {

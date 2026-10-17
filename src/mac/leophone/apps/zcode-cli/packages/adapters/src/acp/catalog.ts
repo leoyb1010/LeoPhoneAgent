@@ -1,6 +1,7 @@
 // [leo][WP-21] ACP 外部 agent 的启动命令。检测逻辑与 UI 共用（@zcode/shared/acp-detect）。
 import { delimiter } from "node:path";
 import type { AcpAgentId } from "@zcode/shared/acp";
+import { systemProxyEnabled, withSystemProxy } from "@zcode/shared/system-proxy";
 import {
   acpSearchPath,
   CODEX_ACP_PACKAGE,
@@ -28,7 +29,12 @@ function launchEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   // 开发自测钩子：LeoBot 跑在隔离 HOME 时，只让外部 agent 子进程回到真实 HOME（它的登录态在那里）。
   const agentHome = env.LEO_ACP_AGENT_HOME?.trim();
   if (agentHome) out.HOME = agentHome;
-  return out;
+  // [fix-remote] Clash 一类的「系统代理」：GUI 启动的 LeoBot 没有 HTTPS_PROXY，Node / Bun 写的 CLI 不读系统代理会一直挂着。
+  const proxied: Record<string, string> = {};
+  for (const [key, value] of Object.entries(withSystemProxy(out, { enabled: systemProxyEnabled(env) }))) {
+    if (typeof value === "string") proxied[key] = value;
+  }
+  return proxied;
 }
 
 /** 解析启动命令；本机条件不满足时返回 undefined（调用方给出可读错误）。 */

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
+import { Switch } from "@/components/ui/switch.js";
 import { cn } from "@/components/lib/utils.js";
 import { logger } from "@/logger.js";
 
@@ -27,6 +28,37 @@ interface AcpBridge {
   list(): Promise<AcpAgentListing[]>;
   login(agentId: string): Promise<{ ok: boolean }>;
   setClaudeToken?(token: string): Promise<{ ok: boolean; error?: string }>;
+  proxy?(enabled?: boolean): Promise<{ enabled: boolean; proxy: string | null }>;
+}
+
+/**
+ * [fix-remote] 「外部 agent 使用系统代理」（默认开）：Clash 一类只开了系统代理（没有 TUN）的 Mac 上，
+ * 从 Finder 启动的 LeoBot 里 codex / gemini / opencode 连不上外网会一直挂着。打开后按 macOS 系统代理
+ * 给它们设 HTTPS_PROXY 等变量；终端里已经设了代理变量时不覆盖。
+ */
+function SystemProxyToggle({ api }: { api: AcpBridge }) {
+  const [state, setState] = useState<{ enabled: boolean; proxy: string | null } | null>(null);
+  useEffect(() => {
+    void api.proxy?.().then(setState).catch(() => setState(null));
+  }, [api]);
+  if (!api.proxy || !state) return null;
+  return (
+    <div className="flex items-center gap-3 border-t border-border px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-ui-base font-medium text-foreground">外部 agent 使用系统代理</div>
+        <div className="text-ui-sm text-foreground-subtle">
+          {state.proxy
+            ? `按系统代理（${state.proxy}）连外网；已在环境里设了代理时不覆盖。改动对新开的 agent 生效。`
+            : "这台 Mac 没开系统代理，打开也不会改变什么。"}
+        </div>
+      </div>
+      <Switch
+        checked={state.enabled}
+        aria-label="外部 agent 使用系统代理"
+        onCheckedChange={(checked) => void api.proxy!(checked).then(setState).catch(() => undefined)}
+      />
+    </div>
+  );
 }
 
 /**
@@ -194,6 +226,7 @@ export function LeoExternalAgentsSection() {
             </div>
           ))
         )}
+        <SystemProxyToggle api={api} />
       </div>
     </div>
   );

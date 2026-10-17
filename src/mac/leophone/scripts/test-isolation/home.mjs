@@ -40,6 +40,9 @@ export function isolateTestHome() {
   process.env.XDG_STATE_HOME = path.join(home, ".local", "state");
   process.env.CLAUDE_CONFIG_DIR = path.join(home, ".claude");
   process.env.CODEX_HOME = path.join(home, ".codex");
+  // 不读本机系统代理与登录 shell 的 PATH（外部 agent 的探测 / 启动环境不随开发机变）。
+  process.env.LEO_SYSTEM_PROXY = "off";
+  process.env.LEO_ACP_LOGIN_SHELL = "off";
   // 这些变量若带着真实路径进来，会绕过 HOME。
   for (const key of ["ZCODE_STORAGE_DIR", "ZCODE_DATA_BASE_DIR", "ZCODE_DESKTOP_USER_DATA_DIR", "ZCODE_DESKTOP_SESSION_DATA_DIR", "ZCODE_DESKTOP_HOME_DIR", "LEO_ACP_AGENT_HOME"]) {
     const value = process.env[key];

@@ -24,6 +24,9 @@
 - Claude Code 长期令牌：`<ZCODE_HOME 或 ~/.leophoneagent>/acp/claude-oauth-token`（一行，0600）。存在即作为
   `CLAUDE_CODE_OAUTH_TOKEN` 传给 claude；启动外部 agent 前去掉宿主的 `CLAUDECODE`、`CLAUDE_CODE_ENTRYPOINT`、
   `CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH`、`CLAUDE_CODE_SESSION_ID` 等变量。设置页只显示有无，可粘贴 / 移除。
+- 系统代理：外部 agent 子进程与内核 CLI 在 env 里没有 `HTTP(S)_PROXY`/`ALL_PROXY` 时，按 `scutil --proxy`（30s 缓存）
+  注入 `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`（SOCKS 用 `socks5://`）与 `NO_PROXY`；用户 env 已设置时不覆盖。
+  设置页「外部 agent 使用系统代理」默认开（`<数据根>/acp/settings.json` 的 `systemProxy`）。
 
 ## 验收
 

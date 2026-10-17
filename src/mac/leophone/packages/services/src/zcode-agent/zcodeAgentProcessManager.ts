@@ -3,6 +3,7 @@ import {
   hostClaudeAgentAcpEntry,
   resolveStagedClaudeAgentAcpEntry,
 } from "#src/acp-agent/acpRegistry.js";
+import { systemProxyAdditions } from "@zcode/shared/system-proxy";
 import { resolveZCodeAgentSpawnCwd } from "#src/zcode-agent/zcodeAgentSpawnCwd.js";
 import type { ZCodeAgentStorageStartupSnapshot } from "#src/zcode-agent/zcodeAgent.js";
 /* eslint-disable max-lines -- zcodeAgentProcessManager 集中维护 agent 子进程启动、复用、超时回收和 runtime identity，拆分会扩大进程生命周期状态同步面 */
@@ -454,9 +455,14 @@ function withClaudeAgentAcpEntry(bundlePath: string): Record<string, string> {
 
 /** [leo][WP-21] 开发态 CLI 跑的是 CJS 包，自己解析不到 node_modules 里的适配器：统一由宿主告诉它。 */
 function withAcpAdapterEnv(command: ZCodeAgentCommand | null): ZCodeAgentCommand | null {
-  if (!command || command.env?.LEO_CLAUDE_AGENT_ACP_ENTRY) return command;
+  if (!command) return command;
+  // [fix-remote] 内核 CLI（及它拉起的外部 agent）用 macOS 系统代理：GUI 启动时 env 里没有 HTTPS_PROXY。
+  // 用户 env 已有代理时不动；设置页可关（见 @zcode/shared/system-proxy）。
+  const proxy = systemProxyAdditions({ ...process.env, ...command.env });
+  const withProxy = Object.keys(proxy).length > 0 ? { ...command, env: { ...command.env, ...proxy } } : command;
+  if (withProxy.env?.LEO_CLAUDE_AGENT_ACP_ENTRY) return withProxy;
   const entry = hostClaudeAgentAcpEntry();
-  return entry ? { ...command, env: { ...command.env, LEO_CLAUDE_AGENT_ACP_ENTRY: entry } } : command;
+  return entry ? { ...withProxy, env: { ...withProxy.env, LEO_CLAUDE_AGENT_ACP_ENTRY: entry } } : withProxy;
 }
 
 export function resolveDefaultZCodeAgentCommand(

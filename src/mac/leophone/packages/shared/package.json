@@ -30,7 +30,8 @@
     "./gen-ui": "./src/gen-ui/index.ts",
     "./request-security": "./src/request-security-edition/index.ts",
     "./acp": "./src/acp.ts",
-    "./acp-detect": "./src/acp-detect.ts"
+    "./acp-detect": "./src/acp-detect.ts",
+    "./system-proxy": "./src/system-proxy.ts"
   },
   "scripts": {
     "lint": "oxlint",

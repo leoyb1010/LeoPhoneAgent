@@ -260,3 +260,14 @@ test("pasting the token writes it 0600 under the data root; an empty paste remov
   await writeClaudeOAuthToken("", environment.env);
   assert.equal(existsSync(file), false);
 });
+
+test("[fix-remote] I: a proxy already in the user's env reaches the agent untouched", () => {
+  const home = mkdtempSync(join(tmpdir(), "leo-acp-proxy-"));
+  makeExecutable(join(home, ".grok", "bin"), "grok");
+  const launch = resolveAcpLaunch("grok", {
+    env: { PATH: "/usr/bin", HOME: home, HTTPS_PROXY: "http://corp:3128", NO_PROXY: "corp.internal" },
+  });
+  assert.equal(launch?.env.HTTPS_PROXY, "http://corp:3128");
+  assert.equal(launch?.env.NO_PROXY, "corp.internal");
+  assert.equal(launch?.env.ALL_PROXY, undefined);
+});
