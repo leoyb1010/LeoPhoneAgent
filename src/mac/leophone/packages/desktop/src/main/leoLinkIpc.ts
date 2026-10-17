@@ -2,7 +2,16 @@ import { randomBytes } from "node:crypto";
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 
 import { callLeo, LEO_HTTP_PORT, leoOAuthPageUrl, ownHostListening } from "./leoLinkHttp.js";
-import { leoScreenHostEnv, SCREEN_PRIVACY_URL, screenPermissionStatus } from "./leo/screenCapture.js";
+import {
+  leoScreenHostEnv,
+  SCREEN_PRIVACY_URL,
+  screenPermissionStatus,
+} from "./leo/screenCapture.js";
+import {
+  accessibilityGranted,
+  openAccessibilitySettings,
+  startScreenInput,
+} from "./leo/screenInput.js";
 
 /**
  * [leo-link] 「连接手机」面板的通道:界面 → 主进程 → 本机 Leo 接口(带 Bearer)。
@@ -57,7 +66,12 @@ export async function callLeoQuick(
   body?: unknown,
 ): Promise<import("./leoLinkHttp.js").LeoLinkIpcResult> {
   if (!(await ownHostListening())) return { ok: false, error: "本机 Leo 服务还没启动" };
-  return callLeo(path, body === undefined ? "GET" : "POST", { "x-leo-pair": LEO_PAIR_SECRET }, body);
+  return callLeo(
+    path,
+    body === undefined ? "GET" : "POST",
+    { "x-leo-pair": LEO_PAIR_SECRET },
+    body,
+  );
 }
 
 /**
@@ -81,31 +95,55 @@ export async function callLeoGroups(
 const PORT_TAKEN = `本机端口 ${LEO_HTTP_PORT} 被别的程序占着(比如旧版 LeoCodeBox),先关掉它再试`;
 
 /** [WP-50] 设置「连接手机 → 屏幕」:开关在 Host(要内存口令),屏幕录制权限状态在主进程。 */
-async function screenShareState(enabled?: boolean) {
+/** [WP-50/51/52] 看屏三个开关:enabled / tailnet_only / control;patch 为空就是读取。 */
+type ScreenPatch = { enabled?: boolean; tailnet_only?: boolean; control?: boolean };
+
+function screenPatch(value: unknown): ScreenPatch | null {
+  // 旧调用只传一个布尔值 = 「允许手机查看屏幕」。
+  if (typeof value === "boolean") return { enabled: value };
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const patch: ScreenPatch = {};
+  for (const key of ["enabled", "tailnet_only", "control"] as const)
+    if (typeof raw[key] === "boolean") patch[key] = raw[key];
+  return Object.keys(patch).length > 0 ? patch : null;
+}
+
+async function screenShareState(patch?: ScreenPatch) {
   const host = (await ownHostListening())
     ? await callLeo(
         "/api/leo/link/screen",
-        enabled === undefined ? "GET" : "POST",
+        patch === undefined ? "GET" : "POST",
         { "x-leo-pair": LEO_PAIR_SECRET },
-        enabled === undefined ? undefined : { enabled },
+        patch,
       )
     : ({ ok: false, error: "本机 Leo 服务还没启动" } as const);
   return {
     enabled: host.ok ? host.data["enabled"] === true : false,
+    tailnetOnly: host.ok ? host.data["tailnet_only"] === true : false,
+    control: host.ok ? host.data["control"] === true : false,
     hostError: host.ok ? null : host.error,
     permission: screenPermissionStatus(),
+    // [WP-52] 操控要给 LeoBot「辅助功能」授权(注入与 Esc×3 监听都要)。
+    accessibility: accessibilityGranted(),
   };
 }
 
 export function registerLeoLinkIpc(): void {
+  // [WP-52] 视频会话打开输入通道时拉起 leo-input、亮菜单栏红点。
+  startScreenInput(console);
+  ipcMain.handle("leo:screen:open-accessibility", async (event) => {
+    if (!isTrustedLeoSender(event)) return false;
+    await openAccessibilitySettings();
+    return true;
+  });
   ipcMain.handle("leo:screen:status", (event) =>
     isTrustedLeoSender(event) ? screenShareState() : { error: "forbidden" },
   );
-  ipcMain.handle("leo:screen:set", (event, enabled: unknown) =>
-    isTrustedLeoSender(event) && typeof enabled === "boolean"
-      ? screenShareState(enabled)
-      : { error: "forbidden" },
-  );
+  ipcMain.handle("leo:screen:set", (event, value: unknown) => {
+    const patch = screenPatch(value);
+    return isTrustedLeoSender(event) && patch ? screenShareState(patch) : { error: "forbidden" };
+  });
   ipcMain.handle("leo:screen:open-settings", async (event) => {
     if (!isTrustedLeoSender(event)) return false;
     await shell.openExternal(SCREEN_PRIVACY_URL);

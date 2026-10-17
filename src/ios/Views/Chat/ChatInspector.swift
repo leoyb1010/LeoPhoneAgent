@@ -12,13 +12,29 @@
 
 import SwiftUI
 
-/// Wraps the chat in the iPad detail column and owns the inspector column.
+/// [WP-43] A request from this window's ⌘K palette to show the third column
+/// in a mode. The nonce makes asking twice for the same mode count.
+struct ChatContextRequest: Equatable {
+    let mode: ChatContextColumnPolicy.Mode
+    let nonce: Int
+}
+
+/// Wraps the chat in the iPad detail column and owns the inspector column
+/// (WP-43: the third column, 文件/工具详情 or Mac 画面).
 struct ChatDetailContainer<Content: View>: View {
     let sessionId: String?
+    /// [WP-43] The window's width: the column opens by itself at ≥ 1100 pt.
+    var windowWidth: CGFloat = 0
+    var contextRequest: ChatContextRequest? = nil
     @ViewBuilder let content: Content
 
     /// Per window: two windows side by side each keep their own.
     @SceneStorage("leo.ipad.inspectorVisible") private var inspectorVisible = false
+    @SceneStorage("leo.ipad.contextMode") private var contextModeRaw = ChatContextColumnPolicy.Mode.details.rawValue
+    /// Width the ≥ 1100 pt rule last ran at; the container is rebuilt on every
+    /// session switch, so this keeps a hand-closed column closed until the
+    /// window actually crosses the threshold.
+    @SceneStorage("leo.ipad.contextRuleWidth") private var contextRuleWidth: Double = 0
     /// [F8] Shared with ChatInspectorPanel so the chat's "…" menu can open a tab.
     @AppStorage("leo.ipad.inspectorTab") private var inspectorTab = ChatInspectorPanel.Tab.run.rawValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -34,18 +50,48 @@ struct ChatDetailContainer<Content: View>: View {
         return max(0, contentFrame.maxX - inspectorFrame.minX)
     }
 
+    /// ⌥⌘I / ⇧⌘M: show the column in that mode, or hide it when it already shows it.
+    private func toggleContext(_ mode: ChatContextColumnPolicy.Mode) {
+        let current = ChatContextColumnPolicy.effective(contextModeRaw, macFleetEnabled: MacFleetFeature.isEnabled())
+        withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) {
+            if inspectorVisible && current == mode {
+                inspectorVisible = false
+            } else {
+                contextModeRaw = mode.rawValue
+                inspectorVisible = true
+            }
+        }
+    }
+
+    private func applyWidthRule(_ width: CGFloat) {
+        guard width > 0 else { return }
+        let old = CGFloat(contextRuleWidth)
+        contextRuleWidth = Double(width)
+        guard let show = LeoWorkspaceLayoutPolicy.crossing(
+            from: old, to: width, rule: LeoWorkspaceLayoutPolicy.showsContextColumn) else { return }
+        withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = show }
+    }
+
     var body: some View {
         content
             // [F8] The chat's "…" menu opens 用量 / 记忆 here instead of a sheet.
             .environment(\.chatInspectorRoute, ChatInspectorRoute { tab in
                 inspectorTab = tab.rawValue
+                contextModeRaw = ChatContextColumnPolicy.Mode.details.rawValue
                 withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = true }
             })
+            .onAppear { applyWidthRule(windowWidth) }
+            .onChange(of: windowWidth) { _, width in applyWidthRule(width) }
+            .onChange(of: contextRequest) { _, request in
+                guard let request else { return }
+                contextModeRaw = request.mode.rawValue
+                withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = true }
+            }
             .modifier(ChatToolbarMinimization())
             .safeAreaPadding(.trailing, coveredTrailing)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { contentFrame = $0 }
             .inspector(isPresented: $inspectorVisible) {
-                ChatInspectorPanel(sessionId: sessionId)
+                ChatInspectorPanel(sessionId: sessionId, modeRaw: $contextModeRaw)
                     .inspectorColumnWidth(min: 300, ideal: 360, max: 480)
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { inspectorFrame = $0 }
                     .onDisappear { inspectorFrame = .zero }
@@ -57,12 +103,13 @@ struct ChatDetailContainer<Content: View>: View {
                     } label: {
                         Image(systemName: "sidebar.right")
                     }
-                    .help("检查器 ⌥⌘I")
-                    .accessibilityLabel(inspectorVisible ? "隐藏检查器" : "显示检查器")
+                    .help("文件/工具详情 ⌥⌘I")
+                    .accessibilityLabel(inspectorVisible ? "隐藏右栏" : "显示右栏")
                 }
             }
             // ⌘. and ⌥⌘I act on the chat in the window you're using.
-            .focusedSceneValue(\.chatWindow, ChatWindowTarget(sessionId: sessionId, inspectorVisible: $inspectorVisible))
+            .focusedSceneValue(\.chatWindow, ChatWindowTarget(sessionId: sessionId, inspectorVisible: $inspectorVisible,
+                                                               toggleContext: { toggleContext($0) }))
     }
 }
 
@@ -82,7 +129,10 @@ extension EnvironmentValues {
 /// Artifacts and files stay in the chat's "…" menu.
 struct ChatInspectorPanel: View {
     let sessionId: String?
+    /// [WP-43] 文件/工具详情 or Mac 画面 (the container's per-window choice).
+    @Binding var modeRaw: String
     @AppStorage("leo.ipad.inspectorTab") private var tabRaw = Tab.run.rawValue
+    @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
     /// Prior #2: a Face ID-locked chat shows nothing here until unlocked.
     @ObservedObject private var lockStore = SessionLockStore.shared
 
@@ -92,11 +142,12 @@ struct ChatInspectorPanel: View {
     }
 
     enum Tab: String, CaseIterable, Identifiable {
-        case run, usage, memory
+        case run, files, usage, memory
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .run: AppLocalized("工具时间线")
+            case .run: AppLocalized("工具")
+            case .files: AppLocalized("文件")
             case .usage: AppLocalized("用量")
             case .memory: AppLocalized("记忆命中")
             }
@@ -122,7 +173,36 @@ struct ChatInspectorPanel: View {
         }
     }
 
+    private var mode: Binding<ChatContextColumnPolicy.Mode> {
+        Binding(get: { ChatContextColumnPolicy.effective(modeRaw, macFleetEnabled: macFleetEnabled) },
+                set: { modeRaw = $0.rawValue })
+    }
+
     private var panel: some View {
+        VStack(spacing: 0) {
+            if macFleetEnabled {
+                Picker("右栏", selection: mode) {
+                    ForEach(ChatContextColumnPolicy.Mode.allCases, id: \.self) { Text(AppLocalized(String.LocalizationValue($0.title))).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+            }
+            switch mode.wrappedValue {
+            case .details: detailsPanel
+            case .macScreen: macScreenPanel
+            }
+        }
+        .animation(LeoMotion.standardEase(reduceMotion: UIAccessibility.isReduceMotionEnabled), value: mode.wrappedValue)
+    }
+
+    /// [WP-50 R0] The Mac's screen (polled snapshots while this column is on screen).
+    private var macScreenPanel: some View {
+        MacScreenColumn()
+    }
+
+    private var detailsPanel: some View {
         VStack(spacing: 0) {
             Picker("检查器", selection: tab) {
                 ForEach(Tab.allCases) { Text($0.title).tag($0) }
@@ -136,6 +216,10 @@ struct ChatInspectorPanel: View {
                 switch tab.wrappedValue {
                 case .run:
                     if let vm { InspectorRunList(vm: vm) } else { draftPlaceholder }
+                case .files:
+                    if let sessionId, !sessionId.isEmpty {
+                        ArtifactTrayView(sessionId: sessionId, embedded: true)
+                    } else { draftPlaceholder }
                 case .usage:
                     if let vm { SessionInspectorView(vm: vm, embedded: true) } else { draftPlaceholder }
                 case .memory:

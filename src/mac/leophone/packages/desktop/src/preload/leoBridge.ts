@@ -15,20 +15,31 @@ contextBridge.exposeInMainWorld("leoLink", {
   /** [WP-50]「允许手机查看屏幕」开关与屏幕录制权限状态。 */
   screenStatus: () => ipcRenderer.invoke("leo:screen:status"),
   setScreenEnabled: (enabled: boolean) => ipcRenderer.invoke("leo:screen:set", enabled),
+  /** [WP-51/52] 改「只走 Tailscale」/「允许手机操控」。 */
+  setScreenOptions: (patch: { enabled?: boolean; tailnet_only?: boolean; control?: boolean }) =>
+    ipcRenderer.invoke("leo:screen:set", patch),
   openScreenSettings: () => ipcRenderer.invoke("leo:screen:open-settings"),
+  openAccessibilitySettings: () => ipcRenderer.invoke("leo:screen:open-accessibility"),
 });
 
 /** [leo] 菜单栏与 ⌥Space 快速派发的设置(macOS;主进程持有,见 docs/specs/leo-quick-entry.md)。 */
 if (process.platform === "darwin") {
   contextBridge.exposeInMainWorld("leoQuick", {
     getSettings: () => ipcRenderer.invoke("leo:quick:settings:get"),
-    setSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke("leo:quick:settings:set", patch),
+    setSettings: (patch: Record<string, unknown>) =>
+      ipcRenderer.invoke("leo:quick:settings:set", patch),
     /** 菜单栏点任务 / 浮窗「派发并打开」:主进程让主窗口定位到这个任务。 */
     onOpenTask: (
-      callback: (target: { taskId: string; workspacePath: string; workspaceIdentity?: string }) => void,
+      callback: (target: {
+        taskId: string;
+        workspacePath: string;
+        workspaceIdentity?: string;
+      }) => void,
     ) => {
-      const listener = (_event: unknown, target: { taskId: string; workspacePath: string; workspaceIdentity?: string }) =>
-        callback(target);
+      const listener = (
+        _event: unknown,
+        target: { taskId: string; workspacePath: string; workspaceIdentity?: string },
+      ) => callback(target);
       ipcRenderer.on("leo:quick:open-task", listener);
       return () => ipcRenderer.removeListener("leo:quick:open-task", listener);
     },
@@ -77,7 +88,9 @@ if (process.platform === "darwin") {
   };
   contextBridge.exposeInMainWorld("leoSpeech", {
     getSettings: () => ipcRenderer.invoke("leo:speech:settings:get"),
-    setSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke("leo:speech:settings:set", patch),
+    setSettings: (patch: Record<string, unknown>) =>
+      ipcRenderer.invoke("leo:speech:settings:set", patch),
+    prewarm: () => ipcRenderer.invoke("leo:speech:prewarm"),
     start: () => ipcRenderer.invoke("leo:speech:start"),
     stop: () => ipcRenderer.invoke("leo:speech:stop"),
     onEvent: subscribe("leo:speech:event"),

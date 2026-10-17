@@ -17,6 +17,16 @@ struct LocalBrainSettingsView: View {
     @State private var probeResult: String?
     @State private var probing = false
     @AppStorage(FollowUpSuggestionPolicy.enabledKey) private var followUpsEnabled = true
+    /// [WP-45] External stand-in model (ModelEntry id; "" = none).
+    @AppStorage(ExternalBrainPreference.entryKey) private var externalEntryId = ""
+    @ObservedObject private var store = ProviderConfigStore.shared
+
+    /// Entries whose provider has a custom (OpenAI-compatible) base URL.
+    private var externalCandidates: [ModelEntry] {
+        store.modelEntries.filter { entry in
+            !entry.isHidden && store.instance(for: entry.providerInstanceId)?.effectiveCustomBaseURL != nil
+        }
+    }
 
     var body: some View {
         List {
@@ -35,6 +45,22 @@ struct LocalBrainSettingsView: View {
                 Text("状态")
             } footer: {
                 Text("本机模型跑在这台设备上,内容不离本机;它不可用时,下面这些功能会自动回落到原来的方式,不会消失。")
+            }
+
+            // [WP-45] Foundation Models 27 `LanguageModel`: when Apple's on-device model is
+            // unavailable, run on an OpenAI-compatible model the user configured (e.g. the
+            // Mac subscription proxy). Opt-in, because content then leaves the device.
+            Section {
+                Picker("本机不可用时改用", selection: $externalEntryId) {
+                    Text("不改用(只用本机)").tag("")
+                    ForEach(externalCandidates, id: \.id) { entry in
+                        Text(entry.model.displayName).tag(entry.id)
+                    }
+                }
+            } header: {
+                Text("外部模型")
+            } footer: {
+                Text("只列出你配置了自定义地址的 OpenAI 兼容模型(比如 Mac 上的订阅代理)。选了之后,本机模型不可用时「改写」「语音任务整理」等会把内容发给这个模型;「回复后建议追问」、离线问图片和离线找会话仍然只用本机模型。")
             }
 
             Section("它在这些地方生效") {

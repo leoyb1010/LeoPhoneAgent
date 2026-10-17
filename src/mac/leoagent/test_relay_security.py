@@ -489,16 +489,14 @@ class RelayTreasurySyncTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_one_time_legacy_file_import_has_rebuildable_sequences(self):
         with tempfile.TemporaryDirectory() as tmp:
-            legacy_root = os.path.join(tmp, "home")
-            os.makedirs(os.path.join(legacy_root, ".leoagent"))
-            with open(os.path.join(legacy_root, ".leoagent", "collections.json"), "w",
+            # 旧收藏与 treasury-sync.json 同目录(relay._load_treasury_sync)。
+            with open(os.path.join(tmp, "collections.json"), "w",
                       encoding="utf-8") as stream:
                 json.dump({"items": [{
                     "id": "legacy-file-item", "kind": "text", "title": "旧镜像",
                     "source": "iPhone", "created_at": 1000, "updated_at": 1001,
                 }]}, stream)
-            with unittest.mock.patch.dict(os.environ, {"HOME": legacy_root}):
-                relay = self._relay(tmp)
+            relay = self._relay(tmp)
             entry = relay.treasury_items["legacy-file-item"]
             self.assertGreater(entry["server_sequence"], 0)
             self.assertEqual(len(relay.treasury_changes), 1)

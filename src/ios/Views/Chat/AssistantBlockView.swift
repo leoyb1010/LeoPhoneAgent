@@ -390,6 +390,25 @@ struct ToolCapsuleView: View {
         }
     }
 
+    private var isSucceeded: Bool {
+        if case .success = block.toolStatus { return true }
+        return false
+    }
+
+    /// [WP-42] Status strip semantics live in LeoMotionPolicy (tested).
+    private var stripStatus: LeoMotionPolicy.StripStatus {
+        let raw: String?
+        switch block.toolStatus {
+        case .success: raw = "success"
+        case .failed: raw = "failed"
+        case .cancelled: raw = "cancelled"
+        case .running: raw = "running"
+        case .streaming: raw = "streaming"
+        case .none: raw = nil
+        }
+        return LeoMotionPolicy.strip(forToolStatus: raw)
+    }
+
     var body: some View {
         HStack {
             HStack(spacing: 8) {
@@ -470,6 +489,15 @@ struct ToolCapsuleView: View {
                 Capsule()
                     .stroke(ChatColors.toolBorder, lineWidth: 0.5)
             )
+            // [WP-42] Shared card anatomy with the Mac timeline: a 2pt status strip on the
+            // left (running = accent breathing, done = green, failed = red). Overlay only,
+            // so the capsule's measured size — and the list's height seed — is unchanged.
+            .overlay(alignment: .leading) {
+                LeoStatusStrip(status: stripStatus, height: 14)
+                    .padding(.leading, 4)
+            }
+            // One shine + pop the moment this tool finishes (not when scrolling history).
+            .leoDone(finished: isSucceeded)
             .contentShape(Capsule())
             .onTapGesture {
                 detailBlock = block
@@ -813,6 +841,8 @@ struct ThinkingBlockView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .contentTransition(.numericText())
+                    // [WP-42] A highlight sweeps through the title while the model thinks.
+                    .leoThinkingShimmer(active: isStreaming)
                 if isStreaming {
                     ProgressView()
                         .controlSize(.mini)

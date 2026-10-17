@@ -221,7 +221,15 @@ struct SendPromptIntent: AppIntent {
                 await Self.reportToolProgress(progress, runId: runId, sessionId: sid)
             }
             defer { reporter.cancel() }
-            settled = try await performBackgroundTask { await settle() }
+            // [WP-45] CancellableIntent: the system's cancel (user, timeout) stops the run
+            // instead of leaving it working on with nobody waiting for the result.
+            settled = try await performBackgroundTask(operation: { await settle() }, onCancel: { _ in
+                Task { @MainActor in
+                    if let live = ViewModelCache.shared.get(for: sid), live.isProcessing {
+                        live.cancel(queuePolicy: .discardQueuedPrompts)
+                    }
+                }
+            })
             let responseText = settled.text
 
             let result = SendPromptResult(
@@ -371,7 +379,7 @@ struct SendPromptIntent: AppIntent {
 }
 
 @available(iOS 27, *)
-extension SendPromptIntent: LongRunningIntent {}
+extension SendPromptIntent: LongRunningIntent, CancellableIntent {}
 
 /// Helper for posting local notifications from Shortcuts intents.
 /// Tapping the notification opens the associated session.

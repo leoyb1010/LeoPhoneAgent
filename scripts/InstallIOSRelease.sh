@@ -65,7 +65,8 @@ fi
 # 在线的配对手表总是一起装;它们不在命令行参数里也会补上。
 watch_app=$(ls -d "$app"/Watch/*.app 2>/dev/null | head -1 || true)
 devices=$(xcrun devicectl list devices 2>/dev/null || true)
-watch_udids=$(printf '%s\n' "$devices" | grep -i physical | grep -vi unavailable | grep -iE 'available|connected' | grep -i 'Watch' \
+# 手表那一行 Reality 列是空的(不写 physical),按 physical 过滤会把在线手表漏掉;改为排除模拟器。
+watch_udids=$(printf '%s\n' "$devices" | grep -vi simulated | grep -vi unavailable | grep -iE 'available|connected' | grep -i 'Watch' \
   | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{16}|[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})' || true)
 if [ -n "$watch_app" ]; then
   for w in $watch_udids; do

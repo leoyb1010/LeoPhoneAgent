@@ -73,6 +73,28 @@ export function LeoPushToTalk() {
     });
   }, [bridge]);
 
+  // [WP-60 预热] 窗口打开 / 回到前台、焦点进到能听写的输入框时,让主进程备好模型,
+  // 按下快捷键时不用再等加载(之前首字 ~1.2s+,其间说的话会丢)。一分钟内最多提醒一次:主进程只是给空闲计时续期。
+  useEffect(() => {
+    if (!bridge || !settings?.dictationEnabled) return;
+    let lastPrewarm = 0;
+    const prewarm = () => {
+      if (Date.now() - lastPrewarm < 60_000) return;
+      lastPrewarm = Date.now();
+      void bridge.prewarm().catch(() => undefined);
+    };
+    const onFocusIn = () => {
+      if (findDictationTarget()) prewarm();
+    };
+    prewarm();
+    window.addEventListener("focus", prewarm);
+    document.addEventListener("focusin", onFocusIn);
+    return () => {
+      window.removeEventListener("focus", prewarm);
+      document.removeEventListener("focusin", onFocusIn);
+    };
+  }, [bridge, settings]);
+
   useEffect(() => {
     if (!bridge || !settings?.dictationEnabled) return;
     const accelerator = settings.accelerator;

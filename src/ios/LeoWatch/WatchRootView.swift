@@ -12,8 +12,12 @@ import AVFoundation
 import SwiftUI
 import WatchKit
 
+/// [WP-44] Page order: Ask → Mac status → Mac screen (WP-50) → History → recording remote.
+enum WatchPage: Hashable { case ask, mac, glance, history, recording }
+
 struct WatchRootView: View {
     @EnvironmentObject private var client: WatchConnectivityClient
+    @State private var page: WatchPage = .ask
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("leo.watch.autoSpeak") private var autoSpeak = true
     /// Read the whole answer instead of its first few sentences.
@@ -21,13 +25,29 @@ struct WatchRootView: View {
     @ObservedObject private var speaker = WatchSpeaker.shared
 
     var body: some View {
-        TabView {
-            AskPage()
-            HistoryPage()
+        // [WP-44] watchOS 27 commits a vertical page change at 50% of the swipe; pages are
+        // full-height so the threshold reads naturally — nothing here depends on the old feel.
+        TabView(selection: $page) {
+            AskPage().tag(WatchPage.ask)
+            MacStatusPage().tag(WatchPage.mac)
+            WatchGlancePage(active: page == .glance).tag(WatchPage.glance)
+            HistoryPage().tag(WatchPage.history)
             // [V-watch] 遥控 iPhone 录音(只发指令,不传音频)。
-            WatchRecordingRemoteView()
+            WatchRecordingRemoteView().tag(WatchPage.recording)
         }
         .tabViewStyle(.verticalPage)
+        // [WP-44] Complication taps: leobot://watch/ask opens the mic, /mac the Mac page.
+        .onOpenURL { url in
+            guard url.scheme == "leobot", url.host == "watch" else { return }
+            switch url.path {
+            case "/mac": page = .mac
+            case "/screen": page = .glance
+            default:
+                page = .ask
+                UserDefaults.standard.set(true, forKey: AskLeoIntent.pendingKey)
+                NotificationCenter.default.post(name: AskLeoIntent.requested, object: nil)
+            }
+        }
         .reducedResourceAware()
         // [T-leogateway] An approval outranks whatever page you were on:
         // a Mac is sitting blocked until this is answered.
@@ -37,6 +57,11 @@ struct WatchRootView: View {
         .sheet(item: $client.pendingApproval) { approval in
             WatchApprovalSheet(approval: approval) { choice in
                 client.answerApproval(choice: choice)
+            } onTimeout: {
+                // [WP-44] Unanswered for 60 s: put the card away and land on the Mac page —
+                // the Mac is still waiting and the phone can answer too.
+                client.pendingApproval = nil
+                page = .mac
             }
         }
         // [T-watch-speak-stream] Read as it is written: each sentence goes out
@@ -88,7 +113,10 @@ struct WatchRootView: View {
 private struct WatchApprovalSheet: View {
     let approval: WatchApproval
     let onChoose: (String) -> Void
+    var onTimeout: () -> Void = {}
     @State private var armedChoice: String?
+    @State private var shownAt = Date()
+    @State private var answered: String?
 
     private func label(for choice: String) -> String {
         switch choice {
@@ -99,11 +127,12 @@ private struct WatchApprovalSheet: View {
         }
     }
 
+    /// [WP-44] Same tones as the phone / Mac approval cards (attention / destructive tokens).
     private var riskColor: Color {
-        switch approval.risk {
-        case "high": return .red
-        case "low": return .green
-        default: return .orange
+        switch WatchApprovalPolicy.tone(forRisk: approval.risk) {
+        case .destructive: return .red
+        case .readOnly: return .green
+        case .attention: return Color(red: 0xF0 / 255, green: 0xB8 / 255, blue: 0x6E / 255)
         }
     }
 
@@ -137,6 +166,9 @@ private struct WatchApprovalSheet: View {
             armedChoice = choice
             return
         }
+        // [WP-44] One bounce on the chosen button + the matching tap before the card goes.
+        answered = choice
+        WKInterfaceDevice.current().play(choice == "deny" ? .failure : .success)
         onChoose(choice)
     }
 
@@ -172,9 +204,137 @@ private struct WatchApprovalSheet: View {
                     }
                     .tint(choice == "deny" ? .gray : riskColor)
                     .handGestureShortcut(.primaryAction, isEnabled: choice == "once" && !approval.isHighRisk)
+                    .symbolEffect(.bounce, value: answered == choice)
                 }
             }
             .padding(.horizontal, 4)
+        }
+        .task(id: approval.runId) {
+            shownAt = Date()
+            try? await Task.sleep(nanoseconds: UInt64(WatchApprovalPolicy.timeout * 1_000_000_000))
+            guard !Task.isCancelled, answered == nil,
+                  WatchApprovalPolicy.hasTimedOut(shownAt: shownAt, now: Date()) else { return }
+            onTimeout()
+        }
+    }
+}
+
+// MARK: - [WP-44] Mac status page
+
+/// Mac tasks at a glance (mirrored from the phone's Leo Link): running / waiting rings,
+/// then the first few tasks, waiting ones first. Tapping a waiting row re-opens its
+/// approval card if the phone sent one.
+private struct MacStatusPage: View {
+    @EnvironmentObject private var client: WatchConnectivityClient
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let mac = client.macStatus
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    countRing(value: mac.running, label: "运行中", color: .teal)
+                    countRing(value: mac.waiting, label: "等你确认",
+                              color: Color(red: 0xF0 / 255, green: 0xB8 / 255, blue: 0x6E / 255))
+                }
+                .frame(maxWidth: .infinity)
+                .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: mac.signature)
+                if mac.rows.isEmpty {
+                    Text(mac.updatedAt == .distantPast ? "在 iPhone 上连好 Mac 后,任务会显示在这里。" : "Mac 上没有进行中的任务。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(mac.rows) { row in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.title).font(.footnote.weight(.semibold)).lineLimit(1)
+                            Text(row.status)
+                                .font(.caption2)
+                                .foregroundStyle(row.waiting ? Color(red: 0xF0 / 255, green: 0xB8 / 255, blue: 0x6E / 255) : .secondary)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        .navigationTitle("Mac")
+    }
+
+    private func countRing(value: Int, label: String, color: Color) -> some View {
+        VStack(spacing: 4) {
+            ZStack {
+                Circle().stroke(color.opacity(0.25), lineWidth: 5)
+                Circle()
+                    .trim(from: 0, to: value > 0 ? 1 : 0)
+                    .stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text("\(value)").font(.title3.weight(.semibold)).monospacedDigit()
+                    .contentTransition(.numericText())
+            }
+            .frame(width: 52, height: 52)
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(label) \(value)"))
+    }
+}
+
+// MARK: - [WP-50 R0] Mac screen glance
+
+/// The Mac's screen as a ≤400 px thumbnail the iPhone fetches and forwards. Polls
+/// every 3 s only while this page is the one showing and the app is active.
+private struct WatchGlancePage: View {
+    let active: Bool
+    @EnvironmentObject private var client: WatchConnectivityClient
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var image: UIImage?
+    @State private var etag: String?
+    @State private var message: String?
+    @State private var updatedAt: Date?
+
+    private var polling: Bool { active && scenePhase == .active }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .accessibilityLabel(Text("Mac 屏幕画面"))
+            } else if message == nil {
+                ProgressView()
+            }
+            if let message {
+                Text(message).font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            } else if let updatedAt {
+                Text(updatedAt, style: .relative).font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle("Mac 画面")
+        .task(id: polling) {
+            guard polling else { return }
+            while !Task.isCancelled {
+                switch await client.requestScreenThumb(etag: etag) {
+                case .image(let data, let tag):
+                    if let decoded = UIImage(data: data) {
+                        image = decoded
+                        etag = tag
+                        message = nil
+                        updatedAt = Date()
+                    }
+                case .unchanged:
+                    message = nil
+                    updatedAt = Date()
+                case .failed(let reason):
+                    message = reason
+                }
+                try? await Task.sleep(for: .seconds(MacScreenWatchRelay.watchInterval))
+            }
         }
     }
 }

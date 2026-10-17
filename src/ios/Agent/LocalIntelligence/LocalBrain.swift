@@ -86,9 +86,24 @@ final class LocalBrain: ObservableObject {
         #endif
     }
 
-    var isReady: Bool { availability == .ready }
+    /// [WP-45] Apple's on-device model is ready, or the user chose an external model
+    /// (Settings › 本机模型) for when it isn't.
+    var isReady: Bool { availability == .ready || usesExternalModel }
+
+    /// [WP-45] The on-device model is unavailable and an external one stands in.
+    var usesExternalModel: Bool {
+        #if canImport(FoundationModels)
+        return availability != .ready && ChatCompletionsLanguageModel.preferred() != nil
+        #else
+        return false
+        #endif
+    }
 
     var statusText: String {
+        if usesExternalModel, let id = ExternalBrainPreference.entryId,
+           let entry = ProviderConfigStore.shared.entry(for: id) {
+            return AppLocalized("本机模型不可用,正在用 \(entry.model.displayName)")
+        }
         switch availability {
         case .ready: return AppLocalized("本机模型可用")
         case .unsupportedDevice: return AppLocalized("这台设备不支持 Apple Intelligence")
@@ -115,7 +130,7 @@ final class LocalBrain: ObservableObject {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard material.count >= 12 else { return nil }
         do {
-            let session = LanguageModelSession(
+            let session = makeSession(
                 instructions: "你是一个内容归档助手。摘要不超过 40 个中文字符，标签最多 3 个。"
             )
             let response = try await session.respond(
@@ -226,7 +241,7 @@ final class LocalBrain: ObservableObject {
         let trimmed = speech.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 8 else { return nil }
         do {
-            let session = LanguageModelSession(
+            let session = makeSession(
                 instructions: "把口语化表述整理成可执行任务。标题不超过 20 个中文字符，要点用一到三句话。"
             )
             let response = try await session.respond(
@@ -268,9 +283,9 @@ final class LocalBrain: ObservableObject {
         \(languageHint)
         """
         let prompt = "对话开头:\n用户:\(input.user)\n助手:\(input.reply)"
+        let session = makeSession(instructions: instructions)
         let payload: SessionTitle? = await Self.withDeadline(seconds: 12) {
             do {
-                let session = LanguageModelSession(instructions: instructions)
                 let response = try await session.respond(to: prompt, generating: SessionTitlePayload.self)
                 return SessionTitle(title: response.content.title, category: response.content.category)
             } catch {
@@ -289,7 +304,8 @@ final class LocalBrain: ObservableObject {
     /// 最多 3 条简短追问。只用本机模型;不可用或失败返回空数组,绝不联网。
     func suggestFollowUps(lastUser: String, reply: String) async -> [String] {
         #if canImport(FoundationModels)
-        guard isReady else { return [] }
+        // [WP-45] Promised on-device only ("不联网"): never the external stand-in model.
+        guard availability == .ready else { return [] }
         let user = OnDeviceTextBudget.clip(lastUser, limit: OnDeviceTextBudget.followUpUserChars)
         let answer = OnDeviceTextBudget.clip(reply, limit: OnDeviceTextBudget.followUpReplyChars)
         guard !answer.isEmpty else { return [] }
@@ -298,9 +314,9 @@ final class LocalBrain: ObservableObject {
         每条不超过 20 个字,站在用户的角度、用用户提问的语言来问,不要重复已经回答过的内容,不要编号。
         """
         let prompt = "用户:\(user)\n助手:\(answer)"
+        let session = makeSession(instructions: instructions)
         let raw: [String]? = await Self.withDeadline(seconds: 12) {
             do {
-                let session = LanguageModelSession(instructions: instructions)
                 let response = try await session.respond(to: prompt, generating: FollowUpPayload.self)
                 return response.content.questions
             } catch {
@@ -331,12 +347,25 @@ final class LocalBrain: ObservableObject {
 
     // MARK: - 底层调用
 
+    #if canImport(FoundationModels)
+    /// [WP-45] One place that decides which model a session runs on: Apple's on-device
+    /// model when ready, otherwise the user's external choice (ChatCompletionsLanguageModel).
+    /// Guided generation (`generating:`) is not supported by the external adapter — those
+    /// calls throw and their callers fall back exactly as when no model is available.
+    func makeSession(tools: [any Tool] = [], instructions: String) -> LanguageModelSession {
+        if availability != .ready, let external = ChatCompletionsLanguageModel.preferred() {
+            return LanguageModelSession(model: external, tools: tools, instructions: instructions)
+        }
+        return LanguageModelSession(tools: tools, instructions: instructions)
+    }
+    #endif
+
     /// 单轮生成。任何异常(会话超限、内容被拦、模型忙)一律回 nil,
     /// 由调用方回落到原有行为——本机模型是加分项,不是依赖项。
     private func respond(to prompt: String, instructions: String) async -> String? {
         #if canImport(FoundationModels)
         do {
-            let session = LanguageModelSession(instructions: instructions)
+            let session = makeSession(instructions: instructions)
             let response = try await session.respond(to: prompt)
             let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
             return text.isEmpty ? nil : text

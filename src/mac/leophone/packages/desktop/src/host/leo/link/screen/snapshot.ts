@@ -63,7 +63,7 @@ function clamp(raw: string | null, fallback: number, min: number, max: number): 
  * 扫直连码配对的手机拿到的授权记作 legacy、设备号以 direct- 开头,也是 iPhone / iPad。
  * 中继上认不出设备钥匙的旧客户端(legacy 非 direct-)与 unknown 不行。
  */
-function mayViewScreen(caller: Caller): boolean {
+export function mayViewScreen(caller: Caller): boolean {
   if (caller.kind === "iphone" || caller.kind === "master") return true;
   return caller.kind === "legacy" && Boolean(caller.deviceId?.startsWith("direct-"));
 }

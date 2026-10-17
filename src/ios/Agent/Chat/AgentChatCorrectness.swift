@@ -14,6 +14,37 @@ enum LeoWorkspaceLayoutPolicy {
         let detail = width - sidebar
         return sidebar >= 300 && detail >= 440
     }
+
+    // MARK: [WP-43] iPad three columns (session list / chat / context)
+    //
+    // Numbers from OpenClaw RootTabsNavigation (sidebar 300, detail ≥ 500); the
+    // context-column threshold is ours. Rules apply when the window CROSSES a
+    // threshold, so a column the user opened or closed by hand stays that way
+    // until the window size changes enough to matter.
+
+    static let sidebarWidth = (min: CGFloat(280), ideal: CGFloat(300), max: CGFloat(320))
+    /// Chat content column cap (the list's scroll indicator stays at the edge).
+    static let contentMaxWidth: CGFloat = 760
+    /// Sidebar stays put at or above this; narrower windows get it as a drawer.
+    static let residentSidebarMinWidth: CGFloat = 800
+    /// The context column (文件/工具详情 · Mac 画面) opens by itself at or above this.
+    static let contextColumnMinWidth: CGFloat = 1100
+
+    static func sidebarResident(width: CGFloat) -> Bool {
+        width.isFinite && width >= residentSidebarMinWidth
+    }
+
+    static func showsContextColumn(width: CGFloat) -> Bool {
+        width.isFinite && width >= contextColumnMinWidth
+    }
+
+    /// The new value a threshold rule wants after a resize, or nil when the
+    /// resize did not cross the threshold (leave the user's choice alone).
+    static func crossing(from old: CGFloat, to new: CGFloat, rule: (CGFloat) -> Bool) -> Bool? {
+        guard old > 0 else { return rule(new) }   // first measurement
+        let before = rule(old), after = rule(new)
+        return before == after ? nil : after
+    }
 }
 
 /// Pure helpers for agent-loop correctness that MinisTests can compile

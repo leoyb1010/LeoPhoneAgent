@@ -832,6 +832,8 @@ export default {
           },
           // [leo][WP-60] 本地语音助手(scripts/build-leo-speech.mjs 编译 native/leo-speech)。
           { from: "resources/leo-speech/leo-speech", to: "leo-speech/leo-speech" },
+          // [leo][WP-52] 远程操控输入助手(scripts/build-leo-input.mjs 编译 native/leo-input)。
+          { from: "resources/leo-input/leo-input", to: "leo-input/leo-input" },
           // [leo][WP-22] 随包 Peekaboo CLI(scripts/leo-fetch-peekaboo.mjs 下载并校验 sha256)。
           // 不在 signIgnore 里:打包时与 App 一起用 LeoBot 的 Developer ID + hardened runtime 重签。
           { from: "leo/bin", to: "leo/bin" },

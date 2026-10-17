@@ -293,6 +293,7 @@ export default defineConfig([
       "preload/cuaPermissionPanel": "src/preload/cuaPermissionPanel.ts",
       "preload/pluginSandbox": "src/preload/pluginSandbox/index.ts",
       "preload/leoQuickPanel": "src/preload/leoQuickPanel.ts",
+      "preload/leoScreenPeer": "src/preload/leoScreenPeer.ts",
     },
     outDir: "out",
     format: "cjs",

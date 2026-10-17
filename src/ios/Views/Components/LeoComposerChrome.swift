@@ -27,6 +27,29 @@ extension View {
     func leoComposerChrome() -> some View {
         glassEffect(.regular, in: .rect(cornerRadius: LeoTheme.Radius.composer, style: .continuous))
     }
+
+    /// [WP-42] The composer shell inside a `GlassEffectContainer`: the id lets sibling glass
+    /// (result banner, "Move to…" pill) emerge from / merge back into the shell instead of
+    /// popping in as a separate pane.
+    @ViewBuilder
+    func leoComposerChrome(glassID: String, in namespace: Namespace.ID?) -> some View {
+        if let namespace {
+            leoComposerChrome().glassEffectID(glassID, in: namespace)
+        } else {
+            leoComposerChrome()
+        }
+    }
+
+    /// [WP-42] Optional `glassEffectID` (no-op without a namespace).
+    @ViewBuilder
+    func leoGlassID(_ id: String, in namespace: Namespace.ID?) -> some View {
+        if let namespace { glassEffectID(id, in: namespace) } else { self }
+    }
+}
+
+enum LeoComposerGlass {
+    /// Spacing at which neighbouring glass shapes start to blend (token-sized gap).
+    static let containerSpacing: CGFloat = 12
 }
 
 /// The round send button every composer uses: teal when it can send, a quiet
@@ -42,7 +65,14 @@ struct LeoComposerSendButton: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                Circle().fill(canSend ? LeoTheme.ColorToken.accent : Color.primary.opacity(0.12))
+                // [WP-42] Primary action = prominent glass tinted with the accent; disabled
+                // stays a quiet grey disc (glass would read as tappable).
+                if canSend {
+                    Circle().fill(.clear)
+                        .glassEffect(.regular.tint(LeoTheme.ColorToken.accent).interactive(), in: .circle)
+                } else {
+                    Circle().fill(Color.primary.opacity(0.12))
+                }
                 if busy {
                     ProgressView().controlSize(.small).tint(.white)
                 } else {

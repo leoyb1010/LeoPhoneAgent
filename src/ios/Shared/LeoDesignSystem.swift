@@ -22,6 +22,14 @@ enum LeoTheme {
         static let destructive = Color(uiColor: .systemRed)
         static let success = Color(uiColor: .systemGreen)
         static let warning = Color(uiColor: .systemOrange)
+        /// [WP-42] 跨端 token `attention`(审批卡、等你确认):浅 #B86E12 / 深 #F0B86E,与 Mac `--leo-attention` 同值。
+        static let attention = Color(uiColor: UIColor { trait in
+            trait.userInterfaceStyle == .dark
+                ? UIColor(red: 0xF0 / 255, green: 0xB8 / 255, blue: 0x6E / 255, alpha: 1)
+                : UIColor(red: 0xB8 / 255, green: 0x6E / 255, blue: 0x12 / 255, alpha: 1)
+        })
+        /// [WP-42] token `brand.soft`:强调色的浅底(选中行、徽标底)。
+        static let accentSoft = Color.accentColor.opacity(0.12)
     }
 
     enum Spacing {
@@ -79,6 +87,8 @@ enum LeoMotion {
     static let panel: Double = 0.28
     static let emphasis: Double = 0.35
     static let springResponse: Double = 0.30
+    /// [WP-42] 呼吸 / 思考扫光周期(token `beat`)。
+    static let beat: Double = LeoMotionPolicy.beat
 
     static func standardEase(reduceMotion: Bool) -> Animation? {
         reduceMotion ? nil : .easeInOut(duration: standard)

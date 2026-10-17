@@ -23,6 +23,8 @@ struct SyncedSession: Syncable {
     var pinnedAt: Date?
     var originDeviceId: String?
     var lastWriterDeviceId: String?
+    /// [WP-42] Manual pinned order, "rank|editedAtMs" (PinnedSessionOrder). Old peers omit it.
+    var pinOrder: String? = nil
 
     static let syncMetadata: SyncTypeMetadata<SyncedSession> = {
         typealias F = FieldDescriptor<SyncedSession>
@@ -42,13 +44,14 @@ struct SyncedSession: Syncable {
                 F.optionalDate("pinnedAt",   \SyncedSession.pinnedAt),
                 F.optionalString("originDeviceId", \SyncedSession.originDeviceId),
                 F.optionalString("lastWriterDeviceId", \SyncedSession.lastWriterDeviceId),
+                F.optionalString("pinOrder", \SyncedSession.pinOrder),
             ],
             conflictPolicy: .lastWriteWinsByField(\SyncedSession.updatedAt),
             version: 2
         )
     }()
 
-    static func from(_ s: ChatSession, memoryEnabled: Bool, modelBinding: String?, originDeviceId: String? = nil, lastWriterDeviceId: String? = nil) -> SyncedSession {
+    static func from(_ s: ChatSession, memoryEnabled: Bool, modelBinding: String?, originDeviceId: String? = nil, lastWriterDeviceId: String? = nil, pinOrder: String? = nil) -> SyncedSession {
         SyncedSession(
             id: s.id,
             title: s.title,
@@ -60,7 +63,8 @@ struct SyncedSession: Syncable {
             modelBinding: modelBinding,
             pinnedAt: s.pinnedAt,
             originDeviceId: originDeviceId,
-            lastWriterDeviceId: lastWriterDeviceId
+            lastWriterDeviceId: lastWriterDeviceId,
+            pinOrder: pinOrder
         )
     }
 }

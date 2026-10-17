@@ -233,6 +233,8 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// [T-home-zoom-transition] Session row ↔ session page zoom (iPhone stack).
     @Namespace private var zoomNS
+    /// [WP-42] Home composer + result banner glass morphing.
+    @Namespace private var homeComposerGlassNS
     /// [T-home-sensory-feedback] Same key as `LeoHaptics`, so the declarative
     /// `.sensoryFeedback` pulses below honour the in-app haptics toggle too.
     @AppStorage(LeoHaptics.enabledDefaultsKey) private var hapticsEnabled: Bool = true
@@ -279,6 +281,8 @@ struct ContentView: View {
     @State private var sessionsRevision = 0
     @State private var homeContextMemo = KeyedMemo<HomeContextMemoKey, HomeContextSnapshot>(capacity: 1)
     @State private var groupedSessionIDsMemo = KeyedMemo<GroupedSessionsMemoKey, [(label: String, ids: [String])]>(capacity: 3)
+    /// [WP-42] Manual order of the pinned section (synced per session; absent = original order).
+    @State private var pinRanks: [String: PinRank] = [:]
     /// Soul name shown as the sidebar title. Sourced from SOUL.md, falls
     /// back to "LeoPhoneAgent". Refreshed whenever SoulStore posts .soulMdChanged.
     @State private var soulName: String = SoulStore.cachedMetadata.name.isEmpty
@@ -380,6 +384,11 @@ struct ContentView: View {
     @State private var didInitialLoad = false
     /// Controls sidebar visibility on iPad (automatic handles iPhone collapse).
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+    /// [WP-43] Window width: sidebar resident at ≥ 800 pt (drawer below), the
+    /// chat's third column opens by itself at ≥ 1100 pt.
+    @State private var windowWidth: CGFloat = 0
+    /// [WP-43] ⌘K palette → this window's third column.
+    @State private var contextRequest: ChatContextRequest?
 
     /// Launch screen preference: 0=Auto, 1=Last Session, 2=New Chat.
     @AppStorage("launchScreen") private var launchScreen: Int = 0
@@ -594,7 +603,9 @@ struct ContentView: View {
                 migrateNavigationState(toWide: newWide)
                 isWideLayout = newWide
             }
+            .onChange(of: geo.size.width) { _, width in updateWindowWidth(width) }
             .onAppear {
+                updateWindowWidth(geo.size.width)
                 isWideLayout = wide
                 if !homeDraftRestored {
                     homeDraftRestored = true
@@ -632,7 +643,7 @@ struct ContentView: View {
                     Label("正在同步接力的会话…", systemImage: "arrow.triangle.2.circlepath")
                         .font(.footnote.weight(.semibold))
                         .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(.regularMaterial, in: Capsule())
+                        .glassEffect(.regular, in: .capsule)
                         .padding(.top, 6)
                         .accessibilityIdentifier("handoff.syncing")
                 }
@@ -885,12 +896,8 @@ struct ContentView: View {
                 },
                 openSession: { sid in jumpToSession(sid) },
                 runQuickTask: { tid in Task { await QuickTaskWidgetRunner.run(taskId: tid) } },
-                openSurface: { target in
-                    // The page itself, once the palette has finished closing.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                        DeepLinkCoordinator.shared.pendingSettingsTarget = target
-                    }
-                },
+                commands: CommandPaletteCatalog.commands(paletteContext),
+                runCommand: { command in runPaletteCommand(command) },
                 close: { showCommandPalette = false }
             )
             // [T-home-sheet-detents] A jump list, not an editor: half-height
@@ -1035,7 +1042,7 @@ struct ContentView: View {
                             }
                         }
                         .padding(24)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                        .glassEffect(.regular, in: .rect(cornerRadius: 16))
                     }
                     .transition(.opacity)
                     .animation(LeoMotion.standardEase(), value: isExporting)
@@ -1050,6 +1057,7 @@ struct ContentView: View {
                 // launch-screen preference here replaced the preserved route/draft.
                 guard !didInitialLoad else { return }
                 LeoPerf.coldFirstFrame()
+                pinRanks = await ChatStore.shared.pinRanks()
                 sessions = await ChatStore.shared.listSessions()
                 LeoPerf.coldStep("listLoaded")
                 let collectionsPending = deepLink.consumePendingCollections()
@@ -1418,6 +1426,18 @@ struct ContentView: View {
 
     // MARK: - Split Layout (iPad / wide window)
 
+    /// [WP-43] Sidebar resident ≥ 800 pt, a drawer below; only when the width
+    /// crosses the line, so a sidebar the user hid or showed stays that way.
+    private func updateWindowWidth(_ width: CGFloat) {
+        let old = windowWidth
+        windowWidth = width
+        guard let resident = LeoWorkspaceLayoutPolicy.crossing(
+            from: old, to: width, rule: LeoWorkspaceLayoutPolicy.sidebarResident) else { return }
+        let target: NavigationSplitViewVisibility = resident ? .all : .detailOnly
+        guard columnVisibility != target else { return }
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.28)) { columnVisibility = target }
+    }
+
     private var splitLayout: some View {
         // [T-ios-gh29-font-scale-split-column] App-base font scale for the iPad
         // split view. `appFontScale()` is environment-based (`.dynamicTypeSize`),
@@ -1508,7 +1528,8 @@ struct ContentView: View {
             let effectiveId: String? = isDraft ? nil : id
             // [T-ipad-inspector] The inspector column lives on this small
             // container, not on AIChatView's own (deep) modifier chain.
-            ChatDetailContainer(sessionId: isDraft ? newSessionRealId : id) {
+            ChatDetailContainer(sessionId: isDraft ? newSessionRealId : id,
+                                windowWidth: windowWidth, contextRequest: contextRequest) {
                 AIChatView(sessionId: effectiveId, draftId: isDraft ? id : nil, initialGroupId: Self.extractGroupId(from: id), initialEntryKey: Self.extractEntryKey(from: id))
                     .onAppear {
                         draftLog.info("🔑DRAFT detailView APPEAR id=\(id) effectiveId=\(effectiveId ?? "nil") isDraft=\(isDraft)")
@@ -1637,11 +1658,12 @@ struct ContentView: View {
             }
         }
 
-        // Sort pinned by last-modified first, then pin time as tiebreaker
-        pinned.sort {
-            if $0.updatedAt != $1.updatedAt { return $0.updatedAt > $1.updatedAt }
-            return ($0.pinnedAt ?? .distantPast) > ($1.pinnedAt ?? .distantPast)
-        }
+        // [WP-42] Dragged order first-class; sessions never dragged keep the old rule
+        // (last-modified first, then pin time) and sit above the ordered ones.
+        let pinnedOrder = PinnedSessionOrder.sort(
+            pinned.map { .init(id: $0.id, updatedAt: $0.updatedAt, pinnedAt: $0.pinnedAt) }, ranks: pinRanks)
+        let pinnedById = Dictionary(pinned.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        pinned = pinnedOrder.compactMap { pinnedById[$0] }
 
         if !pinned.isEmpty    { buckets.append(("Pinned", pinned)) }
         if !today.isEmpty     { buckets.append(("Today", today)) }
@@ -1674,6 +1696,7 @@ struct ContentView: View {
         let ids: [String]
         let updatedAt: [Double]
         let pinnedAt: [Double?]
+        let pinRanks: [String: PinRank]
         let day: Date
     }
 
@@ -1684,10 +1707,23 @@ struct ContentView: View {
             ids: list.map(\.id),
             updatedAt: list.map { $0.updatedAt.timeIntervalSince1970 },
             pinnedAt: list.map { $0.pinnedAt?.timeIntervalSince1970 },
+            pinRanks: pinRanks,
             day: Calendar.current.startOfDay(for: Date()))
         return groupedSessionIDsMemo.value(for: key) {
             groupedSessions(list).map { (label: $0.label, ids: $0.sessions.map(\.id)) }
         }
+    }
+
+    /// [WP-42] The pinned section was dragged: apply locally at once, then persist + sync.
+    private func movePinned(_ ids: [String], from: IndexSet, to: Int) {
+        let order = PinnedSessionOrder.move(ids, from: from, to: to)
+        guard order != ids else { return }
+        let updates = PinnedSessionOrder.assignments(order: order, current: pinRanks, now: Date())
+        var ranks = pinRanks
+        for (id, rank) in updates { ranks[id] = rank }
+        pinRanks = ranks
+        LeoHaptics.selection()
+        Task { await ChatStore.shared.applyPinRanks(updates) }
     }
 
     private func isCollapsibleHistoryGroup(_ label: String) -> Bool {
@@ -2145,9 +2181,34 @@ struct ContentView: View {
                                 )
                                 .equatable()
                             }
+                            // [WP-42] iOS 27 list swipe: leading = pin, trailing = archive / delete
+                            // (delete still goes through the confirmation the menu uses).
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                Button { menuActions.send(.togglePin(session.id)) } label: {
+                                    Label(session.isPinned ? "取消置顶" : "置顶",
+                                          systemImage: session.isPinned ? "pin.slash" : "pin")
+                                }
+                                .tint(LeoTheme.ColorToken.accent)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button { menuActions.send(.delete(session.id)) } label: {
+                                    Label("删除", systemImage: "trash")
+                                }
+                                .tint(.red)
+                                let archived = sessionExtras.archived.contains(session.id)
+                                Button {
+                                    menuActions.send(archived ? .unarchive(session.id) : .archive(session.id))
+                                } label: {
+                                    Label(archived ? "取消归档" : "归档", systemImage: "archivebox")
+                                }
+                                .tint(.gray)
+                            }
                         }
                         }  // if let session
                     }
+                    // [WP-42] Drag to reorder the pinned section (synced across devices).
+                    .onMove(perform: group.label == "Pinned" && !isSelecting && !isSearching
+                            ? { from, to in movePinned(group.ids, from: from, to: to) } : nil)
                 } header: {
                     sectionHeader(group: group)
                 }
@@ -2267,9 +2328,11 @@ struct ContentView: View {
                                     }
                                 }
                                 // [T-ipad-multiwindow] Drag a row to the screen edge → its own window.
-                                .onDrag { [sid = Self.isNewSessionId(session.id) ? newSessionRealId : session.id] in
-                                    SessionWindow.itemProvider(for: sid)
-                                }
+                                // [WP-42] Not on pinned rows: there a drag reorders the section
+                                // (the context menu still opens a new window).
+                                .modifier(SessionWindowDrag(
+                                    sessionId: Self.isNewSessionId(session.id) ? newSessionRealId : session.id,
+                                    enabled: group.label != "Pinned"))
                                 .tag(session.id)
                                 .listRowInsets(EdgeInsets())
                                 .listRowSeparator(.hidden)
@@ -2284,6 +2347,9 @@ struct ContentView: View {
                         }
                         }  // if let session
                     }
+                    // [WP-42] Drag to reorder the pinned section (synced across devices).
+                    .onMove(perform: group.label == "Pinned" && !isSelecting && !isSearching
+                            ? { from, to in movePinned(group.ids, from: from, to: to) } : nil)
                 } header: {
                     sectionHeader(group: group)
                 }
@@ -2291,7 +2357,10 @@ struct ContentView: View {
 
         }
         .listStyle(.plain)
-        .navigationSplitViewColumnWidth(min: 340, ideal: 380, max: 500)
+        // [WP-43] OpenClaw's sidebar: ideal 300, max 320 (was 340/380/500).
+        .navigationSplitViewColumnWidth(min: LeoWorkspaceLayoutPolicy.sidebarWidth.min,
+                                        ideal: LeoWorkspaceLayoutPolicy.sidebarWidth.ideal,
+                                        max: LeoWorkspaceLayoutPolicy.sidebarWidth.max)
         .opacity(didInitialLoad ? 1 : 0)
         // [T-session-filter-trap] 同 stackList:筛空 ≠ 没有会话。起手建议在右侧工作台,侧栏只留一句话。
         .overlay {
@@ -3251,12 +3320,17 @@ struct ContentView: View {
 
     /// 结果条 + 玻璃输入栏:iPhone 首页底部和 iPad 首页工作台共用这一条。
     private var homeComposerStack: some View {
+        // [WP-42] Banner and composer share one GlassEffectContainer: the banner's glass
+        // emerges from the composer shell and merges back when dismissed.
+        GlassEffectContainer(spacing: LeoComposerGlass.containerSpacing) {
         VStack(spacing: 8) {
             if let homeRoutingError {
-                HomeResultBanner(text: homeRoutingError, tone: .error) { self.homeRoutingError = nil }
+                HomeResultBanner(text: homeRoutingError, tone: .error,
+                                 glassNamespace: homeComposerGlassNS) { self.homeRoutingError = nil }
             } else if let result = homeNativeResult {
                 HomeResultBanner(text: result.text,
-                                 tone: result.outcome == .succeeded ? .success : .info) { homeNativeResult = nil }
+                                 tone: result.outcome == .succeeded ? .success : .info,
+                                 glassNamespace: homeComposerGlassNS) { homeNativeResult = nil }
             }
             HomeComposerHost(
                 draft: homeDraft,
@@ -3272,8 +3346,10 @@ struct ContentView: View {
                     showHomeActions = true
                 },
                 onMic: { startHomeChatAction(.startVoice) },
-                onCancelBusy: { homeNativeTask?.cancel() }
+                onCancelBusy: { homeNativeTask?.cancel() },
+                glassNamespace: homeComposerGlassNS
             )
+        }
         }
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeNativeResult?.text)
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeRoutingError)
@@ -3720,6 +3796,8 @@ struct ContentView: View {
         sessionRefreshCooldownDeadline = nil
         sessionRefreshInFlight = true
         Task(priority: .utility) { @MainActor in
+            let ranks = await ChatStore.shared.pinRanks()
+            if ranks != pinRanks { pinRanks = ranks }
             sessions = await ChatStore.shared.listSessions()
             sessionRefreshInFlight = false
             lastRefreshFinishedAt = Date()
@@ -3940,6 +4018,51 @@ struct ContentView: View {
                 )
             )
         relayCatchUp.clearMissedApprovals()
+    }
+
+    // MARK: - [WP-43] ⌘K palette commands
+
+    /// The chat on screen in this window, by its real id when a draft has one.
+    private var onScreenChatId: String? {
+        guard let id = onScreenSessionId else { return nil }
+        return Self.isNewSessionId(id) ? newSessionRealId : id
+    }
+
+    private var paletteContext: CommandPaletteCatalog.Context {
+        CommandPaletteCatalog.Context(
+            hasChat: onScreenSessionId != nil,
+            isProcessing: onScreenChatId.flatMap { ViewModelCache.shared.get(for: $0) }?.isProcessing ?? false,
+            hasApproval: SensitiveToolGate.shared.pending != nil,
+            macFleetEnabled: macFleetEnabled,
+            splitLayout: isWideLayout)
+    }
+
+    private func runPaletteCommand(_ command: PaletteCommand) {
+        // Anything that presents something waits for the palette to finish closing.
+        func afterClose(_ work: @escaping () -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
+        }
+        func surface(_ target: SettingsDeepLinkTarget) {
+            afterClose { DeepLinkCoordinator.shared.pendingSettingsTarget = target }
+        }
+        switch command {
+        case .newTask: afterClose { handleNewChatRequest() }
+        case .search:
+            if isWideLayout { columnVisibility = .all }
+            afterClose { focusSearch() }
+        case .settings: afterClose { activeToolSheet = .settings }
+        case .switchModel: afterClose { ChatComposerActions.current?.pickModel() }
+        case .stopRun: ChatCommandTarget.stopRun(sessionId: onScreenChatId)
+        case .approve: SensitiveToolGate.shared.resolve(.allowOnce)
+        case .deny: SensitiveToolGate.shared.resolve(.deny)
+        case .contextDetails, .macScreen:
+            contextRequest = ChatContextRequest(mode: command == .macScreen ? .macScreen : .details,
+                                                nonce: (contextRequest?.nonce ?? 0) + 1)
+        case .automations: surface(.automations)
+        case .macConsole: surface(.macConsole)
+        case .timeline: surface(.timeline)
+        case .scheduledTasks: surface(.scheduledTasks)
+        }
     }
 
     private func focusSearch() {
@@ -4201,7 +4324,7 @@ struct ContentView: View {
             .disabled(selectedIds.isEmpty)
         }
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
+        .glassEffect(.regular, in: .rect)
     }
 
     /// Force-sync the given sessions: bumps each session, its messages,

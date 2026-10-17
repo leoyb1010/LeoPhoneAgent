@@ -446,7 +446,7 @@ struct SpeechPlayerControl: View {
 
     private var compactButton: some View {
         ZStack(alignment: .bottomTrailing) {
-            // No shadow — a faint border instead, matching the scroll-to-bottom pill.
+            // [WP-42] Floating control → Liquid Glass (was material + hairline border).
             Circle()
                 .fill(.ultraThinMaterial)
                 .frame(width: 40, height: 40)
@@ -532,9 +532,8 @@ struct SpeechPlayerControl: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        // No shadow — a faint border instead, matching the scroll-to-bottom pill.
-        .background(Capsule().fill(.ultraThinMaterial))
-        .overlay(Capsule().stroke(Color.gray.opacity(0.25), lineWidth: 0.5))
+        // [WP-42] Floating control → Liquid Glass (was material + hairline border).
+        .glassEffect(.regular.interactive(), in: .capsule)
         // Drag to reposition. Highest priority so the outer tap-to-dismiss layer
         // doesn't steal it.
         .highPriorityGesture(dragGesture)

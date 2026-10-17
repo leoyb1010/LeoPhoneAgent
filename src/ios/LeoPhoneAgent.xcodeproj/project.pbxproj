@@ -199,6 +199,7 @@
 		AA26CCC32F31090100AECF2D /* libresolv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = AA26CCC42F31090100AECF2D /* libresolv.tbd */; };
 		AA71B0222F44BEB200A28A5E /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA71B0212F44BEB200A28A5E /* Launch Screen.storyboard */; };
 		AA9C2BF92F65996900F41633 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = E5X000021 /* SwiftMath */; };
+		E5RTC5101 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = E5RTC5103 /* WebRTC */; };
 		AADDA9E12F6ECCF400B66649 /* ThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADDA9E02F6ECCF400B66649 /* ThumbnailCache.swift */; };
 		AAF00F012F50A00000049557 /* FFmpeg.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AAF00F002F50A00000049557 /* FFmpeg.framework */; };
 		AAF00F022F50A00000049557 /* FFmpeg.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AAF00F002F50A00000049557 /* FFmpeg.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -487,6 +488,14 @@
 		E5J000040 /* AttributeQueryRecorder.m in Sources */ = {isa = PBXBuildFile; fileRef = E5J000041 /* AttributeQueryRecorder.m */; };
 		E5JB00001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB00002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LF63BDFAF750 /* MacScreenSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFD48397A7A7 /* MacScreenSession.swift */; };
+		LF3E14F93A3B /* PinnedSessionOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF9E8272F01 /* PinnedSessionOrder.swift */; };
+		LF43FE8FE20C /* CommandPaletteCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF837AD530A8 /* CommandPaletteCatalog.swift */; };
+		LF64333B68E8 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
+		LF2ED9FD3235 /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
+		LFCB4BB98193 /* WatchMacStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7295E2414A /* WatchMacStatus.swift */; };
+		LF1456E02725 /* MacScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF538A58CD86 /* MacScreenSnapshot.swift */; };
+		LFD51A292015 /* LeoMotionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2025E8D5E2 /* LeoMotionPolicy.swift */; };
 		LF904607C9DF /* MCPDaemonBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1CC96DB1CD /* MCPDaemonBridge.swift */; };
 		LF135C33AF5C /* LiveActivityRemotePush.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF6973892068 /* LiveActivityRemotePush.swift */; };
 		LF8FF39531B5 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFCFE968014F /* AppLocalization.swift */; };
@@ -495,6 +504,14 @@
 		E5JB00004 /* hmm_model.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00015 /* hmm_model.utf8 */; };
 		E5JB10001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB10002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LFB7E8E0547A /* MacScreenSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFD48397A7A7 /* MacScreenSession.swift */; };
+		LFA0A1B535C5 /* PinnedSessionOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF9E8272F01 /* PinnedSessionOrder.swift */; };
+		LFAB889B1927 /* CommandPaletteCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF837AD530A8 /* CommandPaletteCatalog.swift */; };
+		LF714387EFE1 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
+		LFD1F84A10FA /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
+		LF186F089B19 /* WatchMacStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7295E2414A /* WatchMacStatus.swift */; };
+		LF2D06A8CD8F /* MacScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF538A58CD86 /* MacScreenSnapshot.swift */; };
+		LFB522B634C4 /* LeoMotionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2025E8D5E2 /* LeoMotionPolicy.swift */; };
 		LF65D01EB9C8 /* MCPDaemonBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1CC96DB1CD /* MCPDaemonBridge.swift */; };
 		LF2651E7E07A /* LiveActivityRemotePush.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF6973892068 /* LiveActivityRemotePush.swift */; };
 		LF39CB9C995A /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFCFE968014F /* AppLocalization.swift */; };
@@ -684,6 +701,8 @@
 		E5TPZ0001 /* TreasuryPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TPZ0002 /* TreasuryPresentation.swift */; };
 		E5LBV0001 /* LocalBrainSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LBV0002 /* LocalBrainSettingsView.swift */; };
 		E5LBR0001 /* LocalBrain.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LBR0002 /* LocalBrain.swift */; };
+		LF7FC4AF2C94 /* LocalBrain+Tools.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB939B423FC /* LocalBrain+Tools.swift */; };
+		LFBD7C990B1B /* ChatCompletionsLanguageModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7E48769126 /* ChatCompletionsLanguageModel.swift */; };
 		E5SNP0001 /* FleetSnippets.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SNP0002 /* FleetSnippets.swift */; };
 		E5PSH0001 /* PushRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PSH0002 /* PushRegistrar.swift */; };
 		E5RLY0001 /* RelayEventCatchUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RLY0002 /* RelayEventCatchUp.swift */; };
@@ -710,8 +729,12 @@
 		E5SIR0003 /* HarnessApprovalNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SIR0004 /* HarnessApprovalNotifier.swift */; };
 		E5SIR0001 /* MacFleetIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SIR0002 /* MacFleetIntents.swift */; };
 		E5GWC0001 /* LeoAgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWC0002 /* LeoAgentClient.swift */; };
+		E5SPC51B1 /* ScreenPeerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SPC51R /* ScreenPeerClient.swift */; };
+		E5MSC50B1 /* MacScreenSnapshotClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MSC50R /* MacScreenSnapshotClient.swift */; };
 		E5GWH1001 /* LeoAgentHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH1002 /* LeoAgentHarness.swift */; };
 		E5GWV0001 /* GatewayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWV0002 /* GatewayViews.swift */; };
+		LFFF7A120AA9 /* MacScreenLiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF12689023D8 /* MacScreenLiveViews.swift */; };
+		LF0FA1A41C6D /* MacScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF26AE1ABDCE /* MacScreenViews.swift */; };
 		E5GWD0001 /* GatewayRunDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWD0002 /* GatewayRunDriver.swift */; };
 		E5GWH0001 /* GatewayHostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH0002 /* GatewayHostStore.swift */; };
 		E5RMC0001 /* RelayMachinesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RMC0002 /* RelayMachinesClient.swift */; };
@@ -807,6 +830,7 @@
 		E5T00000A /* RetryRunIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5T00001A /* RetryRunIntent.swift */; };
 		E5T00000B /* UserMessageEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5T00001B /* UserMessageEntity.swift */; };
 		E5T0000A1 /* AskMinisIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5T0000A2 /* AskMinisIntent.swift */; };
+		LF6861F473A2 /* LocalBrainIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF36C28B79AA /* LocalBrainIntents.swift */; };
 		E5TLC0001 /* ThinkingLevelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TLC0002 /* ThinkingLevelCatalog.swift */; };
 		E5UMP0001 /* UnifiedModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UMP0011 /* UnifiedModelPicker.swift */; };
 		E5V000002 /* AlternateIcons in Resources */ = {isa = PBXBuildFile; fileRef = E5V000012 /* AlternateIcons */; };
@@ -814,6 +838,7 @@
 		E5MHC0001 /* MessageHeightCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MHC0011 /* MessageHeightCache.swift */; };
 		E5MHC0002 /* MessageHeightCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MHC0011 /* MessageHeightCache.swift */; };
 		E5V300001 /* CollectionViewMessageListV3.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5V300011 /* CollectionViewMessageListV3.swift */; };
+		E5SFA42B1 /* SendFlightAnimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SFA42R /* SendFlightAnimator.swift */; };
 		E5VC00001 /* VoiceCorrectionDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VC00011 /* VoiceCorrectionDB.swift */; };
 		E5VC00002 /* PhoneticNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VC00012 /* PhoneticNormalizer.swift */; };
 		E5VC00003 /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VC00013 /* SentenceSplitter.swift */; };
@@ -999,6 +1024,15 @@
 		3CF0FE5D0A813923A67BF4F8 /* RecordingDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F57A7FBEA11368012AF9A1E5 /* RecordingDetailView.swift */; };
 		7E891949AC83D7C350DCC6A1 /* RecordingLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03F458E80CFCED85BAF0811E /* RecordingLiveActivityWidget.swift */; };
 		51CBC55507BEC436918E5674 /* WatchRecordingRemoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01127995AF5BFCF73F286A20 /* WatchRecordingRemoteView.swift */; };
+		E5WW00020 /* LeoWatchWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WW00002 /* LeoWatchWidgets.swift */; };
+		E5WW00021 /* AskLeoIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WW00005 /* AskLeoIntent.swift */; };
+		E5WW00022 /* AskLeoIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WW00005 /* AskLeoIntent.swift */; };
+		E5WW00023 /* WatchMacStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7295E2414A /* WatchMacStatus.swift */; };
+		LF39465E891C /* MacScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF538A58CD86 /* MacScreenSnapshot.swift */; };
+		E5WW00024 /* WatchMacStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7295E2414A /* WatchMacStatus.swift */; };
+		LF1BA5E58E39 /* MacScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF538A58CD86 /* MacScreenSnapshot.swift */; };
+		E5WW00025 /* LeoWatchWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E5WW00001 /* LeoWatchWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E5WWSH001 /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1036,6 +1070,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = E5WA00010;
 			remoteInfo = LeoWatch;
+		};
+		E5WW00050 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E51000060 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E5WW00060;
+			remoteInfo = LeoWatchWidget;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -1076,6 +1117,17 @@
 				E5E000009 /* MinisShare.appex in Embed Foundation Extensions */,
 				E5H000009 /* AgentWidgetExtension.appex in Embed Foundation Extensions */,
 				E5FP00009 /* MinisFileProvider.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E5WW00040 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				E5WW00025 /* LeoWatchWidget.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1496,6 +1548,14 @@
 		E5JB00011 /* JiebaWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JiebaWrapper.h; sourceTree = "<group>"; };
 		E5JB00012 /* JiebaWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = JiebaWrapper.mm; sourceTree = "<group>"; };
 		E5JB00013 /* TextSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSegmenter.swift; sourceTree = "<group>"; };
+		LFD48397A7A7 /* MacScreenSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacScreenSession.swift; sourceTree = "<group>"; };
+		LFF9E8272F01 /* PinnedSessionOrder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedSessionOrder.swift; sourceTree = "<group>"; };
+		LF837AD530A8 /* CommandPaletteCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPaletteCatalog.swift; sourceTree = "<group>"; };
+		LFB3AA038DDA /* ChatCompletionsWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCompletionsWire.swift; sourceTree = "<group>"; };
+		LFE35BAC8FC5 /* ShareMacTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareMacTarget.swift; sourceTree = "<group>"; };
+		LF7295E2414A /* WatchMacStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMacStatus.swift; sourceTree = "<group>"; };
+		LF538A58CD86 /* MacScreenSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacScreenSnapshot.swift; sourceTree = "<group>"; };
+		LF2025E8D5E2 /* LeoMotionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoMotionPolicy.swift; sourceTree = "<group>"; };
 		LF1CC96DB1CD /* MCPDaemonBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPDaemonBridge.swift; sourceTree = "<group>"; };
 		LF6973892068 /* LiveActivityRemotePush.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityRemotePush.swift; sourceTree = "<group>"; };
 		LFCFE968014F /* AppLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalization.swift; sourceTree = "<group>"; };
@@ -1669,6 +1729,8 @@
 		E5TPZ0002 /* TreasuryPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/TreasuryPresentation.swift"; sourceTree = SOURCE_ROOT; };
 		E5LBV0002 /* LocalBrainSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/LocalBrainSettingsView.swift"; sourceTree = SOURCE_ROOT; };
 		E5LBR0002 /* LocalBrain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/LocalIntelligence/LocalBrain.swift"; sourceTree = SOURCE_ROOT; };
+		LFB939B423FC /* LocalBrain+Tools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/LocalIntelligence/LocalBrain+Tools.swift"; sourceTree = SOURCE_ROOT; };
+		LF7E48769126 /* ChatCompletionsLanguageModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/LocalIntelligence/ChatCompletionsLanguageModel.swift; sourceTree = SOURCE_ROOT; };
 		E5SNP0002 /* FleetSnippets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Intents/FleetSnippets.swift"; sourceTree = SOURCE_ROOT; };
 		E5PSH0002 /* PushRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/PushRegistrar.swift"; sourceTree = SOURCE_ROOT; };
 		E5RLY0002 /* RelayEventCatchUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/RelayEventCatchUp.swift"; sourceTree = SOURCE_ROOT; };
@@ -1693,8 +1755,12 @@
 		E5SIR0004 /* HarnessApprovalNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/HarnessApprovalNotifier.swift"; sourceTree = SOURCE_ROOT; };
 		E5SIR0002 /* MacFleetIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Intents/MacFleetIntents.swift"; sourceTree = SOURCE_ROOT; };
 		E5GWC0002 /* LeoAgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentClient.swift; sourceTree = SOURCE_ROOT; };
+		E5SPC51R /* ScreenPeerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/ScreenPeerClient.swift; sourceTree = SOURCE_ROOT; };
+		E5MSC50R /* MacScreenSnapshotClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/MacScreenSnapshotClient.swift; sourceTree = SOURCE_ROOT; };
 		E5GWH1002 /* LeoAgentHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentHarness.swift; sourceTree = SOURCE_ROOT; };
 		E5GWV0002 /* GatewayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/GatewayViews.swift; sourceTree = SOURCE_ROOT; };
+		LF12689023D8 /* MacScreenLiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/MacScreenLiveViews.swift; sourceTree = SOURCE_ROOT; };
+		LF26AE1ABDCE /* MacScreenViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/MacScreenViews.swift; sourceTree = SOURCE_ROOT; };
 		E5GWD0002 /* GatewayRunDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayRunDriver.swift; sourceTree = SOURCE_ROOT; };
 		E5GWH0002 /* GatewayHostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayHostStore.swift; sourceTree = SOURCE_ROOT; };
 		E5RMC0002 /* RelayMachinesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/RelayMachinesClient.swift; sourceTree = SOURCE_ROOT; };
@@ -1757,6 +1823,7 @@
 		E5T00001A /* RetryRunIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetryRunIntent.swift; sourceTree = "<group>"; };
 		E5T00001B /* UserMessageEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserMessageEntity.swift; sourceTree = "<group>"; };
 		E5T0000A2 /* AskMinisIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskMinisIntent.swift; sourceTree = "<group>"; };
+		LF36C28B79AA /* LocalBrainIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBrainIntents.swift; sourceTree = "<group>"; };
 		E5TLC0002 /* ThinkingLevelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingLevelCatalog.swift; sourceTree = "<group>"; };
 		E5TT0002 /* ThinkingTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingTypes.swift; sourceTree = "<group>"; };
 		LFF3D490AADF /* ThinkingOffStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingOffStyle.swift; sourceTree = "<group>"; };
@@ -1765,6 +1832,7 @@
 		E5V100011 /* MessageListLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListLayout.swift; sourceTree = "<group>"; };
 		E5MHC0011 /* MessageHeightCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageHeightCache.swift; sourceTree = "<group>"; };
 		E5V300011 /* CollectionViewMessageListV3.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionViewMessageListV3.swift; sourceTree = "<group>"; };
+		E5SFA42R /* SendFlightAnimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendFlightAnimator.swift; sourceTree = "<group>"; };
 		E5VC00011 /* VoiceCorrectionDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCorrectionDB.swift; sourceTree = "<group>"; };
 		E5VC00012 /* PhoneticNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneticNormalizer.swift; sourceTree = "<group>"; };
 		E5VC00013 /* SentenceSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceSplitter.swift; sourceTree = "<group>"; };
@@ -1902,6 +1970,12 @@
 		F57A7FBEA11368012AF9A1E5 /* RecordingDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingDetailView.swift; sourceTree = "<group>"; };
 		03F458E80CFCED85BAF0811E /* RecordingLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingLiveActivityWidget.swift; sourceTree = "<group>"; };
 		01127995AF5BFCF73F286A20 /* WatchRecordingRemoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecordingRemoteView.swift; sourceTree = "<group>"; };
+		E5WW00001 /* LeoWatchWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LeoWatchWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		E5WW00002 /* LeoWatchWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoWatchWidgets.swift; sourceTree = "<group>"; };
+		E5WW00003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E5WW00004 /* LeoWatchWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LeoWatchWidget.entitlements; sourceTree = "<group>"; };
+		E5WW00005 /* AskLeoIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskLeoIntent.swift; sourceTree = "<group>"; };
+		E5WW00006 /* LeoWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LeoWatch.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -1933,6 +2007,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA9C2BF92F65996900F41633 /* SwiftMath in Frameworks */,
+				E5RTC5101 /* WebRTC in Frameworks */,
 				AAF00F012F50A00000049557 /* FFmpeg.framework in Frameworks */,
 				AAF10F012F50A00000049557 /* libavcodec.framework in Frameworks */,
 				AAF10F032F50A00000049557 /* libavformat.framework in Frameworks */,
@@ -1949,6 +2024,13 @@
 				E5S000005 /* CloudKit.framework in Frameworks */,
 				891443CAA4679D09A6D32AE4 /* RealTimeCutVADLibrary in Frameworks */,
 				E5CTD0003 /* Citadel in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E5WW00031 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2028,6 +2110,7 @@
 			isa = PBXGroup;
 			children = (
 				E5WA00050 /* LeoWatch */,
+				E5WW00010 /* LeoWatchWidget */,
 				E51000031 /* LeoPhoneAgent */,
 				E5E000031 /* Shared */,
 				E5E000030 /* ShareExtension */,
@@ -2079,6 +2162,7 @@
 			isa = PBXGroup;
 			children = (
 				E5WA00040 /* LeoWatch.app */,
+				E5WW00001 /* LeoWatchWidget.appex */,
 				E51000010 /* LeoPhoneAgent.app */,
 				E5E000010 /* MinisShare.appex */,
 				E5H000010 /* AgentWidgetExtension.appex */,
@@ -2489,6 +2573,14 @@
 				E5JB00011 /* JiebaWrapper.h */,
 				E5JB00012 /* JiebaWrapper.mm */,
 				E5JB00013 /* TextSegmenter.swift */,
+				LFD48397A7A7 /* MacScreenSession.swift */,
+				LFF9E8272F01 /* PinnedSessionOrder.swift */,
+				LF837AD530A8 /* CommandPaletteCatalog.swift */,
+				LFB3AA038DDA /* ChatCompletionsWire.swift */,
+				LFE35BAC8FC5 /* ShareMacTarget.swift */,
+				LF7295E2414A /* WatchMacStatus.swift */,
+				LF538A58CD86 /* MacScreenSnapshot.swift */,
+				LF2025E8D5E2 /* LeoMotionPolicy.swift */,
 				LF1CC96DB1CD /* MCPDaemonBridge.swift */,
 				LF6973892068 /* LiveActivityRemotePush.swift */,
 				LFCFE968014F /* AppLocalization.swift */,
@@ -2651,6 +2743,7 @@
 				E5T000012 /* ListSessionsIntent.swift */,
 				E5T000013 /* SendPromptIntent.swift */,
 				E5T0000A2 /* AskMinisIntent.swift */,
+				LF36C28B79AA /* LocalBrainIntents.swift */,
 				E5F200016 /* ModelSelectionEntity.swift */,
 				E5T000014 /* OpenSessionIntent.swift */,
 				E5T000015 /* MinisShortcutsProvider.swift */,
@@ -2692,6 +2785,8 @@
 				E5TPZ0002 /* TreasuryPresentation.swift */,
 				E5LBV0002 /* LocalBrainSettingsView.swift */,
 				E5LBR0002 /* LocalBrain.swift */,
+				LFB939B423FC /* LocalBrain+Tools.swift */,
+				LF7E48769126 /* ChatCompletionsLanguageModel.swift */,
 				F1R3LIPF /* LocalIntelligencePolicies.swift */,
 				E5SNP0002 /* FleetSnippets.swift */,
 				E5PSH0002 /* PushRegistrar.swift */,
@@ -2724,9 +2819,13 @@
 				E5SIR0004 /* HarnessApprovalNotifier.swift */,
 				E5SIR0002 /* MacFleetIntents.swift */,
 				E5GWC0002 /* LeoAgentClient.swift */,
+				E5SPC51R /* ScreenPeerClient.swift */,
+				E5MSC50R /* MacScreenSnapshotClient.swift */,
 				E5GWH1002 /* LeoAgentHarness.swift */,
 				E5E15704F /* MacResultInbox.swift */,
 				E5GWV0002 /* GatewayViews.swift */,
+				LF12689023D8 /* MacScreenLiveViews.swift */,
+				LF26AE1ABDCE /* MacScreenViews.swift */,
 				E5GWD0002 /* GatewayRunDriver.swift */,
 				E5GWH0002 /* GatewayHostStore.swift */,
 				E5RMC0002 /* RelayMachinesClient.swift */,
@@ -2872,6 +2971,7 @@
 			isa = PBXGroup;
 			children = (
 				E5V300011 /* CollectionViewMessageListV3.swift */,
+				E5SFA42R /* SendFlightAnimator.swift */,
 				F1A00021 /* MessageListInfrastructure.swift */,
 				E5ASK0004F /* ToolStepGrouping.swift */,
 				E5V100011 /* MessageListLayout.swift */,
@@ -3224,6 +3324,16 @@
 			path = Recording;
 			sourceTree = "<group>";
 		};
+		E5WW00010 /* LeoWatchWidget */ = {
+			isa = PBXGroup;
+			children = (
+				E5WW00002 /* LeoWatchWidgets.swift */,
+				E5WW00003 /* Info.plist */,
+				E5WW00004 /* LeoWatchWidget.entitlements */,
+			);
+			path = LeoWatchWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 		E5WA00050 /* LeoWatch */ = {
@@ -3241,6 +3351,8 @@
 				E5WA00210 /* WatchMCPClient.swift */,
 				E5WA00211 /* WatchAgentLoop.swift */,
 				01127995AF5BFCF73F286A20 /* WatchRecordingRemoteView.swift */,
+				E5WW00005 /* AskLeoIntent.swift */,
+				E5WW00006 /* LeoWatch.entitlements */,
 			);
 			path = LeoWatch;
 			sourceTree = "<group>";
@@ -3249,6 +3361,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5WW00022 /* AskLeoIntent.swift in Sources */,
+				E5WW00024 /* WatchMacStatus.swift in Sources */,
+				LF1BA5E58E39 /* MacScreenSnapshot.swift in Sources */,
 				E5E15705W /* WatchContinueOnPhone.swift in Sources */,
 				E5WA00101 /* LeoWatchApp.swift in Sources */,
 				E5WA00102 /* WatchConnectivityClient.swift in Sources */,
@@ -3367,6 +3482,7 @@
 				E5M000021 /* cmark-gfm */,
 				E5M000022 /* cmark-gfm-extensions */,
 				E5X000021 /* SwiftMath */,
+				E5RTC5103 /* WebRTC */,
 				C42120806C66A2C804F89620 /* RealTimeCutVADLibrary */,
 				E5CTD0002 /* Citadel */,
 			);
@@ -3429,15 +3545,34 @@
 				E5WA00030 /* Sources */,
 				E5WA00031 /* Frameworks */,
 				E5WA00032 /* Resources */,
+				E5WW00040 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				E5WW00051 /* PBXTargetDependency */,
 			);
 			name = LeoWatch;
 			productName = LeoWatch;
 			productReference = E5WA00040 /* LeoWatch.app */;
 			productType = "com.apple.product-type.application";
+		};
+		E5WW00060 /* LeoWatchWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E5WW00061 /* Build configuration list for PBXNativeTarget "LeoWatchWidget" */;
+			buildPhases = (
+				E5WW00030 /* Sources */,
+				E5WW00031 /* Frameworks */,
+				E5WW00032 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LeoWatchWidget;
+			productName = LeoWatchWidget;
+			productReference = E5WW00001 /* LeoWatchWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -3487,6 +3622,7 @@
 				E52000020 /* XCRemoteSwiftPackageReference "SwiftAnthropic" */,
 				E5M000020 /* XCRemoteSwiftPackageReference "swift-cmark" */,
 				E5X000020 /* XCRemoteSwiftPackageReference "SwiftMath" */,
+				E5RTC5102 /* XCRemoteSwiftPackageReference "WebRTC" */,
 				B318C2F47DB3F301A17E49BE /* XCRemoteSwiftPackageReference "RealTimeCutVADLibrary" */,
 				E5CTD0001 /* XCRemoteSwiftPackageReference "Citadel" */,
 			);
@@ -3497,6 +3633,7 @@
 				E51000040 /* LeoPhoneAgent */,
 				E5WA00010 /* LeoWatch */,
 				E5E000040 /* MinisShare */,
+				E5WW00060 /* LeoWatchWidget */,
 				E5H000040 /* AgentWidgetExtension */,
 				E5FP00040 /* MinisFileProvider */,
 				AA8A568A2F6FBB7A00A3E54E /* MinisUITests */,
@@ -3572,6 +3709,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				E5LCW0001 /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E5WW00032 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3766,6 +3910,14 @@
 				LF0B67AADDC6 /* LongTextCollapse.swift in Sources */,
 				E5R3R0003 /* NSTextContainerSetSizeGuard.m in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
+				LFB7E8E0547A /* MacScreenSession.swift in Sources */,
+				LFA0A1B535C5 /* PinnedSessionOrder.swift in Sources */,
+				LFAB889B1927 /* CommandPaletteCatalog.swift in Sources */,
+				LF714387EFE1 /* ChatCompletionsWire.swift in Sources */,
+				LFD1F84A10FA /* ShareMacTarget.swift in Sources */,
+				LF186F089B19 /* WatchMacStatus.swift in Sources */,
+				LF2D06A8CD8F /* MacScreenSnapshot.swift in Sources */,
+				LFB522B634C4 /* LeoMotionPolicy.swift in Sources */,
 				LF65D01EB9C8 /* MCPDaemonBridge.swift in Sources */,
 				LF2651E7E07A /* LiveActivityRemotePush.swift in Sources */,
 				LF39CB9C995A /* AppLocalization.swift in Sources */,
@@ -3919,6 +4071,14 @@
 				AA26CCBA2F31080100AECF2D /* ISHKernel.m in Sources */,
 				E5JB00001 /* JiebaWrapper.mm in Sources */,
 				E5JB00002 /* TextSegmenter.swift in Sources */,
+				LF63BDFAF750 /* MacScreenSession.swift in Sources */,
+				LF3E14F93A3B /* PinnedSessionOrder.swift in Sources */,
+				LF43FE8FE20C /* CommandPaletteCatalog.swift in Sources */,
+				LF64333B68E8 /* ChatCompletionsWire.swift in Sources */,
+				LF2ED9FD3235 /* ShareMacTarget.swift in Sources */,
+				LFCB4BB98193 /* WatchMacStatus.swift in Sources */,
+				LF1456E02725 /* MacScreenSnapshot.swift in Sources */,
+				LFD51A292015 /* LeoMotionPolicy.swift in Sources */,
 				LF904607C9DF /* MCPDaemonBridge.swift in Sources */,
 				LF135C33AF5C /* LiveActivityRemotePush.swift in Sources */,
 				LF8FF39531B5 /* AppLocalization.swift in Sources */,
@@ -4040,6 +4200,7 @@
 				F1W0E101 /* WebLoadError.swift in Sources */,
 				F1T00011 /* ToolLiveSheet.swift in Sources */,
 				E5V300001 /* CollectionViewMessageListV3.swift in Sources */,
+				E5SFA42B1 /* SendFlightAnimator.swift in Sources */,
 				F1A00020 /* MessageListInfrastructure.swift in Sources */,
 				E5V100001 /* MessageListLayout.swift in Sources */,
 				E5MHC0001 /* MessageHeightCache.swift in Sources */,
@@ -4047,6 +4208,7 @@
 				E5T000002 /* ListSessionsIntent.swift in Sources */,
 				E5T000003 /* SendPromptIntent.swift in Sources */,
 				E5T0000A1 /* AskMinisIntent.swift in Sources */,
+				LF6861F473A2 /* LocalBrainIntents.swift in Sources */,
 				E5F200006 /* ModelSelectionEntity.swift in Sources */,
 				E5T000004 /* OpenSessionIntent.swift in Sources */,
 				E5W000031 /* WebAppShortcut.swift in Sources */,
@@ -4090,6 +4252,8 @@
 				E5TPZ0001 /* TreasuryPresentation.swift in Sources */,
 				E5LBV0001 /* LocalBrainSettingsView.swift in Sources */,
 				E5LBR0001 /* LocalBrain.swift in Sources */,
+				LF7FC4AF2C94 /* LocalBrain+Tools.swift in Sources */,
+				LFBD7C990B1B /* ChatCompletionsLanguageModel.swift in Sources */,
 				E5SNP0001 /* FleetSnippets.swift in Sources */,
 				E5PSH0001 /* PushRegistrar.swift in Sources */,
 				E5RLY0001 /* RelayEventCatchUp.swift in Sources */,
@@ -4116,8 +4280,12 @@
 				E5SIR0003 /* HarnessApprovalNotifier.swift in Sources */,
 				E5SIR0001 /* MacFleetIntents.swift in Sources */,
 				E5GWC0001 /* LeoAgentClient.swift in Sources */,
+				E5SPC51B1 /* ScreenPeerClient.swift in Sources */,
+				E5MSC50B1 /* MacScreenSnapshotClient.swift in Sources */,
 				E5GWH1001 /* LeoAgentHarness.swift in Sources */,
 				E5GWV0001 /* GatewayViews.swift in Sources */,
+				LFFF7A120AA9 /* MacScreenLiveViews.swift in Sources */,
+				LF0FA1A41C6D /* MacScreenViews.swift in Sources */,
 				E5GWD0001 /* GatewayRunDriver.swift in Sources */,
 				E5GWH0001 /* GatewayHostStore.swift in Sources */,
 				E5RMC0001 /* RelayMachinesClient.swift in Sources */,
@@ -4526,6 +4694,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E5E000001 /* ShareViewController.swift in Sources */,
+				E5WWSH001 /* ShareMacTarget.swift in Sources */,
 				E5E000003 /* ShareViewModel.swift in Sources */,
 				E5COL0003 /* CollectionStore.swift in Sources */,
 				E5E000004 /* PendingShare.swift in Sources */,
@@ -4559,6 +4728,17 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E5WW00030 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E5WW00020 /* LeoWatchWidgets.swift in Sources */,
+				E5WW00021 /* AskLeoIntent.swift in Sources */,
+				E5WW00023 /* WatchMacStatus.swift in Sources */,
+				LF39465E891C /* MacScreenSnapshot.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -4586,6 +4766,11 @@
 			isa = PBXTargetDependency;
 			target = E5WA00010 /* LeoWatch */;
 			targetProxy = E5WA00071 /* PBXContainerItemProxy */;
+		};
+		E5WW00051 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E5WW00060 /* LeoWatchWidget */;
+			targetProxy = E5WW00050 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -4617,7 +4802,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -4626,7 +4811,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -4641,12 +4826,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -4661,7 +4846,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -4677,7 +4862,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -4692,7 +4877,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -4704,7 +4889,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -4851,7 +5036,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -4880,7 +5065,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -4906,7 +5091,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -4935,7 +5120,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -4956,7 +5141,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -4968,7 +5153,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -4983,7 +5168,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -4995,7 +5180,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5010,7 +5195,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -5022,7 +5207,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5037,7 +5222,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -5049,7 +5234,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5064,7 +5249,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -5076,7 +5261,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5091,7 +5276,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -5103,7 +5288,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5116,9 +5301,10 @@
 		E5WA00021 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LeoWatch/LeoWatch.entitlements;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -5127,7 +5313,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "语音提问需要麦克风。";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leoyuan.leophoneagent;
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -5142,9 +5328,10 @@
 		E5WA00022 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LeoWatch/LeoWatch.entitlements;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 173;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = LeoBot;
@@ -5152,10 +5339,68 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "语音提问需要麦克风。";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leoyuan.leophoneagent;
-				MARKETING_VERSION = 1.74.0;
+				MARKETING_VERSION = 1.75.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Release;
+		};
+		E5WW00062 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LeoWatchWidget/LeoWatchWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 173;
+				DEVELOPMENT_TEAM = 48H5Y3LNUK;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LeoWatchWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LeoBot;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.75.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Debug;
+		};
+		E5WW00063 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LeoWatchWidget/LeoWatchWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 173;
+				DEVELOPMENT_TEAM = 48H5Y3LNUK;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LeoWatchWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LeoBot;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.75.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -5239,6 +5484,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		E5WW00061 /* Build configuration list for PBXNativeTarget "LeoWatchWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E5WW00062 /* Debug */,
+				E5WW00063 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -5282,6 +5536,14 @@
 				minimumVersion = 1.7.3;
 			};
 		};
+		E5RTC5102 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC";
+			requirement = {
+				kind = exactVersion;
+				version = 154.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -5314,6 +5576,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E5X000020 /* XCRemoteSwiftPackageReference "SwiftMath" */;
 			productName = SwiftMath;
+		};
+		E5RTC5103 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E5RTC5102 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
 		};
 		E5R3HXP01 /* cmark-gfm */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -387,7 +387,9 @@ class Relay:
             pass
 
         # One-time compatibility import from the old whole-snapshot mirror.
-        legacy_path = os.path.expanduser("~/.leoagent/collections.json")
+        # 旧收藏与 treasury-sync.json 放在同一目录(默认就是 ~/.leoagent);写死家目录会让
+        # 指定了临时目录的测试读到真机数据,在常开机 Mac mini 上就是这么失败的。
+        legacy_path = os.path.join(os.path.dirname(self.treasury_sync_path), "collections.json")
         try:
             with open(legacy_path, encoding="utf-8") as stream:
                 legacy = json.load(stream)

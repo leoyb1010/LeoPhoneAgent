@@ -1324,9 +1324,17 @@ struct HarnessConsoleView: View {
     @State private var input = ""
     @State private var started = false
     @State private var pairMessage: String?
+    /// [WP-50 R0] 「Mac 画面」卡片:工具栏开关,记住上次的选择;只在卡片显示时轮询。
+    @AppStorage("leo.macScreen.cardVisible") private var showScreen = false
+    @StateObject private var screen = MacScreenPoller()
 
     var body: some View {
         VStack(spacing: 0) {
+            if showScreen {
+                MacScreenCard(poller: screen, hostName: driver.macScreenClient.hostName)
+                    .padding(.horizontal, 12).padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
@@ -1435,6 +1443,16 @@ struct HarnessConsoleView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    withAnimation(.smooth(duration: 0.28)) { showScreen.toggle() }
+                } label: {
+                    Image(systemName: showScreen ? "display.trianglebadge.exclamationmark" : "display")
+                        .symbolVariant(showScreen ? .fill : .none)
+                }
+                .accessibilityLabel(showScreen ? Text("收起 Mac 画面") : Text("Mac 画面"))
+                .accessibilityIdentifier("harness.macScreen")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 if driver.isRunning {
                     Button { driver.stop() } label: {
                         Image(systemName: "stop.circle.fill").foregroundStyle(.red)
@@ -1443,6 +1461,7 @@ struct HarnessConsoleView: View {
             }
         }
         .onAppear {
+            screen.client = driver.macScreenClient
             // Start once; coming back to this view resumes the stream at the
             // last seq instead of launching a second session.
             if !started {

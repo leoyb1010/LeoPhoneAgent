@@ -1112,6 +1112,8 @@ final class CloudSyncEngine: ObservableObject {
             let extras = await ChatStore.shared.getSessionExtras(id)
             record["memoryEnabled"] = extras.memoryEnabled ? 1 : 0
             record["modelBinding"] = extras.modelBinding
+            // [WP-42] Manual pinned order ("rank|editedAtMs"); nil leaves the field absent.
+            record["pinOrder"] = extras.pinOrder
             // pinnedAt: 0 = explicitly unpinned, nil = never set (old device), positive = pinned timestamp
             if let pinnedAt = session.pinnedAt {
                 record["pinnedAt"] = pinnedAt
@@ -1361,6 +1363,7 @@ final class CloudSyncEngine: ObservableObject {
             logger.info("[iCloud] processRemoteRecord Session: id=\(session.id) hasTitle=\(session.title != nil) deviceId=\(deviceId)")
             // Merge into local sessions (last-write-wins by updated_at)
             try? await ChatStore.shared.mergeRemoteSession(session, fromDeviceId: deviceId, memoryEnabled: memoryEnabled, modelBinding: modelBinding, remotePinnedAtRaw: remotePinnedAtRaw)
+            await ChatStore.shared.mergeRemotePinOrder(sessionId: session.id, remote: record["pinOrder"] as? String)
             // Also keep in remote_sessions for browsing/reference
             await ChatStore.shared.upsertRemoteSession(session, deviceId: deviceId)
 

@@ -40,6 +40,8 @@ export function parseSpeechSettings(raw: unknown): SpeechSettings {
 export type SpeechEvent =
   | { type: "ready"; locale?: string }
   | { type: "installing" }
+  /** 常驻助手已把模型备好(只在主进程用,不转给渲染端)。 */
+  | { type: "warm" }
   | { type: "partial"; text: string }
   | { type: "final"; text: string }
   | { type: "error"; code: string; message: string }
@@ -61,6 +63,7 @@ export function parseSpeechLine(line: string): SpeechEvent | null {
         ? { type: "ready", locale: event["locale"] }
         : { type: "ready" };
     case "installing":
+    case "warm":
     case "done":
       return { type: event["type"] };
     case "partial":
@@ -80,6 +83,9 @@ export function parseSpeechLine(line: string): SpeechEvent | null {
 }
 
 /** 朗读前把 Markdown 变成能念的文字:代码块不念、链接只念文字、去掉强调与标题符号。 */
+/** [WP-60 预热] 常驻听写助手空闲这么久就退出,把模型占的内存还给系统;下次进输入框再预热。 */
+export const SPEECH_IDLE_RELEASE_MS = 10 * 60_000;
+
 export function markdownToSpeech(markdown: string, maxChars = 4_000): string {
   const text = markdown
     .replace(/```[\s\S]*?```/g, " 代码略。 ")

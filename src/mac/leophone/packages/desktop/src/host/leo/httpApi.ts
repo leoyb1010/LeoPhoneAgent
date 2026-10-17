@@ -1,7 +1,13 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
-import { LEO_HTTP_PORT, leoLocalKey, leoPairSecret, leoTreasuryKey, leoUiSecret } from "./leoPaths.js";
+import {
+  LEO_HTTP_PORT,
+  leoLocalKey,
+  leoPairSecret,
+  leoTreasuryKey,
+  leoUiSecret,
+} from "./leoPaths.js";
 import {
   configureLeoDirect,
   createLeoDirectPairingCode,
@@ -23,10 +29,16 @@ import {
   OAuthRequestError,
   startOAuthLogin,
 } from "./oauthRuntime.js";
-import { QuickDispatchError, type LeoQuickEntry } from "./quickEntry.js";
-import { handleTaskGroupRequest } from "./taskGroups/http.js";
+import type { LeoQuickEntry } from "./quickEntry.js";
+import { handlePairedLeoRoute, isPairedLeoRoute } from "./pairedRoutes.js";
 import type { LeoTaskGroups } from "./taskGroups/service.js";
-import { screenSharingEnabled, setScreenSharingEnabled } from "./link/screen/hostCapture.js";
+import {
+  closeAllScreenSessions,
+  parseScreenSettingsPatch,
+  screenSettings,
+  screenSettingsBody,
+  updateScreenSettings,
+} from "./link/screen/hostCapture.js";
 import { executeTreasuryTool, TREASURY_TOOLS } from "./treasuryTools.js";
 import type { TreasuryStore } from "./treasuryStore.js";
 
@@ -313,34 +325,14 @@ export function startLeoHttpApi(deps: {
       await handleChatCompletions(req, res, body);
       return;
     }
-    // 菜单栏摘要与快速派发:除主钥匙外还要主进程内存里的口令。主钥匙文件本机进程都读得到,
-    // 只凭它就能派任务的话,一个被注入的 agent 可以自己给自己开新任务。
-    if (url.pathname.startsWith("/api/leo/quick/")) {
-      if (!deps.quick || !isPairSecret(req.headers["x-leo-pair"] as string | undefined)) {
-        json(res, 403, { error: "forbidden" });
-        return;
-      }
-      if (url.pathname === "/api/leo/quick/summary" && req.method === "GET") {
-        json(res, 200, await deps.quick.summary());
-        return;
-      }
-      if (url.pathname === "/api/leo/quick/dispatch" && req.method === "POST") {
-        try {
-          json(res, 202, await deps.quick.dispatch(await readJsonBody(req, 256 * 1024)));
-        } catch (error) {
-          if (!(error instanceof QuickDispatchError)) throw error;
-          json(res, error.status, { error: error.message });
-        }
-        return;
-      }
-      json(res, 404, { error: "not found" });
-      return;
-    }
-    if (url.pathname.startsWith("/api/leo/groups/")) {
-      await handleTaskGroupRequest({
-        groups: isPairSecret(req.headers["x-leo-pair"] as string | undefined) ? deps.groups : undefined,
-        action: url.pathname.slice("/api/leo/groups/".length),
+    // 菜单栏摘要、快速派发与并行任务组:除主钥匙外还要主进程内存里的口令(见 pairedRoutes.ts)。
+    if (isPairedLeoRoute(url.pathname)) {
+      await handlePairedLeoRoute({
+        pathname: url.pathname,
         method: req.method,
+        paired: isPairSecret(req.headers["x-leo-pair"] as string | undefined),
+        quick: deps.quick,
+        groups: deps.groups,
         readBody: () => readJsonBody(req, 256 * 1024),
         send: (status, body) => json(res, status, body),
       });
@@ -382,17 +374,20 @@ export function startLeoHttpApi(deps: {
         return;
       }
       if (req.method === "POST") {
-        const body = await readJsonBody(req, 4096);
-        if (typeof body["enabled"] !== "boolean") {
-          json(res, 400, { error: "enabled is required" });
+        // [WP-51/52] 三个开关可单独改(enabled / tailnet_only / control);收紧时立刻断开在进行的视频会话。
+        const patch = parseScreenSettingsPatch(await readJsonBody(req, 4096));
+        if (!patch) {
+          json(res, 400, { error: "enabled / tailnet_only / control is required" });
           return;
         }
-        await setScreenSharingEnabled(body["enabled"]);
+        await updateScreenSettings(patch);
+        if (patch.enabled === false || patch.control === false || patch.tailnetOnly === true)
+          await closeAllScreenSessions().catch(() => undefined);
       } else if (req.method !== "GET") {
         json(res, 405, { error: "method not allowed" });
         return;
       }
-      json(res, 200, { enabled: await screenSharingEnabled() });
+      json(res, 200, screenSettingsBody(await screenSettings()));
       return;
     }
     // 出码 / 作废码:除了主钥匙,还要主进程内存里的口令 —— 只有界面上点了才会经 IPC 带上。

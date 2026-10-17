@@ -69,6 +69,8 @@ struct ToolStepGroupRow: View {
             : AppLocalized("已运行 \(count) 个工具")
         Button(action: onToggle) {
             HStack(spacing: 8) {
+                // [WP-42] Same left status strip as the single tool capsules.
+                LeoStatusStrip(status: groupStrip(group), height: 14)
                 Image(systemName: "checkmark.circle")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(ChatColors.secondaryText)
@@ -109,5 +111,13 @@ struct ToolStepGroupRow: View {
         .accessibilityHint(expanded ? Text("收起这些步骤") : Text("展开这些步骤"))
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("assistantToolGroupRow")
+    }
+
+    private func groupStrip(_ group: ToolStepGroup?) -> LeoMotionPolicy.StripStatus {
+        guard let group else { return .hidden }
+        let members = Set(group.memberIds)
+        let roles = message.blocks.filter { members.contains($0.id) }.map { ToolStep(block: $0).role }
+        return LeoMotionPolicy.strip(forGroupFailed: roles.filter { $0 == .failedTool }.count,
+                                     cancelled: roles.filter { $0 == .cancelledTool }.count)
     }
 }

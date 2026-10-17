@@ -15,7 +15,8 @@ private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.sel
 enum ChatStoreSchemaContract {
     /// v4: [T-ios-listsessions-perf] nullable `sessions.preview_text` / `preview_sort_order`.
     /// v5: [T-subagent] nullable `sessions.parent_session_id` / `parent_tool_use_id`.
-    static let currentVersion = 5
+    /// v6: [WP-42] nullable `sessions.pin_order` ("rank|editedAtMs", PinnedSessionOrder).
+    static let currentVersion = 6
 
     struct Report: Equatable, Sendable {
         var previousVersion: Int
@@ -67,6 +68,7 @@ enum ChatStoreSchemaContract {
             Column(name: "preview_sort_order", definition: "INTEGER"),
             Column(name: "parent_session_id", definition: "TEXT"),
             Column(name: "parent_tool_use_id", definition: "TEXT"),
+            Column(name: "pin_order", definition: "TEXT"),
         ],
         "messages": [
             Column(name: "id", definition: "TEXT PRIMARY KEY"),

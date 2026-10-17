@@ -21,7 +21,9 @@ struct CommandPaletteView: View {
     /// Actions the host wires: open session / run quick task / open surface.
     let openSession: (String) -> Void
     let runQuickTask: (String) -> Void
-    let openSurface: (SettingsDeepLinkTarget) -> Void
+    /// [WP-43] Fixed commands offered right now (CommandPaletteCatalog), run by the host.
+    let commands: [PaletteCommand]
+    let runCommand: (PaletteCommand) -> Void
     /// Closes the sheet. Not `dismiss`: with the search field active that only
     /// ends the search, so a picked row ran but the palette stayed open.
     let close: () -> Void
@@ -48,20 +50,19 @@ struct CommandPaletteView: View {
                 runQuickTask(task.id)
             })
         }
-        var surfaces: [(String, SettingsDeepLinkTarget, String, String)] = [
-            ("automations", .automations, AppLocalized("Automations"), "bolt.badge.clock"),
-            ("mac", .macConsole, AppLocalized("Mac 控制台"), "desktopcomputer"),
-            ("timeline", .timeline, AppLocalized("Agent Timeline"), "list.bullet.rectangle.portrait"),
-            ("scheduled", .scheduledTasks, AppLocalized("Scheduled Tasks"), "clock.badge.checkmark"),
-        ]
-        // [F-mac-fleet-advanced] Mac 舰队没打开时不列 Mac 控制台。
-        if !MacFleetFeature.isEnabled() { surfaces.removeAll { $0.0 == "mac" } }
-        for (key, target, title, symbol) in surfaces {
-            all.append(Item(id: "p-" + key, title: title,
-                            subtitle: AppLocalized("Open"), symbol: symbol) {
-                openSurface(target)
-            })
+        // [WP-43] Urgent commands (an approval waiting, a run to stop) lead the list;
+        // the rest follow the sessions and quick tasks. Mac 控制台 / Mac 画面 only
+        // with Mac 舰队 on (CommandPaletteCatalog decides).
+        let urgent: Set<PaletteCommand> = [.approve, .deny, .stopRun]
+        let commandItems = commands.map { command in
+            Item(id: "c-" + command.rawValue, title: AppLocalized(String.LocalizationValue(command.title)),
+                 subtitle: command.shortcut ?? AppLocalized("Command"), symbol: command.symbol) {
+                runCommand(command)
+            }
         }
+        let leading = zip(commands, commandItems).filter { urgent.contains($0.0) }.map(\.1)
+        let trailing = zip(commands, commandItems).filter { !urgent.contains($0.0) }.map(\.1)
+        all = leading + all + trailing
         guard !query.isEmpty else { return all }
         let lowered = query.lowercased()
         return all.filter { fuzzyMatch($0.title.lowercased(), lowered) }

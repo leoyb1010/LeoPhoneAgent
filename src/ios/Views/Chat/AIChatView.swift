@@ -294,6 +294,8 @@ struct AIChatView: View {
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
     @State private var showMoveToSheet = false
+    /// [WP-42] Composer shell + floating glass morphing (GlassEffectContainer ids).
+    @Namespace private var chatComposerGlassNS
     @State private var showClearChatConfirm = false
     @State private var showForcePullConfirm = false
     // [inline-voice] Inline voice input mode: the composer's text area becomes a
@@ -335,6 +337,8 @@ struct AIChatView: View {
     /// True while unsent share-extension content is in the input bar.
     @State private var hasInjectedShareContent = false
     @State private var showModelPicker = false
+    /// [WP-43] This chat's slot in ChatComposerActions.
+    @State private var composerActionsToken = UUID()
     @State private var showThinkingLevelSheet = false
     @State private var showSessionSkills = false
     @State private var showSessionMCPs = false
@@ -629,6 +633,9 @@ struct AIChatView: View {
         .environment(\.chatSessionId, vm.sessionId)
         .modifier(NavBarStyleModifier(topSafeAreaInset: $topSafeAreaInset))
         .navigationBarTitleDisplayMode(.inline)
+        // [WP-42] iOS 27: the nav bar shrinks away while reading down a long conversation and
+        // comes back on scroll-up, so the transcript gets the whole screen.
+        .toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)
         // [T-ios-navbar-toolbar-host] The ENTIRE toolbar now lives inside an
         // equatable-gated host child. Root cause of the mid-streaming "..."
         // menu refresh (4th attempt, this one from instrumentation): with
@@ -1738,7 +1745,10 @@ struct AIChatView: View {
             onOpenTerminal: { showTerminal = true },
             onOpenBrowser: { showBrowserSheet = true },
             onBrowseFiles: { showFileBrowser = true },
-            onArtifacts: { showArtifactTray = true },
+            onArtifacts: {
+                // [WP-43] iPad: the files tab of the third column instead of a sheet.
+                if let inspectorRoute { inspectorRoute.open(.files) } else { showArtifactTray = true }
+            },
             onExportMarkdown: { vm.exportSession(format: .markdown) },
             onExportPDF: { vm.exportSession(format: .pdf) },
             onShareLongImage: {
@@ -2656,8 +2666,7 @@ struct AIChatView: View {
                         .foregroundStyle(.primary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 7)
-                        .background(.regularMaterial, in: Capsule())
-                        .overlay(Capsule().stroke(Color.gray.opacity(0.35), lineWidth: 0.5))
+                        .glassEffect(.regular.interactive(), in: .capsule)
                         .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
                         // 44pt hit area around the ~32pt visual capsule.
                         .frame(minHeight: 44)
@@ -2824,7 +2833,7 @@ struct AIChatView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
+            .glassEffect(.regular, in: .rect)
         }
     }
     #endif
@@ -3334,6 +3343,17 @@ struct AIChatView: View {
         .disabled(mode == .send && !canSend)
         .hoverEffect(.lift)
         .keyboardShortcut(mode == .stop ? nil : KeyboardShortcut(.return, modifiers: .command))
+        // [WP-43] The menu bar's 发送 (⌘↩) and the palette's 切换模型 reach this chat.
+        .onAppear {
+            ChatComposerActions.register(.init(token: composerActionsToken, send: {
+                switch sendButtonMode {
+                case .send: if canSend { performSend() }
+                case .enqueue: performEnqueue()
+                case .stop: break
+                }
+            }, pickModel: { showModelPicker = true }))
+        }
+        .onDisappear { ChatComposerActions.unregister(composerActionsToken) }
         .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: mode)
         .accessibilityLabel(mode == .stop ? Text("停止当前任务") : Text("Send task"))
         .accessibilityHint(mode == .send ? Text("Long press to choose task continuity")
@@ -3898,6 +3918,9 @@ struct AIChatView: View {
                 )
             }
 
+            // [WP-42] One GlassEffectContainer for the composer shell and the glass that
+            // floats with it ("Move to…" pill): they blend / morph instead of stacking panes.
+            GlassEffectContainer(spacing: LeoComposerGlass.containerSpacing) {
             VStack(spacing: 5) {
                 // [T-motion-effects] The chat's own "working" heartbeat: three
                 // breathing dots by the composer while a reply is in flight.
@@ -3964,7 +3987,8 @@ struct AIChatView: View {
                             .foregroundStyle(ChatColors.secondaryText)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(.ultraThinMaterial)
+                            .glassEffect(.regular.interactive(), in: .capsule)
+                            .leoGlassID("chat.moveTo", in: chatComposerGlassNS)
                             .clipShape(Capsule())
                     }
                     .disabled(vm.hasLoadingAttachments)
@@ -3990,7 +4014,8 @@ struct AIChatView: View {
                     .fill(ChatColors.inputBg)
             )
             .clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous))
-            .leoComposerChrome()
+            .leoComposerChrome(glassID: "chat.composer", in: chatComposerGlassNS)
+            }
             .frame(maxWidth: maxContentWidth)
             .padding(.horizontal, LeoComposerMetrics.outerPadding)
             .padding(.vertical, 8)
@@ -4831,6 +4856,8 @@ struct AIChatView: View {
     private func performSend(runPolicy: LeoRunPolicy? = nil) {
         // Intercept slash commands — execute instead of sending to LLM
         if vm.tryExecuteInputAsSlashCommand() { return }
+        // [WP-42] 发送飞入:趁文字还在输入框里、键盘还没收起，先截快照。
+        SendFlightAnimator.shared.arm(vmId: String(vm.vmInstanceId))
 
         minisLogger.info("🔑DRAFT performSend vm=\(vm.vmInstanceId) vm.sessionId=\(vm.sessionId ?? "nil") draftId=\(draftId ?? "nil") input=[\(LogContentDigest(vm.inputText).fields)] isProcessing=\(vm.isProcessing)")
         // Keep SwiftUI focus when a hardware keyboard is connected — dropping
@@ -4877,7 +4904,7 @@ struct AIChatView: View {
     /// [T-readable-width] About 45 CJK characters a line on iPad; the list's
     /// scroll indicator stays at the window edge (only the content is capped).
     private var maxContentWidth: CGFloat? {
-        hSizeClass == .regular ? 800 : nil
+        hSizeClass == .regular ? LeoWorkspaceLayoutPolicy.contentMaxWidth : nil
     }
 
 }

@@ -25,6 +25,7 @@ import {
 import { resumeEnvelope } from "./resumeEnvelope.js";
 import { APPROVAL_CHOICES, LinkSession, type ApprovalChoice, type Caller } from "./session.js";
 import type { ScreenRequest } from "./screen/snapshot.js";
+import type { ScreenSessionRequest } from "./screen/session.js";
 
 export type LinkRequest = {
   method: string;
@@ -63,6 +64,8 @@ export type LinkBridgeDeps = {
   recentWorkspaces?: () => Promise<string[]>;
   /** [WP-50] 看屏截图(docs/specs/leo-screen.md);没有就是 404。 */
   screen?: (req: ScreenRequest) => Promise<LinkResponse>;
+  /** [WP-51] 看屏 R1 视频信令 /screen/session…;没有就是 404。 */
+  screenSession?: (req: ScreenSessionRequest) => Promise<LinkResponse>;
   /** 本机 sshd 公钥(仅公钥),手机经已配对的加密通道读取后固定 SSH 身份;默认读 /etc/ssh。 */
   sshHostKeys?: () => Promise<string[]>;
   /** [WP-21] 本机可用的 ACP 外部 agent:手机端的 harness 列表与开会话都走它(LeoBot 运行时托管)。 */
@@ -245,7 +248,9 @@ export class LinkBridge {
     if (operation && method === "GET")
       return this.receipts.status({ ...req, requestId: operation[1] });
     if (!isLinkPath(url.pathname)) return error(404, "这个接口不对手机开放");
-    if (method !== "POST" || !req.requestId) return this.route(method, url, req);
+    // [WP-51] 看屏信令不进操作回执:回执会把 SDP(含 ICE 口令、DTLS 指纹)落盘,重放旧答案也没有意义。
+    if (method !== "POST" || !req.requestId || url.pathname.startsWith("/screen/"))
+      return this.route(method, url, req);
     if (!/^[a-zA-Z0-9_.:-]{1,200}$/.test(req.requestId)) return error(400, "操作编号格式不正确");
     return this.receipts.run(
       req,
@@ -361,6 +366,15 @@ export class LinkBridge {
         transport: req.transport ?? "relay",
         query: url.searchParams,
         ...(req.ifNoneMatch ? { ifNoneMatch: req.ifNoneMatch } : {}),
+      });
+    }
+    if (pathname === "/screen/session" || pathname.startsWith("/screen/session/")) {
+      if (!this.deps.screenSession) return error(404, "这台 Mac 不支持视频看屏");
+      return this.deps.screenSession({
+        method,
+        subpath: pathname.slice("/screen/session".length),
+        caller: req.caller,
+        body: req.body,
       });
     }
     if (pathname === "/harness/sessions") {
@@ -497,6 +511,9 @@ export class LinkBridge {
           task_receipts: false,
           artifacts: false,
           exact_window: false,
+          // [WP-50/51] 看屏:截图 / WebRTC 视频(各自还受 Mac 上的开关约束,见 docs/specs/leo-screen.md)。
+          screen_snapshot: Boolean(this.deps.screen),
+          screen_session: Boolean(this.deps.screenSession),
         },
         harnesses: [{ key: ZCODE, name: "LeoBot", executable: "LeoBot" }, ...acp, ...legacy],
       },

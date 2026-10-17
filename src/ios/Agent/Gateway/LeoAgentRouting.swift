@@ -16,12 +16,15 @@ extension LeoAgentClient {
               source.absoluteString.hasPrefix(relay.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/")
         else { return nil }
         let relative = String(source.absoluteString.dropFirst(relay.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")).count))
-        guard relative.hasPrefix("/harness/") || relative.hasPrefix("/operations/") || relative.hasPrefix("/sync/v1/") || relative == "/v1/capabilities" else { return nil }
+        // [WP-50] /screen/ (看屏) rides the direct route too; the Mac checks the grant's harness scope.
+        guard relative.hasPrefix("/harness/") || relative.hasPrefix("/operations/") || relative.hasPrefix("/sync/v1/")
+                || relative.hasPrefix("/screen/") || relative == "/v1/capabilities" else { return nil }
         guard Date() >= directCooldownUntil else { return nil }
         await enrollDirectIfNeeded()
         guard let route = directRoute, let base = route.endpoint() else { return nil }
         if relative.hasPrefix("/sync/v1/"), !route.supports(scope: "sync", capability: "sync-replica-v1") { return nil }
-        if relative.hasPrefix("/harness/") || relative.hasPrefix("/operations/"), !(route.grant.scopes ?? ["harness"]).contains("harness") { return nil }
+        if relative.hasPrefix("/harness/") || relative.hasPrefix("/operations/") || relative.hasPrefix("/screen/"),
+           !(route.grant.scopes ?? ["harness"]).contains("harness") { return nil }
         if original.httpMethod != "GET", original.httpMethod != "HEAD",
            !route.device.capabilities.contains("operation-receipts") { return nil }
         var request = original

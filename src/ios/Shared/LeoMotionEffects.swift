@@ -264,3 +264,175 @@ extension View {
         modifier(LeoZoomTransitionModifier(id: id, namespace: namespace))
     }
 }
+
+// MARK: - [WP-42] Thinking shimmer (Inferno `shimmer` equivalent, no shader)
+
+/// A soft highlight sweeping through the text itself while the model thinks — replaces the
+/// bare "思考中…" label. Hand-written instead of Inferno's Metal shader: one gradient masked
+/// by the content, transform-only, one period = `LeoMotion.beat`. Reduce Motion: static text.
+private struct LeoThinkingShimmerModifier: ViewModifier {
+    let active: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase: CGFloat = -1
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                if active, LeoMotionPolicy.fallback(reduceMotion: reduceMotion) == .full {
+                    GeometryReader { geo in
+                        LinearGradient(colors: [.clear, .white.opacity(0.75), .clear],
+                                       startPoint: .leading, endPoint: .trailing)
+                            .frame(width: max(geo.size.width * 0.45, 24))
+                            .offset(x: phase * (geo.size.width + 24) - 12)
+                    }
+                    .mask(content)
+                    .allowsHitTesting(false)
+                    .onAppear {
+                        phase = -1
+                        withAnimation(.linear(duration: LeoMotion.beat).repeatForever(autoreverses: false)) { phase = 1 }
+                    }
+                }
+            }
+    }
+}
+
+// MARK: - [WP-42] Done flash (Pow `.changeEffect(.shine)` equivalent)
+
+/// One shine + a 4% pop the moment work finishes (running → success). Never on first
+/// appearance, so scrolling through history stays still. Reduce Motion: no movement.
+private struct LeoDoneModifier: ViewModifier {
+    let finished: Bool
+    var haptic = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appeared = false
+    @State private var shine = 0
+    @State private var popped = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(popped ? 1.04 : 1)
+            .leoShineSweep(trigger: shine)
+            .onAppear { appeared = true }
+            .onChange(of: finished) { was, now in
+                guard LeoMotionPolicy.shouldFlashDone(wasFinished: was, isFinished: now, hasAppeared: appeared) else { return }
+                if haptic { LeoHaptics.notification(.success) }
+                guard LeoMotionPolicy.fallback(reduceMotion: reduceMotion) == .full else { return }
+                shine += 1
+                withAnimation(.spring(response: 0.18, dampingFraction: 0.6)) { popped = true }
+                withAnimation(.spring(response: LeoMotion.springResponse, dampingFraction: 0.82).delay(0.12)) { popped = false }
+            }
+    }
+}
+
+// MARK: - [WP-42] Send flight
+
+/// Source / destination of the "message flies from the composer into its bubble" move.
+/// Both ends must live in the same SwiftUI hierarchy (matchedGeometryEffect). Reduce Motion:
+/// no geometry matching, the bubble simply fades in.
+private struct LeoSendFlightModifier<ID: Hashable>: ViewModifier {
+    let id: ID
+    let namespace: Namespace.ID
+    let isSource: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if LeoMotionPolicy.fallback(reduceMotion: reduceMotion) == .full {
+            content.matchedGeometryEffect(id: id, in: namespace, isSource: isSource)
+        } else {
+            content
+        }
+    }
+}
+
+// MARK: - [WP-42] Breathing dot & status strip
+
+/// The "running" dot: breathes once per `beat`. Reduce Motion: solid dot.
+struct LeoBreathingDot: View {
+    var color: Color = LeoTheme.ColorToken.accent
+    var size: CGFloat = 7
+    var active = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var low = false
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: size, height: size)
+            .opacity(active && low && !reduceMotion ? 0.35 : 1)
+            .onAppear { start() }
+            .onChange(of: active) { _, _ in start() }
+            .accessibilityHidden(true)
+    }
+
+    private func start() {
+        guard active, !reduceMotion else { low = false; return }
+        withAnimation(.easeInOut(duration: LeoMotion.beat / 2).repeatForever(autoreverses: true)) { low = true }
+    }
+}
+
+/// The 2pt left status strip every tool / task card shares (same anatomy as the Mac
+/// timeline cards): running = accent breathing, waiting = attention, done = success,
+/// failed = destructive, cancelled = tertiary.
+struct LeoStatusStrip: View {
+    let status: LeoMotionPolicy.StripStatus
+    var height: CGFloat = 16
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var low = false
+
+    var body: some View {
+        if status != .hidden {
+            Capsule()
+                .fill(color)
+                .frame(width: 2, height: height)
+                .opacity(status.breathes && low && !reduceMotion ? 0.35 : 1)
+                .animation(LeoMotion.standardEase(reduceMotion: reduceMotion), value: status)
+                .onAppear { breathe() }
+                .onChange(of: status) { _, _ in breathe() }
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var color: Color {
+        switch status {
+        case .running: return LeoTheme.ColorToken.accent
+        case .waiting: return LeoTheme.ColorToken.attention
+        case .success: return LeoTheme.ColorToken.success
+        case .failure: return LeoTheme.ColorToken.destructive
+        case .cancelled, .hidden: return LeoTheme.ColorToken.tertiaryText
+        }
+    }
+
+    private func breathe() {
+        guard status.breathes, !reduceMotion else { low = false; return }
+        withAnimation(.easeInOut(duration: LeoMotion.beat / 2).repeatForever(autoreverses: true)) { low = true }
+    }
+}
+
+extension AnyTransition {
+    /// [WP-42] Pow `.movingParts.pop` equivalent: scale-in from 85% with a fade. Reduce Motion: fade only.
+    static func leoPop(reduceMotion: Bool) -> AnyTransition {
+        LeoMotionPolicy.fallback(reduceMotion: reduceMotion) == .full
+            ? .scale(scale: 0.85).combined(with: .opacity)
+            : .opacity
+    }
+
+    /// [WP-42] Card entering from the bottom edge (approval cards). Reduce Motion: fade only.
+    static func leoRiseIn(reduceMotion: Bool) -> AnyTransition {
+        LeoMotionPolicy.fallback(reduceMotion: reduceMotion) == .full
+            ? .move(edge: .bottom).combined(with: .opacity)
+            : .opacity
+    }
+}
+
+extension View {
+    /// [WP-42] Highlight sweeping through the text while `active` (thinking headers).
+    func leoThinkingShimmer(active: Bool) -> some View { modifier(LeoThinkingShimmerModifier(active: active)) }
+    /// [WP-42] One shine + pop when `finished` flips to true (never on first appearance).
+    func leoDone(finished: Bool, haptic: Bool = false) -> some View {
+        modifier(LeoDoneModifier(finished: finished, haptic: haptic))
+    }
+    /// [WP-42] matchedGeometry flight between composer and bubble; nothing under Reduce Motion.
+    func leoSendFlight<ID: Hashable>(id: ID, in namespace: Namespace.ID, isSource: Bool) -> some View {
+        modifier(LeoSendFlightModifier(id: id, namespace: namespace, isSource: isSource))
+    }
+}
