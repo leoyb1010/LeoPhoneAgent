@@ -295,7 +295,8 @@ enum ChatStoreSyncHydrators {
         let extras = await ChatStore.shared.getSessionExtras(id)
         let provenance = await ChatStore.shared.sessionProvenance(id)
         let synced = SyncedSession.from(session, memoryEnabled: extras.memoryEnabled, modelBinding: extras.modelBinding,
-                                        originDeviceId: provenance.origin, lastWriterDeviceId: provenance.writer)
+                                        originDeviceId: provenance.origin, lastWriterDeviceId: provenance.writer,
+                                        pinOrder: extras.pinOrder)
         return SyncableTypeRegistry.shared
             .metadata(for: "SessionV2")?
             .buildPortable(synced)
@@ -330,6 +331,8 @@ enum ChatStoreSyncHydrators {
             originDeviceId: origin,
             lastWriterDeviceId: optionalStringField(record, "lastWriterDeviceId")
         )
+        // [WP-42] Pinned order merges on its own edit time, not the session's updatedAt.
+        await ChatStore.shared.mergeRemotePinOrder(sessionId: id, remote: optionalStringField(record, "pinOrder"))
     }
 
     private static func deleteSession(id: String, updatedAt: Date?) async throws {

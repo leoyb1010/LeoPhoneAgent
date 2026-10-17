@@ -281,6 +281,8 @@ struct ContentView: View {
     @State private var sessionsRevision = 0
     @State private var homeContextMemo = KeyedMemo<HomeContextMemoKey, HomeContextSnapshot>(capacity: 1)
     @State private var groupedSessionIDsMemo = KeyedMemo<GroupedSessionsMemoKey, [(label: String, ids: [String])]>(capacity: 3)
+    /// [WP-42] Manual order of the pinned section (synced per session; absent = original order).
+    @State private var pinRanks: [String: PinRank] = [:]
     /// Soul name shown as the sidebar title. Sourced from SOUL.md, falls
     /// back to "LeoPhoneAgent". Refreshed whenever SoulStore posts .soulMdChanged.
     @State private var soulName: String = SoulStore.cachedMetadata.name.isEmpty
@@ -1055,6 +1057,7 @@ struct ContentView: View {
                 // launch-screen preference here replaced the preserved route/draft.
                 guard !didInitialLoad else { return }
                 LeoPerf.coldFirstFrame()
+                pinRanks = await ChatStore.shared.pinRanks()
                 sessions = await ChatStore.shared.listSessions()
                 LeoPerf.coldStep("listLoaded")
                 let collectionsPending = deepLink.consumePendingCollections()
@@ -1655,11 +1658,12 @@ struct ContentView: View {
             }
         }
 
-        // Sort pinned by last-modified first, then pin time as tiebreaker
-        pinned.sort {
-            if $0.updatedAt != $1.updatedAt { return $0.updatedAt > $1.updatedAt }
-            return ($0.pinnedAt ?? .distantPast) > ($1.pinnedAt ?? .distantPast)
-        }
+        // [WP-42] Dragged order first-class; sessions never dragged keep the old rule
+        // (last-modified first, then pin time) and sit above the ordered ones.
+        let pinnedOrder = PinnedSessionOrder.sort(
+            pinned.map { .init(id: $0.id, updatedAt: $0.updatedAt, pinnedAt: $0.pinnedAt) }, ranks: pinRanks)
+        let pinnedById = Dictionary(pinned.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        pinned = pinnedOrder.compactMap { pinnedById[$0] }
 
         if !pinned.isEmpty    { buckets.append(("Pinned", pinned)) }
         if !today.isEmpty     { buckets.append(("Today", today)) }
@@ -1692,6 +1696,7 @@ struct ContentView: View {
         let ids: [String]
         let updatedAt: [Double]
         let pinnedAt: [Double?]
+        let pinRanks: [String: PinRank]
         let day: Date
     }
 
@@ -1702,10 +1707,23 @@ struct ContentView: View {
             ids: list.map(\.id),
             updatedAt: list.map { $0.updatedAt.timeIntervalSince1970 },
             pinnedAt: list.map { $0.pinnedAt?.timeIntervalSince1970 },
+            pinRanks: pinRanks,
             day: Calendar.current.startOfDay(for: Date()))
         return groupedSessionIDsMemo.value(for: key) {
             groupedSessions(list).map { (label: $0.label, ids: $0.sessions.map(\.id)) }
         }
+    }
+
+    /// [WP-42] The pinned section was dragged: apply locally at once, then persist + sync.
+    private func movePinned(_ ids: [String], from: IndexSet, to: Int) {
+        let order = PinnedSessionOrder.move(ids, from: from, to: to)
+        guard order != ids else { return }
+        let updates = PinnedSessionOrder.assignments(order: order, current: pinRanks, now: Date())
+        var ranks = pinRanks
+        for (id, rank) in updates { ranks[id] = rank }
+        pinRanks = ranks
+        LeoHaptics.selection()
+        Task { await ChatStore.shared.applyPinRanks(updates) }
     }
 
     private func isCollapsibleHistoryGroup(_ label: String) -> Bool {
@@ -2188,6 +2206,9 @@ struct ContentView: View {
                         }
                         }  // if let session
                     }
+                    // [WP-42] Drag to reorder the pinned section (synced across devices).
+                    .onMove(perform: group.label == "Pinned" && !isSelecting && !isSearching
+                            ? { from, to in movePinned(group.ids, from: from, to: to) } : nil)
                 } header: {
                     sectionHeader(group: group)
                 }
@@ -2307,9 +2328,11 @@ struct ContentView: View {
                                     }
                                 }
                                 // [T-ipad-multiwindow] Drag a row to the screen edge → its own window.
-                                .onDrag { [sid = Self.isNewSessionId(session.id) ? newSessionRealId : session.id] in
-                                    SessionWindow.itemProvider(for: sid)
-                                }
+                                // [WP-42] Not on pinned rows: there a drag reorders the section
+                                // (the context menu still opens a new window).
+                                .modifier(SessionWindowDrag(
+                                    sessionId: Self.isNewSessionId(session.id) ? newSessionRealId : session.id,
+                                    enabled: group.label != "Pinned"))
                                 .tag(session.id)
                                 .listRowInsets(EdgeInsets())
                                 .listRowSeparator(.hidden)
@@ -2324,6 +2347,9 @@ struct ContentView: View {
                         }
                         }  // if let session
                     }
+                    // [WP-42] Drag to reorder the pinned section (synced across devices).
+                    .onMove(perform: group.label == "Pinned" && !isSelecting && !isSearching
+                            ? { from, to in movePinned(group.ids, from: from, to: to) } : nil)
                 } header: {
                     sectionHeader(group: group)
                 }
@@ -3770,6 +3796,8 @@ struct ContentView: View {
         sessionRefreshCooldownDeadline = nil
         sessionRefreshInFlight = true
         Task(priority: .utility) { @MainActor in
+            let ranks = await ChatStore.shared.pinRanks()
+            if ranks != pinRanks { pinRanks = ranks }
             sessions = await ChatStore.shared.listSessions()
             sessionRefreshInFlight = false
             lastRefreshFinishedAt = Date()

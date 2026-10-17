@@ -238,6 +238,20 @@ enum SessionWindow {
     }
 }
 
+/// [WP-42] A row's "drag out into a window", switchable: pinned rows drag to reorder instead.
+struct SessionWindowDrag: ViewModifier {
+    let sessionId: String?
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.onDrag { SessionWindow.itemProvider(for: sessionId) }
+        } else {
+            content
+        }
+    }
+}
+
 /// Per-window glue that has to live inside the scene. Rides in ContentView's
 /// existing window-capture background (no extra modifier on that deep chain):
 /// opens the session a new-window request carries, and on iPadOS 27 asks

@@ -562,6 +562,8 @@ actor ChatStore {
         do { try SessionProvenanceStore.migrate(db) }
         catch { logger.error("[Store] session provenance migration failed: \(error)") }
         addColumnIfMissing(table: "sessions", column: "pinned_at", definition: "REAL")
+        // [WP-42] Manual order of pinned sessions ("rank|editedAtMs"), synced with the session.
+        addColumnIfMissing(table: "sessions", column: "pin_order", definition: "TEXT")
         addColumnIfMissing(table: "messages", column: "updated_at", definition: "REAL")
         // [T-error-persist-ios] Device-local error string shown on a failed
         // assistant turn (provider/network/empty-response/context-full/…). Persisted
@@ -1834,7 +1836,8 @@ actor ChatStore {
         sqlite3_finalize(checkStmt)
 
         let newPinned = !isPinned
-        let sql = "UPDATE sessions SET pinned_at = ? WHERE id = ?"
+        // [WP-42] Pinning or unpinning drops a stale manual rank: a re-pinned session starts on top.
+        let sql = "UPDATE sessions SET pinned_at = ?, pin_order = NULL WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             if newPinned {
@@ -2987,20 +2990,76 @@ actor ChatStore {
     }
 
     /// Extra session fields for iCloud sync (memory_enabled, model_binding).
-    func getSessionExtras(_ sessionId: String) -> (memoryEnabled: Bool, modelBinding: String?) {
-        let sql = "SELECT memory_enabled, model_binding FROM sessions WHERE id = ?"
+    func getSessionExtras(_ sessionId: String) -> (memoryEnabled: Bool, modelBinding: String?, pinOrder: String?) {
+        let sql = "SELECT memory_enabled, model_binding, pin_order FROM sessions WHERE id = ?"
         var stmt: OpaquePointer?
         var memoryEnabled = true
         var modelBinding: String?
+        var pinOrder: String?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 memoryEnabled = sqlite3_column_int(stmt, 0) != 0
                 modelBinding = sqlite3_column_text(stmt, 1).map { String(cString: $0) }
+                pinOrder = sqlite3_column_text(stmt, 2).map { String(cString: $0) }
             }
         }
         sqlite3_finalize(stmt)
-        return (memoryEnabled, modelBinding)
+        return (memoryEnabled, modelBinding, pinOrder)
+    }
+
+    // MARK: - [WP-42] Pinned order
+
+    /// Manual ranks of the pinned sessions (sessions never reordered are absent).
+    func pinRanks() -> [String: PinRank] {
+        let sql = "SELECT id, pin_order FROM sessions WHERE pin_order IS NOT NULL AND pinned_at IS NOT NULL"
+        var stmt: OpaquePointer?
+        var out: [String: PinRank] = [:]
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                guard let id = sqlite3_column_text(stmt, 0).map({ String(cString: $0) }),
+                      let rank = PinRank(encoded: sqlite3_column_text(stmt, 1).map { String(cString: $0) }) else { continue }
+                out[id] = rank
+            }
+        }
+        sqlite3_finalize(stmt)
+        return out
+    }
+
+    /// The user dragged the pinned section: write the changed ranks and sync them.
+    func applyPinRanks(_ updates: [String: PinRank]) {
+        guard !updates.isEmpty, beginSyncMutation() else { return }
+        defer { finishSyncMutation() }
+        let sql = "UPDATE sessions SET pin_order = ? WHERE id = ? AND pinned_at IS NOT NULL"
+        for (id, rank) in updates {
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (rank.encoded as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                if sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) > 0 {
+                    SessionProvenanceStore.editedLocally(db, id: id, deviceID: DeviceIdentity.deviceId)
+                    markDirty(recordType: "Session", recordId: id)
+                }
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+
+    /// Inbound: newer edit wins; a peer that sent no order keeps ours (PinnedSessionOrder.merge).
+    func mergeRemotePinOrder(sessionId: String, remote encoded: String?) {
+        guard let remote = PinRank(encoded: encoded) else { return }
+        let local = PinRank(encoded: getSessionExtras(sessionId).pinOrder)
+        guard let merged = PinnedSessionOrder.merge(local: local, remote: remote), merged != local else { return }
+        let sql = "UPDATE sessions SET pin_order = ? WHERE id = ?"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, (merged.encoded as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            _ = sqlite3_step(stmt)
+        }
+        sqlite3_finalize(stmt)
+        invalidateSessionListCache(sessionId: sessionId)
+        NotificationCenter.default.post(name: .sessionDidUpdate, object: sessionId)
     }
 
     /// Return the most recent compact marker for a session, or nil if none.
