@@ -42,6 +42,11 @@ export function wrapModelFactoryForAcp(
   };
 }
 
+/** 外部 agent 会话：`/命令` 是 agent 自带的命令，原样交给它，不按 LeoBot 的内置 / 自定义命令展开。 */
+export function acpOwnsSlashCommands(selection: Parameters<typeof isAcpModelSelection>[0]): boolean {
+  return isAcpModelSelection(selection);
+}
+
 export function registerAcpTool(registry: ToolRegistry, logger?: Logger): void {
   if (registry.has(ACP_TOOL_NAME)) return;
   registry.register(

@@ -18,7 +18,12 @@ import { createNodeSessionMailboxAdapter } from "@zcode/adapters/mailbox";
 import { createNodeContextSourceAdapter } from "@zcode/adapters/context";
 import { createNodeSkillAdapter } from "@zcode/adapters/skills";
 import { createMcpAdapter } from "@zcode/adapters/mcp";
-import { getAcpSessionManager, registerAcpTool, wrapModelFactoryForAcp } from "./leo/acp.js";
+import {
+  acpOwnsSlashCommands,
+  getAcpSessionManager,
+  registerAcpTool,
+  wrapModelFactoryForAcp,
+} from "./leo/acp.js";
 import {
   AgentRuntime,
   normalizeAgentProfiles,
@@ -909,6 +914,10 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     const inputFacade = createInputFacade({
       artifactStore,
       customCommandPromptResolver: async (text, resolverOptions) => {
+        // [leo][WP-21] 外部 agent 会话：`/命令` 是 agent 自带的命令，原样交给它执行，不按 LeoBot 的命令展开。
+        if (acpOwnsSlashCommands(resolverOptions?.modelSelection ?? getRuntime().getSessionModelSelection())) {
+          return undefined;
+        }
         const builtin = resolveZCodeBuiltinPromptCommandInvocation(text, {
           // 动态工作流灰度关闭时内置 `/workflow` 不得展开（DWG-03）。目录侧已经把它从 `/` 面板
           // 剔除，但用户仍可手打命令名，两条路径必须给出同一个结论。独立 CLI 的 TUI 与 headless

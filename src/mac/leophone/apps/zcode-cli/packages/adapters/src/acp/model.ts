@@ -21,7 +21,16 @@ import {
   type ModelRequest,
   type ModelResult,
 } from "@zcode/contracts";
-import { ACP_PROVIDER_ID, ACP_TOOL_NAME, acpAgentInfo, type AcpAgentId } from "@zcode/shared/acp";
+import {
+  ACP_COMMANDS_FILE,
+  ACP_PROVIDER_ID,
+  ACP_TOOL_NAME,
+  acpAgentInfo,
+  parseAcpCommandsStore,
+  recordAcpAgentCommands,
+  type AcpAgentCommand,
+  type AcpAgentId,
+} from "@zcode/shared/acp";
 import { detectAcpAgent, resolveAcpLaunch, type AcpEnvironment } from "./catalog.js";
 import { spawnAcpAgent, type AcpAgentConnection } from "./process.js";
 import { AcpSessionHost } from "./session.js";
@@ -56,6 +65,7 @@ export class AcpSessionManager {
   >();
   readonly #environment: AcpEnvironment;
   readonly #statePath: string;
+  readonly #commandsPath: string;
   readonly #connect: typeof spawnAcpAgent;
   readonly #logger: { warn(message: string, context?: Record<string, unknown>): void } | undefined;
 
@@ -63,6 +73,7 @@ export class AcpSessionManager {
     options: {
       environment?: AcpEnvironment;
       statePath?: string;
+      commandsPath?: string;
       connect?: typeof spawnAcpAgent;
       logger?: { warn(message: string, context?: Record<string, unknown>): void };
     } = {},
@@ -70,6 +81,7 @@ export class AcpSessionManager {
     this.#environment = options.environment ?? {};
     const root = process.env.ZCODE_HOME?.trim() || join(homedir(), ".leophoneagent");
     this.#statePath = options.statePath ?? join(root, "cli", "acp-sessions.json");
+    this.#commandsPath = options.commandsPath ?? join(dirname(this.#statePath), ACP_COMMANDS_FILE);
     this.#connect = options.connect ?? spawnAcpAgent;
     this.#logger = options.logger;
   }
@@ -86,7 +98,9 @@ export class AcpSessionManager {
       entry = undefined;
     }
     if (!entry) {
-      const host = new AcpSessionHost(agentId);
+      const host = new AcpSessionHost(agentId, {
+        onCommands: (commands) => this.#writeCommands(agentId, cwd, commands),
+      });
       const launch = resolveAcpLaunch(agentId, this.#environment);
       const connection = launch
         ? this.#connect(launch, {
@@ -127,6 +141,22 @@ export class AcpSessionManager {
 
   disposeAll(): void {
     for (const id of [...this.#entries.keys()]) this.dispose(id);
+  }
+
+  #writeCommands(agentId: AcpAgentId, cwd: string, commands: readonly AcpAgentCommand[]): void {
+    try {
+      let current: unknown;
+      try {
+        current = JSON.parse(readFileSync(this.#commandsPath, "utf8"));
+      } catch {
+        current = undefined;
+      }
+      const next = recordAcpAgentCommands(parseAcpCommandsStore(current), agentId, cwd, commands);
+      mkdirSync(dirname(this.#commandsPath), { recursive: true });
+      writeFileSync(this.#commandsPath, JSON.stringify(next, null, 2));
+    } catch (error) {
+      this.#logger?.warn("ACP 斜杠命令写入失败", { error: String(error) });
+    }
   }
 
   #readState(): Record<string, { agentId: string; acpSessionId: string }> {

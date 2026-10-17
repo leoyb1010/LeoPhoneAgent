@@ -43,7 +43,10 @@ interface CreateInputFacadeDeps {
   artifactStore?: ToolArtifactStorePort;
   customCommandPromptResolver?: (
     text: string,
-    options?: Pick<SubmitPromptOptions, "abortSignal" | "traceContext">,
+    options?: Pick<SubmitPromptOptions, "abortSignal" | "traceContext"> & {
+      /** [leo] 本轮要用的模型选择（外部 agent 会话不展开 `/命令`）。 */
+      modelSelection?: NonNullable<SubmitPromptOptions["intent"]>["modelSelection"];
+    },
   ) => Promise<string | undefined>;
   inputHistoryStore?: InputHistoryStorePort;
   logger: Logger;
@@ -114,6 +117,7 @@ export function createInputFacade(deps: CreateInputFacadeDeps): InputFacade {
     const resolvedCommandPrompt = await deps.customCommandPromptResolver?.(promptInput.text, {
       abortSignal: options?.abortSignal,
       traceContext: options?.traceContext ?? deps.traceContext,
+      modelSelection: options?.intent?.modelSelection,
     });
     const runtimePromptText = resolvedCommandPrompt ?? promptInput.text;
     const turnAttribution = options?.automationId
@@ -152,6 +156,7 @@ export function createInputFacade(deps: CreateInputFacadeDeps): InputFacade {
     const resolvedCommandPrompt = await deps.customCommandPromptResolver?.(promptInput.text, {
       abortSignal: options?.abortSignal,
       traceContext: options?.traceContext ?? deps.traceContext,
+      modelSelection: options?.intent?.modelSelection,
     });
     return {
       input: resolvedCommandPrompt ?? promptInput.text,

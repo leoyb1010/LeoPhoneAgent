@@ -95,6 +95,7 @@ import {
 import type { ConversationDropTargetController } from "@/v4/composer/conversationDropTarget.js";
 import { shouldIgnoreEscapeForStopGeneration } from "@/v4/composer/escapeStop.js";
 import { LeoTaskGroupsHome } from "@/leo/LeoTaskGroupsHome.js";
+import { acpAgentIdOf, useLeoAcpSlashCommands } from "@/leo/useLeoAcpSlashCommands.js";
 import { ConversationDraftEmptyState } from "@/v4/ConversationDraftEmptyState.js";
 import { LeoDraftStatusList } from "@/leo/LeoDraftStatusList.js";
 import { ConversationDraftSuggestedPromptsContainer } from "@/v4/ConversationDraftSuggestedPromptsContainer.js";
@@ -1674,6 +1675,10 @@ export function SessionPane({
     [cliSlashCommandNames],
   );
 
+  // [leo][WP-21] 外部 agent 会话：`/` 面板换成 agent 自带的命令。
+  const acpAgentId = acpAgentIdOf(draftConfig);
+  const agentSlashCommands = useLeoAcpSlashCommands(acpAgentId, workspacePath);
+
   // `/side` App 层斜杠命令。命令目录仍以 CLI catalog 为权威，这里只在渲染层
   // 按门禁注入"选中即打开辅助对话"的本地命令；草稿态（无父 session 可挂 child）、
   // 辅助对话自身、只读与手机 viewport 均不提供。
@@ -2194,9 +2199,15 @@ export function SessionPane({
       const expectedHeldQueueItemIds = options?.expectedHeldQueueItemIds;
       const readyAttachments = options?.attachments ?? [];
       const contextAttachmentCount = options?.contextAttachmentCount ?? 0;
-      let slashCommand = parseV4VisibleSlashCommand(text, readyAttachments, {
-        contextAttachmentCount,
-      });
+      // [leo][WP-21] 外部 agent 会话里 `/compact`、`/plan` 等是 agent 自己的命令：原样发给它，不按 LeoBot 解析。
+      const submitSelection = submission?.modelSelection ?? draftConfigRef.current.modelSelection;
+      const sendsToAcpAgent =
+        acpAgentIdOf({ provider: submitSelection?.providerId, model: submitSelection?.modelId }) !== null;
+      let slashCommand = sendsToAcpAgent
+        ? null
+        : parseV4VisibleSlashCommand(text, readyAttachments, {
+            contextAttachmentCount,
+          });
 
       // `/plan` 首版只消费纯文本。必须在 provider readiness 和任何 command admission 之前
       // 拒绝附件/context，否则原始 `/plan ...` 会退化成普通 prompt，既绕过产品边界又清空草稿。
@@ -3641,6 +3652,7 @@ export function SessionPane({
       onOpenCodeViewer={onOpenCodeViewer}
       suppressGoalCommands={selectionSideChat}
       appSlashCommands={appSlashCommands}
+      agentSlashCommands={agentSlashCommands}
       onDropTargetControllerChange={handleDropTargetControllerChange}
     />
   );

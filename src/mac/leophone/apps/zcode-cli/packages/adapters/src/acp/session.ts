@@ -19,7 +19,7 @@ import type {
   ToolCallContent,
   ToolCallLocation,
 } from "@agentclientprotocol/sdk";
-import type { AcpAgentId, AcpToolCallInput, AcpToolCallOutput } from "@zcode/shared/acp";
+import type { AcpAgentCommand, AcpAgentId, AcpToolCallInput, AcpToolCallOutput } from "@zcode/shared/acp";
 
 export type AcpHostEvent =
   | { kind: "text"; text: string }
@@ -61,10 +61,12 @@ export class AcpSessionHost {
   #connection: AcpConnectionLike | undefined;
   #turnActive = false;
   #announceSeq = 0;
-  #availableCommands: Array<{ name: string; description: string }> = [];
+  #availableCommands: AcpAgentCommand[] = [];
+  readonly #onCommands: ((commands: AcpAgentCommand[]) => void) | undefined;
 
-  constructor(agentId: AcpAgentId) {
+  constructor(agentId: AcpAgentId, options: { onCommands?: (commands: AcpAgentCommand[]) => void } = {}) {
     this.agentId = agentId;
+    this.#onCommands = options.onCommands;
   }
 
   attach(connection: AcpConnectionLike): void {
@@ -75,7 +77,7 @@ export class AcpSessionHost {
     return this.#turnActive;
   }
 
-  get availableCommands(): ReadonlyArray<{ name: string; description: string }> {
+  get availableCommands(): readonly AcpAgentCommand[] {
     return this.#availableCommands;
   }
 
@@ -267,10 +269,15 @@ export class AcpSessionHost {
         this.#push({ kind: "plan", entries: update.entries });
         return;
       case "available_commands_update":
+        // [leo] agent 自带的斜杠命令：交给管理器落盘，界面输入 / 时列出（见 shared/acp.ts）。
         this.#availableCommands = update.availableCommands.map((command) => ({
           name: command.name,
           description: command.description,
+          ...(command.input && "hint" in command.input && command.input.hint
+            ? { inputHint: `/${command.name} ${command.input.hint}` }
+            : {}),
         }));
+        this.#onCommands?.(this.#availableCommands);
         return;
       default:
         return;

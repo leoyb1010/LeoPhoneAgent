@@ -1,7 +1,7 @@
 // [leo][WP-21] ACP 客户端：用 SDK 的 AgentSideConnection 起一个假 agent，回放一轮
 // 「说话 → 要授权的编辑 → 无需授权的命令 → 计划 → 收尾」，验证模型流与审批回路。
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -14,7 +14,12 @@ import {
   type RequestPermissionResponse,
 } from "@agentclientprotocol/sdk";
 import type { ModelEvent, ModelInputMessage } from "@zcode/contracts";
-import { ACP_TOOL_NAME, type AcpToolCallInput } from "@zcode/shared/acp";
+import {
+  ACP_TOOL_NAME,
+  parseAcpCommandsStore,
+  pickAcpAgentCommands,
+  type AcpToolCallInput,
+} from "@zcode/shared/acp";
 import { AcpModel, AcpSessionManager } from "../../src/acp/model.js";
 import { connectAcpStream, type ConnectAcpAgentOptions } from "../../src/acp/process.js";
 
@@ -282,5 +287,51 @@ test("Claude Code ordering: empty pending call, diff later, then permission → 
   assert.equal(input.diff?.newText, "hi");
   const output = await manager.host("sess_4")!.runApprovedTool(calls[0]!.id, input.acpToolCallId);
   assert.equal(output.status, "completed");
+  manager.disposeAll();
+});
+
+test("available_commands_update: agent commands are recorded per agent + cwd for the / panel; the prompt goes through verbatim", async () => {
+  const seen = { prompts: [] as PromptRequest[], permissions: [] as RequestPermissionResponse[], cancelled: 0 };
+  const script: Script = async (conn, params) => {
+    await conn.sessionUpdate({
+      sessionId: params.sessionId,
+      update: {
+        sessionUpdate: "available_commands_update",
+        availableCommands: [
+          { name: "review", description: "Review the current diff", input: { hint: "[focus]" } },
+          { name: "init", description: "Write CLAUDE.md" },
+        ],
+      },
+    });
+    await conn.sessionUpdate({
+      sessionId: params.sessionId,
+      update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "reviewed" } },
+    });
+  };
+  const dir = mkdtempSync(join(tmpdir(), "leo-acp-commands-"));
+  const manager = new AcpSessionManager({
+    connect: fakeConnect(script, seen) as never,
+    statePath: join(dir, "acp-sessions.json"),
+    environment: fakeClaudeEnvironment(),
+  });
+  const model = new AcpModel({ agentId: "claude-code", leoSessionId: "sess_cmd", cwd: () => "/w/repo", manager });
+  const events = await collect(model.streamText({ messages: [user("/review tests only")] }));
+  assert.equal(textOf(events), "reviewed");
+  // 斜杠命令原样作为 prompt 交给 agent（由 agent 自己执行）。
+  const promptText = seen.prompts[0]!.prompt.map((block) => (block.type === "text" ? block.text : "")).join("");
+  assert.equal(promptText, "/review tests only");
+
+  const store = parseAcpCommandsStore(JSON.parse(readFileSync(join(dir, "acp-commands.json"), "utf8")));
+  assert.deepEqual(pickAcpAgentCommands(store, "claude-code", "/w/repo"), [
+    { name: "review", description: "Review the current diff", inputHint: "/review [focus]" },
+    { name: "init", description: "Write CLAUDE.md" },
+  ]);
+  // 没开过会话的目录退回该 agent 最近一次的命令表；别的 agent 没有。
+  assert.equal(pickAcpAgentCommands(store, "claude-code", "/elsewhere").length, 2);
+  assert.deepEqual(pickAcpAgentCommands(store, "codex", "/w/repo"), []);
+  assert.deepEqual(
+    manager.host("sess_cmd")!.availableCommands.map((command) => command.name),
+    ["review", "init"],
+  );
   manager.disposeAll();
 });

@@ -25,6 +25,11 @@ export interface SlashCommandPluginProps {
    * 追加"选中即执行 UI 行为"的命令，不参与发送，也不写回 CLI 命令列表。
    */
   appCommands?: readonly AppSlashCommand[];
+  /**
+   * [leo][WP-21] 外部 agent（ACP）会话：`/` 面板只列 agent 自带的命令，选中后 `/名字` 原样发给 agent。
+   * 给了就替换 CLI 命令目录、App 命令、技能与子 agent（它们是 LeoBot 自己的能力，agent 不认识）。
+   */
+  agentCommands?: readonly ZCodeSlashCommand[];
 }
 
 /** App 层斜杠命令：选中即执行 UI 行为（不插入 mention、不发送）。 */

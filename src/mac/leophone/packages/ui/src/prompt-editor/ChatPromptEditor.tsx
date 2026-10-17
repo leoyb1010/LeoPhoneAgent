@@ -8,7 +8,7 @@ import type {
   ReactNode,
 } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { TID_CHAT_SEND_BUTTON } from "@zcode/shared";
+import { TID_CHAT_SEND_BUTTON, type ZCodeSlashCommand } from "@zcode/shared";
 import { ArrowUpIcon, Hand, XIcon } from "lucide-react";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { Button } from "@/components/ui/button.js";
@@ -87,6 +87,7 @@ export function ChatPromptEditor({
   onDrop,
   excludedSlashCommandNames,
   appSlashCommands,
+  agentSlashCommands,
   enableMentionPanel,
 }: {
   workspacePath: string;
@@ -146,6 +147,8 @@ export function ChatPromptEditor({
   excludedSlashCommandNames?: readonly string[];
   /** App 层本地斜杠命令（透传 LexicalChatInput）。 */
   appSlashCommands?: readonly AppSlashCommand[];
+  /** [leo] 外部 agent 自带的斜杠命令（透传 LexicalChatInput）。 */
+  agentSlashCommands?: readonly ZCodeSlashCommand[];
   /** mention 面板开关（透传 LexicalChatInput）。 */
   enableMentionPanel?: boolean;
 }) {
@@ -383,6 +386,7 @@ export function ChatPromptEditor({
           onPaste={onPaste}
           excludedSlashCommandNames={excludedSlashCommandNames}
           appSlashCommands={appSlashCommands}
+          agentSlashCommands={agentSlashCommands}
           enableMentionPanel={enableMentionPanel}
         />
         <div ref={toolbarRef} className="group/toolbar flex items-end gap-3">

@@ -47,6 +47,7 @@ import {
 } from "lexical";
 import { SlashCommandPlugin } from "./SlashCommandPlugin.js";
 import type { AppSlashCommand } from "./slashCommandHelpers.js";
+import type { ZCodeSlashCommand } from "@zcode/shared";
 import { MentionPlugin } from "./mentions/MentionPlugin.js";
 import { useChatViewActiveTaskProvider } from "@/v4/activeTaskProvider.js";
 import {
@@ -1332,6 +1333,8 @@ interface LexicalChatInputProps {
   excludedSlashCommandNames?: readonly string[];
   /** App 层本地斜杠命令（如 `/side`），选中即执行 UI 行为，不发送。 */
   appSlashCommands?: readonly AppSlashCommand[];
+  /** [leo] 外部 agent 会话：`/` 面板只列 agent 自带命令（替换 LeoBot 命令、技能与子 agent）。 */
+  agentSlashCommands?: readonly ZCodeSlashCommand[];
   /** mention（@/#）面板开关。v4 数据面未就绪时显式关闭，入口保留。 */
   enableMentionPanel?: boolean;
 }
@@ -1363,6 +1366,7 @@ export function LexicalChatInput({
   onPaste,
   excludedSlashCommandNames,
   appSlashCommands,
+  agentSlashCommands,
   enableMentionPanel = true,
 }: LexicalChatInputProps) {
   const inputMountedAtRef = useRef(Date.now());
@@ -1513,6 +1517,7 @@ export function LexicalChatInput({
           disabled={disabled}
           excludedCommandNames={excludedSlashCommandNames}
           appCommands={appSlashCommands}
+          agentCommands={agentSlashCommands}
         />
         {enableMentionPanel ? (
           <MentionPlugin

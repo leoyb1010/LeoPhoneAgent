@@ -47,6 +47,8 @@ if (process.platform === "darwin") {
   contextBridge.exposeInMainWorld("leoAcp", {
     list: () => ipcRenderer.invoke("leo:acp:list"),
     login: (agentId: string) => ipcRenderer.invoke("leo:acp:login", agentId),
+    /** agent 自带的斜杠命令（外部 agent 会话里输入 / 时列出）。 */
+    commands: (agentId: string, cwd: string) => ipcRenderer.invoke("leo:acp:commands", agentId, cwd),
   });
 }
 

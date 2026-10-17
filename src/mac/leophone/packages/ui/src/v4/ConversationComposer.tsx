@@ -42,6 +42,7 @@ import {
   TID_V4_STOP,
   testId,
   type ZCodeProvider,
+  type ZCodeSlashCommand,
 } from "@zcode/shared";
 import type {
   AttachmentRef,
@@ -473,6 +474,8 @@ export interface ConversationComposerProps {
   suppressGoalCommands?: boolean;
   /** App 层本地斜杠命令（如 `/side`），由 SessionPane 按门禁组装后透传。 */
   appSlashCommands?: readonly AppSlashCommand[];
+  /** [leo] 外部 agent 会话：agent 自带的斜杠命令（替换 LeoBot 命令目录）。 */
+  agentSlashCommands?: readonly ZCodeSlashCommand[];
   /** 把 composer 的 drop 路由暴露给整个对话 pane / 桌面草稿标题栏。 */
   onDropTargetControllerChange?: (controller: ConversationDropTargetController | null) => void;
 }
@@ -534,6 +537,7 @@ function ConversationComposerImpl({
   onComposerRestoreApplied,
   suppressGoalCommands = false,
   appSlashCommands,
+  agentSlashCommands,
   onDropTargetControllerChange,
 }: ConversationComposerProps) {
   const { intl, locale } = useZCodeIntl();
@@ -2302,6 +2306,7 @@ function ConversationComposerImpl({
           // secondary pane 按产品能力隐藏 goal，不再追加任何内建命令或别名。
           excludedSlashCommandNames={suppressGoalCommands ? ["goal"] : undefined}
           appSlashCommands={appSlashCommands}
+          agentSlashCommands={agentSlashCommands}
           enableMentionPanel
           leadingActions={leadingActionsNode}
           submitControl={submitControlNode}

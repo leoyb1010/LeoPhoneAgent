@@ -77,3 +77,57 @@ export interface AcpToolCallOutput {
   text: string;
   diffs?: Array<{ path: string; oldText?: string | null; newText: string }>;
 }
+
+/**
+ * agent 自带的斜杠命令（ACP available_commands_update）。CLI 收到后按 agent + 工作目录记进
+ * <数据根>/cli/acp-commands.json；界面在外部 agent 的会话里输入 / 时列出它们，选中后原样发给 agent。
+ */
+export interface AcpAgentCommand {
+  name: string;
+  description: string;
+  inputHint?: string;
+}
+
+export interface AcpCommandsStore {
+  version: 1;
+  agents: Partial<Record<string, Record<string, { commands: AcpAgentCommand[]; updatedAt: number }>>>;
+}
+
+export const ACP_COMMANDS_FILE = "acp-commands.json";
+const ACP_COMMANDS_CWD_LIMIT = 20;
+
+export function emptyAcpCommandsStore(): AcpCommandsStore {
+  return { version: 1, agents: {} };
+}
+
+export function parseAcpCommandsStore(raw: unknown): AcpCommandsStore {
+  const record = raw && typeof raw === "object" ? (raw as Partial<AcpCommandsStore>) : {};
+  return record.version === 1 && record.agents && typeof record.agents === "object"
+    ? { version: 1, agents: record.agents }
+    : emptyAcpCommandsStore();
+}
+
+/** 记下某个 agent 在某个目录下最新的命令表（每个 agent 只留最近的若干个目录）。 */
+export function recordAcpAgentCommands(
+  store: AcpCommandsStore,
+  agentId: AcpAgentId,
+  cwd: string,
+  commands: readonly AcpAgentCommand[],
+  now = Date.now(),
+): AcpCommandsStore {
+  const entries = { ...store.agents[agentId], [cwd]: { commands: [...commands], updatedAt: now } };
+  const kept = Object.entries(entries)
+    .sort((a, b) => b[1].updatedAt - a[1].updatedAt)
+    .slice(0, ACP_COMMANDS_CWD_LIMIT);
+  return { version: 1, agents: { ...store.agents, [agentId]: Object.fromEntries(kept) } };
+}
+
+/** 这个目录记过就用它；没记过（这个目录还没开过该 agent 的会话）退回该 agent 最近一次的命令表。 */
+export function pickAcpAgentCommands(store: AcpCommandsStore, agentId: string, cwd: string): AcpAgentCommand[] {
+  const entries = store.agents[agentId];
+  if (!entries) return [];
+  const exact = entries[cwd];
+  if (exact) return exact.commands;
+  const latest = Object.values(entries).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  return latest?.commands ?? [];
+}

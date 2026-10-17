@@ -67,13 +67,18 @@ export function SlashCommandPlugin({
   disabled = false,
   excludedCommandNames,
   appCommands,
+  agentCommands,
 }: SlashCommandPluginProps & { provider: ZCodeProvider }) {
   const [editor] = useLexicalComposerContext();
   const { intl, locale } = useZCodeIntl();
   const [activeTrigger, setActiveTrigger] = useState<ActivePromptInputTrigger | null>(null);
   // 远程 workspace 的 slashCommands 写在 workspaceIdentity 桶。
   // 这里只按 workspacePath 读取会落到 path 桶，表现为 ZCode Agent 已收到 available_commands_update 但 / 面板为空。
-  const commands = useSlashCommands(workspacePath, workspaceIdentity);
+  const workspaceCommands = useSlashCommands(workspacePath, workspaceIdentity);
+  const commands = useMemo(
+    () => (agentCommands ? [...agentCommands] : workspaceCommands),
+    [agentCommands, workspaceCommands],
+  );
   const {
     agents,
     loading: subagentsLoading,
@@ -87,7 +92,7 @@ export function SlashCommandPlugin({
     workspacePath,
     workspaceIdentity,
     sessionId: sessionId ?? null,
-    enabled: !disabled && activeTrigger?.trigger === "/",
+    enabled: !disabled && !agentCommands && activeTrigger?.trigger === "/",
   });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const dismissedSignatureRef = useRef<string | null>(null);
@@ -100,19 +105,25 @@ export function SlashCommandPlugin({
     );
     // App 层命令追加在 CLI catalog 之后展示；CLI 已提供同名命令时以 CLI 为准，避免遮蔽。
     const cliValues = new Set(cliSuggestions.map((item) => item.value));
+    if (agentCommands) return cliSuggestions;
     const appSuggestions = buildAppSlashCommandSuggestions(appCommands ?? []).filter(
       (item) => !cliValues.has(item.value) && !excluded.has(item.value),
     );
     return [...cliSuggestions, ...appSuggestions];
-  }, [appCommands, commands, excludedCommandNames]);
-  const subagentSuggestions = useMemo(() => buildSubagentSuggestions(agents), [agents]);
+  }, [agentCommands, appCommands, commands, excludedCommandNames]);
+  const subagentSuggestions = useMemo(
+    () => (agentCommands ? [] : buildSubagentSuggestions(agents)),
+    [agentCommands, agents],
+  );
   const skillSuggestions = useMemo(
     () =>
-      buildSkillSuggestions(
-        filterSkillsForProvider(skills, provider).filter((skill) => skill.enabled),
-        locale,
-      ),
-    [locale, provider, skills],
+      agentCommands
+        ? []
+        : buildSkillSuggestions(
+            filterSkillsForProvider(skills, provider).filter((skill) => skill.enabled),
+            locale,
+          ),
+    [agentCommands, locale, provider, skills],
   );
   const filteredCommandSuggestions = useMemo(
     () => filterPromptInputSuggestions(commandSuggestions, activeTrigger?.query ?? null),
