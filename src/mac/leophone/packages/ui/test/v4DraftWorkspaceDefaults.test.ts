@@ -27,7 +27,7 @@ describe("resolveDraftDisplayedConfig", () => {
       thought: "",
       thoughtLevels: [],
       followupMode: "queue",
-      mode: "build",
+      mode: "guarded", // [leo] 新任务默认档 guarded
     });
   });
 

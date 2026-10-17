@@ -622,7 +622,7 @@ describe("useDraftConfigControl slash command hydration", () => {
     act(() => control!.updateComposerContent({ text: "保留原选择" }));
     act(() => control!.handleDraftSwitchMode("plan"));
     expect(readV4ComposerDraft(workspacePath, undefined, "__draft__")).toMatchObject({
-      mode: "build",
+      mode: "guarded", // [leo] 新任务默认档 guarded（leo/leoDefaultTaskMode.ts）
       planEnabled: true,
       text: "保留原选择",
       modelSelection: { providerId: "provider", modelId: "old" },
@@ -961,7 +961,8 @@ describe("useDraftConfigControl slash command hydration", () => {
       root.render(createElement(Probe, { sessionId: "b", config: { mode: "plan" } }));
     });
     act(() => staleContentCallback({ text: "迟到 A" }));
-    expect(control!.composerDraft).toMatchObject({ text: "", mode: "build", planEnabled: true });
+    // [leo] 新任务默认档 guarded
+    expect(control!.composerDraft).toMatchObject({ text: "", mode: "guarded", planEnabled: true });
     await act(async () => {
       root.render(createElement(Probe, { sessionId: "a", config: { mode: "build" } }));
     });
