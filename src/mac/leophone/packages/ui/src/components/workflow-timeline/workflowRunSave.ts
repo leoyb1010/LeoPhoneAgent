@@ -25,7 +25,8 @@ export function isValidSavedWorkflowNameText(name: string): boolean {
  */
 export function savedWorkflowPathPreview(scope: ZCodeSavedWorkflowScope, name: string): string {
   const file = `${name}.dwf.ts`;
-  return scope === "global" ? `~/.zcode/workflows/${file}` : `.zcode/workflows/${file}`;
+  // [leo] 全局档落在 ~/.leophoneagent/workflows（CLI script-workflow-tool-port 同步改过）
+  return scope === "global" ? `~/.leophoneagent/workflows/${file}` : `.zcode/workflows/${file}`;
 }
 
 export interface WorkflowSaveDraft {

@@ -12,7 +12,7 @@ describe("commands settings source filter", () => {
   it("maps command sources to user-facing metadata", () => {
     expect(COMMAND_AGENT_SOURCE_META.zcodeAgent).toMatchObject({
       labelId: "settings.commands.source.zcodeAgent",
-      pathHint: "~/.zcode/commands",
+      pathHint: "~/.leophoneagent/commands",
       provider: "glm",
     });
   });

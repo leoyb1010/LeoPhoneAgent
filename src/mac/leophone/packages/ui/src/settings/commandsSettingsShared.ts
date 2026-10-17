@@ -19,7 +19,7 @@ export const COMMAND_AGENT_SOURCE_META: Record<
 > = {
   zcodeAgent: {
     labelId: "settings.commands.source.zcodeAgent",
-    pathHint: "~/.zcode/commands",
+    pathHint: "~/.leophoneagent/commands", // [leo] 用户级数据根
     provider: ZCODE_AGENT_PROVIDER,
   },
 };
