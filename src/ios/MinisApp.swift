@@ -777,6 +777,30 @@ struct MinisApp: App {
             lifecycleLog.info("[FileProvider] cleaned up stale workingSet directory")
         }
 
+        // [WP-40] OpenMinis v1.14 FileProviderBootHealth: on iOS-app-on-Mac the
+        // appex can die pre-main and fileproviderd relaunches it in a tight loop.
+        // A registered domain is the only reason it tries, so after the appex has
+        // failed to report a boot `tripThreshold` registrations in a row on this
+        // build, withdraw the domain (unregister only; App Group data untouched).
+        // Self-healing: one successful boot, or a new build, clears it.
+        if FileProviderBootHealth.shouldWithholdRegistration() {
+            lifecycleLog.warning("[FileProvider] withholding domain registration — appex failed to boot \(FileProviderBootHealth.tripThreshold)x in a row on this build (\(FileProviderBootHealth.describe()))")
+            NSFileProviderManager.getDomainsWithCompletionHandler { domains, _ in
+                for d in domains {
+                    NSFileProviderManager.remove(d) { err in
+                        if let err {
+                            lifecycleLog.warning("[FileProvider] breaker deregister of \(d.identifier.rawValue) failed: \(err.localizedDescription)")
+                        }
+                    }
+                }
+            }
+            return
+        }
+        let pendingBoots = FileProviderBootHealth.noteRegistrationAttempt()
+        if pendingBoots > 1 {
+            lifecycleLog.warning("[FileProvider] appex has not reported a successful boot since \(pendingBoots) registration(s) on this build")
+        }
+
         let defaults = UserDefaults.standard
         let lastReset = defaults.integer(forKey: fileProviderResetKey)
         let needsForceReset = lastReset < fileProviderResetGeneration

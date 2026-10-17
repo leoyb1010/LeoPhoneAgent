@@ -238,7 +238,9 @@
 		E5CUR0021 /* PromptCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0022 /* PromptCacheKey.swift */; };
 		E5CUR0023 /* PromptCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0022 /* PromptCacheKey.swift */; };
 		E5UPT01A /* ThinkingRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT01R /* ThinkingRule.swift */; };
+		LF01781932A1 /* ThinkingRuleEdits.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFD0F7135974 /* ThinkingRuleEdits.swift */; };
 		E5UPT01T /* ThinkingRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT01R /* ThinkingRule.swift */; };
+		LF3C6E67E5DD /* ThinkingRuleEdits.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFD0F7135974 /* ThinkingRuleEdits.swift */; };
 		E5UPT02A /* ThinkingWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT02R /* ThinkingWireFormat.swift */; };
 		E5UPT02T /* ThinkingWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT02R /* ThinkingWireFormat.swift */; };
 		E5UPT03A /* ThinkingRuleCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT03R /* ThinkingRuleCoding.swift */; };
@@ -366,6 +368,8 @@
 		E5CFG000F /* ModelsCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CFG001F /* ModelsCollection.swift */; };
 		E5CFG0020 /* GroupsCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CFG0030 /* GroupsCollection.swift */; };
 		E5CFG0021 /* EnvVarsCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CFG0031 /* EnvVarsCollection.swift */; };
+		LFE21EB38E90 /* ThinkingRulesCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB34E3964AA /* ThinkingRulesCollection.swift */; };
+		LFBE82F38C13 /* SubAgentsCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFEA5A676C05 /* SubAgentsCollection.swift */; };
 		E5CKB0001 /* CookieBackupStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CKB0002 /* CookieBackupStore.swift */; };
 		E5CR00001 /* ShellCommandRingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CR00011 /* ShellCommandRingBuffer.swift */; };
 		LFCB3E5FA251 /* KernelBootCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF31AB8B297 /* KernelBootCoalescer.swift */; };
@@ -395,6 +399,7 @@
 		E5D00023 /* ModelGroupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00033 /* ModelGroupsView.swift */; };
 		E5D00024 /* ModelGroupDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00034 /* ModelGroupDetailView.swift */; };
 		E5D00025 /* SessionModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00035 /* SessionModelPicker.swift */; };
+		LF6BB8CB896E /* ThinkingRuleEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF67E084A31A /* ThinkingRuleEditorView.swift */; };
 		E5D00026 /* OnboardingModelSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00036 /* OnboardingModelSelectionView.swift */; };
 		E5D00037 /* AgentLoopModelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00038 /* AgentLoopModelsView.swift */; };
 		E5D00050 /* models-dev-api.json in Resources */ = {isa = PBXBuildFile; fileRef = E5D00060 /* models-dev-api.json */; };
@@ -449,7 +454,10 @@
 		E5FP00009 /* MinisFileProvider.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E5FP00010 /* MinisFileProvider.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E5FP00100 /* AppGroupChangeWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FP00101 /* AppGroupChangeWatcher.swift */; };
 		E5L3AWPB /* AppGroupWatchPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3AWPR /* AppGroupWatchPlanner.swift */; };
+		LFACF6CB1428 /* FileProviderBootHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1935A1F7E9 /* FileProviderBootHealth.swift */; };
+		LFFPBOOTH0001 /* FileProviderBootHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1935A1F7E9 /* FileProviderBootHealth.swift */; };
 		E5L3AWPT /* AppGroupWatchPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3AWPR /* AppGroupWatchPlanner.swift */; };
+		LF4D5D36600C /* FileProviderBootHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1935A1F7E9 /* FileProviderBootHealth.swift */; };
 		E5FP00200 /* FPSyncTraceLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FP00201 /* FPSyncTraceLog.swift */; };
 		E5G000001 /* BackgroundKeepAliveManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000011 /* BackgroundKeepAliveManager.swift */; };
 		E5G000002 /* AgentLiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000012 /* AgentLiveActivityManager.swift */; };
@@ -1231,6 +1239,7 @@
 		E5JV00002 /* Jev.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Jev/Jev.swift"; sourceTree = SOURCE_ROOT; };
 		E5CUR0022 /* PromptCacheKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/OpenAI/PromptCacheKey.swift"; sourceTree = SOURCE_ROOT; };
 		E5UPT01R /* ThinkingRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingRule.swift"; sourceTree = SOURCE_ROOT; };
+		LFD0F7135974 /* ThinkingRuleEdits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/Thinking/ThinkingRuleEdits.swift; sourceTree = SOURCE_ROOT; };
 		E5UPT02R /* ThinkingWireFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingWireFormat.swift"; sourceTree = SOURCE_ROOT; };
 		E5UPT03R /* ThinkingRuleCoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingRuleCoding.swift"; sourceTree = SOURCE_ROOT; };
 		E5UPT04R /* ThinkingRuleResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingRuleResolver.swift"; sourceTree = SOURCE_ROOT; };
@@ -1366,6 +1375,8 @@
 		E5CFG001F /* ModelsCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ModelsCollection.swift; path = Config/Collections/ModelsCollection.swift; sourceTree = "<group>"; };
 		E5CFG0030 /* GroupsCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupsCollection.swift; path = Config/Collections/GroupsCollection.swift; sourceTree = "<group>"; };
 		E5CFG0031 /* EnvVarsCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EnvVarsCollection.swift; path = Config/Collections/EnvVarsCollection.swift; sourceTree = "<group>"; };
+		LFB34E3964AA /* ThinkingRulesCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ThinkingRulesCollection.swift; path = Config/Collections/ThinkingRulesCollection.swift; sourceTree = "<group>"; };
+		LFEA5A676C05 /* SubAgentsCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SubAgentsCollection.swift; path = Config/Collections/SubAgentsCollection.swift; sourceTree = "<group>"; };
 		E5CKB0002 /* CookieBackupStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieBackupStore.swift; sourceTree = "<group>"; };
 		E5CAL0002 /* CookieAuditLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieAuditLogger.swift; sourceTree = "<group>"; };
 		E5CR00011 /* ShellCommandRingBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellCommandRingBuffer.swift; sourceTree = "<group>"; };
@@ -1395,6 +1406,7 @@
 		E5D00033 /* ModelGroupsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelGroupsView.swift; sourceTree = "<group>"; };
 		E5D00034 /* ModelGroupDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelGroupDetailView.swift; sourceTree = "<group>"; };
 		E5D00035 /* SessionModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionModelPicker.swift; sourceTree = "<group>"; };
+		LF67E084A31A /* ThinkingRuleEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingRuleEditorView.swift; sourceTree = "<group>"; };
 		E5D00036 /* OnboardingModelSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingModelSelectionView.swift; sourceTree = "<group>"; };
 		E5D00038 /* AgentLoopModelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLoopModelsView.swift; sourceTree = "<group>"; };
 		E5D00060 /* models-dev-api.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "models-dev-api.json"; path = "Resources/models-dev-api.json"; sourceTree = "<group>"; };
@@ -1441,6 +1453,7 @@
 		E5FP00015 /* FileProvider.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FileProvider.entitlements; sourceTree = "<group>"; };
 		E5FP00101 /* AppGroupChangeWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupChangeWatcher.swift; sourceTree = "<group>"; };
 		E5L3AWPR /* AppGroupWatchPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupWatchPlanner.swift; sourceTree = "<group>"; };
+		LF1935A1F7E9 /* FileProviderBootHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileProviderBootHealth.swift; sourceTree = "<group>"; };
 		E5FP00201 /* FPSyncTraceLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FPSyncTraceLog.swift; sourceTree = "<group>"; };
 		E5G000011 /* BackgroundKeepAliveManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundKeepAliveManager.swift; sourceTree = "<group>"; };
 		E5G000012 /* AgentLiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivityManager.swift; sourceTree = "<group>"; };
@@ -2105,6 +2118,7 @@
 				LF366817653A /* ModelCloudPrune.swift */,
 				E5TLC0002 /* ThinkingLevelCatalog.swift */,
 				E5UPT01R /* ThinkingRule.swift */,
+				LFD0F7135974 /* ThinkingRuleEdits.swift */,
 				E5UPT02R /* ThinkingWireFormat.swift */,
 				E5UPT03R /* ThinkingRuleCoding.swift */,
 				E5UPT04R /* ThinkingRuleResolver.swift */,
@@ -2450,6 +2464,8 @@
 				E5CFG001F /* ModelsCollection.swift */,
 				E5CFG0030 /* GroupsCollection.swift */,
 				E5CFG0031 /* EnvVarsCollection.swift */,
+				LFB34E3964AA /* ThinkingRulesCollection.swift */,
+				LFEA5A676C05 /* SubAgentsCollection.swift */,
 				E5S000011 /* DeviceIdentity.swift */,
 				F1S00010 /* Environment */,
 				E5P000011 /* EnvVarStore.swift */,
@@ -2511,6 +2527,7 @@
 				E5FP00015 /* FileProvider.entitlements */,
 				E5FP00101 /* AppGroupChangeWatcher.swift */,
 				E5L3AWPR /* AppGroupWatchPlanner.swift */,
+				LF1935A1F7E9 /* FileProviderBootHealth.swift */,
 				E5FP00201 /* FPSyncTraceLog.swift */,
 			);
 			path = FileProvider;
@@ -3118,6 +3135,7 @@
 				E5SVP0031 /* ShadowVoiceProviderDetailView.swift */,
 				E3C8BDAC6686E9822D1B75A2 /* SystemSpeechResourcesView.swift */,
 				E5D00035 /* SessionModelPicker.swift */,
+				LF67E084A31A /* ThinkingRuleEditorView.swift */,
 				E5UMP0011 /* UnifiedModelPicker.swift */,
 				E5MDT0011 /* ModelDisplayTraits.swift */,
 				0ED149397BEA7E0408C92688 /* GroupVoiceModelsView.swift */,
@@ -3641,6 +3659,7 @@
 				E5STG9003 /* SensitiveToolGate.swift in Sources */,
 				E5CUR0023 /* PromptCacheKey.swift in Sources */,
 				E5UPT01T /* ThinkingRule.swift in Sources */,
+				LF3C6E67E5DD /* ThinkingRuleEdits.swift in Sources */,
 				E5UPT02T /* ThinkingWireFormat.swift in Sources */,
 				E5UPT03T /* ThinkingRuleCoding.swift in Sources */,
 				E5UPT04T /* ThinkingRuleResolver.swift in Sources */,
@@ -3704,6 +3723,7 @@
 				LFB093608F05 /* MountActivationBackoff.swift in Sources */,
 				E5L3WRCT /* WidgetReloadCoalescer.swift in Sources */,
 				E5L3AWPT /* AppGroupWatchPlanner.swift in Sources */,
+				LF4D5D36600C /* FileProviderBootHealth.swift in Sources */,
 				E5L3LLPT /* LogLinePipeline.swift in Sources */,
 				LFEDD8663B14 /* LogNoiseControl.swift in Sources */,
 				LFDBA0D05082 /* LogContentDigest.swift in Sources */,
@@ -3845,6 +3865,7 @@
 				E54000AC1 /* DebugSkillGenerated.swift in Sources */,
 				E5FP00100 /* AppGroupChangeWatcher.swift in Sources */,
 				E5L3AWPB /* AppGroupWatchPlanner.swift in Sources */,
+				LFACF6CB1428 /* FileProviderBootHealth.swift in Sources */,
 				AA0838A02F3B941A00049557 /* AboutView.swift in Sources */,
 				E5LEO0028 /* LeoReleaseNotesView.swift in Sources */,
 				E5LEO0001 /* LeoDesignSystem.swift in Sources */,
@@ -3865,6 +3886,7 @@
 				E5JV00001 /* Jev.swift in Sources */,
 				E5CUR0021 /* PromptCacheKey.swift in Sources */,
 				E5UPT01A /* ThinkingRule.swift in Sources */,
+				LF01781932A1 /* ThinkingRuleEdits.swift in Sources */,
 				E5UPT02A /* ThinkingWireFormat.swift in Sources */,
 				E5UPT03A /* ThinkingRuleCoding.swift in Sources */,
 				E5UPT04A /* ThinkingRuleResolver.swift in Sources */,
@@ -4246,6 +4268,7 @@
 				E5QT00001 /* ModelQuickTestSheet.swift in Sources */,
 				E5D00024 /* ModelGroupDetailView.swift in Sources */,
 				E5D00025 /* SessionModelPicker.swift in Sources */,
+				LF6BB8CB896E /* ThinkingRuleEditorView.swift in Sources */,
 				E5UMP0001 /* UnifiedModelPicker.swift in Sources */,
 				E5MDT0001 /* ModelDisplayTraits.swift in Sources */,
 				E5D00026 /* OnboardingModelSelectionView.swift in Sources */,
@@ -4351,6 +4374,8 @@
 				E5CFG000F /* ModelsCollection.swift in Sources */,
 				E5CFG0020 /* GroupsCollection.swift in Sources */,
 				E5CFG0021 /* EnvVarsCollection.swift in Sources */,
+				LFE21EB38E90 /* ThinkingRulesCollection.swift in Sources */,
+				LFBE82F38C13 /* SubAgentsCollection.swift in Sources */,
 				E5Q000001 /* BPETokenizer.swift in Sources */,
 				E5MDS0003 /* MarkdownStripper.swift in Sources */,
 				E5Q000003 /* AppLogger.swift in Sources */,
@@ -4494,6 +4519,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				LFFPBOOTH0001 /* FileProviderBootHealth.swift in Sources */,
 				E5FP00001 /* FileProviderExtension.swift in Sources */,
 				E5FP00002 /* FileProviderEnumerator.swift in Sources */,
 				E5FP00003 /* FileProviderItem.swift in Sources */,

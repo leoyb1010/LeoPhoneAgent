@@ -339,6 +339,11 @@ extension ConfigRegistry {
         r.register(ModelsCollection())
         r.register(GroupsCollection())
         r.register(EnvVarsCollection())
+        // [WP-40] OpenMinis v1.14:子代理与思考规则也能被 minis-config 读写。
+        r.register(SubAgentsCollection())
+        r.register(SubAgentsCollection.orderField())
+        r.register(ThinkingRulesCollection())
+        r.register(ThinkingRulesCollection.orderField())
 
         // Aggregate read-only summary so `minis-config get providers`
         // returns a useful list of configured instances. Credentials
