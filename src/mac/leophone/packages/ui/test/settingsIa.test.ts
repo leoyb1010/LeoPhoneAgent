@@ -27,7 +27,8 @@ test("desktop settings nav has four groups in iOS order", () => {
   const config = createSettingsPageConfig({ isDesktop: true, isMacDesktop: true });
   assert.deepEqual(navIds(config), [
     ["providers", ["modelProvider"]],
-    ["agent", ["memory", "subagents", "extensions"]],
+    // [WP-21] 外部 agent（ACP）跟在扩展后面
+    ["agent", ["memory", "subagents", "extensions", "externalAgents"]],
     ["devices", ["phone", "browser", "computerUse"]],
     ["general", ["general", "appearance", "shortcuts", "usage"]],
   ]);
@@ -40,6 +41,12 @@ test("电脑操作 (Peekaboo) only shows on macOS desktop", () => {
     devices?.sections.map((section) => section.id),
     ["phone", "browser"],
   );
+});
+
+test("外部 agent (ACP) only shows on macOS desktop", () => {
+  const windows = createSettingsPageConfig({ isDesktop: true, isWindowsDesktop: true });
+  const agent = windows.settingsSectionGroups.find((group) => group.id === "agent");
+  assert.equal(agent?.sections.some((section) => section.id === "externalAgents"), false);
 });
 
 test("web settings hide the desktop-only phone page", () => {

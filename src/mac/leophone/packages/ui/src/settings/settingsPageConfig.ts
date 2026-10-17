@@ -137,6 +137,7 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     groupId: "agent",
     navParentId: "extensions",
   },
+  { /* [leo][WP-21] 外部 agent（ACP） */ id: "externalAgents", icon: Bot, titleId: "settings.externalAgents.title", hintId: "settings.externalAgents.hint", keywords: "acp agent claude codex gemini opencode 外部 智能体 登录", groupId: "agent" },
   {
     id: "automations",
     icon: AlarmClock,
@@ -197,12 +198,7 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     groupId: "general",
   },
   // 工作区搜索范围（.zcodeignore）：当前隐藏，保留 id。
-  {
-    id: "workspaceFileSearch",
-    icon: FileSearch,
-    titleId: "settings.workspaceFileSearch.title",
-    groupId: "general",
-  },
+  { id: "workspaceFileSearch", icon: FileSearch, titleId: "settings.workspaceFileSearch.title", groupId: "general" },
   {
     id: "usage",
     icon: BarChart3,
@@ -228,7 +224,7 @@ export function resolveSettingsNavEntryId(section: SettingsSectionId): SettingsS
 // macOS/Windows/Linux 必须继续通过 createSettingsPageConfig 动态加入 Computer Use。
 export const SETTINGS_SECTIONS = BASE_SETTINGS_SECTIONS.filter(
   (section) =>
-    section.id !== "computerUse" && section.id !== "phone" && isSettingsSectionEnabled(section.id),
+    !["computerUse", "externalAgents", "phone"].includes(section.id) && isSettingsSectionEnabled(section.id),
 );
 
 export interface SettingsPageConfigOptions {
@@ -246,7 +242,7 @@ export function createSettingsPageConfig({
   // settingsSections：所有可路由分区（含扩展的各 tab）；导航只展示 settingsSectionGroups。
   const settingsSections = BASE_SETTINGS_SECTIONS.filter((section) => {
     if (section.id === "phone" && !hasDesktopPlatform) return false;
-    if (section.id === "computerUse" && !isMacDesktop) return false; // [leo] Peekaboo 只有 macOS 版
+    if ((section.id === "computerUse" || section.id === "externalAgents") && !isMacDesktop) return false; // [leo] macOS only
     return isSettingsSectionEnabled(section.id);
   });
   const extensionSections = settingsSections.filter(

@@ -32,6 +32,7 @@ import { ModelConfigSelect, type ModelSelectGroup } from "@/ModelConfigSelect.js
 import { Button } from "@/components/ui/button.js";
 import { ChatContextUsage } from "@/chat-input-toolbar/display.js";
 import { ThoughtLevelCycleControl } from "@/chat-input-toolbar/ThoughtLevelCycleControl.js";
+import { ACP_PROVIDER_ID } from "@zcode/shared/acp";
 import { getNextThoughtLevelValue } from "@/chat-input-toolbar/thoughtLevelOptions.js";
 import type { V4ComposerConfigPicker } from "@/v4/composer/configPickerState.js";
 import { useToolbarShortcutBindings } from "@/v4/composer/toolbarShortcuts.js";
@@ -342,6 +343,8 @@ function V4ComposerModelControlsImpl({
   const thoughtOption = useMemo<ZCodeConfigOption | null>(() => {
     if (!effectiveConfig) return null;
     if (!draftModelThoughtOption) return null;
+    // [leo][WP-21] 外部 agent（ACP）没有思考档位可调。
+    if (effectiveConfig.provider === ACP_PROVIDER_ID) return null;
     return {
       ...draftModelThoughtOption,
       currentValue: resolveDraftThoughtCurrentValue({

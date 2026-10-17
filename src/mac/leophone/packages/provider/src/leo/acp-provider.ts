@@ -70,7 +70,7 @@ export function createAcpRegistryProvider(agentIds: readonly string[] = ACP_AGEN
   });
   const provider = Object.freeze({
     providerId: ACP_PROVIDER_ID as ProviderId,
-    providerName: "External Agents",
+    providerName: "外部 Agent",
     templateId: undefined,
     config: providerResult.config,
     models: Object.freeze(models),

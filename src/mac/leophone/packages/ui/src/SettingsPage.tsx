@@ -58,6 +58,7 @@ import { WorkspaceFileSearchSection } from "@/settings/WorkspaceFileSearchSectio
 import { MemorySettingsSection } from "@/settings/MemorySettingsSection.js";
 import { BrowserSettingsSection } from "@/settings/BrowserSettingsSection.js";
 import { LeoComputerUseSection } from "@/leo/LeoComputerUseSection.js";
+import { LeoExternalAgentsSection } from "@/leo/LeoExternalAgentsSection.js";
 import { ShortcutSettingsSection } from "@/settings/ShortcutSettingsSection.js";
 import { MigrationSection } from "@/settings/MigrationSection.js";
 import { LeoPhoneLinkSection } from "@/leo/LeoPhoneLinkSection.js";
@@ -1827,6 +1828,9 @@ export function SettingsPage({
                         ) : activeSection === "computerUse" ? (
                           // [leo][WP-22] 上游 ComputerUseSection 依赖占位的 zcode-cua（恒为不可用），换成 Peekaboo 权限页。
                           <LeoComputerUseSection />
+                        ) : activeSection === "externalAgents" ? (
+                          // [leo][WP-21] 外部 agent（ACP）
+                          <LeoExternalAgentsSection />
                         ) : null}
                       </div>
                     </div>
