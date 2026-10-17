@@ -20,10 +20,7 @@ const typographySurfaceFiles = [
   "AutomationScheduleBadge.tsx",
   "AutomationSwitchToggle.tsx",
   "AutomationsSection.tsx",
-  "OffPeakEditActionsMenu.tsx",
-  "OffPeakEditView.tsx",
-  "OffPeakHistoryTab.tsx",
-  "OffPeakTaskList.tsx",
+  // [leo] Off-peak (idle-time) tasks were removed: OffPeak*.tsx no longer exist, so their assertions are dropped below.
 ] as const;
 
 const typographySurfaceSources = await Promise.all(
@@ -54,7 +51,6 @@ describe("automation typography tokens", () => {
 
   it("定时与闲时 Instructions 工具栏使用同一套 trigger 视觉", () => {
     const automationEditSource = sourceByFile.get("AutomationEditView.tsx") ?? "";
-    const offPeakEditSource = sourceByFile.get("OffPeakEditView.tsx") ?? "";
     const automationToolbarSource = sourceByFile.get("AutomationInstructionsComposer.tsx") ?? "";
 
     expect(automationEditSource).toContain('containerClassName="contents"');
@@ -62,8 +58,6 @@ describe("automation typography tokens", () => {
     expect(automationEditSource).toContain(
       '"w-fit max-w-72 min-w-0 shrink @max-sm/composer:size-7 @max-sm/composer:justify-center @max-sm/composer:gap-0 @max-sm/composer:p-0"',
     );
-    expect(offPeakEditSource).toContain('containerClassName="contents"');
-    expect(offPeakEditSource).toContain("items-center gap-1 rounded-full px-2 text-ui-base");
     expect(automationToolbarSource).toContain(
       "h-7 rounded-full text-ui-base font-normal leading-5 text-foreground-subtle",
     );
@@ -74,7 +68,6 @@ describe("automation typography tokens", () => {
     expect(automationToolbarSource).toContain(
       "aria-expanded:bg-hover aria-expanded:text-foreground",
     );
-    expect(offPeakEditSource).not.toContain("focus-within:bg-hover");
     expect(chatEmptyStateSource).toContain("containerClassName?: string");
     expect(chatEmptyStateSource).toContain("triggerClassName?: string");
   });
@@ -103,8 +96,9 @@ describe("automation typography tokens", () => {
   it("首页卡片辅助文字与会话创建跳转按钮统一使用 text-ui-base", () => {
     const automationsSectionSource = sourceByFile.get("AutomationsSection.tsx") ?? "";
 
+    // [leo] The text-wrap-phrase variant lived on the removed off-peak template card; assert the scheduled card instead.
     expect(automationsSectionSource).toContain(
-      "text-wrap-phrase line-clamp-2 flex-1 text-ui-base font-normal leading-5",
+      "line-clamp-2 flex-1 text-ui-base font-normal leading-5",
     );
     expect(cronCreateRendererSource).toContain(
       "px-3 py-1.5 text-ui-base text-foreground hover:bg-hover",
@@ -115,9 +109,8 @@ describe("automation typography tokens", () => {
 
   it("定时与闲时权限菜单直接复用首页 mode selector", () => {
     const automationEditSource = sourceByFile.get("AutomationEditView.tsx") ?? "";
-    const offPeakEditSource = sourceByFile.get("OffPeakEditView.tsx") ?? "";
 
-    for (const source of [automationEditSource, offPeakEditSource]) {
+    for (const source of [automationEditSource]) {
       expect(source).toContain("<ConfigSelect");
       expect(source).toContain("option={modeOption}");
       expect(source).toContain('triggerVariant="ghost"');
@@ -135,47 +128,31 @@ describe("automation typography tokens", () => {
     expect(chatInputDisplaySource).toContain(
       "line-clamp-2 text-ui-sm/relaxed text-foreground-subtle whitespace-nowrap",
     );
-    expect(offPeakEditSource).not.toContain("renderDescription={(value)");
     expect(automationEditSource).not.toContain("权限 trigger 曾固定 160px");
-    // 闲时与定时任务共享 builder、provider 和会话权限词表，避免配置文案漂移。
-    expect(offPeakEditSource).toContain("buildAutomationModeOption(mode)");
-    expect(offPeakEditSource).not.toContain("offPeak.mode.");
-    // 手写复刻已删除：两页都不再自行维护权限菜单结构与 warning 语义。
+    // 手写复刻已删除：不再自行维护权限菜单结构与 warning 语义。
     expect(automationEditSource).not.toContain('mode === "yolo"');
-    expect(offPeakEditSource).not.toContain('mode === "yolo"');
-    expect(offPeakEditSource).not.toContain("OffPeakToolbarSelect");
   });
 
   it("定时与闲时详情通过面包屑返回并展示标题层级", () => {
     const automationEditSource = sourceByFile.get("AutomationEditView.tsx") ?? "";
-    const offPeakEditSource = sourceByFile.get("OffPeakEditView.tsx") ?? "";
     expect(automationEditSource).toContain("<SettingsBreadcrumbReporter");
-    expect(offPeakEditSource).toContain("<SettingsBreadcrumbReporter");
     expect(automationEditSource).toContain('data-testid="automation-edit-title"');
     expect(automationEditSource).toContain('data-testid="automation-edit-subtitle"');
     expect(automationEditSource).not.toContain("AUTOMATION_BACK_TRIGGER_CLASSNAME");
-    expect(offPeakEditSource).not.toContain("AUTOMATION_BACK_TRIGGER_CLASSNAME");
   });
 
   it("定时与闲时字段标题到下方组件统一使用 6px flex 间距", () => {
     const automationEditSource = sourceByFile.get("AutomationEditView.tsx") ?? "";
-    const offPeakEditSource = sourceByFile.get("OffPeakEditView.tsx") ?? "";
     const primitivesSource = sourceByFile.get("AutomationDesignPrimitives.tsx") ?? "";
 
     expect(primitivesSource).toContain('AUTOMATION_FORM_FIELD_CLASSNAME = "flex flex-col gap-1.5"');
     expect(
       automationEditSource.match(/className=\{AUTOMATION_FORM_FIELD_CLASSNAME\}/g)?.length ?? 0,
     ).toBeGreaterThanOrEqual(5);
-    // 修复原因：45a0078032（会话内创建闲时任务）新增了条件渲染的「绑定会话」字段，
-    // 表单字段从 2 个变为 3 个（绑定会话 / 任务标题 / 任务指令），旧断言未同步导致 staging 红测。
-    expect(
-      offPeakEditSource.match(/className=\{AUTOMATION_FORM_FIELD_CLASSNAME\}/g)?.length ?? 0,
-    ).toBe(3);
   });
 
   it("定时与闲时设置页的输入内容统一使用 14px UI 字号", () => {
     const automationEditSource = sourceByFile.get("AutomationEditView.tsx") ?? "";
-    const offPeakEditSource = sourceByFile.get("OffPeakEditView.tsx") ?? "";
     const instructionsSource = sourceByFile.get("AutomationInstructionsComposer.tsx") ?? "";
 
     // 只校验常量取值，不绑定换行格式；格式化工具可能把声明折到一行。
@@ -184,19 +161,8 @@ describe("automation typography tokens", () => {
     );
     expect(instructionsSource).toContain("AUTOMATION_FORM_INPUT_TYPOGRAPHY_CLASSNAME,");
     expect(automationEditSource).toContain("AUTOMATION_FORM_INPUT_TYPOGRAPHY_CLASSNAME");
-    expect(offPeakEditSource).toContain("AUTOMATION_FORM_INPUT_TYPOGRAPHY_CLASSNAME");
     expect(automationEditSource).not.toContain("gap-1 text-ui-sm text-foreground-subtle");
     expect(automationEditSource).not.toMatch(/w-(?:14|16).*text-ui-sm tabular-nums/);
-  });
-
-  it("闲时任务无人值守提示使用中性圆形图标与 14px UI 字号", () => {
-    const offPeakEditSource = sourceByFile.get("OffPeakEditView.tsx") ?? "";
-
-    expect(offPeakEditSource).toContain(
-      "items-start gap-1.5 text-ui-base leading-5 text-foreground-subtle",
-    );
-    expect(offPeakEditSource).toContain('<AutomationInfoIcon className="size-4" />');
-    expect(offPeakEditSource).not.toContain("TriangleAlert");
   });
 
   it("会话创建任务在编辑页展示只读调度摘要", () => {
@@ -212,10 +178,8 @@ describe("automation typography tokens", () => {
 
   it("未保存返回弹窗复用 Automation confirmation presentation", () => {
     const automationEditSource = sourceByFile.get("AutomationEditView.tsx") ?? "";
-    const offPeakEditSource = sourceByFile.get("OffPeakEditView.tsx") ?? "";
 
     expect(automationEditSource).toContain('presentation: "automation-confirmation"');
-    expect(offPeakEditSource).toContain('presentation: "automation-confirmation"');
     expect(automationEditSource).not.toContain(
       'className="w-[min(352px,calc(100vw-2rem))] max-w-none gap-4"',
     );
@@ -223,10 +187,8 @@ describe("automation typography tokens", () => {
 
   it("完全访问模式复用会话 composer 的 warning 强调色", () => {
     const automationEditSource = sourceByFile.get("AutomationEditView.tsx") ?? "";
-    const offPeakEditSource = sourceByFile.get("OffPeakEditView.tsx") ?? "";
 
     expect(automationEditSource).toContain("<ConfigSelect");
-    expect(offPeakEditSource).toContain("<ConfigSelect");
     expect(chatInputDisplaySource).toContain("isHighPermissionModeValue(option.currentValue)");
     expect(chatInputDisplaySource).toContain(
       "text-warning hover:text-warning aria-expanded:text-warning",

@@ -40,6 +40,8 @@ import {
 } from "@/settings/model-provider-section/SortableProviderModelList.js";
 
 vi.mock("@/i18n/IntlProvider.js", () => ({
+  // [leo] DialogContent 通过 useOptionalZCodeIntl 本地化关闭按钮读屏文字。
+  useOptionalZCodeIntl: () => null,
   useZCodeIntl: () => ({
     locale: "zh-CN",
     intl: {
@@ -407,11 +409,13 @@ describe("ProviderModelsSection compact model rows", () => {
 
     const addButton = screen.getByTestId(TID_MODEL_PROVIDER_ADD_MODEL_BUTTON);
     const modelsLabel = screen.getByText("模型列表");
-    expect(addButton.parentElement).toBe(modelsLabel.parentElement);
+    // [leo] 添加模型与「获取模型列表」按钮同组（Mac 1.9 模型发现），按钮组再与标题同行。
+    const headerRow = addButton.parentElement?.parentElement;
+    expect(headerRow).toBe(modelsLabel.parentElement);
     expect(addButton.dataset.variant).toBe("secondary");
     expect(addButton.dataset.size).toBe("default");
-    expect(addButton.parentElement?.className).toContain("mb-1");
-    expect(addButton.parentElement?.className).not.toContain("mt-2");
+    expect(headerRow?.className).toContain("mb-1");
+    expect(headerRow?.className).not.toContain("mt-2");
     expect(
       addButton.compareDocumentPosition(screen.getByText("model-a")) &
         Node.DOCUMENT_POSITION_FOLLOWING,

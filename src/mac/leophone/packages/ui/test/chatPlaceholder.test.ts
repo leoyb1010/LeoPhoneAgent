@@ -24,8 +24,9 @@ describe("resolveChatPlaceholderKey", () => {
         compactNewTask: true,
       }),
     ).toBe("chat.placeholder.newTaskMobile");
-    expect(enUS["chat.placeholder.newTaskMobile"]).toBe("Ask ZCode anything…");
-    expect(zhCN["chat.placeholder.newTaskMobile"]).toBe("向 ZCode 提问…");
+    // [leo] 产品名为 LeoBot。
+    expect(enUS["chat.placeholder.newTaskMobile"]).toBe("Ask LeoBot anything…");
+    expect(zhCN["chat.placeholder.newTaskMobile"]).toBe("向 LeoBot 提问…");
   });
 
   it("returns newTask while first turn is processing", () => {

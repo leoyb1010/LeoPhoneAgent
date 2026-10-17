@@ -26,9 +26,10 @@ describe("workspace main view drag region", () => {
       "min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]",
     );
 
+    // [leo] Web remote control was removed, so only the desktop automations + plugin-store frames remain (upstream: 4).
     expect(
       layoutSource.match(/<AutomationsMainBreadcrumbFrame/gu)?.length,
-    ).toBe(4);
+    ).toBe(2);
     expect(
       frameSource.match(/data-testid="automations-main-drag-region"/gu)?.length,
     ).toBe(1);
@@ -44,6 +45,7 @@ describe("workspace main view drag region", () => {
         /min-h-0 flex-1 overflow-y-auto \[scrollbar-gutter:stable\]/gu,
       )?.length ?? 0;
 
-    expect(stableScrollerCount).toBe(4);
+    // [leo] Web remote control was removed, so only the desktop automations + plugin-store scrollers remain (upstream: 4).
+    expect(stableScrollerCount).toBe(2);
   });
 });

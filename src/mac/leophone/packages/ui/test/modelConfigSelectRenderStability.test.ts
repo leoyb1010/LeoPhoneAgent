@@ -17,11 +17,13 @@ const {
   subTriggerCalls: [] as Array<Record<string, unknown>>,
 }));
 
-vi.mock("lucide-react", () => {
+vi.mock("lucide-react", async (importOriginal) => {
   const createIcon = (name: string) => (props: Record<string, unknown>) =>
     createElement("svg", { "data-icon": name, ...props });
 
   return {
+    // [leo] Leo 的模型选择器（ModelPickerRow / 搜索框 / 星标）引入了更多图标，其余图标沿用真实实现。
+    ...(await importOriginal<typeof import("lucide-react")>()),
     AlertCircle: createIcon("alert-circle"),
     CheckIcon: createIcon("check"),
     ChevronDownIcon: createIcon("chevron-down"),
@@ -84,6 +86,14 @@ vi.mock("@/components/ui/dropdown-menu.js", () => ({
     createElement("span", null, children),
 }));
 
+// [leo] ModelConfigSelect 在 Leo 中通过 useZCodeIntl 渲染搜索框/分区文案；此处不挂 Provider，直接回显 message id。
+vi.mock("@/i18n/IntlProvider.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/i18n/IntlProvider.js")>()),
+  useZCodeIntl: () => ({
+    intl: { formatMessage: ({ id }: { id: string }) => id },
+  }),
+}));
+
 vi.mock("@/components/ui/tooltip.js", () => ({
   Tooltip: ({ children }: { children?: ReactNode }) =>
     createElement("span", null, children),
@@ -103,6 +113,8 @@ function createMinimalElement(ownerDocument: Document, tagName = "div") {
       return child;
     },
     childNodes: [] as unknown[],
+    // [leo] Leo 模型选择器打开时会聚焦搜索框。
+    focus: () => {},
     getAttribute: () => null,
     insertBefore: (child: { parentNode?: unknown }) => {
       child.parentNode = element;

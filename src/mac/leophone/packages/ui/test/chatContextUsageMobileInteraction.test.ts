@@ -26,16 +26,6 @@ vi.mock("@/i18n/IntlProvider.js", () => ({
   }),
 }));
 
-vi.mock("@/chat-input-toolbar/CodingPlanContextUsage.js", () => ({
-  ChatCodingPlanUsageRemainingPanel: () => null,
-  hasChatCodingPlanUsageRemaining: () => false,
-}));
-
-vi.mock("@/chat-input-toolbar/StartPlanContextBalance.js", () => ({
-  ChatStartPlanBalancePanel: () => null,
-  hasChatStartPlanBalance: (config?: { onAccess?: unknown }) => Boolean(config?.onAccess),
-}));
-
 function renderContextUsage() {
   return render(
     createElement(ChatContextUsage, {
@@ -74,36 +64,7 @@ describe("ChatContextUsage mobile interaction", () => {
     expect(screen.getByText("chat.contextUsage.title")).toBeTruthy();
   });
 
-  it("refreshes plan usage through the normal open handler on touch", () => {
-    const onAccess = vi.fn();
-    vi.stubGlobal("matchMedia", (query: string) => ({
-      matches: query === "(hover: none)",
-      media: query,
-    }));
-
-    render(
-      createElement(ChatContextUsage, {
-        intl: {
-          formatMessage: ({ id }: { id: string }) => id,
-        } as never,
-        locale: "en-US",
-        selectedProvider: "glm",
-        startPlanBalance: {
-          loading: false,
-          onAccess,
-          snapshot: null,
-        },
-        taskUsage: null,
-      }),
-    );
-
-    const trigger = screen.getByRole("button", {
-      name: "settings.modelProvider.startPlan.balance.title",
-    });
-    fireEvent.pointerDown(trigger, { pointerType: "touch" });
-
-    expect(onAccess).toHaveBeenCalledTimes(1);
-  });
+  // [leo] Start Plan 余额入口随官方套餐一并删除，对应的触摸刷新用例移除。
 
   it("keeps a desktop pointer from changing the hover card contract", () => {
     vi.stubGlobal("matchMedia", (query: string) => ({

@@ -239,12 +239,9 @@ describe("mobile text input zoom guard", () => {
     const promptEditorSource = readSource("packages/ui/src/prompt-editor/ChatPromptEditor.tsx");
     const lexicalInputSource = readSource("packages/ui/src/LexicalChatInput.tsx");
 
-    expect(composerSource).toContain("shouldAvoidIosInputFocusZoom({");
-    expect(composerSource).toContain("isWebRemoteControl,");
-    expect(composerSource).toContain("isMobileTextInputViewport,");
-    expect(composerSource).toContain("preferEnterNewline: isWebRemoteControl,");
-    expect(composerSource).toContain("avoidIosInputFocusZoom={avoidIosInputFocusZoom}");
-    expect(composerSource).toContain("compactPlaceholder={compactMobilePlaceholder}");
+    // [leo] Leo 没有 Web 远程控制：v4 composer 固定按桌面输入处理，不再接线 iOS 缩放守卫。
+    expect(composerSource).toContain("isWebRemoteControl: false,");
+    expect(composerSource).not.toContain("shouldAvoidIosInputFocusZoom({");
     expect(sessionPaneSource).toContain("isWebRemoteControl={compactForRemoteControl}");
     expect(interactionDialogSource).toContain("isWebRemoteControl={isWebRemoteControl}");
     expect(permissionDialogSource).toContain("useIsMobileTextInputViewport");

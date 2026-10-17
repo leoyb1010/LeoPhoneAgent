@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { BUILTIN_MODEL_PROVIDER_IDS } from "@zcode/shared";
 import type { ModelSelectionView } from "@zcode/services";
 import { buildRegistryModelSelectGroups } from "../src/lib/modelSelectionGroups.js";
 
@@ -51,7 +50,9 @@ describe("model selection groups", () => {
       {
         key: `registry-provider:aggregator:${modelId}`,
         value: "custom:aggregator:upstream%2Ffamily%2Fvision-preview",
-        name: modelId,
+        // [leo] API Key 供应商列表显示可读名，原始模型 ID 放在 modelId。
+        name: "Vision Preview",
+        modelId,
         supportsVisionInput: true,
       },
     ]);
@@ -107,13 +108,16 @@ describe("model selection groups", () => {
           {
             key: "registry-provider:anthropic-api:claude-a",
             value: "custom:anthropic-api:claude-a",
-            name: "claude-a",
+            // [leo] 列表显示可读名，原始模型 ID 放在 modelId。
+            name: "Claude A",
+            modelId: "claude-a",
             supportsVisionInput: true,
           },
           {
             key: "registry-provider:anthropic-api:claude-b",
             value: "custom:anthropic-api:claude-b",
-            name: "claude-b",
+            name: "Claude B",
+            modelId: "claude-b",
           },
         ],
       },
@@ -124,53 +128,13 @@ describe("model selection groups", () => {
           {
             key: "registry-provider:openai-api:model-a",
             value: "custom:openai-api:model-a",
-            name: "model-a",
+            name: "Model A",
+            modelId: "model-a",
           },
         ],
       },
     ]);
   });
 
-  it("直接把 Registry Account Provider 投影为已选连接，不重新裁决 Family", () => {
-    const providerId = BUILTIN_MODEL_PROVIDER_IDS.bigmodelTeamCodingPlan;
-    const selectionView: ModelSelectionView = {
-      revision: 8,
-      providers: [
-        {
-          providerId,
-          providerName: "BigModel Coding Plan",
-          config: {
-            access: {
-              type: "zhipu-account",
-              accountType: "bigmodel",
-              mode: "team-coding-plan",
-              entitled: true,
-            },
-            api: {
-              type: "anthropic-messages",
-              baseUrl: "https://example.com/anthropic",
-            },
-            models: ["GLM-5.2"],
-          },
-          models: [{ modelId: "GLM-5.2", config: {} }],
-        },
-      ],
-    };
-
-    expect(buildRegistryModelSelectGroups("glm", selectionView)).toEqual([
-      {
-        key: `registry-provider:${providerId}`,
-        label: "BigModel",
-        labelBadge: "Team",
-        directItems: true,
-        items: [
-          {
-            key: `registry-provider:${providerId}:GLM-5.2`,
-            value: "custom:account%3Abigmodel-team-coding-plan:GLM-5.2",
-            name: "GLM-5.2",
-          },
-        ],
-      },
-    ]);
-  });
+  // [leo] 已删除「Registry Account Provider（BigModel Team Coding Plan）投影」用例：Leo 无官方账号/套餐 Provider。
 });

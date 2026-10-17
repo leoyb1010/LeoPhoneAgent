@@ -52,9 +52,8 @@ describe("menu radius hierarchy", () => {
 describe("business menus inherit shared radius", () => {
   for (const file of [
     "WindowsCaptionMenuButton",
-    "settings/OffPeakEditActionsMenu",
+    // [leo] OffPeakEditActionsMenu / OffPeakHistoryTab 已随官方套餐功能删除。
     "settings/AutomationEditView",
-    "settings/OffPeakHistoryTab",
   ]) {
     it(file, async () => {
       const source = await readFile(new URL(`../src/${file}.tsx`, import.meta.url), "utf8");

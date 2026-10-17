@@ -101,26 +101,5 @@ describe("WelcomeScreen", () => {
     expect(html).toContain("登录失败，请重试");
     expect(html).not.toContain("bg-destructive text-destructive-foreground");
   });
-
-  it("地域标签使用登录按钮前景色弱强调样式", async () => {
-    oauthState.status = "idle";
-    oauthState.error = null;
-    oauthState.loadingProviders = false;
-    oauthState.providers = [
-      {
-        id: "zai",
-        displayName: "Z.AI",
-        enabled: true,
-        order: 0,
-      },
-    ];
-
-    const { WelcomeScreen } = await import("@/WelcomeScreen.js");
-    const html = renderToStaticMarkup(createElement(WelcomeScreen, { onComplete: vi.fn() }));
-
-    expect(html).toContain("border-primary-foreground/30");
-    expect(html).toContain("text-primary-foreground/60");
-    expect(html).not.toContain("bg-primary-foreground/10");
-    expect(html).not.toContain("button-gradient");
-  });
+  // [leo] 不展示 Z.ai / BigModel 账号登录按钮，地域标签样式用例随之移除。
 });

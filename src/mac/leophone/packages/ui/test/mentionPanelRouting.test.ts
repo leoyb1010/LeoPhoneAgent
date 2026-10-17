@@ -6,11 +6,11 @@ import {
 
 describe("getMentionPanelGroupOrder", () => {
   it("routes @ through the fixed context group order", () => {
+    // [leo] 画板（whiteboards）mention 分组已在 Leo 中移除。
     expect(getMentionPanelGroupOrder("@")).toEqual([
       "plugins",
       "files",
       "sessions",
-      "whiteboards",
     ]);
   });
 

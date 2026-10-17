@@ -703,36 +703,4 @@ describe("resolveMessageStreamdownMode", () => {
   });
 });
 
-it("通用模式回答保留代码容器和复制入口，锁定换行入口且模式变化会重新渲染", () => {
-  const codePreviewSettings = {
-    darkTheme: "github-dark",
-    lightTheme: "github-light",
-    fontSizePx: 13,
-    wrapLongLines: false,
-  };
-  const props = { children: "```python\nprint('MODE_CODE_RETAINED')\n```", codePreviewSettings };
-  const render = (forceCodeWrap: boolean) =>
-    renderToStaticMarkup(
-      createElement(
-        ZCodeIntlProvider,
-        { initialLocale: "zh-CN" },
-        createElement(
-          TooltipProvider,
-          null,
-          createElement(MessageResponse, { ...props, forceCodeWrap }),
-        ),
-      ),
-    );
-  const general = render(true);
-  expect(general).toContain('data-language="python"');
-  expect(general).toContain("复制代码");
-  expect(general).not.toContain("自动换行");
-  expect(render(false)).toContain("自动换行");
-  expect(codePreviewSettings.wrapLongLines).toBe(false);
-  expect(
-    messageResponsePropsAreEqual(
-      { ...props, forceCodeWrap: true },
-      { ...props, forceCodeWrap: false },
-    ),
-  ).toBe(false);
-});
+// [leo] 已删除「通用模式回答锁定换行（forceCodeWrap）」用例：Leo 移除了 Office/通用模式，MessageResponse 不再有 forceCodeWrap。

@@ -27,6 +27,8 @@ vi.mock("radix-ui", async () => {
 });
 
 vi.mock("@/i18n/IntlProvider.js", () => ({
+  // [leo] DialogContent 通过 useOptionalZCodeIntl 本地化关闭按钮读屏文字。
+  useOptionalZCodeIntl: () => null,
   useZCodeIntl: () => ({
     intl: {
       formatMessage: ({ id }: { id: string }) => id,

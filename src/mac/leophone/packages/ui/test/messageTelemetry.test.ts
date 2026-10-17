@@ -654,6 +654,7 @@ describe("messageTelemetry", () => {
     });
   });
 
+  // [leo] Leo 遥测 extra detail 不含 plan_status / plan_product_id（官方套餐已移除）。
   it("resolves model_provider from native custom and ghost supplier keys", () => {
     expect(
       buildPromptTelemetryExtraDetail({
@@ -667,8 +668,6 @@ describe("messageTelemetry", () => {
       model_name: "model-native",
       model_provider: "claude",
       agent: "claude",
-      plan_status: "unknown",
-      plan_product_id: "",
     });
 
     expect(
@@ -683,8 +682,6 @@ describe("messageTelemetry", () => {
       model_name: "model-custom",
       model_provider: "provider-a",
       agent: "claude",
-      plan_status: "unknown",
-      plan_product_id: "",
     });
 
     expect(
@@ -699,50 +696,10 @@ describe("messageTelemetry", () => {
       model_name: "model-ghost",
       model_provider: "gemini",
       agent: "gemini",
-      plan_status: "unknown",
-      plan_product_id: "",
     });
   });
 
-  it("freezes plan identity fields from send button into message completion", () => {
-    const sendButtonExtra = queuePromptTelemetry({
-      workspacePath: "/tmp/workspace-a",
-      taskId: "task-a",
-      messageId: "message-a",
-      sendTime: 200,
-      extraDetail: buildPromptTelemetryExtraDetail({
-        askMode: "chat",
-        modelName: "glm-5.1",
-        provider: "glm",
-        providerBaseURL: "https://api.z.ai/api/paas/v4",
-        planIdentitySnapshot: {
-          generatedAt: 100,
-          planStatus: "coding_plan",
-          planProductId: "product-coding-pro",
-        },
-      }),
-    });
-    activatePromptTelemetry("task-a", "message-a");
-
-    const completion = finalizePromptTelemetry({
-      taskId: "task-a",
-      status: "success",
-      finishedAt: 300,
-      taskMessages: [],
-      fileChanges: [],
-    });
-
-    expect(sendButtonExtra).toMatchObject({
-      plan_status: "coding_plan",
-      plan_product_id: "product-coding-pro",
-      provider_name: "api.z.ai",
-    });
-    expect(completion?.eventExtraDetail).toMatchObject({
-      plan_status: "coding_plan",
-      plan_product_id: "product-coding-pro",
-      provider_name: "api.z.ai",
-    });
-  });
+  // [leo] 已删除「plan identity 字段冻结」用例：Leo 无官方 Coding Plan，遥测不再上报 plan_status / plan_product_id。
 
   it("prefers provider-qualified UI model value over stale supplier key for send button", () => {
     expect(
@@ -757,8 +714,6 @@ describe("messageTelemetry", () => {
       model_name: "4209ad4c-6650-4928-b44e-1167f913289a/deepseek-v4-flash",
       model_provider: "4209ad4c-6650-4928-b44e-1167f913289a",
       agent: "glm",
-      plan_status: "unknown",
-      plan_product_id: "",
     });
 
     expect(
@@ -773,8 +728,6 @@ describe("messageTelemetry", () => {
       model_name: encodeCustomModelValue("provider-custom", "deepseek-v4-flash"),
       model_provider: "provider-custom",
       agent: "glm",
-      plan_status: "unknown",
-      plan_product_id: "",
     });
   });
 

@@ -31,15 +31,12 @@ describe("resolveFileDisplayDescriptor", () => {
     { extension: "flac", iconName: "audio" },
     { extension: "weba", iconName: "audio" },
   ])(
-    "maps .$extension to the $iconName icon for desktop and web",
+    // [leo] packages/web（Web 远程控制前端）已删除，只校验桌面端图标资源。
+    "maps .$extension to the $iconName icon for desktop",
     async ({ extension, iconName }) => {
       const repoRoot = new URL("../../..", import.meta.url);
       const desktopIcon = await readFile(
         new URL(`packages/desktop/src/renderer/public/material-icons/${iconName}.svg`, repoRoot),
-        "utf8",
-      );
-      const webIcon = await readFile(
-        new URL(`packages/web/public/material-icons/${iconName}.svg`, repoRoot),
         "utf8",
       );
 
@@ -48,7 +45,6 @@ describe("resolveFileDisplayDescriptor", () => {
         fileIconSrc: buildMaterialFileIconSrc(iconName),
       });
       expect(desktopIcon).toMatch(/^<svg\b/);
-      expect(webIcon).toBe(desktopIcon);
     },
   );
 

@@ -144,7 +144,8 @@ describe("登录失败态的取消交互", () => {
     storeState.oauthError = null;
     view.rerender(createElement(WelcomeScreen, { onComplete: vi.fn() }));
 
-    expect(screen.getByTestId(TID_OAUTH_LOGIN_BUTTON)).toBeTruthy();
+    // [leo] 不提供 Z.ai / BigModel 平台账号登录，回到 idle 后渠道列表为空（只剩订阅/API Key 入口）。
+    expect(screen.queryByTestId(TID_OAUTH_LOGIN_BUTTON)).toBeNull();
     expect(screen.queryByTestId(TID_OAUTH_ERROR)).toBeNull();
     expect(screen.queryByTestId(TID_OAUTH_CANCEL)).toBeNull();
   });

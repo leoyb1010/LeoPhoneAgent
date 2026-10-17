@@ -9,9 +9,6 @@ import {
   resolveAutomationDetailNavigation,
   resolveAutomationTabNavigation,
   resolveAutomationDetailTarget,
-  resolveAutomationTemplateVisibility,
-  resolveAutomationTabAfterOffPeakChange,
-  resolveVisibleAutomationTabs,
 } from "@/settings/AutomationsSection.js";
 
 const automationsSectionSource = readFileSync(
@@ -105,37 +102,8 @@ describe("canRestartAutomation", () => {
     });
   });
 
-  it("后台关闭闲时灰度后只保留 Scheduled tab", () => {
-    expect(
-      resolveVisibleAutomationTabs({
-        hasAnyTasks: true,
-        offPeakVisible: false,
-      }),
-    ).toEqual(["scheduled"]);
-  });
-
-  it("仅在闲时灰度可见或有闲时存量时展示 Idle tab", () => {
-    expect(
-      resolveVisibleAutomationTabs({
-        hasAnyTasks: true,
-        offPeakVisible: true,
-      }),
-    ).toEqual(["scheduled", "idle"]);
-    expect(
-      resolveVisibleAutomationTabs({
-        hasAnyTasks: false,
-        offPeakVisible: true,
-      }),
-    ).toEqual([]);
-  });
-
-  it("灰度关闭时将已选中的 Idle tab 收敛回 Scheduled", () => {
-    expect(resolveAutomationTabAfterOffPeakChange("idle", false)).toBe("scheduled");
-    expect(resolveAutomationTabAfterOffPeakChange("scheduled", false)).toBe("scheduled");
-    expect(resolveAutomationTabAfterOffPeakChange("idle", true)).toBe("idle");
-  });
-
-  it("仅在 tabs 数据就绪且 Idle tab 可见时应用 OFFPEAK 导航", () => {
+  // [leo] Off-peak (idle-time) tasks were removed: no Idle tab, no off-peak tab/template visibility helpers.
+  it("仅在 tabs 数据就绪后应用导航，Idle 请求收敛回 Scheduled", () => {
     expect(
       resolveAutomationTabNavigation({
         requestedTab: "idle",
@@ -147,71 +115,8 @@ describe("canRestartAutomation", () => {
       resolveAutomationTabNavigation({
         requestedTab: "idle",
         tabsReady: true,
-        visibleTabs: ["scheduled", "idle"],
-      }),
-    ).toEqual({ status: "settled", tab: "idle" });
-    expect(
-      resolveAutomationTabNavigation({
-        requestedTab: "idle",
-        tabsReady: true,
         visibleTabs: ["scheduled"],
       }),
     ).toEqual({ status: "settled", tab: "scheduled" });
-  });
-
-  it("无任务时同时展示可用的闲时模板和定时任务模板", () => {
-    expect(
-      resolveAutomationTemplateVisibility({
-        hasAnyTasks: false,
-        offPeakCreationEnabled: true,
-        tab: "scheduled",
-      }),
-    ).toEqual({
-      showOffPeakTemplates: true,
-      showScheduledTemplates: true,
-    });
-    expect(
-      resolveAutomationTemplateVisibility({
-        hasAnyTasks: false,
-        offPeakCreationEnabled: true,
-        tab: "idle",
-      }),
-    ).toEqual({
-      showOffPeakTemplates: true,
-      showScheduledTemplates: true,
-    });
-    expect(
-      resolveAutomationTemplateVisibility({
-        hasAnyTasks: false,
-        offPeakCreationEnabled: false,
-        tab: "scheduled",
-      }),
-    ).toEqual({
-      showOffPeakTemplates: false,
-      showScheduledTemplates: true,
-    });
-  });
-
-  it("有任务时继续按 Scheduled 和 Idle tab 分流模板", () => {
-    expect(
-      resolveAutomationTemplateVisibility({
-        hasAnyTasks: true,
-        offPeakCreationEnabled: true,
-        tab: "scheduled",
-      }),
-    ).toEqual({
-      showOffPeakTemplates: false,
-      showScheduledTemplates: true,
-    });
-    expect(
-      resolveAutomationTemplateVisibility({
-        hasAnyTasks: true,
-        offPeakCreationEnabled: true,
-        tab: "idle",
-      }),
-    ).toEqual({
-      showOffPeakTemplates: true,
-      showScheduledTemplates: false,
-    });
   });
 });

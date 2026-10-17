@@ -106,7 +106,8 @@ describe("Provider draft uses formal Provider Config", () => {
         provider,
         draft: {
           nameValue: provider.providerId,
-          apiFormat: "anthropic-messages",
+          // [leo] 无模板自定义供应商的默认接口格式是 openai-chat-completions（DEFAULT_CUSTOM_PROVIDER_API_TYPE）。
+          apiFormat: "openai-chat-completions",
           baseUrlValue: "",
           apiKeyValue: "",
         },

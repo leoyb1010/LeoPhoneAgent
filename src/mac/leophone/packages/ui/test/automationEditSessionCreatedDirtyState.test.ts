@@ -233,6 +233,15 @@ vi.mock("@/hooks/useModelSelectionView.js", () => ({
     };
   },
 }));
+// [leo] AutomationEditView reads the Leo model-picker pinned/recent lists from AppSettings (needs PlatformProvider).
+vi.mock("@/hooks/useModelPickerQuickAccess.js", () => ({
+  useModelPickerQuickAccess: () => ({
+    pinnedValues: [],
+    recentValues: [],
+    maxPinned: 5,
+    togglePinned: () => undefined,
+  }),
+}));
 vi.mock("@/i18n/IntlProvider.js", () => ({
   useZCodeIntl: () => ({
     intl: {
@@ -361,8 +370,9 @@ describe("AutomationEditView session-created dirty state", () => {
     await waitFor(() =>
       expect(stableHookValues.selectionInputs.at(-1)).toEqual({ selection: original }),
     );
+    // [leo] Registry model rows show prettifyModelId() display names (raw id stays in the stored selection).
     expect(screen.getByTestId("automation-model-trigger-label").textContent).toBe(
-      "DeepSeek Provider/deepseek-v4-flash",
+      "DeepSeek Provider/DeepSeek V4 Flash",
     );
     expect(onSubmit).not.toHaveBeenCalled();
     expect(editing.modelSelection).toEqual(original);
@@ -442,8 +452,9 @@ describe("AutomationEditView session-created dirty state", () => {
       }),
     );
 
+    // [leo] Registry model rows show prettifyModelId() display names (raw id stays in the stored selection).
     expect(screen.getByTestId("automation-model-trigger-label").textContent).toBe(
-      "DeepSeek Provider/deepseek-v4-flash",
+      "DeepSeek Provider/DeepSeek V4 Flash",
     );
   });
 

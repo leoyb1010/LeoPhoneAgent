@@ -16,7 +16,7 @@ describe("dialog shell radius", () => {
   }
   for (const file of [
     "ChatMediaAttachmentPreviewDialog",
-    "feedback/FeedbackScreenshotPicker",
+    // [leo] feedback/FeedbackScreenshotPicker 随反馈中心一并删除。
     "ToolCallBlocks/renderers/CuaScreenshotSection",
   ]) {
     it(`${file} explicitly preserves xl`, async () => {
@@ -31,7 +31,7 @@ describe("dialog shell radius", () => {
     // 原生购买面板已下线（购买走 webview 弹窗），不再纳入 dialog 圆角契约。
     "quickpick/TaskFindDialog",
     "components/ui/command",
-    "components/cloud-content-dialog/CloudContentDialog",
+    // [leo] components/cloud-content-dialog/CloudContentDialog 随云端内容一并删除。
     "v4/ConversationComposer",
   ]) {
     it(`${file} does not override the standard shell with xl or 3xl`, async () => {

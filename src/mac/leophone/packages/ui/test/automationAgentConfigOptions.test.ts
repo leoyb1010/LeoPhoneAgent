@@ -82,7 +82,11 @@ describe("automation model/thought linkage", () => {
       },
     });
 
+    // [leo] Registry model rows show prettifyModelId() display names; the raw id stays on item.modelId.
     expect(groups.flatMap((group) => group.items.map((item) => item.name))).toEqual([
+      "Coding Only Model",
+    ]);
+    expect(groups.flatMap((group) => group.items.map((item) => item.modelId))).toEqual([
       "coding-only-model",
     ]);
   });

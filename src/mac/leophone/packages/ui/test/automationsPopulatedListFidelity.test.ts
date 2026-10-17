@@ -45,8 +45,9 @@ describe("Automations populated-list Figma contract", () => {
     expect(automationsSectionSource).not.toContain(
       '"bg-surface text-foreground-subtle hover:bg-hover hover:text-foreground"',
     );
-    expect(automationsSectionSource).toContain(
-      "<AutomationCreateDropdown\n                onViaChat={handleCreateViaChat}",
+    // [leo] Off-peak tab branch removed, so the indentation shifted; match the call shape instead.
+    expect(automationsSectionSource).toMatch(
+      /<AutomationCreateDropdown\n\s+onViaChat=\{handleCreateViaChat\}/,
     );
     expect(automationsSectionSource).not.toContain("appearance={");
   });
@@ -55,14 +56,16 @@ describe("Automations populated-list Figma contract", () => {
     const refreshAction = automationsSectionSource.indexOf(
       'aria-label={intl.formatMessage({ id: "automations.refresh" })}',
     );
-    const createAction = automationsSectionSource.indexOf(
-      "<AutomationCreateDropdown\n                onViaChat={handleCreateViaChat}",
+    // [leo] Off-peak tab branch removed, so the indentation shifted; match the call shape instead.
+    const createAction = automationsSectionSource.search(
+      /<AutomationCreateDropdown\n\s+onViaChat=\{handleCreateViaChat\}/,
     );
 
     expect(refreshAction).toBeGreaterThanOrEqual(0);
     expect(createAction).toBeGreaterThan(refreshAction);
     expect(automationsSectionSource).toContain("refresh(zcodeAgentService)");
-    expect(automationsSectionSource).toContain("offPeakRefresh(offPeakTaskService)");
+    // [leo] Off-peak tasks removed: no offPeakRefresh(offPeakTaskService) alongside the scheduled refresh.
+    expect(automationsSectionSource).not.toContain("offPeakRefresh(");
     expect(automationsSectionSource).toMatch(
       /variant="outline"\s+size="icon"\s+aria-label=\{intl\.formatMessage\(\{ id: "automations\.refresh" \}\)\}/,
     );
@@ -81,12 +84,7 @@ describe("Automations populated-list Figma contract", () => {
     expect(enUS["automations.resume"]).toBe("Continue");
   });
 
-  it("uses the dedicated idle-time delete confirmation action label", () => {
-    expect(automationsSectionSource).toMatch(
-      /id: "offPeak\.delete\.title"[\s\S]*?id: "offPeak\.delete\.description"[\s\S]*?id: "offPeak\.delete\.confirm"/,
-    );
-  });
-
+  // [leo] Off-peak (idle-time) delete confirmation removed together with the off-peak feature.
   it("dims paused schedule time and run count to 40 percent opacity", () => {
     expect(automationsSectionSource).toContain("font-normal text-success opacity-40");
     expect(automationsSectionSource).toMatch(

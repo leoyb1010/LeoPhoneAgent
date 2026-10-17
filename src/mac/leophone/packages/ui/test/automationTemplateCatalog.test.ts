@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ClientSceneConfig } from "@zcode/services";
 import {
-  appendLocalCustomizeTemplate,
-  materializeOffPeakTemplateDraft,
   materializeScheduledTemplateDraft,
   mapClientScenesToAutomationTemplates,
-  resolveOffPeakTemplateText,
   resolveAutomationTemplateText,
 } from "@/settings/automationTemplateCatalog.js";
 
@@ -103,13 +100,12 @@ describe("Client Scenes automation template catalog", () => {
     expect(JSON.stringify(result.scheduled)).not.toContain("Wrong server display");
   });
 
-  it("keeps prompt item img as the Lucide icon name for both task catalogs", () => {
+  it("keeps prompt item img as the Lucide icon name for the scheduled catalog", () => {
     const scenes = createScenes();
     scenes[0]!.options.prompts!.items![0]!.img = "  calendar-clock  ";
     scenes[0]!.options.prompts!.items![0]!.imgs = {
       cn: "https://cdn.example.com/scheduled-template-cn.svg",
     };
-    scenes[1]!.options.prompts!.items![0]!.img = "activity";
 
     const result = mapClientScenesToAutomationTemplates(scenes, () => true);
 
@@ -117,12 +113,6 @@ describe("Client Scenes automation template catalog", () => {
       expect.objectContaining({
         iconName: "calendar-clock",
         icon: "target",
-      }),
-    );
-    expect(result.offPeak[0]).toEqual(
-      expect.objectContaining({
-        iconName: "activity",
-        icon: "ciFlakyReport",
       }),
     );
   });
@@ -147,114 +137,31 @@ describe("Client Scenes automation template catalog", () => {
     expect(result.rejectedScheduledTemplateIds).toEqual(["item-morningDevBrief"]);
   });
 
-  it("rejects scheduled and idle templates whose localized titles are both blank", () => {
+  it("rejects scheduled templates whose localized titles are both blank", () => {
     const scenes = createScenes();
     scenes[0]!.options.prompts!.items![0]!.labels = { cn: " ", en: "" };
-    scenes[1]!.options.prompts!.items![0]!.labels = { cn: "", en: "  " };
 
     const result = mapClientScenesToAutomationTemplates(scenes, () => true);
 
     expect(result.scheduled).toEqual([]);
     expect(result.rejectedScheduledTemplateIds).toEqual(["item-morningDevBrief"]);
-    expect(result.offPeak).toEqual([]);
   });
 
-  it("keeps the Automations idle catalog remote-only", () => {
+  // [leo] Off-peak (idle-time) tasks were removed: the off-peak-task scene is ignored and no idle catalog,
+  // local Customize template or off-peak text helpers exist any more.
+  it("ignores the off-peak-task scene and only builds the scheduled catalog", () => {
     const result = mapClientScenesToAutomationTemplates(createScenes(), () => true);
 
-    expect(result.offPeak).toEqual([
-      expect.objectContaining({
-        id: "item-ciFlakyReport",
-        title: { cn: "CI 报告", en: "CI report" },
-        prompt: { cn: "中文闲时指令", en: "English idle prompt" },
-        customize: false,
-        icon: "ciFlakyReport",
-      }),
-    ]);
-  });
-
-  it("prefers idle template descs for homepage display while preserving other contents fields", () => {
-    const scenes = createScenes();
-    scenes[1]!.options.prompts!.items![0]!.descs = {
-      cn: "中文闲时描述",
-      en: "English idle description",
-    };
-
-    const result = mapClientScenesToAutomationTemplates(scenes, () => true);
-
-    expect(result.offPeak[0]).toEqual(
-      expect.objectContaining({
-        homepageDescription: { cn: "中文闲时描述", en: "English idle description" },
-        description: { cn: "中文闲时指令", en: "English idle prompt" },
-        prompt: { cn: "中文闲时指令", en: "English idle prompt" },
-      }),
-    );
-  });
-
-  it("falls back from a blank idle desc to contents in the same locale", () => {
-    const scenes = createScenes();
-    scenes[1]!.options.prompts!.items![0]!.descs = {
-      cn: "  ",
-      en: "English idle description",
-    };
-
-    const result = mapClientScenesToAutomationTemplates(scenes, () => true);
-
-    expect(result.offPeak[0]?.homepageDescription).toEqual({
-      cn: "中文闲时指令",
-      en: "English idle description",
-    });
-    expect(result.offPeak[0]?.description).toEqual({
-      cn: "中文闲时指令",
-      en: "English idle prompt",
-    });
-  });
-
-  it("keeps only the first two ordinary remote templates and appends local Customize last", () => {
-    const remoteOnly = mapClientScenesToAutomationTemplates(createScenes(), () => true).offPeak;
-    const first = remoteOnly[0]!;
-    const remoteCustomize = {
-      ...first,
-      id: "item-customize",
-      title: {},
-      description: {},
-      prompt: { cn: "", en: "" },
-      customize: true,
-      icon: "customize" as const,
-    };
-    const second = { ...first, id: "item-second" };
-    const third = { ...first, id: "item-third" };
-
-    expect(
-      appendLocalCustomizeTemplate([first, remoteCustomize, second, third]).map(({ id }) => id),
-    ).toEqual(["item-ciFlakyReport", "item-second", "customize"]);
-    expect(appendLocalCustomizeTemplate([]).map(({ id }) => id)).toEqual(["customize"]);
-  });
-
-  it("resolves the local Customize copy through the active i18n formatter", () => {
-    const customize = appendLocalCustomizeTemplate([])[0]!;
-    const messages = {
-      "offPeak.newTask.template.customize.title": "自定义",
-      "offPeak.newTask.template.customize.description": "跳过模板，直接告诉它你想做什么。",
-    };
-    const formatMessage = ({ id }: { id: string }) => messages[id as keyof typeof messages] ?? id;
-
-    expect(resolveOffPeakTemplateText(customize, "title", "zh-CN", formatMessage)).toBe("自定义");
-    expect(resolveOffPeakTemplateText(customize, "description", "zh-CN", formatMessage)).toBe(
-      "跳过模板，直接告诉它你想做什么。",
-    );
-    expect(customize.title).toEqual({});
-    expect(customize.description).toEqual({});
+    expect(Object.keys(result).sort()).toEqual(["rejectedScheduledTemplateIds", "scheduled"]);
+    expect(JSON.stringify(result)).not.toContain("item-ciFlakyReport");
   });
 
   it("materializes current-locale primitives that are independent from later catalog refreshes", () => {
     const first = mapClientScenesToAutomationTemplates(createScenes(), () => true);
     const scheduledDraft = materializeScheduledTemplateDraft(first.scheduled[0]!, "zh-CN");
-    const offPeakDraft = materializeOffPeakTemplateDraft(first.offPeak[0]!, "zh-CN");
 
     const refreshedScenes = createScenes();
     refreshedScenes[0]!.options.prompts!.items![0]!.labels.cn = "后台刷新标题";
-    refreshedScenes[1]!.options.prompts!.items![0]!.contents.cn = "后台刷新指令";
     mapClientScenesToAutomationTemplates(refreshedScenes, () => true);
 
     expect(scheduledDraft).toEqual({
@@ -262,11 +169,6 @@ describe("Client Scenes automation template catalog", () => {
       title: "晨会动态",
       cronExpr: "0 9 * * 1-5",
       prompt: "中文定时指令",
-    });
-    expect(offPeakDraft).toEqual({
-      templateId: "item-ciFlakyReport",
-      title: "CI 报告",
-      prompt: "中文闲时指令",
     });
   });
 

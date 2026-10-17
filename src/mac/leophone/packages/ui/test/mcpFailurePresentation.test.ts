@@ -50,9 +50,10 @@ describe("MCP failure presentation", () => {
     expect(html).not.toContain("raw sdk error");
   });
 
+  // [leo] 产品名为 LeoBot。
   it.each([
-    ["zh-CN" as const, "当前未登录，请先登录 ZCode。"],
-    ["en-US" as const, "You are not signed in. Sign in to ZCode to use this MCP server."],
+    ["zh-CN" as const, "当前未登录，请先登录 LeoBot。"],
+    ["en-US" as const, "You are not signed in. Sign in to LeoBot to use this MCP server."],
   ])("localizes the not-authenticated diagnosis for %s", (locale, message) => {
     const html = renderToStaticMarkup(
       createElement(

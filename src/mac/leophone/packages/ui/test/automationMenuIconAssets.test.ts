@@ -9,10 +9,7 @@ const automationsSectionSource = await readFile(
   new URL("../src/settings/AutomationsSection.tsx", import.meta.url),
   "utf8",
 );
-const offPeakTaskListSource = await readFile(
-  new URL("../src/settings/OffPeakTaskList.tsx", import.meta.url),
-  "utf8",
-);
+// [leo] Off-peak (idle-time) tasks were removed; OffPeakTaskList.tsx no longer exists.
 
 describe("automation Lucide icon contract", () => {
   it("统一使用 Lucide 24px viewBox 与 2px 描边，不再加载裁切 Figma 资源", () => {
@@ -50,12 +47,5 @@ describe("automation Lucide icon contract", () => {
       "export function AutomationCancelActionIcon",
     );
     expect(automationIconsSource).toContain('fill="currentColor"');
-    expect(offPeakTaskListSource).toContain("<AutomationCancelActionIcon");
-    expect(offPeakTaskListSource).toContain(
-      'className="size-4 fill-current"',
-    );
-    expect(offPeakTaskListSource).not.toMatch(
-      /<X[\s\S]*offPeak\.action\.cancel/,
-    );
   });
 });

@@ -6,8 +6,6 @@ import {
   getSortableProviderId,
   ModelProviderSectionNavigation,
   resolveReorderedProviderIdsForGroup,
-  resolveModelProviderSideNavLabel,
-  shouldShowModelProviderGroupLoadingIndicator,
 } from "@/settings/model-provider-section/Navigation.js";
 
 vi.mock("@/i18n/IntlProvider.js", () => ({
@@ -41,7 +39,8 @@ describe("model provider navigation loading indicator", () => {
     expect(html).not.toMatch(/>\s*-\s*</u);
   });
 
-  it("Personal Provider 保留自定义名称，且只对 Settings View 允许项启用拖拽", () => {
+  // [leo] 侧栏只剩自定义供应商，标签直接用 item.label，resolveModelProviderSideNavLabel 已删除；保留拖拽准入断言。
+  it("Personal Provider 只对 Settings View 允许项启用拖拽", () => {
     const item = {
       key: "custom:official-api",
       type: "custom" as const,
@@ -65,30 +64,11 @@ describe("model provider navigation loading indicator", () => {
       },
     };
 
-    const formatMessage = vi.fn();
-    expect(resolveModelProviderSideNavLabel(item, formatMessage)).toBe("Official API");
-    expect(formatMessage).not.toHaveBeenCalled();
     expect(getSortableProviderId(item, new Set(["personal-api"]))).toBeNull();
     expect(getSortableProviderId(item, new Set(["official-api"]))).toBe("official-api");
   });
 
-  it("按分组返回对应 loading 状态", () => {
-    expect(
-      shouldShowModelProviderGroupLoadingIndicator({
-        groupId: "preset",
-        presetLoading: true,
-        customLoading: false,
-      }),
-    ).toBe(true);
-
-    expect(
-      shouldShowModelProviderGroupLoadingIndicator({
-        groupId: "custom",
-        presetLoading: true,
-        customLoading: false,
-      }),
-    ).toBe(false);
-  });
+  // [leo] 已删除「按分组返回 loading 状态」用例：预置（官方账号）分组已移除，shouldShowModelProviderGroupLoadingIndicator 不再存在。
 
   it("拖拽结束时只重排当前分组 provider id", () => {
     expect(
