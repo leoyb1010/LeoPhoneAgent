@@ -5,7 +5,7 @@
 import { homedir } from "node:os";
 import { acpAgentInfo, type AcpAgentId } from "@zcode/shared/acp";
 
-export type AcpFailureKind = "unavailable" | "auth" | "spawn" | "exited" | "empty" | "other";
+export type AcpFailureKind = "unavailable" | "auth" | "spawn" | "exited" | "empty" | "stalled" | "other";
 
 export class AcpAgentError extends Error {
   readonly agentId: AcpAgentId;
@@ -30,7 +30,7 @@ const LOGIN_HINTS: Record<AcpAgentId, string> = {
   codex: "在这台 Mac 的终端运行 codex login",
   gemini: "在这台 Mac 的终端运行 gemini 完成登录（或配置 GEMINI_API_KEY）",
   opencode: "在这台 Mac 的终端运行 opencode auth login",
-  grok: "在这台 Mac 的终端运行 grok login",
+  grok: "在这台 Mac 的终端运行 grok login --device-auth",
 };
 
 const INSTALL_HINTS: Record<AcpAgentId, string> = {
@@ -89,6 +89,7 @@ const AUTH_PATTERN =
 
 function classify(error: unknown, stderr: string): AcpFailureKind {
   const message = errorMessage(error);
+  if (error instanceof Error && error.name === "AcpStageTimeoutError") return "stalled";
   const code = errorCode(error);
   // ACP 的 auth_required 是 JSON-RPC -32000（SDK RequestError.authRequired）。
   if (code === -32000 || AUTH_PATTERN.test(message)) return "auth";
@@ -120,6 +121,16 @@ export function describeAcpFailure(input: {
     case "spawn":
       summary = `${name} 在这台 Mac 上启动不了（找不到或无法执行命令）：${INSTALL_HINTS[input.agentId]}`;
       break;
+    case "stalled": {
+      const stage = (input.error as { stage?: string }).stage ?? "";
+      const where = { initialize: "握手（initialize）", authenticate: "登录（authenticate）", newSession: "开会话（newSession）" }[stage] ?? stage;
+      const hint =
+        stage === "authenticate"
+          ? `多半是还没登录、在等浏览器授权：${LOGIN_HINTS[input.agentId]}`
+          : "多半是网络 / 代理连不上（这台 Mac 用系统代理时看看设置 → 外部 agent 的「使用系统代理」）或 CLI 版本太旧";
+      summary = `${name} 卡在${where}这一步（${raw.match(/（(\d+s)/)?.[1] ?? "超时"}无响应）：${hint}`;
+      break;
+    }
     case "exited": {
       const exit = /code=(\S+?) signal=(\S+?)）/.exec(raw);
       const how = !exit ? "连接断开" : exit[2] !== "null" ? `信号 ${exit[2]}` : `退出码 ${exit[1]}`;

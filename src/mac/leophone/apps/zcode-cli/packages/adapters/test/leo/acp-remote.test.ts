@@ -23,7 +23,8 @@ import {
 } from "../../src/acp/catalog.js";
 import { describeAcpFailure, redactAgentOutput } from "../../src/acp/errors.js";
 import { AcpModel, AcpSessionManager } from "../../src/acp/model.js";
-import { connectAcpStream, type ConnectAcpAgentOptions } from "../../src/acp/process.js";
+import { connectAcpStream, orderAuthMethods, type ConnectAcpAgentOptions } from "../../src/acp/process.js";
+import { geminiAuthPreference } from "@zcode/shared/acp-detect";
 
 function makeExecutable(dir: string, name: string, body = "#!/bin/sh\nexit 0\n"): string {
   mkdirSync(dir, { recursive: true });
@@ -321,4 +322,123 @@ test("[fix-remote] J: gemini picks up ~/.gemini/.env keys when the env has none,
   const own = resolveAcpLaunch("gemini", { env: { PATH: join(home, "bin"), HOME: home, GEMINI_API_KEY: "mine" } });
   assert.equal(own?.env.GEMINI_API_KEY, "mine");
   assert.equal(own?.env.GOOGLE_GEMINI_MODEL, undefined);
+});
+
+// [fix-remote] K：开会话报 auth_required 时按本机登录状态 authenticate 再重试；每个握手阶段独立超时。
+function scriptedAgentManager(
+  makeAgent: (conn: () => AgentSideConnection) => Agent,
+  stageTimeouts?: ConnectAcpAgentOptions["stageTimeouts"],
+  authPreference?: string[],
+) {
+  return new AcpSessionManager({
+    statePath: join(mkdtempSync(join(tmpdir(), "leo-acp-auth2-")), "acp-sessions.json"),
+    environment: (() => {
+      const home = mkdtempSync(join(tmpdir(), "leo-acp-authhome-"));
+      makeExecutable(join(home, "bin"), "grok");
+      makeExecutable(join(home, "bin"), "gemini");
+      return { env: { PATH: join(home, "bin"), HOME: home } };
+    })(),
+    connect: async (_launch: unknown, options: ConnectAcpAgentOptions) => {
+      const toAgent = new TransformStream<Uint8Array, Uint8Array>();
+      const toClient = new TransformStream<Uint8Array, Uint8Array>();
+      let conn!: AgentSideConnection;
+      const agent = makeAgent(() => conn);
+      conn = new AgentSideConnection(() => agent, ndJsonStream(toClient.writable, toAgent.readable));
+      return connectAcpStream(ndJsonStream(toAgent.writable, toClient.readable), {
+        ...options,
+        ...(stageTimeouts ? { stageTimeouts } : {}),
+        ...(authPreference ? { authPreference } : {}),
+      });
+    },
+  });
+}
+
+test("K: grok-style agent: newSession auth_required → authenticate(grok.com) → session opens and the turn runs", async () => {
+  const methods: string[] = [];
+  let authed = false;
+  const manager = scriptedAgentManager(
+    (conn) => ({
+      initialize: async () => ({
+        protocolVersion: PROTOCOL_VERSION,
+        agentCapabilities: { loadSession: false },
+        authMethods: [{ id: "other", name: "Other" }, { id: "grok.com", name: "Grok" }],
+      }),
+      authenticate: async (params) => {
+        methods.push(params.methodId);
+        authed = true;
+        return {};
+      },
+      newSession: async () => {
+        if (!authed) throw RequestError.authRequired({}, "no auth method id provided");
+        return { sessionId: "s" };
+      },
+      prompt: async (params) => {
+        await conn().sessionUpdate({
+          sessionId: params.sessionId,
+          update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "OK" } },
+        });
+        return { stopReason: "end_turn" };
+      },
+      cancel: async () => undefined,
+    }),
+    undefined,
+    ["grok.com"],
+  );
+  const model = new AcpModel({ agentId: "grok", leoSessionId: "sess_k1", cwd: () => "/w", manager });
+  const events = await collect(model.streamText({ messages: [{ role: "user", content: "hi" }] }));
+  assert.deepEqual(methods, ["grok.com"]);
+  assert.equal(events.some((event) => event.type === "error"), false, JSON.stringify(events));
+  assert.ok(events.some((event) => event.type === "text_delta" && event.text === "OK"));
+});
+
+test("K: a stalled authenticate reports which step hung, with the device-auth hint", async () => {
+  const agent: Agent = {
+    initialize: async () => ({
+      protocolVersion: PROTOCOL_VERSION,
+      agentCapabilities: { loadSession: false },
+      authMethods: [{ id: "grok.com", name: "Grok" }],
+    }),
+    authenticate: () => new Promise(() => undefined),
+    newSession: async () => {
+      throw RequestError.authRequired();
+    },
+    prompt: async () => ({ stopReason: "end_turn" }),
+    cancel: async () => undefined,
+  };
+  const manager = scriptedAgentManager(() => agent, { authenticate: 50 });
+  const model = new AcpModel({ agentId: "grok", leoSessionId: "sess_k2", cwd: () => "/w", manager });
+  await assert.rejects(
+    collect(model.streamText({ messages: [{ role: "user", content: "hi" }] })),
+    /Grok 卡在登录（authenticate）这一步.*grok login --device-auth/,
+  );
+});
+
+test("K: a stalled initialize says so instead of spinning forever", async () => {
+  const agent: Agent = {
+    initialize: () => new Promise(() => undefined),
+    authenticate: async () => ({}),
+    newSession: async () => ({ sessionId: "s" }),
+    prompt: async () => ({ stopReason: "end_turn" }),
+    cancel: async () => undefined,
+  };
+  const manager = scriptedAgentManager(() => agent, { initialize: 50 });
+  const model = new AcpModel({ agentId: "gemini", leoSessionId: "sess_k3", cwd: () => "/w", manager });
+  await assert.rejects(
+    collect(model.streamText({ messages: [{ role: "user", content: "hi" }] })),
+    /Gemini 卡在握手（initialize）这一步/,
+  );
+});
+
+test("K: auth method choice follows local login state", () => {
+  assert.deepEqual(orderAuthMethods([{ id: "oauth-personal" }, { id: "gemini-api-key" }], ["gemini-api-key"]), [
+    "gemini-api-key",
+    "oauth-personal",
+  ]);
+  assert.deepEqual(orderAuthMethods([{ id: "grok.com" }], ["missing"]), ["grok.com"]);
+  const home = mkdtempSync(join(tmpdir(), "leo-gem-auth-"));
+  assert.deepEqual(geminiAuthPreference({ HOME: home, GEMINI_API_KEY: "k" }), ["gemini-api-key"]);
+  assert.deepEqual(geminiAuthPreference({ HOME: home }), ["oauth-personal"]);
+  mkdirSync(join(home, ".gemini"));
+  writeFileSync(join(home, ".gemini", "settings.json"), JSON.stringify({ security: { auth: { selectedType: "vertex-ai" } } }));
+  assert.deepEqual(geminiAuthPreference({ HOME: home }), ["vertex-ai"]);
 });

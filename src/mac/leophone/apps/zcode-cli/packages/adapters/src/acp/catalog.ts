@@ -9,6 +9,7 @@ import {
   CODEX_ACP_VERSION,
   detectAcpAgent,
   findExecutable,
+  geminiAuthPreference,
   geminiEnvFromDotEnv,
   readClaudeOAuthToken,
   resolveClaudeAgentAcpEntry,
@@ -80,14 +81,17 @@ export function resolveAcpLaunch(
         env: { ...base, ...(status.cliPath ? { CODEX_PATH: status.cliPath } : {}) },
       };
     }
-    case "gemini":
+    case "gemini": {
       // [fix-remote] ~/.gemini/.env 里的 key（env 没有时）；HOME 用子进程实际的 HOME（LEO_ACP_AGENT_HOME 时是它）。
-      return { command: status.cliPath!, args: ["--acp"], env: { ...base, ...geminiEnvFromDotEnv(base) } };
+      const env = { ...base, ...geminiEnvFromDotEnv(base) };
+      return { command: status.cliPath!, args: ["--acp"], env, authPreference: geminiAuthPreference(env) };
+    }
     case "opencode":
       return { command: status.cliPath!, args: ["acp"], env: base };
     case "grok":
       // [fix-remote] `grok agent stdio` = ACP over stdio（裸 grok 是 TUI，无终端直接退出）。工作目录由 spawn cwd 与
       // session/new 的 cwd 给出；审批走 session/request_permission（grok 配置里设了 always-approve 时它不会来问）。
-      return { command: status.cliPath!, args: ["agent", "stdio"], env: base };
+      // grok 只声明一个方法（grok.com）：开会话报 auth_required 时选它，用本机已有的登录。
+      return { command: status.cliPath!, args: ["agent", "stdio"], env: base, authPreference: ["grok.com"] };
   }
 }

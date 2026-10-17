@@ -17,6 +17,8 @@ export interface AcpLaunchSpec {
   command: string;
   args: string[];
   env: Record<string, string>;
+  /** [fix-remote] agent 要求 authenticate 时优先试的方法 id（按本机登录状态推出）。 */
+  authPreference?: string[];
 }
 
 export interface AcpAgentStatus {
@@ -235,6 +237,28 @@ export function geminiEnvFromDotEnv(env: NodeJS.ProcessEnv): Record<string, stri
     if (/^(GEMINI|GOOGLE)_/.test(key) && value && !env[key]?.trim()) out[key] = value;
   }
   return out;
+}
+
+/**
+ * [fix-remote] Gemini 的登录方法：有 API Key 用 gemini-api-key；否则按 ~/.gemini/settings.json 里选过的方式
+ * （security.auth.selectedType，旧版 selectedAuthType），常见是 oauth-personal。
+ */
+export function geminiAuthPreference(env: Record<string, string | undefined>): string[] {
+  if (env.GEMINI_API_KEY?.trim()) return ["gemini-api-key"];
+  const home = env.HOME?.trim() || homedir();
+  let selected: string | undefined;
+  try {
+    const settings = JSON.parse(readFileSync(join(home, ".gemini", "settings.json"), "utf8")) as {
+      security?: { auth?: { selectedType?: unknown } };
+      selectedAuthType?: unknown;
+    };
+    const value = settings.security?.auth?.selectedType ?? settings.selectedAuthType;
+    if (typeof value === "string" && value) selected = value;
+  } catch {
+    selected = undefined;
+  }
+  if (env.GOOGLE_API_KEY?.trim() && !selected) return ["gemini-api-key", "vertex-ai"];
+  return selected ? [selected] : ["oauth-personal"];
 }
 
 export function detectAcpAgent(id: AcpAgentId, environment: AcpEnvironment = {}): AcpAgentStatus {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// [fix-remote] ACP 外部 agent 冒烟：直接起 agent → initialize → session/new → prompt「只回复OK」→ 打印结果。
+// [fix-remote] ACP 外部 agent 冒烟：直接起 agent → initialize →（需要时 authenticate）→ session/new → prompt「只回复OK」→ 打印结果。
 // 单文件、只用 Node 内置模块：可以拷到任何一台 Mac 上直接跑（不需要仓库依赖）。
 //
 //   node scripts/leo-acp-smoke.mjs <claude|codex|gemini|opencode|grok> [--cwd DIR] [--timeout 120] [--prompt 文本] [--no-proxy]
@@ -296,14 +296,66 @@ const describe = (error) => {
   }`;
 };
 
+/** 握手各阶段独立超时：卡住时报出卡在哪一步（与 LeoBot 一致：initialize 30s、authenticate 20s、newSession 60s）。 */
+function staged(stage, ms, promise) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`卡在 ${stage}（${ms / 1000}s 无响应）`)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+const isAuthRequired = (error) => error?.rpc?.code === -32000 || /auth(entication)? required/i.test(String(error?.message));
+
+function geminiAuthPreference(env) {
+  if (env.GEMINI_API_KEY?.trim()) return ["gemini-api-key"];
+  try {
+    const settings = JSON.parse(readFileSync(join(home, ".gemini", "settings.json"), "utf8"));
+    const selected = settings?.security?.auth?.selectedType ?? settings?.selectedAuthType;
+    if (typeof selected === "string" && selected) return [selected];
+  } catch {
+    // 没有 settings.json
+  }
+  return ["oauth-personal"];
+}
+
 try {
-  const init = await request("initialize", {
+  const init = await staged("initialize", 30_000, request("initialize", {
     protocolVersion: 1,
     clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
     clientInfo: { name: "LeoBot-smoke", version: "1" },
-  });
-  console.log(`· 握手     protocol=${init?.protocolVersion} agent=${init?.agentInfo?.name ?? "?"} ${init?.agentInfo?.version ?? ""}`);
-  const session = await request("session/new", { cwd, mcpServers: [] });
+  }));
+  const methods = (init?.authMethods ?? []).map((method) => method.id);
+  console.log(
+    `· 握手     protocol=${init?.protocolVersion} agent=${init?.agentInfo?.name ?? "?"} ${init?.agentInfo?.version ?? ""}` +
+      (methods.length ? ` 登录方法=${methods.join(",")}` : ""),
+  );
+  const newSession = () => staged("newSession", 60_000, request("session/new", { cwd, mcpServers: [] }));
+  let session;
+  try {
+    session = await newSession();
+  } catch (error) {
+    if (!isAuthRequired(error) || methods.length === 0) throw error;
+    // 与 LeoBot 一致：开会话要求登录时，按本机登录状态挑方法 authenticate 再重试。
+    const preference = agent === "gemini" ? geminiAuthPreference(launch.env) : agent === "grok" ? ["grok.com"] : [];
+    const ordered = [...preference.filter((id) => methods.includes(id)), ...methods.filter((id) => !preference.includes(id))];
+    let authed = false;
+    for (const methodId of ordered) {
+      try {
+        await staged("authenticate", 20_000, request("authenticate", { methodId }));
+        console.log(`· 登录     authenticate(${methodId}) 成功`);
+        authed = true;
+        break;
+      } catch (authError) {
+        console.log(`· 登录     authenticate(${methodId}) 失败：${describe(authError)}`);
+        if (String(authError?.message).startsWith("卡在")) throw authError;
+      }
+    }
+    if (!authed) throw error;
+    session = await newSession();
+  }
   console.log(`· 会话     ${session?.sessionId}`);
   const result = await request("session/prompt", {
     sessionId: session.sessionId,
@@ -313,5 +365,5 @@ try {
   if (result?.stopReason === "end_turn" && text) finish(0, `stopReason=end_turn 回复：${text.slice(0, 200)}`);
   else finish(1, `stopReason=${result?.stopReason ?? "?"} 回复：${text ? text.slice(0, 200) : "（空）"}`);
 } catch (error) {
-  finish(1, describe(error));
+  finish(1, describe(error) + (agent === "grok" && isAuthRequired(error) ? "；在这台 Mac 的终端运行 grok login --device-auth" : ""));
 }
