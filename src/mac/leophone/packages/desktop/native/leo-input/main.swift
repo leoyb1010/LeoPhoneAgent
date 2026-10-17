@@ -3,7 +3,9 @@
 //
 // 用法:leo-input serve --display <CGDirectDisplayID> [--target-pid <pid>]
 //   stdin 每行一个 JSON 事件(主进程已校验过形状);stdout 每行一个 JSON 状态。
-//   --target-pid 只给开发验证用:事件只投给这个进程(CGEventPostToPid),不进系统事件流。
+//   --target-pid 只给开发验证用:事件只投给这个进程(CGEventPostToPid),不进系统事件流(只对键盘有效)。
+//   --require-front-pid 只给开发验证用:走真实的全局注入,但每个事件发出前确认该位置最前面的窗口属于这个进程,
+//                      不是就立刻退出(code front_guard)。
 //
 // 输入(坐标 x / y 是 0–1,相对被看的那块屏幕):
 //   {"t":"move","x":0.5,"y":0.5}
@@ -44,12 +46,13 @@ func option(_ name: String) -> String? {
 let injectedMarker: Int64 = 0x4C454F
 
 guard CommandLine.arguments.dropFirst().first == "serve" else {
-    emit(["type": "error", "code": "usage", "message": "用法:leo-input serve --display <id> [--target-pid <pid>]"])
+    emit(["type": "error", "code": "usage", "message": "用法:leo-input serve --display <id> [--target-pid <pid> | --require-front-pid <pid>]"])
     exit(2)
 }
 
 let displayID = option("--display").flatMap { UInt32($0) } ?? CGMainDisplayID()
 let targetPid = option("--target-pid").flatMap { pid_t($0) }
+let requiredFrontPid = option("--require-front-pid").flatMap { pid_t($0) }
 let source = CGEventSource(stateID: .hidSystemState)
 
 func displayBounds() -> CGRect {
@@ -85,34 +88,49 @@ final class Injector: @unchecked Sendable {
         return CGPoint(x: bounds.minX + x * bounds.width, y: bounds.minY + y * bounds.height)
     }
 
-    /// 开发验证(--target-pid):投给进程的鼠标事件不经 WindowServer 命中测试,要自己填上目标窗口号,
-    /// 否则应用不知道该给哪个窗口。正式路径(全局注入)不需要。
-    func targetWindow(at location: CGPoint) -> Int64? {
-        guard let targetPid,
-            let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
-        else { return nil }
-        for window in windows where (window[kCGWindowOwnerPID as String] as? pid_t) == targetPid {
-            guard let bounds = window[kCGWindowBounds as String] as? NSDictionary,
-                let rect = CGRect(dictionaryRepresentation: bounds), rect.contains(location),
-                let number = window[kCGWindowNumber as String] as? Int64
-            else { continue }
-            return number
+    /// 开发验证(--require-front-pid):全局注入前确认「这一点上最前面的窗口属于测试进程」,
+    /// 否则立刻退出、一个事件也不发 —— 防止测试中途前台变了把点击送进别的 App。
+    func frontGuardAllows(_ location: CGPoint, keyboard: Bool) -> Bool {
+        guard let requiredFrontPid else { return true }
+        guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
+        else { return false }
+        // 列表按前后顺序。键盘:最前面的普通窗口(layer 0)就是前台 App 的;
+        // 鼠标:第一个包含该点的窗口就是会收到这次事件的窗口。
+        if keyboard {
+            let front = windows.first { ($0[kCGWindowLayer as String] as? Int) == 0 }
+            return (front?[kCGWindowOwnerPID as String] as? pid_t) == requiredFrontPid
         }
-        return nil
+        // 程序坞等系统层有覆盖全屏的透明窗口(layer 20,点击穿透):只看普通窗口(layer 0)和测试进程自己的
+        // 窗口(如它弹出的右键菜单)。前台 App 也必须是测试进程。
+        let front = windows.first { ($0[kCGWindowLayer as String] as? Int) == 0 }
+        guard (front?[kCGWindowOwnerPID as String] as? pid_t) == requiredFrontPid else { return false }
+        for window in windows {
+            let owner = window[kCGWindowOwnerPID as String] as? pid_t
+            guard (window[kCGWindowLayer as String] as? Int) == 0 || owner == requiredFrontPid,
+                let bounds = window[kCGWindowBounds as String] as? NSDictionary,
+                let rect = CGRect(dictionaryRepresentation: bounds), rect.contains(location)
+            else { continue }
+            return owner == requiredFrontPid
+        }
+        return false
     }
 
     func post(_ event: CGEvent?) {
         guard let event else { return }
         event.setIntegerValueField(.eventSourceUserData, value: injectedMarker)
         if let targetPid {
-            if event.type != .keyDown, event.type != .keyUp, let window = targetWindow(at: event.location) {
-                event.setIntegerValueField(.mouseEventWindowUnderMousePointer, value: window)
-                event.setIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent, value: window)
-            }
+            // 只对键盘有效:AppKit / Chromium 不处理直接投给进程的鼠标事件。
             event.postToPid(targetPid)
-        } else {
-            event.post(tap: .cghidEventTap)
+            return
         }
+        if requiredFrontPid != nil {
+            let keyboard = event.type == .keyDown || event.type == .keyUp
+            guard frontGuardAllows(event.location, keyboard: keyboard) else {
+                emit(["type": "error", "code": "front_guard", "message": "前台不是测试窗口,中止"])
+                exit(3)
+            }
+        }
+        event.post(tap: .cghidEventTap)
     }
 
     var lastPoint = CGPoint(x: displayBounds().midX, y: displayBounds().midY)
@@ -186,7 +204,10 @@ final class Injector: @unchecked Sendable {
             let dx = Int32((event["dx"] as? Double) ?? 0)
             let dy = Int32((event["dy"] as? Double) ?? 0)
             // 手机上手指往上推(dy>0)= 内容往下走 = 滚轮负方向(像素单位)。
-            post(CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 2, wheel1: -dy, wheel2: -dx, wheel3: 0))
+            let wheel = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 2, wheel1: -dy, wheel2: -dx, wheel3: 0)
+        // 新建的滚轮事件位置取的是「此刻」光标,前面那条移动可能还没生效:显式定位到目标点。
+        wheel?.location = lastPoint
+        post(wheel)
         case "key":
             guard let code = event["code"] as? String, let key = keyCodes[code] else {
                 emit(["type": "error", "code": "unknown_key", "message": "不认识的按键 \(event["code"] ?? "")"])
