@@ -52,7 +52,7 @@ describe("ProviderConfigRuntime", () => {
     "旧配置 %s 失败不能提交空迁移，源文件恢复后仍可导入",
     async (stage) => {
       const root = await mkdtemp(join(tmpdir(), "zcode-provider-import-failure-"));
-      const configDir = join(root, ".zcode", "v2");
+      const configDir = join(root, ".leophoneagent", "v2") /* [leo] 数据根 .leophoneagent */;
       const legacyFilePath = join(configDir, "config.json");
       const personalFilePath = join(configDir, "provider_config.json");
       const zcodeBuiltinFilePath = join(root, "builtin.json");
@@ -139,7 +139,7 @@ describe("ProviderConfigRuntime", () => {
       expect((await runtime.configService.read()).personalProviders.keys()).toEqual([]);
       expect(recovery).not.toHaveBeenCalled();
       await expect(
-        readFile(join(root, ".zcode/v2/provider_config.json"), "utf8"),
+        readFile(join(root, ".leophoneagent/v2/provider_config.json") /* [leo] 数据根 .leophoneagent */, "utf8"),
       ).resolves.toContain('"schemaVersion": 1');
     } finally {
       runtime.dispose();
@@ -208,7 +208,7 @@ describe("ProviderConfigRuntime", () => {
   it("从旧 config.json 导入同目录 provider_config.json，不改写旧文件且不备份", async () => {
     const root = await mkdtemp(join(tmpdir(), "zcode-provider-runtime-"));
     const zcodeBuiltinFilePath = join(root, "zcodeBuiltin.json");
-    const configDir = join(root, ".zcode", "v2");
+    const configDir = join(root, ".leophoneagent", "v2") /* [leo] 数据根 .leophoneagent */;
     const legacyFilePath = join(configDir, "config.json");
     const legacyText = JSON.stringify({
       provider: {
@@ -233,7 +233,7 @@ describe("ProviderConfigRuntime", () => {
       const snapshot = await runtime.configService.read();
 
       await expect(
-        readFile(join(root, ".zcode", "v2", "provider_config.json"), "utf8"),
+        readFile(join(root, ".leophoneagent", "v2", "provider_config.json") /* [leo] 数据根 .leophoneagent */, "utf8"),
       ).resolves.toContain('"schemaVersion": 1');
       expect(snapshot.personalProviders.keys()).toEqual(["custom-provider"]);
       await expect(readFile(legacyFilePath, "utf8")).resolves.toBe(legacyText);

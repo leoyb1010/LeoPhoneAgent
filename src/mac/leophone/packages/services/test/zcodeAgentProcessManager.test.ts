@@ -35,6 +35,14 @@ import { setZCodeStdioTapDevEnabled } from "../src/zcode-agent/zcodeStdioTapDevC
 import { ZCodeStdioTransport } from "../src/zcode-agent/zcodeStdioTransport.js";
 import { CuaAgentAdmissionGate } from "../src/cua-permission-broker/cuaAgentAdmissionGate.js";
 
+// [leo][WP-21] 宿主会给每条 agent 启动命令注入随包 claude-agent-acp 入口（LEO_CLAUDE_AGENT_ACP_ENTRY）。
+// 真实解析结果取决于开发机 node_modules，这里固定成假路径，让断言与环境无关。
+const FAKE_ACP_ENTRY = "/fake/claude-agent-acp/dist/index.js";
+vi.mock("../src/acp-agent/acpRegistry.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/acp-agent/acpRegistry.js")>()),
+  hostClaudeAgentAcpEntry: () => FAKE_ACP_ENTRY,
+}));
+
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;
@@ -189,7 +197,7 @@ describe("resolveDefaultZCodeAgentCommand", () => {
       command: process.execPath,
       args: [expect.any(String), "app-server", "--stdio"],
       cwd: "/repo/workspace",
-      env: { ELECTRON_RUN_AS_NODE: "1" },
+      env: { ELECTRON_RUN_AS_NODE: "1", LEO_CLAUDE_AGENT_ACP_ENTRY: FAKE_ACP_ENTRY }, // [leo][WP-21]
     });
     expect(realpathSync(command!.args![0]!)).toBe(realpathSync(distEntrypoint));
     expect(realpathSync(command!.storagePreparationEntry!)).toBe(realpathSync(distEntrypoint));
@@ -332,6 +340,7 @@ describe("resolveDefaultZCodeAgentCommand", () => {
       command: binaryPath,
       args: ZCODE_AGENT_RUNTIME.spawnArgs,
       cwd: "/repo/workspace",
+      env: { LEO_CLAUDE_AGENT_ACP_ENTRY: FAKE_ACP_ENTRY }, // [leo][WP-21]
     });
   });
 
@@ -1466,7 +1475,7 @@ setInterval(() => {}, 1000);
         "--workspace-key",
         "/repo/workspace",
         "--log-dir",
-        join(sandboxRoot, ".zcode", "v2", "dev", "stdio-traffic"),
+        join(sandboxRoot, ".leophoneagent", "v2", "dev", "stdio-traffic"), // [leo] 数据根 .leophoneagent
         "--",
         "zcode-agent",
         "app-server",
@@ -1509,7 +1518,7 @@ setInterval(() => {}, 1000);
         "--workspace-key",
         "/repo/workspace",
         "--log-dir",
-        join(sandboxRoot, ".zcode", "v2", "dev", "stdio-traffic"),
+        join(sandboxRoot, ".leophoneagent", "v2", "dev", "stdio-traffic"), // [leo] 数据根 .leophoneagent
         "--",
         "zcode-agent",
         ...expected,

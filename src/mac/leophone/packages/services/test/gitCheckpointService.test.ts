@@ -137,7 +137,7 @@ describeIfGit("gitCheckpointService", () => {
       "skip changed\n",
     );
     expect(runGit(repoPath, ["diff", "--cached", "--name-only"])).toBe(stagedBeforeRestore);
-    expect(readdirSync(join(dataBaseDir, ".zcode", "git-checkpoint-index"))).toEqual([]);
+    expect(readdirSync(join(dataBaseDir, ".leophoneagent", "git-checkpoint-index") /* [leo] 数据根 .leophoneagent */)).toEqual([]);
   }, GIT_INTEGRATION_TEST_TIMEOUT_MS);
 
   it("returns conflicts when affected files drift away from the declared fromCheckpoint and supports force restore", async () => {

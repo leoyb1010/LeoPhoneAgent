@@ -155,7 +155,7 @@ describe("providerRuntimeResolver workspace config dir identity", () => {
     const workspaceIdentity = "remote:ssh:localhost:2223:dev:/home/dev";
 
     expect(resolveProviderConfigDir("glm", workspacePath, workspaceIdentity)).toBe(
-      join(home, ".zcode", "cli"),
+      join(home, ".leophoneagent", "cli"), // [leo] ZCode Agent home 在 ~/.leophoneagent/cli
     );
   });
 
@@ -168,7 +168,7 @@ describe("providerRuntimeResolver workspace config dir identity", () => {
 
     const workspacePath = "/Users/demo/project";
 
-    expect(resolveProviderConfigDir("glm", workspacePath)).toBe(join(home, ".zcode", "cli"));
+    expect(resolveProviderConfigDir("glm", workspacePath)).toBe(join(home, ".leophoneagent", "cli")); // [leo] ~/.leophoneagent/cli
   });
 });
 

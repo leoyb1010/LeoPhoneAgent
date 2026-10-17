@@ -134,7 +134,7 @@ describe("ClaudeNativeSessionImportRepo", () => {
     const workspaceHash = getWorkspaceHash(workspacePath, workspaceIdentity);
     const expectedOutputPath = join(
       dataBaseDir,
-      ".zcode",
+      ".leophoneagent", // [leo] 数据根 .leophoneagent
       "v2",
       "agent-config",
       "claude",
