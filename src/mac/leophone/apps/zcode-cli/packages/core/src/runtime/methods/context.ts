@@ -18,7 +18,9 @@ import type { AgentRuntimeInternal } from "../internal.js";
 import { ensureMemoryDirectoryExists } from "../../memory/directory.js";
 import { formatProjectMemoryIndexContent } from "../../memory/index-content.js";
 import {
-  ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH,
+  getProjectMemoryRetrievalBranch,
+  rememberProjectMemoryRetrievalBranch,
+  resolveRuntimeProjectMemoryRetrievalBranch,
   type ProjectMemoryRetrievalBranch,
 } from "../../memory/project-memory-retrieval-branch.js";
 import {
@@ -76,7 +78,10 @@ export async function ensureContextInitialized(
   this.memoryIndexContent = await loadProjectMemoryIndexContent(
     this,
     this.memoryRoot,
-    ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH,
+    rememberProjectMemoryRetrievalBranch(
+      this,
+      resolveRuntimeProjectMemoryRetrievalBranch(this.config.memory, model),
+    ),
   );
   await ensureGenUiOutputDirectory(this);
   this.contextBuilder = this.createContextBuilderFromSnapshot(snapshot, this.memoryRoot, {
@@ -144,6 +149,7 @@ export function createContextBuilderFromSnapshot(
     projectContext: snapshot.projectContext,
     memoryIndexContent: options.memoryIndexContent,
     memoryRoot,
+    memoryRetrievalBranch: getProjectMemoryRetrievalBranch(this),
     skills: this.skillLoadOutcome,
     agentProfiles: this.config.subagents?.profiles,
     embeddedSearchEnabled: resolveRuntimeEmbeddedSearchEnabled(this),

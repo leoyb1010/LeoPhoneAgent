@@ -64,7 +64,10 @@ export function findLatestMemoryRecallQuery(
 
 export function isMemoryRecallQueryEligible(query: string | undefined): query is string {
   if (!query) return false;
-  return /\s/u.test(query.trim());
+  const trimmed = query.trim();
+  // [leo][wp-61] 修复原因：上游用「含空白」判断是不是一句完整的话，中文整句没有空格，
+  // 「上次那个端口是多少」会被当成单词查询直接跳过。中文按 ≥5 个汉字视为整句（4 字词组如「中文问题」仍跳过）。
+  return /\s/u.test(trimmed) || (trimmed.match(/\p{Script=Han}/gu)?.length ?? 0) >= 5;
 }
 
 export function buildMemorySelectorRequest(input: {
