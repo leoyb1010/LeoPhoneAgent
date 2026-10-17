@@ -27,7 +27,8 @@ describe("createTempTextAttachment", () => {
 
     expect(result.mimeType).toBe("text/plain");
     expect(result.filename).toMatch(/^pasted-text-20260630-104512-[a-f0-9-]+\.txt$/u);
-    expect(result.localPath).toContain(join(tempRoot, ".zcode", "tmp", "paste-attachments"));
+    // [leo] 用户级数据根为 ~/.leophoneagent。
+    expect(result.localPath).toContain(join(tempRoot, ".leophoneagent", "tmp", "paste-attachments"));
     await expect(readFile(result.localPath, "utf8")).resolves.toBe("hello pasted text");
     await expect(stat(result.localPath)).resolves.toMatchObject({
       size: Buffer.byteLength("hello pasted text", "utf8"),

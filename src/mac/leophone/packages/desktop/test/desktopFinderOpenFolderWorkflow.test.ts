@@ -26,8 +26,9 @@ describe("desktopFinderOpenFolderWorkflow", () => {
     });
 
     const infoPlist = readInfoPlist(homeDir);
-    expect(infoPlist).toContain("<string>在ZCode中打开</string>");
-    expect(infoPlist).not.toContain("<string>Open in ZCode</string>");
+    // [leo] Finder 服务展示名为 LeoBot，workflow 文件名为 Open in LeoPhoneAgent.workflow。
+    expect(infoPlist).toContain("<string>在 LeoBot 中打开</string>");
+    expect(infoPlist).not.toContain("<string>Open in LeoBot</string>");
     expect(refreshServicesIndex).toHaveBeenCalledTimes(1);
   });
 
@@ -44,8 +45,8 @@ describe("desktopFinderOpenFolderWorkflow", () => {
     });
 
     const infoPlist = readInfoPlist(homeDir);
-    expect(infoPlist).toContain("<string>Open in ZCode</string>");
-    expect(infoPlist).not.toContain("<string>在ZCode中打开</string>");
+    expect(infoPlist).toContain("<string>Open in LeoBot</string>");
+    expect(infoPlist).not.toContain("<string>在 LeoBot 中打开</string>");
     expect(infoPlist).toContain("<string>5</string>");
     expect(refreshServicesIndex).toHaveBeenCalledTimes(1);
   });
@@ -74,7 +75,7 @@ function createTempHome(): string {
 
 function readInfoPlist(homeDir: string): string {
   return readFileSync(
-    join(homeDir, "Library", "Services", "Open in ZCode.workflow", "Contents", "Info.plist"),
+    join(homeDir, "Library", "Services", "Open in LeoPhoneAgent.workflow", "Contents", "Info.plist"),
     "utf8",
   );
 }

@@ -16,6 +16,12 @@ vi.mock("../src/main/databaseStartupRelay.js", () => ({
   }),
 }));
 
+// [leo] spawnHostProcess 会合入 Leo Link 配对 / 看屏 socket 的 env；真实实现会在 tmpdir 开 unix socket，
+// 单测只关心 Host 路由，替换为固定 env。
+vi.mock("../src/main/leoLinkIpc.js", () => ({
+  leoHostPairEnv: () => ({}),
+}));
+
 const electronMock = vi.hoisted(() => ({
   fork: vi.fn(),
   isPackaged: false,

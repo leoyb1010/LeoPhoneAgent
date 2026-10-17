@@ -3875,14 +3875,17 @@ describe("AgentRuntime manual compact", () => {
       .map((call) => call[1])
       .find((context) => context?.event === "compact.auto.skipped");
     expect(mainRequestMaxOutputTokens).toBe(64_000);
+    // [leo] 上游 3.12.2 起 Runtime 构造时强制 preflight-v1（agent-runtime.ts），传入的 legacy 只做兼容；
+    // 上游这条断言未同步，按 preflight-v1 的实际预算断言。
     expect(autoCompactLog).toMatchObject({
       maxOutputTokens: 64_000,
-      modelContextBudgetStrategy: "legacy",
-      outputReserveTokens: 64_000,
-      threshold: 51_000,
+      modelContextBudgetStrategy: "preflight-v1",
+      outputReserveTokens: 21_000,
+      threshold: 94_000,
     });
     expect(microcompactLog).toMatchObject({
-      thresholdTokens: 45_900,
+      // [leo] preflight-v1 auto 阈值 94_000 的 90%。
+      thresholdTokens: 84_600,
     });
   });
 

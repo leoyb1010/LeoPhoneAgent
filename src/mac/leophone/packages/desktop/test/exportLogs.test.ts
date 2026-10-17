@@ -387,6 +387,7 @@ describe("export logs archive", () => {
     });
   });
 
+  // [leo] 用户级数据根为 ~/.leophoneagent，zcode-cli 日志 / 配置 / CUA 诊断日志都在其下。
   it("导出日志时应额外带上 zcode-cli 用户日志", async () => {
     const originalHome = process.env["HOME"];
     try {
@@ -399,7 +400,7 @@ describe("export logs archive", () => {
           await import("@desktop/main/exportLogs.js");
 
         const sourceDir = join(tempDir, "source");
-        const zcodeCliLogDir = join(fakeHome, ".zcode", "cli", "log");
+        const zcodeCliLogDir = join(fakeHome, ".leophoneagent", "cli", "log");
         await mkdir(join(sourceDir, "logs"), { recursive: true });
         await mkdir(zcodeCliLogDir, { recursive: true });
         await writeFile(join(sourceDir, "logs", "main.log"), "main-log", "utf-8");
@@ -411,7 +412,7 @@ describe("export logs archive", () => {
 
         const entries = await readZipEntries(zipPath);
         expect(entries.get("logs/main.log")).toBe("main-log");
-        expect(entries.get(".zcode/cli/log/agent.log")).toBe("zcode-cli-agent-log");
+        expect(entries.get(".leophoneagent/cli/log/agent.log")).toBe("zcode-cli-agent-log");
       });
     } finally {
       if (originalHome == null) {
@@ -435,7 +436,7 @@ describe("export logs archive", () => {
           await import("@desktop/main/exportLogs.js");
 
         const sourceDir = join(tempDir, "source");
-        const zcodeCliDir = join(fakeHome, ".zcode", "cli");
+        const zcodeCliDir = join(fakeHome, ".leophoneagent", "cli");
         const rolloutDir = join(zcodeCliDir, "rollout");
         const debugDir = join(zcodeCliDir, "debug");
         await mkdir(join(sourceDir, "logs"), { recursive: true });
@@ -454,9 +455,9 @@ describe("export logs archive", () => {
         await writeLogArchiveZip(zipPath, artifacts, createWriteZipTestOptions(tempDir));
 
         const entries = await readZipEntries(zipPath);
-        expect(entries.get(".zcode/cli/config.json")).toBe('{"model":"glm"}');
-        expect(entries.get(".zcode/cli/rollout/model-io-recent.jsonl")).toBe("rollout-recent");
-        expect(entries.has(".zcode/cli/debug/model-io-old.jsonl")).toBe(false);
+        expect(entries.get(".leophoneagent/cli/config.json")).toBe('{"model":"glm"}');
+        expect(entries.get(".leophoneagent/cli/rollout/model-io-recent.jsonl")).toBe("rollout-recent");
+        expect(entries.has(".leophoneagent/cli/debug/model-io-old.jsonl")).toBe(false);
       });
     } finally {
       if (originalHome == null) {
@@ -483,7 +484,7 @@ describe("export logs archive", () => {
           await import("@desktop/main/exportLogs.js");
 
         const sourceDir = join(tempDir, "source");
-        const runDir = join(fakeHome, ".zcode", "computer-use", "run");
+        const runDir = join(fakeHome, ".leophoneagent", "computer-use", "run");
         const tokenDir = join(runDir, ".tokens");
         await mkdir(join(sourceDir, "logs"), { recursive: true });
         await mkdir(tokenDir, { recursive: true });
@@ -505,11 +506,11 @@ describe("export logs archive", () => {
         await writeLogArchiveZip(zipPath, artifacts, createWriteZipTestOptions(tempDir));
 
         const entries = await readZipEntries(zipPath);
-        expect(entries.get(".zcode/computer-use/run/standalone-abc123.sock.exit.log")).toContain(
+        expect(entries.get(".leophoneagent/computer-use/run/standalone-abc123.sock.exit.log")).toContain(
           "begin rejected",
         );
-        expect(entries.has(".zcode/computer-use/run/.tokens/broker.token")).toBe(false);
-        expect(entries.has(".zcode/computer-use/run/standalone-abc123.sock")).toBe(false);
+        expect(entries.has(".leophoneagent/computer-use/run/.tokens/broker.token")).toBe(false);
+        expect(entries.has(".leophoneagent/computer-use/run/standalone-abc123.sock")).toBe(false);
         // 防呆：凭据内容不得以任何路径出现在包里。
         expect([...entries.values()].join("\n")).not.toContain("super-secret-token");
       });
@@ -523,110 +524,7 @@ describe("export logs archive", () => {
     }
   });
 
-  it("反馈后台日志应只收集诊断日志并写入反馈临时目录", async () => {
-    const originalHome = process.env["HOME"];
-    try {
-      await withTempDir(async (tempDir) => {
-        const fakeHome = join(tempDir, "home");
-        process.env["HOME"] = fakeHome;
-        vi.resetModules();
-
-        const { createFeedbackLogArchiveFromExportLogs } =
-          await import("@desktop/main/exportLogs.js");
-
-        const sourceDir = join(tempDir, "source");
-        const feedbackLogDir = join(tempDir, "feedback-logs");
-        const zcodeCliDir = join(fakeHome, ".zcode", "cli");
-        await mkdir(join(sourceDir, "logs"), { recursive: true });
-        await mkdir(join(sourceDir, "agent-config", "codex", "workspace-a"), {
-          recursive: true,
-        });
-        await mkdir(join(sourceDir, "certs"), { recursive: true });
-        await mkdir(join(zcodeCliDir, "log"), { recursive: true });
-        await mkdir(join(zcodeCliDir, "rollout"), { recursive: true });
-        await mkdir(join(zcodeCliDir, "debug"), { recursive: true });
-
-        await writeFile(join(sourceDir, "logs", "main.log"), "main-log", "utf-8");
-        await writeFile(join(sourceDir, "credentials.json"), '{"token":"app-secret"}', "utf-8");
-        await writeFile(
-          join(sourceDir, "agent-config", "codex", "workspace-a", "config.toml"),
-          "agent-config-state",
-          "utf-8",
-        );
-        await writeFile(join(sourceDir, "certs", "app-ca.pem"), "certificate-state", "utf-8");
-        await writeFile(join(zcodeCliDir, "log", "agent.log"), "agent-log", "utf-8");
-        await writeFile(
-          join(zcodeCliDir, "config.json"),
-          JSON.stringify({
-            model: "glm",
-            apiKey: "config-secret",
-            plugins: {
-              enabledPlugins: { "example-plugin@example": true },
-              options: {
-                "example-plugin@example": { license: "plugin-secret", region: "us-east" },
-              },
-            },
-            ui: { locale: "zh-CN", theme: "dark" },
-          }),
-          "utf-8",
-        );
-        await writeFile(join(zcodeCliDir, "rollout", "trace.jsonl"), "rollout-today", "utf-8");
-        await writeFile(join(zcodeCliDir, "rollout", "old-trace.jsonl"), "rollout-old", "utf-8");
-        await writeFile(join(zcodeCliDir, "debug", "trace.jsonl"), "debug", "utf-8");
-
-        const progressEvents: Array<{ processedBytes: number; totalBytes: number }> = [];
-        const feedbackDate = new Date("2026-06-15T01:02:03");
-        await utimes(join(sourceDir, "logs", "main.log"), feedbackDate, feedbackDate);
-        await utimes(join(zcodeCliDir, "log", "agent.log"), feedbackDate, feedbackDate);
-        await utimes(join(zcodeCliDir, "rollout", "trace.jsonl"), feedbackDate, feedbackDate);
-        const oldRolloutDate = new Date("2026-06-14T23:59:59");
-        await utimes(
-          join(zcodeCliDir, "rollout", "old-trace.jsonl"),
-          oldRolloutDate,
-          oldRolloutDate,
-        );
-        const archive = await createFeedbackLogArchiveFromExportLogs(sourceDir, {
-          now: () => feedbackDate,
-          outputRootDir: feedbackLogDir,
-          stageRootDir: join(tempDir, "stage"),
-          onProgress: (event) => progressEvents.push(event),
-        });
-
-        expect(archive.path.startsWith(feedbackLogDir)).toBe(true);
-        expect(archive.path.endsWith(".zip")).toBe(true);
-        expect(archive.size).toBeGreaterThan(0);
-        expect(progressEvents.at(-1)).toEqual({
-          processedBytes: archive.size,
-          totalBytes: archive.size,
-        });
-
-        const entries = await readZipEntries(archive.path);
-        expect(entries.get("logs/main.log")).toBe("main-log");
-        expect(entries.has("credentials.json")).toBe(false);
-        expect(entries.has("agent-config/codex/workspace-a/config.toml")).toBe(false);
-        expect(entries.has("certs/app-ca.pem")).toBe(false);
-        expect(entries.get(".zcode/cli/log/agent.log")).toBe("agent-log");
-        const configEntry = entries.get(".zcode/cli/config.json");
-        expect(configEntry).toContain('"model":"glm"');
-        expect(configEntry).toContain('"enabledPlugins"');
-        expect(configEntry).toContain('"example-plugin@example":true');
-        expect(configEntry).not.toContain("config-secret");
-        expect(configEntry).not.toContain("plugin-secret");
-        expect(configEntry).not.toContain('"options"');
-        expect(configEntry).toContain('"locale":"zh-CN"');
-        expect(entries.get(".zcode/cli/rollout/trace.jsonl")).toBe("rollout-today");
-        expect(entries.has(".zcode/cli/rollout/old-trace.jsonl")).toBe(false);
-        expect(entries.has(".zcode/cli/debug/trace.jsonl")).toBe(false);
-      });
-    } finally {
-      if (originalHome == null) {
-        delete process.env["HOME"];
-      } else {
-        process.env["HOME"] = originalHome;
-      }
-      vi.resetModules();
-    }
-  });
+  // [leo] 反馈功能已移除（无 createFeedbackLogArchiveFromExportLogs），删除对应的反馈日志归档用例。
 
   it("导出日志应只对日志类目录应用近 3 天窗口并跳过旧 session 状态目录", async () => {
     const originalHome = process.env["HOME"];
@@ -677,12 +575,12 @@ describe("export logs archive", () => {
           oldTime,
         );
         await writeTimedFile(
-          join(fakeHome, ".zcode", "cli", "log", "recent.log"),
+          join(fakeHome, ".leophoneagent", "cli", "log", "recent.log"),
           "recent-zcode-cli-log",
           recentTime,
         );
         await writeTimedFile(
-          join(fakeHome, ".zcode", "cli", "log", "old.log"),
+          join(fakeHome, ".leophoneagent", "cli", "log", "old.log"),
           "old-zcode-cli-log",
           oldTime,
         );
@@ -693,7 +591,7 @@ describe("export logs archive", () => {
         const archivePaths = artifacts.files.map((file) => file.archivePath);
 
         expect(archivePaths).toEqual(
-          expect.arrayContaining(["logs/recent.log", ".zcode/cli/log/recent.log"]),
+          expect.arrayContaining(["logs/recent.log", ".leophoneagent/cli/log/recent.log"]),
         );
         expect(archivePaths).not.toContain("logs/old.log");
         expect(archivePaths).not.toContain("agent-config/codex/workspace-a/sessions/recent.jsonl");
@@ -702,7 +600,7 @@ describe("export logs archive", () => {
         expect(archivePaths).not.toContain("agent-config/claude/workspace-a/debug/old.txt");
         expect(archivePaths).not.toContain("sessions/recent.json");
         expect(archivePaths).not.toContain("sessions/old.json");
-        expect(archivePaths).not.toContain(".zcode/cli/log/old.log");
+        expect(archivePaths).not.toContain(".leophoneagent/cli/log/old.log");
       });
     } finally {
       if (originalHome == null) {

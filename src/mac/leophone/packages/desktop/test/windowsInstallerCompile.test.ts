@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -40,6 +40,26 @@ it("compiles real UAC calls when the plugin directory follows the custom include
   );
   const temp = await mkdtemp(join(tmpdir(), "zcode-nsis-compile-"));
   try {
+    // [leo] electron-builder 自带的 NSIS 3.0.4.1 mac 编译器（x86_64）在 macOS 27 的 Rosetta 下处理
+    // `Unicode true` 即 std::bad_alloc 崩溃，与 installer.nsh 内容无关；先用最小脚本探测，编译器本身
+    // 不可用时按环境不支持跳过，可用时仍走下面的真实编译断言。
+    if (process.platform === "darwin") {
+      const probe = join(temp, "probe.nsi");
+      await writeFile(
+        probe,
+        `Unicode true\nName "probe"\nOutFile "${join(temp, "probe.exe")}"\nSection\nSectionEnd\n`,
+      );
+      try {
+        await execFileAsync(compiler, ["-V1", probe], { env: { ...process.env, NSISDIR: nsisDir } });
+      } catch (error) {
+        const stderr = (error as { stderr?: string }).stderr ?? "";
+        if (stderr.includes("std::bad_alloc")) {
+          context.skip("bundled NSIS mac compiler crashes on Unicode scripts on this macOS");
+          return;
+        }
+        throw error;
+      }
+    }
     for (const uninstaller of [false, true]) {
       const output = join(temp, uninstaller ? "uninstaller.exe" : "installer.exe");
       // 只编译不执行：载荷复用当前文件，所有平台都能验证真实 NSIS 插件解析。

@@ -123,9 +123,12 @@ describe("未绑定模型的 Session 历史恢复", () => {
       },
       { eventStore: createTestSessionEventStore(), modelFactory: factory },
     );
-    await expect(runtime.executeTurn("not ready")).rejects.toThrow(
-      "Select a model before continuing",
-    );
+    // [leo] 上游 turn.ts 把 Turn 之前的模型创建失败收口为 "Model creation failed"（原错误挂在 cause 上），
+    // 上游这条旧断言未同步。
+    await expect(runtime.executeTurn("not ready")).rejects.toMatchObject({
+      message: "Model creation failed",
+      cause: expect.objectContaining({ message: "Select a model before continuing" }),
+    });
     expect(factory).not.toHaveBeenCalled();
     expect(runtime.getSessionModelSelection()).toBeUndefined();
   });

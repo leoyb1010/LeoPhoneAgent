@@ -6,6 +6,12 @@ const repoRoot = join(import.meta.dirname, "..", "..", "..");
 const allowedNetworkBoundaryFiles = new Set([
   "packages/adapters/src/auth/localhost-callback.ts",
   "packages/adapters/src/http/index.ts",
+  // [leo] 只 import node:http 的 IncomingMessage 类型，把已到手的公网 DNS transport 响应解码成 ResponseLike，不发请求。
+  "packages/adapters/src/http/raw-response.ts",
+  // [leo] MCP 传输的 fetch 由 network/proxy-fetch.ts 创建（正式 Adapter 网络边界），这里只包一层抓包豁免。
+  "packages/adapters/src/mcp/network.ts",
+  // [leo] OpenAI 系 prompt cache 补丁：只改写请求体后转交调用方注入的 fetch。
+  "packages/adapters/src/model/leo-prompt-cache.ts",
   // 仅使用 node:http 的状态码/类型，不执行网络请求。
   "packages/adapters/src/http/public-egress-policy.ts",
   // 通过调用方注入的 fetch 执行正式 Adapter 网络边界。

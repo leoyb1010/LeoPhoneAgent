@@ -27,6 +27,8 @@ function createHarness() {
       options: { reasoningLevel: "high" },
     }),
     getTools: () => [],
+    // [leo] persistAssistantMessage 已读取 this.getPlanEnabled()（上游 3.15.1 源码如此，测试替身未同步）。
+    getPlanEnabled: () => false,
     async persistMessage(input: MessageInfo) {
       saved.push(input);
     },

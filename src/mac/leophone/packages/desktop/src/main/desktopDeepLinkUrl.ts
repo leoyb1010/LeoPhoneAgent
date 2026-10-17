@@ -1,6 +1,7 @@
 // [leo] 自己的 URL scheme,不和官方客户端抢 zcode://。
 const DEEP_LINK_SCHEME = "leophoneagent";
-const DEEP_LINK_RE = /\bzcode:(?:\/\/|\/)?[^\s"'<>]+/i;
+// [leo] argv 里认的也必须是自己的 scheme，否则 leophoneagent:// 回调永远提取不出来。
+const DEEP_LINK_RE = /\bleophoneagent:(?:\/\/|\/)?[^\s"'<>]+/i;
 const OAUTH_CALLBACK_HOSTS = new Set(["oauth"]);
 const PAYMENT_CALLBACK_HOST = "payment";
 const WORKSPACE_OPEN_HOST = "workspace";

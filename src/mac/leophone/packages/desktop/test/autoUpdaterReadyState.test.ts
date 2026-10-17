@@ -355,7 +355,8 @@ describe("autoUpdater ready state sync", () => {
       resolveEndpointOrigin?: () => string | Promise<string>;
       resolveReleaseChannel?: () => Promise<string>;
     };
-    expect(options.deviceMid).toBe("mid-1");
+    // [leo] 更新源是静态 manifest，不携带设备 ID。
+    expect(options.deviceMid).toBeUndefined();
     await expect(Promise.resolve(options.resolveEndpointOrigin?.())).resolves.toBe(
       "https://endpoint.example.test",
     );

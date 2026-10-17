@@ -61,6 +61,7 @@ afterEach(() => {
   }
 });
 
+// [leo] Leo 的 deep link scheme 为 leophoneagent://。
 describe("desktopOAuthDeepLink workspace open routing", () => {
   it("按应用 locale 解析外部 workspace 确认文案", async () => {
     const { resolveExternalWorkspaceOpenDialogCopy } =
@@ -70,7 +71,8 @@ describe("desktopOAuthDeepLink workspace open routing", () => {
     const enCopy = resolveExternalWorkspaceOpenDialogCopy("en-US");
 
     expect(zhCopy.buttons).toEqual(["打开文件夹", "取消"]);
-    expect(zhCopy.title).toBe("打开外部 ZCode 链接？");
+    // [leo] 标题不带产品名。
+    expect(zhCopy.title).toBe("打开外部链接？");
     expect(zhCopy.detail("/tmp/project")).toContain("只打开你信任来源的文件夹");
     expect(enCopy.buttons).toEqual(["Open folder", "Cancel"]);
   });
@@ -172,7 +174,7 @@ describe("desktopOAuthDeepLink workspace open routing", () => {
       targetWindow,
       expect.objectContaining({
         buttons: ["打开文件夹", "取消"],
-        title: "打开外部 ZCode 链接？",
+        title: "打开外部链接？", // [leo] 标题不带产品名
       }),
     );
     expect(targetWindow.webContents.send).toHaveBeenCalledWith(
@@ -196,7 +198,7 @@ describe("desktopOAuthDeepLink workspace open routing", () => {
     expect(electronMocks.showMessageBoxSync).toHaveBeenCalledWith(
       expect.objectContaining({
         buttons: ["Open folder", "Cancel"],
-        title: "Open external ZCode link?",
+        title: "Open external link?", // [leo] 标题不带产品名
       }),
     );
     expect(logger.warn).toHaveBeenCalledWith(
@@ -344,27 +346,27 @@ describe("desktopOAuthDeepLink OAuth routing", () => {
       registerOAuthState(31, { state: "state-001", provider: "bigmodel" });
 
       expect(
-        handleDeepLink("zcode://oauth/callback?state=state-001&utm_source=google", logger),
+        handleDeepLink("leophoneagent://oauth/callback?state=state-001&utm_source=google", logger),
       ).toBe(true);
       expect(targetWindow.webContents.send).toHaveBeenCalledWith(
         PlatformChannels.OAuthCallback,
-        "zcode://oauth/callback?state=state-001&utm_source=google",
+        "leophoneagent://oauth/callback?state=state-001&utm_source=google",
       );
 
       targetWindow.webContents.send.mockClear();
 
       expect(
-        handleDeepLink("zcode://oauth/callback?authCode=auth-001&state=state-001", logger),
+        handleDeepLink("leophoneagent://oauth/callback?authCode=auth-001&state=state-001", logger),
       ).toBe(true);
       expect(targetWindow.webContents.send).toHaveBeenCalledWith(
         PlatformChannels.OAuthCallback,
-        "zcode://oauth/callback?authCode=auth-001&state=state-001",
+        "leophoneagent://oauth/callback?authCode=auth-001&state=state-001",
       );
 
       targetWindow.webContents.send.mockClear();
 
       expect(
-        handleDeepLink("zcode://oauth/callback?authCode=auth-002&state=state-001", logger),
+        handleDeepLink("leophoneagent://oauth/callback?authCode=auth-002&state=state-001", logger),
       ).toBe(false);
       expect(targetWindow.webContents.send).not.toHaveBeenCalled();
       expect(logger.warn).toHaveBeenLastCalledWith(
@@ -401,97 +403,7 @@ function createMockWindow(webContentsId: number) {
 }
 
 function buildWorkspaceOpenUrl(workspacePath: string): string {
-  return `zcode://workspace/open?path=${encodeURIComponent(workspacePath)}`;
+  return `leophoneagent://workspace/open?path=${encodeURIComponent(workspacePath)}`;
 }
 
-function buildShareImportUrl(shareCode: string): string {
-  return `zcode://share/import?code=${encodeURIComponent(shareCode)}`;
-}
-
-describe("desktopOAuthDeepLink share import routing", () => {
-  it("share import 路由使用业务窗口解析器，不会选中 CUA 辅助浮层", async () => {
-    const cuaIndicatorWindow = createMockWindow(41);
-    const applicationWindow = createMockWindow(42);
-    const logger = { info: vi.fn(), warn: vi.fn() };
-    electronMocks.getFocusedWindow.mockReturnValue(cuaIndicatorWindow);
-    electronMocks.getAllWindows.mockReturnValue([cuaIndicatorWindow, applicationWindow]);
-
-    const { deliverPendingDeepLink, handleDeepLink } =
-      await import("../src/main/desktopOAuthDeepLink.js");
-    deliverPendingDeepLink(applicationWindow.webContents);
-
-    expect(
-      handleDeepLink(buildShareImportUrl("share-code-1"), logger, {
-        resolveApplicationWindow: () => applicationWindow,
-      }),
-    ).toBe(true);
-    expect(applicationWindow.webContents.send).toHaveBeenCalledWith(PlatformChannels.ShareImport, {
-      shareCode: "share-code-1",
-    });
-    expect(cuaIndicatorWindow.webContents.send).not.toHaveBeenCalled();
-  });
-
-  it("pending share import 只投递给目标窗口，其他窗口先 ready 也不投递", async () => {
-    const targetWindow = createMockWindow(51);
-    const otherWindow = createMockWindow(52);
-    const logger = { info: vi.fn(), warn: vi.fn() };
-    electronMocks.getFocusedWindow.mockReturnValue(targetWindow);
-    electronMocks.getAllWindows.mockReturnValue([targetWindow, otherWindow]);
-
-    const { deliverPendingDeepLink, handleDeepLink } =
-      await import("../src/main/desktopOAuthDeepLink.js");
-
-    // 目标窗口存在但 renderer 未 ready：缓存并绑定目标窗口。
-    expect(handleDeepLink(buildShareImportUrl("share-code-2"), logger)).toBe(true);
-    expect(targetWindow.webContents.send).not.toHaveBeenCalled();
-
-    // 其他窗口先 ready：不得把导入意图投递到非目标窗口（导入会写入该窗口 workspace）。
-    deliverPendingDeepLink(otherWindow.webContents);
-    expect(otherWindow.webContents.send).not.toHaveBeenCalledWith(
-      PlatformChannels.ShareImport,
-      expect.anything(),
-    );
-
-    // 目标窗口 ready 后才投递。
-    deliverPendingDeepLink(targetWindow.webContents);
-    expect(targetWindow.webContents.send).toHaveBeenCalledWith(PlatformChannels.ShareImport, {
-      shareCode: "share-code-2",
-    });
-  });
-
-  it("目标窗口关闭时清理 pending share import，不会投递给后续 ready 的窗口", async () => {
-    const targetWindow = createMockWindow(61);
-    const laterWindow = createMockWindow(62);
-    const logger = { info: vi.fn(), warn: vi.fn() };
-    electronMocks.getFocusedWindow.mockReturnValue(targetWindow);
-    electronMocks.getAllWindows.mockReturnValue([targetWindow]);
-
-    const { clearOAuthRoutesForWindow, deliverPendingDeepLink, handleDeepLink } =
-      await import("../src/main/desktopOAuthDeepLink.js");
-
-    expect(handleDeepLink(buildShareImportUrl("share-code-3"), logger)).toBe(true);
-    clearOAuthRoutesForWindow(61);
-
-    deliverPendingDeepLink(laterWindow.webContents);
-    expect(laterWindow.webContents.send).not.toHaveBeenCalledWith(
-      PlatformChannels.ShareImport,
-      expect.anything(),
-    );
-  });
-
-  it("冷启动无窗口时缓存 share import，首个 ready 的窗口投递", async () => {
-    const firstWindow = createMockWindow(71);
-    const logger = { info: vi.fn(), warn: vi.fn() };
-    electronMocks.getFocusedWindow.mockReturnValue(null);
-    electronMocks.getAllWindows.mockReturnValue([]);
-
-    const { deliverPendingDeepLink, handleDeepLink } =
-      await import("../src/main/desktopOAuthDeepLink.js");
-
-    expect(handleDeepLink(buildShareImportUrl("share-code-4"), logger)).toBe(false);
-    deliverPendingDeepLink(firstWindow.webContents);
-    expect(firstWindow.webContents.send).toHaveBeenCalledWith(PlatformChannels.ShareImport, {
-      shareCode: "share-code-4",
-    });
-  });
-});
+// [leo] 会话分享已移除（deep link 不再处理 share/import），删除 share import 路由用例。

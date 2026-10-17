@@ -264,8 +264,10 @@ describe("subagent background notifications", () => {
     expect(notificationTexts[2]).not.toContain("<task-id>agent_idle_3</task-id>");
     const firstNotificationMessage = notificationInputs[0];
     expect(firstNotificationMessage?.role).toBe("user");
-    expect(modelMessageContentToText(firstNotificationMessage?.content)).not.toContain(
-      "<system-reminder>",
+    // [leo] 上游 provider-entry-origins.ts 在投影边界把新轮 task_notification 包进 <system-reminder>
+    // （保持 user 身份），上游这条旧断言未同步。
+    expect(modelMessageContentToText(firstNotificationMessage?.content)).toMatch(
+      /^<system-reminder>\n\[SYSTEM NOTIFICATION - NOT USER INPUT\]/u,
     );
     expect(hookEvents).toEqual([]);
     expect(requestCount).toBe(3);

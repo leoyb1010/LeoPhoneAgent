@@ -47,11 +47,12 @@ describe("desktop tray log export", () => {
 
       const labels = () => captured.template.map((item) => item.label).filter(Boolean);
       expect(labels()).not.toContain("清除所有数据");
-      expect(labels().slice(-3)).toEqual(["关于 ZCode", "导出日志", "退出"]);
+      // [leo] 产品名 LeoBot。
+      expect(labels().slice(-3)).toEqual(["关于 LeoBot", "导出日志", "退出"]);
       locale = "en-US";
       updateWindowsDesktopTrayMenu();
       expect(labels()).not.toContain("Clear all data");
-      expect(labels().slice(-3)).toEqual(["About ZCode", "Export logs", "Quit"]);
+      expect(labels().slice(-3)).toEqual(["About LeoBot", "Export logs", "Quit"]);
 
       const item = captured.template.find((entry) => entry.label === "Export logs");
       expect(item?.click).toBeDefined();

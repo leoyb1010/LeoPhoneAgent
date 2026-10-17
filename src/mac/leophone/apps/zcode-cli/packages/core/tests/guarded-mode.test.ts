@@ -29,7 +29,9 @@ describe("Guarded is an opt-in mode, not a global gate", () => {
       approvalMode: "user-once",
     });
   });
-  it("guarded retains workflow alwaysAsk and ordinary session grants", () => {
+  // [leo] 刻意差异：guarded（Leo 默认档）与 yolo 一样跳过 alwaysAsk（src/permission/service.ts 的 [leo] 分支），
+  // workflow 工具不再弹确认；会话授权之后仍是 allow。
+  it("guarded bypasses workflow alwaysAsk and keeps ordinary session grants", () => {
     const service = new PermissionService();
     const context = {
       toolName: "CreateWorkflow",
@@ -38,7 +40,10 @@ describe("Guarded is an opt-in mode, not a global gate", () => {
       riskLevel: "high" as const,
     };
     const capability = { alwaysAsk: true };
-    expect(service.checkPermission(context, capability).decision).toBe("ask");
+    expect(service.checkPermission(context, capability)).toMatchObject({
+      decision: "allow",
+      ruleId: "mode.guarded",
+    });
     service.grantSessionPermission([
       { type: "addRules", behavior: "allow", rules: [{ toolName: "CreateWorkflow" }] },
     ]);

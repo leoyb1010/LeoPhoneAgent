@@ -81,28 +81,21 @@ describe("Telemetry V4 bootstrap", () => {
     });
   });
 
-  it("Standalone 异步生成并复用随机 installation id", async () => {
+  // [leo] LeoPhoneAgent 不做任何遥测：prepareModelTelemetryEnv 原样返回 env，不生成 installation id，
+  // 也不读写 telemetry-state.json。
+  it("即使配置了 OTLP endpoint 也不生成 installation id、不写 telemetry-state.json", async () => {
     const home = await mkdtemp(join(tmpdir(), "zcode-telemetry-"));
     const env = {
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "http://127.0.0.1:1/v1/traces",
       ZCODE_HOME: home,
     };
-    const [first, second] = await Promise.all([
-      prepareModelTelemetryEnv(env, {
-        cliVersion: "0.16.1",
-        productVersion: "3.6.1",
-      }),
-      prepareModelTelemetryEnv(env, {
-        cliVersion: "0.16.1",
-        productVersion: "3.6.1",
-      }),
-    ]);
+    const prepared = await prepareModelTelemetryEnv(env, {
+      cliVersion: "0.16.1",
+      productVersion: "3.6.1",
+    });
 
-    expect(first.ZCODE_TELEMETRY_DEVICE_MID).toMatch(/^[0-9a-f-]{36}$/u);
-    expect(second.ZCODE_TELEMETRY_DEVICE_MID).toBe(first.ZCODE_TELEMETRY_DEVICE_MID);
-    const state = JSON.parse(await readFile(join(home, "v2", "telemetry-state.json"), "utf8")) as {
-      deviceMid: string;
-    };
-    expect(state.deviceMid).toBe(first.ZCODE_TELEMETRY_DEVICE_MID);
+    expect(prepared).toEqual(env);
+    expect(prepared.ZCODE_TELEMETRY_DEVICE_MID).toBeUndefined();
+    await expect(readFile(join(home, "v2", "telemetry-state.json"), "utf8")).rejects.toThrow();
   });
 });

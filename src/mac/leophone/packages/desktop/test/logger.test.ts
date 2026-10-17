@@ -38,7 +38,8 @@ describe("desktop main logger", () => {
       expect(() => logger.info("main log append fault")).not.toThrow();
       expect(() => webRemoteControlRelayLogger.warn("relay log append fault")).not.toThrow();
 
-      const logDir = join(tempRoot, ".zcode", "v2", "logs");
+      // [leo] 用户级数据根为 ~/.leophoneagent。
+      const logDir = join(tempRoot, ".leophoneagent", "v2", "logs");
       await expect(readdir(logDir)).resolves.toEqual(["web-remote-control"]);
       await expect(readdir(join(logDir, "web-remote-control"))).resolves.toEqual([]);
 

@@ -36,6 +36,8 @@ const lineCountExemptFiles = new Set([
     "helpers/attachment-media-resolver.ts",
     "helpers/compact-selection.ts",
     "helpers/provider-request-messages.ts",
+    // [leo] 上游 3.15.1 原样发出时就是 414 行（上游自身测试未豁免），未做 Leo 修改，按既有惯例豁免。
+    "methods/streaming-tool-coordinator.ts",
   ].map((file) => join(repoRoot, "packages/core/src/runtime", file)),
 ]);
 

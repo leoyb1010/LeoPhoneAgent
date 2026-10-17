@@ -267,5 +267,6 @@ function createMockWindow(webContentsId: number) {
 }
 
 function buildWorkspaceOpenUrl(workspacePath: string): string {
-  return `zcode://workspace/open?path=${encodeURIComponent(workspacePath)}`;
+  // [leo] Leo 的 deep link scheme 为 leophoneagent://。
+  return `leophoneagent://workspace/open?path=${encodeURIComponent(workspacePath)}`;
 }

@@ -82,10 +82,10 @@ describe("ensureDesktopDeviceMidSync", () => {
       createId: () => "shared-device-uuid",
     });
 
-    // telemetryCore 用 homeDir 定位 state 文件：{homeDir}/.zcode/v2/telemetry-state.json
-    // 让该路径正好等于本测试的 configDir，验证两侧读同一字段。
+    // [leo] telemetryCore 用 homeDir 定位 state 文件：{homeDir}/.leophoneagent/v2/telemetry-state.json；
+    // Leo 的遥测上报端点恒为空（不发请求），改为直接读数仓侧的 deviceMid 入口验证两侧读同一字段。
     const home = makeTempDir();
-    const sharedDir = join(home, ".zcode", "v2");
+    const sharedDir = join(home, ".leophoneagent", "v2");
     mkdirSync(sharedDir, { recursive: true });
     writeFileSync(
       join(sharedDir, "telemetry-state.json"),
@@ -93,28 +93,10 @@ describe("ensureDesktopDeviceMidSync", () => {
       "utf-8",
     );
 
-    const { createTelemetryCore } = await import("@zcode/services/node");
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
-    const service = createTelemetryCore({
-      homeDir: home,
-      fetchImpl: fetchMock,
-      randomUUID: () => "unrelated-event-id",
-    }) as {
-      reportAppLaunch(input: {
-        clientTimezone: string;
-        clientLanguage: string;
-        screenResolution: string;
-      }): Promise<void>;
-    };
-
-    await service.reportAppLaunch({
-      clientTimezone: "Asia/Shanghai",
-      clientLanguage: "zh-CN",
-      screenResolution: "3024x1964",
-    });
-
-    const body = JSON.parse(String(fetchMock.mock.calls[0]![1]!.body));
-    expect(body.device_mid).toBe("shared-device-uuid");
+    const { ensureTelemetryDeviceMid } = await import("@zcode/services/node");
+    await expect(
+      ensureTelemetryDeviceMid({ homeDir: home, randomUUID: () => "unrelated-event-id" }),
+    ).resolves.toBe("shared-device-uuid");
   });
 
   it("JSON 损坏时视作缺失，生成新 UUID 不抛", () => {

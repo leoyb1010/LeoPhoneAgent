@@ -3,7 +3,7 @@
 // ⚠ 术语：artifact = 脚本经 `artifact.*` 发布给用户看的产出，不是引擎的 `RunSettlement.artifact`。
 //
 // 钉四件事：
-//   1. 落点：~/.zcode/tmp/workflow-artifacts/<runId>-<digest>/<artifactId>-<digest>/v<N>/<name>，一版一份；
+//   1. 落点：~/.leophoneagent/tmp/workflow-artifacts/<runId>-<digest>/<artifactId>-<digest>/v<N>/<name>，一版一份；
 //   2. 只在路径为空时写——一版的字节永不变，已有副本要么同字节要么是用户自己的编辑，都保留；
 //   3. 渲染器给的每个路径片段都清洗过，写不出这个目录；
 //   4. 形状与上限（20 MiB，同 `artifact.file`）在宿主侧再校验一次。
@@ -21,7 +21,8 @@ import {
 let tempRoot = "";
 
 function artifactsRoot(): string {
-  return join(tempRoot, ".zcode", "tmp", "workflow-artifacts");
+  // [leo] 用户级数据根为 ~/.leophoneagent。
+  return join(tempRoot, ".leophoneagent", "tmp", "workflow-artifacts");
 }
 
 /** run / 产物目录名：清洗后的 id 加原始 id 的 sha256 前 8 位（与实现同一规则）。 */
@@ -247,6 +248,6 @@ describe("materializeWorkflowArtifactFile", () => {
         /invalid/u,
       );
     }
-    await expect(readdir(join(tempRoot, ".zcode"))).rejects.toThrow();
+    await expect(readdir(join(tempRoot, ".leophoneagent"))).rejects.toThrow();
   });
 });

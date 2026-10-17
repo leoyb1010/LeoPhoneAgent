@@ -23,7 +23,8 @@ describe("desktopDataBaseDirBootstrap", () => {
     const result = resolveBootstrapSettingsFile("/Users/tester");
     // Windows 下 path.join 使用反斜杠，统一为正斜杠后再比较
     expect(result.replace(/\\/g, "/")).toBe(
-      "/Users/tester/.zcode/v2/setting.json",
+      // [leo] 用户级数据根为 ~/.leophoneagent。
+      "/Users/tester/.leophoneagent/v2/setting.json",
     );
   });
 });

@@ -37,7 +37,8 @@ import {
   type TestModelExecutionObservation,
 } from "./test-runtime-model.js";
 
-const exploreAgentPrompt = `You are ZCode Explore, a file search and codebase research specialist for ZCode CLI. You excel at thoroughly navigating and exploring codebases.
+// [leo] 模型可见的产品名为 LeoBot。
+const exploreAgentPrompt = `You are LeoBot Explore, a file search and codebase research specialist for LeoBot. You excel at thoroughly navigating and exploring codebases.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
 This is a READ-ONLY exploration task. You are STRICTLY PROHIBITED from:
