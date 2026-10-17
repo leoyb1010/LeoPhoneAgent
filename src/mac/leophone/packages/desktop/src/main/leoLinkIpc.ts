@@ -60,6 +60,24 @@ export async function callLeoQuick(
   return callLeo(path, body === undefined ? "GET" : "POST", { "x-leo-pair": LEO_PAIR_SECRET }, body);
 }
 
+/**
+ * [leo][WP-27] 并行任务组调 Host:同快速派发,要内存口令。建组要建 worktree、跑 leo.json 的 setup,
+ * 采纳 / 清理要动 git,给足时间。
+ */
+export async function callLeoGroups(
+  action: "list" | "create" | "diff" | "merge" | "cleanup",
+  body?: unknown,
+): Promise<import("./leoLinkHttp.js").LeoLinkIpcResult> {
+  if (!(await ownHostListening())) return { ok: false, error: "本机 Leo 服务还没启动" };
+  return callLeo(
+    `/api/leo/groups/${action}`,
+    action === "list" ? "GET" : "POST",
+    { "x-leo-pair": LEO_PAIR_SECRET },
+    action === "list" ? undefined : (body ?? {}),
+    15 * 60_000,
+  );
+}
+
 const PORT_TAKEN = `本机端口 ${LEO_HTTP_PORT} 被别的程序占着(比如旧版 LeoCodeBox),先关掉它再试`;
 
 /** [WP-50] 设置「连接手机 → 屏幕」:开关在 Host(要内存口令),屏幕录制权限状态在主进程。 */

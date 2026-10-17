@@ -24,6 +24,8 @@ import {
   startOAuthLogin,
 } from "./oauthRuntime.js";
 import { QuickDispatchError, type LeoQuickEntry } from "./quickEntry.js";
+import { handleTaskGroupRequest } from "./taskGroups/http.js";
+import type { LeoTaskGroups } from "./taskGroups/service.js";
 import { screenSharingEnabled, setScreenSharingEnabled } from "./link/screen/hostCapture.js";
 import { executeTreasuryTool, TREASURY_TOOLS } from "./treasuryTools.js";
 import type { TreasuryStore } from "./treasuryStore.js";
@@ -137,6 +139,8 @@ export function startLeoHttpApi(deps: {
   onPortBusy: () => void;
   /** 菜单栏 / ⌥Space 快速派发(只有主进程能调,见 docs/specs/leo-quick-entry.md)。 */
   quick?: LeoQuickEntry;
+  /** [WP-27] 并行任务组(worktree 隔离、对比、采纳、清理);同样只有主进程能调。 */
+  groups?: LeoTaskGroups;
 }): Server {
   const isMainKey = secretMatcher(`Bearer ${leoLocalKey()}`);
   const isTreasuryKey = secretMatcher(`Bearer ${leoTreasuryKey()}`);
@@ -330,6 +334,16 @@ export function startLeoHttpApi(deps: {
         return;
       }
       json(res, 404, { error: "not found" });
+      return;
+    }
+    if (url.pathname.startsWith("/api/leo/groups/")) {
+      await handleTaskGroupRequest({
+        groups: isPairSecret(req.headers["x-leo-pair"] as string | undefined) ? deps.groups : undefined,
+        action: url.pathname.slice("/api/leo/groups/".length),
+        method: req.method,
+        readBody: () => readJsonBody(req, 256 * 1024),
+        send: (status, body) => json(res, status, body),
+      });
       return;
     }
     if (url.pathname === "/api/leo/link/status" && req.method === "GET") {

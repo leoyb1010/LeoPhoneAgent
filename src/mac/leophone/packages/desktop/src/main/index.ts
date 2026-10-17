@@ -7,6 +7,7 @@ import { installRequestSecurityDiagnostics } from "./request-security-edition/in
 import { isLeoQuickPanelWindow, startLeoQuickEntry } from "./leo/quickEntry.js";
 import { registerImcpIpc } from "./leo/imcp.js";
 import { registerAcpIpc } from "./leo/acp.js";
+import { registerTaskGroupsIpc } from "./leo/taskGroups.js";
 import { registerComputerUseIpc } from "./leo/computerUse.js";
 import { registerSpeechIpc } from "./leo/speech.js";
 import { createLocalTtftExporter } from "./localTtftExporter.js";
@@ -1973,6 +1974,7 @@ app.whenReady().then(async () => {
   registerLeoLinkIpc();
   registerImcpIpc();
   registerAcpIpc(); // [leo][WP-21] 外部 agent 列表与登录
+  registerTaskGroupsIpc(); // [leo][WP-27] 并行任务组
   registerComputerUseIpc();
   registerSpeechIpc(logger);
   markMainLaunchAppReady();

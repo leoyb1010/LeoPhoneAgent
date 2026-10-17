@@ -94,6 +94,7 @@ import {
 } from "@/v4/ConversationComposer.js";
 import type { ConversationDropTargetController } from "@/v4/composer/conversationDropTarget.js";
 import { shouldIgnoreEscapeForStopGeneration } from "@/v4/composer/escapeStop.js";
+import { LeoTaskGroupsHome } from "@/leo/LeoTaskGroupsHome.js";
 import { ConversationDraftEmptyState } from "@/v4/ConversationDraftEmptyState.js";
 import { LeoDraftStatusList } from "@/leo/LeoDraftStatusList.js";
 import { ConversationDraftSuggestedPromptsContainer } from "@/v4/ConversationDraftSuggestedPromptsContainer.js";
@@ -3697,6 +3698,8 @@ export function SessionPane({
       {composerNode}
       {/* [leo] 首页输入框下方:等你确认 / 在跑 / 做完待看,没有就不占位。 */}
       {isDraft ? <LeoDraftStatusList className="mt-7" /> : null}
+      {/* [leo][WP-27] 并行方案:几个 agent 各在一个 worktree 里做同一件事,对比后采纳一个。 */}
+      {isDraft && !compactForRemoteControl ? <LeoTaskGroupsHome workspacePath={workspacePath} className="mt-5" /> : null}
       {isDraft ? (
         <ConversationDraftSuggestedPromptsContainer
           className="mt-6"

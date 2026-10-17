@@ -50,6 +50,14 @@ if (process.platform === "darwin") {
   });
 }
 
+/** [leo][WP-27] 并行任务组:多个 agent 各在一个 git worktree 里做同一件事,对比后采纳一个。 */
+if (process.platform === "darwin") {
+  contextBridge.exposeInMainWorld("leoTaskGroups", {
+    call: (action: "list" | "create" | "diff" | "merge" | "cleanup", body?: unknown) =>
+      ipcRenderer.invoke("leo:groups", action, body),
+  });
+}
+
 /** [leo][WP-22] 设置「电脑操作」:随包 Peekaboo 的权限状态与系统设置入口。 */
 if (process.platform === "darwin") {
   contextBridge.exposeInMainWorld("leoComputerUse", {

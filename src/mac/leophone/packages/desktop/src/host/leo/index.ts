@@ -10,7 +10,8 @@ import type { ServiceCollection } from "@zcode/services";
 import { ZCODE_VERSION } from "@zcode/shared";
 
 import { startLeoHttpApi } from "./httpApi.js";
-import { createLeoQuickEntry } from "./quickEntry.js";
+import { createLeoQuickEntry, resolveQuickWorkspaces } from "./quickEntry.js";
+import { createLeoTaskGroups } from "./taskGroups/service.js";
 import { linkEnabled, relayConfigSignature, startLeoLink } from "./link/index.js";
 import { registerPeekabooMcpServer } from "./registerPeekabooMcp.js";
 import { registerTreasuryMcpServer } from "./registerTreasuryMcp.js";
@@ -79,6 +80,16 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
         logger: deps.logger,
         onSubscriptionChanged: syncSubscriptions,
         quick: createLeoQuickEntry(deps.services),
+        groups: createLeoTaskGroups({
+          tasks: {
+            createTask: (input) => taskService.createTask({ ...input, deferPersistenceUntilFirstPrompt: true }),
+            sendPrompt: async (input) => {
+              await taskService.sendPrompt({ ...input, traceId: input.traceId ?? "", clientMode: "desktop-continuous" });
+            },
+          },
+          workspaces: async () =>
+            resolveQuickWorkspaces(await deps.services.getOptional(ISettingService)?.get().catch(() => undefined)),
+        }),
         onListening: () => {
           // 启动时对一次账:之前登过的订阅账号,模型清单要和它一致。
           syncSubscriptions();

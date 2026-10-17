@@ -26,6 +26,7 @@ export async function callLeo(
   method: "GET" | "POST" | "DELETE",
   extraHeaders: Record<string, string> = {},
   body?: unknown,
+  timeoutMs = 25_000,
 ): Promise<LeoLinkIpcResult> {
   const key = leoLocalKey();
   if (!key) return { ok: false, error: "本机 Leo 服务还没启动" };
@@ -38,7 +39,7 @@ export async function callLeo(
         ...extraHeaders,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(25_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     // 不能叫 body:同一块里先用了参数 body,const 会让它落进暂时性死区,每次调用都抛 ReferenceError。
     const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;

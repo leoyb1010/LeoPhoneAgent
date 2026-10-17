@@ -24,10 +24,12 @@ delete process.env["LEOAGENT_KEY"];
 
 const { startLeoHttpApi, readJsonBody } = await import("./httpApi.js");
 const { leoLocalKey, leoTreasuryKey } = await import("./leoPaths.js");
+const { TaskGroupError } = await import("./taskGroups/service.js");
 
 let server: Server;
 const logs: string[] = [];
 const quickDispatched: Record<string, unknown>[] = [];
+const groupCalls: string[] = [];
 
 before(async () => {
   server = startLeoHttpApi({
@@ -42,6 +44,19 @@ before(async () => {
         quickDispatched.push(body);
         return { taskId: "t-quick", workspacePath: "/tmp" };
       },
+    },
+    groups: {
+      list: async () => ({ groups: [] }),
+      create: async () => {
+        groupCalls.push("create");
+        return {} as never;
+      },
+      diff: async () => ({ files: [], patch: "", truncated: false }),
+      merge: async () => {
+        groupCalls.push("merge");
+        throw new TaskGroupError(409, "这个任务组已经采纳过一个方案");
+      },
+      cleanup: async () => ({}) as never,
     },
   });
   await new Promise<void>((resolve) => server.once("listening", () => resolve()));
@@ -265,4 +280,23 @@ test("quick summary / dispatch need the in-memory pair secret, the key file alon
   assert.equal(dispatched.status, 202);
   assert.equal(dispatched.body["taskId"], "t-quick");
   assert.deepEqual(quickDispatched, [{ prompt: "整理一下 README", workspacePath: "/tmp" }]);
+});
+
+test("[WP-27] task group routes need the in-memory pair secret; service errors keep their status", async () => {
+  const auth = { authorization: `Bearer ${leoLocalKey()}` };
+  const body = JSON.stringify({ workspacePath: "/tmp", prompt: "x", agents: [{ kind: "leo" }] });
+  assert.equal((await call("GET", "/api/leo/groups/list", auth)).status, 403);
+  assert.equal((await call("POST", "/api/leo/groups/create", auth, body)).status, 403);
+  assert.deepEqual(groupCalls, []);
+
+  const withPair = { ...auth, "x-leo-pair": "pair-secret-for-test" };
+  const listed = await call("GET", "/api/leo/groups/list", withPair);
+  assert.equal(listed.status, 200);
+  assert.deepEqual(listed.body["groups"], []);
+  assert.equal((await call("POST", "/api/leo/groups/create", withPair, body)).status, 200);
+  const merged = await call("POST", "/api/leo/groups/merge", withPair, JSON.stringify({ groupId: "g", memberId: "1" }));
+  assert.equal(merged.status, 409);
+  assert.equal(merged.body["error"], "这个任务组已经采纳过一个方案");
+  assert.equal((await call("POST", "/api/leo/groups/rm", withPair, "{}")).status, 404);
+  assert.deepEqual(groupCalls, ["create", "merge"]);
 });
