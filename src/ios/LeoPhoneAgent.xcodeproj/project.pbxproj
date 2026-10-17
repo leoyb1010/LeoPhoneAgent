@@ -199,6 +199,7 @@
 		AA26CCC32F31090100AECF2D /* libresolv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = AA26CCC42F31090100AECF2D /* libresolv.tbd */; };
 		AA71B0222F44BEB200A28A5E /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA71B0212F44BEB200A28A5E /* Launch Screen.storyboard */; };
 		AA9C2BF92F65996900F41633 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = E5X000021 /* SwiftMath */; };
+		E5RTC5101 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = E5RTC5103 /* WebRTC */; };
 		AADDA9E12F6ECCF400B66649 /* ThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADDA9E02F6ECCF400B66649 /* ThumbnailCache.swift */; };
 		AAF00F012F50A00000049557 /* FFmpeg.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AAF00F002F50A00000049557 /* FFmpeg.framework */; };
 		AAF00F022F50A00000049557 /* FFmpeg.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AAF00F002F50A00000049557 /* FFmpeg.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -487,6 +488,7 @@
 		E5J000040 /* AttributeQueryRecorder.m in Sources */ = {isa = PBXBuildFile; fileRef = E5J000041 /* AttributeQueryRecorder.m */; };
 		E5JB00001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB00002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LF63BDFAF750 /* MacScreenSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFD48397A7A7 /* MacScreenSession.swift */; };
 		LF3E14F93A3B /* PinnedSessionOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF9E8272F01 /* PinnedSessionOrder.swift */; };
 		LF43FE8FE20C /* CommandPaletteCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF837AD530A8 /* CommandPaletteCatalog.swift */; };
 		LF64333B68E8 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
@@ -502,6 +504,7 @@
 		E5JB00004 /* hmm_model.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00015 /* hmm_model.utf8 */; };
 		E5JB10001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB10002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LFB7E8E0547A /* MacScreenSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFD48397A7A7 /* MacScreenSession.swift */; };
 		LFA0A1B535C5 /* PinnedSessionOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF9E8272F01 /* PinnedSessionOrder.swift */; };
 		LFAB889B1927 /* CommandPaletteCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF837AD530A8 /* CommandPaletteCatalog.swift */; };
 		LF714387EFE1 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
@@ -726,9 +729,11 @@
 		E5SIR0003 /* HarnessApprovalNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SIR0004 /* HarnessApprovalNotifier.swift */; };
 		E5SIR0001 /* MacFleetIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SIR0002 /* MacFleetIntents.swift */; };
 		E5GWC0001 /* LeoAgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWC0002 /* LeoAgentClient.swift */; };
+		E5SPC51B1 /* ScreenPeerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SPC51R /* ScreenPeerClient.swift */; };
 		E5MSC50B1 /* MacScreenSnapshotClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MSC50R /* MacScreenSnapshotClient.swift */; };
 		E5GWH1001 /* LeoAgentHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH1002 /* LeoAgentHarness.swift */; };
 		E5GWV0001 /* GatewayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWV0002 /* GatewayViews.swift */; };
+		LFFF7A120AA9 /* MacScreenLiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF12689023D8 /* MacScreenLiveViews.swift */; };
 		LF0FA1A41C6D /* MacScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF26AE1ABDCE /* MacScreenViews.swift */; };
 		E5GWD0001 /* GatewayRunDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWD0002 /* GatewayRunDriver.swift */; };
 		E5GWH0001 /* GatewayHostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH0002 /* GatewayHostStore.swift */; };
@@ -1543,6 +1548,7 @@
 		E5JB00011 /* JiebaWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JiebaWrapper.h; sourceTree = "<group>"; };
 		E5JB00012 /* JiebaWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = JiebaWrapper.mm; sourceTree = "<group>"; };
 		E5JB00013 /* TextSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSegmenter.swift; sourceTree = "<group>"; };
+		LFD48397A7A7 /* MacScreenSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacScreenSession.swift; sourceTree = "<group>"; };
 		LFF9E8272F01 /* PinnedSessionOrder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedSessionOrder.swift; sourceTree = "<group>"; };
 		LF837AD530A8 /* CommandPaletteCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPaletteCatalog.swift; sourceTree = "<group>"; };
 		LFB3AA038DDA /* ChatCompletionsWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCompletionsWire.swift; sourceTree = "<group>"; };
@@ -1749,9 +1755,11 @@
 		E5SIR0004 /* HarnessApprovalNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/HarnessApprovalNotifier.swift"; sourceTree = SOURCE_ROOT; };
 		E5SIR0002 /* MacFleetIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Intents/MacFleetIntents.swift"; sourceTree = SOURCE_ROOT; };
 		E5GWC0002 /* LeoAgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentClient.swift; sourceTree = SOURCE_ROOT; };
+		E5SPC51R /* ScreenPeerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/ScreenPeerClient.swift; sourceTree = SOURCE_ROOT; };
 		E5MSC50R /* MacScreenSnapshotClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/MacScreenSnapshotClient.swift; sourceTree = SOURCE_ROOT; };
 		E5GWH1002 /* LeoAgentHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentHarness.swift; sourceTree = SOURCE_ROOT; };
 		E5GWV0002 /* GatewayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/GatewayViews.swift; sourceTree = SOURCE_ROOT; };
+		LF12689023D8 /* MacScreenLiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/MacScreenLiveViews.swift; sourceTree = SOURCE_ROOT; };
 		LF26AE1ABDCE /* MacScreenViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/MacScreenViews.swift; sourceTree = SOURCE_ROOT; };
 		E5GWD0002 /* GatewayRunDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayRunDriver.swift; sourceTree = SOURCE_ROOT; };
 		E5GWH0002 /* GatewayHostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayHostStore.swift; sourceTree = SOURCE_ROOT; };
@@ -1999,6 +2007,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA9C2BF92F65996900F41633 /* SwiftMath in Frameworks */,
+				E5RTC5101 /* WebRTC in Frameworks */,
 				AAF00F012F50A00000049557 /* FFmpeg.framework in Frameworks */,
 				AAF10F012F50A00000049557 /* libavcodec.framework in Frameworks */,
 				AAF10F032F50A00000049557 /* libavformat.framework in Frameworks */,
@@ -2564,6 +2573,7 @@
 				E5JB00011 /* JiebaWrapper.h */,
 				E5JB00012 /* JiebaWrapper.mm */,
 				E5JB00013 /* TextSegmenter.swift */,
+				LFD48397A7A7 /* MacScreenSession.swift */,
 				LFF9E8272F01 /* PinnedSessionOrder.swift */,
 				LF837AD530A8 /* CommandPaletteCatalog.swift */,
 				LFB3AA038DDA /* ChatCompletionsWire.swift */,
@@ -2809,10 +2819,12 @@
 				E5SIR0004 /* HarnessApprovalNotifier.swift */,
 				E5SIR0002 /* MacFleetIntents.swift */,
 				E5GWC0002 /* LeoAgentClient.swift */,
+				E5SPC51R /* ScreenPeerClient.swift */,
 				E5MSC50R /* MacScreenSnapshotClient.swift */,
 				E5GWH1002 /* LeoAgentHarness.swift */,
 				E5E15704F /* MacResultInbox.swift */,
 				E5GWV0002 /* GatewayViews.swift */,
+				LF12689023D8 /* MacScreenLiveViews.swift */,
 				LF26AE1ABDCE /* MacScreenViews.swift */,
 				E5GWD0002 /* GatewayRunDriver.swift */,
 				E5GWH0002 /* GatewayHostStore.swift */,
@@ -3470,6 +3482,7 @@
 				E5M000021 /* cmark-gfm */,
 				E5M000022 /* cmark-gfm-extensions */,
 				E5X000021 /* SwiftMath */,
+				E5RTC5103 /* WebRTC */,
 				C42120806C66A2C804F89620 /* RealTimeCutVADLibrary */,
 				E5CTD0002 /* Citadel */,
 			);
@@ -3609,6 +3622,7 @@
 				E52000020 /* XCRemoteSwiftPackageReference "SwiftAnthropic" */,
 				E5M000020 /* XCRemoteSwiftPackageReference "swift-cmark" */,
 				E5X000020 /* XCRemoteSwiftPackageReference "SwiftMath" */,
+				E5RTC5102 /* XCRemoteSwiftPackageReference "WebRTC" */,
 				B318C2F47DB3F301A17E49BE /* XCRemoteSwiftPackageReference "RealTimeCutVADLibrary" */,
 				E5CTD0001 /* XCRemoteSwiftPackageReference "Citadel" */,
 			);
@@ -3896,6 +3910,7 @@
 				LF0B67AADDC6 /* LongTextCollapse.swift in Sources */,
 				E5R3R0003 /* NSTextContainerSetSizeGuard.m in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
+				LFB7E8E0547A /* MacScreenSession.swift in Sources */,
 				LFA0A1B535C5 /* PinnedSessionOrder.swift in Sources */,
 				LFAB889B1927 /* CommandPaletteCatalog.swift in Sources */,
 				LF714387EFE1 /* ChatCompletionsWire.swift in Sources */,
@@ -4056,6 +4071,7 @@
 				AA26CCBA2F31080100AECF2D /* ISHKernel.m in Sources */,
 				E5JB00001 /* JiebaWrapper.mm in Sources */,
 				E5JB00002 /* TextSegmenter.swift in Sources */,
+				LF63BDFAF750 /* MacScreenSession.swift in Sources */,
 				LF3E14F93A3B /* PinnedSessionOrder.swift in Sources */,
 				LF43FE8FE20C /* CommandPaletteCatalog.swift in Sources */,
 				LF64333B68E8 /* ChatCompletionsWire.swift in Sources */,
@@ -4264,9 +4280,11 @@
 				E5SIR0003 /* HarnessApprovalNotifier.swift in Sources */,
 				E5SIR0001 /* MacFleetIntents.swift in Sources */,
 				E5GWC0001 /* LeoAgentClient.swift in Sources */,
+				E5SPC51B1 /* ScreenPeerClient.swift in Sources */,
 				E5MSC50B1 /* MacScreenSnapshotClient.swift in Sources */,
 				E5GWH1001 /* LeoAgentHarness.swift in Sources */,
 				E5GWV0001 /* GatewayViews.swift in Sources */,
+				LFFF7A120AA9 /* MacScreenLiveViews.swift in Sources */,
 				LF0FA1A41C6D /* MacScreenViews.swift in Sources */,
 				E5GWD0001 /* GatewayRunDriver.swift in Sources */,
 				E5GWH0001 /* GatewayHostStore.swift in Sources */,
@@ -5518,6 +5536,14 @@
 				minimumVersion = 1.7.3;
 			};
 		};
+		E5RTC5102 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC";
+			requirement = {
+				kind = exactVersion;
+				version = 154.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -5550,6 +5576,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E5X000020 /* XCRemoteSwiftPackageReference "SwiftMath" */;
 			productName = SwiftMath;
+		};
+		E5RTC5103 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E5RTC5102 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
 		};
 		E5R3HXP01 /* cmark-gfm */ = {
 			isa = XCSwiftPackageProductDependency;
