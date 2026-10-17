@@ -36,6 +36,31 @@ export function relayHttpBase(url: string): string {
     .replace(/\/relay\/(agent|api)$/, "");
 }
 
+/**
+ * [fix-remote] 设备描述符里的中继入口：主入口(relay.json 的 url,Mac 自己连中继用的那条)之外,
+ * relay.json 的 phone_urls 可以再给几条同一中继的其他公网入口(如 Cloudflare 隧道,比 Funnel 快),手机按速度选。
+ * 只收 https;重复的去掉;id 主入口固定 "relay",其余 relay-2、relay-3…(描述符最多 8 个 endpoint)。
+ */
+export function relayPhoneEndpoints(
+  name: string,
+  wsUrl: string,
+  phoneUrls: readonly string[] = [],
+): Array<{ id: string; kind: "relay"; baseURL: string }> {
+  const machine = encodeURIComponent(name);
+  const bases = [relayHttpBase(wsUrl), ...phoneUrls.map(relayHttpBase)].filter((base) => {
+    try {
+      return new URL(base).protocol === "https:";
+    } catch {
+      return false;
+    }
+  });
+  return [...new Set(bases)].slice(0, 6).map((base, index) => ({
+    id: index === 0 ? "relay" : `relay-${index + 1}`,
+    kind: "relay" as const,
+    baseURL: `${base}/relay/api/m/${machine}`,
+  }));
+}
+
 export function encodePairPayload(code: { apiRoot: string; machine: string; join: string; exp: number }): string {
   return PAIR_PREFIX_V2 + JSON.stringify({ apiRoot: code.apiRoot, machine: code.machine, join: code.join, exp: code.exp });
 }

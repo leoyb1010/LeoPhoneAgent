@@ -31,6 +31,7 @@ import {
   joinTokenFromPayload,
   probePairingSupport,
   relayHttpBase,
+  relayPhoneEndpoints,
   revokePairingCode,
   type PairingCode,
   type PairingSupport,
@@ -73,11 +74,15 @@ export function machineName(): string {
   return process.env["LEOAGENT_RELAY_NAME"]?.trim() || os.hostname().split(".")[0]!;
 }
 
-function readRelayJson(): { url: string; key: string } | null {
+function readRelayJson(): { url: string; key: string; phoneUrls: string[] } | null {
   const config = readJson(leoPath("relay.json"));
   const url = typeof config?.["url"] === "string" ? config["url"].trim() : "";
   const key = typeof config?.["key"] === "string" ? config["key"].trim() : "";
-  return url && key ? { url, key } : null;
+  // [fix-remote] 给手机的其他公网入口(同一个中继);Mac 自己仍只连 url。
+  const phoneUrls = Array.isArray(config?.["phone_urls"])
+    ? (config["phone_urls"] as unknown[]).filter((item): item is string => typeof item === "string" && item.trim() !== "")
+    : [];
+  return url && key ? { url, key, phoneUrls } : null;
 }
 
 /** relay.json 变了(补上、换地址、换钥匙)要重连;拿它的内容当指纹。 */
@@ -97,6 +102,10 @@ export function resolveRelayConfig(): RelayConfig | null {
   if (!wsUrl.endsWith("/relay/agent")) wsUrl = `${wsUrl}/relay/agent`;
   wsUrl = wsUrl.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
   return { wsUrl, name: machineName(), registerKey: key };
+}
+
+function relayPhoneUrls(): string[] {
+  return readRelayJson()?.phoneUrls ?? [];
 }
 
 /** 转给 leoagent 用的本机钥匙:切换后是它独享的一把,切换前沿用 `~/.leoagent/key`。 */
@@ -334,15 +343,7 @@ export async function startLeoLink(deps: {
       ],
       aliases: [relay?.name ?? machineName()],
       endpoints: [
-        ...(relay
-          ? [
-              {
-                id: "relay",
-                kind: "relay",
-                baseURL: `${relayHttpBase(relay.wsUrl)}/relay/api/m/${encodeURIComponent(relay.name)}`,
-              },
-            ]
-          : []),
+        ...(relay ? relayPhoneEndpoints(relay.name, relay.wsUrl, relayPhoneUrls()) : []),
         ...(direct ? [{ id: "direct", kind: "direct", baseURL: direct.baseURL }] : []),
       ],
     });

@@ -14,9 +14,26 @@ import {
   PAIR_PREFIX_V2,
   probePairingSupport,
   relayHttpBase,
+  relayPhoneEndpoints,
   revokePairingCode,
   type relayRequest,
 } from "./pairing.js";
+
+test("[fix-remote] device descriptor lists the relay.json entry plus phone_urls mirrors (https only, deduped)", () => {
+  assert.deepEqual(
+    relayPhoneEndpoints("Leo Mac", "wss://funnel.example/leoagent-relay/relay/agent", [
+      "https://relay.example",
+      "https://relay.example/",
+      "http://insecure.example",
+      "not a url",
+    ]),
+    [
+      { id: "relay", kind: "relay", baseURL: "https://funnel.example/leoagent-relay/relay/api/m/Leo%20Mac" },
+      { id: "relay-2", kind: "relay", baseURL: "https://relay.example/relay/api/m/Leo%20Mac" },
+    ],
+  );
+  assert.deepEqual(relayPhoneEndpoints("m", "wss://only.example/relay/agent").map((e) => e.id), ["relay"]);
+});
 
 test("relayHttpBase normalizes relay.json urls to the relay's https root", () => {
   assert.equal(relayHttpBase("https://relay.example/leoagent-relay/"), "https://relay.example/leoagent-relay");

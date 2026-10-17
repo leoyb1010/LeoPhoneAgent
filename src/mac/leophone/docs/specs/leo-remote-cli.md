@@ -19,6 +19,12 @@
 - 外部 agent 回合失败（未登录、命令找不到、进程退出、其他）时，`run.failed.error` 是一行可读文本：
   「<agent> … ：<在这台 Mac 上怎么修>。agent 最后输出：<stderr 最后 3 行，已脱敏>」，≤480 字。
 
+- 中继入口：Mac 仍只用 `~/.leoagent/relay.json` 的 `url` 连中继；`phone_urls`（可选，https 数组）是同一中继的其他公网入口，
+  与主入口一起出现在设备描述符的 `endpoints`（id `relay`、`relay-2`…），手机按速度选。
+- Claude Code 长期令牌：`<ZCODE_HOME 或 ~/.leophoneagent>/acp/claude-oauth-token`（一行，0600）。存在即作为
+  `CLAUDE_CODE_OAUTH_TOKEN` 传给 claude；启动外部 agent 前去掉宿主的 `CLAUDECODE`、`CLAUDE_CODE_ENTRYPOINT`、
+  `CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH`、`CLAUDE_CODE_SESSION_ID` 等变量。设置页只显示有无，可粘贴 / 移除。
+
 ## 验收
 
 - 只装了 grok 的 Mac：capabilities 有 `grok`（available、cli_path、version），手机开 grok 会话走 `acp/grok`。
