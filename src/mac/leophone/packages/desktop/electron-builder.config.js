@@ -709,11 +709,17 @@ export default {
           },
         ]
       : []),
-    {
-      // Windows 独立图标：开发态和打包态都统一走同一套任务栏/窗口图标资源。
-      from: "build/icon_windows.png",
-      to: "icon_windows.png",
-    },
+    // [leo] 修复：此条目原先没有平台守卫，Mac 包里也会带上 264KB 的 icon_windows.png。
+    // 只有 main/index.ts 在 process.platform === "win32" 时才读它，所以只给 win32 目标打包。
+    ...(targetPlatform.os === "win32"
+      ? [
+          {
+            // Windows 独立图标：开发态和打包态都统一走同一套任务栏/窗口图标资源。
+            from: "build/icon_windows.png",
+            to: "icon_windows.png",
+          },
+        ]
+      : []),
     ...(targetPlatform.os === "win32"
       ? [
           {
@@ -840,8 +846,8 @@ export default {
     size: "3200m",
     // 使用自定义安装背景图。
     background: "build/dmg_background.png",
-    // 安装盘图标统一使用安装专用素材，避免复用应用图标导致安装识别度不足。
-    icon: "build/icon_installer.icns",
+    // [leo] 安装盘图标：原 icon_installer.icns 与 icon.icns 逐字节相同（md5 一致），合并为一份。
+    icon: "build/icon.icns",
     contents: [
       // 实验性调整：为隐藏资源文件显式指定图标坐标，尽量把它们移到角落区域。
       { x: 640, y: 56, type: "file", path: ".background.tiff" },
