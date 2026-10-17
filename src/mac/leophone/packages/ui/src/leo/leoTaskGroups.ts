@@ -80,13 +80,14 @@ export function taskGroupAgentChoices(
   ];
 }
 
-/** 首页只显示还开着、且属于当前项目（同一仓库内）的任务组。 */
+const inside = (path: string, root: string) => path === root || path.startsWith(`${root}/`);
+
+/** 首页只显示还开着、且属于当前项目（同一仓库内，或正在看其中某个方案的 worktree）的任务组。 */
 export function openGroupsForWorkspace(groups: readonly LeoTaskGroup[], workspacePath: string): LeoTaskGroup[] {
   return groups.filter(
     (group) =>
       group.state === "open" &&
-      (workspacePath === group.repoRoot ||
-        workspacePath.startsWith(`${group.repoRoot}/`) ||
-        group.workspacePath === workspacePath),
+      (inside(workspacePath, group.repoRoot) ||
+        group.members.some((member) => inside(workspacePath, member.worktreePath))),
   );
 }

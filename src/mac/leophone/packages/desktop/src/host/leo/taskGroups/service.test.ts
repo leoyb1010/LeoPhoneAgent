@@ -147,3 +147,31 @@ test("non-git workspace is refused", async () => {
     (error: unknown) => error instanceof TaskGroupError && error.status === 409,
   );
 });
+
+test("LeoBot member is pinned to a LeoBot model, never silently to an external agent", async () => {
+  const repo = makeRepo();
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "leo-group-root-")));
+  const tasks = fakeTasks();
+  const groups = createLeoTaskGroups({
+    tasks: tasks.port,
+    workspaces: async () => [repo],
+    root,
+    leoModelSelection: async () => ({ providerId: "openai", modelId: "gpt-5" }),
+  });
+  const group = await groups.create({ workspacePath: repo, prompt: "x", agents: [{ kind: "leo" }] });
+  assert.deepEqual(tasks.created[0]!.modelSelection, { providerId: "openai", modelId: "gpt-5" });
+  await groups.cleanup({ groupId: group.id });
+
+  const none = fakeTasks();
+  const noModel = createLeoTaskGroups({ tasks: none.port, workspaces: async () => [repo], root, leoModelSelection: async () => null });
+  const failed = await noModel.create({
+    workspacePath: repo,
+    prompt: "x",
+    agents: [{ kind: "leo" }, { kind: "acp", agentId: "codex" }],
+  });
+  assert.match(failed.members[0]!.error ?? "", /LeoBot 还没有可用的模型/);
+  assert.equal(failed.members[0]!.taskId, undefined);
+  assert.equal(none.created.length, 1);
+  assert.equal(none.created[0]!.modelSelection?.modelId, "codex");
+  await noModel.cleanup({ groupId: failed.id });
+});

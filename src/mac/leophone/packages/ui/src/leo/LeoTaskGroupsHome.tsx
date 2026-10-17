@@ -99,7 +99,12 @@ function LeoTaskGroupsHomeBody({ workspacePath, className }: { workspacePath: st
               variant="ghost"
               size="sm"
               disabled={busy !== null}
-              onClick={() => void run(`cleanup:${group.id}`, () => leoTaskGroups.cleanup(group.id))}
+              onClick={() =>
+                void run(`cleanup:${group.id}`, async () => {
+                  await leoTaskGroups.cleanup(group.id);
+                  home?.onCloseWorkspaces?.(group.members.map((member) => member.worktreePath));
+                })
+              }
             >
               <Trash2 className="mr-1.5 size-3.5" />
               {group.mergedMemberId ? "清理 worktree" : "放弃并清理"}
@@ -122,7 +127,11 @@ function LeoTaskGroupsHomeBody({ workspacePath, className }: { workspacePath: st
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => home.onSelectTask(member.taskWorkspacePath, member.taskId!)}
+                        onClick={() =>
+                          home.onOpenWorkspaceTask
+                            ? home.onOpenWorkspaceTask(member.taskWorkspacePath, member.taskId!)
+                            : home.onSelectTask(member.taskWorkspacePath, member.taskId!)
+                        }
                       >
                         打开
                       </Button>

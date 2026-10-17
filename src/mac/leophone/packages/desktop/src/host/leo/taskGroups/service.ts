@@ -57,10 +57,16 @@ export class TaskGroupError extends Error {
   }
 }
 
+export interface TaskGroupModelSelection {
+  providerId: string;
+  modelId: string;
+  options?: Record<string, unknown>;
+}
+
 export interface TaskGroupTaskPort {
   createTask(input: {
     workspacePath: string;
-    modelSelection?: ReturnType<typeof acpModelSelection>;
+    modelSelection?: TaskGroupModelSelection;
   }): Promise<{ taskId: string; traceId?: string }>;
   sendPrompt(input: { taskId: string; traceId?: string; content: string }): Promise<void>;
 }
@@ -119,6 +125,11 @@ export function createLeoTaskGroups(deps: {
   tasks: TaskGroupTaskPort;
   /** 允许发起任务组的工作区（与快速派发同一份：最近打开的本机项目）。 */
   workspaces: () => Promise<string[]>;
+  /**
+   * LeoBot 自己那一份用哪个模型:用户配置的默认模型,不能是外部 agent(否则「LeoBot」方案其实是 Claude Code)。
+   * undefined = 跟随工作区默认;null = 没有 LeoBot 可用的模型。
+   */
+  leoModelSelection?: () => Promise<TaskGroupModelSelection | null | undefined>;
   root?: string;
 }): LeoTaskGroups {
   const root = deps.root ?? leoWorktreesRoot();
@@ -192,11 +203,19 @@ export function createLeoTaskGroups(deps: {
           throw new TaskGroupError(500, error instanceof WorktreeError ? error.message : String(error));
         }
         // 各 agent 各开一个任务：工作区就是自己的 worktree（保留用户所在的子目录），首条输入同一份需求。
+        const leoSelection = members.some((member) => member.agent.kind === "leo")
+          ? await deps.leoModelSelection?.().catch(() => undefined)
+          : undefined;
         for (const member of members) {
           try {
+            if (member.agent.kind === "leo" && leoSelection === null) {
+              throw new Error("LeoBot 还没有可用的模型，先在设置里配置一个");
+            }
+            const modelSelection =
+              member.agent.kind === "acp" ? acpModelSelection(member.agent.agentId) : (leoSelection ?? undefined);
             const task = await deps.tasks.createTask({
               workspacePath: member.taskWorkspacePath,
-              ...(member.agent.kind === "acp" ? { modelSelection: acpModelSelection(member.agent.agentId) } : {}),
+              ...(modelSelection ? { modelSelection } : {}),
             });
             member.taskId = task.taskId;
             await deps.tasks.sendPrompt({ taskId: task.taskId, traceId: task.traceId, content: prompt });

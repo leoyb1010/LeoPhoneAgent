@@ -14,6 +14,10 @@ export interface LeoHomeContextValue {
     workspaceIdentity?: string,
     selectedRowUnreadAt?: number,
   ) => void;
+  /** 打开一个还没有 tab 的工作区(如并行任务组的 worktree)里的任务。 */
+  onOpenWorkspaceTask?: (workspacePath: string, taskId: string) => void;
+  /** 关掉落在这些目录(含子目录)下的工作区 tab。 */
+  onCloseWorkspaces?: (roots: readonly string[]) => void;
 }
 
 const LeoHomeContext = createContext<LeoHomeContextValue | null>(null);

@@ -35,4 +35,19 @@ test("[WP-27] home shows only open groups of the current repository", () => {
   ];
   expect(openGroupsForWorkspace(groups, "/repo").map((entry) => entry.id)).toEqual(["a"]);
   expect(openGroupsForWorkspace(groups, "/repo/packages/app").map((entry) => entry.id)).toEqual(["a"]);
+  const withMember: LeoTaskGroup = {
+    ...group("e", "/repo-3", "open"),
+    members: [
+      {
+        id: "1",
+        label: "Claude Code",
+        agent: { kind: "acp", agentId: "claude-code" },
+        worktreePath: "/data/worktrees/h/e-1-claude-code",
+        taskWorkspacePath: "/data/worktrees/h/e-1-claude-code/sub",
+        branch: "leo/e-1-claude-code",
+        state: "active",
+      },
+    ],
+  };
+  expect(openGroupsForWorkspace([withMember], "/data/worktrees/h/e-1-claude-code/sub").map((entry) => entry.id)).toEqual(["e"]);
 });

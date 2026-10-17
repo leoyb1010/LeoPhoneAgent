@@ -2,12 +2,14 @@ import type { Server } from "node:http";
 
 import {
   IMcpSyncService,
+  IModelSelectionService,
   IProviderSettingsService,
   ISettingService,
   IZCodeTaskService,
 } from "@zcode/services";
 import type { ServiceCollection } from "@zcode/services";
 import { ZCODE_VERSION } from "@zcode/shared";
+import { ACP_PROVIDER_ID, isAcpModelSelection } from "@zcode/shared/acp";
 
 import { startLeoHttpApi } from "./httpApi.js";
 import { createLeoQuickEntry, resolveQuickWorkspaces } from "./quickEntry.js";
@@ -89,6 +91,16 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
           },
           workspaces: async () =>
             resolveQuickWorkspaces(await deps.services.getOptional(ISettingService)?.get().catch(() => undefined)),
+          leoModelSelection: async () => {
+            const view = await deps.services.getOptional(IModelSelectionService)?.getView({ selection: null });
+            if (!view) return undefined;
+            const preferred = view.preferredSelection ?? view.effectiveSelection ?? undefined;
+            if (preferred && !isAcpModelSelection(preferred)) return preferred;
+            const provider = view.providers.find(
+              (candidate) => candidate.providerId !== ACP_PROVIDER_ID && candidate.models.length > 0,
+            );
+            return provider ? { providerId: provider.providerId, modelId: provider.models[0]!.modelId } : null;
+          },
         }),
         onListening: () => {
           // 启动时对一次账:之前登过的订阅账号,模型清单要和它一致。

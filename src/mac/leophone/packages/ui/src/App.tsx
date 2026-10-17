@@ -344,6 +344,7 @@ export function App({
   });
   const tabs = useTabStore((s) => s.tabs);
   const addTab = useTabStore((s) => s.addTab);
+  const closeTab = useTabStore((s) => s.closeTab);
   const activateTabByPath = useTabStore((s) => s.activateTabByPath);
 
   const {
@@ -1079,8 +1080,27 @@ export function App({
   );
 
   const leoHomeValue = useMemo(
-    () => ({ workspaceTabs: commandCenterWorkspaceTabs, onSelectTask: handleSelectTask }),
-    [commandCenterWorkspaceTabs, handleSelectTask],
+    () => ({
+      workspaceTabs: commandCenterWorkspaceTabs,
+      onSelectTask: handleSelectTask,
+      // [leo][WP-27] 并行任务组的任务开在 worktree 里:先把它作为工作区 tab 打开,再定位任务。
+      onOpenWorkspaceTask: (workspacePath: string, taskId: string) => {
+        addTab(workspacePath);
+        handleSelectTask(workspacePath, taskId);
+      },
+      // 清理任务组后,开着的 worktree tab 指向已删除的目录,一并关掉。
+      onCloseWorkspaces: (roots: readonly string[]) => {
+        for (const tab of tabs) {
+          if (
+            tab.kind === "workspace" &&
+            roots.some((root) => tab.workspacePath === root || tab.workspacePath.startsWith(`${root}/`))
+          ) {
+            closeTab(tab.id);
+          }
+        }
+      },
+    }),
+    [addTab, closeTab, commandCenterWorkspaceTabs, handleSelectTask, tabs],
   );
   return (
     // [leo] 首页状态清单跨项目读任务、点一下打开:把已打开项目和「打开任务」交给草稿页。
