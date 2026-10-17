@@ -21,8 +21,11 @@ import {
   dispatchFinalArmsCustomEvent,
   enableSharedFinalArmsCustomEventE2EController,
 } from "./desktopArmsCustomEvent.js";
-import { openPathInDefaultApp } from "./desktopMainIpcHelpers.js";
+import { openFileUrlInDefaultApp, openPathInDefaultApp } from "./desktopMainIpcHelpers.js";
 import { isAllowedExternalOpenUrl } from "./mainWindowNavigationPolicy.js";
+
+// 上游测试与调用方从这里取该判定；规则本体在 mainWindowNavigationPolicy（[leo] webview 访客只能开 http(s)）。
+export { isAllowedExternalOpenUrl };
 
 interface OpenExternalRequest {
   sourceUrl?: string;
@@ -113,6 +116,11 @@ export function registerRemoteIpcHandlers(options: {
       typeof event.sender?.getType === "function" && event.sender.getType() === "webview";
     if (!isAllowedExternalOpenUrl(url, fromWebviewGuest)) {
       options.logger.warn("[open-external] blocked unsupported url", url);
+      return;
+    }
+    // 3.15.1：file: 交给默认应用打开（openPath 语义），不走 shell.openExternal，避免直接启动 .app / .command。
+    if (new URL(url).protocol === "file:") {
+      void openFileUrlInDefaultApp(url, options.logger);
       return;
     }
     void Promise.resolve(shell.openExternal(url)).catch((error: unknown) => {

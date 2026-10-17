@@ -1,7 +1,6 @@
 import type { BrowserWindow, NativeImage } from "electron";
 import {
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
-  buildZCodeEndpointUrls,
   type Locale,
 } from "@zcode/shared";
 
@@ -52,9 +51,10 @@ export function resolveArchitectureDownloadUrl(
   locale: Locale,
   endpointOrigin = DEFAULT_ZCODE_ENDPOINT_ORIGIN,
 ): string {
-  // 与 changelog 等外链保持一致，按应用语言分流到官网下载页。
-  const origin = buildZCodeEndpointUrls(endpointOrigin).origin;
-  return locale === "zh-CN" ? `${origin}/cn` : `${origin}/en`;
+  // [leo] 架构不匹配时去我们自己的发布页下载（与「更新日志」一致），不再指向官网下载页。
+  void locale;
+  void endpointOrigin;
+  return "https://github.com/leoyb1010/leocodebox-updates/releases";
 }
 
 interface ArchitectureMismatchDialogText {

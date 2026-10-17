@@ -135,7 +135,8 @@ describe("desktopCommandHandlers resolveFeedbackUrl", () => {
     stubProcessPlatform(originalPlatform);
   });
 
-  it("优先使用远端 JSON 里的 feedback_url", async () => {
+  // [leo] 反馈入口（feedback_url）在 Mac 1.9.0 删除
+  it.skip("优先使用远端 JSON 里的 feedback_url", async () => {
     const logger = {
       warn: vi.fn(),
     };
@@ -157,7 +158,8 @@ describe("desktopCommandHandlers resolveFeedbackUrl", () => {
     expect(feedbackUrl).toBe("https://remote.example.com/feedback");
   }, 15_000);
 
-  it("远端不可用时回退到本地 JSON", async () => {
+  // [leo] 反馈入口（feedback_url）在 Mac 1.9.0 删除
+  it.skip("远端不可用时回退到本地 JSON", async () => {
     const logger = {
       warn: vi.fn(),
     };
@@ -180,7 +182,8 @@ describe("desktopCommandHandlers resolveFeedbackUrl", () => {
     );
   });
 
-  it("两个 JSON 都没有有效地址时返回 undefined", async () => {
+  // [leo] 反馈入口（feedback_url）在 Mac 1.9.0 删除
+  it.skip("两个 JSON 都没有有效地址时返回 undefined", async () => {
     const logger = {
       warn: vi.fn(),
     };
@@ -273,7 +276,8 @@ describe("desktopCommandHandlers resolveFeedbackUrl", () => {
     ).toBe(join("/repo", "config", "default.json"));
   });
 
-  it("中文界面打开中文 changelog，其他语言打开英文 changelog", async () => {
+  // [leo] 「更新日志」打开 leocodebox-updates 发布页（docs/mac-3.0/UPSTREAM.md）
+  it.skip("中文界面打开中文 changelog，其他语言打开英文 changelog", async () => {
     const { openChangelog } = await import("../src/main/desktopCommandHandlers.js");
     const { shell } = await import("electron");
 
@@ -284,7 +288,8 @@ describe("desktopCommandHandlers resolveFeedbackUrl", () => {
     expect(shell.openExternal).toHaveBeenNthCalledWith(2, "https://zcode.z.ai/en/changelog");
   });
 
-  it("changelog 按当前非生产 endpoint 打开", async () => {
+  // [leo] 「更新日志」打开 leocodebox-updates 发布页（docs/mac-3.0/UPSTREAM.md）
+  it.skip("changelog 按当前非生产 endpoint 打开", async () => {
     const { executeDesktopCommand } = await import("../src/main/desktopCommandHandlers.js");
     const { shell } = await import("electron");
     const commandOptions = createCommandOptions({
@@ -313,7 +318,8 @@ describe("desktopCommandHandlers resolveFeedbackUrl", () => {
     expect(onRelaunchApp).toHaveBeenCalledTimes(1);
   });
 
-  it("清理 Coding Plan webview 持久 partition，避免账号切换后复用旧凭据", async () => {
+  // [leo] 官网购买页 webview 不接线，没有它的持久分区
+  it.skip("清理 Coding Plan webview 持久 partition，避免账号切换后复用旧凭据", async () => {
     const { executeDesktopCommand } = await import("../src/main/desktopCommandHandlers.js");
     const commandOptions = createCommandOptions();
 
@@ -330,7 +336,8 @@ describe("desktopCommandHandlers resolveFeedbackUrl", () => {
     );
   });
 
-  it("非生产 endpoint 菜单命令能保存 test、自定义和 reset", async () => {
+  // [leo] 官方测试端点指向本机死端口（zcodeEndpoint.ts），菜单保存的 test 值与上游不同
+  it.skip("非生产 endpoint 菜单命令能保存 test、自定义和 reset", async () => {
     const { executeDesktopCommand } = await import("../src/main/desktopCommandHandlers.js");
     const onZCodeEndpointChanged = vi.fn();
     const commandOptions = createCommandOptions({ onZCodeEndpointChanged });

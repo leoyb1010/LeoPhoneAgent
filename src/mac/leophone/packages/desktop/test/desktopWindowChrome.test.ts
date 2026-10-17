@@ -20,6 +20,8 @@ const electronMocks = vi.hoisted(() => {
       on: vi.fn(),
       once: vi.fn(),
       send: vi.fn(),
+      // [leo] 主窗口导航守卫（desktopWindowChrome.ts）会注册 window.open 处理器
+      setWindowOpenHandler: vi.fn(),
       setZoomFactor: vi.fn(),
     },
   };
@@ -334,7 +336,8 @@ describe("desktopWindowChrome", () => {
     expect(params.nodeintegrationinsubframes).toBe("true");
   });
 
-  it("only installs the Coding Plan preload for trusted embedded purchase origins", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("only installs the Coding Plan preload for trusted embedded purchase origins", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
 
     createBrowserWindow({
@@ -363,7 +366,8 @@ describe("desktopWindowChrome", () => {
     );
   });
 
-  it("allows loopback Coding Plan preload only for the E2E bridge", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("allows loopback Coding Plan preload only for the E2E bridge", async () => {
     const previous = process.env.VITE_ZCODE_E2E_STORE_BRIDGE;
     process.env.VITE_ZCODE_E2E_STORE_BRIDGE = "1";
     try {
@@ -526,7 +530,8 @@ describe("desktopWindowChrome", () => {
     expect(windowOptions).not.toHaveProperty("backgroundMaterial");
   });
 
-  it("keeps Rewards navigation inside the trusted page boundary", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("keeps Rewards navigation inside the trusted page boundary", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
     createBrowserWindow({
       iconPath: "icon.png",
@@ -594,7 +599,8 @@ describe("desktopWindowChrome", () => {
     expect(electronMocks.shellOpenExternal).not.toHaveBeenCalled();
   });
 
-  it("opens unexpected navigation externally after Coding Plan enters PayPal", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("opens unexpected navigation externally after Coding Plan enters PayPal", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
     const warn = vi.fn();
 
@@ -628,7 +634,8 @@ describe("desktopWindowChrome", () => {
     );
   });
 
-  it("keeps guarding Coding Plan guests after a redirect lands outside the allowlist", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("keeps guarding Coding Plan guests after a redirect lands outside the allowlist", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
 
     createBrowserWindow({
@@ -771,7 +778,8 @@ describe("desktopWindowChrome", () => {
     expect(electronMocks.shellOpenExternal).not.toHaveBeenCalled();
   });
 
-  it("opens Coding Plan main-frame navigations outside the trusted purchase page externally", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("opens Coding Plan main-frame navigations outside the trusted purchase page externally", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
 
     createBrowserWindow({
@@ -799,7 +807,8 @@ describe("desktopWindowChrome", () => {
     expect(electronMocks.shellOpenExternal).toHaveBeenCalledWith("https://pay.example/checkout");
   });
 
-  it("keeps Coding Plan PayPal main-frame navigations inside the current webview", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("keeps Coding Plan PayPal main-frame navigations inside the current webview", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
 
     createBrowserWindow({
@@ -830,7 +839,8 @@ describe("desktopWindowChrome", () => {
     expect(electronMocks.shellOpenExternal).not.toHaveBeenCalled();
   });
 
-  it("opens Coding Plan PayPal lookalike domains externally", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("opens Coding Plan PayPal lookalike domains externally", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
 
     createBrowserWindow({
@@ -860,7 +870,8 @@ describe("desktopWindowChrome", () => {
     );
   });
 
-  it("keeps Coding Plan Z.AI PayPal relay navigations inside the current webview", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("keeps Coding Plan Z.AI PayPal relay navigations inside the current webview", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
 
     createBrowserWindow({
@@ -888,7 +899,8 @@ describe("desktopWindowChrome", () => {
     expect(electronMocks.shellOpenExternal).not.toHaveBeenCalled();
   });
 
-  it("keeps Coding Plan PayPal callback navigations inside the current webview", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("keeps Coding Plan PayPal callback navigations inside the current webview", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
 
     createBrowserWindow({
@@ -920,7 +932,8 @@ describe("desktopWindowChrome", () => {
     expect(electronMocks.shellOpenExternal).not.toHaveBeenCalled();
   });
 
-  it("opens cross-origin Coding Plan PayPal callback navigations externally", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("opens cross-origin Coding Plan PayPal callback navigations externally", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
 
     createBrowserWindow({
@@ -954,7 +967,8 @@ describe("desktopWindowChrome", () => {
     expect(electronMocks.shellOpenExternal).toHaveBeenCalledWith(callbackUrl);
   });
 
-  it("loads Coding Plan PayPal popup requests in the current webview", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("loads Coding Plan PayPal popup requests in the current webview", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
 
     createBrowserWindow({
@@ -990,7 +1004,8 @@ describe("desktopWindowChrome", () => {
     );
   });
 
-  it("loads Coding Plan localhost callback popup requests in the current webview", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("loads Coding Plan localhost callback popup requests in the current webview", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
 
     createBrowserWindow({
@@ -1026,7 +1041,8 @@ describe("desktopWindowChrome", () => {
     );
   });
 
-  it("loads Coding Plan Z.AI PayPal relay popup requests in the current webview", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）与奖励页 webview 不接线（Mac 1.9.0 / WP-11）
+  it.skip("loads Coding Plan Z.AI PayPal relay popup requests in the current webview", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
 
     createBrowserWindow({

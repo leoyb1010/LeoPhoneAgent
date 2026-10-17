@@ -49,8 +49,13 @@ describe("detectArchitectureMismatch", () => {
 
 describe("resolveArchitectureDownloadUrl", () => {
   it("按语言分流到官网下载页", () => {
-    expect(resolveArchitectureDownloadUrl("zh-CN")).toBe("https://zcode.z.ai/cn");
-    expect(resolveArchitectureDownloadUrl("en-US")).toBe("https://zcode.z.ai/en");
+    // [leo] 指向 LeoBot 自己的发布页
+    expect(resolveArchitectureDownloadUrl("zh-CN")).toBe(
+      "https://github.com/leoyb1010/leocodebox-updates/releases",
+    );
+    expect(resolveArchitectureDownloadUrl("en-US")).toBe(
+      "https://github.com/leoyb1010/leocodebox-updates/releases",
+    );
   });
 });
 

@@ -52,16 +52,16 @@ vi.mock("@zcode/shared", () => ({
   },
   ZCODE_COMMIT: "commit-test",
   ZCODE_VERSION: "0.0.0-test",
-  DEFAULT_ZCODE_ENDPOINT_ORIGIN: "https://zcode.z.ai",
-  TEST_ZCODE_ENDPOINT_ORIGIN: "https://zcode.z.ai",
+  DEFAULT_ZCODE_ENDPOINT_ORIGIN: "http://127.0.0.1:9",
+  TEST_ZCODE_ENDPOINT_ORIGIN: "http://127.0.0.1:9",
   resolveRuntimeZCodeEndpointOrigin: (env: Record<string, string | undefined>) =>
-    env.ZCODE_BASE_URL ?? env.ZCODE_TEST_BASE_URL ?? "https://zcode.z.ai",
+    env.ZCODE_BASE_URL ?? env.ZCODE_TEST_BASE_URL ?? "http://127.0.0.1:9",
   resolveZaiOAuthOrigin: (env: Record<string, string | undefined>) =>
-    env.ZAI_OAUTH_ORIGIN ?? env.ZAI_TEST_OAUTH_ORIGIN ?? "https://chat.z.ai",
+    env.ZAI_OAUTH_ORIGIN ?? env.ZAI_TEST_OAUTH_ORIGIN ?? "http://127.0.0.1:9",
   resolveZaiBusinessBaseUrl: (env: Record<string, string | undefined>) =>
-    env.ZAI_BUSINESS_BASE_URL ?? env.ZAI_TEST_BUSINESS_BASE_URL ?? "https://api.z.ai",
+    env.ZAI_BUSINESS_BASE_URL ?? env.ZAI_TEST_BUSINESS_BASE_URL ?? "http://127.0.0.1:9",
   resolveZaiOAuthClientId: (env: Record<string, string | undefined>) =>
-    env.ZAI_OAUTH_CLIENT_ID ?? env.ZAI_TEST_OAUTH_CLIENT_ID ?? "client_P8X5CMWmlaRO9gyO-KSqtg",
+    env.ZAI_OAUTH_CLIENT_ID ?? env.ZAI_TEST_OAUTH_CLIENT_ID ?? "",
   sanitizeZCodeRuntimeEnv: (env: Record<string, string | undefined>) => {
     const sanitizedKeys = new Set([
       "NODE_ENV",
@@ -555,15 +555,16 @@ describe("desktopRuntimeEnv buildHostProcessEnv", () => {
     expectRuntimePath(env.GLM_BINARY_PATH, bundledPath);
   });
 
+  // [leo] .env.development / .env.production 的官方地址已改成本机死端口、client id 置空。
   it("本地 host 进程加载工作区 .env.development 的测试环境 API 与 ZAI 登录入口", async () => {
     const { loadHostProcessEnvFromLocalFiles } = await import("../src/main/desktopRuntimeEnv.js");
 
     const env = loadHostProcessEnvFromLocalFiles();
 
-    expect(env.ZCODE_BASE_URL).toBe("https://zcode.z.ai");
-    expect(env.ZAI_OAUTH_ORIGIN).toBe("https://chat.z.ai");
-    expect(env.ZAI_BUSINESS_BASE_URL).toBe("https://api.z.ai");
-    expect(env.ZAI_OAUTH_CLIENT_ID).toBe("client_P8X5CMWmlaRO9gyO-KSqtg");
+    expect(env.ZCODE_BASE_URL).toBe("http://127.0.0.1:9");
+    expect(env.ZAI_OAUTH_ORIGIN).toBe("http://127.0.0.1:9");
+    expect(env.ZAI_BUSINESS_BASE_URL).toBe("http://127.0.0.1:9");
+    expect(env.ZAI_OAUTH_CLIENT_ID).toBe("");
   });
 
   it("main 进程 endpoint 临时覆盖优先读取命令行环境变量", async () => {
@@ -572,7 +573,7 @@ describe("desktopRuntimeEnv buildHostProcessEnv", () => {
 
     expect(
       resolveZCodeEndpointEnvBaseOrigin({
-        ZCODE_BASE_URL: "https://zcode.z.ai",
+        ZCODE_BASE_URL: "http://127.0.0.1:9",
       }),
     ).toBe("http://127.0.0.1:18765");
   });
@@ -595,10 +596,10 @@ describe("desktopRuntimeEnv buildHostProcessEnv", () => {
     const env = buildHostProcessEnv(loadHostProcessEnvFromLocalFiles());
 
     expect(env.ZCODE_ENV).toBe("test");
-    expect(env.ZCODE_BASE_URL).toBe("https://zcode.z.ai");
-    expect(env.ZAI_OAUTH_ORIGIN).toBe("https://chat.z.ai");
-    expect(env.ZAI_BUSINESS_BASE_URL).toBe("https://api.z.ai");
-    expect(env.ZAI_OAUTH_CLIENT_ID).toBe("client_P8X5CMWmlaRO9gyO-KSqtg");
+    expect(env.ZCODE_BASE_URL).toBe("http://127.0.0.1:9");
+    expect(env.ZAI_OAUTH_ORIGIN).toBe("http://127.0.0.1:9");
+    expect(env.ZAI_BUSINESS_BASE_URL).toBe("http://127.0.0.1:9");
+    expect(env.ZAI_OAUTH_CLIENT_ID).toBe("");
     expect(env.ZCODE_CUA_HELPER_INSTALL_VARIANT).toBe("preview");
   });
 
@@ -784,13 +785,13 @@ describe("desktopRuntimeEnv runtime identity", () => {
     } = await import("../src/main/desktopRuntimeEnv.js");
 
     expect(isPreviewPackagedRuntime).toBe(true);
-    expect(runtimeApplicationName).toBe("ZCode Preview");
+    expect(runtimeApplicationName).toBe("LeoBot Preview");
     // Bugfix：这两条路径由实现用宿主 path.join 从 app.getPath("appData") 拼出，
     // Windows 上是 `\mock\appData\ZCode Preview`，写死 POSIX 字面量必然失败。
     // 用例要断言的是「Preview 单独占一个 Electron 数据目录」的目录结构，与分隔符无关，
     // 所以用同样的 join 表达；在 POSIX 上是恒等变换。
-    expect(runtimeUserDataPath).toBe(join("/mock/appData", "ZCode Preview"));
-    expect(runtimeSessionDataPath).toBe(join("/mock/appData", "ZCode Preview", "session"));
+    expect(runtimeUserDataPath).toBe(join("/mock/appData", "LeoPhoneAgent Preview")); // [leo] Electron 数据目录名
+    expect(runtimeSessionDataPath).toBe(join("/mock/appData", "LeoPhoneAgent Preview", "session"));
   });
 
   it("e2e 可保留 Chromedriver 注入的 Electron userData 目录", async () => {

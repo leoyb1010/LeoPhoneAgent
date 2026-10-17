@@ -124,7 +124,8 @@ describe("desktop main IPC openExternal", () => {
     expect(options.logger.warn).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps Coding Plan PayPal callback openExternal requests in the sender webview", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）webview 不接线
+  it.skip("keeps Coding Plan PayPal callback openExternal requests in the sender webview", async () => {
     const { registerRemoteIpcHandlers } = await import("../src/main/desktopMainIpcRemote.js");
     const options = createOptions();
     registerRemoteIpcHandlers(options);
@@ -145,7 +146,8 @@ describe("desktop main IPC openExternal", () => {
     expect(h.shellOpenExternal).not.toHaveBeenCalled();
   });
 
-  it("uses Coding Plan bridge sourceUrl when routing openExternal callbacks", async () => {
+  // [leo] 官网购买页（Coding Plan / PayPal）webview 不接线
+  it.skip("uses Coding Plan bridge sourceUrl when routing openExternal callbacks", async () => {
     const { registerRemoteIpcHandlers } = await import("../src/main/desktopMainIpcRemote.js");
     const options = createOptions();
     registerRemoteIpcHandlers(options);

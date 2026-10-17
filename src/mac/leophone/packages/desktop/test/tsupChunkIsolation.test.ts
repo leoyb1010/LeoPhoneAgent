@@ -55,7 +55,8 @@ describe("desktop tsup chunk isolation", () => {
     expect(getChunkNames("host")).toBe("host/chunk-[hash]");
   });
 
-  it("main/host 构建应外置飞书 SDK，避免 Electron ESM 动态 require 崩溃", () => {
+  // [leo] 飞书 SDK 随机器人在 Mac 1.9.0 删除
+  it.skip("main/host 构建应外置飞书 SDK，避免 Electron ESM 动态 require 崩溃", () => {
     expect(getExternal("main")).toContain("@larksuiteoapi/node-sdk");
     expect(getExternal("host")).toContain("@larksuiteoapi/node-sdk");
   });

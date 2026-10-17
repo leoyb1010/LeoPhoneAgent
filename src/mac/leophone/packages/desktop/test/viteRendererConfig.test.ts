@@ -49,11 +49,10 @@ describe("desktop renderer Vite dependency aliases", () => {
       "silent",
     );
 
+    // [leo] .env.production 的官方地址已改成本机死端口：渲染层编进去的是死端口，不是官方域名。
     expect(result?.config.define).toMatchObject({
-      "import.meta.env.VITE_ZCODE_BASE_URL": JSON.stringify("https://zcode.z.ai"),
-      "import.meta.env.VITE_ZCODE_ENDPOINT_ORIGIN": JSON.stringify(
-        "https://zcode.z.ai",
-      ),
+      "import.meta.env.VITE_ZCODE_BASE_URL": JSON.stringify("http://127.0.0.1:9"),
+      "import.meta.env.VITE_ZCODE_ENDPOINT_ORIGIN": JSON.stringify("http://127.0.0.1:9"),
       __ZCODE_LOCAL_DEVELOPMENT_RUNTIME__: JSON.stringify(false),
     });
   });

@@ -12,7 +12,6 @@ const forkIsolatedTests = [
   ...processLifecycleTests,
   // electron-builder 下载 NSIS 时把进程 stdio 传给子进程，不能使用 threads 的虚拟 stdio。
   "packages/desktop/test/windowsInstallerCompile.test.ts",
-  "packages/desktop/test/cdnPreloadScript.test.ts",
   "packages/desktop/test/desktopRuntimeEnv.test.ts",
   "packages/desktop/test/e2eDesktopBuildCache.test.ts",
   "packages/desktop/test/e2eSummarySpecCoverage.test.ts",
