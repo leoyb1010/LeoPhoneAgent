@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { ZCodeTaskMeta } from "@zcode/shared";
 
-import { classifyLeoStatusRows } from "../src/leo/leoStatusRows.js";
+import { classifyLeoStatusRows, pickLeoRecentWorkspaces } from "../src/leo/leoStatusRows.js";
 import { attachTaskListRowActivity } from "../src/v4/taskListRowActivity.js";
 
 function task(taskId: string, extra: Partial<ZCodeTaskMeta> = {}): ZCodeTaskMeta {
@@ -90,4 +90,42 @@ test("pending decisions remain first even when the previous result is an error",
   assert.deepEqual(classifyLeoStatusRows([waiting]).map(({ state, label }) => [state, label]), [
     ["attention", "等你确认"],
   ]);
+});
+
+test("[wp-31] status rows carry the agent badge kind; defaults to LeoBot before ACP", () => {
+  const unread = task("unread", { unreadAt: 5 } as Partial<ZCodeTaskMeta>);
+  const acp = task("acp", { unreadAt: 6, agentKind: "codex" } as Partial<ZCodeTaskMeta>);
+  const rows = classifyLeoStatusRows([unread, acp]);
+  assert.deepEqual(
+    rows.map((row) => [row.task.taskId, row.agentKind]),
+    [
+      ["unread", "leobot"],
+      ["acp", "codex"],
+    ],
+  );
+});
+
+test("[wp-31] recent workspaces: newest task per workspace, identity before path, at most 5", () => {
+  const items = [
+    task("a1", { workspacePath: "/w/a" }),
+    task("b1", { workspacePath: "/w/b" }),
+    task("a2", { workspacePath: "/w/a" }),
+    task("r1", { workspacePath: "/w/a", workspaceIdentity: "remote:a" } as Partial<ZCodeTaskMeta>),
+    task("c1", { workspacePath: "/w/c" }),
+    task("d1", { workspacePath: "/w/d" }),
+    task("e1", { workspacePath: "/w/e" }),
+    task("f1", { workspacePath: "/w/f" }),
+  ];
+  const recent = pickLeoRecentWorkspaces(items);
+  assert.deepEqual(
+    recent.map((item) => [item.key, item.task.taskId]),
+    [
+      ["/w/a", "a1"],
+      ["/w/b", "b1"],
+      ["remote:a", "r1"],
+      ["/w/c", "c1"],
+      ["/w/d", "d1"],
+    ],
+  );
+  assert.equal(recent[0]?.agentKind, "leobot");
 });
