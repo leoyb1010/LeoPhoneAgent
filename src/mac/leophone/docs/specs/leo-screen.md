@@ -296,8 +296,12 @@ injector starts and whenever the Accessibility permission changes. `ok: false` w
   built by `scripts/build-leo-input.mjs`, arm64); events go to its stdin as JSON lines and are posted
   with `CGEvent` (`.cghidEventTap`) in order on one serial queue. Text uses
   `keyboardSetUnicodeString` in ≤ 20-UTF-16-unit chunks split on grapheme boundaries.
-- While controlled: a red dot 「正在被控制」 in the menu bar (its menu has 「立即断开」), and the
-  helper watches the local keyboard: **Esc pressed three times within 1.5 s** on the Mac closes all
+- While controlled: a red dot 「正在被控制」 in the menu bar (its menu has 「立即断开」) **and** a
+  floating HUD 「正在被手机控制 · 断开」 at the top centre of the primary display
+  (`main/leo/screenControlHud.ts`: non-activating panel, always on top at screen-saver level, on all
+  Spaces including full-screen apps, never takes focus — the menu-bar item can be hidden by the
+  menu-bar overflow). Both disconnect immediately. LeoBot's own windows are not in the captured video,
+  so the phone does not see the HUD. The helper also watches the local keyboard: **Esc pressed three times within 1.5 s** on the Mac closes all
   screen sessions. Injected events carry `eventSourceUserData = 0x4C454F` and are ignored by this
   watcher, so an Esc sent from the phone never disconnects.
 - Permission: Accessibility for LeoBot (injection and the Esc watcher). Settings shows a
@@ -311,15 +315,20 @@ sees them; the iOS toolbar sends them as `key` events instead (the iOS side owns
 
 ### Measured (dev, 2026-10-17)
 
-Safe target only (test windows opened for the test, events posted to that process with the
-dev-only `LEO_INPUT_TEST_PID` → `--target-pid`; never the user's apps):
+Safe targets only — test windows opened for the test and closed afterwards, never the user's apps:
 
-- 500 mixed Chinese / English characters in 5 text events → 500 / 500 arrived in order, 0 lost.
-- `Enter`, `Shift+←`, `Backspace`, `Cmd+A`, `Cmd+S`, `Cmd+W`, `Escape` arrived with the right modifiers
-  (TextEdit saved and closed the test file).
-- Mouse events could not be verified this way: AppKit / Chrome ignore mouse events posted to a
-  process; real delivery needs the global HID path, which moves the user's cursor — not run.
-- Esc×3 needs the physical keyboard (injected Escs are deliberately ignored) — not run.
+- Keyboard / text, events posted to the test process only (dev `LEO_INPUT_TEST_PID` → `--target-pid`):
+  500 mixed Chinese / English characters in 5 text events → 500 / 500 arrived in order, 0 lost;
+  `Enter`, `Shift+←`, `Backspace`, `Cmd+A`, `Cmd+S`, `Cmd+W`, `Escape` arrived with the right modifiers.
+- Mouse, real global path with a guard (dev `LEO_INPUT_TEST_FRONT_PID` → `--require-front-pid`: before
+  every event the helper checks that the front app is the test process and that the first normal window
+  under the point belongs to it, otherwise it exits without posting). Cursor position recorded before
+  and restored after. Click landed at the exact point (1102, 227), double-click (`detail = 2`,
+  `dblclick`), drag down → up, right-click (`contextmenu`), wheel `deltaY` −300, then `Cmd+A` /
+  `Shift+→` — all received. The guard aborted twice, both correctly (a point outside the window,
+  and a scroll event created at the stale cursor position — fixed by setting the wheel event location).
+- HUD: shown at screen-saver level without changing the front app; its 断开 closes the session and the HUD.
+- Esc×3 needs the physical keyboard (injected Escs are deliberately ignored) — left for a manual check.
 
 ## Mac settings
 
