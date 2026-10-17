@@ -9,11 +9,11 @@ import {
 } from "@zcode/services";
 import type { ServiceCollection } from "@zcode/services";
 import { ZCODE_VERSION } from "@zcode/shared";
-import { ACP_PROVIDER_ID, isAcpModelSelection } from "@zcode/shared/acp";
 
 import { startLeoHttpApi } from "./httpApi.js";
 import { createLeoQuickEntry, resolveQuickWorkspaces } from "./quickEntry.js";
 import { createLeoTaskGroups } from "./taskGroups/service.js";
+import { resolveLeoBotModelSelection } from "./leobotModelSelection.js";
 import { linkEnabled, relayConfigSignature, startLeoLink } from "./link/index.js";
 import { registerPeekabooMcpServer } from "./registerPeekabooMcp.js";
 import { registerTreasuryMcpServer } from "./registerTreasuryMcp.js";
@@ -92,14 +92,8 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
           workspaces: async () =>
             resolveQuickWorkspaces(await deps.services.getOptional(ISettingService)?.get().catch(() => undefined)),
           leoModelSelection: async () => {
-            const view = await deps.services.getOptional(IModelSelectionService)?.getView({ selection: null });
-            if (!view) return undefined;
-            const preferred = view.preferredSelection ?? view.effectiveSelection ?? undefined;
-            if (preferred && !isAcpModelSelection(preferred)) return preferred;
-            const provider = view.providers.find(
-              (candidate) => candidate.providerId !== ACP_PROVIDER_ID && candidate.models.length > 0,
-            );
-            return provider ? { providerId: provider.providerId, modelId: provider.models[0]!.modelId } : null;
+            const service = deps.services.getOptional(IModelSelectionService);
+            return service ? resolveLeoBotModelSelection(service) : undefined;
           },
         }),
         onListening: () => {
@@ -138,6 +132,7 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
                   startLeoLink({
                     taskService,
                     settingService: deps.services.get(ISettingService),
+                    modelSelectionService: deps.services.getOptional(IModelSelectionService),
                     logger: deps.logger,
                     appVersion: ZCODE_VERSION,
                     treasuryStore: store ?? undefined,

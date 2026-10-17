@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 import type { IZCodeTaskService } from "@zcode/services";
-import type { ZCodeTaskMode } from "@zcode/shared";
+import type { ModelSelection, ZCodeTaskMode } from "@zcode/shared";
 import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 
 import { fetchDesktopTasks, type DesktopTask } from "./desktopTasks.js";
@@ -13,6 +13,7 @@ import { DirectGrants } from "./directGrants.js";
 import { OperationReceipts } from "./operationReceipts.js";
 import { LeoagentForwarder } from "./leoagentForward.js";
 import { acpModelSelection, type AcpAgentId } from "@zcode/shared/acp";
+import { LEOBOT_NO_MODEL_MESSAGE } from "../leobotModelSelection.js";
 import {
   deviceNotRecognized,
   error,
@@ -68,8 +69,23 @@ export type LinkBridgeDeps = {
   screenSession?: (req: ScreenSessionRequest) => Promise<LinkResponse>;
   /** 本机 sshd 公钥(仅公钥),手机经已配对的加密通道读取后固定 SSH 身份;默认读 /etc/ssh。 */
   sshHostKeys?: () => Promise<string[]>;
-  /** [WP-21] 本机可用的 ACP 外部 agent:手机端的 harness 列表与开会话都走它(LeoBot 运行时托管)。 */
-  acpAgents?: () => ReadonlyArray<{ id: AcpAgentId; name: string; harnessKey: string; available: boolean }>;
+  /** [WP-21] 本机的 ACP 外部 agent(含不可用的):手机端的 harness 列表与开会话都走它(LeoBot 运行时托管)。 */
+  acpAgents?: () => ReadonlyArray<{
+    id: AcpAgentId;
+    name: string;
+    harnessKey: string;
+    available: boolean;
+    cliPath?: string;
+    unavailableReason?: string;
+    loginCommand?: string;
+  }>;
+  /** [fix-remote] 外部 agent CLI 的版本(`--version`,带超时与缓存);没有就不报版本。 */
+  acpAgentVersion?: (cliPath: string) => Promise<string | undefined>;
+  /**
+   * [fix-remote] LeoBot(zcode)任务用的模型:用户默认或第一个非 acp 的可用模型;null = 一个都没配。
+   * 没有这个依赖时不传模型(旧行为,仅测试)。
+   */
+  zcodeModelSelection?: () => Promise<ModelSelection | null>;
   /**
    * [WP-23] 旧的 leoagent(Python)harness 转发,默认关:ACP 接管手机开 Claude / Codex 会话后不再转发。
    * 打开方式:~/.leoagent/link.json 的 {"harness": {"legacy": true}} 或 LEO_HARNESS_LEGACY=1(harness.py 下个版本删)。
@@ -472,13 +488,39 @@ export class LinkBridge {
     return (this.deps.acpAgents?.() ?? []).filter((agent) => agent.available);
   }
 
+  /** [fix-remote] LeoBot 任务的模型;undefined = 不指定(没有依赖,或读取失败时交给内核默认,内核默认也已排除 acp)。 */
+  private async zcodeModel(): Promise<ModelSelection | null | undefined> {
+    if (!this.deps.zcodeModelSelection) return undefined;
+    try {
+      return await this.deps.zcodeModelSelection();
+    } catch (cause) {
+      this.deps.logger.warn("[leo/link] resolving LeoBot model failed", { error: String(cause) });
+      return undefined;
+    }
+  }
+
   private async capabilities(): Promise<LinkResponse> {
-    const acp = this.availableAcpAgents().map((agent) => ({
-      key: agent.harnessKey,
-      name: agent.name,
-      executable: agent.name,
-      runtime: "acp",
-    }));
+    // [fix-remote] 列出全部外部 agent(含不可用的,带原因),手机据此灰显并说明;可用与否以这里为准。
+    const acp = await Promise.all(
+      (this.deps.acpAgents?.() ?? []).map(async (agent) => {
+        const version =
+          agent.cliPath && this.deps.acpAgentVersion
+            ? await this.deps.acpAgentVersion(agent.cliPath).catch(() => undefined)
+            : undefined;
+        return {
+          key: agent.harnessKey,
+          name: agent.name,
+          executable: agent.name,
+          runtime: "acp",
+          available: agent.available,
+          ...(agent.cliPath ? { cli_path: agent.cliPath } : {}),
+          ...(version ? { version } : {}),
+          ...(agent.available ? {} : { unavailable_reason: agent.unavailableReason ?? "这台 Mac 上启动不了" }),
+          ...(agent.loginCommand ? { login_command: agent.loginCommand } : {}),
+        };
+      }),
+    );
+    const zcodeModel = await this.zcodeModel();
     let legacy: unknown[] = [];
     if (this.legacyEnabled()) {
       const upstream = await this.leoagent.request("GET", "/v1/capabilities");
@@ -515,7 +557,18 @@ export class LinkBridge {
           screen_snapshot: Boolean(this.deps.screen),
           screen_session: Boolean(this.deps.screenSession),
         },
-        harnesses: [{ key: ZCODE, name: "LeoBot", executable: "LeoBot" }, ...acp, ...legacy],
+        harnesses: [
+          {
+            key: ZCODE,
+            name: "LeoBot",
+            executable: "LeoBot",
+            runtime: "zcode",
+            available: zcodeModel !== null,
+            ...(zcodeModel === null ? { unavailable_reason: LEOBOT_NO_MODEL_MESSAGE } : {}),
+          },
+          ...acp,
+          ...legacy,
+        ],
       },
     };
   }
@@ -565,12 +618,29 @@ export class LinkBridge {
         ? undefined
         : this.availableAcpAgents().find((agent) => agent.harnessKey === harness || agent.id === harness);
     if (harness !== ZCODE && !acpAgent) {
-      // [WP-23] 旧 leoagent harness(如 grok)只在显式打开 legacy 时转发。
+      // [WP-23] 旧 leoagent harness 只在显式打开 legacy 时转发。
       if (this.legacyEnabled())
         return this.leoagent.request("POST", "/harness/sessions", req.body, req.caller);
-      return error(400, `这台 Mac 上没有可用的「${harness}」`);
+      // [fix-remote] 认得这个 agent 但本机启动不了:把原因原样告诉手机(没装在哪、怎么装)。
+      const known = (this.deps.acpAgents?.() ?? []).find(
+        (agent) => agent.harnessKey === harness || agent.id === harness,
+      );
+      return error(
+        400,
+        known
+          ? `这台 Mac 上的「${known.name}」用不了：${known.unavailableReason ?? "启动不了"}`
+          : `这台 Mac 上没有可用的「${harness}」`,
+      );
     }
-    const modelSelection = acpAgent ? acpModelSelection(acpAgent.id) : undefined;
+    // [fix-remote] LeoBot 任务显式选非 acp 模型(新建或按 ready 检查点重建 draft 时才需要)。
+    // 不传模型时内核取 registry 第一个,没配个人供应商的 Mac 上会落到 acp/claude-code。
+    const needsCreate = typeof checkpoint?.["taskId"] !== "string" || checkpoint["stage"] === "ready";
+    let modelSelection: ModelSelection | undefined = acpAgent ? acpModelSelection(acpAgent.id) : undefined;
+    if (!acpAgent && needsCreate) {
+      const selected = await this.zcodeModel();
+      if (selected === null) return error(409, LEOBOT_NO_MODEL_MESSAGE);
+      modelSelection = selected;
+    }
     const phoneSessionId = phoneSessionIdOf(body);
     const cwd =
       typeof checkpoint?.["cwd"] === "string"

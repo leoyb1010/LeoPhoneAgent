@@ -3,13 +3,15 @@ import { hostClaudeAgentAcpEntry, listAcpAgents } from "@zcode/services/acp-agen
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 
-import type { ISettingService, IZCodeTaskService } from "@zcode/services";
+import type { IModelSelectionService, ISettingService, IZCodeTaskService } from "@zcode/services";
+import { readCliVersion } from "@zcode/shared/acp-detect";
 import { leoDeviceDescriptorSchema, type LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 
 import { createSyncReplica, createTreasuryHandler } from "../sync/index.js";
 import type { TreasuryStore } from "../treasuryStore.js";
 import { leoPath } from "../leoPaths.js";
 import { LinkBridge } from "./bridge.js";
+import { resolveLeoBotModelSelection } from "../leobotModelSelection.js";
 import { DirectGrants } from "./directGrants.js";
 import { startDirectServer } from "./directServer.js";
 import {
@@ -293,6 +295,7 @@ export async function revokeLeoPairingCode(payload: string): Promise<void> {
 export async function startLeoLink(deps: {
   taskService: IZCodeTaskService;
   settingService?: ISettingService;
+  modelSelectionService?: Pick<IModelSelectionService, "getView">;
   logger: Logger;
   appVersion: string | null;
   treasuryStore?: TreasuryStore;
@@ -375,6 +378,12 @@ export async function startLeoLink(deps: {
     screen: createScreenSnapshotService({ capture: captureViaMain, enabled: screenSharingEnabled }),
     // [WP-21] 手机开 Claude / Codex / Gemini / opencode 会话走 ACP(LeoBot 运行时托管)。
     acpAgents: () => listAcpAgents({ claudeAgentAcpEntry: hostClaudeAgentAcpEntry() }),
+    // [fix-remote] capabilities 里每个外部 agent 带上 CLI 版本（带超时、按文件缓存）。
+    acpAgentVersion: (cliPath) => readCliVersion(cliPath),
+    // [fix-remote] 手机开 LeoBot 任务显式选非 acp 模型；没有就 409 提示去配置。
+    ...(deps.modelSelectionService
+      ? { zcodeModelSelection: () => resolveLeoBotModelSelection(deps.modelSelectionService!) }
+      : {}),
     // [WP-23] 旧 leoagent harness 转发默认关(link.json {"harness":{"legacy":true}} 或 LEO_HARNESS_LEGACY=1 打开)。
     legacyHarness: () =>
       process.env.LEO_HARNESS_LEGACY === "1" ||

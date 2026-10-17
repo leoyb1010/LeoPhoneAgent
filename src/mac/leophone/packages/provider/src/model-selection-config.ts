@@ -1,3 +1,4 @@
+import { ACP_PROVIDER_ID } from "@zcode/shared/acp";
 import {
   validateModelSelectionOptions,
   type ModelSelection,
@@ -31,7 +32,9 @@ export function resolveInitialModelSelection(input: {
 }): InitialModelSelectionResolution {
   // 这里只构造 Host 的初始推荐，不解析已有会话意图。失效默认是可丢弃偏好，
   // 应继续按 Registry 顺序推荐；不能把历史选择留空的规则误用于新草稿初始化。
-  if (input.configuredDefault) {
+  // [fix-remote] 外部 agent（ACP）只能由用户显式选：新草稿的初始推荐永远不落到 provider acp。
+  // 以前没配个人供应商的 Mac 上 registry 里只剩 acp，LeoBot 任务被悄悄转给 Claude Code 并因未登录失败。
+  if (input.configuredDefault && input.configuredDefault.providerId !== ACP_PROVIDER_ID) {
     if (isSelectable(input.registry, input.configuredDefault)) {
       return {
         source: "configured-default",
@@ -42,7 +45,7 @@ export function resolveInitialModelSelection(input: {
 
   // 仅用于全新草稿的 Host 初始推荐；历史未绑定状态不能进入这个初始化分支。
   for (const provider of input.registry.providers) {
-    if (provider.config.visibility === "hidden") continue;
+    if (provider.config.visibility === "hidden" || provider.providerId === ACP_PROVIDER_ID) continue;
     for (const model of provider.models) {
       const selection = completeNewModelSelection(input.registry, {
         providerId: provider.providerId,

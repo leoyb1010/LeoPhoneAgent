@@ -106,6 +106,8 @@ async function withBridge(
     sshHostKeys?: () => Promise<string[]>;
     legacyHarness?: boolean;
     acpAgents?: LinkBridgeDeps["acpAgents"];
+    acpAgentVersion?: LinkBridgeDeps["acpAgentVersion"];
+    zcodeModelSelection?: LinkBridgeDeps["zcodeModelSelection"];
   } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(path.join(os.tmpdir(), "leo-link-")));
@@ -129,6 +131,8 @@ async function withBridge(
     sshHostKeys: options.sshHostKeys ?? (async () => []),
     legacyHarness: () => options.legacyHarness ?? false,
     ...(options.acpAgents ? { acpAgents: options.acpAgents } : {}),
+    ...(options.acpAgentVersion ? { acpAgentVersion: options.acpAgentVersion } : {}),
+    ...(options.zcodeModelSelection ? { zcodeModelSelection: options.zcodeModelSelection } : {}),
   });
   try {
     await run({ bridge, zcode, dir, pushed });
@@ -1316,9 +1320,14 @@ test("[WP-21] ACP agents are the phone's harnesses; sessions run as LeoBot tasks
         const capabilities = (await bridge.handle(req("GET", "/v1/capabilities"))).body as {
           harnesses: Record<string, unknown>[];
         };
+        // [fix-remote] 不可用的也列出来(带原因),手机灰显;能不能用以 available 为准。
         assert.deepEqual(
-          capabilities.harnesses.map((harness) => harness["key"]),
-          ["zcode", "claude"],
+          capabilities.harnesses.map((harness) => [harness["key"], harness["available"]]),
+          [
+            ["zcode", true],
+            ["claude", true],
+            ["codex", false],
+          ],
         );
         const created = await bridge.handle(
           req("POST", "/harness/sessions", { harness: "claude", cwd: os.tmpdir(), prompt: "" }),
@@ -1351,5 +1360,124 @@ test("[WP-21] ACP agents are the phone's harnesses; sessions run as LeoBot tasks
     );
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+const sonnet = { providerId: "personal-anthropic", modelId: "claude-sonnet", options: { reasoningLevel: "high" } };
+
+test("[fix-remote] grok is an ACP harness: listed with path, version and runs as a LeoBot task on acp/grok", async () => {
+  const versions: string[] = [];
+  await withBridge(
+    async ({ bridge, zcode }) => {
+      const capabilities = (await bridge.handle(req("GET", "/v1/capabilities"))).body as {
+        harnesses: Record<string, unknown>[];
+      };
+      const grok = capabilities.harnesses.find((harness) => harness["key"] === "grok");
+      assert.deepEqual(grok, {
+        key: "grok",
+        name: "Grok",
+        executable: "Grok",
+        runtime: "acp",
+        available: true,
+        cli_path: "/Users/me/.grok/bin/grok",
+        version: "grok 1.0.60",
+        login_command: "grok login",
+      });
+      const gemini = capabilities.harnesses.find((harness) => harness["key"] === "gemini");
+      assert.equal(gemini?.["available"], false);
+      assert.match(String(gemini?.["unavailable_reason"]), /没有找到 gemini/);
+      assert.deepEqual(versions, ["/Users/me/.grok/bin/grok"]);
+
+      const created = await bridge.handle(req("POST", "/harness/sessions", { harness: "grok", cwd: os.tmpdir() }));
+      assert.equal(created.status, 202, JSON.stringify(created.body));
+      assert.equal((created.body as Record<string, unknown>)["harness"], "grok");
+      assert.deepEqual(zcode.named("createTask")[0]?.["modelSelection"], {
+        providerId: "acp",
+        modelId: "grok",
+        options: { reasoningLevel: "default" },
+      });
+
+      // 认得但本机装不上的 agent:把原因原样告诉手机。
+      const refused = await bridge.handle(req("POST", "/harness/sessions", { harness: "gemini", prompt: "hi" }));
+      assert.equal(refused.status, 400);
+      assert.match(JSON.stringify(refused.body), /Gemini.*没有找到 gemini/);
+    },
+    {
+      acpAgents: () => [
+        {
+          id: "grok",
+          name: "Grok",
+          harnessKey: "grok",
+          available: true,
+          cliPath: "/Users/me/.grok/bin/grok",
+          loginCommand: "grok login",
+        },
+        {
+          id: "gemini",
+          name: "Gemini",
+          harnessKey: "gemini",
+          available: false,
+          unavailableReason: "本机没有找到 gemini 命令",
+        },
+      ],
+      acpAgentVersion: async (cliPath) => {
+        versions.push(cliPath);
+        return "grok 1.0.60";
+      },
+      zcodeModelSelection: async () => sonnet,
+    },
+  );
+});
+
+test("[fix-remote] LeoBot tasks pin a non-acp model; with none configured the phone gets 409 and a fix", async () => {
+  await withBridge(
+    async ({ bridge, zcode }) => {
+      await createSession(bridge, os.tmpdir(), { prompt: "hi" });
+      assert.deepEqual(zcode.named("createTask")[0]?.["modelSelection"], sonnet);
+      const capabilities = (await bridge.handle(req("GET", "/v1/capabilities"))).body as {
+        harnesses: Record<string, unknown>[];
+      };
+      assert.equal(capabilities.harnesses[0]?.["available"], true);
+    },
+    { zcodeModelSelection: async () => sonnet },
+  );
+  await withBridge(
+    async ({ bridge, zcode }) => {
+      const refused = await bridge.handle(req("POST", "/harness/sessions", { harness: "zcode", prompt: "hi" }));
+      assert.equal(refused.status, 409);
+      assert.match(JSON.stringify(refused.body), /LeoBot 还没配置模型.*设置 → AI 服务商.*全部发送到 Mac/);
+      assert.equal(zcode.named("createTask").length, 0);
+      const capabilities = (await bridge.handle(req("GET", "/v1/capabilities"))).body as {
+        harnesses: Record<string, unknown>[];
+      };
+      assert.equal(capabilities.harnesses[0]?.["key"], "zcode");
+      assert.equal(capabilities.harnesses[0]?.["available"], false);
+      assert.match(String(capabilities.harnesses[0]?.["unavailable_reason"]), /LeoBot 还没配置模型/);
+    },
+    { zcodeModelSelection: async () => null },
+  );
+});
+
+test("[fix-remote] ready-checkpoint recovery re-creates the LeoBot draft on the pinned model too", async () => {
+  const { OperationReceipts } = await import("./operationReceipts.js");
+  const dir = await mkdtemp(path.join(os.tmpdir(), "leo-ready-model-"));
+  const request = req("POST", "/harness/sessions", { prompt: "once" }, iphone, "ready-model");
+  try {
+    const receipts = new OperationReceipts(path.join(dir, "journals", "operations"));
+    await receipts.run(request, async () => {
+      await receipts.checkpoint(request, { stage: "ready", cwd: dir, taskId: "lost-draft" });
+      throw new Error("CLI restarted before send");
+    });
+    await withBridge(
+      async ({ bridge, zcode }) => {
+        await bridge.restore();
+        assert.equal((await bridge.handle(request)).status, 202);
+        assert.equal(zcode.named("createTask")[0]?.["draftSessionId"], "lost-draft");
+        assert.deepEqual(zcode.named("createTask")[0]?.["modelSelection"], sonnet);
+      },
+      { dir, zcodeModelSelection: async () => sonnet },
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });

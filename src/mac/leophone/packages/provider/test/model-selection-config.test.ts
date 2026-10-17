@@ -5,11 +5,38 @@ import {
   resolveInitialModelSelection,
   type ProviderRegistryView,
 } from "../src/index.js";
+import { createAcpRegistryProvider } from "../src/leo/acp-provider.js";
 import { ModelConfig, ModelOptionSpecsConfig, ModelPropertiesConfig } from "../src/config/index.js";
 import { createApiKeyProviderConfig } from "./provider-config-fixtures.js";
 
 describe("resolveInitialModelSelection", () => {
   const registry = registryView();
+
+  // [fix-remote] 新草稿默认模型永远不落到外部 agent（acp）：LeoBot 任务不能被悄悄转给 Claude Code。
+  describe("外部 agent（acp）不参与默认推荐", () => {
+    const acp = createAcpRegistryProvider(["claude-code", "grok"]);
+    const withAcpFirst: ProviderRegistryView = { ...registry, providers: [acp, ...registry.providers] };
+
+    it("acp 排在前面也跳过，取第一个非 acp 模型", () => {
+      expect(resolveInitialModelSelection({ registry: withAcpFirst })).toMatchObject({
+        source: "registry-fallback",
+        selection: { providerId: "provider-a", modelId: "model-a" },
+      });
+    });
+
+    it("configured default 指向 acp 也不采用", () => {
+      expect(
+        resolveInitialModelSelection({
+          registry: withAcpFirst,
+          configuredDefault: { providerId: "acp", modelId: "claude-code", options: { reasoningLevel: "default" } },
+        }),
+      ).toMatchObject({ source: "registry-fallback", selection: { providerId: "provider-a" } });
+    });
+
+    it("只有 acp 时没有推荐（由调用方提示去配置模型）", () => {
+      expect(resolveInitialModelSelection({ registry: { ...registry, providers: [acp] } })).toEqual({ source: "none" });
+    });
+  });
 
   it("只接受带合法 reasoning 的持久化 configured default", () => {
     expect(
