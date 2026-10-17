@@ -1180,61 +1180,6 @@
 		AA26BD0F2F2E5FA500AECF2D /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		AA26BD112F2E5FAF00AECF2D /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		AA26BD132F2E5FB800AECF2D /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
-		AA26BD152F2E651900AECF2D /* slirp.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = slirp.0.framework; path = ../../build/frameworks/slirp.0.framework; sourceTree = "<group>"; };
-		AA26BD162F2E651900AECF2D /* ffi.8.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ffi.8.framework; path = ../../build/frameworks/ffi.8.framework; sourceTree = "<group>"; };
-		AA26BD172F2E651900AECF2D /* gmodule-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gmodule-2.0.0.framework"; path = "../../build/frameworks/gmodule-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD182F2E651900AECF2D /* pixman-1.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "pixman-1.0.framework"; path = "../../build/frameworks/pixman-1.0.framework"; sourceTree = "<group>"; };
-		AA26BD192F2E651900AECF2D /* zstd.1.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = zstd.1.framework; path = ../../build/frameworks/zstd.1.framework; sourceTree = "<group>"; };
-		AA26BD1A2F2E651900AECF2D /* iconv.2.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = iconv.2.framework; path = ../../build/frameworks/iconv.2.framework; sourceTree = "<group>"; };
-		AA26BD1B2F2E651900AECF2D /* gio-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gio-2.0.0.framework"; path = "../../build/frameworks/gio-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD1C2F2E651900AECF2D /* intl.8.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = intl.8.framework; path = ../../build/frameworks/intl.8.framework; sourceTree = "<group>"; };
-		AA26BD1D2F2E651900AECF2D /* gthread-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gthread-2.0.0.framework"; path = "../../build/frameworks/gthread-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD1E2F2E651900AECF2D /* qemu-aarch64-softmmu.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "qemu-aarch64-softmmu.framework"; path = "../../build/frameworks/qemu-aarch64-softmmu.framework"; sourceTree = "<group>"; };
-		AA26BD1F2F2E651900AECF2D /* gobject-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gobject-2.0.0.framework"; path = "../../build/frameworks/gobject-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD202F2E651900AECF2D /* glib-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "glib-2.0.0.framework"; path = "../../build/frameworks/glib-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD2E2F2E65AB00AECF2D /* gthread-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gthread-2.0.0.framework"; path = "../../build/frameworks/gthread-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD2F2F2E65AB00AECF2D /* gio-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gio-2.0.0.framework"; path = "../../build/frameworks/gio-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD302F2E65AB00AECF2D /* glib-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "glib-2.0.0.framework"; path = "../../build/frameworks/glib-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD312F2E65AB00AECF2D /* pixman-1.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "pixman-1.0.framework"; path = "../../build/frameworks/pixman-1.0.framework"; sourceTree = "<group>"; };
-		AA26BD322F2E65AB00AECF2D /* iconv.2.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = iconv.2.framework; path = ../../build/frameworks/iconv.2.framework; sourceTree = "<group>"; };
-		AA26BD332F2E65AB00AECF2D /* slirp.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = slirp.0.framework; path = ../../build/frameworks/slirp.0.framework; sourceTree = "<group>"; };
-		AA26BD342F2E65AB00AECF2D /* qemu-aarch64-softmmu.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "qemu-aarch64-softmmu.framework"; path = "../../build/frameworks/qemu-aarch64-softmmu.framework"; sourceTree = "<group>"; };
-		AA26BD352F2E65AB00AECF2D /* ffi.8.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ffi.8.framework; path = ../../build/frameworks/ffi.8.framework; sourceTree = "<group>"; };
-		AA26BD362F2E65AB00AECF2D /* gobject-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gobject-2.0.0.framework"; path = "../../build/frameworks/gobject-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD372F2E65AB00AECF2D /* zstd.1.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = zstd.1.framework; path = ../../build/frameworks/zstd.1.framework; sourceTree = "<group>"; };
-		AA26BD382F2E65AB00AECF2D /* intl.8.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = intl.8.framework; path = ../../build/frameworks/intl.8.framework; sourceTree = "<group>"; };
-		AA26BD392F2E65AB00AECF2D /* gmodule-2.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gmodule-2.0.0.framework"; path = "../../build/frameworks/gmodule-2.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD462F2E663600AECF2D /* jpeg.62.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = jpeg.62.framework; path = ../../build/frameworks/jpeg.62.framework; sourceTree = "<group>"; };
-		AA26BD472F2E663600AECF2D /* gstnet-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstnet-1.0.0.framework"; path = "../../build/frameworks/gstnet-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD482F2E663700AECF2D /* opus.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = opus.0.framework; path = ../../build/frameworks/opus.0.framework; sourceTree = "<group>"; };
-		AA26BD492F2E663700AECF2D /* gstcheck-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstcheck-1.0.0.framework"; path = "../../build/frameworks/gstcheck-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD4A2F2E663700AECF2D /* gstcontroller-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstcontroller-1.0.0.framework"; path = "../../build/frameworks/gstcontroller-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD4B2F2E663700AECF2D /* png16.16.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = png16.16.framework; path = ../../build/frameworks/png16.16.framework; sourceTree = "<group>"; };
-		AA26BD4C2F2E663700AECF2D /* json-glib-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "json-glib-1.0.0.framework"; path = "../../build/frameworks/json-glib-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD4D2F2E663700AECF2D /* gcrypt.20.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = gcrypt.20.framework; path = ../../build/frameworks/gcrypt.20.framework; sourceTree = "<group>"; };
-		AA26BD4E2F2E663700AECF2D /* virglrenderer.1.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = virglrenderer.1.framework; path = ../../build/frameworks/virglrenderer.1.framework; sourceTree = "<group>"; };
-		AA26BD4F2F2E663700AECF2D /* gstbase-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstbase-1.0.0.framework"; path = "../../build/frameworks/gstbase-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD502F2E663700AECF2D /* ssl.1.1.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ssl.1.1.framework; path = ../../build/frameworks/ssl.1.1.framework; sourceTree = "<group>"; };
-		AA26BD512F2E663700AECF2D /* gstrtsp-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstrtsp-1.0.0.framework"; path = "../../build/frameworks/gstrtsp-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD522F2E663700AECF2D /* EGL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EGL.framework; path = ../../build/frameworks/EGL.framework; sourceTree = "<group>"; };
-		AA26BD542F2E663700AECF2D /* gstreamer-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstreamer-1.0.0.framework"; path = "../../build/frameworks/gstreamer-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD552F2E663700AECF2D /* gstsdp-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstsdp-1.0.0.framework"; path = "../../build/frameworks/gstsdp-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD562F2E663700AECF2D /* epoxy.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = epoxy.0.framework; path = ../../build/frameworks/epoxy.0.framework; sourceTree = "<group>"; };
-		AA26BD572F2E663700AECF2D /* crypto.1.1.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = crypto.1.1.framework; path = ../../build/frameworks/crypto.1.1.framework; sourceTree = "<group>"; };
-		AA26BD582F2E663700AECF2D /* gstvideo-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstvideo-1.0.0.framework"; path = "../../build/frameworks/gstvideo-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD592F2E663700AECF2D /* swtpm.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = swtpm.0.framework; path = ../../build/frameworks/swtpm.0.framework; sourceTree = "<group>"; };
-		AA26BD5A2F2E663700AECF2D /* phodav-3.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "phodav-3.0.0.framework"; path = "../../build/frameworks/phodav-3.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD5B2F2E663700AECF2D /* gstfft-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstfft-1.0.0.framework"; path = "../../build/frameworks/gstfft-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD5C2F2E663700AECF2D /* gstaudio-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstaudio-1.0.0.framework"; path = "../../build/frameworks/gstaudio-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD5E2F2E663700AECF2D /* gstpbutils-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstpbutils-1.0.0.framework"; path = "../../build/frameworks/gstpbutils-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD5F2F2E663700AECF2D /* gstallocators-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstallocators-1.0.0.framework"; path = "../../build/frameworks/gstallocators-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD602F2E663700AECF2D /* gstapp-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstapp-1.0.0.framework"; path = "../../build/frameworks/gstapp-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD612F2E663700AECF2D /* gpg-error.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gpg-error.0.framework"; path = "../../build/frameworks/gpg-error.0.framework"; sourceTree = "<group>"; };
-		AA26BD622F2E663700AECF2D /* gstrtp-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstrtp-1.0.0.framework"; path = "../../build/frameworks/gstrtp-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD632F2E663700AECF2D /* gstriff-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gstriff-1.0.0.framework"; path = "../../build/frameworks/gstriff-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD642F2E663700AECF2D /* GLESv2.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GLESv2.framework; path = ../../build/frameworks/GLESv2.framework; sourceTree = "<group>"; };
-		AA26BD652F2E663700AECF2D /* gsttag-1.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "gsttag-1.0.0.framework"; path = "../../build/frameworks/gsttag-1.0.0.framework"; sourceTree = "<group>"; };
-		AA26BD662F2E663700AECF2D /* soup-3.0.0.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "soup-3.0.0.framework"; path = "../../build/frameworks/soup-3.0.0.framework"; sourceTree = "<group>"; };
 		AA26CCB62F31067900AECF2D /* alpine-rootfs.zip */ = {isa = PBXFileReference; lastKnownFileType = archive.zip; name = "alpine-rootfs.zip"; path = "../../deps/resources/alpine-rootfs.zip"; sourceTree = SOURCE_ROOT; };
 		AA26CCB82F31070A00AECF2D /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		AA26CCBB2F31080100AECF2D /* ISHKernel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ISHKernel.m; sourceTree = "<group>"; };
@@ -2036,64 +1981,9 @@
 				AA26CCC42F31090100AECF2D /* libresolv.tbd */,
 				AA26CCC22F31090000AECF2D /* SystemConfiguration.framework */,
 				E5S000015 /* CloudKit.framework */,
-				AA26BD162F2E651900AECF2D /* ffi.8.framework */,
-				AA26BD1B2F2E651900AECF2D /* gio-2.0.0.framework */,
-				AA26BD202F2E651900AECF2D /* glib-2.0.0.framework */,
-				AA26BD172F2E651900AECF2D /* gmodule-2.0.0.framework */,
-				AA26BD1F2F2E651900AECF2D /* gobject-2.0.0.framework */,
-				AA26BD1D2F2E651900AECF2D /* gthread-2.0.0.framework */,
-				AA26BD1A2F2E651900AECF2D /* iconv.2.framework */,
-				AA26BD1C2F2E651900AECF2D /* intl.8.framework */,
-				AA26BD182F2E651900AECF2D /* pixman-1.0.framework */,
-				AA26BD1E2F2E651900AECF2D /* qemu-aarch64-softmmu.framework */,
-				AA26BD152F2E651900AECF2D /* slirp.0.framework */,
-				AA26BD192F2E651900AECF2D /* zstd.1.framework */,
 				AA26BD132F2E5FB800AECF2D /* QuartzCore.framework */,
 				AA26BD112F2E5FAF00AECF2D /* MetalKit.framework */,
 				AA26BD0F2F2E5FA500AECF2D /* Metal.framework */,
-				AA26BD352F2E65AB00AECF2D /* ffi.8.framework */,
-				AA26BD2F2F2E65AB00AECF2D /* gio-2.0.0.framework */,
-				AA26BD302F2E65AB00AECF2D /* glib-2.0.0.framework */,
-				AA26BD392F2E65AB00AECF2D /* gmodule-2.0.0.framework */,
-				AA26BD362F2E65AB00AECF2D /* gobject-2.0.0.framework */,
-				AA26BD2E2F2E65AB00AECF2D /* gthread-2.0.0.framework */,
-				AA26BD322F2E65AB00AECF2D /* iconv.2.framework */,
-				AA26BD382F2E65AB00AECF2D /* intl.8.framework */,
-				AA26BD312F2E65AB00AECF2D /* pixman-1.0.framework */,
-				AA26BD342F2E65AB00AECF2D /* qemu-aarch64-softmmu.framework */,
-				AA26BD332F2E65AB00AECF2D /* slirp.0.framework */,
-				AA26BD372F2E65AB00AECF2D /* zstd.1.framework */,
-				AA26BD572F2E663700AECF2D /* crypto.1.1.framework */,
-				AA26BD522F2E663700AECF2D /* EGL.framework */,
-				AA26BD562F2E663700AECF2D /* epoxy.0.framework */,
-				AA26BD4D2F2E663700AECF2D /* gcrypt.20.framework */,
-				AA26BD642F2E663700AECF2D /* GLESv2.framework */,
-				AA26BD612F2E663700AECF2D /* gpg-error.0.framework */,
-				AA26BD5F2F2E663700AECF2D /* gstallocators-1.0.0.framework */,
-				AA26BD602F2E663700AECF2D /* gstapp-1.0.0.framework */,
-				AA26BD5C2F2E663700AECF2D /* gstaudio-1.0.0.framework */,
-				AA26BD4F2F2E663700AECF2D /* gstbase-1.0.0.framework */,
-				AA26BD492F2E663700AECF2D /* gstcheck-1.0.0.framework */,
-				AA26BD4A2F2E663700AECF2D /* gstcontroller-1.0.0.framework */,
-				AA26BD5B2F2E663700AECF2D /* gstfft-1.0.0.framework */,
-				AA26BD472F2E663600AECF2D /* gstnet-1.0.0.framework */,
-				AA26BD5E2F2E663700AECF2D /* gstpbutils-1.0.0.framework */,
-				AA26BD542F2E663700AECF2D /* gstreamer-1.0.0.framework */,
-				AA26BD632F2E663700AECF2D /* gstriff-1.0.0.framework */,
-				AA26BD622F2E663700AECF2D /* gstrtp-1.0.0.framework */,
-				AA26BD512F2E663700AECF2D /* gstrtsp-1.0.0.framework */,
-				AA26BD552F2E663700AECF2D /* gstsdp-1.0.0.framework */,
-				AA26BD652F2E663700AECF2D /* gsttag-1.0.0.framework */,
-				AA26BD582F2E663700AECF2D /* gstvideo-1.0.0.framework */,
-				AA26BD462F2E663600AECF2D /* jpeg.62.framework */,
-				AA26BD4C2F2E663700AECF2D /* json-glib-1.0.0.framework */,
-				AA26BD482F2E663700AECF2D /* opus.0.framework */,
-				AA26BD5A2F2E663700AECF2D /* phodav-3.0.0.framework */,
-				AA26BD4B2F2E663700AECF2D /* png16.16.framework */,
-				AA26BD662F2E663700AECF2D /* soup-3.0.0.framework */,
-				AA26BD502F2E663700AECF2D /* ssl.1.1.framework */,
-				AA26BD592F2E663700AECF2D /* swtpm.0.framework */,
-				AA26BD4E2F2E663700AECF2D /* virglrenderer.1.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -4914,7 +4804,6 @@
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
-					"$(SRCROOT)/../../build/frameworks",
 					"$(SRCROOT)/../../deps/frameworks",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
@@ -4970,7 +4859,6 @@
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
-					"$(SRCROOT)/../../build/frameworks",
 					"$(SRCROOT)/../../deps/frameworks",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
