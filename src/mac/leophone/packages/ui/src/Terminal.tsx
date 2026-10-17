@@ -1,15 +1,18 @@
-import { Plus, X } from "lucide-react";
+import { Columns2, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { IServiceAccessor } from "@zcode/services";
 import { TID_TERMINAL, TID_TERMINAL_CLOSE_BUTTON } from "@zcode/shared";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import { Button } from "@/components/ui/button.js";
-import { Tabs, TabsContent, TabsList } from "@/components/ui/tabs.js";
+import { Tabs, TabsList } from "@/components/ui/tabs.js";
+import { cn } from "@/components/lib/utils.js";
 import { getPathLeaf } from "@/lib/path.js";
 import { TerminalTabTrigger } from "@/terminal/TerminalTabTrigger.js";
 import { TerminalSession } from "@/terminal/TerminalSession.js";
+import { TerminalSplitLayout } from "@/terminal/TerminalSplitLayout.js";
 import {
+  activateTerminalSession,
   closeTerminalSession,
   createTerminalSession,
   createWorkspaceTerminalState,
@@ -18,6 +21,8 @@ import {
   formatTerminalTabTitle,
   getNextTerminalSessionIndex,
   getTerminalSessionCloseAction,
+  splitTerminalWorkspace,
+  unsplitTerminalWorkspace,
   type TerminalPanelState,
   type TerminalSessionDescriptor,
 } from "@/terminal/terminalPanelState.js";
@@ -247,29 +252,29 @@ export function Terminal({
   );
 
   const handleActivateSession = useCallback((sessionId: string) => {
-    setPanelState((current) => {
-      const session = current.sessions[sessionId];
-      if (!session) {
-        return current;
-      }
-
-      const workspace = current.workspaces[session.workspaceKey];
-      if (!workspace || workspace.activeSessionId === sessionId) {
-        return current;
-      }
-
-      return {
-        ...current,
-        workspaces: {
-          ...current.workspaces,
-          [session.workspaceKey]: {
-            ...workspace,
-            activeSessionId: sessionId,
-          },
-        },
-      };
-    });
+    setPanelState((current) => activateTerminalSession(current, sessionId));
   }, []);
+
+  // [leo] WP-24 左右分屏:⌘D 在右侧新开一个终端,⌘⇧D 取消分屏(右侧终端回到普通 tab,PTY 不关)。
+  const handleSplit = useCallback(() => {
+    setPanelState((current) => {
+      const ensured = ensureWorkspaceTerminalState(current, { workspaceKey, services, cwd });
+      const session = createTerminalSession({
+        workspaceKey,
+        services,
+        cwd,
+        index: getNextTerminalSessionIndex(ensured, workspaceKey),
+      });
+      const next = splitTerminalWorkspace(ensured, workspaceKey, session);
+      if (next !== ensured) {
+        logger.info("[Terminal] split terminal", { terminalTabId: session.id, workspaceKey });
+      }
+      return next;
+    });
+  }, [cwd, services, workspaceKey]);
+  const handleUnsplit = useCallback(() => {
+    setPanelState((current) => unsplitTerminalWorkspace(current, workspaceKey));
+  }, [workspaceKey]);
 
   const workspace = panelState.workspaces[workspaceKey];
   const currentSessions =
@@ -281,6 +286,10 @@ export function Terminal({
     currentSessions[0] ??
     null;
   const allSessions = Object.values(panelState.sessions);
+  const splitSession =
+    workspace?.splitSessionId && workspace.splitSessionId !== activeSession?.id
+      ? (currentSessions.find((session) => session.id === workspace.splitSessionId) ?? null)
+      : null;
 
   // 修复说明：关闭面板只收起 UI，不 dispose tab。真正关闭某个终端由 tab 上的关闭按钮负责，
   // 这样 workspace/task 切换或面板收起都不会中断正在运行的命令。
@@ -288,6 +297,15 @@ export function Terminal({
     <section
       data-testid={TID_TERMINAL}
       className="flex h-full min-h-0 flex-col gap-2 overflow-hidden bg-background p-3 pb-2"
+      onKeyDownCapture={(event) => {
+        if (event.key.toLowerCase() !== "d" || event.altKey || event.metaKey === event.ctrlKey) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.shiftKey) handleUnsplit();
+        else handleSplit();
+      }}
     >
       <Tabs
         value={activeSession?.id ?? ""}
@@ -331,6 +349,18 @@ export function Terminal({
               type="button"
               size="icon-md"
               variant="ghost"
+              onClick={splitSession ? handleUnsplit : handleSplit}
+              aria-pressed={Boolean(splitSession)}
+              title={splitSession ? "取消分屏 ⌘⇧D" : "左右分屏 ⌘D"}
+              aria-label={splitSession ? "取消分屏" : "左右分屏"}
+              className={cn(splitSession && "bg-selected")}
+            >
+              <Columns2 className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              size="icon-md"
+              variant="ghost"
               onClick={handleCreateSession}
               title={intl.formatMessage({ id: "terminal.new" })}
               aria-label={intl.formatMessage({ id: "terminal.new" })}
@@ -351,32 +381,25 @@ export function Terminal({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-hidden">
-          {allSessions.map((session) => (
-            <TabsContent
-              key={session.id}
-              value={session.id}
-              forceMount
-              className="h-full min-h-0 flex-1 data-[state=inactive]:hidden"
-            >
-              <TerminalSession
-                sessionId={session.id}
-                services={session.services}
-                cwd={session.cwd}
-                isVisible={
-                  isVisible &&
-                  session.workspaceKey === workspaceKey &&
-                  session.id === activeSession?.id
-                }
-                isPanelResizing={isPanelResizing}
-                isWindowsDesktop={isWindowsDesktop}
-                onShellLabelChange={handleShellLabelChange}
-                onExit={handleSessionExit}
-                onOpenBrowserUrl={onOpenBrowserUrl}
-              />
-            </TabsContent>
-          ))}
-        </div>
+        <TerminalSplitLayout
+          sessions={allSessions}
+          primaryId={activeSession?.id ?? null}
+          secondaryId={splitSession?.id ?? null}
+          workspaceKey={workspaceKey}
+          renderSession={(session, shown) => (
+            <TerminalSession
+              sessionId={session.id}
+              services={session.services}
+              cwd={session.cwd}
+              isVisible={isVisible && shown}
+              isPanelResizing={isPanelResizing}
+              isWindowsDesktop={isWindowsDesktop}
+              onShellLabelChange={handleShellLabelChange}
+              onExit={handleSessionExit}
+              onOpenBrowserUrl={onOpenBrowserUrl}
+            />
+          )}
+        />
       </Tabs>
     </section>
   );
