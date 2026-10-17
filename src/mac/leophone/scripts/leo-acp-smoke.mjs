@@ -2,7 +2,7 @@
 // [fix-remote] ACP 外部 agent 冒烟：直接起 agent → initialize →（需要时 authenticate）→ session/new → prompt「只回复OK」→ 打印结果。
 // 单文件、只用 Node 内置模块：可以拷到任何一台 Mac 上直接跑（不需要仓库依赖）。
 //
-//   node scripts/leo-acp-smoke.mjs <claude|codex|gemini|opencode|grok> [--cwd DIR] [--timeout 120] [--prompt 文本] [--no-proxy]
+//   node scripts/leo-acp-smoke.mjs <claude|codex|gemini|opencode|grok> [--cwd DIR] [--timeout 120] [--prompt 文本] [--no-proxy] [--direct]
 //
 // 探测路径与 LeoBot 一致（packages/shared/src/acp-detect.ts）：进程 PATH + 登录 shell 的 PATH + 常见用户级安装目录。
 // 退出码：0 = agent 回了话且正常结束；1 = 启动/握手/回合失败；2 = 用法错误或本机没装。
@@ -236,6 +236,35 @@ if (launch.cli) {
 }
 console.log(`· 启动     ${launch.command} ${launch.args.join(" ")}`);
 console.log(`· 工作目录 ${cwd}`);
+
+// --direct（仅 claude，排查用）：不经 ACP，直接 `claude -p` 跑一轮，且不加载用户级设置（hooks / 插件，SSH 会话里
+// 它们可能卡住或读钥匙串）；登录走 CLAUDE_CODE_OAUTH_TOKEN 长期令牌。用来区分「CLI/登录问题」与「ACP/适配器问题」。
+if (args.includes("--direct")) {
+  if (!["claude", "claude-code"].includes(agent)) {
+    console.error("--direct 目前只支持 claude");
+    process.exit(2);
+  }
+  const startedDirect = Date.now();
+  const result = spawnSync(
+    launch.cli,
+    ["-p", promptText, "--output-format", "json", "--setting-sources", "project,local"],
+    { cwd, env: launch.env, encoding: "utf8", timeout: timeoutMs },
+  );
+  const seconds = ((Date.now() - startedDirect) / 1000).toFixed(1);
+  let parsed;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    parsed = undefined;
+  }
+  if (result.status === 0 && parsed && !parsed.is_error) {
+    console.log(`✓ claude（直接 -p，跳过用户设置）正常（${seconds}s）：${String(parsed.result ?? "").slice(0, 200)}`);
+    process.exit(0);
+  }
+  console.error(`✗ claude（直接 -p）失败（${seconds}s）：${result.error?.message ?? `退出码 ${result.status}`}`);
+  console.error(`  ${(parsed?.result ?? result.stderr ?? result.stdout ?? "").toString().trim().split("\n").slice(-6).join("\n  ")}`);
+  process.exit(1);
+}
 
 const started = Date.now();
 const child = spawn(launch.command, launch.args, {
