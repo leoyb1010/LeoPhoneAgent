@@ -18,10 +18,10 @@ trap 'rm -rf "$WORK"' EXIT
 
 echo "Checking actual CloudKit transport with SDK: $SDK"
 "$SWIFTC" --version
-# App target uses SWIFT_VERSION=5.0 and IPHONEOS_DEPLOYMENT_TARGET=26.0.
+# App target uses SWIFT_VERSION=5.0 and IPHONEOS_DEPLOYMENT_TARGET=27.0.
 # Cross-typechecking arm64 works on both Intel and Apple Silicon CI hosts.
 "$SWIFTC" -typecheck -parse-as-library -swift-version 5 -D DEBUG \
-  -sdk "$SDK" -target arm64-apple-ios26.0-simulator \
+  -sdk "$SDK" -target arm64-apple-ios27.0-simulator \
   -module-name CloudKitTransportSDKCheck -module-cache-path "$WORK/modules" \
   "$SYNC/PortableRecord.swift" \
   "$SYNC/SyncTransport.swift" \

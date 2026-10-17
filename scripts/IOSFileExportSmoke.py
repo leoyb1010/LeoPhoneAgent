@@ -82,5 +82,5 @@ with tempfile.TemporaryDirectory(prefix='leo-export-test-') as folder:
     fragment = source[source.index('struct DocumentExportView:'):source.index('// MARK: - View Model')]
     ui = root / 'ExportUI.swift'; ui.write_text('import SwiftUI\nimport UIKit\nimport UniformTypeIdentifiers\n' + fragment)
     subprocess.run(['swiftc', '-typecheck', '-parse-as-library', '-swift-version', '5', '-sdk', sdk,
-                    '-target', 'arm64-apple-ios26.0-simulator', '-module-cache-path', str(root / 'sdk-cache'), str(ui)], check=True)
+                    '-target', 'arm64-apple-ios27.0-simulator', '-module-cache-path', str(root / 'sdk-cache'), str(ui)], check=True)
     print('PASS actual export SwiftUI/Activity wrapper iOS SDK typecheck (no share UI launched)')

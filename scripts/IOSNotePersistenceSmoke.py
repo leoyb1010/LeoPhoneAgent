@@ -163,7 +163,7 @@ actor CollectionSearchIndex {
 }
 ''')
     subprocess.run(['swiftc', '-typecheck', '-parse-as-library', '-swift-version', '5', '-sdk', sdk,
-                    '-target', 'arm64-apple-ios26.0-simulator', '-module-cache-path', str(folder / 'sdk-cache'),
+                    '-target', 'arm64-apple-ios27.0-simulator', '-module-cache-path', str(folder / 'sdk-cache'),
                     str(ROOT / 'src/ios/Shared/NoteBodyStore.swift'), str(ROOT / 'src/ios/Views/NoteEditorView.swift'),
                     str(stubs)], check=True)
     print('PASS actual NoteEditorView + NoteBodyStore iOS SDK typecheck (not runtime UI)')

@@ -198,7 +198,7 @@ struct WideSheetSizingModifier: ViewModifier {
 ''')
     sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True).strip()
     subprocess.run(['xcrun', 'swiftc', '-typecheck', '-swift-version', '5', '-sdk', sdk,
-                    '-target', 'arm64-apple-ios26.0', str(adapters),
+                    '-target', 'arm64-apple-ios27.0', str(adapters),
                     str(ROOT / 'src/ios/Views/Chat/WebLoadError.swift'),
                     str(ROOT / 'src/ios/Views/Chat/WebPreviewSheet.swift')], check=True)
     print('PASS complete WebPreviewSheet/WebLoadError iOS SDK typecheck with inert app adapters')

@@ -90,6 +90,6 @@ with tempfile.TemporaryDirectory(prefix='leo-watch-model-search-') as folder:
     stubs.write_text(adapters)
     sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True).strip()
     subprocess.run(['xcrun', 'swiftc', '-typecheck', '-swift-version', '5', '-sdk', sdk,
-                    '-target', 'arm64-apple-ios26.0', str(stubs),
+                    '-target', 'arm64-apple-ios27.0', str(stubs),
                     str(ROOT / 'src/ios/Views/Settings/WatchSettingsView.swift')], check=True)
     print('PASS complete WatchSettingsView iOS SDK typecheck with inert adapters; no device execution')
