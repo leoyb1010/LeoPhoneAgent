@@ -49,6 +49,10 @@ enum LegacyLogScrubber {
         "(command: \"", "(path: \"", "(action: \"", "(title: \"",
         "parse error for '", "zero size for '",
     ]
+    /// [WP-46] StreamHang 的正文切片:`assign[i] slice=N │<800 字原文>│`。1.70 的清洗漏了它
+    /// (真机 10-06…10-12 的日志里还留着 129 行),从 `│` 起截断;`slice=N` 本身保留。
+    static let sliceOpenMarker = " │"
+
     /// 全自动的旧格式:`[FullAuto] 自动批准 <动作> <命令…> 来源=App`,只留动作。
     static let fullAutoMarker = "[FullAuto] 自动批准 "
 
@@ -92,6 +96,9 @@ enum LegacyLogScrubber {
                 earliest = r.lowerBound
             }
         }
+        if let open = streamSliceOpen(in: line), earliest.map({ open < $0 }) ?? true {
+            earliest = open
+        }
         if let r = line.range(of: fullAutoMarker), earliest.map({ r.lowerBound < $0 }) ?? true {
             let rest = line[r.upperBound...]
             let action = rest.split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
@@ -100,5 +107,17 @@ enum LegacyLogScrubber {
             return String(line[..<r.upperBound]) + action + " " + redaction
         }
         return earliest.map { String(line[..<$0]) + redaction }
+    }
+
+    /// `slice=<digits> │` 里 ` │` 的位置。只认这个精确形状:别处的 `slice=` 是数字诊断,不动。
+    private static func streamSliceOpen(in line: Substring) -> String.Index? {
+        var search = line.startIndex
+        while let r = line.range(of: "slice=", range: search..<line.endIndex) {
+            var i = r.upperBound
+            while i < line.endIndex, line[i].isASCII, line[i].isNumber { i = line.index(after: i) }
+            if i > r.upperBound, line[i...].hasPrefix(sliceOpenMarker) { return i }
+            search = r.upperBound
+        }
+        return nil
     }
 }

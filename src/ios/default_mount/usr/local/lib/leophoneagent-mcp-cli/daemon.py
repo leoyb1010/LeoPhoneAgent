@@ -17,7 +17,20 @@ forking parent in main.py); all diagnostics go to the daemon log file. STDIO MCP
 servers are held by their proc.stdin/proc.stdout fds directly — no FIFO, no
 intermediate files. _read_reply uses a reader thread joined with a timeout
 (signal.alarm is unreliable under iSH/PRoot). Shared iOS (iSH) and Android
-(PRoot); keep both copies byte-identical.
+(PRoot); keep both copies byte-identical. [WP-46] Exception: the iOS copy now
+diverges (blocking accept, host-visible port file, calls.jsonl) — Android is
+frozen (archive/android-harmony); port these when it is revived.
+
+[WP-46] Two device-log findings:
+  * After the host app was suspended and resumed, the old 1-second
+    `accept()` timeout loop spun at 60-87% CPU (`last=ppoll`) with no sessions:
+    every timed wait expired immediately. accept() now blocks with no timeout and
+    is woken explicitly (`_wake`) by SIGTERM, `shutdown` and the exit watchdog.
+  * MCP outcomes were invisible to the app. Every handled request appends one
+    line `{ts, server, method, tool, ok, code, ms}` (never args/results) to
+    CALLS_LOG under /var/minis/mcp-servers (the app's App Group), and the port is
+    also published there (HOST_PORT_FILE) so the app can ask an idle daemon to
+    shut down when it goes to the background with no sessions.
 """
 
 import json
@@ -50,6 +63,10 @@ MAX_LINE_CHARS = 8 * 1024 * 1024
 # A tools/call result handed back to the CLI (and from there into the agent's
 # context) is capped here; longer text is cut with an explicit marker.
 MAX_RESULT_CHARS = 4 * 1024 * 1024
+SHARED_DIR = "/var/minis/mcp-servers"   # = App Group MinisConfig/mcp-servers on the host
+HOST_PORT_FILE = os.path.join(SHARED_DIR, "daemon.port")
+CALLS_LOG = os.path.join(SHARED_DIR, "calls.jsonl")
+CALLS_LOG_MAX_BYTES = 256 * 1024        # the app drains it; this only bounds a long offline stretch
 
 log = logging.getLogger("mcp-daemon")
 
@@ -424,13 +441,50 @@ class MCPPool:
 
 # --- daemon server ----------------------------------------------------------
 
+def record_call(path, server, method, ok, code, ms, tool=None, now=None):
+    """Append one structured outcome line for the app's diag log. Best effort."""
+    row = {"ts": round(now if now is not None else time.time(), 3), "server": server,
+           "method": method, "ok": bool(ok), "code": code, "ms": int(ms)}
+    if tool:
+        row["tool"] = str(tool)[:80]
+    try:
+        if os.path.exists(path) and os.path.getsize(path) > CALLS_LOG_MAX_BYTES:
+            os.unlink(path)   # the app has not drained it for a long time; drop, do not grow
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+class _Shutdown(Exception):
+    """Raised from the SIGTERM handler so a blocking accept() returns (PEP 475
+    would otherwise just retry the syscall after the handler)."""
+
+
 class DaemonServer:
-    def __init__(self, port_file, pid_file):
+    def __init__(self, port_file, pid_file, host_port_file=HOST_PORT_FILE, calls_log=CALLS_LOG):
         self.port_file = port_file
         self.pid_file = pid_file
+        self.host_port_file = host_port_file
+        self.calls_log = calls_log
+        self.port = None
         self._running = True
         self._empty_since = None
         self.pool = MCPPool(on_empty=self._on_pool_empty)
+
+    def _wake(self):
+        """Unblock accept() with a throwaway loopback connection so the loop
+        re-checks `_running`. Replaces the 1 s polling timeout."""
+        if self.port is None:
+            return
+        try:
+            socket.create_connection(("127.0.0.1", self.port), timeout=1.0).close()
+        except OSError:
+            pass
+
+    def stop(self):
+        self._running = False
+        self._wake()
 
     def _on_pool_empty(self):
         if self._empty_since is None:
@@ -438,6 +492,16 @@ class DaemonServer:
             log.info("pool empty, daemon will exit in %ss if no new calls", DAEMON_EXIT_GRACE)
 
     def handle_request(self, data):
+        start = time.time()
+        resp = self._handle_request(data)
+        cmd = data.get("cmd", "")
+        if cmd in ("call", "tools", "ping"):
+            record_call(self.calls_log, data.get("server", ""), cmd, resp.get("ok"),
+                        resp.get("code") or ("OK" if resp.get("ok") else "MCP_ERROR"),
+                        (time.time() - start) * 1000, tool=data.get("tool") if cmd == "call" else None)
+        return resp
+
+    def _handle_request(self, data):
         cmd = data.get("cmd", "")
         server = data.get("server", "")
         try:
@@ -516,6 +580,8 @@ class DaemonServer:
                 return
             resp = self.handle_request(req)
             conn.sendall((json.dumps(resp, ensure_ascii=False) + "\n").encode())
+            if not self._running:   # `shutdown`: answer first, then let accept() return
+                self._wake()
         except (OSError, socket.timeout) as exc:
             log.warning("connection error: %s", exc)
         finally:
@@ -533,7 +599,7 @@ class DaemonServer:
             elif self._empty_since is not None:
                 if time.time() - self._empty_since >= DAEMON_EXIT_GRACE:
                     log.info("pool empty past grace, daemon exiting")
-                    self._running = False
+                    self.stop()
                     break
 
     def run(self):
@@ -544,17 +610,31 @@ class DaemonServer:
         srv.bind(("127.0.0.1", 0))
         port = srv.getsockname()[1]
         srv.listen(16)
-        srv.settimeout(1.0)  # wake periodically so _running flips take effect
-        tmp = self.port_file + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            f.write(str(port))
-        os.replace(tmp, self.port_file)
+        srv.settimeout(None)  # [WP-46] block; woken by _wake() / SIGTERM, never polls
+        self.port = port
+        for path in (self.port_file, self.host_port_file):
+            if not path:
+                continue
+            try:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                tmp = path + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as f:
+                    f.write(str(port))
+                os.replace(tmp, path)
+            except OSError as exc:
+                if path == self.port_file:
+                    raise
+                log.warning("could not publish host port file: %s", exc)
         log.info("daemon listening on 127.0.0.1:%s pid=%s ttl=%ss", port, os.getpid(), TTL_SECONDS)
 
         def _sigterm(*_):
             log.info("SIGTERM received")
             self._running = False
-        signal.signal(signal.SIGTERM, _sigterm)
+            raise _Shutdown()
+        try:
+            signal.signal(signal.SIGTERM, _sigterm)
+        except ValueError:
+            pass  # not the main thread (tests)
 
         watchdog = threading.Thread(target=self._watchdog, daemon=True)
         watchdog.start()
@@ -567,7 +647,12 @@ class DaemonServer:
                     continue
                 except OSError:
                     break
+                if not self._running:   # the wake-up connection itself
+                    conn.close()
+                    break
                 threading.Thread(target=self._handle_conn, args=(conn,), daemon=True).start()
+        except _Shutdown:
+            pass
         finally:
             self._cleanup(srv)
 
@@ -578,7 +663,9 @@ class DaemonServer:
             srv.close()
         except OSError:
             pass
-        for path in (self.port_file, self.pid_file):
+        for path in (self.port_file, self.pid_file, self.host_port_file):
+            if not path:
+                continue
             try:
                 os.unlink(path)
             except OSError:

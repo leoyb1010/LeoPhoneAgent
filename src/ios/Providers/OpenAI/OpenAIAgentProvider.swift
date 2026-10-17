@@ -934,6 +934,11 @@ final class OpenAIAgentProvider: AgentProvider {
             || lid.contains("seed-") || lid.contains("doubao") {
             return "minimal"
         }
+        // [WP-46] Gemini (Google's OpenAI-compatible endpoint or a relay): omitting the field
+        // left dynamic thinking on. See ThinkingRuleResolver.geminiOffEffort.
+        if let gemini = ThinkingRuleResolver.geminiOffEffort(modelId: model.id) {
+            return gemini
+        }
         return nil
     }
 

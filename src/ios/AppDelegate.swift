@@ -27,6 +27,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // [WP-46] First thing, synchronously, for background launches too: judge the
+        // previous process's launch marker before this process's own
+        // inactive/background callbacks can merge into it (device logs showed every
+        // report overwritten with the NEW process's phase, memory and log lines).
+        CrashReporter.shared.onAppLaunch(isBackgroundLaunch: application.applicationState == .background)
+
         // [S6] The launch's single orphaned-location-session probe (setup()
         // and didBecomeActive are throttled against it).
         BackgroundKeepAliveManager.probeOrphanedLocationSessionAtLaunch()

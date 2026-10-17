@@ -465,8 +465,10 @@ final class LoggingManager: ObservableObject {
     /// 1.70 首次运行那天记作截止日;截止日之前的 `minis-*.log` 立即清洗一遍(见 `LegacyLogScrubber`)。
     /// 截止日当天的文件还在被写,不碰;等到下一天轮转时它不再是「今天」,再清洗它,之后永不再跑。
     /// 截止日之后的文件由 1.70 的代码写出,本来就不含正文。
-    private static let scrubCutoffKey = "leo.logs.legacyScrubCutoff"
-    private static let scrubCutoffDoneKey = "leo.logs.legacyScrubCutoffDone"
+    /// [WP-46] v2:1.70 的那一遍漏了 StreamHang 切片(`slice=N │…│`),换新 key 让已经标记完成的
+    /// 设备再清洗一次。清洗是幂等的,已清洗过的行不会再变。
+    private static let scrubCutoffKey = "leo.logs.legacyScrubCutoff.v2"
+    private static let scrubCutoffDoneKey = "leo.logs.legacyScrubCutoffDone.v2"
 
     private static func scrubLegacyLogsIfNeeded(in directory: URL, today: String) {
         let defaults = UserDefaults.standard

@@ -49,6 +49,18 @@ app="$derived/Build/Products/Release-iphoneos/LeoPhoneAgent.app"
 [ -d "$app" ] || { echo "没找到 Release 真机构建产物" >&2; exit 1; }
 codesign --verify --deep --strict "$app" || exit 1
 
+# [WP-46] 归档 dSYM:真机崩溃报告只能用同一次构建的 dSYM 符号化。2026-10-17 取证时本机只剩
+# 1.74 的,一份 1.71 的真崩溃(SIGSEGV 在 JSC 线程)因此无法定位。失败不挡装机。
+ver=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist" 2>/dev/null || echo unknown)
+bld=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist" 2>/dev/null || echo 0)
+dsym_dir="$HOME/Library/Developer/LeoBot-dSYMs/$ver-$bld"
+if mkdir -p "$dsym_dir"; then
+  find "$derived/Build/Products/Release-iphoneos" -maxdepth 4 -name '*.dSYM' -type d 2>/dev/null | while read -r d; do
+    ditto "$d" "$dsym_dir/$(basename "$d")" 2>/dev/null || true
+  done
+  echo "    dSYM → $dsym_dir ($(ls "$dsym_dir" 2>/dev/null | wc -l | tr -d ' ') 个)"
+fi
+
 # Apple Watch 装内嵌的手表 App(只装 iPhone 不会可靠地带上手表)。
 # 在线的配对手表总是一起装;它们不在命令行参数里也会补上。
 watch_app=$(ls -d "$app"/Watch/*.app 2>/dev/null | head -1 || true)

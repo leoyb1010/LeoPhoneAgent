@@ -48,17 +48,24 @@ enum LeoPerf {
     static func start() {
         _ = processStart
         captureLaunchState()
-        HangCounter.shared.start()
+        // [WP-46] 后台拉起的进程永远收不到 didBecomeActive / willResignActive:初值必须是真实状态,
+        // 否则它一直按「前台」计卡顿(1.74 的 6 条 hang 里 5 条来自后台拉起)。
+        let launchActive = Thread.isMainThread
+            ? MainActor.assumeIsolated { UIApplication.shared.applicationState == .active }
+            : true
+        HangCounter.shared.start(active: launchActive)
         let center = NotificationCenter.default
         center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
-            LeoPerf.lock.lock(); LeoPerf.wasInBackground = true; LeoPerf.lock.unlock()
+            LeoPerf.lock.lock(); LeoPerf.wasInBackground = true; LeoPerf.backgroundEpoch += 1; LeoPerf.lock.unlock()
         }
         center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
             // 只量真正从后台回来的;冷启动时系统也会发这条通知,那段算在 cold 里。
             LeoPerf.lock.lock()
-            if LeoPerf.wasInBackground { LeoPerf.foregroundAt = CACurrentMediaTime() }
+            let returning = LeoPerf.wasInBackground
+            if returning { LeoPerf.foregroundAt = CACurrentMediaTime() }
             LeoPerf.wasInBackground = false
             LeoPerf.lock.unlock()
+            if returning { LeoPerf.fgLedger.beginForeground() }
         }
         center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
             HangCounter.shared.setActive(true)
@@ -66,7 +73,11 @@ enum LeoPerf {
             guard let began else { return }
             // 等 active 回调都跑完,再等下一帧真正画出来。
             DispatchQueue.main.async {
-                FirstFrameProbe.once { LeoPerf.record("fg.frame", ms: (CACurrentMediaTime() - began) * 1000) }
+                FirstFrameProbe.once {
+                    let ms = (CACurrentMediaTime() - began) * 1000
+                    LeoPerf.record("fg.frame", ms: ms)
+                    LeoPerf.fgLedger.frameRecorded(ms: ms)
+                }
             }
         }
         center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in
@@ -120,6 +131,15 @@ enum LeoPerf {
         let tv = info.kp_proc.p_un.__p_starttime
         return Date(timeIntervalSince1970: Double(tv.tv_sec) + Double(tv.tv_usec) / 1_000_000)
     }()
+
+    /// [WP-46] 进过几次后台。发送时记下,首字时对比:跨过后台的首字打 `bg: true`。
+    private static var backgroundEpoch = 0
+    private static var sendEpochs: [String: Int] = [:]
+
+    /// [WP-46] 回前台分步计时(`FgStep` 写入,`fg.frame` 慢时落一条 `fg.steps`)。只在主线程用。
+    static let fgLedger = FgStepLedger { frameMs, steps in
+        record("fg.steps", ms: frameMs, extra: ["steps": steps])
+    }
 
     private static var coldSteps: [String: Double] = [:]
     private static var coldDone = false
@@ -240,6 +260,7 @@ enum LeoPerf {
     static func sendBegan(_ key: String, at time: CFTimeInterval = CACurrentMediaTime(), model: String? = nil) {
         lock.lock()
         sendStarts[key] = time
+        sendEpochs[key] = backgroundEpoch
         sendModels[key] = model
         firstThought[key] = nil
         firstEvents[key] = nil
@@ -269,9 +290,12 @@ enum LeoPerf {
         let model = sendModels.removeValue(forKey: key)
         let thought = firstThought.removeValue(forKey: key)
         let firstSeen = firstEvents.removeValue(forKey: key)
+        let spannedBackground = PerfSanity.spannedBackground(epochAtStart: sendEpochs.removeValue(forKey: key),
+                                                             epochNow: backgroundEpoch)
         lock.unlock()
         guard let began else { return }
         var extra: [String: Any] = [:]
+        if spannedBackground { extra["bg"] = true }
         if let model { extra["model"] = model }
         if let thought { extra["thinkMs"] = ((thought - began) * 1000).rounded() }
         if let firstSeen { extra["firstEventMs"] = ((firstSeen - began) * 1000).rounded() }
@@ -334,8 +358,9 @@ final class HangCounter {
     private var active = true
     static let thresholdMs: Double = 250
 
-    func start() {
+    func start(active initial: Bool = true) {
         guard timer == nil else { return }
+        lock.lock(); active = initial; lock.unlock()
         let t = DispatchSource.makeTimerSource(queue: timerQueue)
         t.schedule(deadline: .now() + 0.5, repeating: .milliseconds(50), leeway: .milliseconds(10))
         t.setEventHandler { [weak self] in self?.tick() }
@@ -364,6 +389,8 @@ final class HangCounter {
         lock.unlock()
         guard let sent, isActive else { return }
         let ms = (now - sent) * 1000
+        // [WP-46] 隔了十几秒甚至几十分钟才回来的 ping 是进程被挂起过,不是卡顿(真机记到过 19.8 分钟)。
+        guard !PerfSanity.isSuspensionArtifact(hangMs: ms) else { return }
         // `sent` 之后主线程才被卡住,所以它就是卡顿的起点;`stream` 标明起点前是否刚刷过流式文字。
         if ms >= Self.thresholdMs {
             LeoPerf.record("hang", ms: ms, extra: ["stream": LeoPerf.isStreaming(hangBeganAt: sent)])

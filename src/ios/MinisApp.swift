@@ -24,14 +24,20 @@ private let lifecycleLog = AppLogger(category: "Lifecycle")
 private struct FgStepInterval {
     let name: StaticString
     let state: OSSignpostIntervalState
+    let startedAt: CFTimeInterval
 
-    func end() { LeoPerf.signposter.endInterval(name, state) }
+    func end() {
+        LeoPerf.signposter.endInterval(name, state)
+        // [WP-46] signpost 只有接着 Instruments 才看得到;耗时也记进账本,慢的回前台会落盘。
+        let ms = (CACurrentMediaTime() - startedAt) * 1000
+        if Thread.isMainThread { LeoPerf.fgLedger.add("\(name)", ms: ms) }
+    }
 }
 
 private enum FgStep {
     @inline(__always)
     static func begin(_ name: StaticString) -> FgStepInterval {
-        FgStepInterval(name: name, state: LeoPerf.signposter.beginInterval(name))
+        FgStepInterval(name: name, state: LeoPerf.signposter.beginInterval(name), startedAt: CACurrentMediaTime())
     }
 }
 
@@ -347,6 +353,7 @@ struct MinisApp: App {
     private static func runAfterForegroundFrame() {
         // [T-fg-attribution] 这一整段和 `fg.frame` 的记录跑在同一个显示链路 tick 里,先后顺序不定:
         // 它可能排在 fg.frame 的回调之前、被算进那 826 ms。按步骤记区间,看是不是它。
+        defer { LeoPerf.fgLedger.afterFrameFinished() }   // [WP-46] runs last (after every step ended)
         let fgAfterFrame = FgStep.begin("fg.step.afterFrame")
         defer { fgAfterFrame.end() }
         var fgSteps = FgStepChain()
@@ -363,6 +370,10 @@ struct MinisApp: App {
         fgSteps.next("fg.step.crashMarker")
         CrashReporter.shared.updateMarkerPhase(phase: "active")
 
+        fgSteps.next("fg.step.mcpCallLog")
+        DispatchQueue.global(qos: .utility).async {
+            MCPDaemonBridge.drainCallLog(in: AIChatViewModel.minisMcpServersPersistentDir)
+        }
         fgSteps.next("fg.step.liveActivityCleanup")
         AgentLiveActivityManager.shared.cleanupStaleActivities(source: "scenePhase.active")
         // [T-brain] devicectl 拷进来的资料库令牌文件:导入钥匙串后立即删除。
@@ -693,6 +704,14 @@ struct MinisApp: App {
             let remaining = UIApplication.shared.backgroundTimeRemaining
             lifecycleLog.info("[Lifecycle] → Background (remaining: \(Self.formatTimeRemaining(remaining)))")
             CrashReporter.shared.updateMarkerPhase(phase: "background")
+            // [WP-46] MCP 守护进程:调用记录搬进诊断日志;没有会话在跑就让它退出
+            // (真机上它在后台从挂起恢复后空转到 87% CPU)。都在后台队列,不占退后台的这一帧。
+            let idleForMCP = SessionActivityTracker.shared.activeSessions.isEmpty && !ShellCommandRingBuffer.hasRunningCommand
+            DispatchQueue.global(qos: .utility).async {
+                let dir = AIChatViewModel.minisMcpServersPersistentDir
+                MCPDaemonBridge.drainCallLog(in: dir)
+                if idleForMCP { MCPDaemonBridge.requestShutdown(in: dir) }
+            }
             shareCoordinator.clearBufferIfStale()
             // Sync the app-icon badge to the current running-task count
             // on the way out — covers the case where the publisher in

@@ -20,6 +20,8 @@ final class DiagnosticRing: @unchecked Sendable {
         case contextDecision = "context.decision"
         case voiceLatency = "voice.latency"
         case shortcutRun = "shortcut.run"
+        /// [WP-46] One MCP request handled by the in-guest daemon (server/method/ok/code/ms only).
+        case mcpCall = "mcp.call"
         case truncated = "diag.truncated"
     }
 
@@ -34,6 +36,12 @@ final class DiagnosticRing: @unchecked Sendable {
         var errorCode: Int?
         var message: String?
         var durationMs: Int?
+        // [WP-46] mcp.call fields; nil (and therefore absent from the JSON) for other kinds.
+        var server: String?
+        var method: String?
+        var tool: String?
+        var ok: Bool?
+        var code: String?
     }
 
     static let shared = DiagnosticRing(directory: FileManager.default
@@ -66,6 +74,12 @@ final class DiagnosticRing: @unchecked Sendable {
                           sessionId: sessionId.map { String($0.prefix(8)) }, model: model, entryId: entryId,
                           attempt: attempt, errorDomain: ns?.domain, errorCode: ns?.code,
                           message: text.map { String($0.prefix(200)) }, durationMs: durationMs)
+        queue.async { self.write(event, at: date) }
+    }
+
+    /// [WP-46] 已经组装好的事件(MCP 守护进程的调用记录等)直接写入。
+    func record(event: Event) {
+        let date = now()
         queue.async { self.write(event, at: date) }
     }
 

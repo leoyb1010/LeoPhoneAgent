@@ -439,6 +439,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         if launchedInBackground {
             appIsInBackground = true
             logger.info("[BKA][Lifecycle] setup() observed background launch — seeding appIsInBackground=true")
+            // [WP-46] LeoPerf 的注释一直说这里会调,其实没调:后台拉起被当成冷启动(iPad 记过 2815 ms)。
+            // 真机 11 次判为后台拉起的,没有一次在 3 s 内转为 Active,不会误标。
+            LeoPerf.markBackgroundLaunch()
             // [T-ish-bg-cpu-governor] A background launch never receives
             // didEnterBackground, so arm the CPU governor here (idempotent).
             armCPUGovernorIfKernelBooted(caller: "setup.launchedInBackground")

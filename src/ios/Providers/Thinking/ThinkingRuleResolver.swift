@@ -781,3 +781,28 @@ enum ThinkingRuleResolver {
         return declared[0].1
     }
 }
+
+// MARK: - [WP-46] Gemini thinking-off value
+
+extension ThinkingRuleResolver {
+    /// What to send as `reasoning_effort` when the user turns thinking OFF on a Gemini model
+    /// served through an OpenAI-compatible endpoint (Google's own `/v1beta/openai`, or a relay).
+    ///
+    /// Device logs: with thinking off nothing was sent (`keys=[]`), so Gemini kept its default
+    /// dynamic thinking — 15–18-token titles took 5–8 s versus 1–4 s on Claude with thinking off.
+    /// Google's OpenAI compatibility layer maps `reasoning_effort` onto the thinking budget/level:
+    ///   • Gemini 2.x Flash / Flash-Lite: "none" turns thinking off;
+    ///   • Gemini 3+ Flash: no true off — "minimal" is the lowest level;
+    ///   • Pro models cannot disable thinking — "low" is the lowest they accept.
+    /// nil = not a Gemini id (caller keeps its own allowlist).
+    static func geminiOffEffort(modelId: String) -> String? {
+        let id = modelId.lowercased()
+        guard let range = id.range(of: "gemini-") else { return nil }
+        let rest = id[range.upperBound...]
+        let isFlash = rest.contains("flash")
+        if rest.hasPrefix("2") || rest.hasPrefix("1") {
+            return isFlash ? "none" : "low"
+        }
+        return isFlash ? "minimal" : "low"
+    }
+}

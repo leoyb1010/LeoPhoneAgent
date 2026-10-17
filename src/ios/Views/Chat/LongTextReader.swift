@@ -1,6 +1,8 @@
 import SwiftUI
 import UIKit
 
+private let longTextLogger = AppLogger(category: "LongText")
+
 // [T-long-reply-collapse] 超长回复的视图部分:折叠块的缓存、「展开全文」一行、全文阅读器。
 // 切分规则全在 LongTextCollapse(纯逻辑,有单测);这里只负责把它接到界面上。
 
@@ -96,8 +98,14 @@ final class LongTextCollapseCache {
             return slot.collapse
         }
         let content = block.content
+        let started = CACurrentMediaTime()
         let collapse = LongTextCollapse.split(markdown: content).map {
             Collapse(head: $0.head, totalCount: content.count, utf8Count: utf8Count, contentHash: hash)
+        }
+        if let collapse {
+            longTextLogger.info(LongTextCollapse.logLine(totalChars: collapse.totalCount,
+                                                        headChars: collapse.head.count,
+                                                        ms: (CACurrentMediaTime() - started) * 1000))
         }
         slots[block.id] = Slot(utf8Count: utf8Count, contentHash: hash, collapse: collapse)
         touch(block.id)
