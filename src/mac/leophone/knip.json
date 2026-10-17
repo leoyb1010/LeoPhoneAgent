@@ -7,6 +7,7 @@
         ".release-it.mjs",
         ".vscode/*.mjs",
         "scripts/check-workspace-freshness.mjs",
+        "scripts/leo-screen-test/client.mjs",
         "scripts/mise-run.mjs"
       ]
     },
