@@ -9,6 +9,7 @@ import {
   CODEX_ACP_VERSION,
   detectAcpAgent,
   findExecutable,
+  geminiEnvFromDotEnv,
   readClaudeOAuthToken,
   resolveClaudeAgentAcpEntry,
   type AcpEnvironment,
@@ -80,7 +81,8 @@ export function resolveAcpLaunch(
       };
     }
     case "gemini":
-      return { command: status.cliPath!, args: ["--acp"], env: base };
+      // [fix-remote] ~/.gemini/.env 里的 key（env 没有时）；HOME 用子进程实际的 HOME（LEO_ACP_AGENT_HOME 时是它）。
+      return { command: status.cliPath!, args: ["--acp"], env: { ...base, ...geminiEnvFromDotEnv(base) } };
     case "opencode":
       return { command: status.cliPath!, args: ["acp"], env: base };
     case "grok":

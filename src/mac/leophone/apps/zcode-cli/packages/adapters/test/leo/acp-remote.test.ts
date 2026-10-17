@@ -271,3 +271,54 @@ test("[fix-remote] I: a proxy already in the user's env reaches the agent untouc
   assert.equal(launch?.env.NO_PROXY, "corp.internal");
   assert.equal(launch?.env.ALL_PROXY, undefined);
 });
+
+test("[fix-remote] J: a turn that ends with no output and zero usage is a failure with stopReason and stderr", async () => {
+  const manager = new AcpSessionManager({
+    statePath: join(mkdtempSync(join(tmpdir(), "leo-acp-empty-")), "acp-sessions.json"),
+    connect: async (_launch: unknown, options: ConnectAcpAgentOptions) => {
+      options.onStderr?.("Error: must specify GEMINI_API_KEY environment variable\n");
+      const toAgent = new TransformStream<Uint8Array, Uint8Array>();
+      const toClient = new TransformStream<Uint8Array, Uint8Array>();
+      const agent: Agent = {
+        initialize: async () => ({ protocolVersion: PROTOCOL_VERSION, agentCapabilities: { loadSession: false } }),
+        newSession: async () => ({ sessionId: "s" }),
+        authenticate: async () => ({}),
+        prompt: async () => ({ stopReason: "end_turn" }),
+        cancel: async () => undefined,
+      };
+      new AgentSideConnection(() => agent, ndJsonStream(toClient.writable, toAgent.readable));
+      return connectAcpStream(ndJsonStream(toAgent.writable, toClient.readable), options);
+    },
+    environment: (() => {
+      const home = mkdtempSync(join(tmpdir(), "leo-acp-gem-"));
+      makeExecutable(join(home, "bin"), "gemini");
+      return { env: { PATH: join(home, "bin"), HOME: home } };
+    })(),
+  });
+  const model = new AcpModel({ agentId: "gemini", leoSessionId: "sess_empty", cwd: () => "/w", manager });
+  const events = await collect(model.streamText({ messages: [{ role: "user", content: "hi" }] }));
+  const failure = events.find((event) => event.type === "error");
+  assert.ok(failure && failure.type === "error", JSON.stringify(events));
+  const message = (failure.error as Error).message;
+  assert.match(message, /^Gemini 这一轮没有任何输出就结束了（stopReason=end_turn）/);
+  assert.match(message, /GEMINI_API_KEY/);
+  assert.equal(events.some((event) => event.type === "finish"), false);
+});
+
+test("[fix-remote] J: gemini picks up ~/.gemini/.env keys when the env has none, never overriding", () => {
+  const home = mkdtempSync(join(tmpdir(), "leo-acp-gemenv-"));
+  makeExecutable(join(home, "bin"), "gemini");
+  mkdirSync(join(home, ".gemini"));
+  writeFileSync(
+    join(home, ".gemini", ".env"),
+    '# key\nexport GEMINI_API_KEY="AIzaTESTKEY123456"\nGOOGLE_GEMINI_BASE_URL=https://proxy.example/gemini # comment\nGOOGLE_GEMINI_MODEL=gemini-3-pro\nUNRELATED=1\n',
+  );
+  const launch = resolveAcpLaunch("gemini", { env: { PATH: join(home, "bin"), HOME: home } });
+  assert.equal(launch?.env.GEMINI_API_KEY, "AIzaTESTKEY123456");
+  assert.equal(launch?.env.GOOGLE_GEMINI_BASE_URL, "https://proxy.example/gemini");
+  assert.equal(launch?.env.GOOGLE_GEMINI_MODEL, "gemini-3-pro");
+  assert.equal(launch?.env.UNRELATED, undefined);
+  const own = resolveAcpLaunch("gemini", { env: { PATH: join(home, "bin"), HOME: home, GEMINI_API_KEY: "mine" } });
+  assert.equal(own?.env.GEMINI_API_KEY, "mine");
+  assert.equal(own?.env.GOOGLE_GEMINI_MODEL, undefined);
+});

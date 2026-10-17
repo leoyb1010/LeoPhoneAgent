@@ -197,6 +197,46 @@ export const ACP_HOST_ENV_KEYS = [
   "CLAUDE_AGENT_SDK_VERSION",
 ] as const;
 
+/** 读一个 dotenv 文件（KEY=VALUE、可带 export 与引号、# 注释）；读不到返回空。 */
+export function readDotEnvFile(file: string): Record<string, string> {
+  let text = "";
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!match) continue;
+    let value = match[2]!.trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    } else {
+      value = value.replace(/\s+#.*$/, "");
+    }
+    out[match[1]!] = value;
+  }
+  return out;
+}
+
+/**
+ * [fix-remote] Gemini CLI 的 API Key 常放在 ~/.gemini/.env；从 Finder 启动的 LeoBot 里 env 没有 key 时
+ * gemini 只报「must specify GEMINI_API_KEY」然后空着结束一轮。env 里没有 GEMINI_API_KEY / GOOGLE_API_KEY 时，
+ * 把该文件里 GEMINI_* / GOOGLE_* 的变量补进子进程（已有的不覆盖；内容不写日志）。
+ */
+export function geminiEnvFromDotEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  if (env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()) return {};
+  const home = env.HOME?.trim() || homedir();
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(readDotEnvFile(join(home, ".gemini", ".env")))) {
+    if (/^(GEMINI|GOOGLE)_/.test(key) && value && !env[key]?.trim()) out[key] = value;
+  }
+  return out;
+}
+
 export function detectAcpAgent(id: AcpAgentId, environment: AcpEnvironment = {}): AcpAgentStatus {
   const env = environment.env ?? process.env;
   switch (id) {

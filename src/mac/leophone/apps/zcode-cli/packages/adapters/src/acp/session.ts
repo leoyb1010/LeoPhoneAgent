@@ -26,7 +26,13 @@ export type AcpHostEvent =
   | { kind: "thought"; text: string }
   | { kind: "tool"; input: AcpToolCallInput }
   | { kind: "plan"; entries: PlanEntry[] }
-  | { kind: "stop"; stopReason: StopReason; usage?: { inputTokens?: number; outputTokens?: number } }
+  | {
+      kind: "stop";
+      stopReason: StopReason;
+      usage?: { inputTokens?: number; outputTokens?: number };
+      /** [fix-remote] 这一轮 agent 什么都没说、没调工具、没给计划。 */
+      empty?: boolean;
+    }
   | { kind: "error"; error: unknown };
 
 interface ToolState {
@@ -60,6 +66,8 @@ export class AcpSessionHost {
   #waiter: ((event: AcpHostEvent) => void) | undefined;
   #connection: AcpConnectionLike | undefined;
   #turnActive = false;
+  /** 本轮 agent 有没有产出（正文 / 思考 / 工具 / 计划）。 */
+  #turnOutput = false;
   #announceSeq = 0;
   #availableCommands: AcpAgentCommand[] = [];
   readonly #onCommands: ((commands: AcpAgentCommand[]) => void) | undefined;
@@ -101,6 +109,7 @@ export class AcpSessionHost {
   startTurn(prompt: ContentBlock[]): void {
     const connection = this.#requireConnection();
     this.#turnActive = true;
+    this.#turnOutput = false;
     void Promise.resolve(connection.agent.prompt({ sessionId: connection.sessionId, prompt }))
       .then(
         (response) => {
@@ -109,6 +118,7 @@ export class AcpSessionHost {
           this.#push({
             kind: "stop",
             stopReason: response.stopReason,
+            ...(this.#turnOutput ? {} : { empty: true }),
             ...(response.usage
               ? {
                   usage: {
@@ -225,6 +235,9 @@ export class AcpSessionHost {
   }
 
   #push(event: AcpHostEvent): void {
+    if (event.kind === "text" || event.kind === "thought" || event.kind === "tool" || event.kind === "plan") {
+      this.#turnOutput = true;
+    }
     const waiter = this.#waiter;
     if (waiter) {
       this.#waiter = undefined;

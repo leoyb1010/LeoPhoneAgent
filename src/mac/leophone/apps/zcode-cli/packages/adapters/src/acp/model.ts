@@ -36,6 +36,7 @@ import {
   acpUnavailableError,
   appendStderrTail,
   describeAcpFailure,
+  emptyTurnError,
   redactAgentOutput,
   type AcpAgentError,
 } from "./errors.js";
@@ -142,6 +143,11 @@ export class AcpSessionManager {
       );
     }
     return { host: entry.host, connection: await entry.connection };
+  }
+
+  /** [fix-remote] 空回合（没有任何产出就结束）按失败报。 */
+  describeEmptyTurn(leoSessionId: string, agentId: AcpAgentId, stopReason: string): AcpAgentError {
+    return emptyTurnError({ agentId, stopReason, stderrTail: this.#stderrTails.get(leoSessionId) ?? [] });
   }
 
   /** [fix-remote] 把失败包成「哪个 agent、什么原因、怎么修 + stderr 尾部」的错误。 */
@@ -398,6 +404,11 @@ export class AcpModel implements Model {
           }
           case "stop": {
             yield* closeOpen();
+            const tokens = (event.usage?.inputTokens ?? 0) + (event.usage?.outputTokens ?? 0);
+            if (event.empty && tokens === 0 && event.stopReason !== "cancelled" && event.stopReason !== "refusal") {
+              yield { type: "error", error: manager.describeEmptyTurn(leoSessionId, agentId, event.stopReason) };
+              return;
+            }
             if (event.stopReason === "refusal") {
               yield { type: "text_start", id: "acp-refusal" };
               yield { type: "text_delta", id: "acp-refusal", text: "（agent 拒绝了这次请求）" };

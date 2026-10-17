@@ -27,6 +27,9 @@
 - 系统代理：外部 agent 子进程与内核 CLI 在 env 里没有 `HTTP(S)_PROXY`/`ALL_PROXY` 时，按 `scutil --proxy`（30s 缓存）
   注入 `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`（SOCKS 用 `socks5://`）与 `NO_PROXY`；用户 env 已设置时不覆盖。
   设置页「外部 agent 使用系统代理」默认开（`<数据根>/acp/settings.json` 的 `systemProxy`）。
+- 空回合：外部 agent 一轮没有任何正文 / 思考 / 工具 / 计划、usage 为 0 就结束（stopReason 不是 cancelled / refusal）时按失败报，
+  `run.failed` 带 stopReason 与 stderr 尾部。gemini 在 env 没有 `GEMINI_API_KEY`/`GOOGLE_API_KEY` 时读 `~/.gemini/.env` 的
+  `GEMINI_*`/`GOOGLE_*` 补进子进程（已有不覆盖，不写日志）。codex / opencode 自己读各自的登录文件，不注入。
 
 ## 验收
 

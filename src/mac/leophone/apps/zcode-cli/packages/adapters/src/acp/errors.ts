@@ -5,7 +5,7 @@
 import { homedir } from "node:os";
 import { acpAgentInfo, type AcpAgentId } from "@zcode/shared/acp";
 
-export type AcpFailureKind = "unavailable" | "auth" | "spawn" | "exited" | "other";
+export type AcpFailureKind = "unavailable" | "auth" | "spawn" | "exited" | "empty" | "other";
 
 export class AcpAgentError extends Error {
   readonly agentId: AcpAgentId;
@@ -135,6 +135,33 @@ export function describeAcpFailure(input: {
     ...(stderr ? { detail: stderr } : {}),
     cause: input.error,
   });
+}
+
+const EMPTY_HINTS: Partial<Record<AcpAgentId, string>> = {
+  gemini: "在这台 Mac 上给 Gemini 配好 GEMINI_API_KEY（写进 ~/.gemini/.env）或运行 gemini 完成登录",
+};
+
+/**
+ * [fix-remote] agent 一轮什么都没产出就「正常」结束（例如 gemini 缺 API Key 只在 stderr 里报错）：
+ * 不能当成完成——手机会看到「完成」却一片空白。按失败报，带上 stopReason 与 stderr 尾部。
+ */
+export function emptyTurnError(input: {
+  agentId: AcpAgentId;
+  stopReason: string;
+  stderrTail?: readonly string[];
+  home?: string;
+}): AcpAgentError {
+  const name = acpAgentInfo(input.agentId).name;
+  const lines = (input.stderrTail ?? []).map((line) => redactAgentOutput(line, input.home));
+  const stderr = lines.join("\n");
+  const auth = AUTH_PATTERN.test(stderr) || /api[_ ]?key/i.test(stderr);
+  const hint = auth
+    ? (EMPTY_HINTS[input.agentId] ?? LOGIN_HINTS[input.agentId])
+    : (EMPTY_HINTS[input.agentId] ?? `在这台 Mac 的终端直接运行 ${name} 看看是否能正常回答（登录、API Key、网络）`);
+  const summary = `${name} 这一轮没有任何输出就结束了（stopReason=${input.stopReason}）：${hint}`;
+  const tail = lines.slice(-3).join(" | ");
+  const message = (tail ? `${summary}。agent 最后输出：${tail}` : summary).slice(0, 480);
+  return new AcpAgentError(input.agentId, "empty", message, stderr ? { detail: stderr } : {});
 }
 
 /** 本机没装 / 适配器缺失：启动前就知道失败。 */

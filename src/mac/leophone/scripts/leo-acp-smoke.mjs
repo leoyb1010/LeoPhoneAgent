@@ -2,7 +2,7 @@
 // [fix-remote] ACP 外部 agent 冒烟：直接起 agent → initialize → session/new → prompt「只回复OK」→ 打印结果。
 // 单文件、只用 Node 内置模块：可以拷到任何一台 Mac 上直接跑（不需要仓库依赖）。
 //
-//   node scripts/leo-acp-smoke.mjs <claude|codex|gemini|opencode|grok> [--cwd DIR] [--timeout 120] [--prompt 文本]
+//   node scripts/leo-acp-smoke.mjs <claude|codex|gemini|opencode|grok> [--cwd DIR] [--timeout 120] [--prompt 文本] [--no-proxy]
 //
 // 探测路径与 LeoBot 一致（packages/shared/src/acp-detect.ts）：进程 PATH + 登录 shell 的 PATH + 常见用户级安装目录。
 // 退出码：0 = agent 回了话且正常结束；1 = 启动/握手/回合失败；2 = 用法错误或本机没装。
@@ -97,8 +97,30 @@ function claudeToken() {
   }
 }
 
+/** 与 LeoBot 一致：env 里没有代理变量时按 macOS 系统代理（scutil --proxy）补上；--no-proxy 关掉。 */
+function systemProxyEnv(env) {
+  if (args.includes("--no-proxy") || process.platform !== "darwin") return {};
+  if (["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"].some((key) => env[key]?.trim())) return {};
+  const out = spawnSync("/usr/sbin/scutil", ["--proxy"], { encoding: "utf8", timeout: 2000 }).stdout ?? "";
+  const field = (key) => new RegExp(`^\\s*${key}\\s*:\\s*(\\S+)\\s*$`, "m").exec(out)?.[1];
+  const entry = (prefix, scheme) =>
+    field(`${prefix}Enable`) === "1" && field(`${prefix}Proxy`) && field(`${prefix}Port`)
+      ? `${scheme}://${field(`${prefix}Proxy`)}:${field(`${prefix}Port`)}`
+      : undefined;
+  const web = entry("HTTPS", "http") ?? entry("HTTP", "http");
+  const all = entry("SOCKS", "socks5") ?? web;
+  if (!web && !all) return {};
+  console.log(`· 代理     系统代理 ${web ?? all}`);
+  return {
+    ...(web ? { HTTPS_PROXY: web, https_proxy: web, HTTP_PROXY: entry("HTTP", "http") ?? web, http_proxy: entry("HTTP", "http") ?? web } : {}),
+    ...(all ? { ALL_PROXY: all, all_proxy: all } : {}),
+    ...(env.NO_PROXY || env.no_proxy ? {} : { NO_PROXY: "localhost,127.0.0.1,::1,.local,100.64.0.0/10,.ts.net,.leoyuan.top", no_proxy: "localhost,127.0.0.1,::1,.local,100.64.0.0/10,.ts.net,.leoyuan.top" }),
+  };
+}
+
 function resolveLaunch(id) {
   const env = { ...process.env, PATH: searchPath.join(delimiter) };
+  Object.assign(env, systemProxyEnv(env));
   // 宿主自己是 Claude Code 会话时的变量会让子进程 claude 走错鉴权路径。
   for (const key of ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_SSE_PORT", "CLAUDE_AGENT_SDK_VERSION"]) {
     delete env[key];
@@ -130,7 +152,24 @@ function resolveLaunch(id) {
     }
     case "gemini": {
       const cli = which("gemini");
-      return cli ? { cli, command: cli, args: ["--acp"], env } : { error: "没有找到 gemini 命令" };
+      if (!cli) return { error: "没有找到 gemini 命令" };
+      // 与 LeoBot 一致：env 没有 key 时补上 ~/.gemini/.env 里的 GEMINI_* / GOOGLE_*。
+      if (!env.GEMINI_API_KEY?.trim() && !env.GOOGLE_API_KEY?.trim()) {
+        try {
+          for (const raw of readFileSync(join(home, ".gemini", ".env"), "utf8").split(/\r?\n/)) {
+            const match = /^\s*(?:export\s+)?((?:GEMINI|GOOGLE)_[A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(raw);
+            if (!match || env[match[1]]?.trim()) continue;
+            let value = match[2].trim();
+            if (/^(["']).*\1$/.test(value)) value = value.slice(1, -1);
+            else value = value.replace(/\s+#.*$/, "");
+            if (value) env[match[1]] = value;
+          }
+          console.log("· 环境     使用 ~/.gemini/.env");
+        } catch {
+          // 没有 .env
+        }
+      }
+      return { cli, command: cli, args: ["--acp"], env };
     }
     case "opencode": {
       const cli = which("opencode");
