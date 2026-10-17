@@ -41,6 +41,29 @@ describe("pendingInteractionAdapter", () => {
       pendingPermissionToLegacyRequest("s", { ...interaction, payload: legacy }).options,
     ).toHaveLength(1);
   });
+  it("[wp-31] passes the runtime risk level through for the approval risk bar", () => {
+    const payload = {
+      kind: "permission" as const,
+      toolCallId: "t",
+      toolName: "Bash",
+      summary: "rm -rf build",
+      detail: { command: "rm -rf build" },
+      riskLevel: "high" as const,
+      options: [{ optionId: "allowOnce", label: "Allow once", kind: "allowOnce" as const }],
+    };
+    const interaction = {
+      interactionId: "p",
+      kind: "permission" as const,
+      anchorRowId: null,
+      createdAt: 1,
+      payload: permissionRequestPayloadSchema.parse(payload),
+    };
+    expect(pendingPermissionToLegacyRequest("s", interaction).riskLevel).toBe("high");
+    const { riskLevel: _omit, ...legacy } = payload;
+    expect(
+      pendingPermissionToLegacyRequest("s", { ...interaction, payload: legacy }),
+    ).not.toHaveProperty("riskLevel");
+  });
   it("maps v4 permission interaction to legacy PermissionDialog request", () => {
     const request = pendingPermissionToLegacyRequest("sess-1", {
       interactionId: "perm-1",

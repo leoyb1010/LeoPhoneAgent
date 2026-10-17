@@ -58,6 +58,7 @@ import { isSaveWorkflowToolCall } from "@/lib/workflowToolNames.js";
 import { useZCodeStoreWithDefault } from "@/store/StoreProvider.js";
 import { DEFAULT_CODE_PREVIEW_SETTINGS } from "@/lib/codePreviewSettings.js";
 import { useZCodeIntl } from "./i18n/IntlProvider.js";
+import { resolveLeoApprovalRisk } from "./leo/leoApprovalRisk.js";
 import { Info, LoaderIcon, WrenchIcon } from "lucide-react";
 
 const MCP_PERMISSION_TOOL_ICON = <WrenchIcon className="size-4 shrink-0 text-foreground-subtle" />;
@@ -777,7 +778,13 @@ export function PermissionDialog({
   const shouldUseSaveWorkflowBlock = blockKind === "saveWorkflow";
   return (
     // [leo] data-leo-approval:皮肤层让审批卡从输入框位置轻轻滑入。
-    <div ref={rootRef} data-leo-approval="true" className="w-full shrink-0 relative z-1">
+    // [leo][wp-31] data-leo-approval-risk:中风险 attention、高风险 destructive 左条(皮肤层画)。
+    <div
+      ref={rootRef}
+      data-leo-approval="true"
+      data-leo-approval-risk={resolveLeoApprovalRisk(request.riskLevel)}
+      className="w-full shrink-0 relative z-1"
+    >
       <div className="w-full overflow-hidden rounded-2xl border border-border bg-popover shadow-xs">
         <div className="flex flex-col gap-3 p-3">
           <div className="space-y-4">

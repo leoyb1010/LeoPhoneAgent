@@ -83,6 +83,7 @@ export function pendingPermissionToLegacyRequest(
     // V4 permission 的 subagent 来源已经存在于 pendingInteraction，
     // 旧适配器漏传后 PermissionDialog 无法展示来源，用户会误以为是主 Agent 在申请权限。
     ...(payload.origin ? { origin: payload.origin } : {}),
+    ...(payload.riskLevel ? { riskLevel: payload.riskLevel } : {}),
     // 工具自报的确认预览走独立的 display 通道，不塞进 raw/detail：detail 的形状被所有
     // 工具的预览解析共用，改一处会波及全部权限弹窗。
     ...(payload.display ? { display: payload.display } : {}),

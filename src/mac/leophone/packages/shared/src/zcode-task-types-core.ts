@@ -643,6 +643,8 @@ export interface ZCodePermissionRequest {
   /** V4 permission 是否允许在 Deny 时附带用户反馈。 */
   freeText?: boolean;
   origin?: ZCodeInteractionRequestOrigin;
+  /** [leo][wp-31] runtime 风险档；审批卡据此画风险条。缺省不画。 */
+  riskLevel?: "low" | "medium" | "high" | "critical";
   /**
    * 工具自报的确认预览，复用 tool call row 的 display 投影（同一有界形状）。
    * 缺省 = 纯文本 ask（legacy v3 链路会显式剥离该字段）。

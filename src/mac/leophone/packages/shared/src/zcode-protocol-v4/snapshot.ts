@@ -244,6 +244,9 @@ export const permissionRequestPayloadSchema = z.object({
   // additive：旧 snapshot 缺省时 UI 不显示反馈输入；V4 新投影可显式开启。
   freeText: z.boolean().optional(),
   origin: zcodeInteractionRequestOriginSchema.optional(),
+  // [leo][wp-31] additive：runtime 给出的风险档，审批卡据此画风险条（中 attention / 高 destructive）。
+  // 旧 snapshot 缺省时不画。
+  riskLevel: z.enum(["low", "medium", "high", "critical"]).optional(),
   // 工具自报的确认预览，复用 row 的 display 投影（同一有界形状）。缺省 = 纯文本 ask。
   // 同样不设门：预览解析失败退化成纯文本 ask，不拒整份 snapshot（见 toolDisplay.ts 注释）。
   display: toolCallDisplaySchema.optional().catch(undefined),
