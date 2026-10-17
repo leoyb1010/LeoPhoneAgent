@@ -273,6 +273,6 @@ it("renders a human guide through real admission and keeps the ongoing turn", as
   expect(incoming).toMatchObject({
     role: "user",
     content:
-      "<system-reminder>\nThe user sent a new message while you were working:\nshort B\n\nThis is how ZCode surfaces messages the user sends mid-turn — within the running turn, often alongside the next tool result, rather than as a separate conversation turn. Address the message above as you continue this turn.\n</system-reminder>",
+      "<system-reminder>\nThe user sent a new message while you were working:\nshort B\n\nThis is how LeoBot surfaces messages the user sends mid-turn — within the running turn, often alongside the next tool result, rather than as a separate conversation turn. Address the message above as you continue this turn.\n</system-reminder>",
   });
 });

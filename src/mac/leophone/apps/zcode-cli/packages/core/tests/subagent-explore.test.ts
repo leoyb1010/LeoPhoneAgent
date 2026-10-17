@@ -89,7 +89,7 @@ OS Version: Darwin 24.3.0
 You are powered by the model named anthropic/claude-haiku-4-5-20251001-cc.`;
 
 const exploreSystemMessages = [
-  "You are ZCode, an interactive coding agent",
+  "You are LeoBot, an interactive coding agent",
   // 正文已合并为一段；保留原 prompt、Notes、环境及换行顺序的逐字校验。
   `\n${exploreAgentPrompt}\n\n${subagentCommonNotes}\n\n${subagentEnvironmentContext}`,
 ];

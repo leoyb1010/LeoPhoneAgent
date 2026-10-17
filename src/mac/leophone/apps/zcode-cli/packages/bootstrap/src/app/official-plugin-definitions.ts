@@ -285,8 +285,9 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
   {
     // [leo] superpowers（obra/superpowers，MIT）随包：上游 3.15.1 改成「UI 推荐区按需从官方远端
     // 市场安装」，我们切断了官方市场，所以作为随包官方插件 seed。带 SessionStart hook，会给每个会话
-    // 注入技能目录，默认不启用，用户在插件页自行开启。文档类插件（documents / pdf / presentations /
-    // spreadsheets）与 image-search（官方账号 + 官方 API）不随包。
+    // 注入技能目录；产品决策（WP-11）默认启用，用户可在插件页关闭。文档类插件（documents / pdf /
+    // presentations / spreadsheets）与 image-search（官方账号 + 官方 API）不随包。
+    defaultEnabled: true,
     listing: {
       author: { name: "Jesse Vincent", url: "https://github.com/obra/superpowers" },
       category: "developer-tools",

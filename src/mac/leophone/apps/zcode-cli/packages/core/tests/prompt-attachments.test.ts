@@ -293,7 +293,7 @@ describe("prompt attachment provider content order", () => {
     expect(resolved).toMatchObject({
       contentBlock: {
         type: "text",
-        text: expect.stringContaining("video is larger than the ZCode video input limit"),
+        text: expect.stringContaining("video is larger than the LeoBot video input limit"),
       },
       metadata: { recoverability: "metadata_only", storageKind: "local_ref" },
     });
@@ -431,7 +431,7 @@ describe("prompt attachment provider content order", () => {
         "- The user has the in-app browser open with 1 tab.\n" +
         "- Current URL: https://m.ituring.com.cn/book?tab=ebook&sort=hot\n" +
         "</in-app-browser-context>\n\n" +
-        "## My request for ZCode:\n" +
+        "## My request for LeoBot:\n" +
         "打开这本书",
     );
     expect(buildUserContentFromTurn("打开这本书", [])).toBe("打开这本书");

@@ -115,7 +115,7 @@
           "E2E_GUIDE_TIMELINE_GUIDE_ONE",
           "E2E_READONLY_TOOL_FILE_CONTENT",
           "The user sent a new message while you were working:",
-          "This is how ZCode surfaces messages the user sends mid-turn"
+          "This is how LeoBot surfaces messages the user sends mid-turn"
         ],
         "bodyExcludes": [
           "E2E_GUIDE_TIMELINE_GUIDE_TWO",
@@ -154,7 +154,7 @@
         "bodyIncludes": [
           "E2E_GUIDE_TIMELINE_GUIDE_TWO",
           "E2E_GUIDE_TIMELINE_MIDDLE_ASSISTANT",
-          "This is how ZCode surfaces messages the user sends mid-turn"
+          "This is how LeoBot surfaces messages the user sends mid-turn"
         ],
         "bodyExcludes": [
           "Generate a concise title",

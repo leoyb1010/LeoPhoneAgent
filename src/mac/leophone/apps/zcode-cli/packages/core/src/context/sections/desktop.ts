@@ -3,10 +3,10 @@ import { estimateTokens } from "../utils.js";
 
 export function buildDesktopContextSection(genUiOutputDirectory?: string): ContextSection {
   return createDesktopSection(
-    "ZCode Desktop Context",
+    "LeoBot Desktop Context",
     "desktop_context",
     [
-      "# ZCode Desktop Context",
+      "# LeoBot Desktop Context",
       "",
       "### Interactive views",
       ...(genUiOutputDirectory

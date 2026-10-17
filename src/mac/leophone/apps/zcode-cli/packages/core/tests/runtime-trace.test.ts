@@ -844,7 +844,7 @@ describe("AgentRuntime trace propagation", () => {
     await runtime.executeTurn("hello");
 
     expect(requests[0]?.[0]).toEqual(expect.objectContaining({ role: "system" }));
-    expect(requests[0]?.[0]?.content).toBe("You are ZCode, an interactive coding agent");
+    expect(requests[0]?.[0]?.content).toBe("You are LeoBot, an interactive coding agent");
     expect(requests[0]?.[0]?.content).not.toContain("# Agent Identity");
     expect(requests[0]?.[1]?.content).toBe("\nYou are terse for this session.");
     expect(requests[0]?.[1]?.content).not.toContain("# Task Behavior");
@@ -1037,7 +1037,7 @@ describe("AgentRuntime trace propagation", () => {
     const stableBody = second?.messages[1]?.content ?? "";
     const dynamicSystem = second?.messages[2]?.content ?? "";
 
-    expect(cliPrefix).toBe("You are ZCode, an interactive coding agent");
+    expect(cliPrefix).toBe("You are LeoBot, an interactive coding agent");
     expect(stableBody).not.toContain("# Agent Identity");
     expect(stableBody).toContain("according to the active Output Style below");
     expect(stableBody).not.toContain("# Task Behavior");
@@ -1192,10 +1192,10 @@ describe("AgentRuntime trace propagation", () => {
       "system",
       "user",
     ]);
-    expect(requests[0]?.[0]?.content).toBe("You are ZCode, an interactive coding agent");
+    expect(requests[0]?.[0]?.content).toBe("You are LeoBot, an interactive coding agent");
     expect(requests[0]?.[0]?.content).not.toContain("# Agent Identity");
     expect(requests[0]?.[1]?.content).not.toContain("# Agent Identity");
-    expect(requests[0]?.[1]?.content).toMatch(/^\n?You are an interactive ZCode agent/);
+    expect(requests[0]?.[1]?.content).toMatch(/^\n?You are an interactive LeoBot agent/);
     expect(requests[0]?.[1]?.content).toContain("# Harness");
     expect(requests[0]?.[1]?.content).not.toContain("# Session-specific guidance");
     expect(requests[0]?.[1]?.content).not.toContain("# Environment");

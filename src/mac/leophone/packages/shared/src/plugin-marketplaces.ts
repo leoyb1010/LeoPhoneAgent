@@ -30,6 +30,8 @@ export const DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS: ReadonlySet<string> = new Set(
   // visualize（交互视图）随 UI 插件合入时 CLI 定义已标 defaultEnabled，但这里漏加，
   // Settings 会把它当成默认关闭，与 CLI 实际启用状态不一致。
   "visualize@zcode-plugins-official",
+  // [leo] superpowers 随包且默认启用（WP-11 产品决策）。
+  "superpowers@zcode-plugins-official",
   // 电脑控制回退为默认关闭，故 computer-use 不在此名单内。
   // 该集合必须与 official-plugin-definitions.ts 里标了 defaultEnabled 的插件逐一对应，
   // bootstrap 的「Settings 默认启用集合与 CLI 的官方插件声明一致」单测机械对照两者。
@@ -41,6 +43,11 @@ export const DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS: ReadonlySet<string> = new Set(
  */
 export const INTERNAL_OFFICIAL_PLUGIN_IDS: ReadonlySet<string> = new Set([
   "node-repl-host@zcode-plugins-official",
+  // [leo] 不随包、也不对用户露出的上游官方插件：computer-use（上游 zcode-cua 占位，
+  // Mac 的电脑操作由 Peekaboo 提供）与 restore-legacy-sessions（旧版 ZCode 会话恢复）。
+  // 开发态源码目录里能找到它们的包，所以只靠「包缺失不列出」不够，这里显式隐藏。
+  "computer-use@zcode-plugins-official",
+  "restore-legacy-sessions@zcode-plugins-official",
 ]);
 
 export const DEFAULT_PLUGIN_MARKETPLACES: DefaultPluginMarketplace[] = [

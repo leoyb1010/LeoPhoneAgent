@@ -336,7 +336,7 @@ function assertChildSystemPromptShape(
     { type: "ephemeral" },
     { type: "ephemeral" },
   ]);
-  expect(systems[0]).toBe("You are ZCode, an interactive coding agent");
+  expect(systems[0]).toBe("You are LeoBot, an interactive coding agent");
   for (const expected of input.agentPromptIncludes) {
     expect(systems[1]).toContain(expected);
   }

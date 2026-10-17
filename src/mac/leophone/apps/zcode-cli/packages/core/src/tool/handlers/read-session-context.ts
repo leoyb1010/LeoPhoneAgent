@@ -162,9 +162,9 @@ export const readSessionContextToolEntry: ToolEntry = {
   metadata: {
     name: READ_SESSION_CONTEXT_TOOL_NAME,
     description:
-      "Read relevant or handoff context from a persisted ZCode session, or use topic to look up original archived discussion in the current session.",
+      "Read relevant or handoff context from a persisted LeoBot session, or use topic to look up original archived discussion in the current session.",
     modelInstructions: [
-      "Use for context from a prior ZCode session mentioned by id, or to verify an original message referenced in the current topic background.",
+      "Use for context from a prior LeoBot session mentioned by id, or to verify an original message referenced in the current topic background.",
       "Pass a focused query describing what you need; do not ask for the whole session unless the user explicitly wants a handoff.",
       "Use strategy='handoff' when the user wants to continue or resume work from that session.",
       "Use strategy='topic' and omit sessionId to retrieve original archived Feishu/Lark topic discussion by message id or keyword in the current task. Never look up session identity through shell commands. This strategy never reads another session or unread group history. Follow nextCursor for more bounded results; truncated means incomplete coverage.",

@@ -233,7 +233,7 @@ Message from coordinator:
       expect(wireText(lastInput.content)).not.toContain(
         "The coordinator sent a message while you were working:",
       );
-      expect(wireText(lastInput.content)).not.toContain("Another ZCode session sent a message:");
+      expect(wireText(lastInput.content)).not.toContain("Another LeoBot session sent a message:");
       for (const [marker, body, role] of [
         [
           guideOneMarker,
