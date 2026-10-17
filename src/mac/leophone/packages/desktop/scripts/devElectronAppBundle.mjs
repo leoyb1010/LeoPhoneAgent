@@ -2,7 +2,8 @@ import { access, cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promis
 import { dirname, join } from "node:path";
 
 export const DEV_ELECTRON_PROTOCOL_SCHEME = "zcode";
-export const DEV_ELECTRON_APP_NAME = "ZCode Dev";
+// [leo] 开发态进程 / 程序坞里显示 LeoBot Dev:以前叫 ZCode Dev,用户在活动监视器里看到会以为多跑了一个服务。
+export const DEV_ELECTRON_APP_NAME = "LeoBot Dev";
 export const DEV_ELECTRON_APP_BUNDLE_ID = "dev.zcode.app.development";
 // 副本布局版本，见 prepareDevElectronAppBundle 中的指纹说明。
 export const DEV_ELECTRON_BUNDLE_FORMAT = 2;

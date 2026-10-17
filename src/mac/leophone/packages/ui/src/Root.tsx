@@ -8,6 +8,7 @@ import {
 } from "@zcode/shared";
 import { TooltipProvider } from "@/components/ui/tooltip.js";
 import { LeoWhatsNew } from "@/leo/LeoWhatsNew.js";
+import { LeoPushToTalk } from "@/leo/LeoPushToTalk.js";
 import { Button } from "@/components/ui/button.js";
 import { PlatformProvider } from "@/hooks/usePlatform.js";
 import { ServiceProvider } from "@/hooks/useServices.js";
@@ -119,6 +120,7 @@ export function Root(props: RootProps) {
                   >
                     <RootInner {...props} />
                     <LeoWhatsNew />
+                    <LeoPushToTalk />
                   </AssistantCodeCommentFeatureProvider>
                 </DiffsWorkerPoolProvider>
               </TabStoreProvider>

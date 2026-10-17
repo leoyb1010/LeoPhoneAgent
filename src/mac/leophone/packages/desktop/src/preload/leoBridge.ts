@@ -45,3 +45,23 @@ if (process.platform === "darwin") {
     openSettings: (key: string) => ipcRenderer.invoke("leo:computer-use:open-settings", key),
   });
 }
+
+/** [leo][WP-60] 按住快捷键说话(写进输入框)与回复朗读;助手程序由主进程拉起。 */
+if (process.platform === "darwin") {
+  const subscribe = (channel: string) => (callback: (payload: unknown) => void) => {
+    const listener = (_event: unknown, payload: unknown) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  };
+  contextBridge.exposeInMainWorld("leoSpeech", {
+    getSettings: () => ipcRenderer.invoke("leo:speech:settings:get"),
+    setSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke("leo:speech:settings:set", patch),
+    start: () => ipcRenderer.invoke("leo:speech:start"),
+    stop: () => ipcRenderer.invoke("leo:speech:stop"),
+    onEvent: subscribe("leo:speech:event"),
+    speak: (markdown: string) => ipcRenderer.invoke("leo:speech:speak", markdown),
+    stopSpeaking: () => ipcRenderer.invoke("leo:speech:stop-speaking"),
+    onSpeakState: subscribe("leo:speech:speak-state"),
+    openMicSettings: () => ipcRenderer.invoke("leo:speech:open-mic-settings"),
+  });
+}

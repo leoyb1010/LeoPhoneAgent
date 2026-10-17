@@ -73,3 +73,4 @@ packages/desktop/.e2e-network-capture/
 
 # [leo] 随包第三方二进制由 scripts/leo-fetch-peekaboo.mjs 下载并校验,不入库。
 packages/desktop/leo/bin/
+packages/desktop/resources/leo-speech/

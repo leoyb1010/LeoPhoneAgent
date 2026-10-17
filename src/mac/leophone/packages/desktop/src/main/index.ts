@@ -6,6 +6,7 @@ import { registerLeoLinkIpc } from "./leoLinkIpc.js";
 import { isLeoQuickPanelWindow, startLeoQuickEntry } from "./leo/quickEntry.js";
 import { registerImcpIpc } from "./leo/imcp.js";
 import { registerComputerUseIpc } from "./leo/computerUse.js";
+import { registerSpeechIpc } from "./leo/speech.js";
 import { createLocalTtftExporter } from "./localTtftExporter.js";
 /* eslint-disable max-lines */
 import "./desktopEarlyDataBaseDirBootstrap.js";
@@ -1837,6 +1838,7 @@ app.whenReady().then(async () => {
   registerLeoLinkIpc();
   registerImcpIpc();
   registerComputerUseIpc();
+  registerSpeechIpc(logger);
   markMainLaunchAppReady();
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {
     isPathAuthorized: localMediaPreviewPathRegistry.isAuthorized,

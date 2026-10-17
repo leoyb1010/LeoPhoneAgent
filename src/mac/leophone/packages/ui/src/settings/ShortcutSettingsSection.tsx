@@ -27,6 +27,7 @@ import {
 import { ShortcutBindingRow, type RecordingState } from "./ShortcutBindingRow.js";
 import { ShortcutSearchBar } from "./ShortcutSearchBar.js";
 import { LeoQuickEntrySettings } from "@/leo/LeoQuickEntrySettings.js";
+import { LeoSpeechSettings } from "@/leo/LeoSpeechSettings.js";
 import { useShortcutKeySearch } from "./useShortcutKeySearch.js";
 import { useShortcutRecording } from "./useShortcutRecording.js";
 
@@ -214,6 +215,7 @@ export function ShortcutSettingsSection({ isDesktop = false }: { isDesktop?: boo
     <div className="space-y-4" data-testid="settings-shortcuts-section">
       {/* [leo] 全局入口(菜单栏 + 快速派发),只在 macOS 桌面端有 bridge 时出现。 */}
       {isDesktop ? <LeoQuickEntrySettings /> : null}
+      {isDesktop ? <LeoSpeechSettings /> : null}
       <ShortcutSearchBar
         query={query}
         onQueryChange={setQuery}

@@ -681,6 +681,8 @@ export default {
             from: "resources/macos-window-bounds/zcode-window-bounds",
             to: "macos-window-bounds/zcode-window-bounds",
           },
+          // [leo][WP-60] 本地语音助手(scripts/build-leo-speech.mjs 编译 native/leo-speech)。
+          { from: "resources/leo-speech/leo-speech", to: "leo-speech/leo-speech" },
           // [leo][WP-22] 随包 Peekaboo CLI(scripts/leo-fetch-peekaboo.mjs 下载并校验 sha256)。
           // 不在 signIgnore 里:打包时与 App 一起用 LeoBot 的 Developer ID + hardened runtime 重签。
           { from: "leo/bin", to: "leo/bin" },
@@ -778,6 +780,8 @@ export default {
     artifactName: buildDesktopArtifactName("mac"),
     extendInfo: {
       NSAppleEventsUsageDescription: `${desktopProductIdentity.productName} needs Apple Events access to coordinate local automation workflows with user-approved desktop apps.`,
+      // [leo][WP-60] 按住快捷键说话:语音助手 leo-speech 用麦克风做本地听写(系统 SpeechAnalyzer,不上传)。
+      NSMicrophoneUsageDescription: `${desktopProductIdentity.productName} uses the microphone for push-to-talk dictation. Speech is transcribed on this Mac.`,
     },
     // 预签名脚本走的是原生 codesign，要求完整的 "Developer ID Application: ..." 身份串；
     // 但 electron-builder 的 mac.identity 在 26.x 下会拒绝带此前缀的名字。

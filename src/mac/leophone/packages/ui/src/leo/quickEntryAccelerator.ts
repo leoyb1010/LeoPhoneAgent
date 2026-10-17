@@ -77,3 +77,28 @@ export function formatAccelerator(accelerator: string): string {
     .map((part) => SYMBOLS[part] ?? part)
     .join("");
 }
+
+const MODIFIER_KEY: Record<string, string> = {
+  Command: "Meta",
+  CommandOrControl: "Meta",
+  Control: "Control",
+  Alt: "Alt",
+  Shift: "Shift",
+};
+
+/**
+ * [leo][WP-60] 按住说话:这次松开的是不是组合里的键(主键或任一修饰键)。
+ * 主键按物理键位比(event.code),修饰键按 event.key 比。
+ */
+export function isAcceleratorRelease(
+  event: Pick<AcceleratorKeyEvent, "code"> & { key: string },
+  accelerator: string,
+): boolean {
+  const parts = accelerator.split("+");
+  const main = parts.at(-1) ?? "";
+  if (parts.slice(0, -1).some((modifier) => MODIFIER_KEY[modifier] === event.key)) return true;
+  if (/^[A-Z]$/.test(main)) return event.code === `Key${main}`;
+  if (/^\d$/.test(main)) return event.code === `Digit${main}`;
+  if (/^F\d{1,2}$/.test(main)) return event.code === main;
+  return CODE_KEYS[event.code] === main;
+}
