@@ -157,9 +157,26 @@ type ZCodeSessionRecordParams = (
 interface SessionStartupPreferences {
   subagentRuntimeConfigEnabled?: boolean;
   memoryEnabled: boolean;
+  memoryRecall?: { semantic: boolean; treasury: boolean };
   modelContextBudgetStrategy: ZCodeModelContextBudgetStrategy;
   nativeSearchEnhancementsEnabled: boolean;
   resolveInitialBashShellSelection: () => Promise<ExecutionShellSelection | undefined>;
+}
+
+/**
+ * [leo][wp-61] 记忆总开关与召回来源开关 → runtimeConfig.memory override。
+ * 总开关只在关闭时写（不反向覆盖 CLI 自己的禁用配置）；语义召回在核心里默认关（上游语义），
+ * Host 给了就显式写 true/false；藏宝阁召回核心默认开，只写关闭。
+ */
+export function resolveStartupMemoryRuntimeOverride(
+  preferences: Pick<SessionStartupPreferences, "memoryEnabled" | "memoryRecall">,
+): { memory?: { enabled?: false; semanticRecall?: boolean; treasuryRecall?: false } } {
+  const memory = {
+    ...(preferences.memoryEnabled ? {} : { enabled: false as const }),
+    ...(preferences.memoryRecall ? { semanticRecall: preferences.memoryRecall.semantic } : {}),
+    ...(preferences.memoryRecall?.treasury === false ? { treasuryRecall: false as const } : {}),
+  };
+  return Object.keys(memory).length > 0 ? { memory } : {};
 }
 
 type SessionStartupPreferencesSource =
@@ -3263,6 +3280,7 @@ async function resolveSessionStartupPreferences(
     const inheritedShellSelection = source.parent.app.runtime.getSessionShellSelection();
     return {
       memoryEnabled: source.parent.memoryEnabled,
+      ...(source.parent.memoryRecall ? { memoryRecall: source.parent.memoryRecall } : {}),
       subagentRuntimeConfigEnabled: source.parent.subagentRuntimeConfigEnabled,
       modelContextBudgetStrategy: DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
       nativeSearchEnhancementsEnabled: source.parent.nativeSearchEnhancementsEnabled,
@@ -3283,6 +3301,7 @@ async function resolveSessionStartupPreferences(
   return {
     subagentRuntimeConfigEnabled: runtimePreferences.subagentRuntimeConfigEnabled,
     memoryEnabled: runtimePreferences.memoryEnabled,
+    ...(runtimePreferences.memoryRecall ? { memoryRecall: runtimePreferences.memoryRecall } : {}),
     modelContextBudgetStrategy: DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
     nativeSearchEnhancementsEnabled: runtimePreferences.nativeSearchEnhancementsEnabled,
     resolveInitialBashShellSelection: async () => {
@@ -3381,7 +3400,8 @@ async function createRecord(
       modelContextBudgetStrategy: startupPreferences.modelContextBudgetStrategy,
       // Memory Settings 是现有 CLI features.memory/use 之外的总开关。只在关闭时
       // 写入 override，避免开启值反向覆盖用户已有的 CLI 禁用配置。
-      ...(startupPreferences.memoryEnabled ? {} : { memory: { enabled: false } }),
+      // [leo][wp-61] 记忆总开关 + 召回来源开关（见 resolveStartupMemoryRuntimeOverride）。
+      ...resolveStartupMemoryRuntimeOverride(startupPreferences),
       // desktop-continuous session/create 由 UI 先解析 ~/.zcode/.agents 的 enabled MCP，
       // 但 protocol app-server 自己不会读取 UI/main 侧的 MCP store；之前 createRecord 没把
       // params.mcpServers 注入 runtimeConfig，导致日志里 runtimeHasMcpConfig=false，工具永远不启动。
@@ -3459,6 +3479,7 @@ async function createRecord(
     createdAt: now,
     eventStore,
     memoryEnabled: startupPreferences.memoryEnabled,
+    ...(startupPreferences.memoryRecall ? { memoryRecall: startupPreferences.memoryRecall } : {}),
     subagentRuntimeConfigEnabled: startupPreferences.subagentRuntimeConfigEnabled,
     modelContextBudgetStrategy: startupPreferences.modelContextBudgetStrategy,
     nativeSearchEnhancementsEnabled: startupPreferences.nativeSearchEnhancementsEnabled,

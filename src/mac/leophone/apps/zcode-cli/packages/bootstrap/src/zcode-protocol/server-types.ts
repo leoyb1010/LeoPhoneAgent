@@ -84,6 +84,8 @@ export interface ZCodeProtocolSessionRecord {
   app: ZCodeApp;
   subagentRuntimeConfigEnabled?: boolean;
   memoryEnabled: boolean;
+  /** [leo][wp-61] 记忆召回来源开关；缺省按都开。子会话继承父会话。 */
+  memoryRecall?: { semantic: boolean; treasury: boolean };
   nativeSearchEnhancementsEnabled: boolean;
   modelContextBudgetStrategy: ZCodeModelContextBudgetStrategy;
   createdAt: number;

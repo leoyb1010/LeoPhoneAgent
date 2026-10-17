@@ -187,6 +187,13 @@ export function resolveAppRuntimeConfig(input: {
       ...(options.runtimeConfig?.memory?.extractionEnabled === undefined
         ? {}
         : { extractionEnabled: options.runtimeConfig.memory.extractionEnabled }),
+      // [leo][wp-61] 召回来源开关（缺省按开）。
+      ...(options.runtimeConfig?.memory?.semanticRecall === undefined
+        ? {}
+        : { semanticRecall: options.runtimeConfig.memory.semanticRecall }),
+      ...(options.runtimeConfig?.memory?.treasuryRecall === undefined
+        ? {}
+        : { treasuryRecall: options.runtimeConfig.memory.treasuryRecall }),
       ...(input.storageRoot ? { storageRoot: input.storageRoot } : {}),
       use: options.runtimeConfig?.memory?.use ?? configResult.config.memory.use,
       workspaceIdentity: workspaceIdentity?.trim() || undefined,
