@@ -202,25 +202,25 @@ describe("Todo104 规则集合读写与应用", () => {
         baseUrl,
       }).properties;
     for (const baseUrl of [
-      "https://api.z.ai/api/anthropic",
-      "https://open.bigmodel.cn/api/anthropic",
-      "https://zcode.z.ai/api/v1/zcode-plan/anthropic",
+      "https://api.zai.invalid/api/anthropic",
+      "https://open.bigmodel.invalid/api/anthropic",
+      "https://zcode.zai.invalid/api/v1/zcode-plan/anthropic",
     ]) {
       expect(resolve(baseUrl)?.inputFormat).toMatchObject({
         supportsImage: true,
         supportsVideo: true,
       });
     }
-    expect(resolve("https://zcode.z.ai/api/v1/zcode-plan/anthropic")?.supportsNativeWebSearch).toBe(
+    expect(resolve("https://zcode.zai.invalid/api/v1/zcode-plan/anthropic")?.supportsNativeWebSearch).toBe(
       true,
     );
-    expect(resolve("https://api.z.ai/api/anthropic")?.supportsNativeWebSearch).toBe(true);
-    expect(resolve("https://open.bigmodel.cn/api/anthropic")?.supportsMidConversationSystem).toBe(
+    expect(resolve("https://api.zai.invalid/api/anthropic")?.supportsNativeWebSearch).toBe(true);
+    expect(resolve("https://open.bigmodel.invalid/api/anthropic")?.supportsMidConversationSystem).toBe(
       true,
     );
     for (const baseUrl of [
-      "https://open.bigmodel.cn/api/off-peak/anthropic",
-      "https://api.z.ai/api/anthropic-extra",
+      "https://open.bigmodel.invalid/api/off-peak/anthropic",
+      "https://api.zai.invalid/api/anthropic-extra",
       "https://attacker.test/api/anthropic",
     ]) {
       expect(resolve(baseUrl)?.inputFormat?.supportsVideo).toBe(false);

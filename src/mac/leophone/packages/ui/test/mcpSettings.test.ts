@@ -14,8 +14,8 @@ describe("MCP Settings Shared", () => {
   describe("SOURCE_META", () => {
     it("应包含 zcodeagentmcp 的元数据", () => {
       expect(SOURCE_META.zcodeagentmcp).toBeDefined();
-      expect(SOURCE_META.zcodeagentmcp.label).toBe("ZCode Agent");
-      expect(SOURCE_META.zcodeagentmcp.section).toBe("ZCode Agent");
+      expect(SOURCE_META.zcodeagentmcp.label).toBe("LeoBot Agent");
+      expect(SOURCE_META.zcodeagentmcp.section).toBe("LeoBot Agent");
       expect(SOURCE_META.zcodeagentmcp.badgeClass).toContain("cyan");
     });
   });

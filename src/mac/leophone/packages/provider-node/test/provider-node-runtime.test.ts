@@ -121,7 +121,7 @@ describe("@zcode/provider-node", () => {
         templateId: "zai-api",
         modelId: "glm-5.3",
         apiType: "anthropic-messages",
-        baseUrl: "https://api.z.ai/api/anthropic",
+        baseUrl: "https://api.zai.invalid/api/anthropic",
       }).properties,
     ).toMatchObject({
       supportsMidConversationSystem: true,

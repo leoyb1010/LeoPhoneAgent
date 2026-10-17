@@ -130,7 +130,7 @@ function normalizeBackendAvatarUrl(avatar: string | undefined): string | undefin
     return dataUrl;
   }
 
-  // ZAI 后端现在稳定返回可展示 URL 或 base64，客户端继续拼 chat.z.ai 前缀会改坏服务端语义。
+  // ZAI 后端现在稳定返回可展示 URL 或 base64，客户端继续拼官方站点前缀会改坏服务端语义。
   // 这里只保留原值，避免把后端返回的 avatar 二次加工成错误地址。
   return trimmed;
 }
@@ -264,8 +264,9 @@ export class ZaiProviderAdapter implements OAuthProviderAdapter {
     this.businessTokenResolver = new ZaiBusinessTokenResolver({
       apiClient,
       // 测试 OAuth app 返回的 ZAI access_token 需要打到测试业务域换业务 token；
-      // 如果继续硬编码生产 api.z.ai，本地测试登录会在 OAuth token 成功后失败。
-      loginUrl: config.businessLoginUrl ?? "https://api.z.ai/api/auth/z/login",
+      // 如果继续硬编码生产业务域，本地测试登录会在 OAuth token 成功后失败。
+      // [leo] 兜底地址指向本机死端口。
+      loginUrl: config.businessLoginUrl ?? "http://127.0.0.1:9/api/auth/z/login",
       timeoutMs: ZAI_BUSINESS_TOKEN_TIMEOUT_MS,
     });
   }

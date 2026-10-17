@@ -2,7 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 
 const client = createAnthropic({
   apiKey: process.env.ZCODE_API_KEY,
-  baseURL: 'https://open.bigmodel.cn/api/anthropic',
+  baseURL: process.env.ZCODE_TEST_MODEL_BASE_URL, // [leo] 手动探测脚本：端点由环境变量给出
 });
 
 const result = await client('glm-4.7').generateText({

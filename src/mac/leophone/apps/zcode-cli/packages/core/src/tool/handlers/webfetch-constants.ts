@@ -8,5 +8,5 @@ export const CACHE_TTL_MS = 15 * 60 * 1000;
 export const CACHE_MAX_BYTES = 50 * 1024 * 1024;
 export const MAX_REDIRECTS = 10;
 
-// [leo] zcode.ai 这里只是 User-Agent 里的产品链接，不是代理服务；换成本产品名。
+// [leo] 上游这里是 User-Agent 里的官方产品链接，不是代理服务；换成本产品名。
 export const WEBFETCH_USER_AGENT = "LeoPhoneAgent";

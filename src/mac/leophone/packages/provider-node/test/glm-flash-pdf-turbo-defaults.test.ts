@@ -85,8 +85,8 @@ describe("Todo126 发布配置的 Flash PDF 和模板 Turbo 默认", () => {
         "openai-responses",
       ] as const) {
         for (const baseUrl of [
-          "https://api.z.ai/api/anthropic",
-          "https://open.bigmodel.cn/api/anthropic",
+          "https://api.zai.invalid/api/anthropic",
+          "https://open.bigmodel.invalid/api/anthropic",
           "https://proxy.example/v1",
         ]) {
           for (const modelId of ["GLM-5.3-Flash", "glm-5.3-flash", "vendor/GLM-5.3-Flash:free"]) {

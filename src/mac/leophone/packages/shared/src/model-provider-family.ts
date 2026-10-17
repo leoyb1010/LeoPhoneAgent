@@ -24,7 +24,8 @@ export const MODEL_PROVIDER_FAMILY_SPECS = [
   {
     id: "zai",
     label: "Z.ai",
-    rootDomain: "z.ai",
+    // [leo] 官方根域不写进产物；按 baseURL 判官方 family 的函数没有调用方。
+    rootDomain: "",
     oauthProviderId: ZAI_PROVIDER_ID,
     startPlanProviderId: BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan,
     individualCodingPlanProviderId: BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
@@ -33,7 +34,7 @@ export const MODEL_PROVIDER_FAMILY_SPECS = [
   {
     id: "bigmodel",
     label: "BigModel",
-    rootDomain: "bigmodel.cn",
+    rootDomain: "",
     oauthProviderId: BIGMODEL_PROVIDER_ID,
     startPlanProviderId: BUILTIN_MODEL_PROVIDER_IDS.bigmodelStartPlan,
     individualCodingPlanProviderId: BUILTIN_MODEL_PROVIDER_IDS.bigmodelIndividualCodingPlan,

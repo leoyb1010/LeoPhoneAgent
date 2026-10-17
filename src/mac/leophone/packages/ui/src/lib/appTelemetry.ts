@@ -11,7 +11,7 @@ import { logger } from "@/logger.js";
 
 export function resolveProviderTelemetryLabel(providerId: string): string {
   if (providerId === ZAI_PROVIDER_ID || isZaiCodingPlanProviderId(providerId)) {
-    return "z.ai";
+    return "zai"; // [leo] 遥测标签不写官方域名（遥测本身已关）
   }
 
   if (

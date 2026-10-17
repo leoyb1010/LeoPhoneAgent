@@ -1,4 +1,4 @@
-// [leo] 官方站点 / CDN（z.ai、bigmodel.cn、zhipuai.cn 及其子域）的远程资源一律不加载、不外链；
+// [leo] 官方站点 / CDN（见下方匹配规则，含子域）的远程资源一律不加载、不外链；
 // 图片由各展示组件已有的本地图标回退兜住。
 const OFFICIAL_SERVICE_HOST_PATTERN = /(^|\.)(z\.ai|bigmodel\.cn|zhipuai\.cn)$/i;
 

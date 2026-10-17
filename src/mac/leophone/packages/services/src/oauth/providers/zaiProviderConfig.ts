@@ -18,12 +18,12 @@ export const ZAI_OAUTH_PROVIDER_CONFIG: Omit<OAuthProviderRuntimeConfig, "appSec
   enabled: true,
   order: 1,
   // ZAI 当前 OAuth 授权入口使用 /api/oauth 前缀，继续走 /auth/oauth 会打开旧入口。
-  authorizeUrl: "https://chat.z.ai/api/oauth/authorize",
-  tokenUrl: "https://zcode.z.ai/api/v1/oauth/token",
-  userinfoUrl: "https://chat.z.ai/api/oauth/userinfo",
-  businessLoginUrl: "https://api.z.ai/api/auth/z/login",
-  // 生产 client_id 不是 secret，但保留 fallback 可以避免未配置 env 的旧构建直接无法登录。
-  appId: "client_P8X5CMWmlaRO9gyO-KSqtg",
+  // [leo] 官方账号 OAuth 不接入（runtimeConfig 的 provider 列表为空）：地址指向本机死端口，不内置官方 client id。
+  authorizeUrl: "http://127.0.0.1:9/api/oauth/authorize",
+  tokenUrl: "http://127.0.0.1:9/api/v1/oauth/token",
+  userinfoUrl: "http://127.0.0.1:9/api/oauth/userinfo",
+  businessLoginUrl: "http://127.0.0.1:9/api/auth/z/login",
+  appId: "",
   redirectUri: "zcode://oauth/callback",
 };
 

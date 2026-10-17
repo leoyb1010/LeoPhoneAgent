@@ -3,7 +3,7 @@ import type { CommandAgentSource } from "./command-types.js";
 import type { ZCodeProvider } from "./zcode-task-types-core.js";
 
 export const ZCODE_AGENT_PROVIDER = "glm" satisfies ZCodeProvider;
-export const ZCODE_AGENT_PROVIDER_LABEL = "ZCode Agent";
+export const ZCODE_AGENT_PROVIDER_LABEL = "LeoBot Agent"; // [leo] 用户可见的 agent 名
 export const ZCODE_COMMAND_AGENT_SOURCE = "zcodeAgent" satisfies CommandAgentSource;
 
 /**

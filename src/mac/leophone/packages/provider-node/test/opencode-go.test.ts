@@ -21,6 +21,12 @@ const members = {
     "mimo-v2.5-pro",
     "hy4-preview",
     "hy3",
+    // [leo] Mac 1.3.3 起按 opencode.ai Go 端点表补齐的模型（docs/mac-3.0/UPSTREAM.md）
+    "longcat-2.0",
+    "mimo-v2.6-flash",
+    "mimo-v2.6-pro",
+    "space-bunny-free",
+    "longcat-2.5-preview-free",
   ],
   "opencode-go-messages": [
     "minimax-m3",
@@ -32,7 +38,15 @@ const members = {
     "qwen3.7-plus",
     "qwen3.6-plus",
   ],
-  "opencode-go-responses": ["gpt-5.6-luna", "grok-4.6"],
+  "opencode-go-responses": [
+    "gpt-5.6-luna",
+    "grok-4.6",
+    // [leo] Mac 1.3.3 补齐
+    "grok-4.7",
+    "gpt-6-luna",
+    "muse-spark-1.3-contributor",
+    "muse-spark-1.2-contributor",
+  ],
 };
 const enabled = new Set([
   "glm-5.3-flash",
@@ -48,6 +62,16 @@ const enabled = new Set([
   "qwen3.8-flash",
   "gpt-5.6-luna",
   "grok-4.6",
+  // [leo] Mac 1.3.3 补齐的模型默认启用
+  "longcat-2.0",
+  "mimo-v2.6-flash",
+  "mimo-v2.6-pro",
+  "space-bunny-free",
+  "longcat-2.5-preview-free",
+  "grok-4.7",
+  "gpt-6-luna",
+  "muse-spark-1.3-contributor",
+  "muse-spark-1.2-contributor",
 ]);
 let rules: ModelConfigRules;
 let templates: {

@@ -50,7 +50,6 @@ const ALLOWED_EMBEDDED_BROWSER_PROTOCOLS = new Set([
 ]);
 const ALLOWED_EMBEDDED_BROWSER_NEW_WINDOW_PROTOCOLS = new Set(["http:", "https:"]);
 const EXTERNAL_BROWSER_DISPOSITIONS = new Set(["background-tab"]);
-const CODING_PLAN_ZAI_PAYPAL_RELAY_HOSTS = new Set(["api.z.ai", "api.z.ai"]);
 const embeddedBrowserJavaScriptDialogPreloadPath = join(
   import.meta.dirname,
   "../preload/embeddedBrowserJavaScriptDialog.cjs",

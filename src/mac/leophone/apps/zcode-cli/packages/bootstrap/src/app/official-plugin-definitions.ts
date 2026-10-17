@@ -56,7 +56,7 @@ export interface OfficialPluginDefinition {
 
 // [leo] 插件商店里的作者显示为 LeoBot，不带官方网址。
 const ZAI_AUTHOR = { name: "LeoBot" } as const;
-// [leo] 内置插件的 listing 不再带 icon：原先指向官方 CDN（cdn-zcode.z.ai/zcode/official-plugin/assets），
+// [leo] 内置插件的 listing 不再带 icon：原先指向官方 CDN（/zcode/official-plugin/assets），
 // 设置页渲染插件卡片时会自动请求官方服务器；缺 icon 时 UI 用默认图标。
 
 export const OFFICIAL_NODE_REPL_HOST_REQUIRED_SEED_PATHS = ["dist/mcp/server.js"] as const;

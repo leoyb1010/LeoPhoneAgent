@@ -183,7 +183,7 @@ export class BigModelProviderAdapter implements OAuthProviderAdapter {
       }
       const accessToken = resolveBigModelBusinessAccessToken(payload);
       if (!accessToken) {
-        // Coding Plan 付费套餐仍调用 bigmodel.cn 业务接口，只能使用
+        // Coding Plan 付费套餐仍调用官方业务接口，只能使用
         // BigModel 业务 access token；zcode JWT 只能写入 zcodejwttoken 给 Start Plan 使用。
         // 如果继续把 zcode JWT 写进 oauth:bigmodel:access_token，套餐预览会稳定报“令牌已过期”。
         log.warn(undefined, "zcode token response missing bigmodel access token", {
@@ -226,7 +226,7 @@ export class BigModelProviderAdapter implements OAuthProviderAdapter {
   ): Promise<OAuthUserProfile> {
     if (tokenSet.zcodeJwtToken && tokenSet.accessToken === tokenSet.zcodeJwtToken) {
       // 移除 tokenByAuthCode 后 callback 阶段没有 BigModel access token。
-      // zcode JWT 不能调用 bigmodel.cn 的 customer 接口，避免无意义的鉴权失败请求。
+      // zcode JWT 不能调用官方 customer 接口，避免无意义的鉴权失败请求。
       return {
         id: "unknown",
         username: "user",

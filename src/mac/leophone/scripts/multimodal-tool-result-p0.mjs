@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { renderMarkerPng } from "./multimodal-marker-png.mjs";
 
 const MODEL = process.env.ZCODE_MODEL?.trim() || "glm-x-preview-f";
-const BASE_URL = (process.env.ZCODE_BASE_URL?.trim() || "https://open.bigmodel.cn/api/anthropic")
+const BASE_URL = (process.env.ZCODE_BASE_URL?.trim() || "")
   .replace(/\/+$/u, "")
   .replace(/\/v1$/u, "");
 const ENDPOINT = `${BASE_URL}/v1/messages`;

@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import type { HttpClientPort, HttpClientRunOptions, TraceContext } from "@zcode/contracts";
 
-const DEFAULT_ZCODE_OAUTH_BASE_URL = "https://zcode.z.ai/api/v1";
+// [leo] 官方账号服务指向本机死端口（下面的登录入口也已在出网前失败）。
+const DEFAULT_ZCODE_OAUTH_BASE_URL = "http://127.0.0.1:9/api/v1";
 export type CliOAuthProviderId = "zai" | "bigmodel";
 const POLL_TOKEN_BYTES = 32;
 const JSON_CONTENT_TYPE = "application/json";
@@ -73,7 +74,7 @@ export class CliOAuthError extends Error {
 }
 
 export function createCliOAuthClient(options: CliOAuthClientOptions): CliOAuthClient {
-  // [leo] 不再支持 Z.ai / BigModel 平台账号登录（zcode.z.ai/api/v1/oauth/cli/*）。
+  // [leo] 不再支持 Z.ai / BigModel 平台账号登录（官方 /api/v1/oauth/cli/*）。
   // 在发出任何请求、打开任何浏览器页面之前直接失败；模型请用自己的 API Key 配置。
   throw new CliOAuthError(
     "Z.ai / BigModel account login is disabled in LeoBot. Configure a provider API key instead.",

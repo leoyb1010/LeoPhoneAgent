@@ -150,39 +150,7 @@ describe("ZCode Built-in Provider Config 完整性", () => {
         });
       }
 
-      // 加速卡换端点不换模型，能力事实必须与同 Family Coding Plan 站点逐项一致；
-      // 否则同一会话里普通轮与加速轮的 system 折叠、WebSearch 暴露和附件合法性会互相打脸。
-      for (const [highspeedProviderId, planProviderId] of [
-        ["account:zai-highspeed-card", "account:zai-individual-coding-plan"],
-        ["account:bigmodel-highspeed-card", "account:bigmodel-individual-coding-plan"],
-      ] as const) {
-        const resolveAt = (providerId: string, modelId: string) =>
-          snapshot.models.resolve({
-            providerId,
-            modelId,
-            apiType: "anthropic-messages",
-            baseUrl: snapshot.providers.get(providerId)?.api?.baseUrl,
-          });
-        expect(snapshot.providers.get(highspeedProviderId)?.builtinModelIds).toEqual(
-          snapshot.providers.get(planProviderId)?.builtinModelIds,
-        );
-        for (const modelId of snapshot.providers.get(highspeedProviderId)?.builtinModelIds ?? []) {
-          const highspeedModel = resolveAt(highspeedProviderId, modelId);
-          const planModel = resolveAt(planProviderId, modelId);
-          expect(
-            highspeedModel.properties?.inputFormat.toJSON(),
-            `${highspeedProviderId}/${modelId} 输入形态偏离 Coding Plan 站点`,
-          ).toEqual(planModel.properties?.inputFormat.toJSON());
-          expect(
-            highspeedModel.properties?.supportsMidConversationSystem,
-            `${highspeedProviderId}/${modelId} MCS 偏离 Coding Plan 站点`,
-          ).toBe(planModel.properties?.supportsMidConversationSystem);
-          expect(
-            highspeedModel.properties?.supportsNativeWebSearch,
-            `${highspeedProviderId}/${modelId} 原生搜索偏离 Coding Plan 站点`,
-          ).toBe(planModel.properties?.supportsNativeWebSearch);
-        }
-      }
+      // [leo] 加速卡（highspeed）Provider 不随包（zcode-builtin.json 已删除），这里不再对照。
 
       const resolve = (modelId: string) =>
         snapshot.models.resolve({
@@ -225,7 +193,7 @@ describe("ZCode Built-in Provider Config 完整性", () => {
         templateId: "zai-api",
         modelId: "glm-5.3-flash",
         apiType: "openai-chat-completions",
-        baseUrl: "https://api.z.ai/api/anthropic",
+        baseUrl: "https://api.zai.invalid/api/anthropic",
       });
       expect(glm53FlashChat.properties?.inputFormat.supportsPdf).toBe(true);
     } finally {
@@ -540,8 +508,7 @@ describe("ZCode Built-in Provider Config 完整性", () => {
         "account:bigmodel-start-plan",
         "account:zai-offpeak-idle-plan",
         "account:bigmodel-offpeak-idle-plan",
-        "account:zai-highspeed-card",
-        "account:bigmodel-highspeed-card",
+        // [leo] 加速卡 Provider 已删除
       ]);
       expect(snapshot.providerTemplates?.keys()).toEqual([
         "zai-api",
@@ -1001,8 +968,7 @@ describe("ZCode Built-in Provider Config 完整性", () => {
         "account:bigmodel-start-plan",
         "account:zai-offpeak-idle-plan",
         "account:bigmodel-offpeak-idle-plan",
-        "account:zai-highspeed-card",
-        "account:bigmodel-highspeed-card",
+        // [leo] 加速卡 Provider 已删除
         "template:zai-api",
         "template:zai-standard-api",
         "template:bigmodel-api",
@@ -1115,7 +1081,7 @@ function builtinRuleFamily(rule: {
     provider.includes("bigmodel") ||
     provider.includes("offpeak-idle-plan") ||
     baseUrl.includes("z\\.ai") ||
-    baseUrl.includes("bigmodel\\.cn")
+    baseUrl.includes("bigmodel\\.invalid")
   ) {
     return "glm";
   }

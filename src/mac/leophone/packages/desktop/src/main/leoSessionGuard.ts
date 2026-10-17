@@ -6,7 +6,7 @@ import { blockBeforeRequest } from "./observeBeforeRequest.js";
 /** 拦截覆盖的协议：http / https / ws / wss（含 WebSocket 升级请求）。 */
 export const LEO_SESSION_GUARD_URLS = ["http://*/*", "https://*/*", "ws://*/*", "wss://*/*"];
 
-/** 请求是否指向官方服务（z.ai / bigmodel / zhipu / chatglm / codegeex / zcode.ai）。 */
+/** 请求是否指向官方服务（判定规则见 @zcode/shared/leo-network-guard）。 */
 export function isLeoBlockedRequest(details: Pick<OnBeforeRequestListenerDetails, "url">): boolean {
   try {
     return isLeoBlockedHost(new URL(details.url).hostname);

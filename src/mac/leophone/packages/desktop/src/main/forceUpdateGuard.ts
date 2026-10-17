@@ -217,7 +217,7 @@ export function formatForceUpdateDialogText(
 export async function maybeBlockStartupForForceUpdate(
   options: ForceUpdateGuardOptions,
 ): Promise<ForceUpdateGuardResult> {
-  // [leo] 这是官方服务端的远程强制升级开关:它拿我们的版本号去问 zcode.z.ai,
+  // [leo] 这是官方服务端的远程强制升级开关:它拿我们的版本号去问官方服务端,
   // 服务端觉得版本太旧就锁住主窗口、把人引去装官方客户端。LeoPhoneAgent 是
   // 独立产品,版本线、更新源都是我们自己的,这个开关对我们只有坏处 —— 直接放行。
   // 更新只走 autoUpdater + LEO_UPDATE_MANIFEST_URL。

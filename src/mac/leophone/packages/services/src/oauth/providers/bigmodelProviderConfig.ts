@@ -15,8 +15,9 @@ export const BIGMODEL_OAUTH_PROVIDER_CONFIG: Omit<OAuthProviderRuntimeConfig, "a
   displayName: "BigModel",
   enabled: true,
   order: 0,
-  authorizeUrl: "https://bigmodel.cn/login",
-  tokenUrl: "https://zcode.z.ai/api/v1/oauth/token",
+  // [leo] 官方账号 OAuth 不接入（runtimeConfig 的 provider 列表为空），地址指向本机死端口。
+  authorizeUrl: "http://127.0.0.1:9/login",
+  tokenUrl: "http://127.0.0.1:9/api/v1/oauth/token",
   userinfoUrl: buildBigModelApiUrl({ ZCODE_ENV: "production" }, BIGMODEL_USERINFO_PATH),
   appId: "zcode",
   redirectUri: "zcode://oauth/callback",

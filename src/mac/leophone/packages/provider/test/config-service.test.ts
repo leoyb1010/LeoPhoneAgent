@@ -815,6 +815,8 @@ describe("ProviderConfigService", () => {
     expect(personal.current.providers.get("new-provider-3")?.toJSON()).toEqual({
       group: "standard-personal",
       access: { type: "api-key" },
+      // [leo] 无模板新建供应商显式写 api.type = openai-chat-completions（docs/specs/leo-model-discovery.md）
+      api: { type: "openai-chat-completions" },
       personalModelIds: [],
       modelOrder: [],
     });

@@ -468,7 +468,7 @@ function pickHttpsUrl(...candidates: Array<string | undefined>): string | undefi
     (candidate): candidate is string =>
       typeof candidate === "string" &&
       candidate.startsWith("https://") &&
-      // [leo] 官方站点（z.ai / bigmodel.cn / zhipuai.cn）的链接不展示。
+      // [leo] 官方站点的链接不展示（判定见 lib/trustedImageUrl.ts）。
       !isOfficialServiceUrl(candidate),
   );
 }

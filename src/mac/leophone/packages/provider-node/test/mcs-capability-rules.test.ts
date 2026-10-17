@@ -63,8 +63,8 @@ describe("MCS published capability boundaries", () => {
       );
     }
     for (const baseUrl of [
-      "https://zcode.z.ai/api/v1/off-peak/anthropic/",
-      "https://zcode.z.ai/api/v1/zcode-plan/anthropic/",
+      "https://zcode.zai.invalid/api/v1/off-peak/anthropic/",
+      "https://zcode.zai.invalid/api/v1/zcode-plan/anthropic/",
     ]) {
       expect(
         rules.resolve({
@@ -76,7 +76,7 @@ describe("MCS published capability boundaries", () => {
       ).toBe(true);
       for (const negative of [
         `${baseUrl}extra`,
-        baseUrl.replace("zcode.z.ai", "zcode.z.ai.evil.example"),
+        baseUrl.replace("zcode.zai.invalid", "zcode.z.ai.evil.example"),
       ]) {
         expect(
           rules.resolve({
