@@ -9,7 +9,9 @@
 import dns from "node:dns";
 import { syncBuiltinESMExports } from "node:module";
 
-const BLOCKED_HOST = /(^|\.)(z\.ai|bigmodel\.cn|zhipuai\.cn|zhipu\.ai|chatglm\.cn|zcode\.ai)\.?$/i;
+// 3.15.1 起上游远程 CDN 新增国内域 cdn.codegeex.cn(智谱),一并拦截。
+const BLOCKED_HOST =
+  /(^|\.)(z\.ai|bigmodel\.cn|zhipuai\.cn|zhipu\.ai|chatglm\.cn|codegeex\.cn|zcode\.ai)\.?$/i;
 
 export function isLeoBlockedHost(hostname: string | null | undefined): boolean {
   return BLOCKED_HOST.test(String(hostname ?? "").trim());

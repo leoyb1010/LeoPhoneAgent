@@ -36,11 +36,8 @@ export function startResourceManagerNetwork(
   buffer.start(captureId);
   nodeCapture.setCaptureId(captureId);
   // 只订阅 App 拥有的 session；内置浏览器/录屏的独立 session 不进入采集。
-  const sessions = [
-    session.defaultSession,
-    session.fromPartition("persist:zcode-coding-plan"),
-    session.fromPartition("persist:zcode-rewards"),
-  ];
+  // [leo] 官网购买页 / 奖励页 webview 不接线,不再为它们创建分区。
+  const sessions = [session.defaultSession];
   for (const appSession of sessions) {
     disposers.push(
       subscribeBeforeRequest(

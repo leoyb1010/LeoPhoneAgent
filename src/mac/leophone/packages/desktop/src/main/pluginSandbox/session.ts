@@ -1,5 +1,6 @@
 import { webContents, type Session } from "electron";
 import type { PluginSandboxRegistryPort } from "./contract.js";
+import { isLeoBlockedRequest } from "../leoSessionGuard.js";
 import type { PluginSandboxPermissionGate } from "./permissionGate.js";
 import { createGenUiVendorResources, resolveGenUiVendorRedirect } from "./genUiVendor.js";
 import {
@@ -39,8 +40,19 @@ export function preparePluginSandboxSession(input: {
   );
   // 稳定 origin 不能授予跨实例资源访问；以 Electron 提供的实际 guest 与路径登记交叉验证。
   session.webRequest.onBeforeRequest(
-    { urls: ["zcode-sandbox://*/*", "https://*/*"] },
+    // [leo] 加上 http / ws / wss:沙箱分区(persist:plugin-sandbox-v1-*)只有这一个监听,
+    // 官方服务兜底必须写在这里,否则插件页面能直连官方域名。
+    { urls: ["zcode-sandbox://*/*", "https://*/*", "http://*/*", "ws://*/*", "wss://*/*"] },
     (details, callback) => {
+      // [leo] 官方服务一律取消;其余非 https / zcode-sandbox 请求保持上游原行为(不拦截)。
+      if (isLeoBlockedRequest(details)) {
+        callback({ cancel: true });
+        return;
+      }
+      if (!/^(https|zcode-sandbox):/u.test(details.url)) {
+        callback({});
+        return;
+      }
       const target = parsePluginSandboxUrl(details.url);
       const guest =
         details.webContentsId === undefined ? undefined : webContents.fromId(details.webContentsId);
