@@ -4321,3 +4321,17 @@ export const zcodeStoragePathReadySchema = z
 
 // 桌面本地 TTFT 的严格事实合同；检查点不能替代实际内容帧。
 export { localTtftFactsSchema } from "../localTtft.js";
+// 群来源由可信 Host 注入，V4 命令与持久化输入使用相同运行时校验。
+// [leo] 机器人功能已删除，这些协议 schema 随包保留（CLI 共用），桌面端不会产生群来源。
+export {
+  botIdentitySchema,
+  botTopicInputMessageSchema,
+  botGroupInputSourceSchema,
+  type BotGroupInputSource,
+} from "../bots.js";
+export {
+  botTopicContextSchema,
+  botTopicMessageSchema,
+  type BotTopicHistoryBatch,
+  type BotTopicMessage,
+} from "../bots.js";

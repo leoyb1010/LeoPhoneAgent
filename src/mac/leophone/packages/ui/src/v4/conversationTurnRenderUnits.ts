@@ -25,14 +25,12 @@ import {
   resolveConversationTurnWorkDurationMs,
   resolveConversationTurnWorkStatus,
 } from "@/v4/conversationTurnWorkSegments.js";
-import { markHighspeedOutputFooterUnits } from "@/highspeed/highspeedOutputFooter.js";
 
 export type { AssistantWorkRow, ConversationTurnFlowItem } from "@/v4/conversationTurnFlowItems.js";
 export type {
   ConversationTurnWorkSegment,
   ConversationTurnWorkStatus,
 } from "@/v4/conversationTurnWorkSegments.js";
-export { resolveNextHighspeedExpiryMs } from "@/highspeed/highspeedConversationRows.js";
 
 interface DraftTurnRenderUnit {
   key: string;
@@ -439,5 +437,5 @@ export function buildConversationTurnRenderUnits(
   const normalizedUnits = keptUnits.map((unit, index) =>
     normalizeRenderUnitPosition(unit, index, keptUnits.length, options),
   );
-  return markHighspeedOutputFooterUnits(normalizedUnits, options.nowMs ?? Date.now());
+  return normalizedUnits;
 }

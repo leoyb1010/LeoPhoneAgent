@@ -1,4 +1,5 @@
 import { conversationQuotesSchema } from "../conversationSelection.js";
+import { botGroupInputSourceSchema } from "../bots.js";
 // ConversationRow：行类型自包含。
 // 三条结构性规则：row 自包含（渲染任一行不需看别的行）；
 // 结构变化换整行（row.upserted），文本增长用 append（row.delta）；turn 是 row 上的标签不是容器。
@@ -114,6 +115,7 @@ export const userInputRowSchema = z.object({
   ...rowBaseFields,
   kind: z.literal("userInput"),
   inputOrigin: z.enum(["desktop", "mobile"]).optional(),
+  botGroupSource: botGroupInputSourceSchema.optional(),
   conversationQuotes: conversationQuotesSchema.optional(),
   text: z.string(),
   // text 从此下标起是引擎附加文本（dwf ask 尾注 /

@@ -336,6 +336,8 @@ export * from "./conversationSelection.js";
 export * from "./attachment-source.js";
 
 export * from "./channel-mention.js";
+// [leo] 机器人的协议类型随包保留（CLI 共用的 v4 字段）；机器人服务与界面已删除。
+export * from "./bots.js";
 
 export {
   requestSecuritySensitiveHeaders,

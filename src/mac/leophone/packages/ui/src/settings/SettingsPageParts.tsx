@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { BundledTheme } from "shiki";
+import { cn } from "@/components/lib/utils.js";
 import { CodeBlock } from "@/components/ai-elements/code-block.js";
 import { CODE_PREVIEW_THEME_OPTIONS, SETTINGS_PREVIEW_CODE } from "@/lib/codePreviewPreferences.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";

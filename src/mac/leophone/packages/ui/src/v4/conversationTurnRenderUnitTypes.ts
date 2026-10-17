@@ -14,9 +14,8 @@ import type {
   ConversationTurnWorkSegment,
   ConversationTurnWorkStatus,
 } from "@/v4/conversationTurnWorkSegments.js";
-import type { HighspeedOutputFooterMark } from "@/highspeed/highspeedOutputFooter.js";
 
-export interface ConversationTurnRenderUnit extends HighspeedOutputFooterMark {
+export interface ConversationTurnRenderUnit {
   key: string;
   turnId: string;
   header?: TurnHeaderRow;

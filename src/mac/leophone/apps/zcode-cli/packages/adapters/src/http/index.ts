@@ -25,8 +25,10 @@ import {
   defaultPublicDnsLookup,
   type DnsLookup,
 } from "./public-egress-policy.js";
-import { readIncomingResponse } from "../network/incoming-response.js";
 import { readResponseBody, type ResponseLike } from "./response-body.js";
+// [leo] 公网 DNS transport 的响应走 raw-response：空响应状态 + gzip/deflate/br 解压（上游的
+// readIncomingResponse 不解压，WebFetch 会拿到压缩字节）。见 core/test/leo/webfetch-response.test.ts。
+import { rawHttpResponse } from "./raw-response.js";
 
 const TRACE_HEADER = "x-zcode-trace-id";
 const DEFAULT_TIMEOUT_MS = 180_000;
@@ -204,7 +206,7 @@ function fetchHttpResponse(
         // 不包成 `Response`：它表示不了 999 之类的状态码，而这里只要状态、头与正文（与原生 fetch 一样原样带回）。
         // 回调里抛出的东西没人接得住、会打死整个 agent 进程，所以一律转成这一次请求的 reject。
         try {
-          resolve(readIncomingResponse(message));
+          resolve(rawHttpResponse(message, request.method ?? "GET", signal));
         } catch (error) {
           message.destroy();
           reject(error);
