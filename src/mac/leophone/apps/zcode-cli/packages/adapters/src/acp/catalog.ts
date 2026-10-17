@@ -21,6 +21,9 @@ function launchEnv(env: NodeJS.ProcessEnv): Record<string, string> {
     if (typeof value === "string") out[key] = value;
   }
   out.PATH = acpSearchPath(env).join(delimiter);
+  // 开发自测钩子：LeoBot 跑在隔离 HOME 时，只让外部 agent 子进程回到真实 HOME（它的登录态在那里）。
+  const agentHome = env.LEO_ACP_AGENT_HOME?.trim();
+  if (agentHome) out.HOME = agentHome;
   return out;
 }
 
@@ -40,8 +43,9 @@ export function resolveAcpLaunch(
       return {
         command: nodePath,
         args: [entry],
-        // 用本机的 Claude Code（登录态、设置都是用户自己的）。
-        env: { ...base, CLAUDE_CODE_EXECUTABLE: status.cliPath! },
+        // 用本机的 Claude Code（登录态、设置都是用户自己的）。nodePath 在桌面端是 Electron 本体，
+        // 必须以纯 Node 模式运行，否则会被当成 GUI 进程起 GPU 后崩溃（对真正的 node 无影响）。
+        env: { ...base, CLAUDE_CODE_EXECUTABLE: status.cliPath!, ELECTRON_RUN_AS_NODE: "1" },
       };
     }
     case "codex": {

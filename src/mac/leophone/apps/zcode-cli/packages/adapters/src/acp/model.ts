@@ -22,7 +22,7 @@ import {
   type ModelResult,
 } from "@zcode/contracts";
 import { ACP_PROVIDER_ID, ACP_TOOL_NAME, acpAgentInfo, type AcpAgentId } from "@zcode/shared/acp";
-import { resolveAcpLaunch, type AcpEnvironment } from "./catalog.js";
+import { detectAcpAgent, resolveAcpLaunch, type AcpEnvironment } from "./catalog.js";
 import { spawnAcpAgent, type AcpAgentConnection } from "./process.js";
 import { AcpSessionHost } from "./session.js";
 
@@ -96,7 +96,13 @@ export class AcpSessionManager {
             onStderr: (chunk) =>
               this.#logger?.warn("ACP agent stderr", { agentId, chunk: chunk.slice(0, 2000) }),
           })
-        : Promise.reject(new Error(`${acpAgentInfo(agentId).name} 在这台 Mac 上不可用`));
+        : Promise.reject(
+            new Error(
+              `${acpAgentInfo(agentId).name} 在这台 Mac 上不可用：${
+                detectAcpAgent(agentId, this.#environment).unavailableReason ?? "无法启动"
+              }`,
+            ),
+          );
       entry = { host, connection };
       this.#entries.set(leoSessionId, entry);
       connection.then(

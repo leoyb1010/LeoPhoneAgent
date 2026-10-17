@@ -1,5 +1,8 @@
 import { localRuntimeNetworkCapture } from "#src/zcode-agent/localRuntimeNetworkCapture.js";
-import { resolveStagedClaudeAgentAcpEntry } from "#src/acp-agent/acpRegistry.js";
+import {
+  hostClaudeAgentAcpEntry,
+  resolveStagedClaudeAgentAcpEntry,
+} from "#src/acp-agent/acpRegistry.js";
 import { resolveZCodeAgentSpawnCwd } from "#src/zcode-agent/zcodeAgentSpawnCwd.js";
 import type { ZCodeAgentStorageStartupSnapshot } from "#src/zcode-agent/zcodeAgent.js";
 /* eslint-disable max-lines -- zcodeAgentProcessManager 集中维护 agent 子进程启动、复用、超时回收和 runtime identity，拆分会扩大进程生命周期状态同步面 */
@@ -449,6 +452,13 @@ function withClaudeAgentAcpEntry(bundlePath: string): Record<string, string> {
   return entry ? { LEO_CLAUDE_AGENT_ACP_ENTRY: entry } : {};
 }
 
+/** [leo][WP-21] 开发态 CLI 跑的是 CJS 包，自己解析不到 node_modules 里的适配器：统一由宿主告诉它。 */
+function withAcpAdapterEnv(command: ZCodeAgentCommand | null): ZCodeAgentCommand | null {
+  if (!command || command.env?.LEO_CLAUDE_AGENT_ACP_ENTRY) return command;
+  const entry = hostClaudeAgentAcpEntry();
+  return entry ? { ...command, env: { ...command.env, LEO_CLAUDE_AGENT_ACP_ENTRY: entry } } : command;
+}
+
 export function resolveDefaultZCodeAgentCommand(
   context: ZCodeAgentCommandResolverContext,
 ): ZCodeAgentCommand | null {
@@ -469,11 +479,13 @@ export function resolveDefaultZCodeAgentCommand(
   const bundled =
     resolveBundledWorkspaceZCodeAgentCommand(context) ??
     resolveElectronRuntimeZCodeAgentCommand(context);
-  return applyPresentationSurfaceToCommand(
-    bundled
-      ? { ...bundled, supportsStorageStartup: true }
-      : resolveDeployedZCodeAgentBinaryCommand(context),
-    context.presentationSurface,
+  return withAcpAdapterEnv(
+    applyPresentationSurfaceToCommand(
+      bundled
+        ? { ...bundled, supportsStorageStartup: true }
+        : resolveDeployedZCodeAgentBinaryCommand(context),
+      context.presentationSurface,
+    ),
   );
 }
 
