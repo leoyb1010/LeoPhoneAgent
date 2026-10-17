@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setDataBaseDir } from "../src/paths.js";
 import { readModelTrajectory } from "../src/zcode-agent/modelTrajectory.js";
 
+// [leo] model-io 落盘根目录是 ~/.leophoneagent/cli/{debug,rollout}（不是 ~/.zcode/cli）。
 const tempDirs: string[] = [];
 
 function makeTempDir(prefix: string): string {
@@ -27,7 +28,7 @@ afterEach(() => {
 describe("readModelTrajectory", () => {
   it("保留字符串 TOOL 消息顶层的 toolCallId 和 toolName", async () => {
     const dataBaseDir = makeTempDir("zcode-model-trajectory-tool-result-");
-    const debugDir = join(dataBaseDir, ".zcode", "cli", "debug");
+    const debugDir = join(dataBaseDir, ".leophoneagent", "cli", "debug");
     mkdirSync(debugDir, { recursive: true });
     setDataBaseDir(dataBaseDir);
 
@@ -67,7 +68,7 @@ describe("readModelTrajectory", () => {
 
   it("保留字符串 TOOL 消息顶层的错误状态", async () => {
     const dataBaseDir = makeTempDir("zcode-model-trajectory-tool-error-");
-    const debugDir = join(dataBaseDir, ".zcode", "cli", "debug");
+    const debugDir = join(dataBaseDir, ".leophoneagent", "cli", "debug");
     mkdirSync(debugDir, { recursive: true });
     setDataBaseDir(dataBaseDir);
 
@@ -111,7 +112,7 @@ describe("readModelTrajectory", () => {
 
   it("还原同一 session 文件里的 model-io delta 请求消息", async () => {
     const dataBaseDir = makeTempDir("zcode-model-trajectory-");
-    const debugDir = join(dataBaseDir, ".zcode", "cli", "debug");
+    const debugDir = join(dataBaseDir, ".leophoneagent", "cli", "debug");
     mkdirSync(debugDir, { recursive: true });
     setDataBaseDir(dataBaseDir);
 
@@ -169,7 +170,7 @@ describe("readModelTrajectory", () => {
 
   it("从 tail baseline 继续还原后续 model-io delta 请求消息", async () => {
     const dataBaseDir = makeTempDir("zcode-model-trajectory-tail-");
-    const debugDir = join(dataBaseDir, ".zcode", "cli", "rollout");
+    const debugDir = join(dataBaseDir, ".leophoneagent", "cli", "rollout");
     mkdirSync(debugDir, { recursive: true });
     setDataBaseDir(dataBaseDir);
 
@@ -230,7 +231,7 @@ describe("readModelTrajectory", () => {
 
   it("异步读取超过旧体积阈值的长 session model-io 文件", async () => {
     const dataBaseDir = makeTempDir("zcode-model-trajectory-large-");
-    const debugDir = join(dataBaseDir, ".zcode", "cli", "debug");
+    const debugDir = join(dataBaseDir, ".leophoneagent", "cli", "debug");
     mkdirSync(debugDir, { recursive: true });
     setDataBaseDir(dataBaseDir);
 
@@ -269,7 +270,7 @@ describe("readModelTrajectory", () => {
 
   it("只扫描超大文件尾部并丢弃起点处的残行", async () => {
     const dataBaseDir = makeTempDir("zcode-model-trajectory-bounded-tail-");
-    const debugDir = join(dataBaseDir, ".zcode", "cli", "debug");
+    const debugDir = join(dataBaseDir, ".leophoneagent", "cli", "debug");
     mkdirSync(debugDir, { recursive: true });
     setDataBaseDir(dataBaseDir);
 
@@ -297,7 +298,7 @@ describe("readModelTrajectory", () => {
 
   it("从 querySource 和旧标题 prompt 标记调用来源", async () => {
     const dataBaseDir = makeTempDir("zcode-model-trajectory-source-");
-    const debugDir = join(dataBaseDir, ".zcode", "cli", "debug");
+    const debugDir = join(dataBaseDir, ".leophoneagent", "cli", "debug");
     mkdirSync(debugDir, { recursive: true });
     setDataBaseDir(dataBaseDir);
 

@@ -15,59 +15,25 @@ const context = {
   screenResolution: "100x100",
 };
 
-it("adds every public header and re-reads authorization on retry and logout", async () => {
+// [leo] ZCODE_TELEMETRY_REPORT_ENDPOINT 恒为 ""：即使注入了 endpoint origin，上报也不出网，
+// 因而不会构造公共头、也不会读取 JWT。上游断言请求头/重试重读鉴权的用例改为断言不触网。
+it("[leo] never sends telemetry or reads authorization, even with an injected endpoint", async () => {
   const homeDir = await mkdtemp(join(tmpdir(), "telemetry-headers-"));
   homes.push(homeDir);
-  let token: string | null = "Bearer first";
-  const loadAuthorization = vi.fn(async () => token);
-  const fetchImpl = vi
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(new Response(null, { status: 503 }))
-    .mockResolvedValue(new Response(null, { status: 204 }));
+  const loadAuthorization = vi.fn(async () => "Bearer first");
+  const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
   const core = createTelemetryCore({
     homeDir,
     fetchImpl,
     loadAuthorization,
     loadUserId: async () => "user-1",
-    appVersion: "1.2.3",
-    platform: "darwin",
-    arch: "arm64",
-    osVersion: "24.0",
-    releaseChannel: "test",
     randomUUID: () => "device-1",
-    resolveZCodeEndpointOrigin: () => "https://zcode.z.ai",
-    sleep: async () => {
-      token = "Bearer second";
-    },
+    resolveZCodeEndpointOrigin: () => "https://zcode.example.test",
   });
   await core.reportAppLaunch(context);
-  expect(fetchImpl.mock.calls[0]?.[1]?.redirect).toBe("error");
-  expect(fetchImpl.mock.calls[0]?.[1]?.headers).toEqual({
-    "Content-Type": "application/json",
-    "User-Agent": "ZCode/1.2.3",
-    "HTTP-Referer": "https://zcode.z.ai",
-    "X-Title": "Z Code@electron",
-    "X-ZCode-App-Version": "1.2.3",
-    "X-Platform": "darwin-arm64",
-    "X-Release-Channel": "test",
-    "X-Client-Language": "zh-CN",
-    "X-Client-Timezone": "Asia/Shanghai",
-    "X-Os-Category": "macos",
-    "X-Os-Version": "24.0",
-    "X-Device-Mid": "device-1",
-    Authorization: "Bearer first",
-  });
-  expect(new Headers(fetchImpl.mock.calls[1]?.[1]?.headers).get("Authorization")).toBe(
-    "Bearer second",
-  );
-  expect(fetchImpl.mock.calls[1]?.[1]?.body).toBe(fetchImpl.mock.calls[0]?.[1]?.body);
-  token = null;
   await core.reportAppLaunch(context);
-  expect(new Headers(fetchImpl.mock.calls[2]?.[1]?.headers).has("Authorization")).toBe(false);
-  expect(loadAuthorization).toHaveBeenCalledWith("user-1");
-  loadAuthorization.mockRejectedValueOnce(new Error("secret credential error"));
-  await core.reportAppLaunch(context);
-  expect(new Headers(fetchImpl.mock.calls[3]?.[1]?.headers).has("Authorization")).toBe(false);
+  expect(fetchImpl).not.toHaveBeenCalled();
+  expect(loadAuthorization).not.toHaveBeenCalled();
 });
 
 it.each(["zai", "bigmodel"])(

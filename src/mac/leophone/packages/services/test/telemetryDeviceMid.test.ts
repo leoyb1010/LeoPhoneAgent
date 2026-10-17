@@ -17,7 +17,8 @@ describe("ensureTelemetryDeviceMid", () => {
     setDataBaseDir(dataBaseDir);
     return {
       dataBaseDir,
-      stateFile: join(dataBaseDir, ".zcode", "v2", "telemetry-state.json"),
+      // [leo] 数据根目录是 ~/.leophoneagent（不是 ~/.zcode）。
+      stateFile: join(dataBaseDir, ".leophoneagent", "v2", "telemetry-state.json"),
     };
   }
 
@@ -77,9 +78,8 @@ describe("ensureTelemetryDeviceMid", () => {
 
     expect(first).toBe(second);
     expect(JSON.parse(readFileSync(stateFile, "utf-8")).deviceMid).toBe(first);
-    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)) as {
-      device_mid?: string;
-    };
-    expect(body.device_mid).toBe(first);
+    // [leo] 上报端点恒为空：telemetry 不出网，只确认上报路径没有改写已确保的 deviceMid。
+    expect(fetchImpl).not.toHaveBeenCalled();
+    await expect(ensureTelemetryDeviceMid({ homeDir: dataBaseDir })).resolves.toBe(first);
   });
 });

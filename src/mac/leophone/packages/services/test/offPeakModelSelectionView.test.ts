@@ -51,7 +51,8 @@ describe("buildOffPeakModelSelectionView", () => {
           access: { type: "zhipu-account", accountType: "zai", mode: "off-peak" },
           api: {
             type: "anthropic-messages",
-            baseUrl: "https://zcode.z.ai/api/v1/off-peak/anthropic",
+            // [leo] builtin provider config 的官方主机改成 .invalid，不连 Z.ai。
+            baseUrl: "https://zcode.zai.invalid/api/v1/off-peak/anthropic",
           },
         },
       });

@@ -138,9 +138,10 @@ describe("OffPeakTaskService 编排", () => {
     return result.task;
   };
 
+  // [leo] 任务索引库在 ~/.leophoneagent/v2/tasks-index.sqlite（不是 ~/.zcode/v2）。
   const makeLegacySelectionRow = async (offPeakTaskId: string) => {
     repo.close();
-    const db = new DatabaseSync(join(tempDir!, ".zcode", "v2", "tasks-index.sqlite"));
+    const db = new DatabaseSync(join(tempDir!, ".leophoneagent", "v2", "tasks-index.sqlite"));
     db.prepare(
       `UPDATE off_peak_tasks
        SET model = 'GLM-5.2', thought_level = 'high', model_selection = NULL
@@ -169,7 +170,7 @@ describe("OffPeakTaskService 编排", () => {
   it("list：损坏配置不影响内容，也不从旧字段恢复执行选择", async () => {
     const created = await createTask();
     repo.close();
-    const db = new DatabaseSync(join(tempDir!, ".zcode", "v2", "tasks-index.sqlite"));
+    const db = new DatabaseSync(join(tempDir!, ".leophoneagent", "v2", "tasks-index.sqlite"));
     db.prepare(
       `UPDATE off_peak_tasks
        SET model = 'GLM-5.2', thought_level = 'high', model_selection = '{invalid'
