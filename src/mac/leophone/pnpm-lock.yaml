@@ -512,12 +512,6 @@ importers:
         specifier: ^24.0.0
         version: 24.12.2
 
-  apps/zcode-cli/packages/swift-bridge:
-    dependencies:
-      '@zcode/shared-types':
-        specifier: workspace:*
-        version: link:../shared-types
-
   apps/zcode-cli/packages/telemetry:
     dependencies:
       '@opentelemetry/api':

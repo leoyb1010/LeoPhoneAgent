@@ -293,12 +293,6 @@ importers:
 
   packages/shared-types: {}
 
-  packages/swift-bridge:
-    dependencies:
-      '@zcode/shared-types':
-        specifier: workspace:*
-        version: link:../shared-types
-
   packages/tui:
     dependencies:
       '@mbears/opentui-core':
