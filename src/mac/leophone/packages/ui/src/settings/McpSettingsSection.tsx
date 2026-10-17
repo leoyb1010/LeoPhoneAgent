@@ -62,6 +62,7 @@ import {
 import { McpServersImportDialog } from "@/settings/ExternalAgentImportDialog.js";
 import { RemoteSyncDialogs, shouldShowRemoteSyncActions } from "@/settings/RemoteSyncActions.js";
 import { useMcpStore } from "@/store/mcpStore.js";
+import { LeoImcpCard } from "@/leo/LeoImcpCard.js";
 import { usePluginManagementStore } from "@/store/pluginManagementStore.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
 import { useBaseWorkspaceServices, useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
@@ -1242,6 +1243,22 @@ export function McpSettingsSection({
     void requestMcpServerStatusList();
   }
 
+  // [leo] WP-25「推荐：iMCP」一键登记:与表单保存同一条写入路径,固定用户级。
+  async function handleRegisterImcp(name: string, config: { command: string }) {
+    if (!activeWorkspacePath) {
+      return;
+    }
+    const loaded = await ensureLoadedForWorkspace(
+      activeWorkspacePath,
+      services.mcpSyncService,
+      activeWorkspaceIdentity,
+    );
+    if (!loaded) {
+      return;
+    }
+    await addScopedMcpServer(DEFAULT_MCP_SOURCE, name, config, undefined);
+  }
+
   async function handleSave(form: FormState, prev?: ZCodeMcpServer) {
     if (!activeWorkspacePath) {
       return;
@@ -1452,6 +1469,12 @@ export function McpSettingsSection({
           label={intl.formatMessage({
             id: "settings.plugin.mcp.searchEmpty",
           })}
+        />
+      ) : null}
+      {scopeFilter === "user" && mcpProjectionReady ? (
+        <LeoImcpCard
+          registeredNames={new Set(scopedServers.map((server) => server.name))}
+          onRegister={handleRegisterImcp}
         />
       ) : null}
       <div

@@ -4,6 +4,7 @@ import "./leoEarlyEnv.js";
 import { installLeoSessionGuard } from "./leoSessionGuard.js";
 import { registerLeoLinkIpc } from "./leoLinkIpc.js";
 import { isLeoQuickPanelWindow, startLeoQuickEntry } from "./leo/quickEntry.js";
+import { registerImcpIpc } from "./leo/imcp.js";
 import { createLocalTtftExporter } from "./localTtftExporter.js";
 /* eslint-disable max-lines */
 import "./desktopEarlyDataBaseDirBootstrap.js";
@@ -1833,6 +1834,7 @@ app.whenReady().then(async () => {
   installLeoSessionGuard();
   // [leo-link] 「连接手机」面板经主进程转发到本机 Leo 接口。
   registerLeoLinkIpc();
+  registerImcpIpc();
   markMainLaunchAppReady();
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {
     isPathAuthorized: localMediaPreviewPathRegistry.isAuthorized,

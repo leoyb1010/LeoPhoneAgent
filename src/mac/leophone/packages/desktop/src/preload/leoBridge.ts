@@ -30,3 +30,10 @@ if (process.platform === "darwin") {
     },
   });
 }
+
+/** [leo] 设置 → MCP 的「推荐：iMCP」卡片:查本机有没有装 iMCP(主进程只读文件系统,不替用户安装)。 */
+if (process.platform === "darwin") {
+  contextBridge.exposeInMainWorld("leoImcp", {
+    status: () => ipcRenderer.invoke("leo:imcp:status"),
+  });
+}
