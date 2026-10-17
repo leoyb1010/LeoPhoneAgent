@@ -187,7 +187,7 @@ struct StorageManagementView: View {
                                     Label("Locked conversation", systemImage: "lock.fill")
                                         .lineLimit(1)
                                 } else {
-                                    Text(session.title ?? String(localized: "Untitled"))
+                                    Text(session.title ?? AppLocalized("Untitled"))
                                         .lineLimit(1)
                                 }
                                 Spacer()
@@ -277,7 +277,7 @@ struct SessionStorageDetailView: View {
                 if currentMinisSize > 0, lockStore.isVisuallyLocked(session.id) {
                     Button {
                         Task {
-                            if await BiometricAuth.authenticate(reason: String(localized: "Unlock to browse this conversation's files")) {
+                            if await BiometricAuth.authenticate(reason: AppLocalized("Unlock to browse this conversation's files")) {
                                 lockStore.noteUnlock(session.id)
                             }
                         }
@@ -331,8 +331,8 @@ struct SessionStorageDetailView: View {
             }
         }
         .navigationTitle(lockStore.isVisuallyLocked(session.id)
-                         ? String(localized: "Locked conversation")
-                         : session.title ?? String(localized: "Session"))
+                         ? AppLocalized("Locked conversation")
+                         : session.title ?? AppLocalized("Session"))
         .navigationBarTitleDisplayMode(.inline)
         .alert("Clear Session Files?", isPresented: $showClearConfirmation) {
             Button("Clear \(formatter.string(fromByteCount: totalFileSize))", role: .destructive) {

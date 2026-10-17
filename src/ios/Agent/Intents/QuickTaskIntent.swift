@@ -15,11 +15,11 @@ enum QuickTaskIntentError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .cancelledBeforeStart:
-            return String(localized: "Stopped before the task started.")
+            return AppLocalized("Stopped before the task started.")
         case .notStarted:
-            return String(localized: "任务未启动，请检查模型、附件或会话状态。")
+            return AppLocalized("任务未启动，请检查模型、附件或会话状态。")
         case .sessionBusy:
-            return String(localized: "会话仍在处理，请稍后重试。")
+            return AppLocalized("会话仍在处理，请稍后重试。")
         }
     }
 }

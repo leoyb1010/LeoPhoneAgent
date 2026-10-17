@@ -98,9 +98,9 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
-                Picker(String(localized: "Return Key"), selection: $returnKeyBehavior) {
-                    Text(String(localized: "Newline")).tag(0)
-                    Text(String(localized: "Send")).tag(1)
+                Picker(AppLocalized("Return Key"), selection: $returnKeyBehavior) {
+                    Text(AppLocalized("Newline")).tag(0)
+                    Text(AppLocalized("Send")).tag(1)
                 }
                 .pickerStyle(.segmented)
             } header: {
@@ -110,9 +110,9 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
-                Picker(String(localized: "Copy Format"), selection: $copyFormat) {
-                    Text(String(localized: "Plain Text")).tag("plain")
-                    Text(String(localized: "Markdown")).tag("markdown")
+                Picker(AppLocalized("Copy Format"), selection: $copyFormat) {
+                    Text(AppLocalized("Plain Text")).tag("plain")
+                    Text(AppLocalized("Markdown")).tag("markdown")
                 }
                 .pickerStyle(.segmented)
             } header: {
@@ -122,7 +122,7 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
-                Toggle(String(localized: "Long Reply Summary"), isOn: $tldrEnabled)
+                Toggle(AppLocalized("Long Reply Summary"), isOn: $tldrEnabled)
             } header: {
                 Text("Long Reply Summary")
             } footer: {
@@ -138,7 +138,7 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
-                Toggle(String(localized: "Keep Screen Awake"), isOn: $keepScreenAwakeDuringTasks)
+                Toggle(AppLocalized("Keep Screen Awake"), isOn: $keepScreenAwakeDuringTasks)
             } header: {
                 Text("Keep Screen Awake")
             } footer: {
@@ -154,7 +154,7 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
-                Toggle(String(localized: "Auto-Focus Input After Reply"), isOn: $autoFocusAfterReply)
+                Toggle(AppLocalized("Auto-Focus Input After Reply"), isOn: $autoFocusAfterReply)
             } header: {
                 Text("Auto-Focus Input After Reply")
             } footer: {
@@ -170,7 +170,7 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
-                Toggle(String(localized: "Tool Preview Window"), isOn: $toolPreviewEnabled)
+                Toggle(AppLocalized("Tool Preview Window"), isOn: $toolPreviewEnabled)
             } header: {
                 Text("Tool Status Bar")
             } footer: {
@@ -182,7 +182,7 @@ struct AppearanceSettingsView: View {
             // collapsed. Only affects the streaming auto-expand; manual taps
             // always work either way.
             Section {
-                Toggle(String(localized: "Expand Thinking While Streaming"), isOn: $autoExpandThinking)
+                Toggle(AppLocalized("Expand Thinking While Streaming"), isOn: $autoExpandThinking)
             } header: {
                 Text("Deep Thinking")
             } footer: {
@@ -246,7 +246,7 @@ struct AppearanceSettingsView: View {
                                     .foregroundStyle(.secondary)
                                     .frame(width: 28)
                             }
-                            Text(lang.id.isEmpty ? String(localized: "System") : lang.name)
+                            Text(lang.id.isEmpty ? AppLocalized("System") : lang.name)
                                 .foregroundStyle(.primary)
                             Spacer()
                             if appLanguage == lang.id {

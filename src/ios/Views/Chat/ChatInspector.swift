@@ -96,9 +96,9 @@ struct ChatInspectorPanel: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .run: String(localized: "工具时间线")
-            case .usage: String(localized: "用量")
-            case .memory: String(localized: "记忆命中")
+            case .run: AppLocalized("工具时间线")
+            case .usage: AppLocalized("用量")
+            case .memory: AppLocalized("记忆命中")
             }
         }
     }
@@ -302,12 +302,12 @@ private extension AssistantBlockKind {
 enum LeoDuration {
     static func short(_ seconds: TimeInterval) -> String {
         guard seconds > 0 else { return "—" }
-        if seconds < 10 { return String(format: String(localized: "%.1f 秒"), seconds) }
+        if seconds < 10 { return String(format: AppLocalized("%.1f 秒"), seconds) }
         let total = Int(seconds.rounded())
-        if total < 60 { return String(localized: "\(total) 秒") }
+        if total < 60 { return AppLocalized("\(total) 秒") }
         let minutes = total / 60
         let rest = total % 60
-        return rest == 0 ? String(localized: "\(minutes) 分") : String(localized: "\(minutes) 分 \(rest) 秒")
+        return rest == 0 ? AppLocalized("\(minutes) 分") : AppLocalized("\(minutes) 分 \(rest) 秒")
     }
 }
 

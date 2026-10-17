@@ -24,7 +24,7 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
     /// `createdAt` is a fixed epoch so the value is stable/deterministic.
     static let providerInstance = ProviderInstance(
         id: builtinProviderId,
-        label: String(localized: "System", comment: "Built-in Apple speech engine provider name"),
+        label: AppLocalized("System", comment: "Built-in Apple speech engine provider name"),
         providerType: .openAI,          // arbitrary — never used for auth/routing; System routes by id
         credentialType: .apiKey,        // arbitrary — System needs no credential
         isEnabled: true,

@@ -34,7 +34,7 @@ struct BackupProgressReporter {
         lastEmit = now
         let perItem = now.timeIntervalSince(started) / Double(done)
         let remaining = perItem * Double(max(0, total - done))
-        emit(String(localized: "\(done)/\(total) \(noun) · 约剩 \(Self.durationText(remaining))"), true)
+        emit(AppLocalized("\(done)/\(total) \(noun) · 约剩 \(Self.durationText(remaining))"), true)
     }
 
     func finish(_ label: String, detail: String) {
@@ -42,8 +42,8 @@ struct BackupProgressReporter {
     }
 
     static func durationText(_ seconds: TimeInterval) -> String {
-        if seconds < 1 { return String(localized: "不到 1 秒") }
-        if seconds < 60 { return String(localized: "\(Int(seconds.rounded())) 秒") }
-        return String(localized: "\(Int((seconds / 60).rounded())) 分钟")
+        if seconds < 1 { return AppLocalized("不到 1 秒") }
+        if seconds < 60 { return AppLocalized("\(Int(seconds.rounded())) 秒") }
+        return AppLocalized("\(Int((seconds / 60).rounded())) 分钟")
     }
 }

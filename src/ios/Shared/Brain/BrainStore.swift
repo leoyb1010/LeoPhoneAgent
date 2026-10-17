@@ -140,7 +140,7 @@ final class BrainStore: ObservableObject {
         var err: NSError?
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else { return false }
         let ok = (try? await ctx.evaluatePolicy(.deviceOwnerAuthentication,
-                                                localizedReason: String(localized: "查看资料库里的私密资料"))) ?? false
+                                                localizedReason: AppLocalized("查看资料库里的私密资料"))) ?? false
         if ok { unlock.recordUnlock(at: Date()) }
         return ok
     }

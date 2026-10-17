@@ -590,7 +590,7 @@ final class AgentLiveActivityManager {
         let prev = (lastPushedState as? AgentActivityAttributes.ContentState)?
             .sessions.first { $0.sessionId == sessionId }
         var snap = prev ?? LiveSessionSnapshot(
-            sessionId: sessionId, title: String(localized: "Agent Task"),
+            sessionId: sessionId, title: AppLocalized("Agent Task"),
             toolIcon: "checkmark.circle.fill", toolStatus: "", loopIteration: 0
         )
         Self.applyOutcome(to: &snap, lastMessage: Self.collapseLastMessage(lastMessage))
@@ -804,14 +804,14 @@ final class AgentLiveActivityManager {
                 redacted.lastMessage = privacyCompletedStatus
             case .attention:
                 redacted.toolIcon = "exclamationmark.circle.fill"
-                redacted.lastMessage = String(localized: "Needs attention")
+                redacted.lastMessage = AppLocalized("Needs attention")
             case .paused:
                 // A run parked until the app returns says so (no content in it).
                 redacted.toolIcon = pausedIcon
                 redacted.lastMessage = privacyPausedStatus
             case .stopped:
                 redacted.toolIcon = "stop.circle.fill"
-                redacted.lastMessage = String(localized: "Stopped")
+                redacted.lastMessage = AppLocalized("Stopped")
             }
         } else if snap.needsApproval {
             // A run waiting for your OK says so even in Privacy Mode (no command text).
@@ -820,7 +820,7 @@ final class AgentLiveActivityManager {
             redacted.lastMessage = ""
         } else if snap.needsAnswer {
             // [T-ask-user] Content-free: the question itself never reaches the lock screen here.
-            redacted.toolStatus = String(localized: "等你回答")
+            redacted.toolStatus = AppLocalized("等你回答")
             redacted.toolIcon = LiveSessionSnapshot.questionIcon
             redacted.lastMessage = ""
         } else if snap.toolIcon == pausedIcon {
@@ -845,12 +845,12 @@ final class AgentLiveActivityManager {
 
     /// Neutral placeholders used by Privacy Mode. Localized so the redacted
     /// strings still match the user's language.
-    private static var privacyTaskTitle: String { String(localized: "Agent Task") }
-    private static var privacyWorkingStatus: String { String(localized: "Working…") }
-    private static var privacyCompletedStatus: String { String(localized: "Completed") }
-    private static var privacyApprovalStatus: String { String(localized: "等你批准") }
+    private static var privacyTaskTitle: String { AppLocalized("Agent Task") }
+    private static var privacyWorkingStatus: String { AppLocalized("Working…") }
+    private static var privacyCompletedStatus: String { AppLocalized("Completed") }
+    private static var privacyApprovalStatus: String { AppLocalized("等你批准") }
     /// Content-free already: the text and glyph of a run parked until the app returns.
-    private static var privacyPausedStatus: String { String(localized: "已暂停，回到 App 继续") }
+    private static var privacyPausedStatus: String { AppLocalized("已暂停，回到 App 继续") }
     private static let pausedIcon = "pause.circle.fill"
 
     /// [T-la-stale] A running card whose app stopped updating it (killed,
@@ -892,7 +892,7 @@ final class AgentLiveActivityManager {
         // 只会挡住正在看的内容(用户 2026-09-26 反馈)。离开 App 后还没批的,由审批通知接着提醒。
         let alert = newlyWaiting.isEmpty || UIApplication.shared.leoIsInUse ? nil : AlertConfiguration(
             title: LocalizedStringResource("需要你批准"),
-            body: LocalizedStringResource(stringLiteral: state.privacyMode ? String(localized: "有一步在等你批准") : newlyWaiting[0].title),
+            body: LocalizedStringResource(stringLiteral: state.privacyMode ? AppLocalized("有一步在等你批准") : newlyWaiting[0].title),
             sound: .default)
         logger.info("[LiveActivity][push] #\(count) active=\(state.activeSessionCount) sessions=\(state.sessions.count) alert=\(alert != nil)")
         enqueueUpdate {
@@ -1113,18 +1113,18 @@ final class AgentLiveActivityManager {
         switch snap.outcome {
         case .stopped:
             snap.toolIcon = "stop.circle.fill"
-            snap.toolStatus = String(localized: "Stopped")
+            snap.toolStatus = AppLocalized("Stopped")
         case .paused:
             // [T-la-false-failure] Not a verdict: the run carries on once the app
             // is back. Pause glyph, not the orange exclamation.
             snap.toolIcon = "pause.circle.fill"
-            snap.toolStatus = String(localized: "已暂停，回到 App 继续")
+            snap.toolStatus = AppLocalized("已暂停，回到 App 继续")
         case .attention:
             snap.toolIcon = "exclamationmark.circle.fill"
-            snap.toolStatus = String(localized: "Needs attention")
+            snap.toolStatus = AppLocalized("Needs attention")
         case .done:
             snap.toolIcon = "checkmark.circle.fill"
-            snap.toolStatus = String(localized: "Completed")
+            snap.toolStatus = AppLocalized("Completed")
         }
     }
 

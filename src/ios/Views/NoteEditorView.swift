@@ -163,7 +163,7 @@ struct NoteEditorView: View {
             lastPersistedBody = disk
             loaded = true
             if hasUnsavedChanges {
-                if recovery != nil { saveError = String(localized: "已恢复未保存的编辑，将再次尝试保存。") }
+                if recovery != nil { saveError = AppLocalized("已恢复未保存的编辑，将再次尝试保存。") }
                 scheduleSave()
             }
         }
@@ -239,7 +239,7 @@ struct NoteEditorView: View {
     @discardableResult
     private func checkpointRecovery() -> Bool {
         let saved = NoteBodyStore.saveRecoveryDraft(recoverySnapshot, noteID: item.id)
-        if !saved { saveError = String(localized: "恢复草稿未能保存。请保持此页，检查存储空间后重试。") }
+        if !saved { saveError = AppLocalized("恢复草稿未能保存。请保持此页，检查存储空间后重试。") }
         return saved
     }
 
@@ -259,12 +259,12 @@ struct NoteEditorView: View {
         guard result == .saved else {
             if result == .metadataFailed {
                 saveError = recoverySaved
-                    ? String(localized: "正文已保存，但标题和笔记信息未能保存。编辑已保留在恢复草稿中，请重试。")
-                    : String(localized: "正文已保存，但笔记信息和恢复草稿未能保存。请保持此页，检查存储空间后重试。")
+                    ? AppLocalized("正文已保存，但标题和笔记信息未能保存。编辑已保留在恢复草稿中，请重试。")
+                    : AppLocalized("正文已保存，但笔记信息和恢复草稿未能保存。请保持此页，检查存储空间后重试。")
             } else {
                 saveError = recoverySaved
-                    ? String(localized: "正文未能保存，编辑已保留在本机恢复草稿中。请重试保存。")
-                    : String(localized: "正文和恢复草稿都未能保存。请保持此页，检查存储空间后重试。")
+                    ? AppLocalized("正文未能保存，编辑已保留在本机恢复草稿中。请重试保存。")
+                    : AppLocalized("正文和恢复草稿都未能保存。请保持此页，检查存储空间后重试。")
             }
             return false
         }

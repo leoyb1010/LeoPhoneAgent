@@ -35,5 +35,6 @@ echo "Checking actual CloudKit transport with SDK: $SDK"
   "$SYNC/CloudKitInboundJournal.swift" \
   "$ROOT/src/ios/Shared/DeviceIdentity.swift" \
   "$ROOT/scripts/CloudKitTransportSDKStubs.swift" \
+  "$ROOT/src/ios/Shared/AppLocalization.swift" \
   "$SYNC/ICloudSharedZoneTransport.swift"
 echo "CloudKit transport SDK typecheck passed (not runtime or full-app validation)."

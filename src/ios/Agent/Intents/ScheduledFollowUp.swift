@@ -176,7 +176,7 @@ struct ScheduledFollowUp: Codable, Hashable {
 
     /// What the reminder notification and the delivered message say.
     var deliveredPrompt: String {
-        String(localized: "⏰ 定时跟进「\(title)」(Agent 之前自己安排的,不是你新发的消息)") + "\n\n" + prompt
+        AppLocalized("⏰ 定时跟进「\(title)」(Agent 之前自己安排的,不是你新发的消息)") + "\n\n" + prompt
     }
 }
 
@@ -202,16 +202,16 @@ extension ScheduledTask {
             guard let fireAt = followUp.fireAt else { return .expired(reason: "missing time") }
             if fireAt > now { return .waiting }
             return now.timeIntervalSince(fireAt) < ScheduledFollowUp.staleAfter
-                ? .due : .expired(reason: String(localized: "错过超过 26 小时,已跳过"))
+                ? .due : .expired(reason: AppLocalized("错过超过 26 小时,已跳过"))
         case .afterCompletion:
             if now.timeIntervalSince(followUp.createdAt) >= ScheduledFollowUp.staleAfter {
-                return .expired(reason: String(localized: "等待本轮结束超过 26 小时,已跳过"))
+                return .expired(reason: AppLocalized("等待本轮结束超过 26 小时,已跳过"))
             }
             guard let runId = followUp.afterRunId else { return .due }
             switch runEnd(runId) {
             case .running: return .waiting
             case .completed: return .due
-            case .notCompleted: return .expired(reason: String(localized: "那一轮没有正常完成,已跳过"))
+            case .notCompleted: return .expired(reason: AppLocalized("那一轮没有正常完成,已跳过"))
             }
         }
     }
@@ -255,7 +255,7 @@ extension ScheduledTask {
     /// 「下次应运行 · 还有 2 小时」. Honest: it runs when the app is awake, not to the second.
     func countdownText(now: Date, calendar: Calendar = .current) -> String? {
         if let followUp, isPendingFollowUp, followUp.trigger == .afterCompletion {
-            return String(localized: "本轮结束后运行")
+            return AppLocalized("本轮结束后运行")
         }
         guard let target = countdownTarget(now: now, calendar: calendar) else { return nil }
         return Self.countdownText(until: target, now: now)
@@ -263,12 +263,12 @@ extension ScheduledTask {
 
     static func countdownText(until target: Date, now: Date) -> String {
         let seconds = target.timeIntervalSince(now)
-        if seconds <= 0 { return String(localized: "已到期 · App 被唤醒时运行") }
+        if seconds <= 0 { return AppLocalized("已到期 · App 被唤醒时运行") }
         let minutes = max(1, Int((seconds / 60).rounded(.up)))
-        if minutes < 60 { return String(localized: "下次应运行 · 还有 \(minutes) 分钟") }
+        if minutes < 60 { return AppLocalized("下次应运行 · 还有 \(minutes) 分钟") }
         let hours = minutes / 60
-        if hours < 48 { return String(localized: "下次应运行 · 还有 \(hours) 小时") }
-        return String(localized: "下次应运行 · 还有 \(hours / 24) 天")
+        if hours < 48 { return AppLocalized("下次应运行 · 还有 \(hours) 小时") }
+        return AppLocalized("下次应运行 · 还有 \(hours / 24) 天")
     }
 
     /// Display name for settings rows / intents.

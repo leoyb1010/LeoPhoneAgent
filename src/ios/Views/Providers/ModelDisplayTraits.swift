@@ -48,13 +48,13 @@ extension ModelEntry {
             let permitsNetwork = isOnlineASR || (isAutomaticASR && SystemSpeechPreferences.autoNetworkAllowed)
             let subtitle: String
             if isOnlineASR {
-                subtitle = String(localized: "允许联网；优先使用已安装的本机资源")
+                subtitle = AppLocalized("允许联网；优先使用已安装的本机资源")
             } else if isAutomaticASR {
-                subtitle = permitsNetwork ? String(localized: "优先本机；允许联网回退") : String(localized: "自动模式仅本机；联网回退已关闭")
+                subtitle = permitsNetwork ? AppLocalized("优先本机；允许联网回退") : AppLocalized("自动模式仅本机；联网回退已关闭")
             } else if isASR {
-                subtitle = String(localized: "仅本机；需要可用的语言资源")
+                subtitle = AppLocalized("仅本机；需要可用的语言资源")
             } else {
-                subtitle = String(localized: "iOS built-in, works offline", comment: "Built-in engine subtitle")
+                subtitle = AppLocalized("iOS built-in, works offline", comment: "Built-in engine subtitle")
             }
             return ModelDisplayTraits(
                 isOffline: !permitsNetwork,

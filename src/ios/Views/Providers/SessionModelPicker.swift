@@ -68,8 +68,8 @@ struct SessionModelPicker: View {
             mode: .single,
             groupScope: .all,
             headerNote: onPick != nil
-                ? String(localized: "Choose for your next chat. Your saved default stays the same.")
-                : String(localized: "Changes this conversation only. Manage groups to change defaults for new chats."),
+                ? AppLocalized("Choose for your next chat. Your saved default stays the same.")
+                : AppLocalized("Changes this conversation only. Manage groups to change defaults for new chats."),
             dismissOnSelect: false,
             currentEntryId: { [self] in currentEntryId },
             currentGroupId: { [self] in currentGroupId },
@@ -87,17 +87,17 @@ struct SessionModelPicker: View {
             Button("OK", role: .cancel) { selectionFailure = nil }
         } message: { Text(selectionFailure ?? "") }
         .alert(
-            String(localized: "This model may not work as an Agent"),
+            AppLocalized("This model may not work as an Agent"),
             isPresented: Binding(
                 get: { pendingNonTextOutput != nil },
                 set: { if !$0 { pendingNonTextOutput = nil } }
             ),
             presenting: pendingNonTextOutput
         ) { selection in
-            Button(String(localized: "Choose another model"), role: .cancel) {
+            Button(AppLocalized("Choose another model"), role: .cancel) {
                 pendingNonTextOutput = nil
             }
-            Button(String(localized: "Use anyway")) {
+            Button(AppLocalized("Use anyway")) {
                 let entry = selection.entry
                 let group = selection.group
                 let isGroupBind = selection.isGroupBind
@@ -109,7 +109,7 @@ struct SessionModelPicker: View {
                 }
             }
         } message: { selection in
-            Text(String(localized: "\(selection.entry.model.displayName) outputs \(selection.modalityLabel) and usually can't drive an Agent task. Pick a text-output model for the session, or add this model to Available Models in Agent Loop so the agent can call it via minis-model-use when it needs to generate \(selection.modalityLabel)."))
+            Text(AppLocalized("\(selection.entry.model.displayName) outputs \(selection.modalityLabel) and usually can't drive an Agent task. Pick a text-output model for the session, or add this model to Available Models in Agent Loop so the agent can call it via minis-model-use when it needs to generate \(selection.modalityLabel)."))
         }
     }
 
@@ -117,9 +117,9 @@ struct SessionModelPicker: View {
 
     private func nonTextOutputLabel(for model: LLMModel) -> String? {
         guard let modality = model.modalityOverride else { return nil }
-        if modality.contains(.imageOutput) { return String(localized: "image") }
-        if modality.contains(.audioOutput) { return String(localized: "audio") }
-        if modality.contains(.videoOutput) { return String(localized: "video") }
+        if modality.contains(.imageOutput) { return AppLocalized("image") }
+        if modality.contains(.audioOutput) { return AppLocalized("audio") }
+        if modality.contains(.videoOutput) { return AppLocalized("video") }
         return nil
     }
 
@@ -157,7 +157,7 @@ struct SessionModelPicker: View {
         if let onPick {
             guard let live = store.group(for: group.id),
                   ModelGroupRouter.resolve(group: live, sessionId: "draft", store: store, verbose: false) != nil else {
-                selectionFailure = String(localized: "This group has no available models. Check its members and provider sign-in.")
+                selectionFailure = AppLocalized("This group has no available models. Check its members and provider sign-in.")
                 return
             }
             onPick("group:\(live.id)")
@@ -169,11 +169,11 @@ struct SessionModelPicker: View {
         Task {
             defer { isCommitting = false }
             guard let sid = await resolveSessionId() else {
-                selectionFailure = String(localized: "The conversation is not ready. Try again.")
+                selectionFailure = AppLocalized("The conversation is not ready. Try again.")
                 return
             }
             guard await ModelSwitcher.apply(choiceId: "group:\(group.id)", sessionId: sid, store: store) else {
-                selectionFailure = String(localized: "This group has no available models. Check its members and provider sign-in.")
+                selectionFailure = AppLocalized("This group has no available models. Check its members and provider sign-in.")
                 return
             }
             dismiss()
@@ -183,7 +183,7 @@ struct SessionModelPicker: View {
     private func bindToEntry(_ entry: ModelEntry, inGroup group: ModelGroup? = nil) {
         if let onPick {
             guard let live = store.entry(for: entry.id), ModelSwitcher.isAvailable(live, store: store) else {
-                selectionFailure = String(localized: "This model is no longer available. Choose another model.")
+                selectionFailure = AppLocalized("This model is no longer available. Choose another model.")
                 return
             }
             // The draft contract stores a choice, not a session or default.
@@ -196,7 +196,7 @@ struct SessionModelPicker: View {
         Task {
             defer { isCommitting = false }
             guard let sid = await resolveSessionId() else {
-                selectionFailure = String(localized: "The conversation is not ready. Try again.")
+                selectionFailure = AppLocalized("The conversation is not ready. Try again.")
                 return
             }
             if let group {
@@ -207,7 +207,7 @@ struct SessionModelPicker: View {
                       let liveEntry = store.entry(for: entry.id), !liveEntry.isHidden,
                       let provider = store.instance(for: liveEntry.providerInstanceId),
                       provider.isEnabled, provider.hasAnyCredential, !provider.isRetiredSignIn else {
-                    selectionFailure = String(localized: "This model is no longer available. Choose another model.")
+                    selectionFailure = AppLocalized("This model is no longer available. Choose another model.")
                     return
                 }
                 let existing = store.binding(for: sid)
@@ -215,7 +215,7 @@ struct SessionModelPicker: View {
                     sessionId: sid,
                     primarySource: .group(groupId: liveGroup.id, resolvedEntryId: liveEntry.id),
                     subModelSource: existing?.subModelSource), for: sid) else {
-                    selectionFailure = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
+                    selectionFailure = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.")
                     return
                 }
                 NotificationCenter.default.post(name: .sessionModelBindingChanged, object: nil,
@@ -223,7 +223,7 @@ struct SessionModelPicker: View {
                 ModelSwitcher.remember("group:\(liveGroup.id)")
                 await ChatStore.shared.updateSessionModelId(sid, modelId: liveEntry.model.id)
             } else if !(await ModelSwitcher.apply(choiceId: entry.id, sessionId: sid, store: store)) {
-                selectionFailure = String(localized: "This model is no longer available. Choose another model.")
+                selectionFailure = AppLocalized("This model is no longer available. Choose another model.")
                 return
             }
             dismiss()
@@ -265,7 +265,7 @@ struct SessionModelDisplay {
             }
             return entryId
         case .group(let groupId, _):
-            return store.group(for: groupId)?.name ?? String(localized: "Group")
+            return store.group(for: groupId)?.name ?? AppLocalized("Group")
         }
     }
 
@@ -374,6 +374,6 @@ struct SessionModelDisplay {
            let group = store.group(for: groupId) {
             return group.name
         }
-        return String(localized: "No model selected")
+        return AppLocalized("No model selected")
     }
 }

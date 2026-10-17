@@ -201,7 +201,7 @@ struct SendPromptIntent: AppIntent {
         let promptPreview = String(prompt.prefix(50))
         ShortcutNotification.post(
             id: "shortcut-start-\(sid)",
-            title: String(localized: "LeoBot 任务已开始"),
+            title: AppLocalized("LeoBot 任务已开始"),
             body: "\(modelName): \(promptPreview)\(prompt.count > 50 ? "…" : "")",
             sessionId: sid
         )
@@ -210,7 +210,7 @@ struct SendPromptIntent: AppIntent {
             let settle = {
                 await Self.settleRun(
                     sessionId: sid, runId: runId, pendingId: pendingId,
-                    title: String(localized: "LeoBot 任务"), notificationId: "shortcut-done")
+                    title: AppLocalized("LeoBot 任务"), notificationId: "shortcut-done")
             }
             // [T-ios27-long-running] iOS 27 lets a waiting shortcut outlive the
             // ~30 s intent budget instead of being cut off mid-answer.
@@ -246,7 +246,7 @@ struct SendPromptIntent: AppIntent {
         Task { @MainActor in
             _ = await Self.settleRun(
                 sessionId: sid, runId: runId, pendingId: pendingId,
-                title: String(localized: "LeoBot 任务"), notificationId: "shortcut-done")
+                title: AppLocalized("LeoBot 任务"), notificationId: "shortcut-done")
         }
 
         let result = SendPromptResult(
@@ -397,7 +397,7 @@ enum ShortcutNotification {
         // a Face-ID-locked session never shows its reply on the lock screen either.
         let privacy = UserDefaults.standard.object(forKey: "liveActivityPrivacyMode") as? Bool ?? true
         let hidden = privacy || SessionLockStore.isHiddenFromSystemSurfaces(sessionId)
-        content.body = hidden ? String(localized: "打开 App 查看") : body
+        content.body = hidden ? AppLocalized("打开 App 查看") : body
         content.sound = .default
         content.categoryIdentifier = categoryId
         content.userInfo = ["sessionId": sessionId]
@@ -639,9 +639,9 @@ enum NotificationQuickReply {
     static let actionId = "LEO_QUICK_REPLY"
 
     static var action: UNTextInputNotificationAction {
-        UNTextInputNotificationAction(identifier: actionId, title: String(localized: "回复"), options: [.authenticationRequired],
-                                      textInputButtonTitle: String(localized: "发送"),
-                                      textInputPlaceholder: String(localized: "接着说…"))
+        UNTextInputNotificationAction(identifier: actionId, title: AppLocalized("回复"), options: [.authenticationRequired],
+                                      textInputButtonTitle: AppLocalized("发送"),
+                                      textInputPlaceholder: AppLocalized("接着说…"))
     }
 
     /// Returns true when it handled the response (and owns `completion`).
@@ -657,8 +657,8 @@ enum NotificationQuickReply {
             // Unlocking iPhone is not unlocking a Face ID–locked conversation.
             if SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId) {
                 let note = UNMutableNotificationContent()
-                note.title = String(localized: "没有发送")
-                note.body = String(localized: "这个会话已用 Face ID 锁定，请在 App 里打开后回复。")
+                note.title = AppLocalized("没有发送")
+                note.body = AppLocalized("这个会话已用 Face ID 锁定，请在 App 里打开后回复。")
                 try? await UNUserNotificationCenter.current().add(
                     UNNotificationRequest(identifier: "quick-reply-locked-\(sessionId)", content: note, trigger: nil))
                 return

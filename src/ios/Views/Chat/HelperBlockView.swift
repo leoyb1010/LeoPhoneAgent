@@ -90,10 +90,10 @@ struct HelperBlockInfo {
 
     var controlLabel: String {
         switch action {
-        case .status: return String(localized: "查看子代理状态")
-        case .steer: return String(localized: "引导子代理")
-        case .cancel: return String(localized: "停止子代理")
-        case .resume: return String(localized: "恢复子代理")
+        case .status: return AppLocalized("查看子代理状态")
+        case .steer: return AppLocalized("引导子代理")
+        case .cancel: return AppLocalized("停止子代理")
+        case .resume: return AppLocalized("恢复子代理")
         case .delegate: return title
         }
     }
@@ -212,7 +212,7 @@ struct HelperBlockView: View {
     }
 
     private func badgeText(_ info: HelperBlockInfo) -> String {
-        let base = String(localized: "子代理")
+        let base = AppLocalized("子代理")
         guard let agent = info.agent, !agent.isEmpty, agent != SubAgentDefinition.builtInName else { return base }
         return "\(base) · \(agent)"
     }
@@ -220,15 +220,15 @@ struct HelperBlockView: View {
     @ViewBuilder
     private func statusPill(_ info: HelperBlockInfo, live: AgentJob?, state: SubAgentRecovery.BlockState) -> some View {
         let (text, color): (String, Color) = {
-            if case .interrupted = state { return (String(localized: "已中断"), .orange) }
-            if case .neverStarted = state { return (String(localized: "未开始"), .orange) }
-            if live != nil { return (String(localized: "运行中"), ChatColors.accent) }
+            if case .interrupted = state { return (AppLocalized("已中断"), .orange) }
+            if case .neverStarted = state { return (AppLocalized("未开始"), .orange) }
+            if live != nil { return (AppLocalized("运行中"), ChatColors.accent) }
             switch info.status {
-            case "completed": return (String(localized: "已完成"), .green)
-            case "queued": return (String(localized: "排队中"), .secondary)
-            case "running", "starting": return (String(localized: "运行中"), ChatColors.accent)
-            case "rejected": return (String(localized: "被拒绝"), .orange)
-            case "failed": return (info.errorKind ?? String(localized: "失败"), .red)
+            case "completed": return (AppLocalized("已完成"), .green)
+            case "queued": return (AppLocalized("排队中"), .secondary)
+            case "running", "starting": return (AppLocalized("运行中"), ChatColors.accent)
+            case "rejected": return (AppLocalized("被拒绝"), .orange)
+            case "failed": return (info.errorKind ?? AppLocalized("失败"), .red)
             default: return (AgentCallback.localizedStatus(info.status), .secondary)
             }
         }()
@@ -262,7 +262,7 @@ struct HelperBlockView: View {
             Button {
                 AgentJobRegistry.shared.cancelSiblings(ofChild: child, reason: "user stopped from the card")
             } label: {
-                Label(String(localized: "停止"), systemImage: "stop.circle")
+                Label(AppLocalized("停止"), systemImage: "stop.circle")
                     .font(.system(size: 12, weight: .medium))
             }
             .buttonStyle(.borderless)
@@ -272,7 +272,7 @@ struct HelperBlockView: View {
             Button {
                 Task { await Self.resume(childSessionId: child) }
             } label: {
-                Label(String(localized: "恢复"), systemImage: "play.circle")
+                Label(AppLocalized("恢复"), systemImage: "play.circle")
                     .font(.system(size: 12, weight: .medium))
             }
             .buttonStyle(.borderless)
@@ -288,7 +288,7 @@ struct HelperBlockView: View {
         let (vm, fresh) = ViewModelCache.shared.getOrCreate(for: parent)
         if fresh { await vm.loadSession() }
         if let why = await vm.resumeInterruptedSubAgent(childSessionId: childSessionId) {
-            vm.appendSystemInfo(String(localized: "子代理没能恢复：\(why)"), icon: "exclamationmark.triangle")
+            vm.appendSystemInfo(AppLocalized("子代理没能恢复：\(why)"), icon: "exclamationmark.triangle")
         }
     }
 

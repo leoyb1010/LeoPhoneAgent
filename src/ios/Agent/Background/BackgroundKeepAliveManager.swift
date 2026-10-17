@@ -935,8 +935,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// degrades to just the count, per spec — no extra time tracking is added.
     private static func privacyNotificationBody(isError: Bool, startedAt: Date?) -> String {
         let base = isError
-            ? String(localized: "1 task failed")
-            : String(localized: "1 task completed")
+            ? AppLocalized("1 task failed")
+            : AppLocalized("1 task completed")
         guard let startedAt else { return base }
         let elapsed = Date().timeIntervalSince(startedAt).rounded()
         guard elapsed > 0 else { return base }
@@ -967,15 +967,15 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         // A Face ID–locked session is always reported neutrally.
         let redact = liveActivityPrivacyMode || SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId)
         if redact && interrupted && !isError {
-            content.title = String(localized: "⏸ 任务中断")
-            content.body = String(localized: "回到 App 点「继续」")
+            content.title = AppLocalized("⏸ 任务中断")
+            content.body = AppLocalized("回到 App 点「继续」")
         } else if redact {
             // [T-ios-live-activity-privacy-mode] Neutral report only: no session
             // title, no reply summary. sessionId stays in userInfo below so the
             // tap-to-open jump keeps working, and the badge logic is untouched.
             content.title = isError
-                ? String(localized: "❌ Task failed")
-                : String(localized: "✅ Task completed")
+                ? AppLocalized("❌ Task failed")
+                : AppLocalized("✅ Task completed")
             content.body = Self.privacyNotificationBody(
                 isError: isError,
                 startedAt: AgentLiveActivityManager.shared.taskStartTime
@@ -1631,7 +1631,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         } else if !displayName.isEmpty {
             status = displayName
         } else {
-            status = state == .running ? String(localized: "Working") : ""
+            status = state == .running ? AppLocalized("Working") : ""
         }
 
         let snapshot = AgentWidgetSnapshot(
@@ -1705,19 +1705,19 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             } else if tracker.sessionActivityPhases[sid] == .waitingForPermission {
                 // [T-la-approval] Parked on the permission gate: say so, not "Working…".
                 icon = LiveSessionSnapshot.approvalIcon
-                statusText = String(localized: "等你批准")
+                statusText = AppLocalized("等你批准")
             } else if tracker.sessionActivityPhases[sid] == .waitingForUser,
                       tracker.sessionActivityReasons[sid] == .userQuestion {
                 // [T-ask-user] The model asked a question: say so (never the question text).
                 icon = LiveSessionSnapshot.questionIcon
-                statusText = String(localized: "等你回答")
+                statusText = AppLocalized("等你回答")
             } else if tracker.sessionActivityPhases[sid] == .suspended {
                 // [T-la-honest-outcome] Parked in waitIfBackgroundSuspended: it
                 // carries on by itself once the app is back. Not done, not failed.
                 icon = "pause.circle.fill"
-                statusText = String(localized: "已暂停，回到 App 继续")
+                statusText = AppLocalized("已暂停，回到 App 继续")
             } else if toolName.isEmpty {
-                statusText = String(localized: "Working...")
+                statusText = AppLocalized("Working...")
             } else if toolStatus.isEmpty {
                 statusText = displayName
             } else {
@@ -1726,7 +1726,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             logger.info("[LiveActivity][snapshot] sid=\(sid.prefix(8)) toolName=\(toolName) icon=\(icon) status=\(statusText) titleLength=\(title.count)")
             return LiveSessionSnapshot(
                 sessionId: sid,
-                title: title.isEmpty ? String(localized: "Agent Task") : title,
+                title: title.isEmpty ? AppLocalized("Agent Task") : title,
                 toolIcon: icon,
                 toolStatus: statusText,
                 loopIteration: info?.loopIteration ?? 0

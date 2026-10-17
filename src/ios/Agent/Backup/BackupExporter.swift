@@ -83,7 +83,7 @@ actor BackupExporter {
         let started = Date()
         let backupId = UUID().uuidString
         let selected = BackupCategory.backupable.filter(options.categories.contains)
-        guard !selected.isEmpty else { throw BackupError.stagingFailed(String(localized: "未选择任何类别")) }
+        guard !selected.isEmpty else { throw BackupError.stagingFailed(AppLocalized("未选择任何类别")) }
 
         try fm.createDirectory(at: workRoot, withIntermediateDirectories: true)
         BackupExportJournal.begin(.init(backupId: backupId, startedAt: started,
@@ -112,12 +112,12 @@ actor BackupExporter {
             BackupExportJournal.finish(in: workRoot)
         }
 
-        say(String(localized: "开始备份：\(selected.count) 个类别"), false)
+        say(AppLocalized("开始备份：\(selected.count) 个类别"), false)
 
         var keys: BackupCrypto.Keys?
         var encryption: BackupManifest.Encryption?
         if let passphrase = options.passphrase, !passphrase.isEmpty {
-            say(String(localized: "正在生成加密密钥…"), false)
+            say(AppLocalized("正在生成加密密钥…"), false)
             let kdf = BackupCrypto.currentKDF(salt: BackupCrypto.makeSalt())
             let derived = try BackupCrypto.deriveKeys(passphrase: passphrase, kdf: kdf)
             keys = derived
@@ -140,28 +140,28 @@ actor BackupExporter {
                 stat = try await exportChats(dataDir: dataDir, trees: trees, snapshotAt: options.snapshotAt,
                                              state: &state, say: say)
             case .sharedFiles:
-                say(String(localized: "正在导出共享文件…"), false)
+                say(AppLocalized("正在导出共享文件…"), false)
                 let r = try trees.export(root: source.sharedFilesRoot(), logicalPrefix: "shared",
                                          category: .sharedFiles)
                 state.notDownloaded += r.filesNotDownloaded
                 stat = .init(entries: r.filesIncluded, bytes: r.bytesIncluded, encrypted: encrypted)
             case .skills:
-                say(String(localized: "正在导出技能…"), false)
+                say(AppLocalized("正在导出技能…"), false)
                 let src = source
                 trees.isExcludedDirectory = { src.isSkillExcludedDirectory($0) }
                 stat = try await exportSkills(dataDir: dataDir, trees: trees, state: &state)
                 trees.isExcludedDirectory = { _ in false }
             case .memory:
-                say(String(localized: "正在导出记忆…"), false)
+                say(AppLocalized("正在导出记忆…"), false)
                 stat = try exportMemory(dataDir: dataDir)
             case .providers:
-                say(String(localized: "正在导出服务商…"), false)
+                say(AppLocalized("正在导出服务商…"), false)
                 stat = try await exportProviders(dataDir: dataDir, encrypted: encrypted)
             case .mcpServers:
-                say(String(localized: "正在导出 MCP 服务器…"), false)
+                say(AppLocalized("正在导出 MCP 服务器…"), false)
                 stat = try exportMCPServers(dataDir: dataDir, encrypted: encrypted, state: &state)
             case .environmentVariables:
-                say(String(localized: "正在导出环境变量…"), false)
+                say(AppLocalized("正在导出环境变量…"), false)
                 stat = try await exportEnvironmentVariables(dataDir: dataDir)
             case .voiceCorrections:
                 stat = nil
@@ -203,7 +203,7 @@ actor BackupExporter {
 
         // Seal (if encrypted) and hash every staged member.
         try Task.checkCancellation()
-        say(encrypted ? String(localized: "正在加密并封装…") : String(localized: "正在封装…"), false)
+        say(encrypted ? AppLocalized("正在加密并封装…") : AppLocalized("正在封装…"), false)
         var integrity = blobStore.integrity
         var members: [(url: URL, name: String)] = []
         for (url, rel) in stagedMembers(in: staging) {
@@ -253,7 +253,7 @@ actor BackupExporter {
         let total = (try? fm.attributesOfItem(atPath: finalURL.path)[.size] as? Int64) ?? 0
         let elapsed = Date().timeIntervalSince(started)
         let sizeText = ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
-        say(String(localized: "备份完成：\(sizeText)，用时 \(BackupProgressReporter.durationText(elapsed))"), false)
+        say(AppLocalized("备份完成：\(sizeText)，用时 \(BackupProgressReporter.durationText(elapsed))"), false)
         logger.info("[Backup] export done categories=\(selected.count) bytes=\(total) skipped=\(blobStore.skippedFiles) encrypted=\(encrypted)")
 
         return Summary(packageURL: finalURL, backupId: backupId, totalBytes: total, categories: stats,
@@ -280,9 +280,9 @@ actor BackupExporter {
     private func exportChats(dataDir: URL, trees: BackupFileTreeExporter, snapshotAt: Date,
                              state: inout RunState, say: @escaping Progress) async throws -> BackupManifest.CategoryStat {
         let ids = await source.chatSessionIds()
-        var reporter = BackupProgressReporter(noun: String(localized: "个对话"), total: ids.count,
+        var reporter = BackupProgressReporter(noun: AppLocalized("个对话"), total: ids.count,
                                               emit: { say($0, $1) })
-        reporter.begin(String(localized: "正在导出对话…"))
+        reporter.begin(AppLocalized("正在导出对话…"))
         let sessions = BackupJSONLWriter(directory: dataDir, baseName: "sessions")
         let messages = BackupJSONLWriter(directory: dataDir, baseName: "messages")
         let markers = BackupJSONLWriter(directory: dataDir, baseName: "compact_markers")
@@ -321,8 +321,8 @@ actor BackupExporter {
             state.notDownloaded += r.filesNotDownloaded
         }
         try sessions.close(); try messages.close(); try markers.close()
-        reporter.finish(String(localized: "对话已导出"),
-                        detail: String(localized: "\(sessionCount) 个对话、\(messageCount) 条消息、\(fileCount) 个文件"))
+        reporter.finish(AppLocalized("对话已导出"),
+                        detail: AppLocalized("\(sessionCount) 个对话、\(messageCount) 条消息、\(fileCount) 个文件"))
         return .init(entries: messageCount + fileCount,
                      bytes: sessions.totalBytes + messages.totalBytes + markers.totalBytes + fileBytes,
                      encrypted: false, messages: messageCount, files: fileCount)

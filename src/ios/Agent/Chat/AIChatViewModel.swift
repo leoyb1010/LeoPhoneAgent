@@ -2394,7 +2394,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             let store = ProviderConfigStore.shared
             if sessionId.flatMap({ store.binding(for: $0) }) == nil,
                resolveInitialEntry(store: store) == nil {
-                errorMessage = String(localized: "This model is no longer available. Choose another model.")
+                errorMessage = AppLocalized("This model is no longer available. Choose another model.")
                 return
             }
         }
@@ -2526,7 +2526,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     // Shortcut sessions can't show UI — set inline error
                     logger.info("[Context] Exhausted — shortcut session cannot continue")
                     let errMsg = ChatMessage(role: .assistant, content: "", blocks: [])
-                    errMsg.error = String(localized: "Context full. Start a new session to continue.")
+                    errMsg.error = AppLocalized("Context full. Start a new session to continue.")
                     messages.append(errMsg)
                     return
                 }
@@ -2856,7 +2856,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             }
 
             if case .failed(let msg) = self.kernelStatus {
-                self.errorMessage = String(localized: "本机执行环境不可用：\(msg)")
+                self.errorMessage = AppLocalized("本机执行环境不可用：\(msg)")
                 self.isProcessing = false
                 self.endBackgroundProcessing()
                 return
@@ -3057,7 +3057,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
             if case .failed(let msg) = self.kernelStatus {
-                self.errorMessage = String(localized: "本机执行环境不可用：\(msg)")
+                self.errorMessage = AppLocalized("本机执行环境不可用：\(msg)")
                 self.isProcessing = false
                 self.endBackgroundProcessing()
                 return
@@ -3206,7 +3206,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
             if case .failed(let msg) = self.kernelStatus {
-                self.errorMessage = String(localized: "本机执行环境不可用：\(msg)")
+                self.errorMessage = AppLocalized("本机执行环境不可用：\(msg)")
                 self.isProcessing = false
                 self.endBackgroundProcessing()
                 return
@@ -3514,7 +3514,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
             if case .failed(let msg) = self.kernelStatus {
-                self.errorMessage = String(localized: "本机执行环境不可用：\(msg)")
+                self.errorMessage = AppLocalized("本机执行环境不可用：\(msg)")
                 self.isProcessing = false
                 self.endBackgroundProcessing()
                 return
@@ -4771,7 +4771,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // Resolve provider from ProviderConfigStore
         guard let entry = resolveCurrentEntry() else {
             let errMsg = ChatMessage(role: .assistant, content: "", blocks: [])
-            errMsg.error = String(localized: "No model configured. Add a provider in Settings.")
+            errMsg.error = AppLocalized("No model configured. Add a provider in Settings.")
             messages.append(errMsg)
             return
         }
@@ -5124,7 +5124,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 fallthrough
             case .exhausted:
                 logger.info("[Context] In-loop exhausted — stopping loop with resumable notice (turnCount=\(turnCount))")
-                appendSystemInfo(String(localized: "Context is full and could not be compacted further. Start a new session or clear the chat to continue."), icon: "exclamationmark.triangle")
+                appendSystemInfo(AppLocalized("Context is full and could not be compacted further. Start a new session or clear the chat to continue."), icon: "exclamationmark.triangle")
                 canResume = true
                 hitTurnLimit = false
                 break loopLabel
@@ -5255,7 +5255,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         msgIdx = resynced
                         let trailLines = fallbackReasons.map { "⚠️ \($0.model) (\($0.instance)): \($0.reason)" }
                         let instanceLabel = ProviderConfigStore.shared.instance(for: newEntry.providerInstanceId)?.label ?? newEntry.model.provider
-                        let noticeText = trailLines.joined(separator: "\n") + "\n" + String(localized: "Switched to \(newEntry.model.displayName) (\(instanceLabel))")
+                        let noticeText = trailLines.joined(separator: "\n") + "\n" + AppLocalized("Switched to \(newEntry.model.displayName) (\(instanceLabel))")
                         let infoBlock = AssistantBlock(kind: .info, content: noticeText)
                         messages[msgIdx].blocks.insert(infoBlock, at: 0)
                         fallbackReasons.removeAll()
@@ -5318,7 +5318,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     // empty we report an error (below) instead of a silent stall.
                     guard !didInjectEmptyToolReminderThisRun, lastEffectiveMessageIsToolResult() else {
                         logger.error("🔁STREAM empty response (no content, no stop reason) — treating as transient error")
-                        throw LLMError.transientError(message: String(localized: "服务器返回了空回复（负载过高或上游出错）"))
+                        throw LLMError.transientError(message: AppLocalized("服务器返回了空回复（负载过高或上游出错）"))
                     }
                     didInjectEmptyToolReminderThisRun = true
                     logger.error("🔁STREAM empty after tool result — injecting <system-reminder> and retrying one round")
@@ -5341,7 +5341,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         // transient blip. Surface it clearly instead of silently
                         // looping so the user knows why the chat stopped.
                         logger.error("🔁STREAM still empty after <system-reminder> retry — reporting error")
-                        throw LLMError.providerError(message: String(localized: "模型在工具结果之后没有再回应，提醒过一次也没有。可能负载过高——请重试或换个模型。"))
+                        throw LLMError.providerError(message: AppLocalized("模型在工具结果之后没有再回应，提醒过一次也没有。可能负载过高——请重试或换个模型。"))
                     }
                     // Recovered — proceed with the reminder round's content.
                     streamResult = reminderResult
@@ -5434,7 +5434,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         // failing (e.g. Anthropic overloaded).  Trigger group fallback.
                         if isEmptyResponse(retryResult) {
                             logger.error("🔁STREAM autoRetry also returned empty — triggering group fallback")
-                            throw LLMError.providerError(message: String(localized: "服务器负载过高"))
+                            throw LLMError.providerError(message: AppLocalized("服务器负载过高"))
                         }
                         streamResult = retryResult
                     } catch let retryError as LLMError where retryError.isFallbackable || retryError.isRetryable {
@@ -5681,14 +5681,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     // distinguish the wording so a partial reply reads as truncated
                     // rather than empty.
                     if assistantText.isEmpty {
-                        messages[msgIdx].error = String(localized: "Response ended unexpectedly (no content received)")
+                        messages[msgIdx].error = AppLocalized("Response ended unexpectedly (no content received)")
                     } else {
-                        messages[msgIdx].error = String(localized: "The connection dropped — this reply may be incomplete. Tap Resume to continue.")
+                        messages[msgIdx].error = AppLocalized("The connection dropped — this reply may be incomplete. Tap Resume to continue.")
                     }
                     canResume = true
                 } else if stopReason == .maxTokens {
                     logger.warning("Agent loop ended at max_tokens with no tool calls")
-                    messages[msgIdx].error = String(localized: "Response truncated (max tokens reached)")
+                    messages[msgIdx].error = AppLocalized("Response truncated (max tokens reached)")
                     canResume = true
                 } else if stopReason == .refusal {
                     // [T-ios-fable5-empty-response] Anthropic safety classifier declined the
@@ -5700,7 +5700,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     // identical request just gets declined again, so we surface it directly
                     // and steer the user to switch models rather than looping.
                     logger.warning("Agent loop ended with stop_reason=refusal — model declined the request")
-                    messages[msgIdx].error = String(localized: "The model declined to respond to this request. Try rephrasing, or switch to a different model.")
+                    messages[msgIdx].error = AppLocalized("The model declined to respond to this request. Try rephrasing, or switch to a different model.")
                     canResume = true
                 } else if stopReason == .endTurn && assistantText.isEmpty
                             && (streamResult.reasoningContent ?? "").isEmpty {
@@ -5720,9 +5720,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     let maxCtx = effectiveContextWindow(for: freshModel)
                     let curCtx = estimateContextTokens()
                     if maxCtx > 0 && curCtx > Int(Double(maxCtx) * 0.7) {
-                        messages[msgIdx].error = String(localized: "The model returned an empty response. The conversation context may be too large — try compacting or starting a new session.")
+                        messages[msgIdx].error = AppLocalized("The model returned an empty response. The conversation context may be too large — try compacting or starting a new session.")
                     } else {
-                        messages[msgIdx].error = String(localized: "Model returned an empty response. Please try again or switch models.")
+                        messages[msgIdx].error = AppLocalized("Model returned an empty response. Please try again or switch models.")
                     }
                     canResume = true
                 }
@@ -6040,7 +6040,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 // Show a warning and enable Resume so the user can continue.
                 if stopReason == .maxTokens {
                     logger.warning("Agent loop stopped: max_tokens reached")
-                    messages[msgIdx].error = String(localized: "Response truncated (max tokens reached)")
+                    messages[msgIdx].error = AppLocalized("Response truncated (max tokens reached)")
                     canResume = true
                 }
                 // [T-stream-drop-silent] nil stopReason after tool turns means the
@@ -6050,9 +6050,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 if stopReason == nil && toolEntries.isEmpty {
                     logger.warning("Agent loop stopped: stream ended without stop reason")
                     if assistantText.isEmpty {
-                        messages[msgIdx].error = String(localized: "Response ended unexpectedly (no content received)")
+                        messages[msgIdx].error = AppLocalized("Response ended unexpectedly (no content received)")
                     } else {
-                        messages[msgIdx].error = String(localized: "The connection dropped — this reply may be incomplete. Tap Resume to continue.")
+                        messages[msgIdx].error = AppLocalized("The connection dropped — this reply may be incomplete. Tap Resume to continue.")
                     }
                     canResume = true
                 }
@@ -6072,8 +6072,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // ordinary completion — exactly the v1.4.0-dev bug user hit.)
         if hitTurnLimit, msgIdx >= 0, msgIdx < messages.count {
             logger.warning("⚠️ runAgentLoop hit maxAgentTurns=\(Self.maxAgentTurns) — finalizing as resumable")
-            messages[msgIdx].error = String(localized:
-                "为防止工具调用失控，已在 \(Self.maxAgentTurns) 轮后停下：模型一直在调用工具没有收尾。点「继续」从这里接着做，或者发条新消息重新开始。")
+            messages[msgIdx].error = AppLocalized("为防止工具调用失控，已在 \(Self.maxAgentTurns) 轮后停下：模型一直在调用工具没有收尾。点「继续」从这里接着做，或者发条新消息重新开始。")
             canResume = true
         }
 

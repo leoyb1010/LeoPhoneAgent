@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Delayed service adapter exercises actual onboarding validation methods."""
 from pathlib import Path
+from ios_smoke_support import APP_LOCALIZED_SHIM, APP_LOCALIZATION_SOURCE
 import importlib.util
 import subprocess
 import tempfile
@@ -107,6 +108,6 @@ func check(_ condition: Bool, _ message: String) { if !condition { print("FAIL: 
 with tempfile.TemporaryDirectory(prefix='leo-provider-validation-') as folder:
     path = Path(folder) / 'Validation.swift'
     binary = Path(folder) / 'validation'
-    path.write_text(source)
+    path.write_text(APP_LOCALIZED_SHIM + source)
     subprocess.run(['xcrun', 'swiftc', '-parse-as-library', str(path), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)

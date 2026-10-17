@@ -568,11 +568,11 @@ struct MinisTextPreviewView: View {
                         Button {
                             PrintHelper.printText(text, jobName: fileURL.lastPathComponent)
                         } label: {
-                            Label(String(localized: "Print"), systemImage: "printer")
+                            Label(AppLocalized("Print"), systemImage: "printer")
                         }
                         .disabled(text.isEmpty)
                         Button { showShareSheet = true } label: {
-                            Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
+                            Label(AppLocalized("Share"), systemImage: "square.and.arrow.up")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -595,11 +595,11 @@ struct MinisTextPreviewView: View {
         let url = fileURL
         let content: String = await Task.detached(priority: .userInitiated) {
             guard let data = try? Data(contentsOf: url) else {
-                return String(localized: "无法读取文件。")
+                return AppLocalized("无法读取文件。")
             }
             return String(data: data, encoding: .utf8)
                 ?? String(data: data, encoding: .ascii)
-                ?? String(localized: "无法解析文件内容。")
+                ?? AppLocalized("无法解析文件内容。")
         }.value
         await MainActor.run {
             text = content
@@ -687,17 +687,17 @@ struct MinisMarkdownPreviewView: View {
                         Button {
                             PrintHelper.printText(markdownContent, jobName: fileURL.lastPathComponent)
                         } label: {
-                            Label(String(localized: "Print"), systemImage: "printer")
+                            Label(AppLocalized("Print"), systemImage: "printer")
                         }
                         .disabled(markdownContent.isEmpty)
                         Button { showShareSheet = true } label: {
-                            Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
+                            Label(AppLocalized("Share"), systemImage: "square.and.arrow.up")
                         }
                         Button {
                             VoiceOutputPlayer.shared.stopAll()
                             VoiceOutputPlayer.shared.enqueueSegmented(markdownContent, sessionId: VoiceOutputPlayer.manualOwnerId, oneShot: true)
                         } label: {
-                            Label(String(localized: "Read Aloud"), systemImage: "speaker.wave.2")
+                            Label(AppLocalized("Read Aloud"), systemImage: "speaker.wave.2")
                         }
                         .disabled(markdownContent.isEmpty)
                     } label: {
@@ -720,7 +720,7 @@ struct MinisMarkdownPreviewView: View {
     private func loadFileContent() async {
         let url = fileURL
         let content: String = await Task.detached(priority: .userInitiated) {
-            (try? String(contentsOf: url, encoding: .utf8)) ?? String(localized: "无法读取文件。")
+            (try? String(contentsOf: url, encoding: .utf8)) ?? AppLocalized("无法读取文件。")
         }.value
         await MainActor.run {
             markdownContent = content

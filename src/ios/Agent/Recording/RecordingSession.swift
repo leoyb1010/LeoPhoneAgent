@@ -19,9 +19,9 @@ final class RecordingSession: @unchecked Sendable {
         var errorDescription: String? {
             switch self {
             case .microphoneUnavailable:
-                return String(localized: "麦克风暂时不可用(可能正在通话或被其他 App 占用),请稍后再试。")
+                return AppLocalized("麦克风暂时不可用(可能正在通话或被其他 App 占用),请稍后再试。")
             case .engineFailed(let detail):
-                return String(localized: "录音启动失败:\(detail)")
+                return AppLocalized("录音启动失败:\(detail)")
             }
         }
     }

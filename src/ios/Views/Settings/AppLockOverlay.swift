@@ -55,7 +55,7 @@ struct AppLockOverlay: View {
         isAuthenticating = true
         Self.promptInFlight = true
         Task { @MainActor in
-            let reason = String(localized: "Unlock LeoBot")
+            let reason = AppLocalized("Unlock LeoBot")
             let ok = await BiometricAuth.authenticate(reason: reason)
             if ok {
                 withAnimation(.easeOut(duration: 0.25)) {

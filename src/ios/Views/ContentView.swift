@@ -680,8 +680,8 @@ struct ContentView: View {
                     WidgetRecentSessionItem(
                         id: session.id,
                         title: redact
-                            ? String(localized: "Conversation")
-                            : (session.title?.isEmpty == false ? session.title! : String(localized: "New Chat")),
+                            ? AppLocalized("Conversation")
+                            : (session.title?.isEmpty == false ? session.title! : AppLocalized("New Chat")),
                         updatedAt: session.updatedAt
                     )
                 }
@@ -880,8 +880,8 @@ struct ContentView: View {
                 // A locked conversation is listed (and searchable) without its title.
                 sessions: sessions.prefix(12).map {
                     ($0.id, SessionLockStore.shared.isVisuallyLocked($0.id)
-                        ? String(localized: "Locked conversation")
-                        : ($0.title ?? String(localized: "New Chat")))
+                        ? AppLocalized("Locked conversation")
+                        : ($0.title ?? AppLocalized("New Chat")))
                 },
                 openSession: { sid in jumpToSession(sid) },
                 runQuickTask: { tid in Task { await QuickTaskWidgetRunner.run(taskId: tid) } },
@@ -1025,11 +1025,11 @@ struct ContentView: View {
                             ProgressView()
                                 .controlSize(.large)
                             if let p = exportProgress, p.total > 0 {
-                                Text(String(localized: "Exporting… \(p.done) / \(p.total)"))
+                                Text(AppLocalized("Exporting… \(p.done) / \(p.total)"))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             } else {
-                                Text(String(localized: "Exporting…"))
+                                Text(AppLocalized("Exporting…"))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
@@ -1776,7 +1776,7 @@ struct ContentView: View {
         // Not yet persisted — show a "New Chat" placeholder
         let placeholder = ChatSession(
             id: selId,
-            title: String(localized: "New Chat"),
+            title: AppLocalized("New Chat"),
             category: nil,
             modelId: "",
             createdAt: Date(),
@@ -2836,7 +2836,7 @@ struct ContentView: View {
         if cachedLockLabelKey == key, let cached = cachedLockLabel {
             return cached
         }
-        let value = String(localized: "Lock with \(biometry)")
+        let value = AppLocalized("Lock with \(biometry)")
         cachedLockLabel = value
         cachedLockLabelKey = key
         return value
@@ -2853,8 +2853,8 @@ struct ContentView: View {
         guard !locked.isEmpty else { work(); return }
         Task { @MainActor in
             let reason = locked.count == 1
-                ? String(localized: "Unlock this chat session")
-                : String(localized: "Unlock the selected chat sessions")
+                ? AppLocalized("Unlock this chat session")
+                : AppLocalized("Unlock the selected chat sessions")
             guard await BiometricAuth.authenticate(reason: reason) else { return }
             for sid in locked { lockStore.noteUnlock(sid) }
             work()
@@ -2892,7 +2892,7 @@ struct ContentView: View {
                 sessionExtras.objectWillChange.send()
             case .unlockSession(let sid):
                 Task {
-                    let reason = String(localized: "Unlock this session to remove \(BiometricAuth.biometryDisplayName) protection")
+                    let reason = AppLocalized("Unlock this session to remove \(BiometricAuth.biometryDisplayName) protection")
                     let ok = await BiometricAuth.authenticate(reason: reason)
                     if ok {
                         SessionLockStore.shared.unlockPermanently(sid)
@@ -3330,9 +3330,9 @@ struct ContentView: View {
     private var homeChoiceLabel: String? {
         guard let choice = homeModelChoice else { return nil }
         if choice.hasPrefix("group:") {
-            return providerStore.group(for: String(choice.dropFirst("group:".count)))?.name ?? String(localized: "Unavailable model")
+            return providerStore.group(for: String(choice.dropFirst("group:".count)))?.name ?? AppLocalized("Unavailable model")
         }
-        guard let entry = providerStore.entry(for: choice) else { return String(localized: "Unavailable model") }
+        guard let entry = providerStore.entry(for: choice) else { return AppLocalized("Unavailable model") }
         let name = entry.model.displayName
         let duplicate = providerStore.modelEntries.contains {
             $0.id != entry.id && $0.model.displayName == name && !$0.isHidden
@@ -3466,7 +3466,7 @@ struct ContentView: View {
     private var homeExecutionTargetTitle: String {
         switch homeExecutionTarget {
         case .iphone:
-            return isIPad ? String(localized: "此 iPad") : String(localized: "此 iPhone")
+            return isIPad ? AppLocalized("此 iPad") : AppLocalized("此 iPhone")
         case .mac(let hostId, _, let cliName):
             let host = gatewayStore.activeHosts.first(where: { $0.id == hostId })
             let hostName = host?.name ?? (host?.isAndroidBody == true ? "Android" : "Mac")
@@ -3540,7 +3540,7 @@ struct ContentView: View {
                 return
             }
             if let choice = homeModelChoice, !homeChoiceIsAvailable(choice) {
-                homeRoutingError = String(localized: "This model is no longer available. Choose another model.")
+                homeRoutingError = AppLocalized("This model is no longer available. Choose another model.")
                 return
             }
             guard homeHasAvailableModel else {
@@ -3554,12 +3554,12 @@ struct ContentView: View {
             startHomeChatAction(.sendPrompt(prompt))
         case .mac(let hostId, let cliKey, let cliName):
             guard let host = gatewayStore.activeHosts.first(where: { $0.id == hostId }) else {
-                homeRoutingError = String(localized: "这台机器已不可用，请重新选择执行目标")
+                homeRoutingError = AppLocalized("这台机器已不可用，请重新选择执行目标")
                 LeoHaptics.notification(.error)
                 return
             }
             guard gatewayStore.client(for: host) != nil else {
-                homeRoutingError = String(localized: "这台机器缺少访问密钥，任务仍保留在输入框")
+                homeRoutingError = AppLocalized("这台机器缺少访问密钥，任务仍保留在输入框")
                 LeoHaptics.notification(.error)
                 return
             }
@@ -3858,7 +3858,7 @@ struct ContentView: View {
                 || states.contains(.paused) || states.contains(.unread)
             let title = session.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return HomeContextSession(id: session.id,
-                                      title: title.isEmpty ? String(localized: "未命名对话") : title,
+                                      title: title.isEmpty ? AppLocalized("未命名对话") : title,
                                       updatedAt: session.updatedAt,
                                       unfinished: unfinished)
         }
@@ -4229,7 +4229,7 @@ struct ContentView: View {
             await MainActor.run { SyncCore.shared.scheduleSend(delay: 0.5) }
             await MainActor.run {
                 let sessionCount = ids.count
-                forceSyncToast = String(localized: "Marked \(sessionCount) sessions (\(totalMarked) records) for sync. iCloud is syncing now.")
+                forceSyncToast = AppLocalized("Marked \(sessionCount) sessions (\(totalMarked) records) for sync. iCloud is syncing now.")
                 forceSyncInFlight = false
                 if singleSession == nil {
                     // Multi-select path also exits selection mode for the user.
@@ -4251,7 +4251,7 @@ struct ContentView: View {
     private func runForcePullOnSession(_ sessionId: String) {
         guard !forceSyncInFlight else { return }
         forceSyncInFlight = true
-        forceSyncToast = String(localized: "Pulling from iCloud…")
+        forceSyncToast = AppLocalized("Pulling from iCloud…")
         // [T-ios-sessionrow-destroy-crash] Isolate the whole Task to @MainActor.
         // This is the site 6687cf1a (T-ios-state-publish-offmain-crash) MISSED:
         // a bare `Task {}` started from this non-isolated func inherits a
@@ -4267,11 +4267,11 @@ struct ContentView: View {
             let outcome = await ChatStore.shared.forcePullSession(sessionId: sessionId)
             switch outcome {
             case .applied(let pulled, let deleted):
-                forceSyncToast = String(localized: "Pulled \(pulled) records · removed \(deleted) local")
+                forceSyncToast = AppLocalized("Pulled \(pulled) records · removed \(deleted) local")
             case .cloudEmpty:
-                forceSyncToast = String(localized: "iCloud has no records for this chat — local messages preserved")
+                forceSyncToast = AppLocalized("iCloud has no records for this chat — local messages preserved")
             case .failed(let msg):
-                forceSyncToast = String(localized: "Force Pull failed: \(msg) — local messages preserved")
+                forceSyncToast = AppLocalized("Force Pull failed: \(msg) — local messages preserved")
             }
             forceSyncInFlight = false
             // Refresh sessions so any title/updatedAt that came down from
@@ -4824,7 +4824,7 @@ struct ContentView: View {
             if i > 0 {
                 try handle.write(contentsOf: Data(("\n\n" + String(repeating: "=", count: 60) + "\n\n").utf8))
             }
-            var header = "# \(session.title ?? String(localized: "Untitled"))\n"
+            var header = "# \(session.title ?? AppLocalized("Untitled"))\n"
             header += "Model: \(session.modelId)\n"
             header += "Created: \(dateFmt.string(from: session.createdAt))\n"
             header += String(repeating: "-", count: 40) + "\n"
@@ -4923,7 +4923,7 @@ private struct DeleteConfirmSheet: View {
                             // Sessions
                             infoRow(
                                 title: "会话",
-                                value: String(localized: "\(info.sessionCount) 个会话及其全部消息")
+                                value: AppLocalized("\(info.sessionCount) 个会话及其全部消息")
                             )
 
                             // Files
@@ -5054,7 +5054,7 @@ private struct ExportPreviewSheet: View {
                 HStack(spacing: 0) {
                     // Copy only makes sense for non-zip text payloads (single-session export).
                     if summary == nil, fileURL?.pathExtension.lowercased() != "zip" {
-                        actionButton(icon: "doc.on.doc", label: copied ? String(localized: "Copied") : String(localized: "Copy")) {
+                        actionButton(icon: "doc.on.doc", label: copied ? AppLocalized("Copied") : AppLocalized("Copy")) {
                             if let url = fileURL, let content = try? String(contentsOf: url, encoding: .utf8) {
                                 UIPasteboard.general.string = content
                             }
@@ -5062,21 +5062,21 @@ private struct ExportPreviewSheet: View {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
                         }
                     }
-                    actionButton(icon: "square.and.arrow.up", label: String(localized: "Share")) {
+                    actionButton(icon: "square.and.arrow.up", label: AppLocalized("Share")) {
                         showShareSheet = true
                     }
-                    actionButton(icon: "folder", label: String(localized: "Save to Files")) {
+                    actionButton(icon: "folder", label: AppLocalized("Save to Files")) {
                         showFilePicker = true
                     }
                 }
                 .padding(.vertical, 12)
                 .background(Color(UIColor.systemBackground))
             }
-            .navigationTitle(String(localized: "Export Preview"))
+            .navigationTitle(AppLocalized("Export Preview"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "Done")) { dismiss() }
+                    Button(AppLocalized("Done")) { dismiss() }
                 }
             }
             .sheet(isPresented: $showShareSheet) {
@@ -5127,12 +5127,12 @@ private struct ExportPreviewSheet: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                summaryRow(String(localized: "Format"), s.format)
-                summaryRow(String(localized: "Sessions"), "\(s.sessionCount)")
-                summaryRow(String(localized: "Messages"), "\(s.totalMessages)")
-                summaryRow(String(localized: "Time range"), timeRange)
-                summaryRow(String(localized: "Attachments"), "\(s.attachmentCount)")
-                summaryRow(String(localized: "Estimated size"), sizeStr)
+                summaryRow(AppLocalized("Format"), s.format)
+                summaryRow(AppLocalized("Sessions"), "\(s.sessionCount)")
+                summaryRow(AppLocalized("Messages"), "\(s.totalMessages)")
+                summaryRow(AppLocalized("Time range"), timeRange)
+                summaryRow(AppLocalized("Attachments"), "\(s.attachmentCount)")
+                summaryRow(AppLocalized("Estimated size"), sizeStr)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -5583,7 +5583,7 @@ private struct SessionRow: View, Equatable {
             // overlay sit outside this VStack so they stay crisp.
             VStack(alignment: .leading, spacing: 4) {
                 highlightedText(
-                    session.title ?? String(localized: "New Chat"),
+                    session.title ?? AppLocalized("New Chat"),
                     font: .system(size: fontSettings.scaledApp(16), weight: .semibold),
                     color: Color(UIColor.label)
                 )
@@ -5612,7 +5612,7 @@ private struct SessionRow: View, Equatable {
                     .lineLimit(2)
                 } else {
                     highlightedText(
-                        session.lastMessage ?? String(localized: "No messages yet"),
+                        session.lastMessage ?? AppLocalized("No messages yet"),
                         font: .system(size: fontSettings.scaledApp(14)),
                         color: Color(UIColor.secondaryLabel)
                     )
@@ -5806,16 +5806,16 @@ private struct SessionRow: View, Equatable {
         let seconds = Int(now.timeIntervalSince(date))
         if calendar.isDateInToday(date) {
             if seconds < 60 {
-                return String(localized: "Just now")
+                return AppLocalized("Just now")
             } else if seconds < 3600 {
                 let mins = seconds / 60
-                return String(localized: "\(mins) min ago")
+                return AppLocalized("\(mins) min ago")
             } else {
                 let hrs = seconds / 3600
-                return String(localized: "\(hrs) hr ago")
+                return AppLocalized("\(hrs) hr ago")
             }
         } else if calendar.isDateInYesterday(date) {
-            return String(localized: "Yesterday")
+            return AppLocalized("Yesterday")
         } else {
             let diff = calendar.dateComponents([.day], from: date, to: now)
             let weekday = (diff.day ?? 7) < 7
@@ -5905,7 +5905,7 @@ private struct RemoteSessionRow: View {
                 }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(session.title ?? String(localized: "Untitled"))
+                Text(session.title ?? AppLocalized("Untitled"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color(UIColor.label))
                     .lineLimit(1)
@@ -6168,8 +6168,8 @@ struct FeedbackComposerSheet: View {
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .problem: return String(localized: "Problem")
-            case .idea: return String(localized: "Idea")
+            case .problem: return AppLocalized("Problem")
+            case .idea: return AppLocalized("Idea")
             }
         }
     }
@@ -6236,17 +6236,17 @@ struct FeedbackComposerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(savedURL == nil ? String(localized: "Cancel") : String(localized: "Done")) { dismiss() }
+                    Button(savedURL == nil ? AppLocalized("Cancel") : AppLocalized("Done")) { dismiss() }
                 }
                 if savedURL == nil {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button(String(localized: "Save")) {
+                        Button(AppLocalized("Save")) {
                             let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
                             let trimmedDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
                             savedURL = LoggingManager.shared.saveFeedbackRecord(
                                 kind: kind.rawValue,
-                                title: trimmedTitle.isEmpty ? String(localized: "Untitled feedback") : trimmedTitle,
-                                detail: trimmedDetail.isEmpty ? String(localized: "(no details given)") : trimmedDetail,
+                                title: trimmedTitle.isEmpty ? AppLocalized("Untitled feedback") : trimmedTitle,
+                                detail: trimmedDetail.isEmpty ? AppLocalized("(no details given)") : trimmedDetail,
                                 includeDiagnostics: includeDiagnostics
                             )
                         }

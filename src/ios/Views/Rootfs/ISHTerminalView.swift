@@ -223,7 +223,7 @@ struct ISHTerminalView: View {
             return
         }
         Task { @MainActor in
-            guard await BiometricAuth.authenticate(reason: String(localized: "Unlock to open this conversation's workspace")) else { return }
+            guard await BiometricAuth.authenticate(reason: AppLocalized("Unlock to open this conversation's workspace")) else { return }
             lockStore.noteUnlock(session.id)
             mountShell(for: session)
         }
@@ -351,7 +351,7 @@ class ISHTerminalViewModel: ObservableObject {
         if ISHKernel.shared.isBooted && RootfsManager.shared.didResetWhileBooted {
             isShellStarted = false
             logger.warning("[StartShell] rootfs was reset this session; refusing to reuse stale kernel mount")
-            let msg = "\r\n" + String(localized: "The Linux environment was reset. Please restart the app to reinstall it before using the terminal.") + "\r\n"
+            let msg = "\r\n" + AppLocalized("The Linux environment was reset. Please restart the app to reinstall it before using the terminal.") + "\r\n"
             if let data = msg.data(using: .utf8) {
                 emulator.feed(data)
             }
@@ -376,7 +376,7 @@ class ISHTerminalViewModel: ObservableObject {
         let statusLine = Task { @MainActor [weak self] () -> Bool in
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled, let self else { return false }
-            let text = "\u{1B}[2m" + String(localized: "Booting Kernel") + "…\u{1B}[0m"
+            let text = "\u{1B}[2m" + AppLocalized("Booting Kernel") + "…\u{1B}[0m"
             self.emulator.feed(Data(text.utf8))
             return true
         }

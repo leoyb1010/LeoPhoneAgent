@@ -19,10 +19,10 @@ enum MinutesGenerator {
 
         var errorDescription: String? {
             switch self {
-            case .noModel: return String(localized: "还没有可用的模型分组。请先在设置里连接一个模型。")
-            case .emptyTranscript: return String(localized: "转写还是空的,先转写再生成。")
-            case .notStarted: return String(localized: "生成没有开始,请稍后再试。")
-            case .emptyReply: return String(localized: "模型没有返回内容。")
+            case .noModel: return AppLocalized("还没有可用的模型分组。请先在设置里连接一个模型。")
+            case .emptyTranscript: return AppLocalized("转写还是空的,先转写再生成。")
+            case .notStarted: return AppLocalized("生成没有开始,请稍后再试。")
+            case .emptyReply: return AppLocalized("模型没有返回内容。")
             }
         }
     }
@@ -118,7 +118,7 @@ enum MinutesGenerator {
             var notes: [String] = []
             for (i, part) in parts.enumerated() {
                 try Task.checkCancellation()
-                progress(String(localized: "正在分段整理 \(i + 1)/\(parts.count)"))
+                progress(AppLocalized("正在分段整理 \(i + 1)/\(parts.count)"))
                 let note = try await complete(system: MinutesPromptBuilder.mapSystemPrompt,
                                               user: MinutesPromptBuilder.mapUserPrompt(part: i + 1, of: parts.count, title: title, text: part),
                                               entry: model.entry, maxTokens: MinutesPromptBuilder.partNotesMaxTokens)
@@ -126,7 +126,7 @@ enum MinutesGenerator {
             }
             contextBody = notes.joined(separator: "\n\n")
         }
-        progress(String(localized: "正在创建对话…"))
+        progress(AppLocalized("正在创建对话…"))
 
         let transcriptMarkdown = TranscriptAssembler.renderMarkdown(
             title: title, date: meta.createdAt, duration: meta.duration, segments: transcript.segments,
@@ -220,9 +220,9 @@ enum MinutesGenerator {
         for item in items {
             let reminder = EKReminder(eventStore: store)
             reminder.title = item.title
-            var notes: [String] = [String(localized: "来自录音「\(recordingTitle)」")]
-            if let owner = item.owner { notes.append(String(localized: "负责人:\(owner)")) }
-            if let due = item.due { notes.append(String(localized: "期限:\(due)")) }
+            var notes: [String] = [AppLocalized("来自录音「\(recordingTitle)」")]
+            if let owner = item.owner { notes.append(AppLocalized("负责人:\(owner)")) }
+            if let due = item.due { notes.append(AppLocalized("期限:\(due)")) }
             reminder.notes = notes.joined(separator: "\n")
             if let due = item.due, let date = MinutesActionItemParser.dueDate(from: due) {
                 reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)

@@ -52,7 +52,7 @@ struct ProviderInstanceDetailView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle(instance?.label ?? String(localized: "Provider"))
+        .navigationTitle(instance?.label ?? AppLocalized("Provider"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -120,14 +120,14 @@ struct ProviderInstanceDetailView: View {
         .alert("Delete Provider", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) {
                 if store.removeInstance(instanceId) { dismiss() }
-                else { organizationError = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.") }
+                else { organizationError = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.") }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will remove the provider and all its model entries. API keys will be deleted from the Keychain.")
         }
         .alert(
-            String(localized: "Delete Model"),
+            AppLocalized("Delete Model"),
             isPresented: Binding(
                 get: { pendingDeleteModelEntry != nil },
                 set: { if !$0 { pendingDeleteModelEntry = nil } }
@@ -135,7 +135,7 @@ struct ProviderInstanceDetailView: View {
             presenting: pendingDeleteModelEntry
         ) { entry in
             Button("Delete", role: .destructive) {
-                if !store.removeEntry(entry.id) { organizationError = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.") }
+                if !store.removeEntry(entry.id) { organizationError = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.") }
                 pendingDeleteModelEntry = nil
             }
             Button("Cancel", role: .cancel) {
@@ -338,7 +338,7 @@ struct ProviderInstanceDetailView: View {
                             .font(.caption)
                             .foregroundStyle(.red)
                             .textSelection(.enabled)
-                        Text(String(localized: "You may need to add the model ID manually."))
+                        Text(AppLocalized("You may need to add the model ID manually."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -403,7 +403,7 @@ struct ProviderInstanceDetailView: View {
     /// keys and can sync through iCloud Keychain.
     private func credentialFooter(_ instance: ProviderInstance) -> String {
         guard instance.credentialType == .oauth else {
-            return String(localized: "API key is stored securely in the iOS Keychain.")
+            return AppLocalized("API key is stored securely in the iOS Keychain.")
         }
         let deviceOnly: Bool
         switch instance.providerType {
@@ -418,8 +418,8 @@ struct ProviderInstanceDetailView: View {
             deviceOnly = false
         }
         return deviceOnly
-            ? String(localized: "Sign-in tokens stay in this device's Keychain and are not synced to iCloud.")
-            : String(localized: "Stored in the iOS Keychain; it can sync to your other devices through iCloud Keychain.")
+            ? AppLocalized("Sign-in tokens stay in this device's Keychain and are not synced to iCloud.")
+            : AppLocalized("Stored in the iOS Keychain; it can sync to your other devices through iCloud Keychain.")
     }
 
     @ViewBuilder
@@ -443,7 +443,7 @@ struct ProviderInstanceDetailView: View {
                 .font(.callout)
                 .foregroundStyle(.orange)
             if !instance.providerType.isUnsupported {
-                Button(String(localized: "Use API Key Instead")) {
+                Button(AppLocalized("Use API Key Instead")) {
                     convertToAPIKey(instance)
                 }
                 .buttonStyle(.glass)
@@ -532,7 +532,7 @@ struct ProviderInstanceDetailView: View {
         let isAuth = oauthIsAuthenticated(instance)
         // Refresh rejected: the credential is kept, the user signs in again.
         let needsReauth = isAuth && ProviderKeychainHelper.oauthNeedsReauth(instanceId: instance.id)
-        let detail = needsReauth ? String(localized: "Needs sign-in again") : oauthDetail(instance)
+        let detail = needsReauth ? AppLocalized("Needs sign-in again") : oauthDetail(instance)
         // Subscribe to auth state changes (Keychain token save/delete)
         let _ = oauthRefreshTrigger
         let _ = store.authRevision
@@ -567,17 +567,17 @@ struct ProviderInstanceDetailView: View {
                         }
                     }
                     .font(.caption.weight(.medium))
-                    Button(String(localized: "Sign Out"), role: .destructive) {
+                    Button(AppLocalized("Sign Out"), role: .destructive) {
                         oauthLogout(instance)
                         oauthRefreshTrigger.toggle()
                     }
                     .font(.caption.weight(.medium))
                 } else if isAuth {
-                    Button(String(localized: "Copy Token")) {
+                    Button(AppLocalized("Copy Token")) {
                         Task { await oauthCopyToken(instance) }
                     }
                     .font(.caption.weight(.medium))
-                    Button(String(localized: "Sign Out"), role: .destructive) {
+                    Button(AppLocalized("Sign Out"), role: .destructive) {
                         oauthLogout(instance)
                         oauthRefreshTrigger.toggle()
                     }
@@ -708,7 +708,7 @@ struct ProviderInstanceDetailView: View {
     // ?api-version, into Custom API Base). Off by default.
     private func azureModeSection(_ instance: ProviderInstance) -> some View {
         Section {
-            Toggle(String(localized: "Azure OpenAI"), isOn: Binding(
+            Toggle(AppLocalized("Azure OpenAI"), isOn: Binding(
                 get: { instance.azureMode },
                 set: { on in
                     var updated = instance
@@ -717,7 +717,7 @@ struct ProviderInstanceDetailView: View {
                 }
             ))
         } footer: {
-            Text(String(localized: "Use Azure OpenAI authentication (api-key header). Paste your full Azure endpoint into Custom API Base above, including the ?api-version=… query. Works with both API formats."))
+            Text(AppLocalized("Use Azure OpenAI authentication (api-key header). Paste your full Azure endpoint into Custom API Base above, including the ?api-version=… query. Works with both API formats."))
         }
     }
 
@@ -800,7 +800,7 @@ struct ProviderInstanceDetailView: View {
 
     private func customUserAgentSection(_ instance: ProviderInstance) -> some View {
         Section {
-            TextField(String(localized: "Default"), text: $editingCustomUserAgent)
+            TextField(AppLocalized("Default"), text: $editingCustomUserAgent)
                 .font(.system(.body, design: .monospaced))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -808,9 +808,9 @@ struct ProviderInstanceDetailView: View {
                 .onSubmit { saveCustomUserAgent(instance) }
                 .onDisappear { saveCustomUserAgent(instance) }
         } header: {
-            Text(String(localized: "Custom User-Agent"))
+            Text(AppLocalized("Custom User-Agent"))
         } footer: {
-            Text(String(localized: "Override the User-Agent header sent to this endpoint. Leave empty to use the LeoBot default. Useful for relays that only accept specific clients (e.g. \"my-relay-client/1.0\")."))
+            Text(AppLocalized("Override the User-Agent header sent to this endpoint. Leave empty to use the LeoBot default. Useful for relays that only accept specific clients (e.g. \"my-relay-client/1.0\")."))
         }
     }
 
@@ -847,10 +847,10 @@ struct ProviderInstanceDetailView: View {
                 Text("Images Generations").tag(ImageEndpointMode.imagesGenerations)
                 Text("Chat Completions").tag(ImageEndpointMode.chatCompletions)
             } label: {
-                Text(String(localized: "Image Endpoint"))
+                Text(AppLocalized("Image Endpoint"))
             }
         } header: {
-            Text(String(localized: "Image Generation"))
+            Text(AppLocalized("Image Generation"))
         } footer: {
             imageEndpointFooter(instance)
         }
@@ -864,14 +864,14 @@ struct ProviderInstanceDetailView: View {
                 let resolvedLabel = resolved == .imagesGenerations
                     ? "/v1/images/generations"
                     : "/v1/chat/completions"
-                Text(String(localized: "Auto: tries /v1/images/generations first, falls back to /v1/chat/completions. Last successful endpoint: \(resolvedLabel)."))
+                Text(AppLocalized("Auto: tries /v1/images/generations first, falls back to /v1/chat/completions. Last successful endpoint: \(resolvedLabel)."))
             } else {
-                Text(String(localized: "Auto: tries /v1/images/generations first, falls back to /v1/chat/completions. Caches the working endpoint after the first call."))
+                Text(AppLocalized("Auto: tries /v1/images/generations first, falls back to /v1/chat/completions. Caches the working endpoint after the first call."))
             }
         case .imagesGenerations:
-            Text(String(localized: "Always use /v1/images/generations."))
+            Text(AppLocalized("Always use /v1/images/generations."))
         case .chatCompletions:
-            Text(String(localized: "Always use /v1/chat/completions (multimodal output)."))
+            Text(AppLocalized("Always use /v1/chat/completions (multimodal output)."))
         }
     }
 
@@ -978,7 +978,7 @@ struct ProviderInstanceDetailView: View {
                 var updated = entry
                 updated.isHidden = !entry.isHidden
                 if !store.updateEntry(updated) {
-                    organizationError = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
+                    organizationError = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.")
                 }
             } label: {
                 Image(systemName: entry.isHidden ? "eye.slash" : "eye")
@@ -1009,9 +1009,9 @@ struct ProviderInstanceDetailView: View {
         .contextMenu {
             Button {
                 UIPasteboard.general.string = "entry:\(entry.compositeKey)"
-                MinisToast.show(String(localized: "Copied: \(entry.model.displayName)"))
+                MinisToast.show(AppLocalized("Copied: \(entry.model.displayName)"))
             } label: {
-                Label(String(localized: "Copy Shortcut Model ID"), systemImage: "link")
+                Label(AppLocalized("Copy Shortcut Model ID"), systemImage: "link")
             }
         }
     }
@@ -1031,44 +1031,44 @@ struct ProviderInstanceDetailView: View {
                 Image(systemName: "photo")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .accessibilityLabel(String(localized: "Image input"))
+                    .accessibilityLabel(AppLocalized("Image input"))
             }
             if modality.contains(.pdfInput) {
                 Image(systemName: "doc")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .accessibilityLabel(String(localized: "PDF input"))
+                    .accessibilityLabel(AppLocalized("PDF input"))
             }
             if modality.contains(.audioInput) {
                 Image(systemName: "waveform")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .accessibilityLabel(String(localized: "Audio input"))
+                    .accessibilityLabel(AppLocalized("Audio input"))
             }
             if modality.contains(.videoInput) {
                 Image(systemName: "video")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .accessibilityLabel(String(localized: "Video input"))
+                    .accessibilityLabel(AppLocalized("Video input"))
             }
             // Output modalities (tinted, generate-style glyphs).
             if modality.contains(.imageOutput) {
                 Image(systemName: "photo.badge.plus")
                     .font(.caption2)
                     .foregroundStyle(.tint)
-                    .accessibilityLabel(String(localized: "Image output"))
+                    .accessibilityLabel(AppLocalized("Image output"))
             }
             if modality.contains(.audioOutput) {
                 Image(systemName: "speaker.wave.2")
                     .font(.caption2)
                     .foregroundStyle(.tint)
-                    .accessibilityLabel(String(localized: "Audio output"))
+                    .accessibilityLabel(AppLocalized("Audio output"))
             }
             if modality.contains(.videoOutput) {
                 Image(systemName: "video.badge.plus")
                     .font(.caption2)
                     .foregroundStyle(.tint)
-                    .accessibilityLabel(String(localized: "Video output"))
+                    .accessibilityLabel(AppLocalized("Video output"))
             }
         }
     }
@@ -1095,7 +1095,7 @@ struct ProviderInstanceDetailView: View {
                 let result = try await ProviderConfigStore.fetchModelsWithFallback(freshInstance, forceRefresh: true)
                 guard store.replaceEntries(for: freshInstance.id, models: result.models,
                                            pruneCloudCopies: result.source == "api") else {
-                    fetchError = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
+                    fetchError = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.")
                     return
                 }
                 fetchWarnings = result.warnings
@@ -1126,49 +1126,49 @@ struct ProviderInstanceDetailView: View {
     private func oauthDetail(_ instance: ProviderInstance) -> String {
         // Manual OAuth token — show masked token
         if ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") != nil {
-            return String(localized: "Authenticated (manual token)")
+            return AppLocalized("Authenticated (manual token)")
         }
         switch instance.providerType {
         case .anthropic, .gemini, .openCodeGo:
-            return String(localized: "Not authenticated")
+            return AppLocalized("Not authenticated")
         case .openAI:
             if CodexOAuthManager.shared.isAuthenticated(instanceId: instance.id) {
-                return CodexOAuthManager.shared.planType(instanceId: instance.id) ?? String(localized: "Authenticated")
+                return CodexOAuthManager.shared.planType(instanceId: instance.id) ?? AppLocalized("Authenticated")
             }
-            return String(localized: "Not authenticated")
+            return AppLocalized("Not authenticated")
         case .openRouter:
             if OpenRouterOAuthManager.shared.isAuthenticated(instanceId: instance.id) {
-                return OpenRouterOAuthManager.shared.maskedToken(instanceId: instance.id) ?? String(localized: "Authenticated")
+                return OpenRouterOAuthManager.shared.maskedToken(instanceId: instance.id) ?? AppLocalized("Authenticated")
             }
-            return String(localized: "Not authenticated")
+            return AppLocalized("Not authenticated")
         case .openAIResponses:
-            return String(localized: "Not applicable") // API key only
+            return AppLocalized("Not applicable") // API key only
         case .xAI:
             if XAIOAuthManager.shared.isAuthenticated(instanceId: instance.id) {
                 let parts = [
                     XAIOAuthManager.shared.email(instanceId: instance.id),
                     XAIOAuthManager.shared.accountId(instanceId: instance.id).map { "ID: \(String($0.prefix(8)))..." }
                 ].compactMap { $0 }
-                return parts.isEmpty ? String(localized: "Authenticated") : parts.joined(separator: " · ")
+                return parts.isEmpty ? AppLocalized("Authenticated") : parts.joined(separator: " · ")
             }
-            return String(localized: "Not authenticated")
+            return AppLocalized("Not authenticated")
         case .kimiCode:
             return KimiOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-                ? String(localized: "Authenticated") : String(localized: "Not authenticated")
+                ? AppLocalized("Authenticated") : AppLocalized("Not authenticated")
         case .unsupported:
-            return String(localized: "Unsupported in this app version")
+            return AppLocalized("Unsupported in this app version")
         }
     }
 
     private func oauthSignInLabel(_ instance: ProviderInstance) -> String {
         switch instance.providerType {
-        case .anthropic, .gemini, .openCodeGo: return String(localized: "Sign In")
-        case .openAI: return String(localized: "Sign in with OpenAI")
-        case .openRouter: return String(localized: "Sign in with OpenRouter")
-        case .openAIResponses: return String(localized: "Sign In")
-        case .xAI: return String(localized: "Sign in with xAI")
-        case .kimiCode: return String(localized: "Sign in with Kimi Code")
-        case .unsupported: return String(localized: "Sign In")
+        case .anthropic, .gemini, .openCodeGo: return AppLocalized("Sign In")
+        case .openAI: return AppLocalized("Sign in with OpenAI")
+        case .openRouter: return AppLocalized("Sign in with OpenRouter")
+        case .openAIResponses: return AppLocalized("Sign In")
+        case .xAI: return AppLocalized("Sign in with xAI")
+        case .kimiCode: return AppLocalized("Sign in with Kimi Code")
+        case .unsupported: return AppLocalized("Sign In")
         }
     }
 
@@ -1344,18 +1344,18 @@ struct AddCustomModelSheet: View {
 
                 Section {
                     HStack {
-                        Text(String(localized: "Context Window"))
+                        Text(AppLocalized("Context Window"))
                         Spacer()
                         TextField("128000", text: $contextWindowText)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 120)
                     }
-                    Toggle(String(localized: "Thinking"), isOn: $supportsThinking)
+                    Toggle(AppLocalized("Thinking"), isOn: $supportsThinking)
                 } header: {
-                    Text(String(localized: "Capabilities"))
+                    Text(AppLocalized("Capabilities"))
                 } footer: {
-                    Text(String(localized: "Context window size in tokens. Leave empty for default."))
+                    Text(AppLocalized("Context window size in tokens. Leave empty for default."))
                 }
 
                 Section {
@@ -1433,9 +1433,9 @@ struct AddCustomModelSheet: View {
         if store.addEntry(entry) {
             dismiss()
         } else if store.entries(for: instance.id).contains(where: { $0.baseModel.id == trimmedId }) {
-            duplicateError = String(localized: "Model ID \"\(trimmedId)\" already exists.")
+            duplicateError = AppLocalized("Model ID \"\(trimmedId)\" already exists.")
         } else {
-            duplicateError = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
+            duplicateError = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.")
         }
     }
 }
@@ -1525,7 +1525,7 @@ struct ModelEntryDetailSheet: View {
                 if entry.isCustom {
                     Section {
                         HStack {
-                            Text(String(localized: "Context Window"))
+                            Text(AppLocalized("Context Window"))
                             Spacer()
                             TextField("128000", text: $contextWindowText)
                                 .keyboardType(.numberPad)
@@ -1533,16 +1533,16 @@ struct ModelEntryDetailSheet: View {
                                 .frame(maxWidth: 120)
                         }
                         maxTokensField()
-                        Toggle(String(localized: "Thinking"), isOn: $supportsThinking)
+                        Toggle(AppLocalized("Thinking"), isOn: $supportsThinking)
                     } header: {
-                        Text(String(localized: "Capabilities"))
+                        Text(AppLocalized("Capabilities"))
                     } footer: {
-                        Text(String(localized: "Context window and max output tokens in tokens. Leave empty for default."))
+                        Text(AppLocalized("Context window and max output tokens in tokens. Leave empty for default."))
                     }
                 } else {
                     Section {
                         HStack {
-                            Text(String(localized: "Context Window"))
+                            Text(AppLocalized("Context Window"))
                             Spacer()
                             TextField(
                                 "\(entry.baseModel.contextWindowTokens)",
@@ -1556,20 +1556,20 @@ struct ModelEntryDetailSheet: View {
                         maxTokensField()
 
                         HStack {
-                            Text(String(localized: "Thinking"))
+                            Text(AppLocalized("Thinking"))
                                 .foregroundStyle(.secondary)
                             Spacer()
                             if supportsThinking {
-                                Label(String(localized: "Supported"), systemImage: "checkmark.circle.fill")
+                                Label(AppLocalized("Supported"), systemImage: "checkmark.circle.fill")
                                     .foregroundStyle(.green)
                                     .labelStyle(.titleAndIcon)
                             } else if entry.baseModel.supportsReasoning == false {
-                                Text(String(localized: "Not Supported"))
+                                Text(AppLocalized("Not Supported"))
                                     .foregroundStyle(.secondary)
                             } else {
-                                Text(String(localized: "Unknown"))
+                                Text(AppLocalized("Unknown"))
                                     .foregroundStyle(.tertiary)
-                                Button(String(localized: "Force Enable")) {
+                                Button(AppLocalized("Force Enable")) {
                                     showForceThinkingAlert = true
                                 }
                                 .font(.caption)
@@ -1578,9 +1578,9 @@ struct ModelEntryDetailSheet: View {
                             }
                         }
                     } header: {
-                        Text(String(localized: "Capabilities"))
+                        Text(AppLocalized("Capabilities"))
                     } footer: {
-                        Text(String(localized: "Leave Context Window empty to use auto-detected value. Leave Max Output Tokens empty to follow the provider default."))
+                        Text(AppLocalized("Leave Context Window empty to use auto-detected value. Leave Max Output Tokens empty to follow the provider default."))
                     }
                 }
 
@@ -1617,12 +1617,12 @@ struct ModelEntryDetailSheet: View {
                         } label: {
                             HStack {
                                 Image(systemName: "arrow.counterclockwise")
-                                Text(String(localized: "Reset to Default"))
+                                Text(AppLocalized("Reset to Default"))
                             }
                         }
                         .accessibilityIdentifier("model-editor.reset")
                     } footer: {
-                        Text(String(localized: "Clear your customizations and restore the values reported by the provider."))
+                        Text(AppLocalized("Clear your customizations and restore the values reported by the provider."))
                     }
                 }
 
@@ -1634,11 +1634,11 @@ struct ModelEntryDetailSheet: View {
                         AppLogger(category: "QuickTest").info("[QuickTest] button tapped model=\(entry.model.id)")
                         showQuickTest = true
                     } label: {
-                        Label(String(localized: "Quick Test"), systemImage: "bolt.badge.checkmark")
+                        Label(AppLocalized("Quick Test"), systemImage: "bolt.badge.checkmark")
                     }
                     .buttonStyle(.borderless)
                 } footer: {
-                    Text(String(localized: "Run a quick test matching this model's main capability."))
+                    Text(AppLocalized("Run a quick test matching this model's main capability."))
                 }
             }
             .navigationTitle("Model Details")
@@ -1672,26 +1672,26 @@ struct ModelEntryDetailSheet: View {
                     .presentationDragIndicator(.visible)
             }
             .alert(
-                String(localized: "Force Enable Thinking"),
+                AppLocalized("Force Enable Thinking"),
                 isPresented: $showForceThinkingAlert
             ) {
-                Button(String(localized: "Enable"), role: .destructive) {
+                Button(AppLocalized("Enable"), role: .destructive) {
                     supportsThinking = true
                 }
-                Button(String(localized: "Cancel"), role: .cancel) {}
+                Button(AppLocalized("Cancel"), role: .cancel) {}
             } message: {
-                Text(String(localized: "The provider has not declared whether this model supports thinking. Force-enabling may cause errors — you can disable it or retry if needed."))
+                Text(AppLocalized("The provider has not declared whether this model supports thinking. Force-enabling may cause errors — you can disable it or retry if needed."))
             }
             .alert(
-                String(localized: "Reset Model Settings"),
+                AppLocalized("Reset Model Settings"),
                 isPresented: $showResetAlert
             ) {
-                Button(String(localized: "Reset"), role: .destructive) {
+                Button(AppLocalized("Reset"), role: .destructive) {
                     resetToDefault()
                 }
-                Button(String(localized: "Cancel"), role: .cancel) {}
+                Button(AppLocalized("Cancel"), role: .cancel) {}
             } message: {
-                Text(String(localized: "This will clear all customizations (including force-enabled thinking) and restore the provider's default values."))
+                Text(AppLocalized("This will clear all customizations (including force-enabled thinking) and restore the provider's default values."))
             }
         }
     }
@@ -1702,7 +1702,7 @@ struct ModelEntryDetailSheet: View {
         if let apiMax = entry.baseModel.maxOutputTokens {
             return "\(apiMax)"
         }
-        return String(localized: "Default")
+        return AppLocalized("Default")
     }
 
     /// True when the user has typed a value that exceeds the API-reported maximum.
@@ -1721,7 +1721,7 @@ struct ModelEntryDetailSheet: View {
     private func maxTokensField() -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(String(localized: "Max Output Tokens"))
+                Text(AppLocalized("Max Output Tokens"))
                 Spacer()
                 TextField(maxTokensPlaceholder, text: $maxTokensText)
                     .keyboardType(.numberPad)

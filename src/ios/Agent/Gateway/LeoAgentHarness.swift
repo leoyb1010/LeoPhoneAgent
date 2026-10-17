@@ -270,9 +270,9 @@ final class HarnessSessionDriver: ObservableObject {
     /// The typing row's words; `status` is the wire value ("running", …).
     var statusLabel: String {
         switch status {
-        case "starting": String(localized: "正在连接 Mac…")
-        case "waiting_for_approval": String(localized: "等你审批")
-        default: String(localized: "Mac 正在处理…")
+        case "starting": AppLocalized("正在连接 Mac…")
+        case "waiting_for_approval": AppLocalized("等你审批")
+        default: AppLocalized("Mac 正在处理…")
         }
     }
     @Published private(set) var resumeCount = 0
@@ -376,7 +376,7 @@ final class HarnessSessionDriver: ObservableObject {
     func retryFullAuto() {
         guard fullAutoRefused else { return }
         fullAutoRefused = false
-        note(String(localized: "已恢复全自动请求:下一条消息会请这台 Mac 切回全自动。"))
+        note(AppLocalized("已恢复全自动请求:下一条消息会请这台 Mac 切回全自动。"))
     }
 
     /// 发一条后续消息,顺带告诉 Mac 全自动开关的当前状态(所有 CLI 都带)。
@@ -392,7 +392,7 @@ final class HarnessSessionDriver: ObservableObject {
                 try HarnessOutbox.shared.record(id: id, scope: scope, sessionId: sessionId, text: text, fullAuto: fullAuto)
             }.value
         } catch {
-            steerFailed(text, String(localized: "无法保存待发送内容，本次没有发送；请检查本机存储空间。"))
+            steerFailed(text, AppLocalized("无法保存待发送内容，本次没有发送；请检查本机存储空间。"))
             return
         }
         // On disk but still in flight: a concurrent restoreOutbox must not
@@ -455,8 +455,8 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     private static func describe(_ error: Error) -> String {
-        if case GatewayError.unauthorized = error { return String(localized: "这台 Mac 拒绝了本机的访问密钥，请在设备页面重新配对。") }
-        if let urlError = error as? URLError, urlError.code == .notConnectedToInternet { return String(localized: "手机当前没有网络。") }
+        if case GatewayError.unauthorized = error { return AppLocalized("这台 Mac 拒绝了本机的访问密钥，请在设备页面重新配对。") }
+        if let urlError = error as? URLError, urlError.code == .notConnectedToInternet { return AppLocalized("手机当前没有网络。") }
         return error.localizedDescription
     }
 
@@ -464,7 +464,7 @@ final class HarnessSessionDriver: ObservableObject {
     private func steerFailed(_ text: String, _ reason: String, problem found: LeoLinkProblem? = nil) {
         lastError = reason
         if let found { adopt(found) }
-        items.append(GatewayTranscriptItem(kind: .failure, text: String(localized: "没送到 Mac：\(reason)")))
+        items.append(GatewayTranscriptItem(kind: .failure, text: AppLocalized("没送到 Mac：\(reason)")))
         if status == "running" { status = "idle" }
         unsentText = text
     }
@@ -489,7 +489,7 @@ final class HarnessSessionDriver: ObservableObject {
                     try HarnessOutbox.shared.entries(scope: scope, sessionId: sessionId)
                 }.value
             } catch {
-                self?.note(String(localized: "未确认消息记录暂时无法读取；没有删除记录，也不会自动重新发送。"))
+                self?.note(AppLocalized("未确认消息记录暂时无法读取；没有删除记录，也不会自动重新发送。"))
                 return
             }
             guard let self, self.sessionId == sessionId else { return }
@@ -498,7 +498,7 @@ final class HarnessSessionDriver: ObservableObject {
                 // 上次拒绝后清理失败留下的记录：后台再清一次；只在这个会话里报一次。
                 Task.detached(priority: .utility) { for entry in rejected { _ = try? HarnessOutbox.shared.remove(entry) } }
                 for entry in rejected where self.announcedUncertain.insert(entry.id).inserted {
-                    self.steerFailed(entry.text, String(localized: "Mac 已拒绝这条输入，原文已恢复，请核对任务后重试。"))
+                    self.steerFailed(entry.text, AppLocalized("Mac 已拒绝这条输入，原文已恢复，请核对任务后重试。"))
                 }
             }
             let pending = stored.filter { $0.state != .rejected && !self.inFlightOutbox.contains($0.id) }
@@ -532,14 +532,14 @@ final class HarnessSessionDriver: ObservableObject {
         } catch {
             relayQueued.removeAll { $0.id == entry.id }
             announcedUncertain.remove(entry.id)
-            steerFailed(entry.text, String(localized: "Mac 已拒绝这条输入；本机记录清理失败，原文已放回输入框，请核对任务后重试。"))
+            steerFailed(entry.text, AppLocalized("Mac 已拒绝这条输入；本机记录清理失败，原文已放回输入框，请核对任务后重试。"))
             return nil
         }
     }
 
     private func showUncertain(_ entry: HarnessOutbox.Entry) {
         guard announcedUncertain.insert(entry.id).inserted else { return }
-        let message = String(localized: "这条输入已保存在本机，但送达状态未确认；正在查询 Mac 回执。不要重复发送，请先核对任务。")
+        let message = AppLocalized("这条输入已保存在本机，但送达状态未确认；正在查询 Mac 回执。不要重复发送，请先核对任务。")
         lastError = message
         note(message + "\n" + entry.text)
     }
@@ -581,7 +581,7 @@ final class HarnessSessionDriver: ObservableObject {
                 if result["status"] as? String == "expired" {
                     // 中继排队超时、从未交给 Mac：明确没送到，原文放回输入框。
                     guard finishRejectedOutbox(entry) == true else { continue }
-                    steerFailed(entry.text, String(localized: "Mac 一直不在线，中继排队已过期，这条没有送到。"))
+                    steerFailed(entry.text, AppLocalized("Mac 一直不在线，中继排队已过期，这条没有送到。"))
                     continue
                 }
                 switch HarnessOutbox.relayResolution(result) {
@@ -592,7 +592,7 @@ final class HarnessSessionDriver: ObservableObject {
                         note(HarnessFullAuto.refusedNote(serverMessage: nil, status: http))
                         await sendSteer(sessionId: entry.sessionId, text: entry.text)
                     } else if !(200..<300).contains(http) {
-                        steerFailed(entry.text, String(localized: "Mac 拒绝了排队的这条（HTTP \(http)）"))
+                        steerFailed(entry.text, AppLocalized("Mac 拒绝了排队的这条（HTTP \(http)）"))
                     }
                     continue
                 case .pending:
@@ -613,12 +613,12 @@ final class HarnessSessionDriver: ObservableObject {
                 } else if !(200..<300).contains(http) {
                     steerFailed(entry.text, "Mac HTTP \(http)")
                 } else {
-                    note(String(localized: "Mac 回执已确认这条输入送达。"))
+                    note(AppLocalized("Mac 回执已确认这条输入送达。"))
                 }
             } catch GatewayError.http(let status, _) where status == 404 && hostKeepsReceipts && entry.state != .queued {
                 // 会留回执的 Mac 说没见过这个编号，中继也没在排队：它没收到。
                 guard finishRejectedOutbox(entry) == true else { continue }
-                steerFailed(entry.text, String(localized: "Mac 没有收到这条输入。"))
+                steerFailed(entry.text, AppLocalized("Mac 没有收到这条输入。"))
             } catch {
                 giveUpIfExhausted(entry) // 旧 Mac 无回执接口，或已重新配对：保留本机记录供核对。
             }
@@ -631,10 +631,10 @@ final class HarnessSessionDriver: ObservableObject {
         guard receiptAttempts[entry.id, default: 0] >= Self.receiptAttemptLimit else { showUncertain(entry); return }
         receiptAttempts[entry.id] = nil
         guard finishRejectedOutbox(entry) == true else { return }
-        steerFailed(entry.text, String(localized: "5 分钟内没拿到 Mac 的回执。这条可能已执行，也可能没送到；原文已放回输入框，请先看任务状态再决定是否重发。"))
+        steerFailed(entry.text, AppLocalized("5 分钟内没拿到 Mac 的回执。这条可能已执行，也可能没送到；原文已放回输入框，请先看任务状态再决定是否重发。"))
     }
 
-    private static let queuedWhileOfflineNote = String(localized: "Mac 暂时不在线，输入已保存在本机并交给中继排队；最终送达需要 Mac 回执确认。")
+    private static let queuedWhileOfflineNote = AppLocalized("Mac 暂时不在线，输入已保存在本机并交给中继排队；最终送达需要 Mac 回执确认。")
 
     /// Send a follow-up. Never a dead tap: with no session yet the text is
     /// queued (create in flight) or becomes the first prompt of a fresh
@@ -861,7 +861,7 @@ final class HarnessSessionDriver: ObservableObject {
                 await MainActor.run {
                     self.status = "detached"
                     self.isRunning = false
-                    self.note(String(localized: "Still running on your Mac; reopen to follow along."))
+                    self.note(AppLocalized("Still running on your Mac; reopen to follow along."))
                     if let lastProblem { self.problem = lastProblem }
                 }
                 return
@@ -870,7 +870,7 @@ final class HarnessSessionDriver: ObservableObject {
             // picking up at lastSeq loses nothing.
             await MainActor.run {
                 self.resumeCount += 1
-                self.note(String(localized: "Reconnecting…"))
+                self.note(AppLocalized("Reconnecting…"))
             }
             try? await Task.sleep(nanoseconds: UInt64(min(30, 1 << attempt)) * 1_000_000_000)
         }
@@ -885,7 +885,7 @@ final class HarnessSessionDriver: ObservableObject {
                 self.status = "completed"
                 self.isRunning = false
                 self.clearApprovals()
-                self.note(String(localized: "Session is gone from the Mac."))
+                self.note(AppLocalized("Session is gone from the Mac."))
             }
             return true
         }
@@ -895,8 +895,8 @@ final class HarnessSessionDriver: ObservableObject {
                 self.isRunning = false
                 self.clearApprovals()
                 self.note(summary.status == "failed"
-                    ? String(localized: "The session failed on the Mac.")
-                    : String(localized: "Session ended."))
+                    ? AppLocalized("The session failed on the Mac.")
+                    : AppLocalized("Session ended."))
             }
             return true
         }
@@ -941,7 +941,7 @@ final class HarnessSessionDriver: ObservableObject {
             HarnessLiveActivityBridge.shared.refresh()
         case .approvalResponded(_, let approvalId, let auto):
             // [A1] 全自动:Mac 直接应答,手机上没有审批卡,只在时间线记一笔。
-            if let auto { note(String(localized: "已自动允许 · \(auto)")) }
+            if let auto { note(AppLocalized("已自动允许 · \(auto)")) }
             if let approvalId {
                 if let resolved = pendingApprovals.first(where: { $0.approvalId == approvalId }) {
                     WatchBridge.shared.clearApprovalRequest(approvalId: resolved.approvalId)
@@ -980,7 +980,7 @@ final class HarnessSessionDriver: ObservableObject {
             lastError = message
             items.append(GatewayTranscriptItem(
                 kind: .failure,
-                text: message ?? String(localized: "The turn failed.")))
+                text: message ?? AppLocalized("The turn failed.")))
             status = "idle"
             lastTurnFailed = true
             clearApprovals()
@@ -988,7 +988,7 @@ final class HarnessSessionDriver: ObservableObject {
             // The turn stopped; keep following — a follow-up may come next.
             status = "idle"
             clearApprovals()
-            note(String(localized: "Session stopped."))
+            note(AppLocalized("Session stopped."))
         case .unknown(let name, let payload):
             if name == "user.message" {
                 // The durable log now carries the user half of the

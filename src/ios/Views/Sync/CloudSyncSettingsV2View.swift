@@ -203,7 +203,7 @@ struct CloudSyncSettingsV2View: View {
 
                 if v2Enabled, let cloudProblem {
                     Section {
-                        Text(health.state == .degraded ? String(localized: "Some sync operations are waiting; other data can continue.") : String(localized: "Sync needs attention. Local changes are kept on this device."))
+                        Text(health.state == .degraded ? AppLocalized("Some sync operations are waiting; other data can continue.") : AppLocalized("Sync needs attention. Local changes are kept on this device."))
                             .foregroundStyle(.secondary)
                         DisclosureGroup("Sync diagnostics") {
                             Text(cloudProblem).font(.caption).textSelection(.enabled)
@@ -355,9 +355,9 @@ struct CloudSyncSettingsV2View: View {
                 cloudProblem = nil
             }
             statusText = health.state.localizedLabel
-            if SyncCore.shared.pausedUntil != nil { statusText = String(localized: "Paused") }
+            if SyncCore.shared.pausedUntil != nil { statusText = AppLocalized("Paused") }
         } else {
-            statusText = String(localized: "Off")
+            statusText = AppLocalized("Off")
         }
     }
 
@@ -411,18 +411,18 @@ struct CloudSyncSettingsV2View: View {
     }
 
     private func uploadTypesSummary(_ csv: [String]) -> String {
-        guard !csv.isEmpty else { return String(localized: "No categories enabled") }
+        guard !csv.isEmpty else { return AppLocalized("No categories enabled") }
         return csv.joined(separator: " · ")
     }
 
     private func relativeDate(_ d: Date) -> String {
         let secs = Int(Date().timeIntervalSince(d))
-        if secs < 60 { return String(localized: "Just now") }
+        if secs < 60 { return AppLocalized("Just now") }
         let mins = secs / 60
-        if mins < 60 { return String(localized: "\(mins) min ago") }
+        if mins < 60 { return AppLocalized("\(mins) min ago") }
         let hrs = mins / 60
-        if hrs < 24 { return String(localized: "\(hrs) hr ago") }
+        if hrs < 24 { return AppLocalized("\(hrs) hr ago") }
         let days = hrs / 24
-        return String(localized: "\(days) day ago")
+        return AppLocalized("\(days) day ago")
     }
 }

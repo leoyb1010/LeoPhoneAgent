@@ -245,7 +245,7 @@ import VisionKit
                     isPinchToZoomEnabled: true, isGuidanceEnabled: true, isHighlightingEnabled: true)
                 let delegate = CodeScanDelegate(operation: operation)
                 scanner.delegate = delegate
-                scanner.navigationItem.title = String(localized: "Scan Code")
+                scanner.navigationItem.title = AppLocalized("Scan Code")
                 scanner.navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel,
                     target: delegate, action: #selector(CodeScanDelegate.cancelTapped))
                 let nav = UINavigationController(rootViewController: scanner)

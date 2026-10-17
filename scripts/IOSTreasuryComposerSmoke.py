@@ -3,6 +3,7 @@
 Only app-support/cache directory locations are redirected; no user's draft is read.
 """
 from pathlib import Path
+from ios_smoke_support import APP_LOCALIZED_SHIM, APP_LOCALIZATION_SOURCE
 import importlib.util,subprocess,tempfile
 root=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('audit_generator',root/'scripts/native-model-audit/generate.py')
@@ -128,6 +129,6 @@ func expect(_ c:Bool,_ m:String){if !c{print("FAIL: "+m);exit(1)}}
 }
 '''
 with tempfile.TemporaryDirectory(prefix='leo-treasury-composer-') as folder:
- code=Path(folder)/'Smoke.swift';code.write_text(swift);binary=Path(folder)/'smoke';data=Path(folder)/'data';data.mkdir()
+ code=Path(folder)/'Smoke.swift';code.write_text(APP_LOCALIZED_SHIM + swift);binary=Path(folder)/'smoke';data=Path(folder)/'data';data.mkdir()
  subprocess.run(['swiftc','-parse-as-library',str(code),'-o',str(binary)],check=True)
  subprocess.run([str(binary),str(data)],check=True)

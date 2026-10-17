@@ -45,12 +45,12 @@ final class CapabilityAuthorizationProbe: ObservableObject {
 
         var label: String {
             switch self {
-            case .authorized: return String(localized: "Authorized")
+            case .authorized: return AppLocalized("Authorized")
             case .limited(let detail): return detail
-            case .denied: return String(localized: "Denied")
-            case .notDetermined: return String(localized: "Not asked")
-            case .unknown: return String(localized: "Cannot query")
-            case .unavailable: return String(localized: "Unavailable")
+            case .denied: return AppLocalized("Denied")
+            case .notDetermined: return AppLocalized("Not asked")
+            case .unknown: return AppLocalized("Cannot query")
+            case .unavailable: return AppLocalized("Unavailable")
             }
         }
 
@@ -90,7 +90,7 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         next["apple-location"] = location()
         next["apple-speech"] = Self.speech()
         next["apple-media"] = Self.mediaLibrary()
-        next["apple-player"] = .unknown(String(localized: "Access depends on the selected media file"))
+        next["apple-player"] = .unknown(AppLocalized("Access depends on the selected media file"))
         next["apple-bluetooth"] = Self.bluetooth()
         next["apple-healthkit"] = healthKit()
         next["apple-nfc"] = Self.nfc()
@@ -98,11 +98,11 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         next["apple-camera"] = Self.camera()
         next["apple-motion"] = Self.motion()
         // No status API exists for these; say so rather than implying "off".
-        next["apple-homekit"] = .unknown(String(localized: "HomeKit exposes no status API; asked on first use"))
-        next["apple-clipboard"] = .unknown(String(localized: "iOS asks on demand when reading"))
+        next["apple-homekit"] = .unknown(AppLocalized("HomeKit exposes no status API; asked on first use"))
+        next["apple-clipboard"] = .unknown(AppLocalized("iOS asks on demand when reading"))
         next["apple-alarm"] = Self.alarm()
-        next["apple-files"] = .unknown(String(localized: "Per-folder grants via the system picker"))
-        next["apple-shortcuts"] = .unknown(String(localized: "Runs through the Shortcuts app"))
+        next["apple-files"] = .unknown(AppLocalized("Per-folder grants via the system picker"))
+        next["apple-shortcuts"] = .unknown(AppLocalized("Runs through the Shortcuts app"))
 
         // [T-capability-probe-flicker] Carry the async-filled notification row
         // across. `refresh()` runs on every onAppear (list AND every detail
@@ -120,10 +120,10 @@ final class CapabilityAuthorizationProbe: ObservableObject {
             let status: Status
             switch settings.authorizationStatus {
             case .authorized, .provisional: status = .authorized
-            case .ephemeral: status = .limited(String(localized: "Temporary"))
+            case .ephemeral: status = .limited(AppLocalized("Temporary"))
             case .denied: status = .denied
             case .notDetermined: status = .notDetermined
-            @unknown default: status = .unknown(String(localized: "Unknown state"))
+            @unknown default: status = .unknown(AppLocalized("Unknown state"))
             }
             Task { @MainActor in
                 self.statuses["apple-notification"] = status
@@ -138,17 +138,17 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         case .authorized: return .authorized
         case .denied: return .denied
         case .notDetermined: return .notDetermined
-        @unknown default: return .unknown(String(localized: "Unknown state"))
+        @unknown default: return .unknown(AppLocalized("Unknown state"))
         }
     }
 
     private static func contacts() -> Status {
         switch CNContactStore.authorizationStatus(for: .contacts) {
         case .authorized: return .authorized
-        case .limited: return .limited(String(localized: "Selected contacts only"))
+        case .limited: return .limited(AppLocalized("Selected contacts only"))
         case .denied, .restricted: return .denied
         case .notDetermined: return .notDetermined
-        @unknown default: return .unknown(String(localized: "Unknown state"))
+        @unknown default: return .unknown(AppLocalized("Unknown state"))
         }
     }
 
@@ -157,7 +157,7 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         case .authorized: return .authorized
         case .denied, .restricted: return .denied
         case .notDetermined: return .notDetermined
-        @unknown default: return .unknown(String(localized: "Unknown state"))
+        @unknown default: return .unknown(AppLocalized("Unknown state"))
         }
     }
 
@@ -166,38 +166,38 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         case .authorized: return .authorized
         case .denied, .restricted: return .denied
         case .notDetermined: return .notDetermined
-        @unknown default: return .unknown(String(localized: "Unknown state"))
+        @unknown default: return .unknown(AppLocalized("Unknown state"))
         }
     }
 
     private static func eventKit(_ type: EKEntityType) -> Status {
         switch EKEventStore.authorizationStatus(for: type) {
         case .fullAccess: return .authorized
-        case .writeOnly: return .limited(String(localized: "Write only"))
+        case .writeOnly: return .limited(AppLocalized("Write only"))
         case .authorized: return .authorized
         case .denied, .restricted: return .denied
         case .notDetermined: return .notDetermined
-        @unknown default: return .unknown(String(localized: "Unknown state"))
+        @unknown default: return .unknown(AppLocalized("Unknown state"))
         }
     }
 
     private static func photos() -> Status {
         switch PHPhotoLibrary.authorizationStatus(for: .readWrite) {
         case .authorized: return .authorized
-        case .limited: return .limited(String(localized: "Selected photos only"))
+        case .limited: return .limited(AppLocalized("Selected photos only"))
         case .denied, .restricted: return .denied
         case .notDetermined: return .notDetermined
-        @unknown default: return .unknown(String(localized: "Unknown state"))
+        @unknown default: return .unknown(AppLocalized("Unknown state"))
         }
     }
 
     private func location() -> Status {
         switch locationManager.authorizationStatus {
         case .authorizedAlways: return .authorized
-        case .authorizedWhenInUse: return .limited(String(localized: "While in use"))
+        case .authorizedWhenInUse: return .limited(AppLocalized("While in use"))
         case .denied, .restricted: return .denied
         case .notDetermined: return .notDetermined
-        @unknown default: return .unknown(String(localized: "Unknown state"))
+        @unknown default: return .unknown(AppLocalized("Unknown state"))
         }
     }
 
@@ -206,7 +206,7 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         case .authorized: return .authorized
         case .denied, .restricted: return .denied
         case .notDetermined: return .notDetermined
-        @unknown default: return .unknown(String(localized: "Unknown state"))
+        @unknown default: return .unknown(AppLocalized("Unknown state"))
         }
     }
 
@@ -215,7 +215,7 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         case .authorized: return .authorized
         case .denied, .restricted: return .denied
         case .notDetermined: return .notDetermined
-        @unknown default: return .unknown(String(localized: "Unknown state"))
+        @unknown default: return .unknown(AppLocalized("Unknown state"))
         }
     }
 
@@ -224,7 +224,7 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         case .allowedAlways: return .authorized
         case .denied, .restricted: return .denied
         case .notDetermined: return .notDetermined
-        @unknown default: return .unknown(String(localized: "Unknown state"))
+        @unknown default: return .unknown(AppLocalized("Unknown state"))
         }
     }
 
@@ -233,16 +233,16 @@ final class CapabilityAuthorizationProbe: ObservableObject {
     /// declined. Say that plainly instead of showing a misleading value.
     private func healthKit() -> Status {
         guard HKHealthStore.isHealthDataAvailable() else {
-            return .unavailable(String(localized: "Health data is not supported on this device"))
+            return .unavailable(AppLocalized("Health data is not supported on this device"))
         }
         guard let steps = HKObjectType.quantityType(forIdentifier: .stepCount) else {
-            return .unknown(String(localized: "Cannot resolve health data type"))
+            return .unknown(AppLocalized("Cannot resolve health data type"))
         }
         switch healthStore.authorizationStatus(for: steps) {
-        case .sharingAuthorized: return .limited(String(localized: "Writable; iOS does not allow querying read access"))
-        case .sharingDenied: return .limited(String(localized: "Write denied; iOS does not allow querying read access"))
+        case .sharingAuthorized: return .limited(AppLocalized("Writable; iOS does not allow querying read access"))
+        case .sharingDenied: return .limited(AppLocalized("Write denied; iOS does not allow querying read access"))
         case .notDetermined: return .notDetermined
-        @unknown default: return .unknown(String(localized: "Unknown state"))
+        @unknown default: return .unknown(AppLocalized("Unknown state"))
         }
     }
 
@@ -251,10 +251,10 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         // authorization one — NFC has no user-facing permission.
         #if canImport(CoreNFC)
         return NFCAvailability.isAvailable
-            ? .limited(String(localized: "Hardware available; authorized per use"))
-            : .unavailable(String(localized: "This device does not support NFC"))
+            ? .limited(AppLocalized("Hardware available; authorized per use"))
+            : .unavailable(AppLocalized("This device does not support NFC"))
         #else
-        return .unavailable(String(localized: "This device does not support NFC"))
+        return .unavailable(AppLocalized("This device does not support NFC"))
         #endif
     }
 }

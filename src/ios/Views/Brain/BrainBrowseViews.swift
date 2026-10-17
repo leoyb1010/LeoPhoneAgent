@@ -35,10 +35,10 @@ struct BrainScopePicker: View {
 extension BrainBrowseScope {
     var title: String {
         switch self {
-        case .all: return String(localized: "全部")
-        case .phone: return String(localized: "手机收藏")
-        case .archive: return String(localized: "资料库")
-        case .cards: return String(localized: "知识卡")
+        case .all: return AppLocalized("全部")
+        case .phone: return AppLocalized("手机收藏")
+        case .archive: return AppLocalized("资料库")
+        case .cards: return AppLocalized("知识卡")
         }
     }
 }
@@ -50,7 +50,7 @@ struct BrainPrivacyBadge: View {
 
     var body: some View {
         if privacy == .private {
-            LeoCapsuleBadge(text: String(localized: "私密"), systemImage: "lock.fill",
+            LeoCapsuleBadge(text: AppLocalized("私密"), systemImage: "lock.fill",
                             tint: LeoTheme.ColorToken.warning)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text("私密资料"))
@@ -60,7 +60,7 @@ struct BrainPrivacyBadge: View {
 
 struct BrainOfflineBadge: View {
     var body: some View {
-        LeoCapsuleBadge(text: String(localized: "离线 · 缓存"), systemImage: "icloud.slash")
+        LeoCapsuleBadge(text: AppLocalized("离线 · 缓存"), systemImage: "icloud.slash")
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text("离线,显示的是缓存内容"))
     }
@@ -206,9 +206,9 @@ struct BrainBrowseSection: View {
             case .notConfigured(let showsPrompt):
                 if showsPrompt {
                     LeoEmptyState(systemImage: "books.vertical",
-                                  title: String(localized: "还没有连接资料库"),
-                                  message: String(localized: "在「设置 › 资料库」连接 Mac 上的资料库后,这里能搜到你的文件和知识卡。"),
-                                  actionTitle: String(localized: "去连接"),
+                                  title: AppLocalized("还没有连接资料库"),
+                                  message: AppLocalized("在「设置 › 资料库」连接 Mac 上的资料库后,这里能搜到你的文件和知识卡。"),
+                                  actionTitle: AppLocalized("去连接"),
                                   actionSystemImage: "link",
                                   action: openBrainSettings)
                         .listRowSeparator(.hidden)
@@ -248,7 +248,7 @@ struct BrainBrowseSection: View {
     private var content: some View {
         if scope == .all {
             if !trimmed.isEmpty {
-                LeoSectionHeader(title: String(localized: "资料库"),
+                LeoSectionHeader(title: AppLocalized("资料库"),
                                  count: phase == .loading ? nil : model.results.count,
                                  systemImage: "books.vertical")
                     .leoListPlainRow(inset: inset, top: LeoTheme.Spacing.md, bottom: LeoTheme.Spacing.xxs)
@@ -294,13 +294,13 @@ struct BrainBrowseSection: View {
             }
             if phase == .empty {
                 LeoEmptyState(systemImage: "rectangle.on.rectangle.angled",
-                              title: String(localized: "资料库里还没有知识卡。"))
+                              title: AppLocalized("资料库里还没有知识卡。"))
             }
         } else if phase == .idle {
             if scope == .archive {
                 LeoEmptyState(systemImage: "text.magnifyingglass",
-                              title: String(localized: "搜索你的资料库"),
-                              message: String(localized: "输入关键词搜索资料库里的文件。"))
+                              title: AppLocalized("搜索你的资料库"),
+                              message: AppLocalized("输入关键词搜索资料库里的文件。"))
             }
         } else {
             if !store.unlock.unlockedThisSession {
@@ -329,7 +329,7 @@ struct BrainBrowseSection: View {
             }
             if phase == .empty {
                 LeoEmptyState(systemImage: "doc.text.magnifyingglass",
-                              title: String(localized: "资料库里没有匹配的内容。"))
+                              title: AppLocalized("资料库里没有匹配的内容。"))
             }
         }
     }
@@ -404,7 +404,7 @@ struct BrainBrowseSection: View {
     private func failedRow(_ error: BrainError) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Label(error.isOffline
-                  ? (scope == .all ? String(localized: "资料库离线,只显示手机收藏。") : String(localized: "资料库离线,暂时搜不了。"))
+                  ? (scope == .all ? AppLocalized("资料库离线,只显示手机收藏。") : AppLocalized("资料库离线,暂时搜不了。"))
                   : error.message,
                   systemImage: error.isOffline ? "icloud.slash" : "exclamationmark.triangle")
                 .font(.footnote)
@@ -413,12 +413,12 @@ struct BrainBrowseSection: View {
             Spacer(minLength: 4)
             switch error.recovery {
             case .retry:
-                Button(String(localized: "重试")) { retryToken += 1 }
+                Button(AppLocalized("重试")) { retryToken += 1 }
                     .font(.footnote.weight(.semibold))
                     .buttonStyle(.borderless)
                     .frame(minHeight: 44)
             case .reconnect:
-                Button(String(localized: "去设置")) { openBrainSettings() }
+                Button(AppLocalized("去设置")) { openBrainSettings() }
                     .font(.footnote.weight(.semibold))
                     .buttonStyle(.borderless)
                     .frame(minHeight: 44)
@@ -446,7 +446,7 @@ struct BrainResultRow: View {
             LeoIconTile(systemImage: symbol, size: 40)
             VStack(alignment: .leading, spacing: LeoTheme.Card.lineGap) {
                 HStack(alignment: .firstTextBaseline, spacing: LeoTheme.Spacing.xs) {
-                    Text(item.title.isEmpty ? String(localized: "未命名") : item.title)
+                    Text(item.title.isEmpty ? AppLocalized("未命名") : item.title)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(LeoTheme.ColorToken.primaryText)
                         .lineLimit(2)
@@ -491,7 +491,7 @@ struct BrainCardRow: View {
         HStack(alignment: .top, spacing: LeoTheme.Spacing.sm) {
             LeoIconTile(systemImage: "rectangle.on.rectangle.angled", size: 40)
             VStack(alignment: .leading, spacing: LeoTheme.Card.lineGap) {
-                Text(card.title.isEmpty ? String(localized: "未命名") : card.title)
+                Text(card.title.isEmpty ? AppLocalized("未命名") : card.title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(LeoTheme.ColorToken.primaryText)
                     .lineLimit(2)
@@ -538,9 +538,9 @@ private struct BrainLockedView: View {
 
     var body: some View {
         LeoEmptyState(systemImage: "lock.fill",
-                      title: String(localized: "私密资料"),
-                      message: String(localized: "用面容 ID 或设备密码解锁后查看。5 分钟内再次打开不用重复解锁。"),
-                      actionTitle: String(localized: "解锁查看"),
+                      title: AppLocalized("私密资料"),
+                      message: AppLocalized("用面容 ID 或设备密码解锁后查看。5 分钟内再次打开不用重复解锁。"),
+                      actionTitle: AppLocalized("解锁查看"),
                       actionSystemImage: "faceid",
                       action: onUnlock)
     }
@@ -574,7 +574,7 @@ struct BrainFileDetailView: View {
     var body: some View {
         Group {
             if effectivePrivacy == .restricted {
-                LeoEmptyState(systemImage: "nosign", title: String(localized: "这份资料不能在手机上查看"))
+                LeoEmptyState(systemImage: "nosign", title: AppLocalized("这份资料不能在手机上查看"))
             } else if effectivePrivacy == .private && !unlocked {
                 BrainLockedView { Task { await unlock() } }
             } else {
@@ -797,7 +797,7 @@ struct BrainFileDetailView: View {
                 fromCache = true
                 error = nil
             } else {
-                error = String(localized: "离线,这一页没有缓存。")
+                error = AppLocalized("离线,这一页没有缓存。")
             }
         } catch {
             self.error = (error as? BrainError)?.message ?? BrainError.network.message
@@ -1003,7 +1003,7 @@ struct BrainCardEditorView: View {
                 Section { Text(error).font(.footnote).foregroundStyle(LeoTheme.ColorToken.warning) }
             }
         }
-        .navigationTitle(card == nil ? String(localized: "新建知识卡") : String(localized: "编辑知识卡"))
+        .navigationTitle(card == nil ? AppLocalized("新建知识卡") : AppLocalized("编辑知识卡"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -1092,7 +1092,7 @@ enum BrainTreasuryCapture {
                 _ = try await store.captureText(markdown(title: title, body: item.value, item: item),
                                                 filename: BrainStore.markdownFileName(title))
             }
-            return String(localized: "已送进资料库收件箱")
+            return AppLocalized("已送进资料库收件箱")
         } catch {
             return (error as? BrainError)?.message ?? BrainError.network.message
         }

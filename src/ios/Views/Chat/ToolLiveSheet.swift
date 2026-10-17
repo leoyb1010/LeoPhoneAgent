@@ -264,7 +264,7 @@ private struct CopyableURLCapsule: View {
     @State private var showCopied = false
 
     var body: some View {
-        Text(showCopied ? String(localized: "Copied") : url)
+        Text(showCopied ? AppLocalized("Copied") : url)
             .font(.system(size: 12, weight: showCopied ? .semibold : .regular))
             .foregroundStyle(showCopied ? Color.white : Color(white: 0.35))
             .lineLimit(1)
@@ -1033,7 +1033,7 @@ struct ToolLiveSheet: View {
 
         // Compute size label for title bar (just byte size, not the result message)
         let sizeLabel: String = {
-            if isStreaming { return String(localized: "streaming…") }
+            if isStreaming { return AppLocalized("streaming…") }
             let totalBytes = oldText.utf8.count + newText.utf8.count
             return Self.formatBytes(totalBytes)
         }()
@@ -1128,9 +1128,9 @@ struct ToolLiveSheet: View {
                                 // cancelled → "Cancelled".
                                 let (label, labelColor): (String, Color) = {
                                     switch block.toolStatus {
-                                    case .failed:    return (String(localized: "Failed to edit"), .red)
-                                    case .cancelled: return (String(localized: "Cancelled"),     .orange)
-                                    default:         return (String(localized: "Edited"),        Color(UIColor.label))
+                                    case .failed:    return (AppLocalized("Failed to edit"), .red)
+                                    case .cancelled: return (AppLocalized("Cancelled"),     .orange)
+                                    default:         return (AppLocalized("Edited"),        Color(UIColor.label))
                                     }
                                 }()
                                 let isFailure: Bool = {
@@ -1294,7 +1294,7 @@ struct ToolLiveSheet: View {
     private func memoryEditorContent(_ memoryContent: String, action: String, resultText: String? = nil, isStreaming: Bool = false) -> some View {
         let byteCount = memoryContent.utf8.count
         let sizeLabel = isStreaming
-            ? String(localized: "\(Self.formatBytes(byteCount)) received")
+            ? AppLocalized("\(Self.formatBytes(byteCount)) received")
             : Self.formatBytes(byteCount)
 
         return ScrollView {
@@ -1355,7 +1355,7 @@ struct ToolLiveSheet: View {
         let isRead = { if case .fileReadTool = block.kind { return true }; return false }()
         let byteCount = fileContent.utf8.count
         let sizeLabel = isStreaming
-            ? String(localized: "\(Self.formatBytes(byteCount)) received")
+            ? AppLocalized("\(Self.formatBytes(byteCount)) received")
             : Self.formatBytes(byteCount)
 
         let chunks = isStreaming
@@ -1897,7 +1897,7 @@ struct ToolLiveSheet: View {
         case .browserTool: return AgentToolPresentation.displayName(for: "browser")
         case .readImageTool: return AgentToolPresentation.displayName(for: "read_image")
         case .memoryTool: return AgentToolPresentation.displayName(for: "memory")
-        case .delegateTool: return String(localized: "子代理")
+        case .delegateTool: return AppLocalized("子代理")
         case .info, .text, .thinking: return "LeoBot"
         }
     }
@@ -2236,17 +2236,17 @@ private struct ToolPreviewThumbnail: View {
         case .shellTool(let cmd): return cmd.isEmpty ? "$ shell" : "$ \(cmd)"
         case .fileReadTool(let p):
             let name = (p as NSString).lastPathComponent
-            return (!p.isEmpty && name != "/" && name.contains(".")) ? name : String(localized: "Read file")
+            return (!p.isEmpty && name != "/" && name.contains(".")) ? name : AppLocalized("Read file")
         case .fileWriteTool(let p):
             let name = (p as NSString).lastPathComponent
-            return (!p.isEmpty && name != "/" && name.contains(".")) ? name : String(localized: "Write file")
+            return (!p.isEmpty && name != "/" && name.contains(".")) ? name : AppLocalized("Write file")
         case .fileEditTool(let p):
             let name = (p as NSString).lastPathComponent
-            return (!p.isEmpty && name != "/" && name.contains(".")) ? name : String(localized: "Edit file")
+            return (!p.isEmpty && name != "/" && name.contains(".")) ? name : AppLocalized("Edit file")
         case .browserTool(let a): return a
         case .readImageTool(let p):
             let name = (p as NSString).lastPathComponent
-            return (!p.isEmpty && name != "/" && name.contains(".")) ? name : String(localized: "Read image")
+            return (!p.isEmpty && name != "/" && name.contains(".")) ? name : AppLocalized("Read image")
         case .memoryTool(let a): return a
         default: return ""
         }

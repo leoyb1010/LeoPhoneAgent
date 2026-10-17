@@ -5590,7 +5590,7 @@ extension ChatStore {
         // The replay below goes through mergeRemoteMessage, which skips a chat
         // that is running here: pulling one would delete its rows and put nothing back.
         if SessionActivityTracker.isActiveThreadSafe(sessionId) {
-            return .failed(String(localized: "这个对话正在运行，停下后再拉取"))
+            return .failed(AppLocalized("这个对话正在运行，停下后再拉取"))
         }
         invalidateSessionListCache(sessionId: sessionId)  // PER-SESSION: one session's rows are swapped
         iCloudLogger.warning("[ForcePull] sid=\(sessionId.prefix(8)) START — pulling cloud first, local untouched")

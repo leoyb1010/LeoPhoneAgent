@@ -23,30 +23,30 @@ struct HelperSheet: View {
         let childId = childSessionIdOverride ?? info.childSessionId
         NavigationStack {
             List {
-                Section(String(localized: "任务")) {
+                Section(AppLocalized("任务")) {
                     Text(info.title).font(.body.weight(.semibold))
                     if let task = HelperBlockInfo.parsed(block).args["task"] as? String, !task.isEmpty {
                         Text(task).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                     }
-                    LabeledContent(String(localized: "子代理"), value: info.agent ?? SubAgentDefinition.builtInName)
-                    if let model = info.modelLabel { LabeledContent(String(localized: "模型"), value: model) }
-                    LabeledContent(String(localized: "状态"), value: AgentCallback.localizedStatus(info.status))
+                    LabeledContent(AppLocalized("子代理"), value: info.agent ?? SubAgentDefinition.builtInName)
+                    if let model = info.modelLabel { LabeledContent(AppLocalized("模型"), value: model) }
+                    LabeledContent(AppLocalized("状态"), value: AgentCallback.localizedStatus(info.status))
                 }
                 if let result = info.result, !result.isEmpty {
-                    Section(String(localized: "结果")) {
+                    Section(AppLocalized("结果")) {
                         Text(result).font(.callout).textSelection(.enabled)
                     }
                 } else if info.isControlOnly, !block.content.isEmpty {
-                    Section(String(localized: "返回")) {
+                    Section(AppLocalized("返回")) {
                         Text(block.content).font(.caption.monospaced()).textSelection(.enabled)
                     }
                 }
                 if childId != nil {
-                    Section(String(localized: "子代理对话（只读）")) {
+                    Section(AppLocalized("子代理对话（只读）")) {
                         if !loaded {
                             ProgressView()
                         } else if transcript.isEmpty {
-                            Text(String(localized: "还没有内容")).foregroundStyle(.secondary)
+                            Text(AppLocalized("还没有内容")).foregroundStyle(.secondary)
                         } else {
                             ForEach(transcript) { line in
                                 VStack(alignment: .leading, spacing: 4) {
@@ -59,11 +59,11 @@ struct HelperSheet: View {
                     }
                 }
             }
-            .navigationTitle(String(localized: "子代理"))
+            .navigationTitle(AppLocalized("子代理"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "完成")) { dismiss() }
+                    Button(AppLocalized("完成")) { dismiss() }
                 }
             }
             .task(id: childId) { await load(childId) }
@@ -88,11 +88,11 @@ struct HelperSheet: View {
                     let head = tr.output.prefix(300)
                     if !head.isEmpty { parts.append("← " + head + (tr.output.count > 300 ? "…" : "")) }
                 case .mediaRef:
-                    parts.append(String(localized: "[图片]"))
+                    parts.append(AppLocalized("[图片]"))
                 }
             }
             guard !parts.isEmpty else { continue }
-            let role = raw.role == .assistant ? String(localized: "子代理") : String(localized: "输入 / 工具结果")
+            let role = raw.role == .assistant ? AppLocalized("子代理") : AppLocalized("输入 / 工具结果")
             lines.append(TranscriptLine(role: role, text: parts.joined(separator: "\n")))
         }
         transcript = lines

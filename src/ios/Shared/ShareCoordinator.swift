@@ -151,7 +151,7 @@ final class ShareCoordinator: ObservableObject {
             // explicitly shared content into LeoPhoneAgent — tell them it didn't make
             // it instead of letting the screenshot vanish into thin air.
             Task { @MainActor in
-                ShareFeedbackToast.show(String(localized: "Shared content expired. Please share again."))
+                ShareFeedbackToast.show(AppLocalized("Shared content expired. Please share again."))
             }
             return nil
         }

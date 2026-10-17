@@ -3,6 +3,7 @@
 No app group, live Treasury data, model execution or simulator is used.
 """
 from pathlib import Path
+from ios_smoke_support import APP_LOCALIZED_SHIM, APP_LOCALIZATION_SOURCE
 import importlib.util
 import subprocess
 import tempfile
@@ -134,7 +135,7 @@ func expect(_ value: Bool, _ message: String) { if !value { print("FAIL: " + mes
 with tempfile.TemporaryDirectory(prefix='leo-note-recovery-') as temp:
     folder = Path(temp)
     body = folder / 'NoteBodyStore.swift'; body.write_text(body_source)
-    code = folder / 'Probe.swift'; code.write_text(support)
+    code = folder / 'Probe.swift'; code.write_text(APP_LOCALIZED_SHIM + support)
     binary = folder / 'probe'
     subprocess.run(['swiftc', '-parse-as-library', '-module-cache-path', str(folder / 'cache'), str(body), str(code), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
@@ -165,5 +166,5 @@ actor CollectionSearchIndex {
     subprocess.run(['swiftc', '-typecheck', '-parse-as-library', '-swift-version', '5', '-sdk', sdk,
                     '-target', 'arm64-apple-ios27.0-simulator', '-module-cache-path', str(folder / 'sdk-cache'),
                     str(ROOT / 'src/ios/Shared/NoteBodyStore.swift'), str(ROOT / 'src/ios/Views/NoteEditorView.swift'),
-                    str(stubs)], check=True)
+                    str(stubs), str(APP_LOCALIZATION_SOURCE)], check=True)
     print('PASS actual NoteEditorView + NoteBodyStore iOS SDK typecheck (not runtime UI)')

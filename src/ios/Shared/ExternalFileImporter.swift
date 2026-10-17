@@ -145,16 +145,16 @@ enum ExternalFileImporter {
 
         let alert = UIAlertController(
             title: replacing
-                ? String(localized: "Replace skill “\(parsed.name)”?")
-                : String(localized: "Install skill “\(parsed.name)”?"),
+                ? AppLocalized("Replace skill “\(parsed.name)”?")
+                : AppLocalized("Install skill “\(parsed.name)”?"),
             message: replacing
-                ? String(localized: "A skill with this name is already installed. Replacing it overwrites its instructions.") + "\n\n" + message
+                ? AppLocalized("A skill with this name is already installed. Replacing it overwrites its instructions.") + "\n\n" + message
                 : message,
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
+        alert.addAction(UIAlertAction(title: AppLocalized("Cancel"), style: .cancel))
         alert.addAction(UIAlertAction(
-            title: replacing ? String(localized: "Replace") : String(localized: "Install"),
+            title: replacing ? AppLocalized("Replace") : AppLocalized("Install"),
             style: replacing ? .destructive : .default
         ) { _ in
             install(content: content)
@@ -174,7 +174,7 @@ enum ExternalFileImporter {
             let skill = try SkillStore.shared.importSkill(content: content, source: .file, replace: true)
             importLog.info("[Share] installed shared skill '\(skill.name)'")
             let note = UNMutableNotificationContent()
-            note.title = String(localized: "Skill installed")
+            note.title = AppLocalized("Skill installed")
             note.body = skill.name
             Task {
                 try? await UNUserNotificationCenter.current().add(

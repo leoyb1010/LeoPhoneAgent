@@ -475,11 +475,13 @@
 		E5J000040 /* AttributeQueryRecorder.m in Sources */ = {isa = PBXBuildFile; fileRef = E5J000041 /* AttributeQueryRecorder.m */; };
 		E5JB00001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB00002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LF8FF39531B5 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFCFE968014F /* AppLocalization.swift */; };
 		LF09A3D5AF16 /* AppLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7490DDBA85 /* AppLanguages.swift */; };
 		E5JB00003 /* jieba.dict.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00014 /* jieba.dict.utf8 */; };
 		E5JB00004 /* hmm_model.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00015 /* hmm_model.utf8 */; };
 		E5JB10001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB10002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
+		LF39CB9C995A /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFCFE968014F /* AppLocalization.swift */; };
 		LFD3285375CA /* AppLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7490DDBA85 /* AppLanguages.swift */; };
 		E5JB10003 /* jieba.dict.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00014 /* jieba.dict.utf8 */; };
 		E5JB10004 /* hmm_model.utf8 in Resources */ = {isa = PBXBuildFile; fileRef = E5JB00015 /* hmm_model.utf8 */; };
@@ -1471,6 +1473,7 @@
 		E5JB00011 /* JiebaWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JiebaWrapper.h; sourceTree = "<group>"; };
 		E5JB00012 /* JiebaWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = JiebaWrapper.mm; sourceTree = "<group>"; };
 		E5JB00013 /* TextSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSegmenter.swift; sourceTree = "<group>"; };
+		LFCFE968014F /* AppLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalization.swift; sourceTree = "<group>"; };
 		LF7490DDBA85 /* AppLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguages.swift; sourceTree = "<group>"; };
 		E5JB00014 /* jieba.dict.utf8 */ = {isa = PBXFileReference; lastKnownFileType = text; name = jieba.dict.utf8; path = Resources/jieba.dict.utf8; sourceTree = "<group>"; };
 		E5JB00015 /* hmm_model.utf8 */ = {isa = PBXFileReference; lastKnownFileType = text; name = hmm_model.utf8; path = Resources/hmm_model.utf8; sourceTree = "<group>"; };
@@ -2458,6 +2461,7 @@
 				E5JB00011 /* JiebaWrapper.h */,
 				E5JB00012 /* JiebaWrapper.mm */,
 				E5JB00013 /* TextSegmenter.swift */,
+				LFCFE968014F /* AppLocalization.swift */,
 				LF7490DDBA85 /* AppLanguages.swift */,
 				E5VC00013 /* SentenceSplitter.swift */,
 				E5KVC0014 /* SafeKVCSetTrue.h */,
@@ -3724,6 +3728,7 @@
 				LF0B67AADDC6 /* LongTextCollapse.swift in Sources */,
 				E5R3R0003 /* NSTextContainerSetSizeGuard.m in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
+				LF39CB9C995A /* AppLocalization.swift in Sources */,
 				LFD3285375CA /* AppLanguages.swift in Sources */,
 				E5VC1000A /* SentenceSplitter.swift in Sources */,
 				E5VTS1001 /* VoiceTextSanitizer.swift in Sources */,
@@ -3872,6 +3877,7 @@
 				AA26CCBA2F31080100AECF2D /* ISHKernel.m in Sources */,
 				E5JB00001 /* JiebaWrapper.mm in Sources */,
 				E5JB00002 /* TextSegmenter.swift in Sources */,
+				LF8FF39531B5 /* AppLocalization.swift in Sources */,
 				LF09A3D5AF16 /* AppLanguages.swift in Sources */,
 				E5VC00001 /* VoiceCorrectionDB.swift in Sources */,
 				E5VC0000D /* VoiceCorrectionDiff.swift in Sources */,

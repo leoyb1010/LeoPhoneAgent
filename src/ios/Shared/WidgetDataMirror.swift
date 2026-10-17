@@ -49,11 +49,11 @@ enum WidgetDataMirror {
             || SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId)
         let summary: String
         if redact {
-            summary = String(localized: "已生成 · 打开 App 查看")
+            summary = AppLocalized("已生成 · 打开 App 查看")
         } else {
             let text = await AgentRunResultReader.text(sessionId: sessionId, runId: runId)
             summary = text.isEmpty
-                ? String(localized: "任务已完成，可打开对话查看执行记录。") : text
+                ? AppLocalized("任务已完成，可打开对话查看执行记录。") : text
         }
 
         WidgetBriefingStore.save(WidgetBriefing(
@@ -129,7 +129,7 @@ enum WidgetDataMirror {
                 // user asked for this work in advance, tell them it landed.
                 if entry.origin == "scheduled" {
                     ScheduledTaskRunner.notify(
-                        title: String(localized: "Scheduled task finished"),
+                        title: AppLocalized("Scheduled task finished"),
                         body: entry.taskName,
                         sessionId: entry.sessionId)
                 }
@@ -333,7 +333,7 @@ enum WidgetDataMirror {
         if privacy {
             items = items.map { item in
                 var item = item
-                item.title = String(localized: "Conversation")
+                item.title = AppLocalized("Conversation")
                 return item
             }
         }
@@ -341,7 +341,7 @@ enum WidgetDataMirror {
             WidgetRecentSessionsStore.save(items)
             WidgetReloads.request(LeoWidgetKind.recentSessions)
         }
-        let redactedSummary = String(localized: "已生成 · 打开 App 查看")
+        let redactedSummary = AppLocalized("已生成 · 打开 App 查看")
         if var briefing = WidgetBriefingStore.load(),
            privacy || lockStore.isHiddenFromSystemSurfaces(briefing.sessionId),
            briefing.summary != redactedSummary {

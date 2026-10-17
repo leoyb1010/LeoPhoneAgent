@@ -115,7 +115,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
         // 5. Validate state
         guard result.state == state else {
             logger.error("State mismatch!")
-            throw LLMError.providerError(message: String(localized: "Sign-in could not be verified. Please try again."))
+            throw LLMError.providerError(message: AppLocalized("Sign-in could not be verified. Please try again."))
         }
 
         // 6. Exchange code for token
@@ -134,7 +134,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
 
     func validAccessToken(instanceId: String) async throws -> String {
         guard var storage = ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: CodexTokenStorage.self) else {
-            throw LLMError.invalidAPIKey(detail: String(localized: "Not signed in to ChatGPT. Sign in again in Settings → Providers."))
+            throw LLMError.invalidAPIKey(detail: AppLocalized("Not signed in to ChatGPT. Sign in again in Settings → Providers."))
         }
 
         let needsRefresh = storage.refreshToken != nil
@@ -145,7 +145,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
         }
 
         guard let token = Optional(storage.accessToken), !token.isEmpty else {
-            throw LLMError.invalidAPIKey(detail: String(localized: "Not signed in to ChatGPT. Sign in again in Settings → Providers."))
+            throw LLMError.invalidAPIKey(detail: AppLocalized("Not signed in to ChatGPT. Sign in again in Settings → Providers."))
         }
         return token
     }
@@ -254,7 +254,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
             return try await postTokenRequest(body: body, context: "Token exchange")
         } catch let error as LLMError {
             guard case .providerError = error else { throw error }
-            throw LLMError.providerError(message: String(localized: "ChatGPT sign-in failed (\(OAuthRefreshErrorClassifier.userFacingSummary(error))). Please try again."))
+            throw LLMError.providerError(message: AppLocalized("ChatGPT sign-in failed (\(OAuthRefreshErrorClassifier.userFacingSummary(error))). Please try again."))
         }
     }
 

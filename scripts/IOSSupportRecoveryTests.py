@@ -3,6 +3,7 @@
 No simulator, user Keychain, live MCP endpoint or remote command is accessed.
 """
 from pathlib import Path
+from ios_smoke_support import APP_LOCALIZED_SHIM, APP_LOCALIZATION_SOURCE
 import subprocess
 import tempfile
 
@@ -230,7 +231,7 @@ func check(_ value: @autoclosure () -> Bool, _ message: String) {
 with tempfile.TemporaryDirectory(prefix='leo-support-recovery-') as work:
     work = Path(work)
     swift = work / 'Recovery.swift'
-    swift.write_text(source)
+    swift.write_text(APP_LOCALIZED_SHIM + source)
     binary = work / 'recovery'
     subprocess.run(['swiftc', '-parse-as-library', '-module-cache-path', str(work / 'cache'), str(swift), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)

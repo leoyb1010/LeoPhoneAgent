@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run actual Home send routing with group-free and unavailable-choice fixtures."""
 from pathlib import Path
+from ios_smoke_support import APP_LOCALIZED_SHIM, APP_LOCALIZATION_SOURCE
 import importlib.util
 import subprocess
 import tempfile
@@ -47,6 +48,6 @@ expect(noModels.launches==0 && noModels.showSelectModels && !noModels.homeDraft.
 print("PASS production Home routing: no groups, invalid explicit choice, unavailable catalog")
 '''
 with tempfile.TemporaryDirectory(prefix='leo-home-prompt-') as folder:
- code=Path(folder)/'main.swift';code.write_text(swift);binary=Path(folder)/'smoke'
+ code=Path(folder)/'main.swift';code.write_text(APP_LOCALIZED_SHIM + swift);binary=Path(folder)/'smoke'
  subprocess.run(['swiftc',str(code),'-o',str(binary)],check=True)
  subprocess.run([str(binary)],check=True)

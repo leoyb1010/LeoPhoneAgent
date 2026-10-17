@@ -491,7 +491,7 @@ struct SpeechPlayerControl: View {
                     Image(systemName: "waveform")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
-                    Text(modelLabel.isEmpty ? String(localized: "Voice") : modelLabel)
+                    Text(modelLabel.isEmpty ? AppLocalized("Voice") : modelLabel)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)

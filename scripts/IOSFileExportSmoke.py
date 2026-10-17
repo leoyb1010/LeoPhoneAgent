@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """File-browser export staging on real temporary files; no native share UI runs."""
 from pathlib import Path
+from ios_smoke_support import APP_LOCALIZED_SHIM, APP_LOCALIZATION_SOURCE
 import importlib.util
 import subprocess
 import tempfile
@@ -75,12 +76,12 @@ func expect(_ value: Bool, _ message: String) { if !value { print("FAIL: " + mes
 }
 '''
 with tempfile.TemporaryDirectory(prefix='leo-export-test-') as folder:
-    root = Path(folder); code = root / 'Export.swift'; code.write_text(swift); binary = root / 'probe'
+    root = Path(folder); code = root / 'Export.swift'; code.write_text(APP_LOCALIZED_SHIM + swift); binary = root / 'probe'
     subprocess.run(['swiftc', '-parse-as-library', str(code), '-o', str(binary)], check=True)
     subprocess.run([str(binary), str(root / 'data')], check=True)
     sdk = subprocess.check_output(['xcrun', '--sdk', 'iphonesimulator', '--show-sdk-path'], text=True).strip()
     fragment = source[source.index('struct DocumentExportView:'):source.index('// MARK: - View Model')]
     ui = root / 'ExportUI.swift'; ui.write_text('import SwiftUI\nimport UIKit\nimport UniformTypeIdentifiers\n' + fragment)
     subprocess.run(['swiftc', '-typecheck', '-parse-as-library', '-swift-version', '5', '-sdk', sdk,
-                    '-target', 'arm64-apple-ios27.0-simulator', '-module-cache-path', str(root / 'sdk-cache'), str(ui)], check=True)
+                    '-target', 'arm64-apple-ios27.0-simulator', '-module-cache-path', str(root / 'sdk-cache'), str(ui), str(APP_LOCALIZATION_SOURCE)], check=True)
     print('PASS actual export SwiftUI/Activity wrapper iOS SDK typecheck (no share UI launched)')

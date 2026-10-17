@@ -323,7 +323,7 @@ final class SensitiveToolGate: ObservableObject {
         // 只用来提示(弹窗标题、手表颜色),不加额外步骤。
         if FullAutoGate.mode == .smart, category.allowsSmartApproval,
            let riskSubject, SmartShellApproval.isReadOnly(riskSubject) {
-            FullAutoGate.announce(String(localized: "智能批准 · 只读命令 \(host)"), sessionId: sessionId)
+            FullAutoGate.announce(AppLocalized("智能批准 · 只读命令 \(host)"), sessionId: sessionId)
             return .allowed
         }
         let scope = grantScope ?? host
@@ -485,11 +485,11 @@ final class SensitiveToolGate: ObservableObject {
     /// (捡到锁屏手机的人不能放行命令),「拒绝」免解锁。
     nonisolated static var notificationCategory: UNNotificationCategory {
         UNNotificationCategory(identifier: notifyCategoryId, actions: [
-            UNNotificationAction(identifier: notifyAllowOnceAction, title: String(localized: "允许一次"),
+            UNNotificationAction(identifier: notifyAllowOnceAction, title: AppLocalized("允许一次"),
                                  options: [.authenticationRequired]),
-            UNNotificationAction(identifier: notifyAllowSessionAction, title: String(localized: "本次会话允许"),
+            UNNotificationAction(identifier: notifyAllowSessionAction, title: AppLocalized("本次会话允许"),
                                  options: [.authenticationRequired]),
-            UNNotificationAction(identifier: notifyDenyAction, title: String(localized: "拒绝"), options: [.destructive]),
+            UNNotificationAction(identifier: notifyDenyAction, title: AppLocalized("拒绝"), options: [.destructive]),
         ], intentIdentifiers: [])
     }
 

@@ -83,9 +83,9 @@ enum RequestBodySizeGuard {
         case .ok:
             return nil
         case .tooLarge(let est, let limit):
-            return String(localized: "请求太大（约 \(est) MB，上限 \(limit) MB）。请新开会话，或移除较大的图片/附件后重试。")
+            return AppLocalized("请求太大（约 \(est) MB，上限 \(limit) MB）。请新开会话，或移除较大的图片/附件后重试。")
         case .insufficientMemory(let needed, let available):
-            return String(localized: "内存不足，无法发送这次请求（约需 \(needed) MB，剩余 \(available) MB）。请关闭其他会话或重启 App 后重试。")
+            return AppLocalized("内存不足，无法发送这次请求（约需 \(needed) MB，剩余 \(available) MB）。请关闭其他会话或重启 App 后重试。")
         }
     }
 }

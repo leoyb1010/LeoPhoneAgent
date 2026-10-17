@@ -16,7 +16,7 @@ final class BackupZipWriter {
         case cannotCreate
 
         var errorDescription: String? {
-            String(localized: "无法创建备份包文件")
+            AppLocalized("无法创建备份包文件")
         }
     }
 

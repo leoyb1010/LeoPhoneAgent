@@ -173,19 +173,19 @@ struct ConfigAuditView: View {
         let now = Date()
         let secs = max(0, Int(now.timeIntervalSince(date)))
         if secs < 60 {
-            return String(localized: "Just now")
+            return AppLocalized("Just now")
         }
         if secs < 3600 {
             let m = secs / 60
-            return String(localized: "\(m) min ago")
+            return AppLocalized("\(m) min ago")
         }
         if secs < 86_400 {
             let h = secs / 3600
-            return String(localized: "\(h) hr ago")
+            return AppLocalized("\(h) hr ago")
         }
         let cal = Calendar.current
         if cal.isDateInYesterday(date) {
-            return String(localized: "Yesterday")
+            return AppLocalized("Yesterday")
         }
         let f = DateFormatter()
         f.dateStyle = .short
@@ -226,11 +226,11 @@ struct ConfigAuditView: View {
             await MainActor.run {
                 revertingId = nil
                 if (bridgeResult["ok"] as? Bool) == true {
-                    revertResult = AlertMessage(title: String(localized: "Reverted"),
-                                                body: String(localized: "Setting restored."))
+                    revertResult = AlertMessage(title: AppLocalized("Reverted"),
+                                                body: AppLocalized("Setting restored."))
                 } else {
-                    let reason = bridgeResult["reason"] as? String ?? String(localized: "Unknown error")
-                    revertResult = AlertMessage(title: String(localized: "Revert Failed"),
+                    let reason = bridgeResult["reason"] as? String ?? AppLocalized("Unknown error")
+                    revertResult = AlertMessage(title: AppLocalized("Revert Failed"),
                                                 body: reason)
                 }
                 reload()

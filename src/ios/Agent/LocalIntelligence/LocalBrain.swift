@@ -90,11 +90,11 @@ final class LocalBrain: ObservableObject {
 
     var statusText: String {
         switch availability {
-        case .ready: return String(localized: "本机模型可用")
-        case .unsupportedDevice: return String(localized: "这台设备不支持 Apple Intelligence")
-        case .notEnabled: return String(localized: "在系统设置里开启 Apple Intelligence 后可用")
-        case .modelNotReady: return String(localized: "本机模型还在准备中")
-        case .unavailableOnOS: return String(localized: "当前系统版本不提供本机模型")
+        case .ready: return AppLocalized("本机模型可用")
+        case .unsupportedDevice: return AppLocalized("这台设备不支持 Apple Intelligence")
+        case .notEnabled: return AppLocalized("在系统设置里开启 Apple Intelligence 后可用")
+        case .modelNotReady: return AppLocalized("本机模型还在准备中")
+        case .unavailableOnOS: return AppLocalized("当前系统版本不提供本机模型")
         }
     }
 
@@ -163,13 +163,13 @@ final class LocalBrain: ObservableObject {
 
         var title: String {
             switch self {
-            case .polish: return String(localized: "润色")
-            case .concise: return String(localized: "更精简")
-            case .expand: return String(localized: "更详细")
-            case .translateEN: return String(localized: "译成英文")
-            case .translateZH: return String(localized: "译成中文")
-            case .formal: return String(localized: "更正式")
-            case .casual: return String(localized: "更口语")
+            case .polish: return AppLocalized("润色")
+            case .concise: return AppLocalized("更精简")
+            case .expand: return AppLocalized("更详细")
+            case .translateEN: return AppLocalized("译成英文")
+            case .translateZH: return AppLocalized("译成中文")
+            case .formal: return AppLocalized("更正式")
+            case .casual: return AppLocalized("更口语")
             }
         }
 

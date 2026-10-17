@@ -191,22 +191,22 @@ struct RecordingMetadata: Codable, Equatable, Sendable, Identifiable {
         let f = DateFormatter()
         f.locale = locale
         f.dateFormat = "M月d日 HH:mm"
-        return String(localized: "录音 \(f.string(from: date))")
+        return AppLocalized("录音 \(f.string(from: date))")
     }
 
     /// 列表上的状态文字。
     var statusLabel: String {
         switch state {
-        case .recording: return String(localized: "录音中")
-        case .paused: return String(localized: "已暂停")
+        case .recording: return AppLocalized("录音中")
+        case .paused: return AppLocalized("已暂停")
         case .finished: break
         }
         switch transcription.phase {
-        case .none: return String(localized: "未转写")
-        case .running: return String(localized: "转写中")
-        case .done: return outputs.isEmpty ? String(localized: "已转写") : String(localized: "已生成纪要")
-        case .failed: return String(localized: "转写失败")
-        case .needsAssets: return String(localized: "需下载语言资源")
+        case .none: return AppLocalized("未转写")
+        case .running: return AppLocalized("转写中")
+        case .done: return outputs.isEmpty ? AppLocalized("已转写") : AppLocalized("已生成纪要")
+        case .failed: return AppLocalized("转写失败")
+        case .needsAssets: return AppLocalized("需下载语言资源")
         }
     }
 }

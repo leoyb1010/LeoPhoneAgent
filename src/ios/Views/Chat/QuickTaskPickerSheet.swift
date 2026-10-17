@@ -54,7 +54,7 @@ struct QuickTaskPickerSheet: View {
                                 Button {
                                     togglePin(task)
                                 } label: {
-                                    Label(store.isPinnedToComposer(task.id) ? String(localized: "Unpin") : String(localized: "Pin"),
+                                    Label(store.isPinnedToComposer(task.id) ? AppLocalized("Unpin") : AppLocalized("Pin"),
                                           systemImage: store.isPinnedToComposer(task.id) ? "pin.slash" : "pin")
                                 }
                                 .tint(.orange)

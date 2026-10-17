@@ -253,8 +253,8 @@ struct SettingsHomeView: View {
         let hits = groups.flatMap(\.entries).filter(matches)
         return VStack(spacing: 0) {
             if hits.isEmpty {
-                LeoEmptyState(systemImage: "magnifyingglass", title: String(localized: "没有匹配的设置项"),
-                              message: String(localized: "试试「模型」、「Mac」、「藏宝阁」或「权限」"))
+                LeoEmptyState(systemImage: "magnifyingglass", title: AppLocalized("没有匹配的设置项"),
+                              message: AppLocalized("试试「模型」、「Mac」、「藏宝阁」或「权限」"))
             } else {
                 ForEach(Array(hits.enumerated()), id: \.element.id) { index, entry in
                     SettingsRow(entry: entry)

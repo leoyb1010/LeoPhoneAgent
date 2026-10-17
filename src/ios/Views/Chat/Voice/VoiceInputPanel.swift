@@ -220,7 +220,7 @@ final class VoiceInputViewModel: ObservableObject {
         guard vad.isRunning, !vad.isCapturing else { return }
         VoiceLog.log("foreground: capture died while backgrounded (interrupted) — resetting to idle")
         stopListening()
-        startError = String(localized: "Recording was interrupted — tap the mic to resume", comment: "Voice capture interrupted")
+        startError = AppLocalized("Recording was interrupted — tap the mic to resume", comment: "Voice capture interrupted")
     }
 
     // MARK: - Control
@@ -1247,7 +1247,7 @@ extension VoiceInputViewModel: VoiceActivityDelegate {
         cancelIdleTimer()
         backgroundTimer?.invalidate(); backgroundTimer = nil
         VoiceModePreference.shared.isCapturing = false
-        startError = String(localized: "Recording was interrupted — tap the mic to resume", comment: "Voice capture interrupted")
+        startError = AppLocalized("Recording was interrupted — tap the mic to resume", comment: "Voice capture interrupted")
     }
 
     private static func computeWaveformLevels(from pcmData: Data) -> [Float] {

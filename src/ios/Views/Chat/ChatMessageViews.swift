@@ -323,7 +323,7 @@ struct ChatMessageRow: View {
                     Button {
                         onCopyScreenshot()
                     } label: {
-                        Label(String(localized: "Copy Screenshot"), systemImage: "camera.viewfinder")
+                        Label(AppLocalized("Copy Screenshot"), systemImage: "camera.viewfinder")
                     }
                 }
                 if let onEdit {
@@ -503,7 +503,7 @@ struct ChatMessageRow: View {
                             Button {
                                 onReadAloud()
                             } label: {
-                                Label(String(localized: "Read from Start"), systemImage: "play.circle")
+                                Label(AppLocalized("Read from Start"), systemImage: "play.circle")
                             }
                             // Greyed out while streaming so it can't clash with the
                             // live streaming TTS of the same reply.
@@ -513,7 +513,7 @@ struct ChatMessageRow: View {
                             Button {
                                 onCopyScreenshot()
                             } label: {
-                                Label(String(localized: "Copy Screenshot"), systemImage: "camera.viewfinder")
+                                Label(AppLocalized("Copy Screenshot"), systemImage: "camera.viewfinder")
                             }
                         }
                         if let onCompact {
@@ -574,15 +574,15 @@ struct ChatMessageRow: View {
     private func usageSummary(_ u: TokenUsage) -> String {
         var parts: [String] = []
         if u.latestContextTokens > 0 {
-            parts.append("\(String(localized: "Context")):\(formatTokenCount(u.latestContextTokens))")
+            parts.append("\(AppLocalized("Context")):\(formatTokenCount(u.latestContextTokens))")
         }
-        parts.append("\(String(localized: "Input")):\(formatTokenCount(u.inputTokens))")
-        parts.append("\(String(localized: "Output")):\(formatTokenCount(u.outputTokens))")
+        parts.append("\(AppLocalized("Input")):\(formatTokenCount(u.inputTokens))")
+        parts.append("\(AppLocalized("Output")):\(formatTokenCount(u.outputTokens))")
         if u.cacheReadTokens > 0 {
-            parts.append("\(String(localized: "Cache Read")):\(formatTokenCount(u.cacheReadTokens))")
+            parts.append("\(AppLocalized("Cache Read")):\(formatTokenCount(u.cacheReadTokens))")
         }
         if u.cacheCreationTokens > 0 {
-            parts.append("\(String(localized: "Cache Write")):\(formatTokenCount(u.cacheCreationTokens))")
+            parts.append("\(AppLocalized("Cache Write")):\(formatTokenCount(u.cacheCreationTokens))")
         }
         return parts.joined(separator: " ")
     }
@@ -608,7 +608,7 @@ struct ChatMessageRow: View {
                 Button {
                     UIPasteboard.general.string = error
                 } label: {
-                    Label(String(localized: "Copy Error"), systemImage: "doc.on.doc")
+                    Label(AppLocalized("Copy Error"), systemImage: "doc.on.doc")
                 }
             }
 

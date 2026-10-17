@@ -130,7 +130,7 @@ struct OnboardingModelSelectionView: View {
             dismiss()
             return
         }
-        let base = String(localized: "Default Models")
+        let base = AppLocalized("Default Models")
         var name = base
         var suffix = 2
         while store.modelGroups.contains(where: { $0.name == name }) { name = "\(base) \(suffix)"; suffix += 1 }

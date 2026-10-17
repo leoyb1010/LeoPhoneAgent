@@ -152,7 +152,7 @@ enum TranscriptAssembler {
         if let name = names[String(speaker)]?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
-        return String(localized: "说话人 \(speaker)")
+        return AppLocalized("说话人 \(speaker)")
     }
 
     /// 改名:去首尾空白、单行、≤20 字;空名字 = 恢复成「说话人 N」。
@@ -243,19 +243,19 @@ enum TranscriptAssembler {
         f.locale = Locale(identifier: "zh_CN")
         f.dateFormat = "yyyy-MM-dd HH:mm"
         var out = "# \(title)\n\n"
-        out += "- \(String(localized: "录音时间")):\(f.string(from: date))\n"
-        out += "- \(String(localized: "时长")):\(timestamp(duration))\n"
+        out += "- \(AppLocalized("录音时间")):\(f.string(from: date))\n"
+        out += "- \(AppLocalized("时长")):\(timestamp(duration))\n"
         if speakersInferred {
-            out += "- \(String(localized: "说话人标签由模型根据语义推断,可能有误"))\n"
+            out += "- \(AppLocalized("说话人标签由模型根据语义推断,可能有误"))\n"
         }
         if segments.contains(where: \.approximate) {
-            out += "- \(String(localized: "部分时间戳为估算"))\n"
+            out += "- \(AppLocalized("部分时间戳为估算"))\n"
         }
         if !highlights.isEmpty {
             let marks = highlights.sorted { $0.time < $1.time }.map { h in
                 "[\(timestamp(h.time))]" + (h.note.map { " \($0)" } ?? "")
             }
-            out += "- \(String(localized: "标记的重点")):\(marks.joined(separator: "、"))\n"
+            out += "- \(AppLocalized("标记的重点")):\(marks.joined(separator: "、"))\n"
         }
         out += "\n"
         for p in paragraphs(segments) {

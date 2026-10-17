@@ -87,7 +87,7 @@ struct ProviderModelCatalogView: View {
         .searchable(text: $query, prompt: "Search model, ID or provider")
         .searchFocused($searchFocused)
         .scrollDismissesKeyboard(.interactively)
-        .navigationTitle(store.instance(for: instanceId)?.label ?? String(localized: "Models"))
+        .navigationTitle(store.instance(for: instanceId)?.label ?? AppLocalized("Models"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .secondaryAction) {
@@ -97,7 +97,7 @@ struct ProviderModelCatalogView: View {
         .confirmationDialog("Hide selected models?", isPresented: $showHideConfirmation, titleVisibility: .visible) {
             Button("Hide selected models", role: .destructive) {
                 if store.setEntriesHidden(ids: selectedIds, hidden: true) { selectedIds.removeAll() }
-                else { message = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.") }
+                else { message = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.") }
             }
             .accessibilityIdentifier("model-catalog.confirm-hide")
             Button("Cancel", role: .cancel) {}
@@ -110,7 +110,7 @@ struct ProviderModelCatalogView: View {
             Button("Delete", role: .destructive) {
                 if let entry = pendingDelete {
                     if store.removeEntry(entry.id) { selectedIds.remove(entry.id) }
-                    else { message = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.") }
+                    else { message = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.") }
                 }
                 pendingDelete = nil
             }
@@ -164,7 +164,7 @@ struct ProviderModelCatalogView: View {
             Button("Add to group") { showGroupPicker = true }.disabled(selectedEntries.isEmpty)
             Button("Show selected models") {
                 if store.setEntriesHidden(ids: selectedIds, hidden: false) { selectedIds.removeAll() }
-                else { message = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.") }
+                else { message = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.") }
             }.disabled(selectedEntries.isEmpty)
             Button("Hide selected models", role: .destructive) { showHideConfirmation = true }
                 .disabled(selectedEntries.isEmpty)
@@ -200,7 +200,7 @@ struct ProviderModelCatalogView: View {
             .buttonStyle(.borderless)
             .accessibilityIdentifier("model-catalog.entry.\(entry.id)")
             Button {
-                if !pins.toggle(entry.id) { message = String(localized: "Favorites are full") }
+                if !pins.toggle(entry.id) { message = AppLocalized("Favorites are full") }
             } label: {
                 Image(systemName: pins.isPinned(entry.id) ? "star.fill" : "star")
                     .foregroundStyle(pins.isPinned(entry.id) ? Color.orange : Color.secondary)
@@ -221,23 +221,23 @@ struct ProviderModelCatalogView: View {
         guard var group = store.group(for: captured.id) else { return }
         for entry in selectedEntries where !group.memberEntryIds.contains(entry.id) { group.memberEntryIds.append(entry.id) }
         guard store.updateGroup(group) else {
-            pendingGroupMessage = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
+            pendingGroupMessage = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.")
             return
         }
         selectedIds.removeAll()
-        pendingGroupMessage = String(localized: "Models added. Review their priority in Groups.")
+        pendingGroupMessage = AppLocalized("Models added. Review their priority in Groups.")
     }
 
     private func createGroup() {
         let name = newGroupName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, !selectedEntries.isEmpty else { return }
         guard store.addGroup(ModelGroup(name: name, memberEntryIds: selectedEntries.map(\.id))) else {
-            message = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
+            message = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.")
             return
         }
         selectedIds.removeAll()
         newGroupName = ""
-        message = String(localized: "Group created. Your default stays the same.")
+        message = AppLocalized("Group created. Your default stays the same.")
     }
 }
 

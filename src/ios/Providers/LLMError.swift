@@ -19,21 +19,21 @@ enum LLMError: LocalizedError {
         switch self {
         // Shown in the chat; AgentActivityFailureClassifier reads these words too.
         case .invalidAPIKey(let detail):
-            return detail.isEmpty ? String(localized: "Invalid API key") : String(localized: "Invalid API key: \(detail)")
+            return detail.isEmpty ? AppLocalized("Invalid API key") : AppLocalized("Invalid API key: \(detail)")
         case .networkError(let error):
-            return String(localized: "Network error: \(error.localizedDescription)")
+            return AppLocalized("Network error: \(error.localizedDescription)")
         case .providerError(let message):
-            return String(localized: "Provider error: \(message)")
+            return AppLocalized("Provider error: \(message)")
         case .transientError(let message, _):
-            return String(localized: "Service temporarily unavailable: \(message)")
+            return AppLocalized("Service temporarily unavailable: \(message)")
         case .decodingError(let error):
-            return String(localized: "Decoding error: \(error.localizedDescription)")
+            return AppLocalized("Decoding error: \(error.localizedDescription)")
         case .rateLimited:
-            return String(localized: "Rate limited — please try again later")
+            return AppLocalized("Rate limited — please try again later")
         case .cancelled:
-            return String(localized: "Request was cancelled")
+            return AppLocalized("Request was cancelled")
         case .unknown(let error):
-            return error.map { String(localized: "Unknown error: \($0.localizedDescription)") } ?? String(localized: "Unknown error")
+            return error.map { AppLocalized("Unknown error: \($0.localizedDescription)") } ?? AppLocalized("Unknown error")
         }
     }
 
@@ -75,10 +75,10 @@ enum LLMError: LocalizedError {
     /// auto-retry is exhausted on the current model, group fallback kicks in.
     var fallbackReason: String {
         switch self {
-        case .rateLimited: return String(localized: "请求太频繁")
-        case .invalidAPIKey: return String(localized: "API Key 无效")
-        case .providerError(let msg): return String(localized: "服务商报错：\(String(msg.prefix(60)))")
-        default: return String(localized: "出错")
+        case .rateLimited: return AppLocalized("请求太频繁")
+        case .invalidAPIKey: return AppLocalized("API Key 无效")
+        case .providerError(let msg): return AppLocalized("服务商报错：\(String(msg.prefix(60)))")
+        default: return AppLocalized("出错")
         }
     }
 

@@ -490,12 +490,12 @@ final class ProviderCredentialCache: @unchecked Sendable {
 enum RetiredSignIn {
     static let antigravityRawType = "antigravity"
     static var claudeNotice: String {
-        String(localized: "Claude subscription sign-in has been retired. Use an API key instead, or the official claude CLI on your Mac.")
+        AppLocalized("Claude subscription sign-in has been retired. Use an API key instead, or the official claude CLI on your Mac.")
     }
     static var geminiNotice: String {
-        String(localized: "Google account sign-in for Gemini has been retired. Use a Gemini API key from Google AI Studio instead.")
+        AppLocalized("Google account sign-in for Gemini has been retired. Use a Gemini API key from Google AI Studio instead.")
     }
     static var antigravityNotice: String {
-        String(localized: "Antigravity has been retired. Add a Gemini API key from Google AI Studio instead, then delete this provider.")
+        AppLocalized("Antigravity has been retired. Add a Gemini API key from Google AI Studio instead, then delete this provider.")
     }
 }

@@ -24,9 +24,9 @@ struct MemoryManagementView: View {
     var body: some View {
         List {
             Section {
-                Toggle(String(localized: "settings_memory_global_enabled"), isOn: $memoryGlobalEnabled)
+                Toggle(AppLocalized("settings_memory_global_enabled"), isOn: $memoryGlobalEnabled)
             } footer: {
-                Text(String(localized: "settings_memory_global_enabled_footer"))
+                Text(AppLocalized("settings_memory_global_enabled_footer"))
             }
 
             ForEach(memoryFiles) { file in
@@ -65,18 +65,18 @@ struct MemoryManagementView: View {
             }
         }
         .navigationTitle("Memory")
-        .alert(String(localized: "Delete this memory file?"),
+        .alert(AppLocalized("Delete this memory file?"),
                isPresented: Binding(get: { pendingDeleteNames != nil },
                                     set: { if !$0 { pendingDeleteNames = nil } })) {
-            Button(String(localized: "Delete"), role: .destructive) {
+            Button(AppLocalized("Delete"), role: .destructive) {
                 if let names = pendingDeleteNames { deleteFiles(named: names) }
                 pendingDeleteNames = nil
             }
-            Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteNames = nil }
+            Button(AppLocalized("Cancel"), role: .cancel) { pendingDeleteNames = nil }
         } message: {
             Text(iCloudSyncEnabled
-                 ? String(localized: "This removes it from this device only. A copy on another iCloud device may sync it back.")
-                 : String(localized: "This cannot be undone."))
+                 ? AppLocalized("This removes it from this device only. A copy on another iCloud device may sync it back.")
+                 : AppLocalized("This cannot be undone."))
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -86,7 +86,7 @@ struct MemoryManagementView: View {
                         Button {
                             Task { await forceSyncMemory() }
                         } label: {
-                            Label(String(localized: "Force iCloud Sync"),
+                            Label(AppLocalized("Force iCloud Sync"),
                                   systemImage: "arrow.triangle.2.circlepath.icloud")
                         }
                     } label: {
@@ -122,7 +122,7 @@ struct MemoryManagementView: View {
         let count = await ForceSyncHelper.markMemoryDirty()
         await ForceSyncHelper.bidirectionalSync(
             recordTypes: ["MemoryGlobalV2", "MemoryDailyV2"])
-        forceSyncToast = String(localized: "Synced \(count) memory files")
+        forceSyncToast = AppLocalized("Synced \(count) memory files")
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
             forceSyncToast = nil
         }
@@ -331,7 +331,7 @@ private struct MemoryFileEditView: View {
             // [T-toast-feedback] Confirm the save succeeded — the screen
             // doesn't dismiss or change, so without this the user gets no
             // signal that the write landed.
-            MinisToast.show(String(localized: "Saved"))
+            MinisToast.show(AppLocalized("Saved"))
             // Enqueue for iCloud v2 sync. GLOBAL.md uses its own singleton
             // record; per-day logs use the dateKey from the filename.
             if isGlobal {
@@ -395,15 +395,15 @@ private struct ConfirmDiscardOnBack: ViewModifier {
                         Button {
                             isPresented = true
                         } label: {
-                            Label(String(localized: "Back"), systemImage: "chevron.backward")
+                            Label(AppLocalized("Back"), systemImage: "chevron.backward")
                         }
                     }
                 }
             }
-            .alert(String(localized: "Discard unsaved changes?"), isPresented: $isPresented) {
-                Button(String(localized: "Save"), action: onSave)
-                Button(String(localized: "Discard"), role: .destructive, action: onDiscard)
-                Button(String(localized: "Keep Editing"), role: .cancel) {}
+            .alert(AppLocalized("Discard unsaved changes?"), isPresented: $isPresented) {
+                Button(AppLocalized("Save"), action: onSave)
+                Button(AppLocalized("Discard"), role: .destructive, action: onDiscard)
+                Button(AppLocalized("Keep Editing"), role: .cancel) {}
             }
     }
 }

@@ -33,10 +33,10 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
 
         var title: String {
             switch self {
-            case .daily: return String(localized: "Daily")
-            case .weekdays: return String(localized: "Weekdays")
-            case .weekly: return String(localized: "Weekly")
-            case .hourly: return String(localized: "Hourly")
+            case .daily: return AppLocalized("Daily")
+            case .weekdays: return AppLocalized("Weekdays")
+            case .weekly: return AppLocalized("Weekly")
+            case .hourly: return AppLocalized("Hourly")
             }
         }
     }
@@ -110,7 +110,7 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
     var timeText: String {
         switch cadence {
         case .hourly:
-            return String(localized: "Every hour, on the hour")
+            return AppLocalized("Every hour, on the hour")
         default:
             return String(format: "%02d:%02d", minuteOfDay / 60, minuteOfDay % 60)
         }

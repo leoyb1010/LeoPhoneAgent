@@ -27,9 +27,9 @@ struct SoulSettingsView: View {
 
     private static var langOptions: [(label: String, value: String)] {
         [
-            (String(localized: "Auto"), "auto"),
-            (String(localized: "Chinese"), "zh"),
-            (String(localized: "English"), "en"),
+            (AppLocalized("Auto"), "auto"),
+            (AppLocalized("Chinese"), "zh"),
+            (AppLocalized("English"), "en"),
         ]
     }
 
@@ -39,18 +39,18 @@ struct SoulSettingsView: View {
                 previewCard
             }
 
-            Section(String(localized: "Identity")) {
-                LabeledContent(String(localized: "Name")) {
+            Section(AppLocalized("Identity")) {
+                LabeledContent(AppLocalized("Name")) {
                     TextField("LeoBot", text: $name)
                         .multilineTextAlignment(.trailing)
                         .textInputAutocapitalization(.words)
                         .submitLabel(.done)
                 }
-                LabeledContent(String(localized: "Style")) {
-                    TextField(String(localized: "e.g. Warm, direct, opinionated"), text: $style)
+                LabeledContent(AppLocalized("Style")) {
+                    TextField(AppLocalized("e.g. Warm, direct, opinionated"), text: $style)
                         .multilineTextAlignment(.trailing)
                 }
-                Picker(String(localized: "Language"), selection: $lang) {
+                Picker(AppLocalized("Language"), selection: $lang) {
                     ForEach(Self.langOptions, id: \.value) { opt in
                         Text(opt.label).tag(opt.value)
                     }
@@ -60,7 +60,7 @@ struct SoulSettingsView: View {
             Section {
                 personalityEditor
             } header: {
-                Text(String(localized: "Personality Prompt"))
+                Text(AppLocalized("Personality Prompt"))
             } footer: {
                 bodyLengthFooter
             }
@@ -69,7 +69,7 @@ struct SoulSettingsView: View {
                 Button(role: .destructive) {
                     showRestoreConfirm = true
                 } label: {
-                    Label(String(localized: "Restore Default"), systemImage: "arrow.uturn.backward")
+                    Label(AppLocalized("Restore Default"), systemImage: "arrow.uturn.backward")
                 }
 
                 // Force iCloud Sync — re-marks SOUL.md dirty and asks
@@ -82,10 +82,10 @@ struct SoulSettingsView: View {
                         Task { await forceSyncSoul() }
                     } label: {
                         HStack {
-                            Label(String(localized: "Force iCloud Sync"), systemImage: "icloud.and.arrow.up")
+                            Label(AppLocalized("Force iCloud Sync"), systemImage: "icloud.and.arrow.up")
                             Spacer()
                             if showForceSyncDone {
-                                Text(String(localized: "Queued"))
+                                Text(AppLocalized("Queued"))
                                     .foregroundStyle(.green)
                                     .font(.caption)
                             }
@@ -102,11 +102,11 @@ struct SoulSettingsView: View {
                 }
             }
         }
-        .navigationTitle(String(localized: "Soul"))
+        .navigationTitle(AppLocalized("Soul"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(String(localized: "Save")) { save() }
+                Button(AppLocalized("Save")) { save() }
                     .disabled(!isDirty || isBodyOverLimit)
             }
         }
@@ -125,17 +125,17 @@ struct SoulSettingsView: View {
         // rect renders as a popover anchored to the screen's top edge
         // on regular-width size classes.
         .alert(
-            String(localized: "Restore Default"),
+            AppLocalized("Restore Default"),
             isPresented: $showRestoreConfirm
         ) {
-            Button(String(localized: "Restore Default"), role: .destructive, action: restoreDefault)
-            Button(String(localized: "Cancel"), role: .cancel) {}
+            Button(AppLocalized("Restore Default"), role: .destructive, action: restoreDefault)
+            Button(AppLocalized("Cancel"), role: .cancel) {}
         } message: {
-            Text(String(localized: "Restore default SOUL.md? Your current personality will be replaced."))
+            Text(AppLocalized("Restore default SOUL.md? Your current personality will be replaced."))
         }
         .overlay(alignment: .bottom) {
             if didJustSave {
-                Text(String(localized: "Saved"))
+                Text(AppLocalized("Saved"))
                     .font(.footnote.weight(.medium))
                     .padding(.horizontal, 14).padding(.vertical, 8)
                     .background(Color.green.opacity(0.85), in: Capsule())
@@ -182,7 +182,7 @@ struct SoulSettingsView: View {
             // typed into. allowsHitTesting(false) so taps fall through
             // to the editor below.
             if bodyText.isEmpty {
-                Text(String(localized: "Describe the personality and voice you want for your agent"))
+                Text(AppLocalized("Describe the personality and voice you want for your agent"))
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(.tertiary)
                     .padding(.top, 8)
@@ -207,7 +207,7 @@ struct SoulSettingsView: View {
                 Text(soulBodyCountText(bodyText))
                     .foregroundStyle(.secondary)
             case .overLimit(let count, let cap):
-                Text(String(localized: "Over limit: \(count) / \(cap) tokens. Each CJK character and each Latin word counts as one."))
+                Text(AppLocalized("Over limit: \(count) / \(cap) tokens. Each CJK character and each Latin word counts as one."))
                     .foregroundStyle(.red)
             }
         }
@@ -217,7 +217,7 @@ struct SoulSettingsView: View {
     /// Counter shown when the body is within budget.
     private func soulBodyCountText(_ body: String) -> String {
         let count = SoulStore.tokenCount(body)
-        return String(localized: "\(count) / \(SoulStore.bodyTokenLimit) tokens")
+        return AppLocalized("\(count) / \(SoulStore.bodyTokenLimit) tokens")
     }
 
     private var isBodyOverLimit: Bool {
@@ -268,7 +268,7 @@ struct SoulSettingsView: View {
                 withAnimation { didJustSave = false }
             }
         } catch {
-            saveError = String(localized: "Save failed: \(error.localizedDescription)")
+            saveError = AppLocalized("Save failed: \(error.localizedDescription)")
         }
     }
 
@@ -283,7 +283,7 @@ struct SoulSettingsView: View {
         // unsaved edits have to land on disk first or they're silently lost.
         if isDirty {
             guard !isBodyOverLimit else {
-                saveError = String(localized: "Save your changes before syncing.")
+                saveError = AppLocalized("Save your changes before syncing.")
                 return
             }
             save()

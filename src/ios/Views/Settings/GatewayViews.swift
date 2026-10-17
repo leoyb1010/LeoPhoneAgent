@@ -548,7 +548,7 @@ private struct GatewayHostRow: View {
                         .truncationMode(.middle)
                 } else {
                     // [T-gateway-row-relay] 中继发现的机器没有引擎地址,以前这里是一行空白。
-                    Text(host.harnessURL == nil ? statusText : String(localized: "经中继 · \(statusText)"))
+                    Text(host.harnessURL == nil ? statusText : AppLocalized("经中继 · \(statusText)"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
@@ -573,9 +573,9 @@ private struct GatewayHostRow: View {
 
     private var statusText: String {
         switch isReachable {
-        case .some(true): return String(localized: "在线")
-        case .some(false): return problem?.owner.blame ?? String(localized: "连不上")
-        case .none: return String(localized: "检测中…")
+        case .some(true): return AppLocalized("在线")
+        case .some(false): return problem?.owner.blame ?? AppLocalized("连不上")
+        case .none: return AppLocalized("检测中…")
         }
     }
 }
@@ -974,10 +974,10 @@ extension GatewayApprovalRequest {
     /// The owner's words for a CLI's approval choice (the card, the transcript).
     static func title(forChoice choice: String) -> String {
         switch choice {
-        case "once": return String(localized: "Allow Once")
-        case "session": return String(localized: "Allow This Session")
-        case "always": return String(localized: "Always Allow")
-        case "deny": return String(localized: "Deny")
+        case "once": return AppLocalized("Allow Once")
+        case "session": return AppLocalized("Allow This Session")
+        case "always": return AppLocalized("Always Allow")
+        case "deny": return AppLocalized("Deny")
         default: return choice
         }
     }

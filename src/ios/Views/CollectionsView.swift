@@ -258,7 +258,7 @@ struct CollectionsView: View {
             importRow(inset: inset)
             // 「全部」里同时有资料库结果时,两块各带一个分区标题。
             if scope == .all, isSearching, !items.isEmpty {
-                LeoSectionHeader(title: String(localized: "手机收藏"), count: shown.count, systemImage: "iphone")
+                LeoSectionHeader(title: AppLocalized("手机收藏"), count: shown.count, systemImage: "iphone")
                     .leoListPlainRow(inset: inset, top: LeoTheme.Spacing.xs, bottom: LeoTheme.Spacing.xxs)
             }
             if items.isEmpty {
@@ -269,9 +269,9 @@ struct CollectionsView: View {
                 // 归档条目时,items 非空 → 不走 emptyState → 页面只剩几个
                 // 筛选胶囊和一片空白,没有任何解释。
                 LeoEmptyState(systemImage: showArchived ? "archivebox" : "magnifyingglass",
-                              title: showArchived ? String(localized: "归档里还没有东西") : String(localized: "没有匹配的内容"),
-                              message: showArchived ? String(localized: "左滑任意条目可以归档。") : nil,
-                              actionTitle: hasActiveFilters ? String(localized: "清除筛选") : nil,
+                              title: showArchived ? AppLocalized("归档里还没有东西") : AppLocalized("没有匹配的内容"),
+                              message: showArchived ? AppLocalized("左滑任意条目可以归档。") : nil,
+                              actionTitle: hasActiveFilters ? AppLocalized("清除筛选") : nil,
                               actionSystemImage: "line.3.horizontal.decrease.circle",
                               action: hasActiveFilters ? clearFilters : nil)
                     .listRowSeparator(.hidden)
@@ -527,8 +527,8 @@ struct CollectionsView: View {
             }
             .id(item.id)
         } else {
-            LeoEmptyState(systemImage: "sidebar.left", title: String(localized: "选择一条收藏"),
-                          message: String(localized: "在左侧选择内容，即可阅读正文、更新进度并添加高亮。"))
+            LeoEmptyState(systemImage: "sidebar.left", title: AppLocalized("选择一条收藏"),
+                          message: AppLocalized("在左侧选择内容，即可阅读正文、更新进度并添加高亮。"))
         }
     }
 
@@ -807,7 +807,7 @@ struct CollectionsView: View {
             ToolbarItem(placement: .topBarLeading) {
                 let ids = visible.map(\.id)
                 Button(TreasurySelection.allSelected(selection: selection, visibleIDs: ids)
-                       ? String(localized: "取消全选") : String(localized: "全选")) {
+                       ? AppLocalized("取消全选") : AppLocalized("全选")) {
                     selection = TreasurySelection.toggleAll(selection: selection, visibleIDs: ids)
                 }
                 .disabled(ids.isEmpty)
@@ -914,7 +914,7 @@ struct CollectionsView: View {
         reload()
         if count > 0 {
             LeoHaptics.content(.archived)
-            flash(showArchived ? String(localized: "已取消归档 \(count) 条") : String(localized: "已归档 \(count) 条"))
+            flash(showArchived ? AppLocalized("已取消归档 \(count) 条") : AppLocalized("已归档 \(count) 条"))
         }
     }
 
@@ -1028,7 +1028,7 @@ struct CollectionsView: View {
             HStack(spacing: 4) {
                 Image(systemName: "line.3.horizontal.decrease")
                     .font(.caption2.weight(.bold))
-                Text(filterSource ?? String(localized: "来源"))
+                Text(filterSource ?? AppLocalized("来源"))
                     .font(.footnote.weight(.semibold))
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
@@ -1041,7 +1041,7 @@ struct CollectionsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(active ? String(localized: "来源:\(filterSource ?? "")") : String(localized: "按来源筛选")))
+        .accessibilityLabel(Text(active ? AppLocalized("来源:\(filterSource ?? "")") : AppLocalized("按来源筛选")))
     }
 
     // MARK: 行为
@@ -1818,7 +1818,7 @@ private struct TreasuryReadingSheet: View {
             LeoIconTile(systemImage: TreasuryKindStyle.symbol(for: item.kind),
                         tint: leoSourceColor(item.sourceLabel), size: LeoTheme.Card.heroTile)
             VStack(alignment: .leading, spacing: LeoTheme.Spacing.xs) {
-                Text(item.title?.isEmpty == false ? item.title! : String(localized: "阅读"))
+                Text(item.title?.isEmpty == false ? item.title! : AppLocalized("阅读"))
                     .font(.title3.weight(.semibold))
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
@@ -2306,7 +2306,7 @@ private struct CollectionCard: View {
         if let line = firstLine(item.value) { return line }
         if let line = firstLine(item.summary) { return line }
         if let line = firstLine(item.annotation) { return line }
-        return item.kind == .note ? String(localized: "未命名笔记") : String(localized: "未命名条目")
+        return item.kind == .note ? AppLocalized("未命名笔记") : AppLocalized("未命名条目")
     }
 
     @ViewBuilder

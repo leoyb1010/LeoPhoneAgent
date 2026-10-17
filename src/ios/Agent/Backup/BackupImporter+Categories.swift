@@ -211,7 +211,7 @@ extension BackupImporter {
             }
         }
         if plan.localKept > 0 {
-            plan.notes.append(String(localized: "\(plan.localKept) 个文件本地已存在，内容不同时保留较新的一份"))
+            plan.notes.append(AppLocalized("\(plan.localKept) 个文件本地已存在，内容不同时保留较新的一份"))
         }
     }
 
@@ -380,7 +380,7 @@ extension BackupImporter {
                 undo.add { try? await t.applyProviderConfigJSON(localData) }
             }
             if merged.stats.groupsAdded > 0 {
-                r.needsAttention.append(String(localized: "新增 \(merged.stats.groupsAdded) 个模型分组"))
+                r.needsAttention.append(AppLocalized("新增 \(merged.stats.groupsAdded) 个模型分组"))
             }
 
             if p.hasSecrets, let data = BackupJSONFile.read(p.root.appendingPathComponent("secrets.json")),
@@ -394,7 +394,7 @@ extension BackupImporter {
                     undo.add { await t.removeProviderSecrets(written) }
                 }
             } else if r.imported > 0 {
-                r.needsAttention.append(String(localized: "\(r.imported) 个服务商需要重新填写 API 密钥"))
+                r.needsAttention.append(AppLocalized("\(r.imported) 个服务商需要重新填写 API 密钥"))
             }
         }
 
@@ -435,7 +435,7 @@ extension BackupImporter {
             if value != nil { r.credentialsRestored += 1 }
         }
         if missingValues > 0 {
-            r.needsAttention.append(String(localized: "\(missingValues) 个环境变量没有值，需要重新填写"))
+            r.needsAttention.append(AppLocalized("\(missingValues) 个环境变量没有值，需要重新填写"))
         }
         return r
     }
@@ -465,10 +465,10 @@ extension BackupImporter {
             undo.add { await t.revertMCPServers(previous: localData, added: added) }
         }
         if !merged.plan.needsSecrets.isEmpty {
-            r.needsAttention.append(String(localized: "\(merged.plan.needsSecrets.count) 个 MCP 服务器需要重新填写密钥"))
+            r.needsAttention.append(AppLocalized("\(merged.plan.needsSecrets.count) 个 MCP 服务器需要重新填写密钥"))
         }
         if quarantined > 0 {
-            r.needsAttention.append(String(localized: "未加密备份无法验证来源：导入的 \(quarantined) 个 MCP 服务器已保持停用，请在 设置 › MCP 里逐个检查后再启用"))
+            r.needsAttention.append(AppLocalized("未加密备份无法验证来源：导入的 \(quarantined) 个 MCP 服务器已保持停用，请在 设置 › MCP 里逐个检查后再启用"))
         }
         return r
     }

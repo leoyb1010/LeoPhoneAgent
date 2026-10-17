@@ -189,7 +189,7 @@ final class ConfigConfirmationGate: ObservableObject {
         LeoNotificationCategories.register()
 
         let content = UNMutableNotificationContent()
-        content.title = String(localized: "⚙️ 有设置改动等你确认")
+        content.title = AppLocalized("⚙️ 有设置改动等你确认")
         // Show the caption (e.g. "Update multi-model writing workflow: …") so
         // the user gets the gist without opening the app; fall back to a
         // row-count summary when there's no caption.
@@ -198,8 +198,8 @@ final class ConfigConfirmationGate: ObservableObject {
             content.body = caption
         } else {
             content.body = change.items.count > 1
-                ? String(localized: "\(change.items.count) 项改动等你确认，打开 LeoBot 批准或拒绝。")
-                : String(localized: "有一项改动等你确认，打开 LeoBot 批准或拒绝。")
+                ? AppLocalized("\(change.items.count) 项改动等你确认，打开 LeoBot 批准或拒绝。")
+                : AppLocalized("有一项改动等你确认，打开 LeoBot 批准或拒绝。")
         }
         content.sound = .default
         content.categoryIdentifier = Self.notifyCategoryId

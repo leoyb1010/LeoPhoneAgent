@@ -3,6 +3,7 @@
 The AlarmKit bridge is an in-memory adapter; no system alarms are accessed.
 """
 from pathlib import Path
+from ios_smoke_support import APP_LOCALIZED_SHIM, APP_LOCALIZATION_SOURCE
 import subprocess,tempfile
 root=Path(__file__).resolve().parents[1]
 source=(root/'src/ios/Views/Alarms/AlarmListView.swift').read_text()
@@ -43,6 +44,6 @@ func expect(_ c:Bool,_ m:String){if !c{print("FAIL: "+m);exit(1)}}
 }
 '''
 with tempfile.TemporaryDirectory(prefix='leo-alarm-cancel-') as folder:
- code=Path(folder)/'Smoke.swift';code.write_text(swift);binary=Path(folder)/'smoke'
+ code=Path(folder)/'Smoke.swift';code.write_text(APP_LOCALIZED_SHIM + swift);binary=Path(folder)/'smoke'
  subprocess.run(['swiftc','-parse-as-library',str(code),'-o',str(binary)],check=True)
  subprocess.run([str(binary)],check=True)

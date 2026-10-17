@@ -22,10 +22,10 @@ struct AutomationRule: Codable, Identifiable, Hashable {
 
         var title: String {
             switch self {
-            case .arriveLocation(_, _, _, let name): return String(localized: "Arriving at \(name)")
-            case .leaveLocation(_, _, _, let name): return String(localized: "Leaving \(name)")
-            case .beforeEvent(let minutes): return String(localized: "\(minutes) min before events")
-            case .nightCharging: return String(localized: "Charging at night")
+            case .arriveLocation(_, _, _, let name): return AppLocalized("Arriving at \(name)")
+            case .leaveLocation(_, _, _, let name): return AppLocalized("Leaving \(name)")
+            case .beforeEvent(let minutes): return AppLocalized("\(minutes) min before events")
+            case .nightCharging: return AppLocalized("Charging at night")
             case .signal(let name): return "情境信号:\(name)"
             }
         }

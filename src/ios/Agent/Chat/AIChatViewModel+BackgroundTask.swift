@@ -17,7 +17,7 @@ extension AIChatViewModel {
         AgentContinuedProcessingManager.shared.begin(
             sessionKey: continuedKey,
             title: "LeoBot",
-            subtitle: String(localized: "Preparing"),
+            subtitle: AppLocalized("Preparing"),
             onExpiration: { [weak self] in
                 guard let self else { return }
                 // [T-bg-false-fail] 继续处理授权到期 ≠ 任务失败。静音
@@ -146,15 +146,15 @@ extension AIChatViewModel {
             let failed = completionHasError && !backgroundSuspended && !userDidCancel
             let subtitle: String
             if backgroundSuspended && !userDidCancel {
-                subtitle = String(localized: "已暂停，回到 App 继续")
+                subtitle = AppLocalized("已暂停，回到 App 继续")
             } else if userDidCancel {
-                subtitle = String(localized: "Stopped")
+                subtitle = AppLocalized("Stopped")
             } else if failed && canResume {
-                subtitle = String(localized: "已中断，回到 App 继续")
+                subtitle = AppLocalized("已中断，回到 App 继续")
             } else if failed {
-                subtitle = String(localized: "Needs attention")
+                subtitle = AppLocalized("Needs attention")
             } else {
-                subtitle = String(localized: "Completed")
+                subtitle = AppLocalized("Completed")
             }
             AgentContinuedProcessingManager.shared.finish(
                 sessionKey: continuedKey,
@@ -259,10 +259,10 @@ extension AIChatViewModel {
                     return String(t.prefix(200))
                 }
                 logger.info("[BackgroundNotification] source=fallback")
-                return String(localized: "任务已完成。")
+                return AppLocalized("任务已完成。")
             }()
             logger.info("[BackgroundNotification] responseSummary ready length=\(responseSummary.count) wasBackground=\(wasBackground)")
-            let fallbackTitle = messages.first(where: { $0.role == .user })?.content.prefix(60).description ?? String(localized: "Agent 任务")
+            let fallbackTitle = messages.first(where: { $0.role == .user })?.content.prefix(60).description ?? AppLocalized("Agent 任务")
             let bgTaskID = backgroundTaskID
             backgroundTaskID = .invalid
             let otherActive = SessionActivityTracker.shared.activeSessions
@@ -315,7 +315,7 @@ extension AIChatViewModel {
                 }
                 if stillWorthNotifying {
                     let summary = interrupted && !hasError
-                        ? String(localized: "任务中断,回到 app 可继续。") + " " + responseSummary
+                        ? AppLocalized("任务中断,回到 app 可继续。") + " " + responseSummary
                         : responseSummary
                     BackgroundKeepAliveManager.shared.postBackgroundTaskNotification(
                         sessionTitle: sessionTitle, responseSummary: summary, sessionId: sid,
@@ -873,7 +873,7 @@ final class AgentContinuedProcessingManager {
         run.lastProgress = ContinuedProcessingProgress.next(after: run.lastProgress, events: run.progressEvents)
         guard let task = run.task else { return }
         task.progress.completedUnitCount = run.lastProgress
-        task.updateTitle("LeoBot", subtitle: subtitle.isEmpty ? String(localized: "Working") : subtitle)
+        task.updateTitle("LeoBot", subtitle: subtitle.isEmpty ? AppLocalized("Working") : subtitle)
     }
 
     /// - Parameter subtitle: what actually happened. The system banner only
@@ -909,8 +909,8 @@ final class AgentContinuedProcessingManager {
                 run.task?.updateTitle(
                     "LeoBot",
                     subtitle: stillAlive
-                        ? String(localized: "仍在后台运行")
-                        : String(localized: "已暂停，回到 App 继续")
+                        ? AppLocalized("仍在后台运行")
+                        : AppLocalized("已暂停，回到 App 继续")
                 )
                 run.task?.setTaskCompleted(success: true)
                 run.expiration()

@@ -33,12 +33,12 @@ enum HarnessApprovalNotifier {
         UNNotificationCategory(
             identifier: categoryId,
             actions: [
-                UNNotificationAction(identifier: approveAction, title: String(localized: "允许一次"),
+                UNNotificationAction(identifier: approveAction, title: AppLocalized("允许一次"),
                                      options: [.authenticationRequired]),
-                UNNotificationAction(identifier: approveSessionAction, title: String(localized: "本次会话允许"),
+                UNNotificationAction(identifier: approveSessionAction, title: AppLocalized("本次会话允许"),
                                      options: [.authenticationRequired]),
-                UNNotificationAction(identifier: denyAction, title: String(localized: "拒绝"), options: [.destructive]),
-                UNNotificationAction(identifier: denyAndStopAction, title: String(localized: "拒绝并停止任务"),
+                UNNotificationAction(identifier: denyAction, title: AppLocalized("拒绝"), options: [.destructive]),
+                UNNotificationAction(identifier: denyAndStopAction, title: AppLocalized("拒绝并停止任务"),
                                      options: [.destructive]),
             ],
             intentIdentifiers: [])
@@ -79,8 +79,8 @@ enum HarnessApprovalNotifier {
         }
         let tool = approval.tool
             ?? command.split(whereSeparator: \.isWhitespace).first.map { String($0.split(separator: "/").last ?? $0) }
-        guard let tool, !tool.isEmpty else { return String(localized: "有一步在等你批准") }
-        return String(localized: "\(String(tool.prefix(40))) 在等你批准")
+        guard let tool, !tool.isEmpty else { return AppLocalized("有一步在等你批准") }
+        return AppLocalized("\(String(tool.prefix(40))) 在等你批准")
     }
 
     /// 审批已被任何一端解决:撤掉横幅与通知中心里的卡。

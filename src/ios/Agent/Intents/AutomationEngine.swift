@@ -72,7 +72,7 @@ final class AutomationStore: ObservableObject {
             rules[index].isEnabled = false
             AutomationEngine.shared.reloadMonitoring()
             ScheduledTaskRunner.notify(
-                title: String(localized: "Automation paused"),
+                title: AppLocalized("Automation paused"),
                 body: rules[index].name, sessionId: nil, gated: false)
         }
         persist()
@@ -199,7 +199,7 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
                     firedEventIds[(event.eventIdentifier ?? "") + event.startDate.description] = Date()
                     // 日程标题来自日历(别人发来的邀请也能写),是不受信任的文本:
                     // 走受限回合(不带发信、删除、远程执行类工具),全自动下也不会被它带着做危险操作。
-                    await fire(rule, context: String(localized: "Upcoming event: \(event.title ?? "")"), restricted: true)
+                    await fire(rule, context: AppLocalized("Upcoming event: \(event.title ?? "")"), restricted: true)
                     break
                 }
             default: break
@@ -295,7 +295,7 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
                 shouldStop: quietBudget.map { limit in { $0 >= limit } })
             if speak {
                 ScheduledTaskRunner.notify(
-                    title: outcome.started ? String(localized: "Automation finished") : String(localized: "Automation failed to start"),
+                    title: outcome.started ? AppLocalized("Automation finished") : AppLocalized("Automation failed to start"),
                     body: rule.name, sessionId: outcome.sessionId, gated: false)
             } else if let sid = outcome.sessionId {
                 SessionBadgeStore.shared.pushFront(.unread, for: sid)
@@ -306,8 +306,8 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
             let started = await QuickTaskWidgetRunner.run(taskId: quickTaskId)
             guard speak || !started else { return 0 }
             ScheduledTaskRunner.notify(
-                title: started ? String(localized: "Automation started") : String(localized: "Automation failed to start"),
-                body: started ? rule.name : String(localized: "\(rule.name) did not start. Open Automations and check its Quick Task and provider settings."),
+                title: started ? AppLocalized("Automation started") : AppLocalized("Automation failed to start"),
+                body: started ? rule.name : AppLocalized("\(rule.name) did not start. Open Automations and check its Quick Task and provider settings."),
                 sessionId: nil, gated: false)
         } else if let prompt = rule.prompt, !prompt.isEmpty {
             let fullPrompt = context.map { "\($0)\n\n\(prompt)" } ?? prompt
@@ -316,7 +316,7 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
                 prompt: fullPrompt, sessionId: nil)
             guard speak else { return 0 }
             ScheduledTaskRunner.notify(
-                title: String(localized: "Automation finished"),
+                title: AppLocalized("Automation finished"),
                 body: rule.name, sessionId: nil, gated: false)
         }
         return 0

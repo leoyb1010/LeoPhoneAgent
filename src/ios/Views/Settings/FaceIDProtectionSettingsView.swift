@@ -46,7 +46,7 @@ struct FaceIDProtectionSettingsView: View {
 
             if appLockEnabled {
                 Section {
-                    Picker(String(localized: "Require unlock"), selection: appLockIdleBinding) {
+                    Picker(AppLocalized("Require unlock"), selection: appLockIdleBinding) {
                         ForEach(SessionLockIdleOption.allOptions) { opt in
                             Text(opt.labelKey).tag(opt.seconds)
                         }
@@ -76,7 +76,7 @@ struct FaceIDProtectionSettingsView: View {
 
             if enabled {
                 Section {
-                    Picker(String(localized: "Re-lock after idle"), selection: sessionIdleBinding) {
+                    Picker(AppLocalized("Re-lock after idle"), selection: sessionIdleBinding) {
                         ForEach(SessionLockIdleOption.allOptions) { opt in
                             Text(opt.labelKey).tag(opt.seconds)
                         }
@@ -102,7 +102,7 @@ struct FaceIDProtectionSettingsView: View {
                     if !store.lockedSessionIds.isEmpty {
                         Button(role: .destructive) {
                             Task { @MainActor in
-                                let reason = String(localized: "Remove all session locks")
+                                let reason = AppLocalized("Remove all session locks")
                                 let ok = await BiometricAuth.authenticate(reason: reason)
                                 if ok {
                                     for sid in store.lockedSessionIds {
@@ -137,12 +137,12 @@ struct FaceIDProtectionSettingsView: View {
         Binding(get: { appLockEnabled }, set: { newValue in
             guard newValue != appLockEnabled else { return }
             if newValue {
-                authorize(String(localized: "Enable \(BiometricAuth.biometryDisplayName) app lock"), always: true) {
+                authorize(AppLocalized("Enable \(BiometricAuth.biometryDisplayName) app lock"), always: true) {
                     store.appLockEnabled = true
                     store.noteAppUnlock()
                 }
             } else {
-                authorize(String(localized: "Turn off app lock")) {
+                authorize(AppLocalized("Turn off app lock")) {
                     store.appLockEnabled = false
                 }
             }
@@ -153,14 +153,14 @@ struct FaceIDProtectionSettingsView: View {
         Binding(get: { enabled }, set: { newValue in
             guard newValue != enabled else { return }
             if newValue {
-                authorize(String(localized: "Enable \(BiometricAuth.biometryDisplayName) protection for chat sessions"), always: true) {
+                authorize(AppLocalized("Enable \(BiometricAuth.biometryDisplayName) protection for chat sessions"), always: true) {
                     enabled = true
                     // Locked sessions drop out of Spotlight and widgets immediately.
                     Task { await SessionSpotlightIndexer.reindexAll(force: true) }
                     WidgetDataMirror.applyPrivacyToMirroredContent()
                 }
             } else {
-                authorize(String(localized: "Turn off session locks")) {
+                authorize(AppLocalized("Turn off session locks")) {
                     enabled = false
                     Task { await SessionSpotlightIndexer.reindexAll(force: true) }
                 }
@@ -176,7 +176,7 @@ struct FaceIDProtectionSettingsView: View {
                 store.appLockIdleSeconds = newValue
             }
             if Self.isWeaker(newValue, than: appLockIdleSeconds) {
-                authorize(String(localized: "Change app lock timeout"), perform: apply)
+                authorize(AppLocalized("Change app lock timeout"), perform: apply)
             } else {
                 apply()
             }
@@ -187,7 +187,7 @@ struct FaceIDProtectionSettingsView: View {
         Binding(get: { idleSeconds }, set: { newValue in
             guard newValue != idleSeconds else { return }
             if Self.isWeaker(newValue, than: idleSeconds) {
-                authorize(String(localized: "Change session lock timeout")) { idleSeconds = newValue }
+                authorize(AppLocalized("Change session lock timeout")) { idleSeconds = newValue }
             } else {
                 idleSeconds = newValue
             }
@@ -198,7 +198,7 @@ struct FaceIDProtectionSettingsView: View {
         Binding(get: { spotlightEnabled }, set: { newValue in
             guard newValue != spotlightEnabled else { return }
             if newValue {
-                authorize(String(localized: "Show conversations in Spotlight")) {
+                authorize(AppLocalized("Show conversations in Spotlight")) {
                     SessionSpotlightIndexer.setEnabled(true)
                 }
             } else {

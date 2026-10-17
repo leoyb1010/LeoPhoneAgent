@@ -3,6 +3,7 @@
 Only the app-group/defaults roots and search-index observer are test adapters.
 """
 from pathlib import Path
+from ios_smoke_support import APP_LOCALIZED_SHIM, APP_LOCALIZATION_SOURCE
 import importlib.util
 import subprocess
 import tempfile
@@ -133,7 +134,7 @@ with tempfile.TemporaryDirectory(prefix='leo-note-metadata-') as temp:
     folder = Path(temp)
     (folder / 'CollectionStore.swift').write_text(store)
     (folder / 'NoteBodyStore.swift').write_text(body)
-    (folder / 'Probe.swift').write_text(swift)
+    (folder / 'Probe.swift').write_text(APP_LOCALIZED_SHIM + swift)
     binary = folder / 'probe'
     subprocess.run(['swiftc', '-parse-as-library', '-module-cache-path', str(folder / 'cache'),
                     str(folder / 'CollectionStore.swift'), str(folder / 'NoteBodyStore.swift'), str(folder / 'Probe.swift'),

@@ -26,9 +26,9 @@ struct BackupSettingsView: View {
     private var passphraseProblem: String? {
         guard encrypt else { return nil }
         if passphrase.count < BackupCrypto.minimumPassphraseLength {
-            return String(localized: "密码至少 \(BackupCrypto.minimumPassphraseLength) 位")
+            return AppLocalized("密码至少 \(BackupCrypto.minimumPassphraseLength) 位")
         }
-        if passphrase != confirmPassphrase { return String(localized: "两次输入的密码不一致") }
+        if passphrase != confirmPassphrase { return AppLocalized("两次输入的密码不一致") }
         return nil
     }
 
@@ -90,7 +90,7 @@ struct BackupSettingsView: View {
                 if runner.activity == .exporting {
                     HStack(spacing: LeoTheme.Spacing.sm) {
                         ProgressView()
-                        Text(runner.statusText.isEmpty ? String(localized: "正在备份…") : runner.statusText)
+                        Text(runner.statusText.isEmpty ? AppLocalized("正在备份…") : runner.statusText)
                             .font(.subheadline)
                             .foregroundStyle(LeoTheme.ColorToken.secondaryText)
                             .lineLimit(2)
@@ -117,7 +117,7 @@ struct BackupSettingsView: View {
                     VStack(alignment: .leading, spacing: LeoTheme.Spacing.xxs) {
                         Text(outcome.packageURL.lastPathComponent).font(.subheadline).lineLimit(2)
                         Text(ByteCountFormatter.string(fromByteCount: outcome.summary.totalBytes, countStyle: .file)
-                             + (outcome.summary.encrypted ? String(localized: " · 已加密") : String(localized: " · 未加密")))
+                             + (outcome.summary.encrypted ? AppLocalized(" · 已加密") : AppLocalized(" · 未加密")))
                             .font(.footnote).foregroundStyle(LeoTheme.ColorToken.secondaryText)
                         if outcome.summary.skippedFiles > 0 || outcome.summary.notDownloadedFiles > 0 {
                             Text("有 \(outcome.summary.skippedFiles + outcome.summary.notDownloadedFiles) 个文件未包含（超出大小上限或尚未从 iCloud 下载）")
@@ -160,8 +160,8 @@ struct BackupSettingsView: View {
 
             Section {
                 if history.records.isEmpty {
-                    LeoEmptyState(systemImage: "clock.arrow.circlepath", title: String(localized: "还没有备份记录"),
-                                  message: String(localized: "最近 30 天的备份和恢复会显示在这里"))
+                    LeoEmptyState(systemImage: "clock.arrow.circlepath", title: AppLocalized("还没有备份记录"),
+                                  message: AppLocalized("最近 30 天的备份和恢复会显示在这里"))
                 } else {
                     ForEach(history.records) { record in
                         NavigationLink {
@@ -245,7 +245,7 @@ struct BackupHistoryRow: View {
                 .foregroundStyle(color)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
-                Text(record.kind == .export ? String(localized: "备份") : String(localized: "恢复"))
+                Text(record.kind == .export ? AppLocalized("备份") : AppLocalized("恢复"))
                     .font(.subheadline.weight(.medium))
                 Text("\(record.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(Self.statusText(record.status))")
                     .font(.caption)
@@ -282,11 +282,11 @@ struct BackupHistoryRow: View {
 
     static func statusText(_ s: BackupHistory.Status) -> String {
         switch s {
-        case .running: return String(localized: "进行中")
-        case .succeeded: return String(localized: "成功")
-        case .completedWithIssues: return String(localized: "完成但有问题")
-        case .failed: return String(localized: "失败")
-        case .cancelled: return String(localized: "已取消")
+        case .running: return AppLocalized("进行中")
+        case .succeeded: return AppLocalized("成功")
+        case .completedWithIssues: return AppLocalized("完成但有问题")
+        case .failed: return AppLocalized("失败")
+        case .cancelled: return AppLocalized("已取消")
         }
     }
 }

@@ -488,28 +488,28 @@ enum BrainError: Error, Equatable, Sendable {
 
     var message: String {
         switch self {
-        case .notConfigured: return String(localized: "还没有连接资料库。到「设置 › 资料库」连接。")
-        case .invalidBaseURL: return String(localized: "资料库地址无效,需要 https:// 开头的完整地址。")
-        case .unauthorized: return String(localized: "设备令牌无效或已被吊销,请重新连接资料库。")
+        case .notConfigured: return AppLocalized("还没有连接资料库。到「设置 › 资料库」连接。")
+        case .invalidBaseURL: return AppLocalized("资料库地址无效,需要 https:// 开头的完整地址。")
+        case .unauthorized: return AppLocalized("设备令牌无效或已被吊销,请重新连接资料库。")
         case .forbidden(let m):
             if let m, !m.isEmpty { return m }
-            return String(localized: "这枚设备令牌没有这项权限。")
-        case .notFound: return String(localized: "资料库里找不到这条内容。")
-        case .versionConflict: return String(localized: "已被其他设备修改,已重新载入最新版本。")
+            return AppLocalized("这枚设备令牌没有这项权限。")
+        case .notFound: return AppLocalized("资料库里找不到这条内容。")
+        case .versionConflict: return AppLocalized("已被其他设备修改,已重新载入最新版本。")
         case .rateLimited(let s):
-            if let s { return String(localized: "请求太频繁,请 \(s) 秒后再试。") }
-            return String(localized: "请求太频繁,请稍后再试。")
-        case .payloadTooLarge: return String(localized: "文件太大,资料库收件箱单个文件上限 256 MB。")
-        case .offline: return String(localized: "连不上资料库,当前离线。")
-        case .timeout: return String(localized: "资料库响应超时,请稍后再试。")
-        case .redirectBlocked: return String(localized: "资料库把请求转到了别的地址,已拦截。")
-        case .privateLocked: return String(localized: "私密资料需要先用面容 ID 或设备密码解锁。")
-        case .privateForCloudModel: return String(localized: "私密资料只在本机查看,不会交给云端模型。")
+            if let s { return AppLocalized("请求太频繁,请 \(s) 秒后再试。") }
+            return AppLocalized("请求太频繁,请稍后再试。")
+        case .payloadTooLarge: return AppLocalized("文件太大,资料库收件箱单个文件上限 256 MB。")
+        case .offline: return AppLocalized("连不上资料库,当前离线。")
+        case .timeout: return AppLocalized("资料库响应超时,请稍后再试。")
+        case .redirectBlocked: return AppLocalized("资料库把请求转到了别的地址,已拦截。")
+        case .privateLocked: return AppLocalized("私密资料需要先用面容 ID 或设备密码解锁。")
+        case .privateForCloudModel: return AppLocalized("私密资料只在本机查看,不会交给云端模型。")
         case .server(let status, let m):
             if let m, !m.isEmpty { return m }
-            return String(localized: "资料库出错了(HTTP \(status))。")
-        case .invalidResponse: return String(localized: "资料库返回的数据看不懂。")
-        case .network: return String(localized: "网络出错,没能连上资料库。")
+            return AppLocalized("资料库出错了(HTTP \(status))。")
+        case .invalidResponse: return AppLocalized("资料库返回的数据看不懂。")
+        case .network: return AppLocalized("网络出错,没能连上资料库。")
         }
     }
 }
@@ -962,10 +962,10 @@ enum BrainBrowseScope: String, CaseIterable, Identifiable, Sendable {
     /// 搜索框提示随范围走:在「资料库」里写「搜索收藏」会让人以为搜不到 Mac 上的文件。
     var searchPrompt: String {
         switch self {
-        case .all: return String(localized: "搜索收藏和资料库")
-        case .phone: return String(localized: "搜索收藏(含正文)")
-        case .archive: return String(localized: "搜索资料库里的文件")
-        case .cards: return String(localized: "搜索知识卡")
+        case .all: return AppLocalized("搜索收藏和资料库")
+        case .phone: return AppLocalized("搜索收藏(含正文)")
+        case .archive: return AppLocalized("搜索资料库里的文件")
+        case .cards: return AppLocalized("搜索知识卡")
         }
     }
 
@@ -986,9 +986,9 @@ enum BrainDisplay {
     static func status(_ raw: String?) -> String? {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
         switch raw.lowercased() {
-        case "draft": return String(localized: "草稿")
-        case "confirmed": return String(localized: "已确认")
-        case "reference": return String(localized: "参考")
+        case "draft": return AppLocalized("草稿")
+        case "confirmed": return AppLocalized("已确认")
+        case "reference": return AppLocalized("参考")
         default: return raw
         }
     }
@@ -1015,7 +1015,7 @@ enum BrainDisplay {
 
     /// 知识卡「出处」一行:网关只给文件 id(一串哈希),给人看的是序号和位置。
     static func sourceLabel(index: Int, locator: String?) -> String {
-        let base = String(localized: "出处 \(index + 1)")
+        let base = AppLocalized("出处 \(index + 1)")
         guard let locator = locator?.trimmingCharacters(in: .whitespacesAndNewlines), !locator.isEmpty else { return base }
         return base + " · " + locator
     }
@@ -1064,15 +1064,15 @@ extension BrainError {
 /// 藏宝阁里资料库的连接状态(一行小字,不抢内容)。
 enum BrainConnectionSummary {
     static func text(configured: Bool, health: BrainHealth?, statusError: String?) -> String? {
-        guard configured else { return String(localized: "资料库未连接") }
+        guard configured else { return AppLocalized("资料库未连接") }
         if let health {
-            guard health.ok else { return String(localized: "资料库网关异常") }
+            guard health.ok else { return AppLocalized("资料库网关异常") }
             if let files = health.files {
-                return String(localized: "资料库已连接 · \(files) 份文件")
+                return AppLocalized("资料库已连接 · \(files) 份文件")
             }
-            return String(localized: "资料库已连接")
+            return AppLocalized("资料库已连接")
         }
-        if statusError != nil { return String(localized: "资料库暂时连不上") }
+        if statusError != nil { return AppLocalized("资料库暂时连不上") }
         return nil
     }
 }
@@ -1103,15 +1103,15 @@ enum KnowledgeQuoteCommand: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .brain: return String(localized: "引用资料库")
-        case .treasury: return String(localized: "引用藏宝阁")
+        case .brain: return AppLocalized("引用资料库")
+        case .treasury: return AppLocalized("引用藏宝阁")
         }
     }
 
     var subtitle: String {
         switch self {
-        case .brain: return String(localized: "这条先查 Mac 上的资料库再回答")
-        case .treasury: return String(localized: "这条先查手机上的藏宝阁再回答")
+        case .brain: return AppLocalized("这条先查 Mac 上的资料库再回答")
+        case .treasury: return AppLocalized("这条先查手机上的藏宝阁再回答")
         }
     }
 
@@ -1125,8 +1125,8 @@ enum KnowledgeQuoteCommand: String, CaseIterable {
     /// 写进输入框的前缀。
     var composerPrefix: String {
         switch self {
-        case .brain: return String(localized: "查一下我的资料库:")
-        case .treasury: return String(localized: "查一下我的藏宝阁:")
+        case .brain: return AppLocalized("查一下我的资料库:")
+        case .treasury: return AppLocalized("查一下我的藏宝阁:")
         }
     }
 

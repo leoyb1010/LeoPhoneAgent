@@ -75,13 +75,13 @@ struct ScheduledTaskSettingsView: View {
             }
 
             Section {
-                Toggle(String(localized: "Notify when a scheduled task finishes"), isOn: $notifyOnComplete)
+                Toggle(AppLocalized("Notify when a scheduled task finishes"), isOn: $notifyOnComplete)
             }
             Section {
                 Button {
                     Task {
                         let n = await ScheduledTaskRunner.runDueTasks(reason: "manual")
-                        runNowMessage = n == 0 ? String(localized: "No tasks are due right now") : String(localized: "Started \(n) task(s)")
+                        runNowMessage = n == 0 ? AppLocalized("No tasks are due right now") : AppLocalized("Started \(n) task(s)")
                     }
                 } label: {
                     Label("Check and run due tasks now", systemImage: "arrow.clockwise")
@@ -94,10 +94,10 @@ struct ScheduledTaskSettingsView: View {
             }
 
             Section {
-                stepRow(1, String(localized: "Open the Shortcuts app → Automation → New"))
-                stepRow(2, String(localized: "Choose “Time of Day” and set the time you want (e.g. 08:00 daily)"))
-                stepRow(3, String(localized: "For the action, search LeoBot and pick “Run Due Scheduled Tasks”"))
-                stepRow(4, String(localized: "Turn off “Ask Before Running” and save"))
+                stepRow(1, AppLocalized("Open the Shortcuts app → Automation → New"))
+                stepRow(2, AppLocalized("Choose “Time of Day” and set the time you want (e.g. 08:00 daily)"))
+                stepRow(3, AppLocalized("For the action, search LeoBot and pick “Run Due Scheduled Tasks”"))
+                stepRow(4, AppLocalized("Turn off “Ask Before Running” and save"))
             } header: {
                 Text("Make it fire on time (recommended)")
             } footer: {
@@ -122,22 +122,22 @@ struct ScheduledTaskSettingsView: View {
         .sheet(item: $editing) { task in
             ScheduledTaskEditorView(existing: task)
         }
-        .alert(String(localized: "Delete this scheduled task?"),
+        .alert(AppLocalized("Delete this scheduled task?"),
                isPresented: Binding(get: { pendingDeleteIds != nil },
                                     set: { if !$0 { pendingDeleteIds = nil } })) {
-            Button(String(localized: "Delete"), role: .destructive) {
+            Button(AppLocalized("Delete"), role: .destructive) {
                 for id in pendingDeleteIds ?? [] {
                     ScheduledFollowUpDispatcher.cancelReminder(taskId: id)
                     store.delete(id: id)
                 }
                 pendingDeleteIds = nil
             }
-            Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteIds = nil }
+            Button(AppLocalized("Cancel"), role: .cancel) { pendingDeleteIds = nil }
         }
     }
 
     private func row(_ task: ScheduledTask) -> some View {
-        let name = quickTasks.definition(for: task.quickTaskId)?.displayName ?? String(localized: "(task deleted)")
+        let name = quickTasks.definition(for: task.quickTaskId)?.displayName ?? AppLocalized("(task deleted)")
         return HStack(spacing: 12) {
             Image(systemName: quickTasks.definition(for: task.quickTaskId)?.symbolName ?? "questionmark")
                 .frame(width: 26)
@@ -174,7 +174,7 @@ struct ScheduledTaskSettingsView: View {
         let when: String = {
             guard let followUp else { return "" }
             switch followUp.trigger {
-            case .afterCompletion: return String(localized: "本轮结束后")
+            case .afterCompletion: return AppLocalized("本轮结束后")
             case .once: return followUp.fireAt.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? ""
             }
         }()
@@ -186,7 +186,7 @@ struct ScheduledTaskSettingsView: View {
                 Text(followUp?.title ?? "")
                     .font(.body)
                     .foregroundStyle(task.isPendingFollowUp ? .primary : .secondary)
-                Text(String(localized: "定时跟进 · \(when)"))
+                Text(AppLocalized("定时跟进 · \(when)"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(followUp?.prompt ?? "")
@@ -206,7 +206,7 @@ struct ScheduledTaskSettingsView: View {
         guard let sessionId else { return }
         Task { @MainActor in
             guard await ChatStore.shared.sessionExists(id: sessionId) else {
-                runNowMessage = String(localized: "那次运行的会话已被删除。")
+                runNowMessage = AppLocalized("那次运行的会话已被删除。")
                 return
             }
             NotificationNavigationStore.shared.setPending(sessionId)
@@ -328,7 +328,7 @@ private struct ScheduledTaskEditorView: View {
                     }
                 }
             }
-            .navigationTitle(existing == nil ? String(localized: "New schedule") : String(localized: "Edit schedule"))
+            .navigationTitle(existing == nil ? AppLocalized("New schedule") : AppLocalized("Edit schedule"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

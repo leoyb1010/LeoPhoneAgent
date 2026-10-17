@@ -212,8 +212,8 @@ actor CompactStreamProgress {
         /// input was too big to summarize in time.
         var userMessage: String {
             switch self {
-            case .stalled(let s): return String(localized: "模型 \(Int(s)) 秒没有响应")
-            case .overall(let s): return String(localized: "\(Int(s)) 秒内没有完成")
+            case .stalled(let s): return AppLocalized("模型 \(Int(s)) 秒没有响应")
+            case .overall(let s): return AppLocalized("\(Int(s)) 秒内没有完成")
             }
         }
     }

@@ -79,8 +79,8 @@ struct AgentActivityLogView: View {
 
             if events.isEmpty {
                 LeoEmptyState(systemImage: "waveform.path.ecg",
-                              title: String(localized: "No Activity Yet"),
-                              message: String(localized: "New agent runs will appear here."))
+                              title: AppLocalized("No Activity Yet"),
+                              message: AppLocalized("New agent runs will appear here."))
             } else {
                 Section("Recent Events") {
                     ForEach(events) { event in
@@ -125,7 +125,7 @@ struct AgentActivityLogView: View {
                 Text(title(for: event))
                     .font(.subheadline.weight(.medium))
                 HStack(spacing: 6) {
-                    Text(event.sessionId.hasPrefix("__new__") ? String(localized: "新对话") : String(event.sessionId.prefix(8)))
+                    Text(event.sessionId.hasPrefix("__new__") ? AppLocalized("新对话") : String(event.sessionId.prefix(8)))
                     Text("•")
                     Text(event.at, style: .relative)
                 }
@@ -194,10 +194,10 @@ struct AgentActivityLogView: View {
 
     private func recoveryTitle(_ action: AgentRecoveryAction) -> String {
         switch action {
-        case .retry: String(localized: "Retry from Last Safe Step")
-        case .resume: String(localized: "Resume Task")
-        case .reviewProvider: String(localized: "Review Provider Settings")
-        case .retryKernel: String(localized: "Retry Local Environment")
+        case .retry: AppLocalized("Retry from Last Safe Step")
+        case .resume: AppLocalized("Resume Task")
+        case .reviewProvider: AppLocalized("Review Provider Settings")
+        case .retryKernel: AppLocalized("Retry Local Environment")
         }
     }
 
@@ -212,10 +212,10 @@ struct AgentActivityLogView: View {
 
     private func recoveryDescription(_ action: AgentRecoveryAction) -> String {
         switch action {
-        case .retry: String(localized: "Keeps completed steps and retries from the last safe conversation state.")
-        case .resume: String(localized: "Continues from the interruption point already saved in this conversation.")
-        case .reviewProvider: String(localized: "Check the selected provider, credentials and model before retrying.")
-        case .retryKernel: String(localized: "Attempts to start the on-device Linux environment again.")
+        case .retry: AppLocalized("Keeps completed steps and retries from the last safe conversation state.")
+        case .resume: AppLocalized("Continues from the interruption point already saved in this conversation.")
+        case .reviewProvider: AppLocalized("Check the selected provider, credentials and model before retrying.")
+        case .retryKernel: AppLocalized("Attempts to start the on-device Linux environment again.")
         }
     }
 }
@@ -394,53 +394,53 @@ struct AgentCurrentStatusCard: View {
             return AgentToolPresentation.displayName(for: toolName)
         }
         // [T-ask-user] Waiting for the answer to a question, not for a Resume tap.
-        if phase == .waitingForUser, reason == .userQuestion { return String(localized: "等你回答") }
+        if phase == .waitingForUser, reason == .userQuestion { return AppLocalized("等你回答") }
         return switch phase {
-        case .waitingForUser: String(localized: "Ready to Resume")
-        case .suspended: String(localized: "Waiting for a Slot")
-        case .thinking: String(localized: "Thinking…")
-        case .preparing: String(localized: "Preparing")
-        case .usingTool: String(localized: "Using a Tool")
-        case .waitingForPermission: String(localized: "Permission Required")
-        case .completed: String(localized: "Completed")
-        case .failed: String(localized: "Run failed")
-        case .cancelled: String(localized: "Cancelled")
-        case .unverified: String(localized: "Result unverified")
-        case .idle: String(localized: "Idle")
+        case .waitingForUser: AppLocalized("Ready to Resume")
+        case .suspended: AppLocalized("Waiting for a Slot")
+        case .thinking: AppLocalized("Thinking…")
+        case .preparing: AppLocalized("Preparing")
+        case .usingTool: AppLocalized("Using a Tool")
+        case .waitingForPermission: AppLocalized("Permission Required")
+        case .completed: AppLocalized("Completed")
+        case .failed: AppLocalized("Run failed")
+        case .cancelled: AppLocalized("Cancelled")
+        case .unverified: AppLocalized("Result unverified")
+        case .idle: AppLocalized("Idle")
         }
     }
 
     private var subtitle: String {
-        if reconnectAttempt != nil { return String(localized: "连接中断，正在自动重试；恢复后接着做") }
+        if reconnectAttempt != nil { return AppLocalized("连接中断，正在自动重试；恢复后接着做") }
         if let reason {
             return switch reason {
-            case .permissionApproval: String(localized: "Review the device capability request")
-            case .autoApproved: String(localized: "Approved automatically (full auto), no prompt shown")
-            case .browserTakeover: String(localized: "Finish browsing to return control")
-            case .backgroundTimeExpired: String(localized: "Return to LeoBot to continue")
-            case .unexpectedTermination: String(localized: "The saved interruption point can be resumed")
-            case .concurrencyLimit: String(localized: "Queued behind another task")
-            case .userInterruption: String(localized: "The interruption point was saved")
-            case .responseLimit: String(localized: "Resume to continue the response")
-            case .connectionDropped: String(localized: "Resume when the connection is stable")
-            case .toolFailure: String(localized: "Review the failed tool step")
-            case .providerFailure: String(localized: "Review the provider error")
-            case .authenticationRequired: String(localized: "Check the selected provider credentials")
-            case .rateLimited: String(localized: "Wait briefly, then retry from the last safe step")
-            case .kernelUnavailable: String(localized: "Restart the local execution environment")
-            case .userQuestion: String(localized: "回答问题后接着做")
+            case .permissionApproval: AppLocalized("Review the device capability request")
+            case .autoApproved: AppLocalized("Approved automatically (full auto), no prompt shown")
+            case .browserTakeover: AppLocalized("Finish browsing to return control")
+            case .backgroundTimeExpired: AppLocalized("Return to LeoBot to continue")
+            case .unexpectedTermination: AppLocalized("The saved interruption point can be resumed")
+            case .concurrencyLimit: AppLocalized("Queued behind another task")
+            case .userInterruption: AppLocalized("The interruption point was saved")
+            case .responseLimit: AppLocalized("Resume to continue the response")
+            case .connectionDropped: AppLocalized("Resume when the connection is stable")
+            case .toolFailure: AppLocalized("Review the failed tool step")
+            case .providerFailure: AppLocalized("Review the provider error")
+            case .authenticationRequired: AppLocalized("Check the selected provider credentials")
+            case .rateLimited: AppLocalized("Wait briefly, then retry from the last safe step")
+            case .kernelUnavailable: AppLocalized("Restart the local execution environment")
+            case .userQuestion: AppLocalized("回答问题后接着做")
             }
         }
         return switch phase {
-        case .waitingForUser: String(localized: "The interruption point was saved")
-        case .suspended: String(localized: "Queued behind another task")
-        case .thinking, .preparing, .usingTool: String(localized: "View current agent activity")
-        case .waitingForPermission: String(localized: "Review the pending request")
-        case .completed: String(localized: "The run finished")
-        case .failed: String(localized: "The run needs attention")
-        case .cancelled: String(localized: "The run was stopped")
-        case .unverified: String(localized: "Check the result before trying the action again")
-        case .idle: String(localized: "No active run")
+        case .waitingForUser: AppLocalized("The interruption point was saved")
+        case .suspended: AppLocalized("Queued behind another task")
+        case .thinking, .preparing, .usingTool: AppLocalized("View current agent activity")
+        case .waitingForPermission: AppLocalized("Review the pending request")
+        case .completed: AppLocalized("The run finished")
+        case .failed: AppLocalized("The run needs attention")
+        case .cancelled: AppLocalized("The run was stopped")
+        case .unverified: AppLocalized("Check the result before trying the action again")
+        case .idle: AppLocalized("No active run")
         }
     }
 
@@ -480,17 +480,17 @@ struct AgentCurrentStatusCard: View {
 extension AgentActivityPhase {
     var activityTitle: String {
         switch self {
-        case .idle: String(localized: "Idle")
-        case .preparing: String(localized: "Preparing")
-        case .thinking: String(localized: "Thinking…")
-        case .usingTool: String(localized: "Using a tool")
-        case .waitingForPermission: String(localized: "Waiting for permission")
-        case .waitingForUser: String(localized: "Paused, ready to resume")
-        case .suspended: String(localized: "Waiting for an execution slot")
-        case .completed: String(localized: "Completed")
-        case .failed: String(localized: "Run failed")
-        case .cancelled: String(localized: "Cancelled")
-        case .unverified: String(localized: "Result unverified")
+        case .idle: AppLocalized("Idle")
+        case .preparing: AppLocalized("Preparing")
+        case .thinking: AppLocalized("Thinking…")
+        case .usingTool: AppLocalized("Using a tool")
+        case .waitingForPermission: AppLocalized("Waiting for permission")
+        case .waitingForUser: AppLocalized("Paused, ready to resume")
+        case .suspended: AppLocalized("Waiting for an execution slot")
+        case .completed: AppLocalized("Completed")
+        case .failed: AppLocalized("Run failed")
+        case .cancelled: AppLocalized("Cancelled")
+        case .unverified: AppLocalized("Result unverified")
         }
     }
 }
@@ -498,21 +498,21 @@ extension AgentActivityPhase {
 extension AgentActivityReason {
     var activityDescription: String {
         switch self {
-        case .permissionApproval: String(localized: "Waiting for device permission approval")
-        case .autoApproved: String(localized: "Auto-approved (full auto)")
-        case .browserTakeover: String(localized: "Waiting for browser control to return")
-        case .backgroundTimeExpired: String(localized: "Paused after iOS background time expired")
-        case .unexpectedTermination: String(localized: "Recovered after LeoBot stopped unexpectedly")
-        case .concurrencyLimit: String(localized: "Waiting for an execution slot")
-        case .userInterruption: String(localized: "Paused by the user")
-        case .responseLimit: String(localized: "The response reached its token limit")
-        case .connectionDropped: String(localized: "The provider connection ended early")
-        case .toolFailure: String(localized: "A tool step failed")
-        case .providerFailure: String(localized: "The model provider request failed")
-        case .authenticationRequired: String(localized: "Provider authentication needs attention")
-        case .rateLimited: String(localized: "The provider rate limit was reached")
-        case .kernelUnavailable: String(localized: "The local execution environment is unavailable")
-        case .userQuestion: String(localized: "等你回答一个问题")
+        case .permissionApproval: AppLocalized("Waiting for device permission approval")
+        case .autoApproved: AppLocalized("Auto-approved (full auto)")
+        case .browserTakeover: AppLocalized("Waiting for browser control to return")
+        case .backgroundTimeExpired: AppLocalized("Paused after iOS background time expired")
+        case .unexpectedTermination: AppLocalized("Recovered after LeoBot stopped unexpectedly")
+        case .concurrencyLimit: AppLocalized("Waiting for an execution slot")
+        case .userInterruption: AppLocalized("Paused by the user")
+        case .responseLimit: AppLocalized("The response reached its token limit")
+        case .connectionDropped: AppLocalized("The provider connection ended early")
+        case .toolFailure: AppLocalized("A tool step failed")
+        case .providerFailure: AppLocalized("The model provider request failed")
+        case .authenticationRequired: AppLocalized("Provider authentication needs attention")
+        case .rateLimited: AppLocalized("The provider rate limit was reached")
+        case .kernelUnavailable: AppLocalized("The local execution environment is unavailable")
+        case .userQuestion: AppLocalized("等你回答一个问题")
         }
     }
 }

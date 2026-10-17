@@ -123,9 +123,9 @@ struct WatchSettingsView: View {
     }
 
     private var selectedModelLabel: String {
-        guard !entryId.isEmpty else { return String(localized: "跟默认模型分组走") }
+        guard !entryId.isEmpty else { return AppLocalized("跟默认模型分组走") }
         guard let selected = candidates.first(where: { $0.id == entryId }) else {
-            return String(localized: "Unavailable model")
+            return AppLocalized("Unavailable model")
         }
         return "\(selected.modelName) · \(selected.providerName)"
     }

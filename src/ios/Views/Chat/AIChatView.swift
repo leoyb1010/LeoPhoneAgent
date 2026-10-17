@@ -692,13 +692,13 @@ struct AIChatView: View {
         }
         // [T-cred-approval] 凭证按次审批弹窗已上移到 MinisApp 根视图——
         // 用户在会话列表/其他页面时 agent 触发审批也能弹出,不再无声挂起。
-        .alert(String(localized: "Force Pull Messages"), isPresented: $showForcePullConfirm) {
-            Button(String(localized: "Pull from iCloud"), role: .destructive) {
+        .alert(AppLocalized("Force Pull Messages"), isPresented: $showForcePullConfirm) {
+            Button(AppLocalized("Pull from iCloud"), role: .destructive) {
                 runForcePull()
             }
-            Button(String(localized: "Cancel"), role: .cancel) {}
+            Button(AppLocalized("Cancel"), role: .cancel) {}
         } message: {
-            Text(String(localized: "This will delete all local messages for this chat and re-download them from iCloud. Local changes that haven't synced yet will be lost. Continue?"))
+            Text(AppLocalized("This will delete all local messages for this chat and re-download them from iCloud. Local changes that haven't synced yet will be lost. Continue?"))
         }
         // [T-ios-json-open-provider-import-prompt] Shared/opened Provider-export
         // JSON: let the user choose import-as-provider vs add-as-attachment.
@@ -752,48 +752,48 @@ struct AIChatView: View {
         } message: {
             Text("Enhanced cache extends the cache TTL from 5 minutes to 1 hour. Cache writes cost more (2x vs 1.25x base price), but cache reads remain cheap (0.1x). Recommended for long coding sessions where request gaps may exceed 5 minutes.")
         }
-        .alert(String(localized: "Context Near Capacity"), isPresented: Binding(get: { vm.showCompactBeforeSendPrompt }, set: { vm.showCompactBeforeSendPrompt = $0 })) {
-            Button(String(localized: "Compact & Send")) {
+        .alert(AppLocalized("Context Near Capacity"), isPresented: Binding(get: { vm.showCompactBeforeSendPrompt }, set: { vm.showCompactBeforeSendPrompt = $0 })) {
+            Button(AppLocalized("Compact & Send")) {
                 vm.compactAndSend()
             }
             // [T-chat-auto-compact-opt-in] One-tap opt-in: compact now AND
             // remember (globally, UserDefaults "autoCompactOnThreshold") to
             // auto-compact without prompting whenever the threshold fires in
             // future conversations.
-            Button(String(localized: "Compact & Enable Auto-Compact")) {
+            Button(AppLocalized("Compact & Enable Auto-Compact")) {
                 vm.autoCompactEnabled = true
                 vm.compactAndSend()
             }
-            Button(String(localized: "Cancel"), role: .cancel) {
+            Button(AppLocalized("Cancel"), role: .cancel) {
                 vm.cancelCompactBeforeSend()
             }
         } message: {
-            Text(String(localized: "Conversation context is nearly full. Compact the history to free up space before sending. Enabling auto-compact will do this automatically from now on."))
+            Text(AppLocalized("Conversation context is nearly full. Compact the history to free up space before sending. Enabling auto-compact will do this automatically from now on."))
         }
-        .alert(String(localized: "Context Full"), isPresented: Binding(get: { vm.showContextExhaustedPrompt }, set: { vm.showContextExhaustedPrompt = $0 })) {
-            Button(String(localized: "New Session")) {
+        .alert(AppLocalized("Context Full"), isPresented: Binding(get: { vm.showContextExhaustedPrompt }, set: { vm.showContextExhaustedPrompt = $0 })) {
+            Button(AppLocalized("New Session")) {
                 vm.showContextExhaustedPrompt = false
                 // [#33] The unsent message opens as the new chat's draft
                 // instead of going back into this full one.
                 vm.movePendingSendToNewChatDraft()
                 NotificationCenter.default.post(name: .newChatRequested, object: nil)
             }
-            Button(String(localized: "Clear Chat"), role: .destructive) {
+            Button(AppLocalized("Clear Chat"), role: .destructive) {
                 vm.showContextExhaustedPrompt = false
                 vm.cancelCompactBeforeSend()
                 vm.clearChat()
             }
-            Button(String(localized: "Cancel"), role: .cancel) {
+            Button(AppLocalized("Cancel"), role: .cancel) {
                 vm.cancelCompactBeforeSend()
             }
         } message: {
-            Text(String(localized: "The conversation context has reached its limit. Start a new session or clear the chat to continue."))
+            Text(AppLocalized("The conversation context has reached its limit. Start a new session or clear the chat to continue."))
         }
-        .alert(String(localized: "Clear Chat"), isPresented: $showClearChatConfirm) {
-            Button(String(localized: "Clear"), role: .destructive) { vm.clearChat() }
-            Button(String(localized: "Cancel"), role: .cancel) {}
+        .alert(AppLocalized("Clear Chat"), isPresented: $showClearChatConfirm) {
+            Button(AppLocalized("Clear"), role: .destructive) { vm.clearChat() }
+            Button(AppLocalized("Cancel"), role: .cancel) {}
         } message: {
-            Text(String(localized: "All messages in this session will be permanently deleted."))
+            Text(AppLocalized("All messages in this session will be permanently deleted."))
         }
         // Bridge VM's slash-command "/clear" request into the local @State that
         // drives the confirmation alert above, so the menu and slash-command
@@ -804,19 +804,19 @@ struct AIChatView: View {
                 vm.clearChatConfirmRequested = false
             }
         }
-        .alert(String(localized: "Compact Above"), isPresented: Binding(
+        .alert(AppLocalized("Compact Above"), isPresented: Binding(
             get: { compactConfirmMessageId != nil },
             set: { if !$0 { compactConfirmMessageId = nil } }
         )) {
-            Button(String(localized: "Compact"), role: .destructive) {
+            Button(AppLocalized("Compact"), role: .destructive) {
                 if let id = compactConfirmMessageId {
                     // [T-ios-compact-task-binding] Tracked, so Stop can cancel it.
                     vm.compactTask = Task { await vm.compactBefore(id) }
                 }
             }
-            Button(String(localized: "Cancel"), role: .cancel) {}
+            Button(AppLocalized("Cancel"), role: .cancel) {}
         } message: {
-            Text(String(localized: "Messages above this point will be compacted into a summary. This cannot be undone."))
+            Text(AppLocalized("Messages above this point will be compacted into a summary. This cannot be undone."))
         }
         // [T-delete-from-here] Destructive, so confirm first; the view model
         // re-checks isProcessing at commit time and reports `.busy`.
@@ -835,7 +835,7 @@ struct AIChatView: View {
                     flashToast("这条消息无法删除")
                 }
             }
-            Button(String(localized: "Cancel"), role: .cancel) {}
+            Button(AppLocalized("Cancel"), role: .cancel) {}
         } message: {
             Text("将删除这条消息以及之后的全部消息，无法撤销。")
         }
@@ -849,16 +849,16 @@ struct AIChatView: View {
             MinisImageFilePreviewView(fileURL: fileURL)
         }
         .alert(
-            String(localized: "File Not Found"),
+            AppLocalized("File Not Found"),
             isPresented: Binding(
                 get: { missingMinisFileName != nil },
                 set: { if !$0 { missingMinisFileName = nil } }
             ),
             presenting: missingMinisFileName
         ) { _ in
-            Button(String(localized: "OK"), role: .cancel) { missingMinisFileName = nil }
+            Button(AppLocalized("OK"), role: .cancel) { missingMinisFileName = nil }
         } message: { name in
-            Text(String(localized: "\(name) is unavailable. It may have been deleted or not yet synced from iCloud."))
+            Text(AppLocalized("\(name) is unavailable. It may have been deleted or not yet synced from iCloud."))
         }
         .fullScreenCover(item: $imageGallery) { presentation in
             MessageImageGallery(items: presentation.items, startIndex: presentation.startIndex)
@@ -903,7 +903,7 @@ struct AIChatView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button(String(localized: "Done")) { previewDocumentFile = nil }
+                            Button(AppLocalized("Done")) { previewDocumentFile = nil }
                         }
                     }
             }
@@ -1179,7 +1179,7 @@ struct AIChatView: View {
                 }
             case .failure(let error):
                 minisLogger.error("File import failed: \(error.localizedDescription)")
-                flashToast(String(localized: "Couldn't import the file: \(error.localizedDescription)"))
+                flashToast(AppLocalized("Couldn't import the file: \(error.localizedDescription)"))
             }
         }
         .onAppear {
@@ -1818,13 +1818,13 @@ struct AIChatView: View {
     private func runForceSync() {
         guard let sid = vm.sessionId, !isForcePulling else { return }
         isForcePulling = true
-        forcePullToast = String(localized: "Marking for upload…")
+        forcePullToast = AppLocalized("Marking for upload…")
         Task {
             let n = await ChatStore.shared.forceSyncSession(sid)
             await MainActor.run { SyncCore.shared.scheduleSend(delay: 0.5) }
             await MainActor.run {
                 isForcePulling = false
-                forcePullToast = String(localized: "Marked \(n) records for sync. iCloud is uploading now.")
+                forcePullToast = AppLocalized("Marked \(n) records for sync. iCloud is uploading now.")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
                     forcePullToast = nil
                 }
@@ -1835,7 +1835,7 @@ struct AIChatView: View {
     private func runForcePull() {
         guard let sid = vm.sessionId, !isForcePulling else { return }
         isForcePulling = true
-        forcePullToast = String(localized: "Pulling from iCloud…")
+        forcePullToast = AppLocalized("Pulling from iCloud…")
         Task {
             let outcome = await ChatStore.shared.forcePullSession(sessionId: sid)
             // Inbound hydration runs asynchronously after applyPortables
@@ -1850,11 +1850,11 @@ struct AIChatView: View {
                 isForcePulling = false
                 switch outcome {
                 case .applied(let pulled, let deleted):
-                    forcePullToast = String(localized: "Pulled \(pulled) records · removed \(deleted) local")
+                    forcePullToast = AppLocalized("Pulled \(pulled) records · removed \(deleted) local")
                 case .cloudEmpty:
-                    forcePullToast = String(localized: "iCloud has no records for this chat — local messages preserved")
+                    forcePullToast = AppLocalized("iCloud has no records for this chat — local messages preserved")
                 case .failed(let msg):
-                    forcePullToast = String(localized: "Force Pull failed: \(msg) — local messages preserved")
+                    forcePullToast = AppLocalized("Force Pull failed: \(msg) — local messages preserved")
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
                     forcePullToast = nil
@@ -2610,7 +2610,7 @@ struct AIChatView: View {
                             // chevron.down. Available since iOS 16 (both our legacy
                             // and iOS 26 floors).
                             scrollFloatingButtonLabel("arrow.up.to.line",
-                                                      accessibilityLabel: String(localized: "Previous Turn"))
+                                                      accessibilityLabel: AppLocalized("Previous Turn"))
                         }
                         .transition(.opacity.combined(with: .scale(scale: 0.8)))
                     }
@@ -2624,7 +2624,7 @@ struct AIChatView: View {
                             vm.forceScrollToBottom.send()
                         } label: {
                             scrollFloatingButtonLabel("chevron.down",
-                                                      accessibilityLabel: String(localized: "Scroll to Bottom"))
+                                                      accessibilityLabel: AppLocalized("Scroll to Bottom"))
                         }
                         .transition(.opacity.combined(with: .scale(scale: 0.8)))
                     }
@@ -3464,7 +3464,7 @@ struct AIChatView: View {
             // `%@` form ("Message %@ (@ to mention files)") as the lookup
             // key in Localizable.xcstrings, so translators get one
             // parameterized entry per locale instead of one per soul name.
-            placeholder: String(localized: "给 \(soulName) 交代任务（@ 引用文件）"),
+            placeholder: AppLocalized("给 \(soulName) 交代任务（@ 引用文件）"),
             onPasteImage: { image in vm.addImageAttachment(image) },
             onPasteFile: { url in vm.addFileAttachment(from: url) },
             onReturnKey: handleReturnKey,
@@ -3634,7 +3634,7 @@ struct AIChatView: View {
             }
             // [#32] No Mac yet: one tap to where one gets connected.
             if gatewayStore.activeHosts.isEmpty {
-                Button(String(localized: "Connect a Mac")) {
+                Button(AppLocalized("Connect a Mac")) {
                     DeepLinkCoordinator.shared.pendingSettingsTarget = .macConsole
                 }
             }
@@ -3763,7 +3763,7 @@ struct AIChatView: View {
         }
         return ModelSwitcher.defaultLabel()
             ?? vm.resolveCurrentEntry()?.model.displayName
-            ?? String(localized: "No model selected")
+            ?? AppLocalized("No model selected")
     }
 
     /// 长按胶囊弹出的常用列表。空的时候给一句话指路,不给一个空菜单。
@@ -3825,7 +3825,7 @@ struct AIChatView: View {
         inputFocused = true
         UIAccessibility.post(
             notification: .announcement,
-            argument: String(format: String(localized: "%@ prepared"), task.displayName)
+            argument: String(format: AppLocalized("%@ prepared"), task.displayName)
         )
     }
 
@@ -4460,8 +4460,8 @@ struct AIChatView: View {
                                 ProgressView().scaleEffect(0.7)
                             }
                             Text(mentionIndex.isScanning
-                                 ? String(localized: "Scanning files…")
-                                 : String(localized: "No matching files"))
+                                 ? AppLocalized("Scanning files…")
+                                 : AppLocalized("No matching files"))
                                 .font(.system(size: 13))
                                 .foregroundStyle(ChatColors.secondaryText)
                             Spacer()
@@ -4676,7 +4676,7 @@ struct AIChatView: View {
                         let titleColor: Color = isThinkingActive
                             ? .blue : (isSelected ? .white : ChatColors.primaryText)
                         let subtitleText = (cmd.id == "thinking" && !thinkingSupported)
-                            ? String(localized: "Not supported by current model")
+                            ? AppLocalized("Not supported by current model")
                             : cmd.subtitle
                         let subtitleColor: Color = (cmd.id == "thinking" && !thinkingSupported)
                             ? .secondary
@@ -4909,9 +4909,9 @@ private struct ProviderImportPromptModifier: ViewModifier {
                     onImport: {
                         pending = nil
                         if let label = onImport(item.json) {
-                            result = String(localized: "Imported provider \"\(label)\".")
+                            result = AppLocalized("Imported provider \"\(label)\".")
                         } else {
-                            result = String(localized: "Could not import this provider configuration.")
+                            result = AppLocalized("Could not import this provider configuration.")
                         }
                         try? FileManager.default.removeItem(at: item.fileURL)
                     },
@@ -4926,13 +4926,13 @@ private struct ProviderImportPromptModifier: ViewModifier {
                 )
             }
             .alert(
-                String(localized: "Provider Import"),
+                AppLocalized("Provider Import"),
                 isPresented: Binding(
                     get: { result != nil },
                     set: { if !$0 { result = nil } }
                 )
             ) {
-                Button(String(localized: "OK"), role: .cancel) { result = nil }
+                Button(AppLocalized("OK"), role: .cancel) { result = nil }
             } message: {
                 Text(result ?? "")
             }
@@ -4961,10 +4961,10 @@ private struct ProviderImportSheet: View {
                     .font(.system(size: 40))
                     .foregroundStyle(.tint)
                     .padding(.top, 8)
-                Text(String(localized: "Provider Configuration Detected"))
+                Text(AppLocalized("Provider Configuration Detected"))
                     .font(.headline)
                     .multilineTextAlignment(.center)
-                Text(String(localized: "This JSON file looks like an exported provider configuration. Import it as a new provider, or add it to the chat as a file attachment?"))
+                Text(AppLocalized("This JSON file looks like an exported provider configuration. Import it as a new provider, or add it to the chat as a file attachment?"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -4973,21 +4973,21 @@ private struct ProviderImportSheet: View {
 
             VStack(spacing: 10) {
                 Button(action: { chose = true; onImport() }) {
-                    Text(String(localized: "Import as Provider"))
+                    Text(AppLocalized("Import as Provider"))
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glassProminent)
                 .controlSize(.large)
 
                 Button(action: { chose = true; onAttach() }) {
-                    Text(String(localized: "Add as Chat Attachment"))
+                    Text(AppLocalized("Add as Chat Attachment"))
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glass)
                 .controlSize(.large)
 
                 Button(role: .cancel, action: { chose = true; onCancel() }) {
-                    Text(String(localized: "Cancel"))
+                    Text(AppLocalized("Cancel"))
                         .frame(maxWidth: .infinity)
                 }
                 .controlSize(.large)
@@ -5328,7 +5328,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         button.setImage(UIImage(systemName: "ellipsis", withConfiguration: cfg), for: .normal)
         button.tintColor = UIColor(ChatColors.primaryText)
         button.showsMenuAsPrimaryAction = true
-        button.accessibilityLabel = String(localized: "More options")
+        button.accessibilityLabel = AppLocalized("More options")
         button.menu = Self.buildMenu(key: key, coordinator: context.coordinator)
         context.coordinator.lastKey = key
         return button
@@ -5366,19 +5366,19 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         let contentGate: UIMenuElement.Attributes = key.isLocked ? [.disabled] : []
 
         groups.append(UIMenu(options: .displayInline, children: [
-            UIAction(title: String(localized: "New Chat"),
+            UIAction(title: AppLocalized("New Chat"),
                      image: UIImage(systemName: "square.and.pencil")) { _ in coordinator.parent.onNewChat() },
         ]))
 
         // [T-session-export] Whole-conversation export; disabled while empty.
         groups.append(UIMenu(options: .displayInline, children: [
-            UIAction(title: String(localized: "Export as Markdown"),
+            UIAction(title: AppLocalized("Export as Markdown"),
                      image: UIImage(systemName: "arrow.down.doc"),
                      attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onExportMarkdown() },
-            UIAction(title: String(localized: "Export as PDF"),
+            UIAction(title: AppLocalized("Export as PDF"),
                      image: UIImage(systemName: "doc.richtext"),
                      attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onExportPDF() },
-            UIAction(title: String(localized: "分享为长图"),
+            UIAction(title: AppLocalized("分享为长图"),
                      image: UIImage(systemName: "photo.on.rectangle"),
                      attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onShareLongImage() },
         ]))
@@ -5388,10 +5388,10 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         // separate inline group so a divider lands between Clear Chat and the
         // sync rows (user-requested layout).
         groups.append(UIMenu(options: .displayInline, children: [
-            UIAction(title: String(localized: "Compact Messages"),
+            UIAction(title: AppLocalized("Compact Messages"),
                      image: UIImage(systemName: "arrow.down.right.and.arrow.up.left"),
                      attributes: key.messagesEmpty ? [.disabled] : []) { _ in coordinator.parent.onCompact() },
-            UIAction(title: String(localized: "Clear Chat"),
+            UIAction(title: AppLocalized("Clear Chat"),
                      image: UIImage(systemName: "trash"),
                      attributes: key.messagesEmpty || key.isProcessing ? [.destructive, .disabled] : [.destructive]) { _ in coordinator.parent.onClearChat() },
         ]))
@@ -5401,46 +5401,46 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         if key.iCloudSyncEnabled {
             let disabled: UIMenuElement.Attributes = (!key.hasSession || key.isForcePulling) ? [.disabled] : []
             groups.append(UIMenu(options: .displayInline, children: [
-                UIAction(title: String(localized: "Force iCloud Sync"),
+                UIAction(title: AppLocalized("Force iCloud Sync"),
                          image: UIImage(systemName: "icloud.and.arrow.up"),
                          attributes: disabled) { _ in coordinator.parent.onForceSync() },
-                UIAction(title: String(localized: "Force Pull Messages"),
+                UIAction(title: AppLocalized("Force Pull Messages"),
                          image: UIImage(systemName: "icloud.and.arrow.down"),
                          attributes: disabled) { _ in coordinator.parent.onForcePull() },
             ]))
         }
 
         groups.append(UIMenu(options: .displayInline, children: [
-            UIAction(title: String(localized: "Open Terminal"),
+            UIAction(title: AppLocalized("Open Terminal"),
                      image: UIImage(systemName: "terminal"),
                      attributes: contentGate) { _ in coordinator.parent.onOpenTerminal() },
-            UIAction(title: String(localized: "Open Browser"),
+            UIAction(title: AppLocalized("Open Browser"),
                      image: UIImage(systemName: "globe"),
                      attributes: contentGate) { _ in coordinator.parent.onOpenBrowser() },
-            UIAction(title: String(localized: "Browse Chat Files"),
+            UIAction(title: AppLocalized("Browse Chat Files"),
                      image: UIImage(systemName: "folder"),
                      attributes: contentGate) { _ in coordinator.parent.onBrowseFiles() },
-            UIAction(title: String(localized: "Artifacts"),
+            UIAction(title: AppLocalized("Artifacts"),
                      image: UIImage(systemName: "shippingbox"),
                      attributes: contentGate) { _ in coordinator.parent.onArtifacts() },
         ]))
 
         var sessionGroup: [UIMenuElement] = [
-            UIAction(title: String(localized: "Skills in Session"),
+            UIAction(title: AppLocalized("Skills in Session"),
                      image: UIImage(systemName: "puzzlepiece.extension"),
                      attributes: contentGate) { _ in coordinator.parent.onSkills() },
-            UIAction(title: String(localized: "MCPs in Session"),
+            UIAction(title: AppLocalized("MCPs in Session"),
                      image: UIImage(systemName: "wrench.and.screwdriver"),
                      attributes: contentGate) { _ in coordinator.parent.onMCPs() },
         ]
         if key.memoryEnabled {
-            sessionGroup.append(UIAction(title: String(localized: "Memories in Session"),
+            sessionGroup.append(UIAction(title: AppLocalized("Memories in Session"),
                                          image: UIImage(systemName: "brain.head.profile"),
                                          attributes: contentGate) { _ in coordinator.parent.onMemories() })
         }
         // Reading replies aloud reveals them too: can't be switched ON while
         // locked (switching it off stays possible).
-        sessionGroup.append(UIAction(title: String(localized: "Speak Responses"),
+        sessionGroup.append(UIAction(title: AppLocalized("Speak Responses"),
                                      image: UIImage(systemName: "speaker.wave.2"),
                                      attributes: key.isLocked && !key.speakEnabled ? [.disabled] : [],
                                      state: key.speakEnabled ? .on : .off) { _ in
@@ -5453,7 +5453,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         // their own inline group so dividers separate them on both sides.
         var modelControlGroup: [UIMenuElement] = []
         if key.showEnhancedCacheToggle {
-            modelControlGroup.append(UIAction(title: String(localized: "Enhanced Cache"),
+            modelControlGroup.append(UIAction(title: AppLocalized("Enhanced Cache"),
                                               image: UIImage(systemName: "clock.arrow.circlepath"),
                                               state: key.enhancedCacheEnabled ? .on : .off) { _ in
                 coordinator.parent.setEnhancedCache(!key.enhancedCacheEnabled)
@@ -5463,13 +5463,13 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         // service_tier=priority (the wire value codex_cli_rs sends for its
         // Fast mode) into Codex requests while enabled; 2x credit burn.
         if key.showFastModeToggle {
-            let fastMode = UIAction(title: String(localized: "Enable Fast Mode"),
+            let fastMode = UIAction(title: AppLocalized("Enable Fast Mode"),
                                     image: UIImage(systemName: "bolt.fill"),
                                     state: key.fastModeEnabled ? .on : .off) { _ in
                 coordinator.parent.setFastMode(!key.fastModeEnabled)
             }
             // #16: one app-wide switch, not per chat, and billed at twice the rate.
-            fastMode.subtitle = String(localized: "All chats · billed at 2×")
+            fastMode.subtitle = AppLocalized("All chats · billed at 2×")
             modelControlGroup.append(fastMode)
         }
         if !modelControlGroup.isEmpty {
@@ -5481,10 +5481,10 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
                      image: UIImage(systemName: "book.and.wrench"),
                      attributes: key.messagesEmpty || key.isProcessing || key.isEditing || key.isLocked
                         ? [.disabled] : []) { _ in coordinator.parent.onDistillSkill() },
-            UIAction(title: String(localized: "Session Inspector"),
+            UIAction(title: AppLocalized("Session Inspector"),
                      image: UIImage(systemName: "gauge.with.dots.needle.bottom.50percent"),
                      attributes: contentGate) { _ in coordinator.parent.onInspector() },
-            UIAction(title: String(localized: "Token Usage"),
+            UIAction(title: AppLocalized("Token Usage"),
                      image: UIImage(systemName: "number"),
                      attributes: contentGate) { _ in coordinator.parent.onTokenUsage() },
         ]
@@ -5494,7 +5494,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
             completion([
                 UIAction(title: "Copy Requests (\(n))",
                          image: UIImage(systemName: "arrow.up.doc")) { _ in coordinator.parent.onCopyRequests() },
-                UIAction(title: String(localized: "Copy Session Data"),
+                UIAction(title: AppLocalized("Copy Session Data"),
                          image: UIImage(systemName: "tray.and.arrow.up")) { _ in coordinator.parent.onCopySessionData() },
             ])
         })
@@ -5539,11 +5539,11 @@ private struct MoveToSessionSheet: View {
                         dismiss()
                         onSelect(newId)
                     } label: {
-                        Label(String(localized: "New Chat"), systemImage: "plus.bubble")
+                        Label(AppLocalized("New Chat"), systemImage: "plus.bubble")
                     }
                 }
 
-                Section(isSearching ? String(localized: "Results") : String(localized: "Recent")) {
+                Section(isSearching ? AppLocalized("Results") : AppLocalized("Recent")) {
                     ForEach(displayedSessions) { session in
                         Button {
                             dismiss()
@@ -5552,13 +5552,13 @@ private struct MoveToSessionSheet: View {
                             HStack(spacing: 8) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     highlightedText(
-                                        session.title ?? String(localized: "New Chat"),
+                                        session.title ?? AppLocalized("New Chat"),
                                         font: .system(size: 16, weight: .semibold),
                                         color: Color(UIColor.label)
                                     )
                                     .lineLimit(1)
                                     highlightedText(
-                                        session.lastMessage ?? String(localized: "No messages yet"),
+                                        session.lastMessage ?? AppLocalized("No messages yet"),
                                         font: .system(size: 14),
                                         color: Color(UIColor.secondaryLabel)
                                     )
@@ -5573,7 +5573,7 @@ private struct MoveToSessionSheet: View {
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: String(localized: "Search chats..."))
+            .searchable(text: $searchText, prompt: AppLocalized("Search chats..."))
             // [r7] A search with no hits used to leave an empty "Results" header.
             .overlay {
                 if isSearching, searchMatchedIds != nil, displayedSessions.isEmpty {
@@ -5581,11 +5581,11 @@ private struct MoveToSessionSheet: View {
                 }
             }
             .onChange(of: searchText) { _ in scheduleSearch() }
-            .navigationTitle(String(localized: "Move to…"))
+            .navigationTitle(AppLocalized("Move to…"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { dismiss() }
+                    Button(AppLocalized("Cancel")) { dismiss() }
                 }
             }
         }
@@ -5656,16 +5656,16 @@ private struct MoveToSessionSheet: View {
         let seconds = Int(now.timeIntervalSince(date))
         if calendar.isDateInToday(date) {
             if seconds < 60 {
-                return String(localized: "Just now")
+                return AppLocalized("Just now")
             } else if seconds < 3600 {
                 let mins = seconds / 60
-                return String(localized: "\(mins) min ago")
+                return AppLocalized("\(mins) min ago")
             } else {
                 let hrs = seconds / 3600
-                return String(localized: "\(hrs) hr ago")
+                return AppLocalized("\(hrs) hr ago")
             }
         } else if calendar.isDateInYesterday(date) {
-            return String(localized: "Yesterday")
+            return AppLocalized("Yesterday")
         } else {
             let diff = calendar.dateComponents([.day], from: date, to: now)
             // [T-r3-P2] Shared formatters (were built per row).
@@ -5781,8 +5781,8 @@ private struct SessionLockGateOverlay: View {
                     promptForBiometricUnlock()
                 } label: {
                     Label(attemptFailed
-                          ? String(localized: "Try again")
-                          : String(localized: "Unlock"),
+                          ? AppLocalized("Try again")
+                          : AppLocalized("Unlock"),
                           systemImage: "faceid")
                         .font(.system(size: 16, weight: .semibold))
                         .padding(.horizontal, 22).padding(.vertical, 10)
@@ -5812,7 +5812,7 @@ private struct SessionLockGateOverlay: View {
         guard !promptInFlight else { return }
         promptInFlight = true
         Task { @MainActor in
-            let reason = String(localized: "Unlock this chat session")
+            let reason = AppLocalized("Unlock this chat session")
             let ok = await BiometricAuth.authenticate(reason: reason)
             promptInFlight = false
             if ok {
@@ -6044,11 +6044,11 @@ private struct TokenUsageSheet: View {
 
                 if let thinkingInfo = vm.currentModelThinkingInfo {
                     Section("Thinking") {
-                        StatRow(label: "Thinking", value: thinkingInfo.enabled ? String(localized: "开") : String(localized: "关"), icon: "lightbulb", customIcon: Image("ThinkingIcon"))
+                        StatRow(label: "Thinking", value: thinkingInfo.enabled ? AppLocalized("开") : AppLocalized("关"), icon: "lightbulb", customIcon: Image("ThinkingIcon"))
                         if thinkingInfo.enabled {
                             StatRow(label: "Level", value: thinkingInfo.level, icon: "slider.horizontal.3")
                         }
-                        StatRow(label: "Supported", value: thinkingInfo.supported ? String(localized: "是") : String(localized: "否"), icon: "checkmark.circle")
+                        StatRow(label: "Supported", value: thinkingInfo.supported ? AppLocalized("是") : AppLocalized("否"), icon: "checkmark.circle")
                     }
                 }
 
@@ -6076,7 +6076,7 @@ private struct TokenUsageSheet: View {
                     let speed = vm.sessionOutputTokensPerSecond
                     StatRow(
                         label: "Output Speed",
-                        value: speed > 0 ? String(format: String(localized: "%.1f Token/s"), speed) : "—",
+                        value: speed > 0 ? String(format: AppLocalized("%.1f Token/s"), speed) : "—",
                         icon: "speedometer"
                     )
                 }
@@ -6147,9 +6147,9 @@ private struct EmptyChatWorkspaceCard: View {
     // 原来那张"此 iPhone 工作区"大卡片(说明文字 + 状态 + 按钮)在键盘弹出后被
     // 居中挤到导航栏底下,和标题叠在一起;说明文字也没人读。
     private let prompts = [
-        (String(localized: "整理今天要做的事"), "checklist"),
-        (String(localized: "分析一份本机文件"), "doc.text.magnifyingglass"),
-        (String(localized: "打开浏览器查资料"), "globe"),
+        (AppLocalized("整理今天要做的事"), "checklist"),
+        (AppLocalized("分析一份本机文件"), "doc.text.magnifyingglass"),
+        (AppLocalized("打开浏览器查资料"), "globe"),
     ]
 
     var body: some View {
@@ -6167,9 +6167,9 @@ private struct EmptyChatWorkspaceCard: View {
             ForEach(prompts, id: \.0) { prompt in
                 pill(prompt.0, icon: prompt.1) { onPrompt(prompt.0) }
             }
-            pill(String(localized: "浏览此对话的文件"), icon: "folder") { onBrowse() }
+            pill(AppLocalized("浏览此对话的文件"), icon: "folder") { onBrowse() }
             ForEach(mounts, id: \.id) { mount in
-                pill(String(localized: "工作区:\(mount.name)"),
+                pill(AppLocalized("工作区:\(mount.name)"),
                      icon: selectedMountId == mount.id ? "checkmark.circle.fill" : "externaldrive") {
                     onUseMount(mount.id)
                 }
@@ -6434,25 +6434,25 @@ struct TerminalLinkConfirmation: ViewModifier {
 
     func body(content: Content) -> some View {
         content.alert(
-            String(localized: "Open Terminal?"),
+            AppLocalized("Open Terminal?"),
             isPresented: Binding(
                 get: { pending != nil },
                 set: { if !$0 { pending = nil } }
             ),
             presenting: pending
         ) { link in
-            Button(String(localized: "Open Terminal")) {
+            Button(AppLocalized("Open Terminal")) {
                 let dl = DeepLinkCoordinator.shared
                 dl.terminalInitCommand = link.command
                 dl.showTerminal = true
                 pending = nil
             }
-            Button(String(localized: "Cancel"), role: .cancel) { pending = nil }
+            Button(AppLocalized("Cancel"), role: .cancel) { pending = nil }
         } message: { link in
             if let cmd = link.command, !cmd.isEmpty {
-                Text(String(localized: "This link will type the following command into the terminal. It won't run until you press Return.\n\n\(cmd)"))
+                Text(AppLocalized("This link will type the following command into the terminal. It won't run until you press Return.\n\n\(cmd)"))
             } else {
-                Text(String(localized: "This link opens an interactive terminal."))
+                Text(AppLocalized("This link opens an interactive terminal."))
             }
         }
     }

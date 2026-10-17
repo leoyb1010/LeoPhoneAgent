@@ -660,7 +660,7 @@ final class CloudSyncEngine: ObservableObject {
             consecutiveRejections += 1
             if didAttemptRejectionRecovery, consecutiveRejections >= 3 {
                 syncSuspendedThisLaunch = true
-                syncStatus = .error(String(localized: "iCloud keeps rejecting requests (error 15) — sync paused until next launch to keep the app responsive. Local changes are safe and will upload once iCloud recovers."))
+                syncStatus = .error(AppLocalized("iCloud keeps rejecting requests (error 15) — sync paused until next launch to keep the app responsive. Local changes are safe and will upload once iCloud recovers."))
                 logger.error("[CloudSync] code-15 storm — suspending sync for this launch after \(self.consecutiveRejections) rejections")
                 return
             }
@@ -672,16 +672,16 @@ final class CloudSyncEngine: ObservableObject {
         // Force Full Sync button in charge.
         let dirtyBefore = await ChatStore.shared.countDirtyRecords().total
         if dirtyBefore > 2000 {
-            syncStatus = .error(String(localized: "iCloud rejected the request (code 15). Automatic recovery is skipped for large pending queues — use Force Full Sync in Sync Settings if this persists."))
+            syncStatus = .error(AppLocalized("iCloud rejected the request (code 15). Automatic recovery is skipped for large pending queues — use Force Full Sync in Sync Settings if this persists."))
             logger.warning("[CloudSync] code-15 auto-recovery skipped: \(dirtyBefore) dirty rows")
             return
         }
                 logger.warning("[CloudSync] CKError 15 (serverRejectedRequest) on \(phase) — auto-resetting sync state and retrying once")
-                syncStatus = .error(String(localized: "iCloud rejected the sync state (error 15) — rebuilding automatically…"))
+                syncStatus = .error(AppLocalized("iCloud rejected the sync state (error 15) — rebuilding automatically…"))
                 await forceFullSync()
                 return
             }
-            syncStatus = .error(String(localized: "iCloud keeps rejecting requests (error 15). Check iCloud status in system Settings, then use Force Full Sync. This can also be a temporary iCloud/beta-OS issue."))
+            syncStatus = .error(AppLocalized("iCloud keeps rejecting requests (error 15). Check iCloud status in system Settings, then use Force Full Sync. This can also be a temporary iCloud/beta-OS issue."))
             return
         }
         syncStatus = .error(error.localizedDescription)
@@ -924,7 +924,7 @@ final class CloudSyncEngine: ObservableObject {
                 } catch {
                     failedZones.append(zone.zoneID.zoneName)
                     let reason = (error as? CKError).map { "CKError \($0.code.rawValue) — \(($0.userInfo["ServerErrorDescription"] as? String) ?? $0.localizedDescription)" } ?? error.localizedDescription
-                    syncStatus = .error(String(localized: "Zone delete failed: ") + reason)
+                    syncStatus = .error(AppLocalized("Zone delete failed: ") + reason)
                     logger.error("[CloudSync] Delete iCloud Data: failed to delete zone \(zone.zoneID.zoneName): \(reason)")
                 }
             }

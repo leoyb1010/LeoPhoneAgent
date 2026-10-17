@@ -126,7 +126,7 @@ struct LongTextExpandRow: View {
     let onExpand: () -> Void
 
     var body: some View {
-        let title = String(localized: "展开全文（共 \(characterCount.formatted()) 字）")
+        let title = AppLocalized("展开全文（共 \(characterCount.formatted()) 字）")
         Button {
             LeoHaptics.selection()
             onExpand()
@@ -218,7 +218,7 @@ struct LongTextReaderView: View {
                     VStack(spacing: 0) {
                         Text("全文").font(.headline)
                         if let characterCount {
-                            Text(verbatim: String(localized: "\(characterCount.formatted()) 字"))
+                            Text(verbatim: AppLocalized("\(characterCount.formatted()) 字"))
                                 .font(.caption2)
                                 .foregroundStyle(LeoTheme.ColorToken.secondaryText)
                         }
@@ -251,7 +251,7 @@ struct LongTextReaderView: View {
         let wantsMarkdown = UserDefaults.standard.string(forKey: "leo.copyFormat") == "markdown"
         UIPasteboard.general.string = wantsMarkdown ? markdown : WatchTextSanitizer.plain(markdown)
         LeoHaptics.content(.copied)
-        MinisToast.show(String(localized: "Copied"))
+        MinisToast.show(AppLocalized("Copied"))
     }
 }
 

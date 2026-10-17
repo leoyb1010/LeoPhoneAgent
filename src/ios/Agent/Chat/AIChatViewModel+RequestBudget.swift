@@ -183,7 +183,7 @@ extension AIChatViewModel {
         // Surface to the user via Toast (already-existing infrastructure).
         let droppedCount = plan.droppedCount
         Task { @MainActor in
-            self.transientNotice = String(localized: "Older \(droppedCount) image(s) elided from request to fit 25MB budget")
+            self.transientNotice = AppLocalized("Older \(droppedCount) image(s) elided from request to fit 25MB budget")
         }
 
         return mutated
@@ -224,7 +224,7 @@ extension AIChatViewModel {
         if lower.contains("image content cannot exceed")
             || lower.contains("image_too_large")
             || (lower.contains("413") && lower.contains("image")) {
-            return String(localized: "Image too large for the provider. The pre-send compressor already shrank it as far as it could; try removing one or more attachments and resending.") + "\n\n" + raw
+            return AppLocalized("Image too large for the provider. The pre-send compressor already shrank it as far as it could; try removing one or more attachments and resending.") + "\n\n" + raw
         }
         return raw
     }

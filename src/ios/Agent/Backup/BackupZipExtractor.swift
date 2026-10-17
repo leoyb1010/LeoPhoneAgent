@@ -29,18 +29,18 @@ enum BackupZipExtractor {
 
         var errorDescription: String? {
             switch self {
-            case .notAZip: return String(localized: "不是有效的备份包（ZIP 结构损坏）")
-            case .truncated: return String(localized: "备份包不完整（文件被截断）")
-            case .unsupportedCompression(let m): return String(localized: "备份包使用了不支持的压缩方式（\(m)）")
-            case .unsafePath: return String(localized: "备份包含有不安全的路径，已拒绝")
-            case .duplicateEntry: return String(localized: "备份包含有重复条目，已拒绝")
-            case .tooManyEntries(let n): return String(localized: "备份包条目过多（\(n)），已拒绝")
-            case .tooLarge: return String(localized: "备份包解压后体积超出上限，已拒绝")
+            case .notAZip: return AppLocalized("不是有效的备份包（ZIP 结构损坏）")
+            case .truncated: return AppLocalized("备份包不完整（文件被截断）")
+            case .unsupportedCompression(let m): return AppLocalized("备份包使用了不支持的压缩方式（\(m)）")
+            case .unsafePath: return AppLocalized("备份包含有不安全的路径，已拒绝")
+            case .duplicateEntry: return AppLocalized("备份包含有重复条目，已拒绝")
+            case .tooManyEntries(let n): return AppLocalized("备份包条目过多（\(n)），已拒绝")
+            case .tooLarge: return AppLocalized("备份包解压后体积超出上限，已拒绝")
             case .insufficientSpace(let need, let have):
                 let n = ByteCountFormatter.string(fromByteCount: need, countStyle: .file)
                 let h = ByteCountFormatter.string(fromByteCount: have, countStyle: .file)
-                return String(localized: "空间不足：需要约 \(n)，当前可用 \(h)")
-            case .inconsistentEntry: return String(localized: "备份包条目信息不一致，已拒绝")
+                return AppLocalized("空间不足：需要约 \(n)，当前可用 \(h)")
+            case .inconsistentEntry: return AppLocalized("备份包条目信息不一致，已拒绝")
             }
         }
     }

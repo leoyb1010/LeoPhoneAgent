@@ -77,24 +77,24 @@ struct LongImageShareView: View {
         guard turn < starts.count else { return "" }
         let text = items[starts[turn]].text
             .split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
-        let short = text.isEmpty ? String(localized: "(附件)") : String(text.prefix(18))
-        return String(localized: "第 \(turn + 1) 轮 · \(short)")
+        let short = text.isEmpty ? AppLocalized("(附件)") : String(text.prefix(18))
+        return AppLocalized("第 \(turn + 1) 轮 · \(short)")
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Picker(String(localized: "从"), selection: $fromTurn) {
+                    Picker(AppLocalized("从"), selection: $fromTurn) {
                         ForEach(turnStarts.indices, id: \.self) { Text(turnLabel($0)).tag($0) }
                     }
-                    Picker(String(localized: "到"), selection: $toTurn) {
+                    Picker(AppLocalized("到"), selection: $toTurn) {
                         ForEach(turnStarts.indices, id: \.self) { Text(turnLabel($0)).tag($0) }
                     }
                 } header: {
-                    Text(String(localized: "范围"))
+                    Text(AppLocalized("范围"))
                 } footer: {
-                    Text(String(localized: "只包含对话文字:不含思考过程、工具调用、文件路径和附件内容。跟随当前的浅色/深色外观,太长时自动分成多张。"))
+                    Text(AppLocalized("只包含对话文字:不含思考过程、工具调用、文件路径和附件内容。跟随当前的浅色/深色外观,太长时自动分成多张。"))
                 }
 
                 Section {
@@ -102,9 +102,9 @@ struct LongImageShareView: View {
                         Task { await render() }
                     } label: {
                         if isRendering {
-                            HStack { ProgressView(); Text(String(localized: "正在生成…")) }
+                            HStack { ProgressView(); Text(AppLocalized("正在生成…")) }
                         } else {
-                            Label(String(localized: "生成长图"), systemImage: "photo.on.rectangle")
+                            Label(AppLocalized("生成长图"), systemImage: "photo.on.rectangle")
                         }
                     }
                     .disabled(isRendering)
@@ -113,7 +113,7 @@ struct LongImageShareView: View {
                     }
                     if !output.isEmpty {
                         ShareLink(items: output) {
-                            Label(String(localized: "分享 \(output.count) 张图片"), systemImage: "square.and.arrow.up")
+                            Label(AppLocalized("分享 \(output.count) 张图片"), systemImage: "square.and.arrow.up")
                         }
                     }
                 }
@@ -129,18 +129,18 @@ struct LongImageShareView: View {
                                         .frame(height: 220)
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator, lineWidth: 0.5))
-                                        .accessibilityLabel(Text(String(localized: "第 \(index + 1) 张")))
+                                        .accessibilityLabel(Text(AppLocalized("第 \(index + 1) 张")))
                                 }
                             }
                         }
                     }
                 }
             }
-            .navigationTitle(String(localized: "分享为长图"))
+            .navigationTitle(AppLocalized("分享为长图"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(String(localized: "Cancel")) { dismiss() }
+                    Button(AppLocalized("Cancel")) { dismiss() }
                 }
             }
             .onAppear {
@@ -174,7 +174,7 @@ struct LongImageShareView: View {
                                                  maxHeight: LongImageTranscript.maxPageHeight - footerHeight)
         if pages.count > LongImageTranscript.maxPages {
             pages = Array(pages.prefix(LongImageTranscript.maxPages))
-            notice = String(localized: "内容太长,只生成了前 \(LongImageTranscript.maxPages) 张。可以缩小范围再试。")
+            notice = AppLocalized("内容太长,只生成了前 \(LongImageTranscript.maxPages) 张。可以缩小范围再试。")
         }
 
         let dir = FileManager.default.temporaryDirectory
@@ -208,13 +208,13 @@ struct LongImageShareView: View {
                 urls.append(url)
                 if thumbs.count < 6 { thumbs.append(image.preparingThumbnail(of: CGSize(width: 180, height: 600)) ?? image) }
             } catch {
-                notice = String(localized: "保存图片失败:\(error.localizedDescription)")
+                notice = AppLocalized("保存图片失败:\(error.localizedDescription)")
             }
             await Task.yield()
         }
         output = urls
         previews = thumbs
-        if urls.isEmpty, notice == nil { notice = String(localized: "没有可以生成的内容。") }
+        if urls.isEmpty, notice == nil { notice = AppLocalized("没有可以生成的内容。") }
         LeoHaptics.notification(urls.isEmpty ? .error : .success)
     }
 
@@ -247,7 +247,7 @@ private struct LongImageFooter: View {
     let page: Int
     let total: Int
     var body: some View {
-        Text(total > 1 ? String(localized: "由 LeoBot 生成 · \(page)/\(total)") : String(localized: "由 LeoBot 生成"))
+        Text(total > 1 ? AppLocalized("由 LeoBot 生成 · \(page)/\(total)") : AppLocalized("由 LeoBot 生成"))
             .font(.caption2)
             .foregroundStyle(.tertiary)
             .frame(maxWidth: .infinity)
@@ -268,7 +268,7 @@ private struct LongImageBubble: View {
             if item.role == .user { Spacer(minLength: 48) }
             VStack(alignment: .leading, spacing: 4) {
                 if item.attachmentCount > 0 {
-                    Label(String(localized: "附件 ×\(item.attachmentCount)"), systemImage: "paperclip")
+                    Label(AppLocalized("附件 ×\(item.attachmentCount)"), systemImage: "paperclip")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

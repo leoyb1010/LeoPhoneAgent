@@ -157,12 +157,12 @@ final class AskUserCenter: ObservableObject {
         let locked = sessionId.map { SessionLockStore.shared.isHiddenFromSystemSurfaces($0) } ?? false
 
         let content = UNMutableNotificationContent()
-        content.title = String(localized: "有个问题等你回答")
+        content.title = AppLocalized("有个问题等你回答")
         if locked {
-            content.body = String(localized: "打开 LeoBot 查看问题。")
+            content.body = AppLocalized("打开 LeoBot 查看问题。")
         } else if let first = request.questions.first {
             content.body = request.isMultiStep
-                ? String(localized: "共 \(request.questions.count) 个问题：\(first.prompt)")
+                ? AppLocalized("共 \(request.questions.count) 个问题：\(first.prompt)")
                 : first.prompt
         }
         content.sound = .default
@@ -208,16 +208,16 @@ final class AskUserCenter: ObservableObject {
     private static func notificationId(_ toolUseId: String) -> String { "ask-user-\(toolUseId)" }
 
     static var labels: AskUserNotification.Labels {
-        AskUserNotification.Labels(yes: String(localized: "是"), no: String(localized: "否"),
-                                   other: String(localized: "其他（自己填）"), answer: String(localized: "回答"))
+        AskUserNotification.Labels(yes: AppLocalized("是"), no: AppLocalized("否"),
+                                   other: AppLocalized("其他（自己填）"), answer: AppLocalized("回答"))
     }
 
     /// Answering can make the agent act, so every button needs the phone unlocked.
     private static func action(_ spec: AskUserNotification.ActionSpec) -> UNNotificationAction {
         if spec.isTextInput {
             return UNTextInputNotificationAction(identifier: spec.id, title: spec.title, options: [.authenticationRequired],
-                                                 textInputButtonTitle: String(localized: "发送"),
-                                                 textInputPlaceholder: String(localized: "你的回答…"))
+                                                 textInputButtonTitle: AppLocalized("发送"),
+                                                 textInputPlaceholder: AppLocalized("你的回答…"))
         }
         return UNNotificationAction(identifier: spec.id, title: spec.title, options: [.authenticationRequired])
     }

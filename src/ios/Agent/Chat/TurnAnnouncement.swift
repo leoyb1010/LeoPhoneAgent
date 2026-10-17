@@ -14,11 +14,11 @@ enum TurnAnnouncement {
     /// What VoiceOver says when a turn ends. Errors win over the reply.
     static func text(replyText: String, error: String?) -> String {
         if let error = error?.trimmingCharacters(in: .whitespacesAndNewlines), !error.isEmpty {
-            return String(localized: "出错了:") + clip(firstLine(error))
+            return AppLocalized("出错了:") + clip(firstLine(error))
         }
         let plain = MarkdownStripper.plainText(String(replyText.prefix(4_000)))
         let summary = clip(firstSentence(plain))
-        return summary.isEmpty ? String(localized: "回复完成") : String(localized: "回复完成:") + summary
+        return summary.isEmpty ? AppLocalized("回复完成") : AppLocalized("回复完成:") + summary
     }
 
     private static func firstLine(_ text: String) -> String {

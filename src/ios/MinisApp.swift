@@ -51,48 +51,6 @@ private struct FgStepChain {
     }
 }
 
-// MARK: - Bundle Language Override
-
-/// Overrides `Bundle.main.localizedString(forKey:value:table:)` so that
-/// `String(localized:)` and UIKit strings respect the in-app language setting
-/// without requiring an app restart.
-extension Bundle {
-    private static var overrideBundleKey: UInt8 = 0
-
-    /// The language-specific `.lproj` bundle currently in use, or `nil` for system default.
-    var languageBundle: Bundle? {
-        get { objc_getAssociatedObject(self, &Self.overrideBundleKey) as? Bundle }
-        set { objc_setAssociatedObject(self, &Self.overrideBundleKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
-    }
-
-    /// Call once at launch to swizzle `localizedString(forKey:value:table:)`.
-    static func enableLanguageOverride() {
-        let original = class_getInstanceMethod(Bundle.self, #selector(localizedString(forKey:value:table:)))!
-        let swizzled = class_getInstanceMethod(Bundle.self, #selector(overrideLocalizedString(forKey:value:table:)))!
-        method_exchangeImplementations(original, swizzled)
-    }
-
-    @objc private func overrideLocalizedString(forKey key: String, value: String?, table tableName: String?) -> String {
-        if self == Bundle.main, let bundle = languageBundle {
-            return bundle.overrideLocalizedString(forKey: key, value: value, table: tableName)
-        }
-        return overrideLocalizedString(forKey: key, value: value, table: tableName) // calls original (swizzled)
-    }
-
-    /// Sets the override language. Pass `nil` or `""` to revert to system language.
-    static func setLanguage(_ code: String?) {
-        guard let code, !code.isEmpty,
-              let path = Bundle.main.path(forResource: code, ofType: "lproj"),
-              let bundle = Bundle(path: path) else {
-            Bundle.main.languageBundle = nil
-            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
-            return
-        }
-        Bundle.main.languageBundle = bundle
-        UserDefaults.standard.set([code], forKey: "AppleLanguages")
-    }
-}
-
 extension Notification.Name {
     static let newChatRequested = Notification.Name("newChatRequested")
     /// Posted when a new session is persisted to the database. `object` is the session ID (`String`).
@@ -1270,31 +1228,31 @@ private enum ApprovalAlertPresenter {
         // 风险只影响标题和说明,不减选项。
         let alert = UIAlertController(
             // [T-subagent] A sub agent's request names the agent in the title.
-            title: p.requester.map { String(localized: "\($0)需要确认") }
-                ?? (p.risk == .high ? String(localized: "高风险操作，需要确认") : String(localized: "需要确认")),
+            title: p.requester.map { AppLocalized("\($0)需要确认") }
+                ?? (p.risk == .high ? AppLocalized("高风险操作，需要确认") : AppLocalized("需要确认")),
             message: p.risk == .high
-                ? String(localized: "有一个任务想\(p.category.humanName)：\(p.host)。这条命令可能删除数据或改动系统,确认是你要它做的再允许。")
-                : String(localized: "有一个任务想\(p.category.humanName)：\(p.host)。"),   // host is a site, a command or a path
+                ? AppLocalized("有一个任务想\(p.category.humanName)：\(p.host)。这条命令可能删除数据或改动系统,确认是你要它做的再允许。")
+                : AppLocalized("有一个任务想\(p.category.humanName)：\(p.host)。"),   // host is a site, a command or a path
             preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: String(localized: "允许一次"), style: .default) { _ in
+        alert.addAction(UIAlertAction(title: AppLocalized("允许一次"), style: .default) { _ in
             gate.resolve(.allowOnce, requestId: p.id)
         })
-        alert.addAction(UIAlertAction(title: String(localized: "本次会话允许"), style: .default) { _ in
+        alert.addAction(UIAlertAction(title: AppLocalized("本次会话允许"), style: .default) { _ in
             gate.resolve(.allowSession, requestId: p.id)
         })
         // [T-mail-always] 邮件操作可以长期允许(按邮箱),设置 → 邮箱账户里可撤销。
         if p.category.supportsAlwaysAllow {
-            alert.addAction(UIAlertAction(title: String(localized: "始终允许（此邮箱）"), style: .default) { _ in
+            alert.addAction(UIAlertAction(title: AppLocalized("始终允许（此邮箱）"), style: .default) { _ in
                 gate.resolve(.allowAlways, requestId: p.id)
             })
         }
         if let sid = p.sessionId {
-            alert.addAction(UIAlertAction(title: String(localized: "拒绝并停止任务"), style: .destructive) { _ in
+            alert.addAction(UIAlertAction(title: AppLocalized("拒绝并停止任务"), style: .destructive) { _ in
                 gate.resolve(.deny, requestId: p.id)
                 ViewModelCache.shared.get(for: sid)?.cancel()
             })
         }
-        alert.addAction(UIAlertAction(title: String(localized: "拒绝"), style: .cancel) { _ in
+        alert.addAction(UIAlertAction(title: AppLocalized("拒绝"), style: .cancel) { _ in
             gate.resolve(.deny, requestId: p.id)
         })
         shown = alert

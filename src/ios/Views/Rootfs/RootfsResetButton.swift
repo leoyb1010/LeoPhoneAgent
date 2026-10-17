@@ -119,7 +119,7 @@ struct RootfsResetButton: View {
             if isProcessing {
                 HStack {
                     ProgressView()
-                    Text(statusMessage ?? String(localized: "处理中…"))
+                    Text(statusMessage ?? AppLocalized("处理中…"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

@@ -1750,7 +1750,7 @@ final class ProviderConfigStore: ObservableObject {
         if let gid = config.voiceInputGroupId, group(for: gid) != nil { return gid }
         let sentinel = SystemVoiceProvider.builtinProviderId
         let group = ModelGroup(
-            name: String(localized: "Voice Input", comment: "Default voice input group name"),
+            name: AppLocalized("Voice Input", comment: "Default voice input group name"),
             memberEntryIds: ["\(sentinel)/system-asr"])
         config.modelGroups.append(group)
         config.voiceInputGroupId = group.id
@@ -1769,7 +1769,7 @@ final class ProviderConfigStore: ObservableObject {
         if let gid = config.voiceOutputGroupId, group(for: gid) != nil { return gid }
         let sentinel = SystemVoiceProvider.builtinProviderId
         let group = ModelGroup(
-            name: String(localized: "Voice Output", comment: "Default voice output group name"),
+            name: AppLocalized("Voice Output", comment: "Default voice output group name"),
             memberEntryIds: ["\(sentinel)/system-tts"])
         config.modelGroups.append(group)
         config.voiceOutputGroupId = group.id

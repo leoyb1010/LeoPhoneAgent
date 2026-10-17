@@ -27,7 +27,7 @@ struct ScheduledTaskEntity: AppEntity {
         id = task.id
         name = task.followUp?.title
             ?? QuickTaskStore.shared.definition(for: task.quickTaskId)?.displayName ?? "已删除的快捷任务"
-        schedule = task.isFollowUp ? String(localized: "定时跟进")
+        schedule = task.isFollowUp ? AppLocalized("定时跟进")
             : task.cadence == .hourly ? task.cadence.title : "\(task.cadence.title) \(task.timeText)"
         isEnabled = task.isEnabled
     }

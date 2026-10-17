@@ -143,8 +143,8 @@ final class RelayEventCatchUp: ObservableObject {
             return
         }
         let failed = items.filter { $0.eventName == "run.failed" }.count
-        postSimple(title: String(localized: "Mac 上有 \(items.count) 个任务结束"),
-                   body: String(localized: "其中 \(failed) 个失败，打开 App 查看"))
+        postSimple(title: AppLocalized("Mac 上有 \(items.count) 个任务结束"),
+                   body: AppLocalized("其中 \(failed) 个失败，打开 App 查看"))
     }
 
     private func remember(_ fingerprint: String) {
@@ -177,7 +177,7 @@ final class RelayEventCatchUp: ObservableObject {
         // Task output is private: with Task Status Privacy on, the lock screen
         // only learns that something finished.
         content.body = BackgroundKeepAliveManager.shared.liveActivityPrivacyMode
-            ? String(localized: "打开 App 查看结果")
+            ? AppLocalized("打开 App 查看结果")
             : String(body.prefix(120))
         content.sound = .default
         UNUserNotificationCenter.current().add(

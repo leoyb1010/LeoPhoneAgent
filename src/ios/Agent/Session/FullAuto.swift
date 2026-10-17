@@ -72,9 +72,9 @@ final class FullAutoStore: ObservableObject {
 extension FullAutoGate.Mode {
     var title: String {
         switch self {
-        case .ask: String(localized: "逐项确认")
-        case .smart: String(localized: "智能批准")
-        case .full: String(localized: "全自动")
+        case .ask: AppLocalized("逐项确认")
+        case .smart: AppLocalized("智能批准")
+        case .full: AppLocalized("全自动")
         }
     }
 
@@ -88,9 +88,9 @@ extension FullAutoGate.Mode {
 
     var detail: String {
         switch self {
-        case .ask: String(localized: "写文件、跑命令、调用手机能力前都先问你。")
-        case .smart: String(localized: "只读、不碰个人数据的操作直接放行；会改动的先问你，一个会话里允许过就不再问。")
-        case .full: String(localized: "不再逐项确认。设成「不允许」的能力仍然不执行。")
+        case .ask: AppLocalized("写文件、跑命令、调用手机能力前都先问你。")
+        case .smart: AppLocalized("只读、不碰个人数据的操作直接放行；会改动的先问你，一个会话里允许过就不再问。")
+        case .full: AppLocalized("不再逐项确认。设成「不允许」的能力仍然不执行。")
         }
     }
 
@@ -206,7 +206,7 @@ struct FullAutoBadge: View {
                 Image(systemName: mode.symbol)
                     .font(.system(size: 10, weight: .bold))
                     .contentTransition(.symbolEffect(.replace))
-                Text(flashing ? "\(mode.title) · \(mode == .full ? String(localized: "不再逐项确认") : String(localized: "只读的直接放行"))" : mode.title)
+                Text(flashing ? "\(mode.title) · \(mode == .full ? AppLocalized("不再逐项确认") : AppLocalized("只读的直接放行"))" : mode.title)
                     .lineLimit(1)
                     .contentTransition(.interpolate)
             }
@@ -221,7 +221,7 @@ struct FullAutoBadge: View {
         .menuStyle(.button)
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
-        .accessibilityLabel(String(localized: "审批方式：\(mode.title)"))
+        .accessibilityLabel(AppLocalized("审批方式：\(mode.title)"))
         .accessibilityHint(mode.detail)
         .confirmationDialog("打开全自动？", isPresented: $confirming, titleVisibility: .visible) {
             Button("打开全自动") {
@@ -249,7 +249,7 @@ struct FullAutoBadge: View {
         if mode == .full {
             Task { @MainActor in
                 guard await BiometricAuth.authorizeLoweringProtection(
-                    reason: String(localized: "Turn on full-auto approvals")
+                    reason: AppLocalized("Turn on full-auto approvals")
                 ) else { return }
                 applyMode(mode)
             }
@@ -294,7 +294,7 @@ struct FullAutoSettingsSection: View {
                     }
                     Task { @MainActor in
                         guard await BiometricAuth.authorizeLoweringProtection(
-                            reason: String(localized: "Turn on full-auto approvals")
+                            reason: AppLocalized("Turn on full-auto approvals")
                         ) else { return }
                         store.mode = newValue
                         // 在这里选过就已经看过说明了,输入框上的菜单之后一选即开。

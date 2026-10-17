@@ -62,7 +62,7 @@ enum LongImageTranscript {
         sources.compactMap { source in
             var text = clean(source.text)
             if text.count > itemTextLimit {
-                text = String(text.prefix(itemTextLimit)) + "\n…" + String(localized: "(已截断)")
+                text = String(text.prefix(itemTextLimit)) + "\n…" + AppLocalized("(已截断)")
             }
             let error = source.error.map(clean).flatMap { $0.isEmpty ? nil : $0 }
             if source.role == .assistant, text.isEmpty, let error {

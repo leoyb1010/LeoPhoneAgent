@@ -64,7 +64,7 @@ final class MountBackoffAndForegroundSignpostWiringTests: XCTestCase {
 
     func testSettingsShowsReauthorizationStateAndRetry() throws {
         let view = try source("Views/Settings/MountedFoldersSettingsView.swift")
-        XCTAssertTrue(view.contains("LeoCapsuleBadge(text: String(localized: \"需要重新授权\")"))
+        XCTAssertTrue(view.contains("LeoCapsuleBadge(text: AppLocalized(\"需要重新授权\")"))
         XCTAssertTrue(view.contains("LeoInlineError("))
         XCTAssertTrue(view.contains("onRetry: { model.retry(id: entry.id) }"))
         XCTAssertTrue(view.contains("await MountedFoldersManager.shared.retryActivation(id: id)"))

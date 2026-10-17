@@ -790,7 +790,7 @@ struct InlineVoiceInputView: View {
                                 viewModel.clearTranscript()
                                 VoiceLog.log("cleared transcript via long-press")
                             } label: {
-                                Label(String(localized: "Clear", comment: "Clear transcript context menu"), systemImage: "trash")
+                                Label(AppLocalized("Clear", comment: "Clear transcript context menu"), systemImage: "trash")
                             }
                         }
                         // [T-voice-scroll-gesture-priority] Same boundary probe as
@@ -945,15 +945,15 @@ struct InlineVoiceInputView: View {
         }
         .disabled(isCorrecting)
         .accessibilityLabel(Text("Correct transcript with AI", comment: "Voice manual-correction button"))
-        .alert(String(localized: "Improve voice corrections?",
+        .alert(AppLocalized("Improve voice corrections?",
                       comment: "One-time prompt: enable correction data collection"),
                isPresented: $showCollectionConsentPrompt) {
-            Button(String(localized: "Enable", comment: "Enable correction data collection")) {
+            Button(AppLocalized("Enable", comment: "Enable correction data collection")) {
                 VoiceCorrectionCollectionConsent.shared.isEnabled = true
                 VoiceCorrectionCollectionConsent.shared.hasPrompted = true
                 runManualCorrection()
             }
-            Button(String(localized: "Not Now", comment: "Decline correction data collection"),
+            Button(AppLocalized("Not Now", comment: "Decline correction data collection"),
                    role: .cancel) {
                 VoiceCorrectionCollectionConsent.shared.hasPrompted = true
                 runManualCorrection()
@@ -1014,13 +1014,13 @@ struct InlineVoiceInputView: View {
                         // needed". Saying "No corrections needed" here disguises
                         // an outage as a semantic verdict (exactly how the
                         // adaptive-thinking token-burn bug stayed hidden).
-                        MinisToast.show(String(localized: "Correction failed, original kept",
+                        MinisToast.show(AppLocalized("Correction failed, original kept",
                                                comment: "Voice: AI correction call failed (timeout/error); transcript left unchanged"),
                                         systemImage: "exclamationmark.triangle.fill")
                     } else {
                         // Model genuinely found nothing to fix — tell the user so
                         // the tap doesn't read as "nothing happened".
-                        MinisToast.show(String(localized: "No corrections needed",
+                        MinisToast.show(AppLocalized("No corrections needed",
                                                comment: "Voice: AI found nothing to fix"),
                                         systemImage: "sparkles")
                     }
@@ -1095,39 +1095,39 @@ struct InlineVoiceInputView: View {
 
     private var stateLabel: String {
         if viewModel.permissionDenied {
-            return String(localized: "Microphone access denied — enable it in Settings", comment: "Inline voice permission denied")
+            return AppLocalized("Microphone access denied — enable it in Settings", comment: "Inline voice permission denied")
         }
         if let err = viewModel.startError {
-            return String(localized: "Couldn't start microphone: \(err)", comment: "Inline voice start error")
+            return AppLocalized("Couldn't start microphone: \(err)", comment: "Inline voice start error")
         }
         if viewModel.isEditingTranscript {
-            return String(localized: "Editing — tap mic to resume", comment: "Inline voice editing state")
+            return AppLocalized("Editing — tap mic to resume", comment: "Inline voice editing state")
         }
         switch viewModel.state {
         case .waiting:
             if !viewModel.transcript.isEmpty {
                 let tips = [
-                    String(localized: "Double-tap text to edit", comment: "Voice tip: edit transcript"),
-                    String(localized: "Tap mic to continue", comment: "Voice tip: resume dictation"),
-                    String(localized: "Hold ⌫ to clear all", comment: "Voice tip: long press delete to clear"),
+                    AppLocalized("Double-tap text to edit", comment: "Voice tip: edit transcript"),
+                    AppLocalized("Tap mic to continue", comment: "Voice tip: resume dictation"),
+                    AppLocalized("Hold ⌫ to clear all", comment: "Voice tip: long press delete to clear"),
                 ]
                 return tips[viewModel.resultTipIndex % tips.count]
             }
-            return String(localized: "Tap to speak", comment: "Inline voice waiting")
+            return AppLocalized("Tap to speak", comment: "Inline voice waiting")
         case .recording:
             let tips = [
-                String(localized: "Tap to transcribe", comment: "Voice tip: tap mic to stop and transcribe"),
-                String(localized: "Listening…", comment: "Voice tip: steady recording"),
-                String(localized: "Long press to paste", comment: "Voice tip: paste from clipboard"),
-                String(localized: "Listening…", comment: "Voice tip: steady recording"),
+                AppLocalized("Tap to transcribe", comment: "Voice tip: tap mic to stop and transcribe"),
+                AppLocalized("Listening…", comment: "Voice tip: steady recording"),
+                AppLocalized("Long press to paste", comment: "Voice tip: paste from clipboard"),
+                AppLocalized("Listening…", comment: "Voice tip: steady recording"),
             ]
             return tips[viewModel.recordingTipIndex % tips.count]
-        case .processing: return String(localized: "Recognizing…", comment: "Inline voice processing")
+        case .processing: return AppLocalized("Recognizing…", comment: "Inline voice processing")
         case .result:
             let tips = [
-                String(localized: "Double-tap text to edit", comment: "Voice tip: edit transcript"),
-                String(localized: "Tap mic to continue", comment: "Voice tip: resume dictation"),
-                String(localized: "Hold ⌫ to clear all", comment: "Voice tip: long press delete to clear"),
+                AppLocalized("Double-tap text to edit", comment: "Voice tip: edit transcript"),
+                AppLocalized("Tap mic to continue", comment: "Voice tip: resume dictation"),
+                AppLocalized("Hold ⌫ to clear all", comment: "Voice tip: long press delete to clear"),
             ]
             return tips[viewModel.resultTipIndex % tips.count]
         }

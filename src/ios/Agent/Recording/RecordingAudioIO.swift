@@ -16,8 +16,8 @@ final class RecordingAudioWriter: @unchecked Sendable {
 
         var errorDescription: String? {
             switch self {
-            case .cannotCreate(let detail): return String(localized: "无法创建录音文件:\(detail)")
-            case .formatUnsupported: return String(localized: "麦克风格式不受支持")
+            case .cannotCreate(let detail): return AppLocalized("无法创建录音文件:\(detail)")
+            case .formatUnsupported: return AppLocalized("麦克风格式不受支持")
             }
         }
     }
@@ -150,8 +150,8 @@ enum RecordingAudioReader {
 
         var errorDescription: String? {
             switch self {
-            case .noAudioTrack: return String(localized: "文件里没有音频")
-            case .cannotRead(let detail): return String(localized: "无法读取音频:\(detail)")
+            case .noAudioTrack: return AppLocalized("文件里没有音频")
+            case .cannotRead(let detail): return AppLocalized("无法读取音频:\(detail)")
             }
         }
     }
