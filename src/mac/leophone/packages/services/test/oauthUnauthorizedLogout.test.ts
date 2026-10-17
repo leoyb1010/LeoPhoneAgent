@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_BIGMODEL_API_ORIGIN, DEFAULT_ZAI_BUSINESS_BASE_URL } from "@zcode/shared";
 import type { OAuthProviderId } from "@zcode/shared";
 import { OAuthService } from "#src/oauth/oauthService.js";
 import {
@@ -56,10 +57,11 @@ function fixture(provider: OAuthProviderId = "zai", responseStatus = 401) {
       },
     ],
   });
-  const url =
-    provider === "zai"
-      ? "https://api.z.ai/api/biz/customer/getCustomerInfo"
-      : "https://bigmodel.cn/api/biz/customer/getCustomerInfo";
+  // [leo] 官方默认业务地址在 Leo 里是本机死端口(packages/shared/src/zcodeEndpoint.ts),
+  // 不再是 api.z.ai / bigmodel.cn;按默认常量拼当前配置的身份接口地址。
+  const url = `${
+    provider === "zai" ? DEFAULT_ZAI_BUSINESS_BASE_URL : DEFAULT_BIGMODEL_API_ORIGIN
+  }/api/biz/customer/getCustomerInfo`;
   const headers = new Headers({ Authorization: "Bearer old-token" });
   const notified = vi.fn();
   const logoutTasks: Promise<void>[] = [];

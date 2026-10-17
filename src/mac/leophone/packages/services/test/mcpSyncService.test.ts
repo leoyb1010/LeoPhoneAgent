@@ -1,3 +1,4 @@
+// [leo] 用户级数据根是 ~/.leophoneagent（cli/config.json、skills、plugins、agents、security 等），项目级仍为 .zcode/。
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,8 +14,8 @@ async function writeZcodeUserMcp(
   home: string,
   servers: Record<string, Record<string, unknown>>,
 ) {
-  const configPath = join(home, ".zcode", "cli", "config.json");
-  await mkdir(join(home, ".zcode", "cli"), { recursive: true });
+  const configPath = join(home, ".leophoneagent", "cli", "config.json");
+  await mkdir(join(home, ".leophoneagent", "cli"), { recursive: true });
   await writeFile(
     configPath,
     `${JSON.stringify({ mcp: { servers } }, null, 2)}\n`,
@@ -36,7 +37,7 @@ async function writeAgentsUserMcp(
 }
 
 async function readRemoteZcodeServers(home: string) {
-  const raw = await readFile(join(home, ".zcode", "cli", "config.json"), "utf-8");
+  const raw = await readFile(join(home, ".leophoneagent", "cli", "config.json"), "utf-8");
   const parsed = JSON.parse(raw) as {
     mcp?: { servers?: Record<string, Record<string, unknown>> };
   };
@@ -74,7 +75,7 @@ describe("mcp sync service", () => {
         name: "context7",
         enabled: true,
         source: "zcode",
-        path: join(home, ".zcode", "cli", "config.json"),
+        path: join(home, ".leophoneagent", "cli", "config.json"),
         config: {
           command: "npx",
           args: ["-y", "@upstash/context7-mcp"],
@@ -193,8 +194,8 @@ describe("mcp sync service", () => {
     process.env.HOME = home;
     // 迁移必须幂等：没有残留字段时不能重写文件，否则每次列举候选都会动用户的配置。
     // 故意用非规范化的紧凑 JSON 落盘，任何重写都会改变字节内容。
-    const configPath = join(home, ".zcode", "cli", "config.json");
-    await mkdir(join(home, ".zcode", "cli"), { recursive: true });
+    const configPath = join(home, ".leophoneagent", "cli", "config.json");
+    await mkdir(join(home, ".leophoneagent", "cli"), { recursive: true });
     const raw = JSON.stringify({
       mcp: {
         servers: {
@@ -223,21 +224,21 @@ describe("mcp sync service", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      path: join(remoteHome, ".zcode", "cli"),
+      path: join(remoteHome, ".leophoneagent", "cli"),
     });
   });
 
   it("reports remote MCP write preflight failure when cli path is not a directory", async () => {
     const remoteHome = makeHome();
     process.env.HOME = remoteHome;
-    await mkdir(join(remoteHome, ".zcode"), { recursive: true });
-    await writeFile(join(remoteHome, ".zcode", "cli"), "not a directory");
+    await mkdir(join(remoteHome, ".leophoneagent"), { recursive: true });
+    await writeFile(join(remoteHome, ".leophoneagent", "cli"), "not a directory");
     const service = createMcpSyncService();
 
     const result = await service.checkRemoteUserMcpWriteAccess();
 
     expect(result.ok).toBe(false);
-    expect(result.path).toBe(join(remoteHome, ".zcode", "cli"));
+    expect(result.path).toBe(join(remoteHome, ".leophoneagent", "cli"));
     expect(result.error).toBeTruthy();
   });
 
@@ -341,7 +342,7 @@ describe("mcp sync service", () => {
         overwrite: false,
       });
 
-      const configMode = (await stat(join(remoteHome, ".zcode", "cli", "config.json")))
+      const configMode = (await stat(join(remoteHome, ".leophoneagent", "cli", "config.json")))
         .mode;
       expect(configMode & 0o777).toBe(0o600);
     } finally {
@@ -367,8 +368,8 @@ describe("mcp sync service", () => {
 
     const remoteHome = makeHome();
     process.env.HOME = remoteHome;
-    const invalidConfigPath = join(remoteHome, ".zcode", "cli", "config.json");
-    await mkdir(join(remoteHome, ".zcode", "cli"), { recursive: true });
+    const invalidConfigPath = join(remoteHome, ".leophoneagent", "cli", "config.json");
+    await mkdir(join(remoteHome, ".leophoneagent", "cli"), { recursive: true });
     await writeFile(invalidConfigPath, '{"mcp":');
     const remoteService = createMcpSyncService();
 
@@ -412,7 +413,7 @@ describe("mcp sync service", () => {
       },
     ]);
     expect(result.servers[0]?.file?.filePath).toBe(
-      join(home, ".zcode", "cli", "config.json"),
+      join(home, ".leophoneagent", "cli", "config.json"),
     );
   });
 
@@ -530,7 +531,7 @@ describe("mcp sync service", () => {
       {
         name: "context7",
         status: "skipped",
-        path: join(remoteHome, ".zcode", "cli", "config.json"),
+        path: join(remoteHome, ".leophoneagent", "cli", "config.json"),
       },
     ]);
     const remoteServers = await readRemoteZcodeServers(remoteHome);

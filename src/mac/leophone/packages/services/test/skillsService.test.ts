@@ -1,3 +1,4 @@
+// [leo] 用户级数据根是 ~/.leophoneagent（cli/config.json、skills、plugins、agents、security 等），项目级仍为 .zcode/。
 import {
   existsSync,
   mkdirSync,
@@ -50,7 +51,7 @@ function workspaceSkillRoot(workspacePath: string): string {
 }
 
 function userSkillRoot(home: string): string {
-  return join(home, ".zcode", "skills");
+  return join(home, ".leophoneagent", "skills");
 }
 
 function userAgentsSkillRoot(home: string): string {
@@ -60,7 +61,7 @@ function userAgentsSkillRoot(home: string): string {
 function officialPluginRoot(home: string, pluginName: string, version = "0.1.0"): string {
   return join(
     home,
-    ".zcode",
+    ".leophoneagent",
     "cli",
     "plugins",
     "cache",
@@ -78,7 +79,7 @@ function marketplacePluginRoot(
 ): string {
   return join(
     home,
-    ".zcode",
+    ".leophoneagent",
     "cli",
     "plugins",
     "cache",
@@ -115,7 +116,7 @@ function writeInstalledPluginRecord(
     version?: string;
   },
 ): void {
-  const pluginsRoot = join(home, ".zcode", "cli", "plugins");
+  const pluginsRoot = join(home, ".leophoneagent", "cli", "plugins");
   mkdirSync(pluginsRoot, { recursive: true });
   writeFileSync(
     join(pluginsRoot, "installed_plugins.json"),
@@ -144,8 +145,8 @@ function writeInstalledPluginRecord(
 }
 
 function writeCliConfig(home: string, config: Record<string, unknown>): void {
-  const configPath = join(home, ".zcode", "cli", "config.json");
-  mkdirSync(join(home, ".zcode", "cli"), { recursive: true });
+  const configPath = join(home, ".leophoneagent", "cli", "config.json");
+  mkdirSync(join(home, ".leophoneagent", "cli"), { recursive: true });
   writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
 }
 
@@ -464,7 +465,7 @@ description: agents version
 agents-review-body`,
     );
     writeSkill(
-      join(home, ".zcode", "cli", "skills"),
+      join(home, ".leophoneagent", "cli", "skills"),
       "old-global",
       `---
 name: old-global
@@ -484,9 +485,9 @@ body`,
       "zcode-global",
     ]);
     expect(result.skills.find((skill) => skill.name === "copied-global")?.path)
-      .toContain(join(home, ".zcode", "skills", "copied-global"));
+      .toContain(join(home, ".leophoneagent", "skills", "copied-global"));
     expect(result.skills.find((skill) => skill.name === "shared-review")?.path)
-      .toContain(join(home, ".zcode", "skills", "current-review"));
+      .toContain(join(home, ".leophoneagent", "skills", "current-review"));
     expect(result.skills.every((skill) => skill.scope === "user")).toBe(true);
   });
 
@@ -608,27 +609,20 @@ android-body`,
     const service = await createSkillsServiceInEnv(home, { isDesktopRuntime: true });
     const result = await service.list({ workspacePath, provider: "glm" });
 
+    // [leo] documents 不随包、也不默认启用（见 DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS），
+    // 与 android-emulator 一样仅存在 cache 时不贡献技能。
     expect(result.skills.map((skill) => skill.name)).toEqual([
       "control-browser",
       "diagnosing-plugins",
-      "docx",
       "ios-simulator",
-      "pdf",
     ]);
-    expect(result.skills.map((skill) => skill.scope)).toEqual([
-      "plugin",
-      "plugin",
-      "plugin",
-      "plugin",
-      "plugin",
-    ]);
+    expect(result.skills.map((skill) => skill.scope)).toEqual(["plugin", "plugin", "plugin"]);
     expect(result.skills.map((skill) => skill.pluginName).sort()).toEqual([
       "browser-use",
-      "documents",
-      "documents",
       "ios-simulator",
       "zcode-guide",
     ]);
+    expect(result.skills.find((skill) => skill.name === "docx")).toBeUndefined();
     expect(result.skills.find((skill) => skill.name === "android-emulator")).toBeUndefined();
   });
 
@@ -905,7 +899,7 @@ body`,
       provider: "glm",
     });
     const config = JSON.parse(
-      readFileSync(join(home, ".zcode", "cli", "config.json"), "utf-8"),
+      readFileSync(join(home, ".leophoneagent", "cli", "config.json"), "utf-8"),
     ) as { skills?: Record<string, { enable?: boolean }> };
     expect(disabled.skills[0]?.enabled).toBe(false);
     expect(enabled.skills[0]?.enabled).toBe(false);
@@ -926,7 +920,7 @@ body`,
       provider: "glm",
     });
     const reenabledConfig = JSON.parse(
-      readFileSync(join(home, ".zcode", "cli", "config.json"), "utf-8"),
+      readFileSync(join(home, ".leophoneagent", "cli", "config.json"), "utf-8"),
     ) as { skills?: Record<string, { enable?: boolean }> };
     expect(reenabled.skills[0]?.enabled).toBe(true);
     expect(reenabledConfig.skills?.[skill.path]).toBeUndefined();
@@ -936,8 +930,8 @@ body`,
     const home = makeTempHome();
     const workspacePath = join(home, "workspace");
     const legacySkillId = "workspace:legacy-skill";
-    const legacyStatePath = join(home, ".zcode", "v2", "skills-state.json");
-    mkdirSync(join(home, ".zcode", "v2"), { recursive: true });
+    const legacyStatePath = join(home, ".leophoneagent", "v2", "skills-state.json");
+    mkdirSync(join(home, ".leophoneagent", "v2"), { recursive: true });
     writeFileSync(
       legacyStatePath,
       JSON.stringify({ disabledByWorkspace: { [workspacePath]: [legacySkillId] } }),
@@ -951,7 +945,7 @@ body`,
       disabledByWorkspace?: Record<string, string[]>;
     };
     expect(state.disabledByWorkspace).toEqual({ [workspacePath]: [legacySkillId] });
-    expect(existsSync(join(home, ".zcode", "cli", "config.json"))).toBe(false);
+    expect(existsSync(join(home, ".leophoneagent", "cli", "config.json"))).toBe(false);
   });
 
   it("buildPromptContext 只注入启用且被提及的技能正文", async () => {
@@ -988,7 +982,7 @@ plan-body`,
     expect(context.prompt).toContain("review-body");
     expect(context.prompt).not.toContain("plan-body");
     expect(context.activatedSkillNames).toEqual(["code-review"]);
-    expect(existsSync(join(home, ".zcode", "v2", "skills-audit.log"))).toBe(true);
+    expect(existsSync(join(home, ".leophoneagent", "v2", "skills-audit.log"))).toBe(true);
   });
 
   it("被禁用的技能即便被提及也不会注入", async () => {

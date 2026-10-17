@@ -35,6 +35,7 @@ afterEach(() => {
   }
 });
 
+// [leo] 凭据存放在 Leo 数据根 ~/.leophoneagent/v2(见 src/paths.ts),不与官方 ~/.zcode 共用。
 describe("credentialService encryption", () => {
   it("notifies Host listeners only after a credential mutation is persisted", async () => {
     const home = makeTempHome();
@@ -57,7 +58,7 @@ describe("credentialService encryption", () => {
 
     await service.save(credentialKey, "plain-access-token");
 
-    const credentialsFile = join(home, ".zcode", "v2", "credentials.json");
+    const credentialsFile = join(home, ".leophoneagent", "v2", "credentials.json");
     const rawStore = JSON.parse(readFileSync(credentialsFile, "utf-8")) as Record<string, string>;
     const storedValue = rawStore[credentialKey];
 
@@ -69,7 +70,7 @@ describe("credentialService encryption", () => {
 
   it("keeps backward compatibility for legacy plaintext values", async () => {
     const home = makeTempHome();
-    const credentialsDir = join(home, ".zcode", "v2");
+    const credentialsDir = join(home, ".leophoneagent", "v2");
     const credentialsFile = join(credentialsDir, "credentials.json");
     await mkdir(credentialsDir, { recursive: true });
     writeFileSync(
@@ -104,7 +105,7 @@ describe("credentialService encryption", () => {
 
   it("backs up corrupt JSON and refuses to erase it during save", async () => {
     const home = makeTempHome();
-    const credentialsDir = join(home, ".zcode", "v2");
+    const credentialsDir = join(home, ".leophoneagent", "v2");
     const credentialsFile = join(credentialsDir, "credentials.json");
     await mkdir(credentialsDir, { recursive: true });
     writeFileSync(credentialsFile, "{not-json", "utf-8");

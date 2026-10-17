@@ -1,3 +1,4 @@
+// [leo] 用户级数据根是 ~/.leophoneagent（cli/config.json、skills、plugins、agents、security 等），项目级仍为 .zcode/。
 import { existsSync, mkdtempSync, symlinkSync } from "node:fs";
 import { chmod, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,14 +14,14 @@ async function writeZcodeUserConfig(
   home: string,
   value: Record<string, unknown>,
 ): Promise<string> {
-  const configPath = join(home, ".zcode", "cli", "config.json");
-  await mkdir(join(home, ".zcode", "cli"), { recursive: true });
+  const configPath = join(home, ".leophoneagent", "cli", "config.json");
+  await mkdir(join(home, ".leophoneagent", "cli"), { recursive: true });
   await writeFile(configPath, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
   return configPath;
 }
 
 async function readZcodeUserConfig(home: string): Promise<Record<string, unknown>> {
-  const raw = await readFile(join(home, ".zcode", "cli", "config.json"), "utf-8");
+  const raw = await readFile(join(home, ".leophoneagent", "cli", "config.json"), "utf-8");
   return JSON.parse(raw) as Record<string, unknown>;
 }
 
@@ -108,8 +109,8 @@ describe("plugin sync service", () => {
     expect(result).toMatchObject({
       ok: true,
       path: [
-        join(remoteHome, ".zcode", "plugins"),
-        join(remoteHome, ".zcode", "cli"),
+        join(remoteHome, ".leophoneagent", "plugins"),
+        join(remoteHome, ".leophoneagent", "cli"),
       ].join(", "),
     });
   });
@@ -117,14 +118,14 @@ describe("plugin sync service", () => {
   it("reports remote plugin write preflight failure when plugin root is not a directory", async () => {
     const remoteHome = makeHome();
     process.env.HOME = remoteHome;
-    await mkdir(join(remoteHome, ".zcode"), { recursive: true });
-    await writeFile(join(remoteHome, ".zcode", "plugins"), "not a directory");
+    await mkdir(join(remoteHome, ".leophoneagent"), { recursive: true });
+    await writeFile(join(remoteHome, ".leophoneagent", "plugins"), "not a directory");
     const service = createPluginSyncService();
 
     const result = await service.checkRemoteUserPluginWriteAccess();
 
     expect(result.ok).toBe(false);
-    expect(result.path).toBe(join(remoteHome, ".zcode", "plugins"));
+    expect(result.path).toBe(join(remoteHome, ".leophoneagent", "plugins"));
     expect(result.error).toBeTruthy();
   });
 
@@ -132,13 +133,13 @@ describe("plugin sync service", () => {
     const home = makeHome();
     process.env.HOME = home;
     const cachePluginRoot = await writeInlinePlugin(
-      join(home, ".zcode", "cli", "plugins", "cache", "market", "cached", "1.0.0"),
+      join(home, ".leophoneagent", "cli", "plugins", "cache", "market", "cached", "1.0.0"),
       "cached",
       { name: "cached" },
     );
-    await mkdir(join(home, ".zcode", "cli", "plugins"), { recursive: true });
+    await mkdir(join(home, ".leophoneagent", "cli", "plugins"), { recursive: true });
     await writeFile(
-      join(home, ".zcode", "cli", "plugins", "installed_plugins.json"),
+      join(home, ".leophoneagent", "cli", "plugins", "installed_plugins.json"),
       `${JSON.stringify({
         plugins: [
           {
@@ -195,7 +196,7 @@ describe("plugin sync service", () => {
         status: "synced",
       },
     ]);
-    const remotePluginRoot = join(remoteHome, ".zcode", "plugins", "remote-tools");
+    const remotePluginRoot = join(remoteHome, ".leophoneagent", "plugins", "remote-tools");
     expect(existsSync(join(remotePluginRoot, ".zcode-plugin", "plugin.json"))).toBe(true);
     const remoteConfig = await readZcodeUserConfig(remoteHome);
     expect(remoteConfig).toMatchObject({
@@ -239,7 +240,7 @@ describe("plugin sync service", () => {
 
     const remoteCommandPath = join(
       remoteHome,
-      ".zcode",
+      ".leophoneagent",
       "plugins",
       "remote-tools",
       "commands",
@@ -267,8 +268,8 @@ describe("plugin sync service", () => {
     const remoteHome = makeHome();
     process.env.HOME = remoteHome;
     await writeZcodeUserConfig(remoteHome, {});
-    const remoteConfigDir = join(remoteHome, ".zcode", "cli");
-    const remotePluginRoot = join(remoteHome, ".zcode", "plugins", "remote-tools");
+    const remoteConfigDir = join(remoteHome, ".leophoneagent", "cli");
+    const remotePluginRoot = join(remoteHome, ".leophoneagent", "plugins", "remote-tools");
     const remoteService = createPluginSyncService();
 
     await chmod(remoteConfigDir, 0o555);
@@ -350,7 +351,7 @@ describe("plugin sync service", () => {
     const existingRemoteRoot = await writeInlinePlugin(join(remoteHome, "existing"), "known", {
       name: "known",
     });
-    await writeInlinePlugin(join(remoteHome, ".zcode", "plugins"), "known", {
+    await writeInlinePlugin(join(remoteHome, ".leophoneagent", "plugins"), "known", {
       name: "other-known",
     });
     await writeZcodeUserConfig(remoteHome, { plugins: { dirs: [existingRemoteRoot] } });
@@ -432,7 +433,7 @@ describe("plugin sync service", () => {
       marketplaceId: "team-market",
       status: "synced",
     });
-    expect(imported.path.startsWith(join(remoteHome, ".zcode", "plugins", "marketplace-sources"))).toBe(true);
+    expect(imported.path.startsWith(join(remoteHome, ".leophoneagent", "plugins", "marketplace-sources"))).toBe(true);
     const mirroredManifest = await readJsonFile(join(imported.path, "marketplace.json"));
     expect(mirroredManifest).toMatchObject({
       name: "team-market",

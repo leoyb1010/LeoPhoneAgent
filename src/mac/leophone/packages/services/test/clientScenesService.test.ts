@@ -1,70 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@zcode/shared";
-import { ZCODE_CLIENT_SCENES_URL } from "../src/providers/api/apiEndpoints.js";
 import { createClientScenesService } from "../src/client-scenes/clientScenesService.js";
 
 describe("ClientScenesService", () => {
-  it("通过统一 ApiClient 读取 client scenes envelope", async () => {
-    const request = vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
-            code: 0,
-            msg: "",
-            data: [
-              {
-                namespace: "zcode",
-                scene: "ai-slides",
-                options: {
-                  template: {
-                    id: "template",
-                    type: "template",
-                    contents: { en: "Template", cn: "模板" },
-                    prompts: { en: "Create slides", cn: "制作幻灯片" },
-                    items: [
-                      {
-                        id: "business",
-                        type: "template",
-                        contents: { en: "Business", cn: "商务" },
-                        descs: { en: "Business deck", cn: "商务演示" },
-                        labels: { en: "Recommended", cn: "推荐" },
-                        on_finish: "open_presentation",
-                        img: null,
-                        imgs: { cn: "https://example.com/cn.png" },
-                        share_urls: {},
-                      },
-                    ],
-                    refer: "",
-                    cascades: {},
-                  },
-                },
-                created_at: 1,
-                updated_at: 2,
-              },
-            ],
-          }),
-          { status: 200 },
-        ),
-    );
+  // [leo] 自动化场景模板由官方服务器下发;LeoBot 不连官方,固定返回空列表且不发请求。
+  it("本地模式返回空 client scenes envelope 且不请求官方服务", async () => {
+    const request = vi.fn();
     const service = createClientScenesService({
-      apiClient: { request } as ApiClient,
+      apiClient: { request } as unknown as ApiClient,
     });
 
-    await expect(service.list()).resolves.toEqual({
-      code: 0,
-      msg: "",
-      data: [
-        expect.objectContaining({
-          namespace: "zcode",
-          scene: "ai-slides",
-          created_at: 1,
-          updated_at: 2,
-        }),
-      ],
-    });
-    expect(request).toHaveBeenCalledOnce();
-    expect(request).toHaveBeenCalledWith(ZCODE_CLIENT_SCENES_URL, {
-      method: "GET",
-    });
+    await expect(service.list()).resolves.toEqual({ code: 0, msg: "ok", data: [] });
+    expect(request).not.toHaveBeenCalled();
   });
 });

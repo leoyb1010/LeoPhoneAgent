@@ -1,3 +1,4 @@
+// [leo] 用户级数据根是 ~/.leophoneagent（cli/config.json、skills、plugins、agents、security 等），项目级仍为 .zcode/。
 import {
   mkdirSync,
   mkdtempSync,
@@ -27,7 +28,7 @@ function officialPluginRoot(
 ): string {
   return join(
     home,
-    ".zcode",
+    ".leophoneagent",
     "cli",
     "plugins",
     "cache",
@@ -45,7 +46,7 @@ function marketplacePluginRoot(
 ): string {
   return join(
     home,
-    ".zcode",
+    ".leophoneagent",
     "cli",
     "plugins",
     "cache",
@@ -88,7 +89,7 @@ function writeInstalledPluginRecord(
     version?: string;
   },
 ): void {
-  const pluginsRoot = join(home, ".zcode", "cli", "plugins");
+  const pluginsRoot = join(home, ".leophoneagent", "cli", "plugins");
   mkdirSync(pluginsRoot, { recursive: true });
   writeFileSync(
     join(pluginsRoot, "installed_plugins.json"),
@@ -117,8 +118,8 @@ function writeInstalledPluginRecord(
 }
 
 function writeCliConfig(home: string, config: Record<string, unknown>): void {
-  const configPath = join(home, ".zcode", "cli", "config.json");
-  mkdirSync(join(home, ".zcode", "cli"), { recursive: true });
+  const configPath = join(home, ".leophoneagent", "cli", "config.json");
+  mkdirSync(join(home, ".leophoneagent", "cli"), { recursive: true });
   writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
 }
 
@@ -146,12 +147,12 @@ describe("commandsService", () => {
   it("lists user commands and workspace project commands", async () => {
     const home = makeTempRoot();
     const workspacePath = join(makeTempRoot(), "workspace");
-    mkdirSync(join(home, ".zcode", "commands"), { recursive: true });
+    mkdirSync(join(home, ".leophoneagent", "commands"), { recursive: true });
     mkdirSync(join(workspacePath, ".zcode", "commands", "ops"), {
       recursive: true,
     });
     writeFileSync(
-      join(home, ".zcode", "commands", "global.md"),
+      join(home, ".leophoneagent", "commands", "global.md"),
       "---\ndescription: Global command\n---\n\nRun globally",
       "utf-8",
     );
@@ -178,7 +179,7 @@ describe("commandsService", () => {
           location: expect.objectContaining({
             source: "zcode",
             scope: "user",
-            directoryPath: join(home, ".zcode", "commands"),
+            directoryPath: join(home, ".leophoneagent", "commands"),
           }),
         }),
         expect.objectContaining({
@@ -233,14 +234,14 @@ describe("commandsService", () => {
   it("reads .zcode command directories first and skips .agents/.claude when zcode has commands", async () => {
     const home = makeTempRoot();
     const workspacePath = join(makeTempRoot(), "workspace");
-    mkdirSync(join(home, ".zcode", "commands"), { recursive: true });
+    mkdirSync(join(home, ".leophoneagent", "commands"), { recursive: true });
     mkdirSync(join(home, ".agents", "commands"), { recursive: true });
     mkdirSync(join(home, ".claude", "commands"), { recursive: true });
     mkdirSync(join(workspacePath, ".zcode", "commands"), { recursive: true });
     mkdirSync(join(workspacePath, ".agents", "commands"), { recursive: true });
     mkdirSync(join(workspacePath, ".claude", "commands"), { recursive: true });
     writeFileSync(
-      join(home, ".zcode", "commands", "review.md"),
+      join(home, ".leophoneagent", "commands", "review.md"),
       "ZCode review",
       "utf-8",
     );
@@ -308,16 +309,16 @@ describe("commandsService", () => {
       agentSource: "zcodeAgent",
     });
 
-    expect(directory.path).toBe(join(home, ".zcode", "commands"));
+    expect(directory.path).toBe(join(home, ".leophoneagent", "commands"));
     expect(created.command).toMatchObject({
       agentSource: "zcodeAgent",
-      filePath: join(home, ".zcode", "commands", "ship-it.md"),
+      filePath: join(home, ".leophoneagent", "commands", "ship-it.md"),
       id: "zcodeAgent:zcode:global:/ship-it",
       name: "/ship-it",
       location: expect.objectContaining({
         source: "zcode",
         scope: "user",
-        directoryPath: join(home, ".zcode", "commands"),
+        directoryPath: join(home, ".leophoneagent", "commands"),
       }),
     });
     expect(readFileSync(created.command.filePath, "utf-8")).toContain(
@@ -331,7 +332,7 @@ describe("commandsService", () => {
 
     const directory = await service.getPrimaryUserCommandsDirectory();
 
-    expect(directory.path).toBe(join(home, ".zcode", "commands"));
+    expect(directory.path).toBe(join(home, ".leophoneagent", "commands"));
     expect(statSync(directory.path).isDirectory()).toBe(true);
   });
 
@@ -402,10 +403,10 @@ describe("commandsService", () => {
     const home = makeTempRoot();
     const workspacePath = join(makeTempRoot(), "workspace");
     const pluginRoot = officialPluginRoot(home, "ios-simulator");
-    mkdirSync(join(home, ".zcode", "commands"), { recursive: true });
+    mkdirSync(join(home, ".leophoneagent", "commands"), { recursive: true });
     mkdirSync(join(pluginRoot, "commands", "ios"), { recursive: true });
     writeFileSync(
-      join(home, ".zcode", "commands", "local-review.md"),
+      join(home, ".leophoneagent", "commands", "local-review.md"),
       "---\ndescription: Local review\n---\n\nReview locally",
       "utf-8",
     );
@@ -566,7 +567,7 @@ describe("commandsService", () => {
     });
 
     const saved = JSON.parse(
-      readFileSync(join(home, ".zcode", "cli", "config.json"), "utf-8"),
+      readFileSync(join(home, ".leophoneagent", "cli", "config.json"), "utf-8"),
     );
     expect(saved.command[created.command.filePath]).toEqual({ enable: false });
 
@@ -582,7 +583,7 @@ describe("commandsService", () => {
     });
     const enabled = await service.list({});
     const reenabledConfig = JSON.parse(
-      readFileSync(join(home, ".zcode", "cli", "config.json"), "utf-8"),
+      readFileSync(join(home, ".leophoneagent", "cli", "config.json"), "utf-8"),
     ) as { command?: Record<string, { enable?: boolean }> };
     expect(enabled.userCommands[0]).toEqual(
       expect.objectContaining({ enabled: true }),

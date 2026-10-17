@@ -1,3 +1,4 @@
+// [leo] 用户级数据根是 ~/.leophoneagent（cli/config.json、skills、plugins、agents、security 等），项目级仍为 .zcode/。
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -54,7 +55,7 @@ function setupWorkspaceWithHook(): { home: string; workspace: string } {
 }
 
 function trustStorePath(home: string): string {
-  return join(home, ".zcode", "security", "workspace-hook-trust-v1.json");
+  return join(home, ".leophoneagent", "security", "workspace-hook-trust-v1.json");
 }
 
 const VALID_DIGEST = "a".repeat(64);

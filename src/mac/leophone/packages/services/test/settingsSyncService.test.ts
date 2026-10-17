@@ -1,3 +1,4 @@
+// [leo] 用户级数据根是 ~/.leophoneagent（cli/config.json、skills、plugins、agents、security 等），项目级仍为 .zcode/。
 import {
   existsSync,
   lstatSync,
@@ -121,7 +122,7 @@ describe("settingsSyncService Claude AGENTS.md migration", () => {
 
     await expect(service.getClaudeAgentsFileMigrationStatus({ workspacePath })).resolves.toEqual({
       sourcePath: join(home, ".claude", "CLAUDE.md"),
-      targetPath: join(home, ".zcode", "AGENTS.md"),
+      targetPath: join(home, ".leophoneagent", "AGENTS.md"),
       sourceExists: true,
       targetExists: false,
       supported: true,
@@ -131,11 +132,11 @@ describe("settingsSyncService Claude AGENTS.md migration", () => {
       overwrite: false,
     })).resolves.toEqual({
       sourcePath: join(home, ".claude", "CLAUDE.md"),
-      targetPath: join(home, ".zcode", "AGENTS.md"),
+      targetPath: join(home, ".leophoneagent", "AGENTS.md"),
       status: "copied",
       overwritten: false,
     });
-    expect(readFileSync(join(home, ".zcode", "AGENTS.md"), "utf-8")).toBe("claude memory");
+    expect(readFileSync(join(home, ".leophoneagent", "AGENTS.md"), "utf-8")).toBe("claude memory");
   });
 
   it("detects and overwrites default ZCode AGENTS.md from Claude user memory", async () => {
@@ -143,7 +144,7 @@ describe("settingsSyncService Claude AGENTS.md migration", () => {
     const workspacePath = join(home, "workspace");
     process.env.HOME = home;
     writeTextConfig(join(home, ".claude", "CLAUDE.md"), "claude memory");
-    writeTextConfig(join(home, ".zcode", "AGENTS.md"), "existing agents");
+    writeTextConfig(join(home, ".leophoneagent", "AGENTS.md"), "existing agents");
     const { createSettingsSyncService } = await import(
       "../src/settings-sync/settingsSyncService.js"
     );
@@ -153,7 +154,7 @@ describe("settingsSyncService Claude AGENTS.md migration", () => {
 
     expect(status).toEqual({
       sourcePath: join(home, ".claude", "CLAUDE.md"),
-      targetPath: join(home, ".zcode", "AGENTS.md"),
+      targetPath: join(home, ".leophoneagent", "AGENTS.md"),
       sourceExists: true,
       targetExists: true,
       supported: true,
@@ -164,23 +165,23 @@ describe("settingsSyncService Claude AGENTS.md migration", () => {
       overwrite: false,
     })).resolves.toEqual({
       sourcePath: join(home, ".claude", "CLAUDE.md"),
-      targetPath: join(home, ".zcode", "AGENTS.md"),
+      targetPath: join(home, ".leophoneagent", "AGENTS.md"),
       status: "skipped",
       overwritten: false,
       skippedReason: "targetExists",
     });
-    expect(readFileSync(join(home, ".zcode", "AGENTS.md"), "utf-8")).toBe("existing agents");
+    expect(readFileSync(join(home, ".leophoneagent", "AGENTS.md"), "utf-8")).toBe("existing agents");
 
     await expect(service.copyClaudeAgentsFileToZcodeAgentsFile({
       workspacePath,
       overwrite: true,
     })).resolves.toEqual({
       sourcePath: join(home, ".claude", "CLAUDE.md"),
-      targetPath: join(home, ".zcode", "AGENTS.md"),
+      targetPath: join(home, ".leophoneagent", "AGENTS.md"),
       status: "copied",
       overwritten: true,
     });
-    expect(readFileSync(join(home, ".zcode", "AGENTS.md"), "utf-8")).toBe("claude memory");
+    expect(readFileSync(join(home, ".leophoneagent", "AGENTS.md"), "utf-8")).toBe("claude memory");
   });
 
   it("reports missing Claude user memory as unsupported", async () => {
@@ -194,7 +195,7 @@ describe("settingsSyncService Claude AGENTS.md migration", () => {
 
     await expect(service.getClaudeAgentsFileMigrationStatus({ workspacePath })).resolves.toEqual({
       sourcePath: join(home, ".claude", "CLAUDE.md"),
-      targetPath: join(home, ".zcode", "AGENTS.md"),
+      targetPath: join(home, ".leophoneagent", "AGENTS.md"),
       sourceExists: false,
       targetExists: false,
       supported: false,
@@ -205,7 +206,7 @@ describe("settingsSyncService Claude AGENTS.md migration", () => {
       overwrite: true,
     })).resolves.toEqual({
       sourcePath: join(home, ".claude", "CLAUDE.md"),
-      targetPath: join(home, ".zcode", "AGENTS.md"),
+      targetPath: join(home, ".leophoneagent", "AGENTS.md"),
       status: "skipped",
       overwritten: false,
       skippedReason: "missingSource",
@@ -308,7 +309,7 @@ describe("settingsSyncService commands import", () => {
       selections: [{ agent: "claudeCode", category: "commands" }],
     });
 
-    const importedPath = join(home, ".zcode", "commands", "review.md");
+    const importedPath = join(home, ".leophoneagent", "commands", "review.md");
     expect(result.successCount).toBe(2);
     expect(result.skippedCount).toBe(0);
     expect(result.failedCount).toBe(0);
@@ -334,7 +335,7 @@ describe("settingsSyncService commands import", () => {
       expect(lstatSync(importedPath).isSymbolicLink()).toBe(true);
     }
     expect(readFileSync(importedPath, "utf-8")).toContain("review body");
-    expect(existsSync(join(home, ".zcode", "commands", "Git", "commit.md"))).toBe(true);
+    expect(existsSync(join(home, ".leophoneagent", "commands", "Git", "commit.md"))).toBe(true);
   });
 
   it("scans global Claude commands without an active workspace", async () => {
@@ -403,8 +404,8 @@ describe("settingsSyncService commands import", () => {
     });
 
     expect(result.successCount).toBe(1);
-    expect(existsSync(join(home, ".zcode", "commands", "write.md"))).toBe(true);
-    expect(existsSync(join(home, ".zcode", "commands", "review.md"))).toBe(false);
+    expect(existsSync(join(home, ".leophoneagent", "commands", "write.md"))).toBe(true);
+    expect(existsSync(join(home, ".leophoneagent", "commands", "review.md"))).toBe(false);
   });
 
   it("imports selected commands into the requested project target as copies", async () => {
@@ -434,7 +435,7 @@ describe("settingsSyncService commands import", () => {
     expect(existsSync(importedPath)).toBe(true);
     expect(lstatSync(importedPath).isSymbolicLink()).toBe(false);
     expect(readFileSync(importedPath, "utf-8")).toContain("review body");
-    expect(existsSync(join(home, ".zcode", "commands", "review", "code.md"))).toBe(false);
+    expect(existsSync(join(home, ".leophoneagent", "commands", "review", "code.md"))).toBe(false);
   });
 
   it("does not scan .agents commands for import", async () => {
@@ -461,7 +462,7 @@ describe("settingsSyncService commands import", () => {
     process.env.HOME = home;
     writeCommand(join(home, ".claude", "commands"), "review.md", "source");
     writeCommand(join(home, ".codex", "commands"), "other-review.md", "source");
-    writeCommand(join(home, ".zcode", "commands"), "review.md", "existing");
+    writeCommand(join(home, ".leophoneagent", "commands"), "review.md", "existing");
     const { createSettingsSyncService } = await import(
       "../src/settings-sync/settingsSyncService.js"
     );
@@ -485,7 +486,7 @@ describe("settingsSyncService commands import", () => {
       importable: true,
     }]);
 
-    writeCommand(join(home, ".zcode", "commands"), "other-review.md", "existing");
+    writeCommand(join(home, ".leophoneagent", "commands"), "other-review.md", "existing");
     const result = await service.importSelected({
       workspacePath,
       selections: [{ agent: "codexCli", category: "commands" }],
@@ -574,9 +575,9 @@ describe("settingsSyncService plugins import", () => {
       selections: [{ agent: "claudeCode", category: "plugins" }],
     });
 
-    const importedPath = join(home, ".zcode", "plugins", "review-plugin");
+    const importedPath = join(home, ".leophoneagent", "plugins", "review-plugin");
     const config = JSON.parse(
-      readFileSync(join(home, ".zcode", "cli", "config.json"), "utf-8"),
+      readFileSync(join(home, ".leophoneagent", "cli", "config.json"), "utf-8"),
     ) as { plugins?: { dirs?: string[] } };
     expect(result.successCount).toBe(1);
     expect(result.skippedCount).toBe(0);
@@ -628,7 +629,7 @@ describe("settingsSyncService plugins import", () => {
     expect(lstatSync(importedPath).isSymbolicLink()).toBe(false);
     expect(existsSync(join(importedPath, ".claude-plugin", "plugin.json"))).toBe(true);
     expect(config.plugins?.dirs).toEqual([importedPath]);
-    expect(existsSync(join(home, ".zcode", "plugins", "writer-plugin"))).toBe(false);
+    expect(existsSync(join(home, ".leophoneagent", "plugins", "writer-plugin"))).toBe(false);
   });
 
   it("skips plugin imports when target directory or same plugin id exists", async () => {
@@ -641,15 +642,15 @@ describe("settingsSyncService plugins import", () => {
     writePlugin(join(home, ".codex", "plugins"), "other-review", {
       name: "other-review",
     });
-    writePlugin(join(home, ".zcode", "plugins"), "review-plugin", {
+    writePlugin(join(home, ".leophoneagent", "plugins"), "review-plugin", {
       name: "review-plugin",
     });
     const configuredPluginPath = writePlugin(join(home, "configured"), "other-review", {
       name: "other-review",
     });
-    mkdirSync(join(home, ".zcode", "cli"), { recursive: true });
+    mkdirSync(join(home, ".leophoneagent", "cli"), { recursive: true });
     writeFileSync(
-      join(home, ".zcode", "cli", "config.json"),
+      join(home, ".leophoneagent", "cli", "config.json"),
       JSON.stringify({ plugins: { dirs: [configuredPluginPath] } }),
       "utf-8",
     );
@@ -771,7 +772,7 @@ describe("settingsSyncService MCP server import", () => {
     });
 
     const config = JSON.parse(
-      readFileSync(join(home, ".zcode", "cli", "config.json"), "utf-8"),
+      readFileSync(join(home, ".leophoneagent", "cli", "config.json"), "utf-8"),
     ) as { mcp?: { servers?: Record<string, unknown> } };
     expect(result.successCount).toBe(1);
     expect(result.skippedCount).toBe(0);
@@ -812,7 +813,7 @@ describe("settingsSyncService MCP server import", () => {
     });
 
     const config = JSON.parse(
-      readFileSync(join(home, ".zcode", "cli", "config.json"), "utf-8"),
+      readFileSync(join(home, ".leophoneagent", "cli", "config.json"), "utf-8"),
     ) as { mcp?: { servers?: Record<string, unknown> } };
     expect(result.successCount).toBe(1);
     expect(config.mcp?.servers?.context7).toEqual({
@@ -856,7 +857,7 @@ describe("settingsSyncService MCP server import", () => {
       command: "npx",
       args: ["-y", "@upstash/context7-mcp"],
     });
-    expect(existsSync(join(home, ".zcode", "cli", "config.json"))).toBe(false);
+    expect(existsSync(join(home, ".leophoneagent", "cli", "config.json"))).toBe(false);
   });
 
   it("normalizes OpenCode command arrays when importing MCP servers", async () => {
@@ -883,7 +884,7 @@ describe("settingsSyncService MCP server import", () => {
     });
 
     const config = JSON.parse(
-      readFileSync(join(home, ".zcode", "cli", "config.json"), "utf-8"),
+      readFileSync(join(home, ".leophoneagent", "cli", "config.json"), "utf-8"),
     ) as { mcp?: { servers?: Record<string, unknown> } };
     expect(result.successCount).toBe(1);
     expect(config.mcp?.servers?.browser).toEqual({
@@ -903,7 +904,7 @@ describe("settingsSyncService MCP server import", () => {
         browser: { command: "external" },
       },
     });
-    writeJsonConfig(join(home, ".zcode", "cli", "config.json"), {
+    writeJsonConfig(join(home, ".leophoneagent", "cli", "config.json"), {
       mcp: {
         servers: {
           browser: { command: "existing" },
@@ -933,7 +934,7 @@ describe("settingsSyncService MCP server import", () => {
       selections: [{ agent: "claudeCode", category: "mcpServers" }],
     });
     const config = JSON.parse(
-      readFileSync(join(home, ".zcode", "cli", "config.json"), "utf-8"),
+      readFileSync(join(home, ".leophoneagent", "cli", "config.json"), "utf-8"),
     ) as { mcp?: { servers?: Record<string, unknown> } };
     expect(result.successCount).toBe(0);
     expect(result.skippedCount).toBe(1);
@@ -1033,7 +1034,7 @@ describe("settingsSyncService skills import", () => {
       status: "imported",
       version: "1.2.3",
     }]);
-    const importedDirectoryPath = join(home, ".zcode", "skills", "review");
+    const importedDirectoryPath = join(home, ".leophoneagent", "skills", "review");
     const importedPath = join(importedDirectoryPath, "SKILL.md");
     expect(existsSync(importedPath)).toBe(true);
     expect(lstatSync(importedDirectoryPath).isSymbolicLink()).toBe(true);
@@ -1073,8 +1074,8 @@ describe("settingsSyncService skills import", () => {
     expect(result.successCount).toBe(1);
     expect(result.skippedCount).toBe(0);
     expect(result.failedCount).toBe(0);
-    expect(existsSync(join(home, ".zcode", "skills", "writer", "SKILL.md"))).toBe(true);
-    expect(existsSync(join(home, ".zcode", "skills", "review", "SKILL.md"))).toBe(false);
+    expect(existsSync(join(home, ".leophoneagent", "skills", "writer", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(home, ".leophoneagent", "skills", "review", "SKILL.md"))).toBe(false);
   });
 
   it("imports selected skills into the requested project target", async () => {
@@ -1107,7 +1108,7 @@ describe("settingsSyncService skills import", () => {
     expect(result.failedCount).toBe(0);
     expect(existsSync(join(workspacePath, ".zcode", "skills", "review", "SKILL.md")))
       .toBe(true);
-    expect(existsSync(join(home, ".zcode", "skills", "review", "SKILL.md"))).toBe(false);
+    expect(existsSync(join(home, ".leophoneagent", "skills", "review", "SKILL.md"))).toBe(false);
   });
 
   it("can import selected skills as symlinks", async () => {
@@ -1135,7 +1136,7 @@ describe("settingsSyncService skills import", () => {
       }],
     });
 
-    const targetPath = join(home, ".zcode", "skills", "linked-review");
+    const targetPath = join(home, ".leophoneagent", "skills", "linked-review");
     expect(result.successCount).toBe(1);
     expect(lstatSync(targetPath).isSymbolicLink()).toBe(true);
     expect(readFileSync(join(targetPath, "SKILL.md"), "utf-8")).toContain("linked-review");
@@ -1166,7 +1167,7 @@ describe("settingsSyncService skills import", () => {
       }],
     });
 
-    const targetPath = join(home, ".zcode", "skills", "copied-review");
+    const targetPath = join(home, ".leophoneagent", "skills", "copied-review");
     expect(result.successCount).toBe(1);
     expect(lstatSync(targetPath).isSymbolicLink()).toBe(false);
     expect(readFileSync(join(targetPath, "SKILL.md"), "utf-8")).toContain("copied-review");
@@ -1223,7 +1224,7 @@ describe("settingsSyncService skills import", () => {
     });
 
     expect(result.successCount).toBe(1);
-    expect(existsSync(join(home, ".zcode", "skills", "commit-helper", "SKILL.md")))
+    expect(existsSync(join(home, ".leophoneagent", "skills", "commit-helper", "SKILL.md")))
       .toBe(true);
   });
 
@@ -1516,7 +1517,7 @@ describe("settingsSyncService skills import", () => {
       "---\nname: review\ndescription: source\n---\nsource-body",
     );
     writeSkill(
-      join(home, ".zcode", "skills"),
+      join(home, ".leophoneagent", "skills"),
       "current-review",
       "---\nname: review\ndescription: existing\n---\nexisting-body",
     );
@@ -1567,8 +1568,8 @@ describe("settingsSyncService skills import", () => {
       status: "skipped",
       skipReason: "sameNameExists",
     }]);
-    expect(existsSync(join(home, ".zcode", "skills", "external-review"))).toBe(false);
-    expect(readFileSync(join(home, ".zcode", "skills", "current-review", "SKILL.md"), "utf-8"))
+    expect(existsSync(join(home, ".leophoneagent", "skills", "external-review"))).toBe(false);
+    expect(readFileSync(join(home, ".leophoneagent", "skills", "current-review", "SKILL.md"), "utf-8"))
       .toContain("existing-body");
   });
 
@@ -1582,7 +1583,7 @@ describe("settingsSyncService skills import", () => {
       "---\nname: external-review\ndescription: source\n---\nsource-body",
     );
     writeSkill(
-      join(home, ".zcode", "skills"),
+      join(home, ".leophoneagent", "skills"),
       "review",
       "---\nname: existing-review\ndescription: existing\n---\nexisting-body",
     );

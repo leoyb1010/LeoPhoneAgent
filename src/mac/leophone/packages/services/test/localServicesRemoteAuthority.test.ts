@@ -378,19 +378,29 @@ describe("createLocalServices remote authority", () => {
       dispose: vi.fn(),
       disposeAndWait: vi.fn(async () => {}),
     };
-    const [{ createLocalServices, disposeServiceResources }, { IClientScenesService }] =
+    const [{ createLocalServices, disposeServiceResources }, { IProviderSettingsService }] =
       await Promise.all([import("../src/node.js"), import("../src/index.js")]);
     const services = createLocalServices({
       hostApiNetworkTransport: transport,
+      zcodeBuiltinProviderConfigFilePath: writeZCodeBuiltinProviderConfig(home),
       serviceAuthorityMode: "desktop-attached-remote",
     });
 
     try {
-      await expect(services.get(IClientScenesService).list()).resolves.toMatchObject({
-        code: 0,
-        data: [],
+      // [leo] ClientScenes 在 LeoBot 里固定返回空列表、不发请求;改用仍走 Host 出口的
+      // 「从接口获取模型」验证 Host 注入的 transport 被复用。
+      await services.get(IProviderSettingsService).discoverModels({
+        baseUrl: "https://models.example.invalid/v1",
+        apiFormat: "openai-chat-completions",
+        apiKey: "test-key",
       });
-      expect(transport.fetch).toHaveBeenCalledOnce();
+      expect(
+        transport.fetch.mock.calls.some(([input]) =>
+          String(input instanceof Request ? input.url : input).startsWith(
+            "https://models.example.invalid/",
+          ),
+        ),
+      ).toBe(true);
     } finally {
       disposeServiceResources(services);
     }

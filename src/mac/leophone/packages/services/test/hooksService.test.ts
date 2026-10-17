@@ -1,3 +1,4 @@
+// [leo] 用户级数据根是 ~/.leophoneagent（cli/config.json、skills、plugins、agents、security 等），项目级仍为 .zcode/。
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -36,7 +37,7 @@ describe("hooksService", () => {
     const home = makeTempRoot();
     const workspacePath = join(makeTempRoot(), "workspace");
 
-    mkdirSync(join(home, ".zcode", "cli"), { recursive: true });
+    mkdirSync(join(home, ".leophoneagent", "cli"), { recursive: true });
     mkdirSync(join(home, ".agents"), { recursive: true });
     mkdirSync(join(home, ".claude"), { recursive: true });
     mkdirSync(join(workspacePath, ".zcode"), { recursive: true });
@@ -44,7 +45,7 @@ describe("hooksService", () => {
     mkdirSync(join(workspacePath, ".claude"), { recursive: true });
 
     writeFileSync(
-      join(home, ".zcode", "cli", "config.json"),
+      join(home, ".leophoneagent", "cli", "config.json"),
       JSON.stringify({
         hooks: {
           enabled: true,
@@ -137,9 +138,9 @@ describe("hooksService", () => {
         },
       },
     };
-    mkdirSync(join(home, ".zcode", "cli"), { recursive: true });
+    mkdirSync(join(home, ".leophoneagent", "cli"), { recursive: true });
     mkdirSync(join(workspacePath, ".zcode"), { recursive: true });
-    writeFileSync(join(home, ".zcode", "cli", "config.json"), JSON.stringify(hookConfig), "utf-8");
+    writeFileSync(join(home, ".leophoneagent", "cli", "config.json"), JSON.stringify(hookConfig), "utf-8");
     writeFileSync(
       join(workspacePath, ".zcode", "config.json"),
       JSON.stringify(hookConfig),
@@ -156,9 +157,9 @@ describe("hooksService", () => {
   it("saves zcode hooks to user and workspace config files", async () => {
     const home = makeTempRoot();
     const workspacePath = join(makeTempRoot(), "workspace");
-    mkdirSync(join(home, ".zcode", "cli"), { recursive: true });
+    mkdirSync(join(home, ".leophoneagent", "cli"), { recursive: true });
     writeFileSync(
-      join(home, ".zcode", "cli", "config.json"),
+      join(home, ".leophoneagent", "cli", "config.json"),
       JSON.stringify({ features: { mcp: true } }),
       "utf-8",
     );
@@ -178,7 +179,7 @@ describe("hooksService", () => {
           location: {
             source: "zcode",
             scope: "user",
-            directoryPath: join(home, ".zcode", "cli"),
+            directoryPath: join(home, ".leophoneagent", "cli"),
           },
         },
         {
@@ -209,7 +210,7 @@ describe("hooksService", () => {
       ],
     });
 
-    const saved = JSON.parse(readFileSync(join(home, ".zcode", "cli", "config.json"), "utf-8"));
+    const saved = JSON.parse(readFileSync(join(home, ".leophoneagent", "cli", "config.json"), "utf-8"));
     expect(saved.features).toEqual({ mcp: true });
     expect(saved.hooks.events.Stop).toEqual([
       {
@@ -325,7 +326,7 @@ describe("hooksService", () => {
     // schema"，已由 workspaceHookTrustCorrupt.test.ts 覆盖）；本用例验证的是 IO 不可读分支，
     // 因此用目录占位 trust store 路径——readFile 对目录稳定返回 EISDIR/EPERM（非 ENOENT），
     // 在 macOS/Linux/Windows 上都能触发"不可读"日志分支。
-    mkdirSync(join(home, ".zcode", "security", "workspace-hook-trust-v1.json"), {
+    mkdirSync(join(home, ".leophoneagent", "security", "workspace-hook-trust-v1.json"), {
       recursive: true,
     });
     writeFileSync(

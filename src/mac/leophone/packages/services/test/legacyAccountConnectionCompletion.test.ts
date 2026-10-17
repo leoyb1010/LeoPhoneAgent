@@ -17,7 +17,8 @@ async function setup(raw: unknown = oldFields) {
   const home = await mkdtemp(join(tmpdir(), "zcode-team-migration-"));
   homes.push(home);
   process.env.HOME = home;
-  const dir = join(home, ".zcode", "v2");
+  // [leo] setting.json 在 Leo 数据根 .leophoneagent/v2(见 src/paths.ts)。
+  const dir = join(home, ".leophoneagent", "v2");
   await mkdir(dir, { recursive: true });
   const file = join(dir, "setting.json");
   await writeFile(file, JSON.stringify(raw));

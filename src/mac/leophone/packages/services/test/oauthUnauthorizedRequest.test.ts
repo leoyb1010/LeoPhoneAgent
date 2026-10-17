@@ -4,6 +4,19 @@ import {
   isOAuthBusinessRequest,
 } from "#src/oauth/oauthUnauthorizedRequest.js";
 import { createNodeApiClient } from "#src/providers/api/nodeApiClient.js";
+import {
+  DEFAULT_BIGMODEL_API_ORIGIN,
+  DEFAULT_ZAI_BUSINESS_BASE_URL,
+  DEFAULT_ZAI_OAUTH_ORIGIN,
+  TEST_BIGMODEL_API_ORIGIN,
+} from "@zcode/shared";
+
+// [leo] 官方 BigModel / Z.ai 默认地址在 Leo 里统一改成本机死端口(packages/shared/src/zcodeEndpoint.ts),
+// 不再是 bigmodel.cn / api.z.ai / chat.z.ai。“命中当前配置身份接口”的正向用例改用默认常量拼地址,
+// 否定用例里的官方域名保持原样(它们本来就不应命中)。
+const BIGMODEL_ORIGIN = DEFAULT_BIGMODEL_API_ORIGIN;
+const ZAI_BUSINESS_ORIGIN = DEFAULT_ZAI_BUSINESS_BASE_URL;
+const ZAI_USERINFO_URL = `${DEFAULT_ZAI_OAUTH_ORIGIN}/api/oauth/userinfo`;
 
 function createFixture(provider = "zai", env: NodeJS.ProcessEnv = { ZCODE_ENV: "production" }) {
   const credentials = new Map([
@@ -30,13 +43,13 @@ function createFixture(provider = "zai", env: NodeJS.ProcessEnv = { ZCODE_ENV: "
 
 describe("当前 App 登录凭据的 HTTP 401 识别", () => {
   it.each([
-    ["bigmodel", "https://bigmodel.cn/api/biz/customer/getCustomerInfo"],
-    ["zai", "https://api.z.ai/api/biz/customer/getCustomerInfo"],
-    ["zai", "https://chat.z.ai/api/oauth/userinfo"],
-    ["bigmodel", "https://bigmodel.cn/api/biz/subscription/enterprise/v2/pricing"],
-    ["zai", "https://api.z.ai/api/biz/subscription/enterprise/v2/pricing"],
-    ["bigmodel", "https://bigmodel.cn/api/biz/team/subscribe/product/querySubscribeDetail"],
-    ["zai", "https://api.z.ai/api/biz/team/subscribe/product/querySubscribeDetail"],
+    ["bigmodel", `${BIGMODEL_ORIGIN}/api/biz/customer/getCustomerInfo`],
+    ["zai", `${ZAI_BUSINESS_ORIGIN}/api/biz/customer/getCustomerInfo`],
+    ["zai", ZAI_USERINFO_URL],
+    ["bigmodel", `${BIGMODEL_ORIGIN}/api/biz/subscription/enterprise/v2/pricing`],
+    ["zai", `${ZAI_BUSINESS_ORIGIN}/api/biz/subscription/enterprise/v2/pricing`],
+    ["bigmodel", `${BIGMODEL_ORIGIN}/api/biz/team/subscribe/product/querySubscribeDetail`],
+    ["zai", `${ZAI_BUSINESS_ORIGIN}/api/biz/team/subscribe/product/querySubscribeDetail`],
   ])("%s 用户/团队查询兼容裸 token 与 Bearer", async (provider, url) => {
     const fixture = createFixture(provider);
     for (const prefix of ["", "Bearer "]) {
@@ -131,7 +144,7 @@ describe("当前 App 登录凭据的 HTTP 401 识别", () => {
     "%s 当前业务 token 的三个接口业务 401 均通知失效",
     async (provider) => {
       const fixture = createFixture(provider);
-      const origin = provider === "bigmodel" ? "https://bigmodel.cn" : "https://api.z.ai";
+      const origin = provider === "bigmodel" ? BIGMODEL_ORIGIN : ZAI_BUSINESS_ORIGIN;
       for (const path of [
         "/api/biz/customer/getCustomerInfo",
         "/api/biz/subscription/enterprise/v2/pricing",
@@ -180,7 +193,7 @@ describe("当前 App 登录凭据的 HTTP 401 识别", () => {
       BIGMODEL_OAUTH_USERINFO_URL: "http://127.0.0.1:18080/custom/userinfo",
     });
     for (const url of [
-      "https://bigmodel.cn/api/biz/customer/getCustomerInfo",
+      `${TEST_BIGMODEL_API_ORIGIN}/api/biz/customer/getCustomerInfo`,
       "http://127.0.0.1:18080/custom/userinfo",
     ]) {
       await fixture.client.request(url, { headers: { Authorization: "bigmodel-business-token" } });
@@ -193,13 +206,13 @@ describe("当前 App 登录凭据的 HTTP 401 识别", () => {
       "bigmodel",
       "BIGMODEL_API_BASE_URL",
       "BIGMODEL_OAUTH_USERINFO_URL",
-      "https://bigmodel.cn/api/biz/customer/getCustomerInfo",
+      `${BIGMODEL_ORIGIN}/api/biz/customer/getCustomerInfo`,
     ],
     [
       "zai",
       "ZAI_BUSINESS_BASE_URL",
       "ZAI_OAUTH_USERINFO_URL",
-      "https://api.z.ai/api/biz/customer/getCustomerInfo",
+      `${ZAI_BUSINESS_ORIGIN}/api/biz/customer/getCustomerInfo`,
     ],
   ])("%s URL 配置边界", (provider, baseKey, userinfoKey, customerInfoUrl) => {
     it.each(["production", "test"])("%s 环境仅识别当前配置的身份接口", async (environment) => {
@@ -275,7 +288,7 @@ describe("当前 App 登录凭据的 HTTP 401 识别", () => {
         [baseKey]: blank,
         [userinfoKey]: blank,
       });
-      const url = provider === "zai" ? "https://chat.z.ai/api/oauth/userinfo" : customerInfoUrl;
+      const url = provider === "zai" ? ZAI_USERINFO_URL : customerInfoUrl;
       await expect(
         fixture.observe(url, new Headers({ Authorization: `${provider}-business-token` })),
       ).resolves.toBe(true);
@@ -308,7 +321,7 @@ describe("当前 App 登录凭据的 HTTP 401 识别", () => {
     });
     await expect(
       fixture.observe(
-        "https://chat.z.ai/api/oauth/userinfo",
+        ZAI_USERINFO_URL,
         new Headers({ Authorization: "zai-business-token" }),
       ),
     ).resolves.toBe(true);
@@ -328,7 +341,7 @@ describe("当前 App 登录凭据的 HTTP 401 识别", () => {
     const fixture = createFixture("zai", { ZCODE_ENV: "production", ZCODE_BASE_URL: "invalid" });
     await expect(
       fixture.observe(
-        "https://chat.z.ai/api/oauth/userinfo",
+        ZAI_USERINFO_URL,
         new Headers({ Authorization: "zai-business-token" }),
       ),
     ).resolves.toBe(true);

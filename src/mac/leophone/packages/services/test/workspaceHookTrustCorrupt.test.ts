@@ -1,3 +1,4 @@
+// [leo] 用户级数据根是 ~/.leophoneagent（cli/config.json、skills、plugins、agents、security 等），项目级仍为 .zcode/。
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -82,7 +83,7 @@ describe("readPersistentWorkspaceHookTrustDigests corrupt 检测（#7）", () =>
     // 写入合法完整的 trust 记录以证明：若 trust store 畸形，即使存在有效记录也不会被采纳。
     // CR-01 后 services 使用与 runtime 相同的完整 strict schema——记录必须包含全部
     // 必需字段（旧测试只写 identity+digest，恰好依赖了被修复的局部校验 bug）。
-    writeJson(join(home, ".zcode", "security", "workspace-hook-trust-v1.json"), {
+    writeJson(join(home, ".leophoneagent", "security", "workspace-hook-trust-v1.json"), {
       schemaVersion: 1,
       records: [
         {
@@ -106,7 +107,7 @@ describe("readPersistentWorkspaceHookTrustDigests corrupt 检测（#7）", () =>
 
     // 覆盖为畸形 JSON。
     writeJson(
-      join(home, ".zcode", "security", "workspace-hook-trust-v1.json"),
+      join(home, ".leophoneagent", "security", "workspace-hook-trust-v1.json"),
       "{ this is :: not valid JSON !!!",
     );
 
@@ -146,7 +147,7 @@ describe("readPersistentWorkspaceHookTrustDigests corrupt 检测（#7）", () =>
     vi.stubEnv("USERPROFILE", home);
 
     // 根节点为数组（非对象）。
-    writeJson(join(home, ".zcode", "security", "workspace-hook-trust-v1.json"), []);
+    writeJson(join(home, ".leophoneagent", "security", "workspace-hook-trust-v1.json"), []);
 
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
