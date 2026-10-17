@@ -14,7 +14,6 @@ export {
   PlatformProvider,
   usePlatform,
   useSelectDirectory,
-  useConnectRemote,
 } from "./usePlatform.js";
 
 // 文件服务

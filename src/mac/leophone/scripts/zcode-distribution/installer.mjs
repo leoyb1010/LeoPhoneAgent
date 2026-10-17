@@ -49,7 +49,7 @@ SH
 chmod +x "$BIN_DIR/zcode"
 
 echo "ZCode $VERSION installed."
-echo "Run: zcode (TUI) or zcode --web (Web)"
+echo "Run: zcode"
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *) echo "Note: $BIN_DIR is not in PATH." ;;

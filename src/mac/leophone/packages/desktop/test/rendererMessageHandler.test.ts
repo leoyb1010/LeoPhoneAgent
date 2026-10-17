@@ -22,7 +22,6 @@ vi.mock("@zcode/ui", () => ({
   Root: () => null,
   ZCodeIntlProvider: ({ children }: { children: unknown }) => children,
   registerBaseWorkspaceServices: vi.fn(),
-  registerRemoteWorkspaceSession: vi.fn(),
   playTaskNotificationSound: vi.fn(() => Promise.resolve()),
 }));
 
@@ -40,12 +39,6 @@ vi.stubGlobal("window", {
   zcode: {
     selectDirectory: vi.fn(),
     activateOrSetWorkspace: vi.fn(),
-    connectRemote: vi.fn(),
-    disposeRemoteSession: vi.fn(async () => {}),
-    isDockerAvailable: vi.fn(async () => false),
-    listWSLDistros: vi.fn(async () => []),
-    listDockerContainers: vi.fn(async () => []),
-    listSSHConfigAliases: vi.fn(async () => []),
     openExternal: vi.fn(),
     registerOAuthState: vi.fn(),
     onOAuthCallback: vi.fn(() => () => {}),
@@ -107,16 +100,6 @@ describe("renderer main.tsx 防重复 createRoot", () => {
     );
 
     expect(source).toContain("window.zcode.onOpenWorkspace?.(handler) ?? (() => {})");
-  });
-
-  it("remote workspace service port 早于 base ServicePort 时会暂存并在 base ready 后 flush", () => {
-    const source = readFileSync(join(import.meta.dirname, "../src/renderer/src/main.tsx"), "utf-8");
-
-    expect(source).toContain("const pendingRemoteWorkspaceServicePorts");
-    expect(source).toContain("pendingRemoteWorkspaceServicePorts.push(remoteWorkspacePort);");
-    expect(source).toContain("notifyRemoteWorkspaceServicePortReady(params);");
-    expect(source).toContain("function flushPendingRemoteWorkspaceServicePorts(): void");
-    expect(source).toContain("flushPendingRemoteWorkspaceServicePorts();");
   });
 
   it("desktop Root 暂时显式开启 Assistant code-comment 卡片", () => {

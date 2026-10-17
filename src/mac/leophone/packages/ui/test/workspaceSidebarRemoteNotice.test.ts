@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { RemoteConnectionLogEntry } from "@/hooks/useRemoteConnectionLogs.js";
 import type { WorkspaceTabState } from "@/store/tabStore.js";
 
 const {
@@ -19,11 +18,6 @@ const {
     draftStatus: "idle",
     taskRuntimeByTaskId: {} as Record<string, { status: string }>,
   },
-}));
-
-vi.mock("border-beam", () => ({
-  BorderBeam: ({ children }: { children: unknown }) =>
-    createElement("div", { "data-testid": "border-beam" }, children),
 }));
 
 vi.mock("lucide-react", () => {
@@ -126,17 +120,8 @@ vi.mock("@/i18n/IntlProvider.js", () => ({
         const messages: Record<string, string> = {
           "common.more": "更多",
           "workspaceSidebar.remove": "移除工作区",
-          "workspaceSidebar.notConnected": "未连接",
-          "workspaceSidebar.connecting": "连接中",
-          "workspaceSidebar.reconnect": "重新连接",
-          "workspaceSidebar.sshConnectionTitle": "SSH 连接",
-          "workspaceSidebar.sshConnectionAlias": "Alias",
-          "workspaceSidebar.sshConnectionHost": "Host",
-          "workspaceSidebar.sshConnectionPath": "Path",
           "workspaceSidebar.unavailableLocalDirectory":
             "工作区目录不存在或无法访问，当前仅可查看历史记录。恢复该目录后重启 ZCode 即可继续使用。",
-          "settings.skills.remoteSync.open": "同步 Skill",
-          "settings.mcp.remoteSync.open": "同步 MCP",
           "taskList.newThread": "新建任务",
         };
         return messages[id] ?? id;
@@ -147,27 +132,6 @@ vi.mock("@/i18n/IntlProvider.js", () => ({
 
 vi.mock("@/TaskList.js", () => ({
   TaskList: () => createElement("div", { "data-testid": "task-list" }),
-}));
-
-vi.mock("@/WorkspaceSidebar/ReconnectingRemoteWorkspaceLogTooltip.js", () => ({
-  ReconnectingRemoteWorkspaceLogTooltip: () =>
-    createElement("div", { "data-testid": "reconnect-tooltip" }),
-}));
-
-vi.mock("@/lib/remoteWorkspaceHistory.js", () => ({
-  buildWorkspaceSessionKey: (entry: { workspacePath: string; workspaceIdentity?: string }) =>
-    entry.workspaceIdentity?.trim() || entry.workspacePath,
-  formatRemoteWorkspaceDisplayLabel: (
-    label: string,
-    target?: { kind: string; sshConfigAlias?: string },
-  ) => {
-    if (target?.kind !== "ssh") {
-      return label;
-    }
-
-    const sshConfigAlias = target.sshConfigAlias?.trim();
-    return sshConfigAlias ? `${label} [SSH: ${sshConfigAlias}]` : label;
-  },
 }));
 
 vi.mock("@/hooks/useWorkspaceServices.js", () => ({
@@ -199,19 +163,6 @@ vi.mock("@/hooks/useWorkspaceServices.js", () => ({
   }),
 }));
 
-vi.mock("@/settings/RemoteSkillSyncDialog.js", () => ({
-  RemoteSkillSyncDialog: () => createElement("div", { "data-testid": "remote-skill-sync-dialog" }),
-}));
-
-vi.mock("@/settings/RemoteMcpSyncDialog.js", () => ({
-  RemoteMcpSyncDialog: () => createElement("div", { "data-testid": "remote-mcp-sync-dialog" }),
-}));
-
-vi.mock("@/settings/RemotePluginSyncDialog.js", () => ({
-  RemotePluginSyncDialog: () =>
-    createElement("div", { "data-testid": "remote-plugin-sync-dialog" }),
-}));
-
 vi.mock("@/store/taskQueryCacheStore.js", () => ({
   applyTaskQueryCacheMutation: () => {},
   invalidateTaskQueryCacheByScopes: () => {},
@@ -234,31 +185,21 @@ vi.mock("@/store/zcodeSessionStore.js", () => ({
   }),
 }));
 
-const onReconnectRemoteWorkspace = vi.fn(async () => {});
 let capturedWorkspaceRemoveSelect: ((event: { preventDefault(): void }) => void) | null = null;
 let capturedWorkspaceMenuClick: ((event: { stopPropagation(): void }) => void) | null = null;
 
-function createRemoteWorkspaceTab(overrides: Partial<WorkspaceTabState> = {}): WorkspaceTabState {
+function createWorkspaceTab(overrides: Partial<WorkspaceTabState> = {}): WorkspaceTabState {
   return {
-    id: "workspace-remote",
+    id: "workspace-local",
     kind: "workspace",
-    label: "remote-project",
-    workspacePath: "/remote/project",
-    remoteTarget: {
-      kind: "ssh",
-      host: "example.com",
-      username: "dev",
-    },
-    workspaceIdentity: "ssh://dev@example.com/remote/project",
+    label: "project",
+    workspacePath: "/workspace/project",
     ...overrides,
   };
 }
 
 function renderWorkspaceItem(params?: {
   tab?: WorkspaceTabState;
-  remoteWorkspaceErrorByWorkspaceKey?: Record<string, string>;
-  reconnectingRemoteWorkspaceKeys?: string[];
-  reconnectingRemoteWorkspaceLogsByWorkspaceKey?: Record<string, RemoteConnectionLogEntry[]>;
   onOpenFileTree?: Parameters<typeof WorkspaceSidebarItem>[0]["onOpenFileTree"];
   closeTab?: Parameters<typeof WorkspaceSidebarItem>[0]["closeTab"];
   isExpanded?: boolean;
@@ -266,7 +207,7 @@ function renderWorkspaceItem(params?: {
   taskListLiveWorkflowCount?: number;
   taskItems?: Parameters<typeof WorkspaceSidebarItem>[0]["taskItems"];
 }) {
-  const tab = params?.tab ?? createRemoteWorkspaceTab();
+  const tab = params?.tab ?? createWorkspaceTab();
 
   return renderToStaticMarkup(
     createElement(WorkspaceSidebarItem, {
@@ -284,11 +225,6 @@ function renderWorkspaceItem(params?: {
       taskListHasUnread: params?.taskListHasUnread ?? false,
       taskListLiveWorkflowCount: params?.taskListLiveWorkflowCount ?? 0,
       onShowMoreTasks: () => {},
-      reconnectingRemoteWorkspaceKeys: params?.reconnectingRemoteWorkspaceKeys ?? [],
-      remoteWorkspaceErrorByWorkspaceKey: params?.remoteWorkspaceErrorByWorkspaceKey ?? {},
-      reconnectingRemoteWorkspaceLogsByWorkspaceKey:
-        params?.reconnectingRemoteWorkspaceLogsByWorkspaceKey ?? {},
-      onReconnectRemoteWorkspace,
       onOpenFileTree: params?.onOpenFileTree,
     }),
   );
@@ -296,12 +232,11 @@ function renderWorkspaceItem(params?: {
 
 import { WorkspaceSidebarItem } from "@/WorkspaceSidebarItem.js";
 
-describe("WorkspaceSidebarItem remote notice", () => {
+describe("WorkspaceSidebarItem", () => {
   beforeEach(() => {
     vi.stubGlobal("window", {
       matchMedia: () => ({ matches: true }),
     });
-    onReconnectRemoteWorkspace.mockClear();
     archiveWorkspaceTasks.mockClear();
     confirmDialog.mockClear();
     confirmDialog.mockResolvedValue(true);
@@ -311,13 +246,6 @@ describe("WorkspaceSidebarItem remote notice", () => {
     workspaceRuntimeState.taskRuntimeByTaskId = {};
     capturedWorkspaceRemoveSelect = null;
     capturedWorkspaceMenuClick = null;
-  });
-
-  it("远程项目仅仅未连接时，不显示叹号提示图标", () => {
-    const html = renderWorkspaceItem();
-
-    expect(html).not.toContain('data-icon="info"');
-    expect(html).not.toContain('data-title="未连接"');
   });
 
   it("workspace 收起时显示聚合未读蓝点，展开时只保留 task 行提示", () => {
@@ -347,14 +275,11 @@ describe("WorkspaceSidebarItem remote notice", () => {
 
   it("失效的本地 workspace 标题后显示红色告警并禁用目录操作", () => {
     const html = renderWorkspaceItem({
-      tab: createRemoteWorkspaceTab({
+      tab: createWorkspaceTab({
         id: "workspace-local-missing",
         label: "missing-project",
         workspacePath: "/workspace/missing-project",
         availability: "unavailable-local-directory",
-        remoteSessionId: undefined,
-        remoteTarget: undefined,
-        workspaceIdentity: undefined,
       }),
       onOpenFileTree: () => {},
     });
@@ -368,107 +293,11 @@ describe("WorkspaceSidebarItem remote notice", () => {
     expect(html).toContain('disabled=""');
   });
 
-  it("SSH 远程工作区有配置别名时，在任务列表标题后展示 SSH 别名标签", () => {
-    const html = renderWorkspaceItem({
-      tab: createRemoteWorkspaceTab({
-        label: "root",
-        workspacePath: "/root",
-        remoteTarget: {
-          kind: "ssh",
-          host: "localhost",
-          port: 2223,
-          username: "root",
-          sshConfigAlias: "linux-arm64",
-        },
-        workspaceIdentity: "remote:ssh:localhost:2223:root:/root",
-      }),
-    });
-
-    expect(html).toContain("root [SSH: linux-arm64]");
-  });
-
-  it("SSH 远程工作区没有配置别名时，workspace tooltip 展示连接 host 和路径", () => {
-    const html = renderWorkspaceItem({
-      tab: createRemoteWorkspaceTab({
-        label: "demo-project",
-        workspacePath: "/srv/demo-project",
-        remoteTarget: {
-          kind: "ssh",
-          host: "10.0.0.8",
-          port: 2202,
-          username: "root",
-        },
-        workspaceIdentity: "remote:ssh:10.0.0.8:2202:root:/srv/demo-project",
-      }),
-    });
-
-    expect(html).toContain('data-testid="tooltip-content"');
-    expect(html).toContain("SSH 连接");
-    expect(html).toContain("root@10.0.0.8:2202");
-    expect(html).toContain("/srv/demo-project");
-  });
-
-  it("远程项目有连接错误时，显示叹号提示图标和错误内容", () => {
-    const html = renderWorkspaceItem({
-      remoteWorkspaceErrorByWorkspaceKey: {
-        "ssh://dev@example.com/remote/project": "ssh connection refused",
-      },
-    });
-
-    expect(html).toContain('data-icon="info"');
-    expect(html).toContain("ssh connection refused");
-  });
-
-  it("远程项目未连接时，不显示 file tree 入口", () => {
+  it("本地项目显示 file tree 入口", () => {
     const html = renderWorkspaceItem({ onOpenFileTree: () => {} });
-
-    expect(html).not.toContain('data-icon="list-tree"');
-    expect(html).not.toContain("workspaceSidebar.showFileTree");
-  });
-
-  it("远程项目已连接时，显示 file tree 入口", () => {
-    const html = renderWorkspaceItem({
-      tab: createRemoteWorkspaceTab({ remoteSessionId: "remote-session-1" }),
-      onOpenFileTree: () => {},
-    });
 
     expect(html).toContain('data-icon="list-tree"');
     expect(html).toContain("workspaceSidebar.showFileTree");
-  });
-
-  it("已连接 SSH 远程工作区的更多菜单显示同步 Skills 和 MCP 入口", () => {
-    const html = renderWorkspaceItem({
-      tab: createRemoteWorkspaceTab({ remoteSessionId: "remote-session-1" }),
-    });
-
-    expect(html).toContain('data-icon="upload-cloud"');
-    expect(html).toContain("同步 Skill");
-    expect(html).toContain("同步 MCP");
-  });
-
-  it("未连接远程工作区的更多菜单不显示同步 Skills 和 MCP 入口", () => {
-    const html = renderWorkspaceItem();
-
-    expect(html).not.toContain("同步 Skill");
-    expect(html).not.toContain("同步 MCP");
-  });
-
-  it("远程项目重连中时，右侧 loading 图标使用连接日志 tooltip", () => {
-    const html = renderWorkspaceItem({
-      reconnectingRemoteWorkspaceKeys: ["ssh://dev@example.com/remote/project"],
-      reconnectingRemoteWorkspaceLogsByWorkspaceKey: {
-        "ssh://dev@example.com/remote/project": [
-          {
-            id: "log-1",
-            level: "info",
-            timestamp: "10:00:00",
-            message: "connecting",
-          },
-        ],
-      },
-    });
-
-    expect(html).toContain('data-testid="reconnect-tooltip"');
   });
 
   it("移除 workspace 会释放 runtime 且不批量归档已有 task", async () => {
@@ -481,10 +310,9 @@ describe("WorkspaceSidebarItem remote notice", () => {
     await Promise.resolve();
 
     expect(confirmDialog).not.toHaveBeenCalled();
-    expect(closeTab).toHaveBeenCalledWith("workspace-remote");
+    expect(closeTab).toHaveBeenCalledWith("workspace-local");
     expect(releaseWorkspacePreparation).toHaveBeenCalledWith({
-      workspacePath: "/remote/project",
-      workspaceIdentity: "ssh://dev@example.com/remote/project",
+      workspacePath: "/workspace/project",
     });
     expect(archiveWorkspaceTasks).not.toHaveBeenCalled();
   });
@@ -501,7 +329,7 @@ describe("WorkspaceSidebarItem remote notice", () => {
           taskId: "task_running",
           traceId: "trace_running",
           title: "running task",
-          workspacePath: "/remote/project",
+          workspacePath: "/workspace/project",
           createdAt: 1,
           updatedAt: 1,
           mode: "agent",
@@ -535,10 +363,9 @@ describe("WorkspaceSidebarItem remote notice", () => {
     await Promise.resolve();
 
     expect(confirmDialog).toHaveBeenCalledOnce();
-    expect(closeTab).toHaveBeenCalledWith("workspace-remote");
+    expect(closeTab).toHaveBeenCalledWith("workspace-local");
     expect(releaseWorkspacePreparation).toHaveBeenCalledWith({
-      workspacePath: "/remote/project",
-      workspaceIdentity: "ssh://dev@example.com/remote/project",
+      workspacePath: "/workspace/project",
     });
   });
 

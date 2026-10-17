@@ -10,7 +10,6 @@ import {
   type HostCuaOperationStateResponse,
   type HostMcpTelemetryResponse,
   type HostSessionCreateTelemetryResponse,
-  type RemoteTarget,
   type TaskRealtimeHostDeliveryKind,
   type WorkspacePurpose,
   formatZCodeHostProcessName,
@@ -91,8 +90,6 @@ export interface HostInitMessage {
 }
 
 export interface SpawnHostProcessOptions {
-  internalChannel?: typeof InternalChannels.ServicePort | typeof InternalChannels.ScopedServicePort;
-  internalPayload?: unknown;
   registerBroadcast?: boolean;
   taskRealtime?: {
     workspaceKeys: Iterable<string>;
@@ -276,8 +273,6 @@ export function spawnHostProcess(
     `[spawnHostProcess] BIGMODEL_OAUTH_APP_SECRET source: ${process.env.BIGMODEL_OAUTH_APP_SECRET ? "process" : dependencies.hostProcessLocalEnv.BIGMODEL_OAUTH_APP_SECRET ? "dotenv" : "fallback"}`,
   );
 
-  // 远程连接与本地服务共享 window Host，进程级 stdout 没有请求身份。
-  // 连接进度改由 HostResponseTypes.RemoteWorkspaceConnectionLog 按 requestId 上报。
   const hostLogRelay = createHostLogRelay(
     label,
     dependencies.logger as Parameters<typeof createHostLogRelay>[1],
@@ -582,10 +577,8 @@ export function spawnHostProcess(
       options.onPortReady(port1);
     } else {
       win.webContents.postMessage(
-        options?.internalChannel ?? InternalChannels.ServicePort,
-        options?.internalChannel === InternalChannels.ScopedServicePort
-          ? (options.internalPayload ?? null)
-          : { databaseStartupId: databaseStartupRelay.startupId },
+        InternalChannels.ServicePort,
+        { databaseStartupId: databaseStartupRelay.startupId },
         [port1],
       );
     }

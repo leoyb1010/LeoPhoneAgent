@@ -19,17 +19,6 @@ import {
   TID_PREVIEW_PANE,
   TID_PREVIEW_PREV_BUTTON,
   TID_TERMINAL,
-  TID_SSH_CONNECT_TRIGGER,
-  TID_SSH_DIALOG,
-  TID_SSH_HOST_INPUT,
-  TID_SSH_PORT_INPUT,
-  TID_SSH_USERNAME_INPUT,
-  TID_SSH_PASSWORD_INPUT,
-  TID_SSH_PRIVATE_KEY_INPUT,
-  TID_SSH_CONNECT_BUTTON,
-  TID_SSH_CANCEL_BUTTON,
-  TID_SSH_ERROR,
-  TID_SSH_SUCCESS,
   TID_WORKSPACE_LIST,
   TID_WORKSPACE_OPEN_BUTTON,
   TID_SIDEBAR,
@@ -181,47 +170,6 @@ class AppPage {
   }
   get previewNextButton(): ChainablePromiseElement {
     return $(sel(TID_PREVIEW_NEXT_BUTTON));
-  }
-
-  // ── SSH Dialog ──
-  get sshConnectTrigger(): ChainablePromiseElement {
-    return $(sel(TID_SSH_CONNECT_TRIGGER));
-  }
-  get sshDialog(): ChainablePromiseElement {
-    return $(sel(TID_SSH_DIALOG));
-  }
-  get sshHostInput(): ChainablePromiseElement {
-    return $(sel(TID_SSH_HOST_INPUT));
-  }
-  get sshPortInput(): ChainablePromiseElement {
-    return $(sel(TID_SSH_PORT_INPUT));
-  }
-  get sshUsernameInput(): ChainablePromiseElement {
-    return $(sel(TID_SSH_USERNAME_INPUT));
-  }
-  get sshPasswordInput(): ChainablePromiseElement {
-    return $(sel(TID_SSH_PASSWORD_INPUT));
-  }
-  get sshPrivateKeyInput(): ChainablePromiseElement {
-    return $(sel(TID_SSH_PRIVATE_KEY_INPUT));
-  }
-  get sshConnectButton(): ChainablePromiseElement {
-    return $(sel(TID_SSH_CONNECT_BUTTON));
-  }
-  get sshCancelButton(): ChainablePromiseElement {
-    return $(sel(TID_SSH_CANCEL_BUTTON));
-  }
-  get sshError(): ChainablePromiseElement {
-    return $(sel(TID_SSH_ERROR));
-  }
-  get sshSuccess(): ChainablePromiseElement {
-    return $(sel(TID_SSH_SUCCESS));
-  }
-
-  /** 打开 SSH 连接弹窗 */
-  async openSSHDialog() {
-    await this.sshConnectTrigger.click();
-    await this.sshDialog.waitForDisplayed();
   }
 
   /** 切换主题 */

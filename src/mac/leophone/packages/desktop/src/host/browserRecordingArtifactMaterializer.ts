@@ -1,7 +1,6 @@
 import { copyFile, mkdir, rename, rm } from "node:fs/promises";
-import { dirname, posix, relative, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { IRemoteBackend } from "@zcode/server/remote";
 import type { BrowserRecordingArtifact } from "@zcode/shared";
 
 function resolveWorkspaceRecordingPath(workspacePath: string, outputPath: string): string {
@@ -18,8 +17,8 @@ function resolveWorkspaceRecordingPath(workspacePath: string, outputPath: string
 }
 
 /**
- * main 只返回短期 WebM；Host 按当前 workspace authority 落盘。本地使用同目录 rename，远端
- * 复用已有 backend.upload，避免让远端 Agent 依赖 Desktop 临时路径。
+ * main 只返回短期 WebM；Host 在本地 workspace 内落盘（同目录 staging + rename）。
+ * 远程工作区已删除：带 remoteSessionId 的请求直接拒绝，不能落到本机路径。
  */
 export async function materializeBrowserRecordingArtifact(input: {
   artifact: BrowserRecordingArtifact;
@@ -27,29 +26,9 @@ export async function materializeBrowserRecordingArtifact(input: {
   outputPath: string;
   workspacePath: string;
   remoteSessionId?: string;
-  remoteBackend?: Pick<IRemoteBackend, "upload">;
 }): Promise<BrowserRecordingArtifact> {
   if (input.remoteSessionId) {
-    if (!input.remoteBackend) {
-      throw new Error("remote Browser recording materialization is unavailable for this session");
-    }
-    const normalizedWorkspace = posix.normalize(input.workspacePath.replace(/\\/gu, "/"));
-    const rawOutputSegments = input.outputPath.split(/[\\/]+/u);
-    const normalizedOutput = posix.normalize(input.outputPath.replace(/\\/gu, "/"));
-    if (
-      rawOutputSegments.some((segment) => segment === ".." || segment === "." || !segment) ||
-      normalizedOutput === ".." ||
-      normalizedOutput.startsWith("../") ||
-      posix.isAbsolute(normalizedOutput)
-    ) {
-      throw new Error("recording outputPath must stay inside the remote workspace");
-    }
-    if (!normalizedOutput.toLowerCase().endsWith(".webm")) {
-      throw new Error("recording outputPath must end with .webm");
-    }
-    const remoteTargetPath = posix.join(normalizedWorkspace, normalizedOutput);
-    await input.remoteBackend.upload(input.localPath, remoteTargetPath);
-    return { ...input.artifact, path: remoteTargetPath };
+    throw new Error("remote Browser recording materialization is unavailable for this session");
   }
 
   const targetPath = resolveWorkspaceRecordingPath(input.workspacePath, input.outputPath);

@@ -29,8 +29,6 @@ export function useRootPlatformEffects({
   isDesktop,
   locale,
   tabs,
-  reconnectingRemoteWorkspaceKeys = [],
-  remoteWorkspaceErrorByWorkspaceKey = {},
   totalUnreadTaskCount,
   hasCompletedFullTabRestore = true,
   intl,
@@ -59,8 +57,6 @@ export function useRootPlatformEffects({
   isDesktop?: boolean;
   locale: ReturnType<typeof import("@/i18n/IntlProvider.js").useZCodeIntl>["locale"];
   tabs: WindowTabState[];
-  reconnectingRemoteWorkspaceKeys?: string[];
-  remoteWorkspaceErrorByWorkspaceKey?: Record<string, string>;
   totalUnreadTaskCount: number;
   hasCompletedFullTabRestore?: boolean;
   intl: ReturnType<typeof import("@/i18n/IntlProvider.js").useZCodeIntl>["intl"];

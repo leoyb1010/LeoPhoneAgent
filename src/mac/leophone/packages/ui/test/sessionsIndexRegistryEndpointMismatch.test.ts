@@ -24,7 +24,7 @@ import {
 import {
   registerRemoteWorkspaceSession,
   unregisterRemoteWorkspaceSession,
-} from "@/store/remoteWorkspaceSessionStore.js";
+} from "./helpers/remoteWorkspaceSessionSeed.js";
 
 const workspacePath = "/root/src/plancov";
 const workspaceIdentity = "remote:wsl:default:root:/root/src/plancov";

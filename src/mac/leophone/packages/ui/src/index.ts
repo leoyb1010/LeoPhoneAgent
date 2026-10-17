@@ -29,19 +29,7 @@ export { useTestActions } from "./test-actions.js";
 export type { TestActions } from "./test-actions.js";
 export { StoreProvider, useZCodeStore } from "./store/StoreProvider.js";
 export type { ZCodeState } from "./store/index.js";
-export {
-  bindRemoteWorkspacePath,
-  getRemoteWorkspaceSession,
-  registerBaseWorkspaceServices,
-  registerRemoteWorkspaceSession,
-  unbindRemoteWorkspacePath,
-  unregisterRemoteWorkspaceSession,
-  useRemoteWorkspaceSessionStore,
-} from "./store/remoteWorkspaceSessionStore.js";
-export {
-  REMOTE_WORKSPACE_DISCONNECTED_ERROR_CODE,
-  createRemoteWorkspaceDisconnectedError,
-} from "./lib/remoteWorkspaceServiceError.js";
+export { registerBaseWorkspaceServices } from "./store/remoteWorkspaceSessionStore.js";
 
 // Hooks —— 统一的服务和平台操作访问层
 export {
@@ -51,7 +39,6 @@ export {
   PlatformProvider,
   usePlatform,
   useSelectDirectory,
-  useConnectRemote,
   useReaddir,
   useSystemInfo,
   useIntranetProbe,

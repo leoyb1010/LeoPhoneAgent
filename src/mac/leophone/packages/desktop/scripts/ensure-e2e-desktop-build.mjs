@@ -177,8 +177,8 @@ export function resolveE2EDesktopBuildInputPaths({
     }
   }
 
-  // Bug 根因：手写输入目录遗漏了 tsup noExternal 内联的 @zcode/server，导致同一
-  // HEAD 下修改 server 仍可能命中旧 bundle。依赖图作为权威输入，新增 workspace
+  // Bug 根因：手写输入目录曾遗漏 tsup noExternal 内联的 workspace 包，导致同一
+  // HEAD 下修改被内联的包仍可能命中旧 bundle。依赖图作为权威输入，新增 workspace
   // 依赖时无需再同步维护缓存白名单。
   return [...new Set([...DEFAULT_E2E_DESKTOP_BUILD_INPUTS, ...packageInputPaths])].sort();
 }

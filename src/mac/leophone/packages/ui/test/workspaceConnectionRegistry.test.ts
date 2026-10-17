@@ -1,7 +1,6 @@
 // 分屏二期：conversation 连接注册表单测（引用计数 / keep-warm / agentService 换代）。
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Emitter } from "@zcode/rpc";
-import type { IServiceAccessor } from "@zcode/services";
 import type {
   ConversationRow,
   ConversationSnapshot,
@@ -16,10 +15,6 @@ import {
   type WorkspaceConnectionAgentService,
 } from "@/v4/workspaceConnectionRegistry.js";
 import { createCommandEnvelope } from "@/v4/commandFactory.js";
-import {
-  registerRemoteWorkspaceSession,
-  unregisterRemoteWorkspaceSession,
-} from "@/store/remoteWorkspaceSessionStore.js";
 
 function mockAgentService(): WorkspaceConnectionAgentService {
   const runtimeRestarts = new Emitter<{ workspaceKey: string }>();
@@ -476,50 +471,6 @@ describe("workspaceConnectionRegistry", () => {
       }
     },
   );
-
-  it("远程 service 连续换代时，迟到旧 consumer 不能把 transport 切回去", async () => {
-    const firstService = mockAgentService();
-    const staleMiddleService = mockAgentService();
-    const latestService = mockAgentService();
-    const scope = {
-      workspacePath: "/ws",
-      workspaceIdentity: "ssh://host/ws",
-      remoteSessionId: "remote-1",
-    };
-    const register = (agentService: WorkspaceConnectionAgentService) =>
-      registerRemoteWorkspaceSession({
-        sessionId: scope.remoteSessionId,
-        services: { zcodeAgentService: agentService } as unknown as IServiceAccessor,
-      });
-    register(firstService);
-    register(staleMiddleService);
-    register(latestService);
-
-    const firstLease = acquireWorkspaceConnection(scope, firstService);
-    const latestLease = acquireWorkspaceConnection(scope, latestService);
-    const staleLease = acquireWorkspaceConnection(scope, staleMiddleService);
-    try {
-      latestLease.activateRemoteService();
-      staleLease.activateRemoteService();
-      const envelope = createCommandEnvelope({
-        type: "sendText",
-        sessionId: "sess-x",
-        payload: { text: "latest" },
-      });
-      await staleLease.transport.sendCommand(envelope);
-
-      expect(staleMiddleService.sendConversationCommandV4).not.toHaveBeenCalled();
-      expect(latestService.sendConversationCommandV4).toHaveBeenCalledTimes(1);
-      expect(staleLease.layer).toBe(firstLease.layer);
-      expect(latestLease.layer).toBe(firstLease.layer);
-    } finally {
-      staleLease.release();
-      latestLease.release();
-      firstLease.release();
-      vi.runAllTimers();
-      unregisterRemoteWorkspaceSession(scope.remoteSessionId);
-    }
-  });
 
   it("远程旧订阅一直未完成时，新 service 仍可立即接管 conversation store", async () => {
     const oldService = mockAgentService();

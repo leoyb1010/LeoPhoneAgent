@@ -9,10 +9,6 @@ import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { spawnCancellableStep, startStepExecution } from "./e2e-step-process.mjs";
-import {
-  hasRequiredSshE2EEnvironment,
-  isSshFormalSpec,
-} from "./e2e-formal-spec-selection.mjs";
 
 const RUNNER_SHARD_ARG_PREFIX = "--shards=";
 const DEFAULT_SPEC_DURATION_PROFILE_PATH = "test/e2e/spec-duration-weights.json";
@@ -92,10 +88,9 @@ export function resolveWindowsE2EShardTotal({
   return 1;
 }
 
-export function listDefaultFormalE2ESpecs(desktopDir, env = process.env) {
+export function listDefaultFormalE2ESpecs(desktopDir) {
   const e2eDir = join(desktopDir, "test/e2e");
   const specs = [];
-  const includeSshSpecs = hasRequiredSshE2EEnvironment(env);
   const visit = (directory, relativeDirectory = "") => {
     for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) =>
       a.name.localeCompare(b.name),
@@ -109,8 +104,7 @@ export function listDefaultFormalE2ESpecs(desktopDir, env = process.env) {
       if (
         entry.isFile() &&
         entry.name.endsWith(".test.ts") &&
-        relativePath !== "upstream-provider.test.ts" &&
-        (includeSshSpecs || !isSshFormalSpec(`./test/e2e/${relativePath}`))
+        relativePath !== "upstream-provider.test.ts"
       ) {
         specs.push(`./test/e2e/${relativePath}`);
       }
@@ -476,7 +470,7 @@ export async function runWindowsE2EShards({
       readFileSync(join(desktopDir, DEFAULT_SPEC_DURATION_PROFILE_PATH), "utf-8"),
     );
     weightedSpecBuckets = partitionE2ESpecsByWeight(
-      listDefaultFormalE2ESpecs(desktopDir, env),
+      listDefaultFormalE2ESpecs(desktopDir),
       shardTotal,
       durationProfile,
     );

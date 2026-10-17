@@ -30,7 +30,6 @@ const h = vi.hoisted(() => ({
 vi.mock("@/hooks/usePlatform.js", () => ({
   usePlatform: () => ({
     activateOrSetWorkspace: vi.fn(),
-    connectRemote: vi.fn(),
     getDeviceId: vi.fn(() => Promise.resolve("device-mid-test")),
     notifyRendererReady: vi.fn(),
     onOAuthCallback: vi.fn(),

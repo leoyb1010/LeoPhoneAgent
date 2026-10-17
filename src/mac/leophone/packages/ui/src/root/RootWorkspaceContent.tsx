@@ -18,7 +18,6 @@ interface RootWorkspaceContentProps {
   workspaceRemoteSessionId?: string;
   activeWorkspacePath: string | null;
   isSettingsTabActive: boolean;
-  handleReconnectRemoteWorkspace: AppProps["onReconnectRemoteWorkspace"];
   handleCreateTask: AppProps["onCreateTask"];
   handleCreateConversationTask: NonNullable<AppProps["onCreateConversationTask"]>;
   handleResolveConversationWorkspace: NonNullable<AppProps["onResolveConversationWorkspace"]>;
@@ -29,9 +28,6 @@ interface RootWorkspaceContentProps {
   handleLogout?: () => void;
   onLogin?: () => void;
   user: AppProps["user"];
-  reconnectingRemoteWorkspaceKeys: AppProps["reconnectingRemoteWorkspaceKeys"];
-  remoteWorkspaceErrorByWorkspaceKey: AppProps["remoteWorkspaceErrorByWorkspaceKey"];
-  reconnectingRemoteWorkspaceLogsByWorkspaceKey: AppProps["reconnectingRemoteWorkspaceLogsByWorkspaceKey"];
   allowOpenWorkspace: NonNullable<RootProps["allowOpenWorkspace"]>;
   isDesktop?: RootProps["isDesktop"];
   isMacDesktop?: RootProps["isMacDesktop"];
@@ -47,7 +43,6 @@ export function RootWorkspaceContent({
   workspaceRemoteSessionId,
   activeWorkspacePath,
   isSettingsTabActive,
-  handleReconnectRemoteWorkspace,
   handleCreateTask,
   handleCreateConversationTask,
   handleResolveConversationWorkspace,
@@ -58,9 +53,6 @@ export function RootWorkspaceContent({
   handleLogout,
   onLogin,
   user,
-  reconnectingRemoteWorkspaceKeys,
-  remoteWorkspaceErrorByWorkspaceKey,
-  reconnectingRemoteWorkspaceLogsByWorkspaceKey,
   allowOpenWorkspace,
   isDesktop,
   isMacDesktop,
@@ -120,15 +112,9 @@ export function RootWorkspaceContent({
             >
               <StableWorkspaceApp
                 services={workspaceScopedServices}
-                onReconnectRemoteWorkspace={handleReconnectRemoteWorkspace}
                 onLogout={handleLogout}
                 onLogin={onLogin}
                 user={user}
-                reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
-                remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
-                reconnectingRemoteWorkspaceLogsByWorkspaceKey={
-                  reconnectingRemoteWorkspaceLogsByWorkspaceKey
-                }
                 workspaceAbsPath={workspaceShellPath}
                 workspaceRemoteSessionId={workspaceRemoteSessionId}
                 workspaceIdentity={workspaceIdentity}

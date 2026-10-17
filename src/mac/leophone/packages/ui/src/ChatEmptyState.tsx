@@ -18,7 +18,6 @@ import {
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group.js";
 import {
   ChevronDownIcon,
-  Cloud,
   Folder,
   FolderPlus,
   House,
@@ -29,10 +28,6 @@ import {
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { cn } from "@/components/lib/utils.js";
 import { getPathLeaf } from "@/lib/path.js";
-import {
-  formatRemoteWorkspaceTargetSubtitle,
-  hasRemoteWorkspaceIdentity,
-} from "@/lib/remoteWorkspaceHistory.js";
 import {
   TID_COMPOSER_PROJECT_DETACH,
   TID_COMPOSER_WORK_OUTSIDE_PROJECT,
@@ -114,19 +109,6 @@ export function isWorkspaceMenuTabSelected(
   return resolveWorkspaceKey(workspaceTab) === resolveWorkspaceKey(current);
 }
 
-function getRemoteWorkspaceSearchText(workspaceTab: ChatEmptyWorkspaceMenuTab) {
-  if (!workspaceTab.remoteTarget) {
-    return workspaceTab.workspaceIdentity ?? "";
-  }
-
-  return [
-    formatRemoteWorkspaceTargetSubtitle(workspaceTab.remoteTarget),
-    workspaceTab.workspaceIdentity,
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
 export function filterVisibleWorkspaceMenuTabs({
   workspaceTabs,
   homeWorkspaceLabel,
@@ -140,16 +122,13 @@ export function filterVisibleWorkspaceMenuTabs({
 
   return workspaceTabs
     .filter((workspaceTab) => {
-      const isDisconnectedRemoteWorkspace = Boolean(
-        hasRemoteWorkspaceIdentity(workspaceTab) &&
-        !workspaceTab.remoteSessionId,
+      // LeoBot 已删除 SSH / WSL / Docker 远程工作区：残留远程身份的项不可进入，
+      // 空态菜单只列可直接切换的本地 workspace；底部的固定入口保持不变。
+      return !(
+        workspaceTab.remoteSessionId ||
+        workspaceTab.remoteTarget ||
+        workspaceTab.workspaceIdentity
       );
-
-      // 空态菜单的 workspace 列表是给“立即切换可用上下文”用的。
-      // 断连 remote workspace 继续出现在这里时，用户点进去只会得到一条当前不可用的上下文，
-      // 和左侧 sidebar 的“保留断连项以便重连”职责不同。这里把断连 remote 从菜单列表里排除，
-      // 仅保留可直接进入的 workspace；底部的固定入口保持不变。
-      return !isDisconnectedRemoteWorkspace;
     })
     .filter((workspaceTab) => {
       if (!normalizedQuery) {
@@ -164,7 +143,6 @@ export function filterVisibleWorkspaceMenuTabs({
         workspaceTitle,
         workspaceTab.label,
         workspaceTab.workspacePath,
-        getRemoteWorkspaceSearchText(workspaceTab),
       ]
         .join(" ")
         .toLowerCase();
@@ -227,9 +205,6 @@ export function ChatEmptyWorkspacePreviewMenu({
     !isConversationWorkspace;
   const homeWorkspacePath = inferWorkspaceHomePath(workspacePath);
   const homeWorkspaceLabel = intl.formatMessage({ id: "chat.empty.home" });
-  const isCurrentRemoteWorkspace = hasRemoteWorkspaceIdentity(
-    currentWorkspaceTab ?? {},
-  );
   const visibleWorkspaceTabs = useMemo(
     () =>
       filterVisibleWorkspaceMenuTabs({
@@ -244,11 +219,7 @@ export function ChatEmptyWorkspacePreviewMenu({
   const currentWorkspaceTitle = isConversationWorkspace
     ? intl.formatMessage({ id: "chat.empty.selectProject" })
     : getWorkspaceTriggerTitle(workspacePath, homeWorkspaceLabel);
-  const CurrentWorkspaceIcon = isCurrentRemoteWorkspace
-    ? Cloud
-    : homeWorkspacePath === workspacePath
-      ? House
-      : Folder;
+  const CurrentWorkspaceIcon = homeWorkspacePath === workspacePath ? House : Folder;
 
   return (
     <DropdownMenu>
@@ -345,11 +316,8 @@ export function ChatEmptyWorkspacePreviewMenu({
               workspaceTab.workspacePath,
               homeWorkspaceLabel,
             );
-            const isRemoteWorkspace = hasRemoteWorkspaceIdentity(workspaceTab);
-            const WorkspaceIcon = isRemoteWorkspace
-              ? Cloud
-              : inferWorkspaceHomePath(workspaceTab.workspacePath) ===
-                  workspaceTab.workspacePath
+            const WorkspaceIcon =
+              inferWorkspaceHomePath(workspaceTab.workspacePath) === workspaceTab.workspacePath
                 ? House
                 : Folder;
 
@@ -366,7 +334,7 @@ export function ChatEmptyWorkspacePreviewMenu({
                       featureId: isConversationWorkspace ? "workspace.project_binding" : "workspace.local.lifecycle",
                       action: isConversationWorkspace ? "attach" : "switch",
                       trigger: "menu",
-                      workspaceKind: isRemoteWorkspace ? "remote" : "local",
+                      workspaceKind: "local",
                     },
                     operation: () => onSelectWorkspace(workspaceTab),
                     completed: { resultSource: "local_commit" },

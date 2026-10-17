@@ -7,11 +7,13 @@ import { PlatformProvider } from "@/hooks/usePlatform.js";
 import { ServiceProvider } from "@/hooks/useServices.js";
 import { TabStoreProvider } from "@/store/TabStoreProvider.js";
 import {
-  bindRemoteWorkspaceIdentity,
   registerBaseWorkspaceServices,
-  registerRemoteWorkspaceSession,
   useRemoteWorkspaceSessionStore,
 } from "@/store/remoteWorkspaceSessionStore.js";
+import {
+  bindRemoteWorkspaceIdentity,
+  registerRemoteWorkspaceSession,
+} from "./helpers/remoteWorkspaceSessionSeed.js";
 import {
   useV4Conversation,
   V4ConversationProvider,

@@ -13,8 +13,6 @@ const h = vi.hoisted(() => ({
   registerWebRemoteControlIpcHandlers: vi.fn(),
   shellOpenExternal: vi.fn(),
   shellOpenPath: vi.fn(),
-  configureRemoteUsageArmsTelemetry: vi.fn(),
-  reportRemoteConnectResultToArms: vi.fn(),
 }));
 
 vi.mock("electron", () => ({
@@ -54,11 +52,6 @@ vi.mock("../src/main/desktopWebRemoteControlIpc.js", () => ({
   registerWebRemoteControlIpcHandlers: h.registerWebRemoteControlIpcHandlers,
 }));
 
-vi.mock("../src/main/desktopRemoteUsageArmsTelemetry.js", () => ({
-  configureRemoteUsageArmsTelemetry: h.configureRemoteUsageArmsTelemetry,
-  reportRemoteConnectResultToArms: h.reportRemoteConnectResultToArms,
-}));
-
 function createOptions(): RemoteIpcOptions {
   return {
     logger: {
@@ -74,7 +67,6 @@ function createOptions(): RemoteIpcOptions {
     appTelemetryCore: {
       reportEvent: vi.fn(async () => {}),
     },
-    reportRemoteUsageEvent: vi.fn(),
     armsCustomContext: {
       deviceMid: "device-mid",
       platform: "darwin",
@@ -88,19 +80,6 @@ function createOptions(): RemoteIpcOptions {
       stop: vi.fn(),
       getStatus: vi.fn(),
     },
-    createRemoteWorkspaceSession: vi.fn(async () => "remote-session-1"),
-    disposeRemoteWorkspaceSession: vi.fn(),
-    cancelPendingRemoteWorkspaceSessionsForWindow: vi.fn(),
-    bindRemoteWorkspaceSessionContext: vi.fn(),
-    confirmRendererAttachmentReady: vi.fn(),
-    getRemoteConnectionStats: vi.fn(() => ({
-      activeSessionCount: 0,
-      activeTargetCount: 0,
-    })),
-    isDockerDaemonAvailable: vi.fn(async () => true),
-    listAvailableWSLDistros: vi.fn(async () => []),
-    listAvailableDockerContainers: vi.fn(async () => []),
-    listSSHConfigAliases: vi.fn(async () => []),
   };
 }
 

@@ -9,7 +9,6 @@ import {
   RefreshCw,
   RotateCcw,
   Trash2,
-  UploadCloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button.js";
 import { toast } from "@/components/ui/toast.js";
@@ -21,14 +20,10 @@ import {
 } from "@/components/ui/dropdown-menu.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.js";
 import { Switch } from "@/components/ui/switch.js";
-import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { TID_PLUGIN_STORE_BROWSE } from "@zcode/shared";
 import type { ZCodePluginInfo, ZCodePluginScope, ZCodePluginUserConfigOption } from "@zcode/shared";
 import type { CreateTaskRequest } from "@/app-shell/types.js";
-import {
-  useBaseWorkspaceServices,
-  useWorkspaceServicesResolution,
-} from "@/hooks/useWorkspaceServices.js";
+import { useWorkspaceServicesResolution } from "@/hooks/useWorkspaceServices.js";
 import { getPathLeaf } from "@/lib/path.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { McpSettingsSection } from "@/settings/McpSettingsSection.js";
@@ -60,7 +55,6 @@ import {
   buildPluginConfigPatch,
   type PluginOptionDraftValue,
 } from "@/settings/pluginConfigPatch.js";
-import { formatRemoteSkillSyncTarget } from "@/settings/RemoteSkillSyncDialog.js";
 import {
   buildPluginStoreTryMention,
   buildPluginStoreTryPrompt,
@@ -91,11 +85,6 @@ import {
   getPluginWorkspaceKey,
   isPluginScopeWorkspaceConnected,
 } from "@/settings/PluginScopeMenu.js";
-import {
-  RemoteSyncDialogs,
-  shouldShowRemoteSyncActions,
-  useRemoteSyncDialogIntent,
-} from "@/settings/RemoteSyncActions.js";
 
 type PluginTabTarget = "plugins" | "mcps" | "skills" | "commands";
 type PluginTab = Exclude<PluginTabTarget, "commands">;
@@ -169,7 +158,6 @@ function PluginList({
     target?.workspaceIdentity,
     target?.remoteTarget,
   );
-  const baseServices = useBaseWorkspaceServices();
   // Scope 可选择非激活 workspace，若继续从当前 ServiceProvider 取服务，
   // 会把 B 的路径发往 A 的 host。插件读写必须和 Scope target 共用同一服务解析结果。
   const { pluginManagementService } = targetServiceResolution.services;
@@ -197,33 +185,7 @@ function PluginList({
   const [pluginOptionsDrafts, setPluginOptionsDrafts] = useState<
     Record<string, Record<string, PluginOptionDraftValue>>
   >({});
-  // 设置页重构后只保留了 Plugin 管理列表，漏掉了旧版插件页的远端同步入口。
-  // 同步目标必须沿用当前 Scope 的 target services，不能回退到激活 workspace 的 host。
-  const connectedRemoteSyncTarget =
-    targetServiceResolution.rpcReady &&
-    shouldShowRemoteSyncActions({
-      remoteSessionId: target?.remoteSessionId,
-      remoteTarget: target?.remoteTarget,
-      clientMode: isWebRemoteControl ? "web-remote-replayable" : "desktop-continuous",
-      hasLocalSourceService: Boolean(baseServices.pluginSyncService),
-    }) &&
-    target?.workspacePath
-      ? target.remoteTarget
-      : null;
-  // 设置页重构时只迁移了插件远程同步操作，遗漏了当前远端工作区提示，
-  // 用户无法确认插件列表实际对应的是哪个远程目标。
-  const remotePluginSyncTargetLabel = connectedRemoteSyncTarget
-    ? formatRemoteSkillSyncTarget(connectedRemoteSyncTarget, target?.workspacePath ?? "")
-    : "";
   const targetKey = target ? workspaceKey(target) : "";
-  const pluginSyncTargetKey = target
-    ? `${targetKey}\u0000${target.remoteSessionId?.trim() ?? ""}`
-    : "";
-  const { open: remotePluginSyncOpen, setOpen: setRemotePluginSyncOpen } =
-    useRemoteSyncDialogIntent({
-      rpcReady: targetServiceResolution.rpcReady,
-      targetKey: pluginSyncTargetKey,
-    });
   const storeKey = currentWorkspaceIdentity?.trim() || currentWorkspacePath || "";
   const storeMatchesTarget = storeKey === targetKey && currentConfigScope === configScope;
   const storeItemById = useMemo(
@@ -790,25 +752,6 @@ function PluginList({
             </span>
           </h3>
           <div className="flex flex-wrap items-center gap-2">
-            {connectedRemoteSyncTarget ? (
-              <ControlHintTooltip
-                title={intl.formatMessage({
-                  id: "settings.plugins.remoteSync.open",
-                })}
-              >
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-md"
-                  aria-label={intl.formatMessage({
-                    id: "settings.plugins.remoteSync.open",
-                  })}
-                  onClick={() => setRemotePluginSyncOpen(true)}
-                >
-                  <UploadCloud className="size-3.5" aria-hidden="true" />
-                </Button>
-              </ControlHintTooltip>
-            ) : null}
             <SettingsResourceHeaderActions onRefresh={() => void refreshAfterPluginChange()} />
             {configScope === "user" ? (
               <>
@@ -836,14 +779,6 @@ function PluginList({
             data-testid="plugin-settings-workspace-scope-hint"
           >
             {intl.formatMessage({ id: "settings.plugins.scope.workspaceHint" })}
-          </div>
-        ) : null}
-        {connectedRemoteSyncTarget ? (
-          <div className="rounded-lg border border-border bg-card px-3 py-2 text-ui-base text-foreground-subtle">
-            {intl.formatMessage(
-              { id: "settings.plugins.remoteContext" },
-              { target: remotePluginSyncTargetLabel },
-            )}
           </div>
         ) : null}
         {!target ? (
@@ -913,30 +848,6 @@ function PluginList({
         pending={uninstall.uninstalling}
         onCancel={uninstall.cancelUninstall}
         onConfirm={() => void uninstall.confirmUninstall()}
-      />
-      <RemoteSyncDialogs
-        canSyncSkills={false}
-        canSyncMcp={false}
-        canSyncPlugins={Boolean(connectedRemoteSyncTarget && target?.workspacePath)}
-        skillOpen={false}
-        mcpOpen={false}
-        pluginOpen={remotePluginSyncOpen}
-        onSkillOpenChange={() => {}}
-        onMcpOpenChange={() => {}}
-        onPluginOpenChange={setRemotePluginSyncOpen}
-        localPluginSyncService={baseServices.pluginSyncService}
-        remotePluginSyncService={targetServiceResolution.services.pluginSyncService}
-        localZCodeAgentService={baseServices.zcodeAgentService}
-        remoteZCodeAgentService={targetServiceResolution.services.zcodeAgentService}
-        remoteTarget={connectedRemoteSyncTarget}
-        skillWorkspacePath=""
-        mcpWorkspacePath=""
-        pluginWorkspacePath={target?.workspacePath ?? ""}
-        pluginLocalWorkspacePath={target?.localWorkspacePath}
-        workspaceIdentity={target?.workspaceIdentity}
-        onSkillsSynced={() => {}}
-        onMcpSynced={() => {}}
-        onPluginsSynced={refreshAfterPluginChange}
       />
     </section>
   );
@@ -1319,8 +1230,6 @@ export function PluginsSection({
                 workspaceIdentity={mcpTarget.workspaceIdentity}
                 remoteSessionId={mcpTarget.remoteSessionId}
                 remoteTarget={mcpTarget.remoteTarget}
-                localWorkspacePath={mcpTarget.localWorkspacePath}
-                isWebRemoteControl={isWebRemoteControl}
                 scopeFilter={effectiveMcpScopeKey === "user" ? "user" : "workspace"}
                 parentScopeKey={selectedScopeKey}
                 workspaceTabs={workspaceTabs}
@@ -1350,7 +1259,6 @@ export function PluginsSection({
                 workspaceIdentity={target.workspaceIdentity}
                 remoteSessionId={target.remoteSessionId}
                 remoteTarget={target.remoteTarget}
-                isWebRemoteControl={isWebRemoteControl}
                 scopeFilter={selectedScope.kind === "user" ? "user" : "workspace"}
                 searchQuery={searchQueries.skills}
                 onCreateTask={onCreateTask}

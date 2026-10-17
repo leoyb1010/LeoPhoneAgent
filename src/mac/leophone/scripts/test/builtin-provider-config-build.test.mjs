@@ -226,14 +226,14 @@ test("real tsup config bundling retains helper location and embeds selected rele
   for (const environment of ["test", "production"]) {
     process.env.ZCODE_ENV = environment;
     const expected = await loadBuiltinProviderConfig();
-    for (const packageName of ["server", "zcode-server-cli", "desktop"]) {
+    for (const packageName of ["zcode-server-cli", "desktop"]) {
       const filepath = resolve(repositoryRoot, "packages", packageName, "tsup.config.ts");
       const { mod } = await bundleRequire({ filepath, cwd: dirname(filepath), format: "esm" });
       if (packageName === "desktop") {
         assert.equal(JSON.parse(mod.default[0].define.__ZCODE_ENV__), environment);
         continue;
       }
-      const defines = mod.SERVER_HTTP_DEFINES ?? mod.SERVER_CLI_DEFINES;
+      const defines = mod.SERVER_CLI_DEFINES;
       const result = await build({
         stdin: { contents: "export default __ZCODE_BUILTIN_PROVIDER_CONFIG_JSON__;" },
         define: defines,

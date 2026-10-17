@@ -4,10 +4,8 @@ import { describe, expect, it } from "vitest";
 // Commands/Hooks/Subagents/Memory 的头部纯图标按钮已收进共享组件
 // SettingsResourceHeaderActions（icon-md）；仍自带图标的页面沿用 icon-lg。
 const selfRenderedIconFiles = {
-  "McpSettingsSection.tsx": 1,
   "PluginStorePage.tsx": 2,
   "PluginStoreListView.tsx": 1,
-  "SkillsSection.tsx": 1,
 } as const;
 
 const delegatingSections = [

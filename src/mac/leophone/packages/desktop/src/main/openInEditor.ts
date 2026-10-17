@@ -2,10 +2,8 @@ import { execFile } from "node:child_process";
 import { statSync } from "node:fs";
 import { shell } from "electron";
 import type { OpenInEditorOptions, OpenInEditorRemoteTarget } from "@zcode/shared";
-import { listWSLDistros } from "@zcode/server/remote/wsl-detect.js";
 import { getEditorDefsForCurrentPlatform, resolveEditorDefAppPath } from "./editors.js";
 import { logger } from "./logger.js";
-import { isDelegatedWindowsExplorerExit } from "./windowsExplorerDelegation.js";
 
 type PathKind = "file" | "directory" | "unknown";
 
@@ -60,36 +58,6 @@ function encodeRemotePath(path: string): string {
     .join("/");
 }
 
-async function resolveWslDistroName(
-  target: Extract<OpenInEditorRemoteTarget, { kind: "wsl" }>,
-): Promise<string | null> {
-  const explicitDistro = target.distro?.trim();
-  if (explicitDistro) {
-    return explicitDistro;
-  }
-
-  try {
-    const distros = await listWSLDistros();
-    return distros.find((distro) => distro.isDefault)?.name ?? distros[0]?.name ?? null;
-  } catch (error) {
-    logger.warn("[editors] 解析默认 WSL distro 失败", {
-      error: stringifyError(error),
-    });
-    return null;
-  }
-}
-
-function buildWslUncPathCandidates(path: string, distroName: string): string[] {
-  const normalizedPath = normalizeRemotePath(path);
-  const suffix = normalizedPath
-    .split("/")
-    .filter((segment) => segment.length > 0)
-    .join("\\");
-  const pathSuffix = suffix ? `\\${suffix}` : "";
-
-  return [`\\\\wsl.localhost\\${distroName}${pathSuffix}`, `\\\\wsl$\\${distroName}${pathSuffix}`];
-}
-
 function resolveVSCodeSshRemoteAuthority(
   target: Extract<OpenInEditorRemoteTarget, { kind: "ssh" }>,
 ): string {
@@ -112,20 +80,6 @@ function buildVSCodeSshFolderUri(
   // 直接拼进 URI 会被解析成 userinfo/host/port，必须按 Remote-SSH authority 组件整体编码。
   const encodedAuthority = encodeURIComponent(resolveVSCodeSshRemoteAuthority(target));
   return `vscode-remote://ssh-remote+${encodedAuthority}${encodeRemotePath(path)}`;
-}
-
-async function buildVSCodeWslFolderUri(
-  path: string,
-  target: Extract<OpenInEditorRemoteTarget, { kind: "wsl" }>,
-): Promise<{ uri?: string; error?: string }> {
-  const distroName = await resolveWslDistroName(target);
-  if (!distroName) {
-    return { error: "missing WSL distro for VS Code Remote-WSL" };
-  }
-
-  return {
-    uri: `vscode-remote://wsl+${encodeURIComponent(distroName)}${encodeRemotePath(path)}`,
-  };
 }
 
 async function openVSCodeRemoteSshFolder(
@@ -186,101 +140,6 @@ async function openVSCodeRemoteSshFolder(
   }
 }
 
-async function openVSCodeRemoteWslFolder(
-  editorId: string,
-  appPath: string,
-  command: string | null,
-  path: string,
-  remoteTarget: Extract<OpenInEditorRemoteTarget, { kind: "wsl" }>,
-  pathKind: OpenInEditorOptions["pathKind"],
-): Promise<OpenInEditorResult> {
-  const folderUri = await buildVSCodeWslFolderUri(path, remoteTarget);
-  if (!folderUri.uri) {
-    return { success: false, error: folderUri.error ?? "invalid WSL folder URI" };
-  }
-
-  const args = [pathKind === "file" ? "--file-uri" : "--folder-uri", folderUri.uri];
-
-  if (command) {
-    try {
-      await execFileAsync(command, args);
-      return { success: true };
-    } catch (error) {
-      if (process.platform === "win32") {
-        return openWindowsEditor(editorId, appPath, args, error);
-      }
-
-      try {
-        await execFileAsync("open", ["-a", appPath, "--args", ...args]);
-        return { success: true };
-      } catch (fallbackError) {
-        logger.warn("[editors] 打开 VS Code WSL 工作区失败", {
-          editorId,
-          path,
-          args,
-          error: stringifyError(error),
-          fallbackError: stringifyError(fallbackError),
-        });
-        return { success: false, error: stringifyError(fallbackError) };
-      }
-    }
-  }
-
-  try {
-    if (process.platform === "win32") {
-      await execFileAsync(appPath, args);
-    } else {
-      await execFileAsync("open", ["-a", appPath, "--args", ...args]);
-    }
-    return { success: true };
-  } catch (error) {
-    logger.warn("[editors] 打开 VS Code WSL 工作区失败", {
-      editorId,
-      path,
-      args,
-      error: stringifyError(error),
-    });
-    return { success: false, error: stringifyError(error) };
-  }
-}
-
-async function openWslPathInExplorer(
-  appPath: string,
-  path: string,
-  remoteTarget: Extract<OpenInEditorRemoteTarget, { kind: "wsl" }>,
-  pathKind: OpenInEditorOptions["pathKind"],
-): Promise<OpenInEditorResult> {
-  const distroName = await resolveWslDistroName(remoteTarget);
-  if (!distroName) {
-    return { success: false, error: "missing WSL distro for Windows Explorer" };
-  }
-
-  const candidates = buildWslUncPathCandidates(path, distroName);
-  let lastError = "";
-  for (const candidate of candidates) {
-    const args = pathKind === "file" ? ["/select,", candidate] : [candidate];
-    try {
-      await execFileAsync(appPath, args);
-      return { success: true };
-    } catch (error) {
-      // explorer.exe 会把请求委托给已运行的资源管理器进程，窗口已经打开时
-      // 子进程仍可能以 code=1 退出。不能只按数字退出码吞错；必须同时核对 Windows
-      // 平台、进程状态、stderr 和本次完整命令，避免路径/权限/UNC 错误跳过候选 fallback。
-      if (await isDelegatedWindowsExplorerExit(error, appPath, args, candidate)) {
-        return { success: true };
-      }
-      lastError = stringifyError(error);
-    }
-  }
-
-  logger.warn("[editors] 打开 WSL 工作区资源管理器失败", {
-    path,
-    candidates,
-    error: lastError,
-  });
-  return { success: false, error: lastError || "failed to open WSL path in Explorer" };
-}
-
 async function openWindowsEditor(
   editorId: string,
   appPath: string,
@@ -327,25 +186,6 @@ export async function openInEditor(
       options.remoteTarget,
       options.pathKind,
     );
-  }
-
-  if (options?.remoteTarget?.kind === "wsl" && isVSCodeEditor(editorId)) {
-    // WSL 工作区的 workspacePath 是 Linux 路径，不能直接传给 Windows 侧 `code`。
-    // VS Code Remote-WSL 需要 folder URI，才能在指定 distro 内打开同一个 Linux 目录。
-    return openVSCodeRemoteWslFolder(
-      editorId,
-      appPath,
-      def.command,
-      path,
-      options.remoteTarget,
-      options.pathKind,
-    );
-  }
-
-  if (options?.remoteTarget?.kind === "wsl" && editorId === "explorer") {
-    // Windows 资源管理器无法理解 `/home/...` 这类 WSL 内部路径。
-    // 仅在打开宿主应用的边界把路径转成 UNC，远端 host / agent 仍保留 Linux 路径语义。
-    return openWslPathInExplorer(appPath, path, options.remoteTarget, options.pathKind);
   }
 
   const pathKind = detectPathKind(path);

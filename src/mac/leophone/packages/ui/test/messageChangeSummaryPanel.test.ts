@@ -51,10 +51,7 @@ const mockBroadcastService: IBroadcastService = {
 const mockPlatform = {
   selectDirectory: async () => null,
   selectFile: async () => null,
-  onRemoteConnectionLog: () => () => {},
-  onRemoteSessionClosed: () => () => {},
   activateOrSetWorkspace: async () => ({ activated: false }),
-  connectRemote: async () => ({ success: true }),
   startWebRemoteControl: async () => ({
     status: "running" as const,
     sessionId: "session-1",
@@ -64,11 +61,6 @@ const mockPlatform = {
   }),
   stopWebRemoteControl: async () => {},
   getWebRemoteControlStatus: async () => ({ status: "idle" as const }),
-  disposeRemoteSession: async () => {},
-  isDockerAvailable: async () => false,
-  listWSLDistros: async () => [],
-  listDockerContainers: async () => [],
-  listSSHConfigAliases: async () => [],
   openExternal: () => {},
   openFeedback: async () => {},
   openCommunity: async () => {},

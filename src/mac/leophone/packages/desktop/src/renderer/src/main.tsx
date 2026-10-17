@@ -10,15 +10,13 @@ import {
   UpdateStatusWindowRoot,
   ZCodeIntlProvider,
   registerBaseWorkspaceServices,
-  registerRemoteWorkspaceSession,
-  createRemoteWorkspaceDisconnectedError,
   installDocumentHiddenMotionPause,
   playTaskNotificationSound,
   setStreamClientId,
   setReactErrorArmsReporter,
 } from "@zcode/ui";
 import "@zcode/ui/styles.css";
-import { connectViaMessagePort, createMessagePortServiceConnection } from "@zcode/client";
+import { connectViaMessagePort } from "@zcode/client";
 import {
   InternalChannels,
   databaseStartupStateSchema,
@@ -30,20 +28,10 @@ import {
   DEFAULT_LOCALE,
 } from "@zcode/shared";
 import type { Locale } from "@zcode/shared";
-import type { IServiceAccessor } from "@zcode/services";
 import { syncAppTelemetryContext } from "../appTelemetryBridge.js";
 import { createDesktopPlatform } from "./desktopPlatform.js";
 import { startPerformanceTimelineCleanup } from "./performanceTimelineCleanup.js";
 import { initializeDesktopUserActionTrace } from "./userActionTraceBootstrap.js";
-import {
-  buildRemoteWorkspaceSessionServices,
-  buildServerRemoteWorkspaceSessionServices,
-} from "./remoteWorkspaceSessionServices.js";
-import {
-  notifyRemoteWorkspaceServicePortReady,
-  parseRemoteWorkspaceServicePortMessage,
-  type RemoteWorkspaceServicePortRegistration,
-} from "./remoteWorkspaceServicePortBridge.js";
 
 type DesktopRendererImportMetaEnv = {
   VITE_ZCODE_E2E_STORE_BRIDGE?: string;
@@ -148,8 +136,6 @@ const initialLocale: Locale =
   initialLocaleFlag === "zh-CN" || initialLocaleFlag === "en-US"
     ? initialLocaleFlag
     : DEFAULT_LOCALE;
-let baseServicesForRemoteSessions: IServiceAccessor | null = null;
-const pendingRemoteWorkspaceServicePorts: RemoteWorkspaceServicePortRegistration[] = [];
 
 const desktopPlatform = createDesktopPlatform({
   isLocalDevelopmentRuntime,
@@ -165,7 +151,7 @@ initializeDesktopUserActionTrace({
  *
  * MessagePort 不能经过 contextBridge（会丢失原生方法），
  * 所以 preload 用 window.postMessage + transfer 把 port 原样传递到 renderer。
- * 本地窗口的 port 来自 utilityProcess，远程窗口也一样，renderer 无需区分。
+ * port 来自窗口的 local Host utilityProcess。
  */
 // 之前用匿名函数注册 addEventListener("message")，reload/HMR 时会重复注册，
 // 导致多次 createRoot 在同一 DOM 节点上挂载。用 flag 防止重复初始化。
@@ -226,40 +212,6 @@ const firstStartupStateTimer =
         renderDatabaseStartup();
       }, 30_000);
 
-function registerRemoteWorkspaceServicePort(params: RemoteWorkspaceServicePortRegistration) {
-  if (!baseServicesForRemoteSessions) {
-    return;
-  }
-
-  const remoteConnection = createMessagePortServiceConnection(params.port);
-  const remoteServices = remoteConnection.services;
-  const services =
-    params.target.kind === "server"
-      ? buildServerRemoteWorkspaceSessionServices(baseServicesForRemoteSessions, remoteServices)
-      : buildRemoteWorkspaceSessionServices(baseServicesForRemoteSessions, remoteServices);
-  registerRemoteWorkspaceSession({
-    sessionId: params.sessionId,
-    target: params.target,
-    services,
-    dispose: (reason) =>
-      remoteConnection.dispose(reason ?? createRemoteWorkspaceDisconnectedError()),
-  });
-  // canonical workspace bind 会换代 remote-scoped port。
-  // 只有 store 已注册新 services 后才能确认 ready，bind IPC 返回后的调用方才可重新读取并使用新代 services。
-  notifyRemoteWorkspaceServicePortReady(params);
-}
-
-function flushPendingRemoteWorkspaceServicePorts(): void {
-  if (!baseServicesForRemoteSessions || pendingRemoteWorkspaceServicePorts.length === 0) {
-    return;
-  }
-
-  const pending = pendingRemoteWorkspaceServicePorts.splice(0);
-  for (const entry of pending) {
-    registerRemoteWorkspaceServicePort(entry);
-  }
-}
-
 function StartupReadyNotifier() {
   useEffect(() => {
     // T5:React 首次 commit。供启动分阶段耗时计算 react_commit 段。
@@ -290,19 +242,6 @@ function handleServicePortMessage(event: MessageEvent): void {
     return;
   }
 
-  const remoteWorkspacePort = parseRemoteWorkspaceServicePortMessage(event);
-  if (remoteWorkspacePort) {
-    if (!baseServicesForRemoteSessions) {
-      // renderer reload 时 main 可能先补投 remote port，再投本地 ServicePort。
-      // 早到的 remote port 不能直接丢弃，否则 SSH host 仍存活但 UI 会进入断连代理。
-      pendingRemoteWorkspaceServicePorts.push(remoteWorkspacePort);
-      return;
-    }
-
-    registerRemoteWorkspaceServicePort(remoteWorkspacePort);
-    return;
-  }
-
   if (
     event.source !== window ||
     event.data?.type !== InternalChannels.ServicePort ||
@@ -318,9 +257,7 @@ function handleServicePortMessage(event: MessageEvent): void {
 function initializeBusinessRoot(port: MessagePort): void {
   appInitialized = true;
   const services = connectViaMessagePort(port);
-  baseServicesForRemoteSessions = services;
   registerBaseWorkspaceServices(services);
-  flushPendingRemoteWorkspaceServicePorts();
   const settingService = supportsSettings ? services.settingService : undefined;
 
   syncAppTelemetryContext({

@@ -139,7 +139,6 @@ vi.mock("@/i18n/IntlProvider.js", () => ({
           "settings.skills.create.open": "New Skill",
           "settings.skills.import.open": "Import skills from external agents",
           "settings.skills.remoteContext": `Current remote workspace: ${values?.target ?? ""}`,
-          "settings.skills.remoteSync.open": "Sync Skill",
           "settings.skills.import.title": "Import external agent skills",
           "settings.skills.import.description": "Scan reusable skills.",
           "settings.skills.import.scanning": "Scanning importable skills...",
@@ -462,40 +461,6 @@ describe("SkillsSection", () => {
     await renderSkillsSection();
 
     expect(findButton("More actions")).toBeTruthy();
-  });
-
-  it("connected SSH workspace shows remote skill sync entry", async () => {
-    activeWorkspacePath = "/home/alice/project";
-    activeWorkspaceIdentity = "ssh://alice@dev.example.com/home/alice/project";
-    activeRemoteSessionId = "remote-session-1";
-    activeRemoteTarget = {
-      kind: "ssh",
-      host: "dev.example.com",
-      username: "alice",
-      port: 22,
-    };
-
-    const html = await renderSkillsSection();
-
-    expect(html).toContain("dev.example.com");
-    expect(findButton("Sync Skill")).toBeTruthy();
-  });
-
-  it("connected WSL workspace shows remote skill sync entry", async () => {
-    activeWorkspacePath = "/home/alice/project";
-    activeWorkspaceIdentity = "remote:wsl:Ubuntu:/home/alice/project";
-    activeRemoteSessionId = "remote-session-wsl";
-    activeRemoteTarget = {
-      kind: "wsl",
-      distro: "Ubuntu",
-      user: "alice",
-    };
-
-    const html = await renderSkillsSection();
-
-    expect(html).toContain("WSL");
-    expect(html).toContain("Ubuntu");
-    expect(findButton("Sync Skill")).toBeTruthy();
   });
 
   it("技能详情弹窗会展示完整长描述和路径", async () => {

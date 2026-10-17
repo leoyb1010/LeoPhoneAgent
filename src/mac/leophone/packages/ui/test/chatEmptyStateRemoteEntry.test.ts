@@ -183,57 +183,6 @@ describe("ChatEmptyWorkspacePreviewMenu", () => {
     ).toEqual(["alpha", "beta", "gamma", "delta", "epsilon"]);
   });
 
-  it("工作区搜索匹配名称、路径和远程目标信息", async () => {
-    const {
-      filterVisibleWorkspaceMenuTabs,
-    } = await import("../src/ChatEmptyState.js");
-    const tabs = [
-      {
-        workspacePath: "/repo/alpha",
-        label: "Alpha",
-      },
-      {
-        workspacePath: "/remote/project",
-        label: "Remote Project",
-        remoteSessionId: "remote-1",
-        remoteTarget: {
-          kind: "ssh",
-          host: "dev.example.com",
-          port: 2222,
-          username: "alice",
-        },
-      },
-      {
-        workspacePath: "/repo/by-path",
-        label: "Path Match",
-      },
-    ] as const;
-
-    expect(
-      filterVisibleWorkspaceMenuTabs({
-        workspaceTabs: tabs,
-        homeWorkspaceLabel: "Home",
-        searchQuery: "alpha",
-      }).map((tab) => tab.label),
-    ).toEqual(["Alpha"]);
-
-    expect(
-      filterVisibleWorkspaceMenuTabs({
-        workspaceTabs: tabs,
-        homeWorkspaceLabel: "Home",
-        searchQuery: "by-path",
-      }).map((tab) => tab.label),
-    ).toEqual(["Path Match"]);
-
-    expect(
-      filterVisibleWorkspaceMenuTabs({
-        workspaceTabs: tabs,
-        homeWorkspaceLabel: "Home",
-        searchQuery: "dev.example.com",
-      }).map((tab) => tab.label),
-    ).toEqual(["Remote Project"]);
-  });
-
   it("工作区搜索没有匹配项时保留新增工作区入口", async () => {
     const {
       filterVisibleWorkspaceMenuTabs,
@@ -295,12 +244,6 @@ describe("ChatEmptyWorkspacePreviewMenu", () => {
     expect(getScratchWorkspaceNameErrorKind("bad/name")).toBe("separator");
     expect(getScratchWorkspaceNameErrorKind("bad\\name")).toBe("separator");
     expect(getScratchWorkspaceNameErrorKind("demo")).toBeNull();
-  });
-
-  it("在允许远程入口时展示远程连接项", async () => {
-    const html = await renderMenu(true);
-
-    expect(html).toContain("remote.trigger");
   });
 
   it("workspace 菜单提供不在项目中工作入口", async () => {

@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 const {
   accessMock,
   execFileMock,
-  listWSLDistrosMock,
   openPathMock,
   showItemInFolderMock,
   loggerWarnMock,
@@ -14,7 +13,6 @@ const {
   vi.hoisted(() => ({
     accessMock: vi.fn(),
     execFileMock: vi.fn(),
-    listWSLDistrosMock: vi.fn(),
     openPathMock: vi.fn(),
     showItemInFolderMock: vi.fn(),
     loggerWarnMock: vi.fn(),
@@ -33,10 +31,6 @@ vi.mock("electron", () => ({
     openPath: openPathMock,
     showItemInFolder: showItemInFolderMock,
   },
-}));
-
-vi.mock("@zcode/server/remote/wsl-detect.js", () => ({
-  listWSLDistros: listWSLDistrosMock,
 }));
 
 vi.mock("../src/main/editors.js", () => ({
@@ -91,11 +85,9 @@ describe("openInEditor", () => {
     accessMock.mockReset();
     accessMock.mockResolvedValue(undefined);
     execFileMock.mockReset();
-    listWSLDistrosMock.mockReset();
     openPathMock.mockReset();
     showItemInFolderMock.mockReset();
     loggerWarnMock.mockReset();
-    listWSLDistrosMock.mockResolvedValue([{ name: "Ubuntu", isDefault: true }]);
     openPathMock.mockResolvedValue("");
   });
 
@@ -229,307 +221,6 @@ describe("openInEditor", () => {
         "vscode-remote://ssh-remote+asset01%40root%40192.168.100.166%3A2222/root/demo-project",
       ],
       expect.any(Function),
-    );
-  });
-
-  it("WSL 远程工作区用 VS Code 打开时应走 Remote-WSL folder URI", async () => {
-    execFileMock.mockImplementation(
-      (_file: string, _args: string[], callback: (error: Error | null) => void) => {
-        callback(null);
-      },
-    );
-
-    const result = await openInEditor("vscode", "/home/demo/My Repo", {
-      remoteTarget: {
-        kind: "wsl",
-        distro: "Ubuntu 22.04",
-      },
-    });
-
-    expect(result).toEqual({ success: true });
-    expect(execFileMock).toHaveBeenCalledWith(
-      "code",
-      [
-        "--folder-uri",
-        "vscode-remote://wsl+Ubuntu%2022.04/home/demo/My%20Repo",
-      ],
-      expect.any(Function),
-    );
-  });
-
-  it("WSL 远程文件用 VS Code 打开时应走 Remote-WSL file URI", async () => {
-    execFileMock.mockImplementation(
-      (_file: string, _args: string[], callback: (error: Error | null) => void) => {
-        callback(null);
-      },
-    );
-
-    const result = await openInEditor("vscode", "/home/demo/My Repo/src/index.ts", {
-      pathKind: "file",
-      remoteTarget: {
-        kind: "wsl",
-        distro: "Ubuntu 22.04",
-      },
-    });
-
-    expect(result).toEqual({ success: true });
-    expect(execFileMock).toHaveBeenCalledWith(
-      "code",
-      [
-        "--file-uri",
-        "vscode-remote://wsl+Ubuntu%2022.04/home/demo/My%20Repo/src/index.ts",
-      ],
-      expect.any(Function),
-    );
-  });
-
-  it("WSL 远程工作区缺少 distro 时应使用默认 distro 打开 VS Code", async () => {
-    execFileMock.mockImplementation(
-      (_file: string, _args: string[], callback: (error: Error | null) => void) => {
-        callback(null);
-      },
-    );
-
-    const result = await openInEditor("vscode", "/home/demo/repo", {
-      remoteTarget: {
-        kind: "wsl",
-      },
-    });
-
-    expect(result).toEqual({ success: true });
-    expect(listWSLDistrosMock).toHaveBeenCalledTimes(1);
-    expect(execFileMock).toHaveBeenCalledWith(
-      "code",
-      ["--folder-uri", "vscode-remote://wsl+Ubuntu/home/demo/repo"],
-      expect.any(Function),
-    );
-    expect(openPathMock).not.toHaveBeenCalled();
-  });
-
-  it("WSL 远程工作区缺少 distro 且检测失败时不应裸传 Linux 路径给 VS Code", async () => {
-    listWSLDistrosMock.mockRejectedValueOnce(new Error("wsl unavailable"));
-
-    const result = await openInEditor("vscode", "/home/demo/repo", {
-      remoteTarget: {
-        kind: "wsl",
-      },
-    });
-
-    expect(result).toEqual({
-      success: false,
-      error: "missing WSL distro for VS Code Remote-WSL",
-    });
-    expect(listWSLDistrosMock).toHaveBeenCalledTimes(1);
-    expect(execFileMock).not.toHaveBeenCalled();
-    expect(openPathMock).not.toHaveBeenCalled();
-    expect(loggerWarnMock).toHaveBeenCalledWith(
-      "[editors] 解析默认 WSL distro 失败",
-      { error: "wsl unavailable" },
-    );
-  });
-
-  it("WSL 远程工作区用资源管理器打开时应通过 explorer.exe 打开 wsl.localhost UNC", async () => {
-    execFileMock.mockImplementation(
-      (_file: string, _args: string[], callback: (error: Error | null) => void) => {
-        callback(null);
-      },
-    );
-
-    const result = await openInEditor("explorer", "/home/demo/My Repo", {
-      remoteTarget: {
-        kind: "wsl",
-        distro: "Ubuntu",
-      },
-    });
-
-    expect(result).toEqual({ success: true });
-    expect(execFileMock).toHaveBeenCalledTimes(1);
-    expect(execFileMock).toHaveBeenCalledWith(
-      "C:/Windows/explorer.exe",
-      ["\\\\wsl.localhost\\Ubuntu\\home\\demo\\My Repo"],
-      expect.any(Function),
-    );
-    expect(openPathMock).not.toHaveBeenCalled();
-  });
-
-  it("WSL 远程文件用资源管理器定位时应选择对应 UNC 文件", async () => {
-    execFileMock.mockImplementation(
-      (_file: string, _args: string[], callback: (error: Error | null) => void) => {
-        callback(null);
-      },
-    );
-
-    const result = await openInEditor("explorer", "/home/demo/src/index.ts", {
-      pathKind: "file",
-      remoteTarget: {
-        kind: "wsl",
-        distro: "Ubuntu",
-      },
-    });
-
-    expect(result).toEqual({ success: true });
-    expect(execFileMock).toHaveBeenCalledWith(
-      "C:/Windows/explorer.exe",
-      ["/select,", "\\\\wsl.localhost\\Ubuntu\\home\\demo\\src\\index.ts"],
-      expect.any(Function),
-    );
-  });
-
-  it("WSL Explorer 已委托打开但返回数字退出码时仍应视为成功", async () => {
-    setProcessPlatform("win32");
-    const command =
-      '"C:/Windows/explorer.exe" /select, "\\\\wsl.localhost\\Ubuntu\\home\\demo\\src\\index.ts"';
-    execFileMock.mockImplementation(
-      (
-        _file: string,
-        _args: string[],
-        callback: (error: Error | null) => void,
-      ) => {
-        callback(
-          Object.assign(new Error(`Command failed: ${command}`), {
-            code: 1,
-            killed: false,
-            signal: null,
-            cmd: command,
-            stderr: "",
-          }),
-        );
-      },
-    );
-
-    const result = await openInEditor("explorer", "/home/demo/src/index.ts", {
-      pathKind: "file",
-      remoteTarget: {
-        kind: "wsl",
-        distro: "Ubuntu",
-      },
-    });
-
-    expect(result).toEqual({ success: true });
-    expect(execFileMock).toHaveBeenCalledTimes(1);
-    expect(loggerWarnMock).not.toHaveBeenCalled();
-  });
-
-  it("WSL Explorer 数字退出码包含路径错误时应继续尝试 wsl$", async () => {
-    setProcessPlatform("win32");
-    accessMock.mockRejectedValueOnce(new Error("network path not found"));
-    execFileMock.mockImplementation(
-      (_file: string, args: string[], callback: (error: Error | null) => void) => {
-        const candidate = args.at(-1) ?? "";
-        if (candidate.startsWith("\\\\wsl.localhost")) {
-          const command = `"C:/Windows/explorer.exe" "${candidate}"`;
-          callback(
-            Object.assign(new Error(`Command failed: ${command}`), {
-              code: 1,
-              killed: false,
-              signal: null,
-              cmd: command,
-              stderr: "",
-            }),
-          );
-          return;
-        }
-        callback(null);
-      },
-    );
-
-    const result = await openInEditor("explorer", "/workspace/demo", {
-      pathKind: "directory",
-      remoteTarget: {
-        kind: "wsl",
-        distro: "Ubuntu",
-      },
-    });
-
-    expect(result).toEqual({ success: true });
-    expect(accessMock).toHaveBeenCalledWith(
-      "\\\\wsl.localhost\\Ubuntu\\workspace\\demo",
-    );
-    expect(execFileMock).toHaveBeenCalledTimes(2);
-    expect(execFileMock).toHaveBeenNthCalledWith(
-      2,
-      "C:/Windows/explorer.exe",
-      ["\\\\wsl$\\Ubuntu\\workspace\\demo"],
-      expect.any(Function),
-    );
-  });
-
-  it("WSL 远程工作区资源管理器应在 wsl.localhost 失败后回退到 wsl$ UNC", async () => {
-    execFileMock.mockImplementation(
-      (_file: string, args: string[], callback: (error: Error | null) => void) => {
-        callback(
-          args[0]?.startsWith("\\\\wsl.localhost")
-            ? new Error("cannot open wsl.localhost")
-            : null,
-        );
-      },
-    );
-
-    const result = await openInEditor("explorer", "/workspace/demo", {
-      remoteTarget: {
-        kind: "wsl",
-        distro: "Ubuntu",
-      },
-    });
-
-    expect(result).toEqual({ success: true });
-    expect(execFileMock).toHaveBeenNthCalledWith(
-      1,
-      "C:/Windows/explorer.exe",
-      ["\\\\wsl.localhost\\Ubuntu\\workspace\\demo"],
-      expect.any(Function),
-    );
-    expect(execFileMock).toHaveBeenNthCalledWith(
-      2,
-      "C:/Windows/explorer.exe",
-      ["\\\\wsl$\\Ubuntu\\workspace\\demo"],
-      expect.any(Function),
-    );
-    expect(openPathMock).not.toHaveBeenCalled();
-  });
-
-  it("WSL 远程工作区资源管理器两个 UNC 候选都失败时应返回错误并记录日志", async () => {
-    execFileMock.mockImplementation(
-      (_file: string, args: string[], callback: (error: Error | null) => void) => {
-        callback(new Error(`cannot open ${args[0] ?? "unknown"}`));
-      },
-    );
-
-    const result = await openInEditor("explorer", "/workspace/demo", {
-      remoteTarget: {
-        kind: "wsl",
-        distro: "Ubuntu",
-      },
-    });
-
-    expect(result).toEqual({
-      success: false,
-      error: "cannot open \\\\wsl$\\Ubuntu\\workspace\\demo",
-    });
-    expect(execFileMock).toHaveBeenCalledTimes(2);
-    expect(execFileMock).toHaveBeenNthCalledWith(
-      1,
-      "C:/Windows/explorer.exe",
-      ["\\\\wsl.localhost\\Ubuntu\\workspace\\demo"],
-      expect.any(Function),
-    );
-    expect(execFileMock).toHaveBeenNthCalledWith(
-      2,
-      "C:/Windows/explorer.exe",
-      ["\\\\wsl$\\Ubuntu\\workspace\\demo"],
-      expect.any(Function),
-    );
-    expect(openPathMock).not.toHaveBeenCalled();
-    expect(loggerWarnMock).toHaveBeenCalledWith(
-      "[editors] 打开 WSL 工作区资源管理器失败",
-      {
-        path: "/workspace/demo",
-        candidates: [
-          "\\\\wsl.localhost\\Ubuntu\\workspace\\demo",
-          "\\\\wsl$\\Ubuntu\\workspace\\demo",
-        ],
-        error: "cannot open \\\\wsl$\\Ubuntu\\workspace\\demo",
-      },
     );
   });
 

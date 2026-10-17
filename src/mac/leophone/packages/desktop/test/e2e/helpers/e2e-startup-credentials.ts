@@ -10,8 +10,6 @@ const PERSONAL_PROVIDER_ONLY_SPEC_NAMES = new Set([
   "conversation-session-draft-model-switch-first-send.test.ts",
   "conversation-session-unbound-resume.test.ts",
   "conversation-session-v4-composer-toolbar.test.ts",
-  // SSH 配置同步用例只需 Personal 配置；假 OAuth 的 401 会在连接前遮住向导入口。
-  "conversation-session-ssh-provisioning-failure.test.ts",
 ]);
 
 // 这些 fork/goal/tool 场景也只使用本地回放 Provider；假 OAuth 会触发真实控制面

@@ -23,7 +23,6 @@ const forkIsolatedTests = [
   "packages/desktop/test/webRemoteControlTransport.test.ts",
   "packages/provider-node/test/builtin-provider-build.test.ts",
   "packages/provider-node/test/builtin-provider-test-config-sync.test.ts",
-  "packages/server/test/remoteDeploy.test.ts",
   // Bugfix: 该集成测试会启动数百个真实 Git 子进程；放在普通 threads 并发组会让
   // macOS 进程启动队列饥饿，表现为 git init 长时间停在 dyld_start。
   "packages/services/test/gitService.test.ts",
@@ -46,13 +45,12 @@ const forkIsolatedTests = [
 export default defineConfig({
   // 测试固定注入事件上报端点，使遥测上报链路在单测中可验证；真实构建由 scripts/build-time-config.mjs 决定。
   define: {
-    __ZCODE_TELEMETRY_REPORT_ENDPOINT__: JSON.stringify("https://zcode.z.ai/api/v1/event/report"),
+    __ZCODE_TELEMETRY_REPORT_ENDPOINT__: JSON.stringify("http://127.0.0.1:9/api/v1/event/report"),
   },
   resolve: {
     alias: {
       "@": resolve(__dirname, "packages/ui/src"),
       "@desktop": resolve(__dirname, "packages/desktop/src"),
-      "@web": resolve(__dirname, "packages/web/src"),
       // 间接 import desktopNetworkTelemetry 等的单测无需真实 ARMS；需 vi.fn 的用例在文件内 vi.mock 覆盖
       // Bugfix: 具体的 /browser 子路径必须排在包根别名前，否则会被根别名拼成不存在的 stub.ts/browser。
       "@arms/rum-electron/browser": resolve(

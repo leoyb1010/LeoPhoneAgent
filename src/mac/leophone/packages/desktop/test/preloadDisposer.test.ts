@@ -121,27 +121,6 @@ describe("preload IPC disposer", () => {
     });
   });
 
-  it("把 renderer 的 scoped attachment ready ACK 转发给 Main", async () => {
-    await loadPreload();
-    const messageHandler = vi
-      .mocked(window.addEventListener)
-      .mock.calls.find(([eventName]) => eventName === "message")?.[1] as EventListener | undefined;
-    expect(messageHandler).toBeDefined();
-
-    messageHandler?.({
-      source: window,
-      data: {
-        type: InternalChannels.ScopedServicePortReady,
-        sessionId: "remote-session-1",
-        attachmentId: "attachment-b",
-      },
-    } as unknown as Event);
-
-    expect(mockIpcSend).toHaveBeenCalledWith(InternalChannels.ScopedServicePortReady, {
-      sessionId: "remote-session-1",
-      attachmentId: "attachment-b",
-    });
-  });
   it("onNewTab 返回 disposer，调用后移除 ipcRenderer 监听", async () => {
     const api = await loadPreload();
     const callback = vi.fn();

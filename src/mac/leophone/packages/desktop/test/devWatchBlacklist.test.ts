@@ -8,7 +8,6 @@ const desktopPackageJson = JSON.parse(readFileSync(desktopPackageJsonPath, "utf8
 };
 
 const generatedWatchBlacklist = [
-  "mock-cdn/**",
   "bundled-agents/**",
   ".e2e-cache/**",
   ".e2e-artifacts/**",
@@ -18,7 +17,6 @@ const generatedWatchBlacklist = [
 const workspaceWatchRoots = [
   "src",
   "../services/src",
-  "../server/src",
   "../shared/src",
   "../rpc/src",
   "../client/src",
@@ -47,7 +45,7 @@ describe("desktop dev tsup watcher", () => {
     for (const scriptName of ["dev:runtime", "dev:local-cli"]) {
       const script = desktopPackageJson.scripts[scriptName] ?? "";
       expect(script).not.toMatch(
-        /--ignore-watch (?:mock-cdn|bundled-agents|\.e2e|dist-cua-helper)\/\*/u,
+        /--ignore-watch (?:bundled-agents|\.e2e|dist-cua-helper)\/\*/u,
       );
     }
   });

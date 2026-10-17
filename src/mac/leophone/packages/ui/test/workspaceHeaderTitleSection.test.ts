@@ -71,19 +71,6 @@ vi.mock("@/TaskActionMenuContent.js", () => ({
   TaskActionMenuContent: () => createElement("div", { "data-testid": "task-action-menu" }),
 }));
 
-vi.mock("@/settings/RemoteSkillSyncDialog.js", () => ({
-  RemoteSkillSyncDialog: () => createElement("div", { "data-testid": "remote-skill-sync-dialog" }),
-}));
-
-vi.mock("@/settings/RemoteMcpSyncDialog.js", () => ({
-  RemoteMcpSyncDialog: () => createElement("div", { "data-testid": "remote-mcp-sync-dialog" }),
-}));
-
-vi.mock("@/settings/RemotePluginSyncDialog.js", () => ({
-  RemotePluginSyncDialog: () =>
-    createElement("div", { "data-testid": "remote-plugin-sync-dialog" }),
-}));
-
 vi.mock("@/hooks/useConfirmDialog.js", () => ({
   useConfirmDialog: () => vi.fn(async () => true),
 }));
@@ -262,87 +249,4 @@ describe("WorkspaceHeaderTitleSection", () => {
     );
   });
 
-  it("uses the SSH alias suffix format for remote workspace context", async () => {
-    const { WorkspaceHeaderTitleSection } = await import("@/WorkspaceHeaderSections.js");
-
-    const html = renderToStaticMarkup(
-      createElement(WorkspaceHeaderTitleSection, {
-        workspaceAbsPath: "/root",
-        remoteSessionId: "remote-session-1",
-        workspaceIdentity: "remote:ssh:localhost:2223:root:/root",
-        remoteTarget: {
-          kind: "ssh",
-          host: "localhost",
-          port: 2223,
-          username: "root",
-          sshConfigAlias: "linux-arm64",
-        },
-        projectName: "root",
-        activeTaskTitle: "hello",
-        activeTaskId: "task-1",
-        activeTraceId: "trace-1",
-        activeSessionId: "session-1",
-        activeTaskProvider: "glm",
-        gitSummary: { isRepository: false },
-        gitDirtyFileCount: 0,
-        sessionLogPath: null,
-        nativeSessionLogProvider: null,
-        nativeSessionLogPath: null,
-        nativeSessionLogExists: false,
-        nativeSessionLogLoading: false,
-        providerWorkspaceConfigPath: null,
-        providerWorkspaceConfigExists: false,
-        providerWorkspaceConfigLoading: false,
-        workspaceHeaderState: { selectedProvider: "glm" },
-        selectedEditor: null,
-        onRefreshGit: vi.fn(),
-      }),
-    );
-
-    expect(html).toContain("root [SSH: linux-arm64]");
-    expect(html).toContain('data-icon="cloud"');
-    expect(html).not.toContain(">root</span><span");
-    expect(html).not.toContain(">localhost:2223</span>");
-  });
-
-  it("shows Skills and MCP sync actions for connected SSH workspace header menu", async () => {
-    const { WorkspaceHeaderTitleSection } = await import("@/WorkspaceHeaderSections.js");
-
-    const html = renderToStaticMarkup(
-      createElement(WorkspaceHeaderTitleSection, {
-        workspaceAbsPath: "/root/folder1",
-        remoteSessionId: "remote-session-1",
-        workspaceIdentity: "remote:ssh:localhost:2223:root:/root/folder1",
-        remoteTarget: {
-          kind: "ssh",
-          host: "localhost",
-          port: 2223,
-          username: "root",
-          sshConfigAlias: "linux-arm64",
-        },
-        projectName: "folder1",
-        activeTaskTitle: "hello",
-        activeTaskId: "task-1",
-        activeTraceId: "trace-1",
-        activeSessionId: "session-1",
-        activeTaskProvider: "glm",
-        gitSummary: { isRepository: false },
-        gitDirtyFileCount: 0,
-        sessionLogPath: null,
-        nativeSessionLogProvider: null,
-        nativeSessionLogPath: null,
-        nativeSessionLogExists: false,
-        nativeSessionLogLoading: false,
-        providerWorkspaceConfigPath: null,
-        providerWorkspaceConfigExists: false,
-        providerWorkspaceConfigLoading: false,
-        workspaceHeaderState: { selectedProvider: "glm" },
-        selectedEditor: null,
-        onRefreshGit: vi.fn(),
-      }),
-    );
-
-    expect(html).toContain("settings.skills.remoteSync.open");
-    expect(html).toContain("settings.mcp.remoteSync.open");
-  });
 });

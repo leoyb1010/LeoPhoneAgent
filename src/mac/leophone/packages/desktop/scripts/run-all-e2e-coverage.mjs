@@ -6,7 +6,6 @@ import { resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { parse as parseDotenv } from "dotenv";
-import { hasRequiredSshE2EEnvironment } from "./e2e-formal-spec-selection.mjs";
 
 const DESKTOP_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const REPO_ROOT = resolve(DESKTOP_DIR, "../..");
@@ -14,10 +13,6 @@ const UPSTREAM_PROVIDER_SPEC = "./test/e2e/upstream-provider.test.ts";
 const ALL_E2E_SPECS = [
   "./test/e2e/**/*.test.ts",
   "./test/e2e/conversation-session/manual-review/pending/conversation-session-turn-steer-probe.test.ts",
-];
-const SSH_E2E_EXCLUDES = [
-  "./test/e2e/conversation-session/conversation-session-ssh-remote*.test.ts",
-  "./test/e2e/conversation-session/manual-review/**/conversation-session-ssh-remote*.test.ts",
 ];
 // 仓库不提供供应商地址与 key：两者只来自 shell 或本机 .env.e2e.local，示例文件值留空不参与判断。
 const PROVIDER_ENV_FILES = [
@@ -43,7 +38,6 @@ export function createAllE2ECoverageRunPlan({
   env = process.env,
   upstreamReady = hasRealUpstreamProviderConfig(env),
   platform = process.platform,
-  sshReady = hasRequiredSshE2EEnvironment(env),
 } = {}) {
   return {
     command: platform === "win32" ? "pnpm.cmd" : "pnpm",
@@ -51,7 +45,6 @@ export function createAllE2ECoverageRunPlan({
       "test:e2e",
       "--",
       ...ALL_E2E_SPECS.flatMap((spec) => ["--spec", spec]),
-      ...(sshReady ? [] : SSH_E2E_EXCLUDES.flatMap((spec) => ["--exclude", spec])),
       ...(upstreamReady ? [] : ["--exclude", UPSTREAM_PROVIDER_SPEC]),
       ...args,
     ],

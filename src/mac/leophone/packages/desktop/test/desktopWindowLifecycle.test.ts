@@ -73,8 +73,6 @@ describe("desktopWindowLifecycle createWindow", () => {
       syncReadyUpdateToWindow: vi.fn(),
       syncPostUpdateReleaseNotesToWindow: vi.fn(),
       webRemoteControlManager: { disposeWindow: vi.fn(async () => undefined) },
-      disposeRemoteWorkspaceSessionsForWindow: vi.fn(),
-      reattachRemoteWorkspaceSessionsForWindow: vi.fn(),
       agentWarmupTargets: [
         { workspacePath: "/Users/demo/active-project" },
         { workspacePath: "/Users/demo/recent-a" },
@@ -139,8 +137,6 @@ describe("desktopWindowLifecycle createWindow", () => {
       syncReadyUpdateToWindow: vi.fn(),
       syncPostUpdateReleaseNotesToWindow: vi.fn(),
       webRemoteControlManager: { disposeWindow: vi.fn(async () => undefined) },
-      disposeRemoteWorkspaceSessionsForWindow: vi.fn(),
-      reattachRemoteWorkspaceSessionsForWindow: vi.fn(),
       agentSpawnFallbackCwd: "/Users/demo/.zcode/workspace/default",
       deviceMid: "device-mid",
       runtimeProcessEnvPatchPromise,
@@ -187,7 +183,6 @@ describe("desktopWindowLifecycle createWindow", () => {
     const existingChild = { pid: 1236, postMessage: vi.fn() };
     const spawnHostProcess = vi.fn();
     const syncAutoUpdaterStateToWindow = vi.fn();
-    const reattachRemoteWorkspaceSessionsForWindow = vi.fn();
 
     createWindow({
       iconPath: "/tmp/icon.png",
@@ -201,8 +196,6 @@ describe("desktopWindowLifecycle createWindow", () => {
       syncReadyUpdateToWindow: vi.fn(),
       syncPostUpdateReleaseNotesToWindow: vi.fn(),
       webRemoteControlManager: { disposeWindow: vi.fn(async () => undefined) },
-      disposeRemoteWorkspaceSessionsForWindow: vi.fn(),
-      reattachRemoteWorkspaceSessionsForWindow,
       agentSpawnFallbackCwd: "/Users/demo/.zcode/workspace/default",
       deviceMid: "device-mid",
       runtimeProcessEnvPatchPromise: new Promise(() => {}),
@@ -222,10 +215,6 @@ describe("desktopWindowLifecycle createWindow", () => {
     );
     expect(spawnHostProcess).not.toHaveBeenCalled();
     expect(syncAutoUpdaterStateToWindow).toHaveBeenCalledWith(win);
-    expect(reattachRemoteWorkspaceSessionsForWindow).toHaveBeenCalledWith(
-      win,
-      "local-44:renderer-reload",
-    );
   });
 
   it("runtime env 永不完成时按 deadline 使用 fallback，迟到结果不重复创建 Host", async () => {
@@ -265,8 +254,6 @@ describe("desktopWindowLifecycle createWindow", () => {
       syncReadyUpdateToWindow: vi.fn(),
       syncPostUpdateReleaseNotesToWindow: vi.fn(),
       webRemoteControlManager: { disposeWindow: vi.fn(async () => undefined) },
-      disposeRemoteWorkspaceSessionsForWindow: vi.fn(),
-      reattachRemoteWorkspaceSessionsForWindow: vi.fn(),
       agentSpawnFallbackCwd: "/Users/demo/.zcode/workspace/default",
       deviceMid: "device-mid",
       runtimeProcessEnvPatchPromise,
@@ -323,8 +310,6 @@ describe("desktopWindowLifecycle createWindow", () => {
       syncReadyUpdateToWindow: vi.fn(),
       syncPostUpdateReleaseNotesToWindow: vi.fn(),
       webRemoteControlManager: { disposeWindow: vi.fn(async () => undefined) },
-      disposeRemoteWorkspaceSessionsForWindow: vi.fn(),
-      reattachRemoteWorkspaceSessionsForWindow: vi.fn(),
       agentSpawnFallbackCwd: "/Users/demo/.zcode/workspace/default",
       deviceMid: "device-mid",
       runtimeProcessEnvPatchPromise: Promise.reject(new Error("profile failed")),
@@ -382,8 +367,6 @@ describe("desktopWindowLifecycle createWindow", () => {
       syncReadyUpdateToWindow: vi.fn(),
       syncPostUpdateReleaseNotesToWindow: vi.fn(),
       webRemoteControlManager: { disposeWindow: vi.fn(async () => undefined) },
-      disposeRemoteWorkspaceSessionsForWindow: vi.fn(),
-      reattachRemoteWorkspaceSessionsForWindow: vi.fn(),
       agentSpawnFallbackCwd: "/Users/demo/.zcode/workspace/default",
       deviceMid: "device-mid",
       runtimeProcessEnvFallbackPatch: {},

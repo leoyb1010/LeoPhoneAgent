@@ -25,8 +25,6 @@ export interface WorkspaceHeaderTitleSectionProps {
   workspaceAbsPath: string;
   remoteSessionId?: string;
   workspaceIdentity?: string;
-  remoteTarget?: RemoteTarget;
-  localWorkspacePath?: string;
   projectName: string;
   activeTaskTitle: string;
   activeTaskChangeSummary?: ZCodeTaskChangeSummary | null;

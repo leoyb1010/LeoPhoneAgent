@@ -83,19 +83,11 @@ import type { SavedWorkflowsOpenTarget } from "@/settings/saved-workflows/SavedW
 import type { AssistantPreviewCardsAutoOpenRequest } from "@/lib/assistantPreviewCards.js";
 import { startMemoryDiagnosticsLogger } from "@/lib/memoryDiagnostics.js";
 
-const EMPTY_RECONNECTING_REMOTE_WORKSPACE_LOGS_BY_WORKSPACE_KEY: NonNullable<
-  AppProps["reconnectingRemoteWorkspaceLogsByWorkspaceKey"]
-> = {};
-
 export function App({
   services,
-  onReconnectRemoteWorkspace,
   onLogout,
   onLogin,
   user,
-  reconnectingRemoteWorkspaceKeys,
-  remoteWorkspaceErrorByWorkspaceKey,
-  reconnectingRemoteWorkspaceLogsByWorkspaceKey = EMPTY_RECONNECTING_REMOTE_WORKSPACE_LOGS_BY_WORKSPACE_KEY,
   onCreateTask,
   onCreateConversationTask,
   onResolveConversationWorkspace,
@@ -1119,15 +1111,9 @@ export function App({
         handleOpenAutomations={handleOpenAutomations}
         handleOpenPluginStore={handleOpenPluginStoreForScope}
         handleManageInstalledPlugins={handleManageInstalledPlugins}
-        onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
         onLogout={onLogout}
         onLogin={onLogin}
         user={user}
-        reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
-        remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
-        reconnectingRemoteWorkspaceLogsByWorkspaceKey={
-          reconnectingRemoteWorkspaceLogsByWorkspaceKey
-        }
         onCreateTask={handleCreateTaskIfWritable}
         onCreateConversationTask={onCreateConversationTask}
         onResolveConversationWorkspace={onResolveConversationWorkspace}

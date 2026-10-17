@@ -90,11 +90,6 @@ vi.mock("@/TaskList.js", () => ({
   },
 }));
 
-vi.mock("@/WorkspaceSidebar/ReconnectingRemoteWorkspaceLogTooltip.js", () => ({
-  ReconnectingRemoteWorkspaceLogTooltip: ({ children }: { children?: ReactNode }) =>
-    createElement("div", null, children),
-}));
-
 vi.mock("@/i18n/IntlProvider.js", () => ({
   useZCodeIntl: () => ({
     intl: {
@@ -258,13 +253,9 @@ describe("WorkspaceSidebarItem render stability", () => {
             itemStyle: { opacity: 1 },
             mobileActiveTaskKey: null,
             onOpenFileTree: () => {},
-            onReconnectRemoteWorkspace: async () => {},
             onSelectTask: () => {},
             onStartDraftInWorkspace: () => {},
             onShowMoreTasks: () => {},
-            reconnectingRemoteWorkspaceKeys: [],
-            reconnectingRemoteWorkspaceLogsByWorkspaceKey: {},
-            remoteWorkspaceErrorByWorkspaceKey: {},
             tab,
             taskItems,
             taskListHasMore: true,
@@ -308,13 +299,9 @@ describe("WorkspaceSidebarItem render stability", () => {
             itemStyle: { opacity: 1 },
             mobileActiveTaskKey: null,
             onOpenFileTree: () => {},
-            onReconnectRemoteWorkspace: async () => {},
             onSelectTask: () => {},
             onStartDraftInWorkspace: () => {},
             onShowMoreTasks: () => {},
-            reconnectingRemoteWorkspaceKeys: [],
-            reconnectingRemoteWorkspaceLogsByWorkspaceKey: {},
-            remoteWorkspaceErrorByWorkspaceKey: {},
             tab,
             taskItems,
             taskListHasMore: true,

@@ -259,7 +259,6 @@ export default defineConfig([
     // desktop 保持 undici 为外部依赖，remote 单文件 bundle 再单独内联。
     external: desktopNodeRuntimeExternals,
     noExternal: [
-      "@zcode/server",
       "@zcode/shared",
       "@zcode/rpc",
       "@zcode/services",
@@ -346,7 +345,6 @@ export default defineConfig([
     // 这里同样保留为外部依赖，避免 desktop 开发态和打包态 host 进程启动失败。
     external: desktopNodeRuntimeExternals,
     noExternal: [
-      "@zcode/server",
       "@zcode/shared",
       "@zcode/rpc",
       "@zcode/services",
@@ -392,7 +390,6 @@ export default defineConfig([
     // 同样保留 undici 等为外部依赖，避免 Electron ESM runtime 的 dynamic require 崩溃。
     external: desktopNodeRuntimeExternals,
     noExternal: [
-      "@zcode/server",
       "@zcode/shared",
       "@zcode/rpc",
       "@zcode/services",

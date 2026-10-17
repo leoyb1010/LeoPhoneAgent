@@ -29,7 +29,6 @@ import type {
   WorkspaceSidePaneState,
 } from "@/lib/workspaceSidePane.js";
 import type { WorkspaceZCodeUIState } from "@/store/zcodeSessionStore.js";
-import type { RemoteConnectionLogEntry } from "@/hooks/useRemoteConnectionLogs.js";
 import type { Theme } from "@/useTheme.js";
 import type {
   ChatSearchResultHighlightRequest,
@@ -73,13 +72,9 @@ export type CreateTaskRequest = ZCodeProvider | CreateTaskOptions;
 
 export interface AppProps {
   services: IServiceAccessor;
-  onReconnectRemoteWorkspace: (workspaceKey: string) => Promise<void>;
   onLogout?: () => void;
   onLogin?: () => void;
   user?: UserInfo | null;
-  reconnectingRemoteWorkspaceKeys: string[];
-  remoteWorkspaceErrorByWorkspaceKey: Record<string, string>;
-  reconnectingRemoteWorkspaceLogsByWorkspaceKey?: Record<string, RemoteConnectionLogEntry[]>;
   onCreateTask: (request?: CreateTaskRequest) => void;
   onCreateConversationTask?: () => void;
   onResolveConversationWorkspace?: () => Promise<string>;

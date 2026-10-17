@@ -74,15 +74,4 @@ describe("workspace sidebar new-task routing", () => {
     expect(coldDraftIndex).toBeGreaterThan(explicitTaskIndex);
     expect(startDraftIndex).toBeGreaterThan(coldDraftIndex);
   });
-
-  it("远程 workspace 选定 canonical identity 后进入对应草稿桶", () => {
-    const source = readUiSource("Root.tsx");
-    const remoteDraftStart = source.indexOf("const handleRemoteWorkspaceActivated");
-    const remoteDraftEnd = source.indexOf("});", remoteDraftStart);
-    const remoteDraftSource = source.slice(remoteDraftStart, remoteDraftEnd);
-
-    expect(remoteDraftSource).toContain(
-      "startDraftInWorkspace(workspacePath, workspaceIdentity)",
-    );
-  });
 });

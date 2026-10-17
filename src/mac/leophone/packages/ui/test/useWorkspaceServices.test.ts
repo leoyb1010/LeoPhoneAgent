@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import type { IServiceAccessor } from "@zcode/services";
 import type { RemoteTarget } from "@zcode/shared";
 import {
@@ -11,16 +11,13 @@ import { resolveRemoteWorkspaceSessionIdForTarget } from "../src/hooks/useResolv
 import {
   useRemoteWorkspaceSessionStore,
   registerBaseWorkspaceServices,
-  registerRemoteWorkspaceSession,
-  unregisterRemoteWorkspaceSession,
-  bindRemoteWorkspacePath,
-  unbindRemoteWorkspacePath,
-  bindRemoteWorkspaceIdentity,
-  unbindRemoteWorkspaceIdentity,
   getRemoteWorkspaceSession,
-  getRemoteWorkspaceServicesForPath,
-  getRemoteWorkspaceServicesForIdentity,
 } from "../src/store/remoteWorkspaceSessionStore.js";
+import {
+  registerRemoteWorkspaceSession,
+  bindRemoteWorkspacePath,
+  bindRemoteWorkspaceIdentity,
+} from "./helpers/remoteWorkspaceSessionSeed.js";
 import type { WorkspaceTabState, WindowTabState } from "../src/store/tabStore.js";
 import { isWorkspaceTab, SETTINGS_TAB_ID } from "../src/store/tabStore.js";
 
@@ -86,264 +83,6 @@ describe("useRemoteWorkspaceSessionStore", () => {
 
       const state = useRemoteWorkspaceSessionStore.getState();
       expect(state.baseServices).toBe(second);
-    });
-  });
-
-  describe("registerSession / unregisterSession", () => {
-    it("注册后 session 可被读取", () => {
-      const session = {
-        sessionId: "session-1",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-1"),
-      };
-      registerRemoteWorkspaceSession(session);
-
-      expect(getRemoteWorkspaceSession("session-1")).toBe(session);
-    });
-
-    it("unregisterSession 会删除 session 并清理所有索引", () => {
-      const session = {
-        sessionId: "session-1",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-1"),
-      };
-      registerRemoteWorkspaceSession(session);
-      bindRemoteWorkspacePath("/workspace/demo", "session-1");
-      bindRemoteWorkspaceIdentity("remote:ssh:host:/workspace/demo", "session-1");
-
-      unregisterRemoteWorkspaceSession("session-1");
-
-      const state = useRemoteWorkspaceSessionStore.getState();
-      expect(state.sessionsById["session-1"]).toBeUndefined();
-      expect(state.sessionIdByWorkspacePath["/workspace/demo"]).toBeUndefined();
-      expect(state.sessionIdByWorkspaceIdentity["remote:ssh:host:/workspace/demo"]).toBeUndefined();
-    });
-
-    it("unregisterSession 不影响其他 session 和索引", () => {
-      const session1 = {
-        sessionId: "session-1",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-1"),
-      };
-      const session2 = {
-        sessionId: "session-2",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-2"),
-      };
-      registerRemoteWorkspaceSession(session1);
-      registerRemoteWorkspaceSession(session2);
-      bindRemoteWorkspacePath("/workspace/a", "session-1");
-      bindRemoteWorkspacePath("/workspace/b", "session-2");
-
-      unregisterRemoteWorkspaceSession("session-1");
-
-      const state = useRemoteWorkspaceSessionStore.getState();
-      expect(state.sessionsById["session-1"]).toBeUndefined();
-      expect(state.sessionsById["session-2"]).toBe(session2);
-      expect(state.sessionIdByWorkspacePath["/workspace/a"]).toBeUndefined();
-      expect(state.sessionIdByWorkspacePath["/workspace/b"]).toBe("session-2");
-    });
-
-    it("unregisterSession 会终结已注入的远程 transport", () => {
-      const dispose = vi.fn();
-      registerRemoteWorkspaceSession({
-        sessionId: "session-1",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-1"),
-        dispose,
-      });
-
-      unregisterRemoteWorkspaceSession("session-1");
-
-      expect(dispose).toHaveBeenCalledTimes(1);
-      expect(dispose).toHaveBeenCalledWith(
-        expect.objectContaining({ code: "ZCODE_REMOTE_WORKSPACE_DISCONNECTED" }),
-      );
-    });
-
-    it("同 sessionId 换代时只终结被替换的旧 transport", () => {
-      const oldDispose = vi.fn();
-      const newDispose = vi.fn();
-      const oldSession = {
-        sessionId: "session-1",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-old"),
-        dispose: oldDispose,
-      };
-      const newSession = {
-        sessionId: "session-1",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-new"),
-        dispose: newDispose,
-      };
-
-      registerRemoteWorkspaceSession(oldSession);
-      registerRemoteWorkspaceSession(newSession);
-
-      expect(oldDispose).toHaveBeenCalledTimes(1);
-      expect(newDispose).not.toHaveBeenCalled();
-      expect(getRemoteWorkspaceSession("session-1")).toBe(newSession);
-    });
-  });
-
-  describe("bindWorkspacePath / unbindWorkspacePath", () => {
-    it("绑定后可通过路径查到 session", () => {
-      const session = {
-        sessionId: "session-1",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-1"),
-      };
-      registerRemoteWorkspaceSession(session);
-      bindRemoteWorkspacePath("/workspace/demo", "session-1");
-
-      expect(getRemoteWorkspaceServicesForPath("/workspace/demo")).toBe(session.services);
-    });
-
-    it("路径未绑定时返回 null", () => {
-      expect(getRemoteWorkspaceServicesForPath("/workspace/unknown")).toBeNull();
-    });
-
-    it("unbindWorkspacePath 清理路径索引", () => {
-      const session = {
-        sessionId: "session-1",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-1"),
-      };
-      registerRemoteWorkspaceSession(session);
-      bindRemoteWorkspacePath("/workspace/demo", "session-1");
-
-      unbindRemoteWorkspacePath("/workspace/demo");
-
-      const state = useRemoteWorkspaceSessionStore.getState();
-      expect(state.sessionIdByWorkspacePath["/workspace/demo"]).toBeUndefined();
-    });
-
-    it("同一路径被不同 session 绑定时，后者覆盖前者", () => {
-      const session1 = {
-        sessionId: "session-1",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-1"),
-      };
-      const session2 = {
-        sessionId: "session-2",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-2"),
-      };
-      registerRemoteWorkspaceSession(session1);
-      registerRemoteWorkspaceSession(session2);
-      bindRemoteWorkspacePath("/workspace/demo", "session-1");
-      bindRemoteWorkspacePath("/workspace/demo", "session-2");
-
-      expect(getRemoteWorkspaceServicesForPath("/workspace/demo")).toBe(session2.services);
-    });
-  });
-
-  describe("bindWorkspaceIdentity / unbindWorkspaceIdentity", () => {
-    it("绑定后可通过 identity 查到 session", () => {
-      const session = {
-        sessionId: "session-1",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-1"),
-      };
-      registerRemoteWorkspaceSession(session);
-      bindRemoteWorkspaceIdentity("remote:ssh:host:/workspace/demo", "session-1");
-
-      expect(getRemoteWorkspaceServicesForIdentity("remote:ssh:host:/workspace/demo")).toBe(
-        session.services,
-      );
-    });
-
-    it("identity 未绑定时返回 null", () => {
-      expect(getRemoteWorkspaceServicesForIdentity("remote:ssh:host:/unknown")).toBeNull();
-    });
-
-    it("unbindWorkspaceIdentity 清理 identity 索引", () => {
-      const session = {
-        sessionId: "session-1",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-1"),
-      };
-      registerRemoteWorkspaceSession(session);
-      bindRemoteWorkspaceIdentity("remote:ssh:host:/workspace/demo", "session-1");
-
-      unbindRemoteWorkspaceIdentity("remote:ssh:host:/workspace/demo");
-
-      const state = useRemoteWorkspaceSessionStore.getState();
-      expect(state.sessionIdByWorkspaceIdentity["remote:ssh:host:/workspace/demo"]).toBeUndefined();
-    });
-
-    it("同路径不同 identity 的 session 不互相覆盖", () => {
-      const sessionA = {
-        sessionId: "session-A",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-A"),
-      };
-      const sessionB = {
-        sessionId: "session-B",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-B"),
-      };
-      registerRemoteWorkspaceSession(sessionA);
-      registerRemoteWorkspaceSession(sessionB);
-      bindRemoteWorkspaceIdentity("remote:ssh:host-a:/workspace/demo", "session-A");
-      bindRemoteWorkspaceIdentity("remote:ssh:host-b:/workspace/demo", "session-B");
-
-      expect(getRemoteWorkspaceServicesForIdentity("remote:ssh:host-a:/workspace/demo")).toBe(
-        sessionA.services,
-      );
-      expect(getRemoteWorkspaceServicesForIdentity("remote:ssh:host-b:/workspace/demo")).toBe(
-        sessionB.services,
-      );
-    });
-  });
-
-  describe("workspacePath 和 workspaceIdentity 索引共存且互不干扰", () => {
-    it("同一个 session 同时绑定路径和 identity 时，两者都指向该 session", () => {
-      const session = {
-        sessionId: "session-1",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-1"),
-      };
-      registerRemoteWorkspaceSession(session);
-      bindRemoteWorkspacePath("/workspace/demo", "session-1");
-      bindRemoteWorkspaceIdentity("remote:ssh:host:/workspace/demo", "session-1");
-
-      expect(getRemoteWorkspaceServicesForPath("/workspace/demo")).toBe(session.services);
-      expect(getRemoteWorkspaceServicesForIdentity("remote:ssh:host:/workspace/demo")).toBe(
-        session.services,
-      );
-    });
-
-    it("路径绑定和 identity 绑定的 session 不同，查询互不影响", () => {
-      const sessionByPath = {
-        sessionId: "session-by-path",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-by-path"),
-      };
-      const sessionByIdentity = {
-        sessionId: "session-by-identity",
-        target: makeMockTarget(),
-        services: makeMockServices("remote-by-identity"),
-      };
-      registerRemoteWorkspaceSession(sessionByPath);
-      registerRemoteWorkspaceSession(sessionByIdentity);
-      bindRemoteWorkspacePath("/workspace/demo", "session-by-path");
-      bindRemoteWorkspaceIdentity("remote:ssh:host:/workspace/demo", "session-by-identity");
-
-      expect(getRemoteWorkspaceServicesForPath("/workspace/demo")).toBe(sessionByPath.services);
-      expect(getRemoteWorkspaceServicesForIdentity("remote:ssh:host:/workspace/demo")).toBe(
-        sessionByIdentity.services,
-      );
-    });
-  });
-
-  describe("无效的 unbind 不报错", () => {
-    it("unbind 不存在的 workspacePath 不报错", () => {
-      expect(() => unbindRemoteWorkspacePath("/workspace/nonexistent")).not.toThrow();
-    });
-
-    it("unbind 不存在的 workspaceIdentity 不报错", () => {
-      expect(() => unbindRemoteWorkspaceIdentity("remote:ssh:host:/workspace/nonexistent")).not.toThrow();
     });
   });
 
@@ -905,8 +644,8 @@ describe("useWorkspaceServices 核心路由逻辑覆盖", () => {
       const state = useRemoteWorkspaceSessionStore.getState();
 
       // 同一路径绑定不同 session
-      useRemoteWorkspaceSessionStore.getState().bindWorkspacePath("/workspace/shared", "session-1");
-      useRemoteWorkspaceSessionStore.getState().bindWorkspacePath("/workspace/shared", "session-2");
+      bindRemoteWorkspacePath("/workspace/shared", "session-1");
+      bindRemoteWorkspacePath("/workspace/shared", "session-2");
 
       // 最后绑定的 session-2 生效
       expect(

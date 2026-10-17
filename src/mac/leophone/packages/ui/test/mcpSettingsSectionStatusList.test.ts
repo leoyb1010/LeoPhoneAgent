@@ -13,7 +13,6 @@ import {
   createMcpStatusListRefreshQueue,
   isMcpOAuthAuthorizationStatusRefreshExpired,
   resolveMcpStatusListRefreshSkipReason,
-  shouldShowPluginMcpServersInMcpSettings,
   refreshMcpServerStatusList,
   transitionMcpAutoStatusListRefreshKey,
   transitionMcpOAuthAuthorizationPendingRefresh,
@@ -790,11 +789,6 @@ describe("McpSettingsSection status list", () => {
         },
       ]),
     ).toBe("");
-  });
-
-  it("hides local plugin MCP servers in SSH remote workspace settings", () => {
-    expect(shouldShowPluginMcpServersInMcpSettings(true)).toBe(false);
-    expect(shouldShowPluginMcpServersInMcpSettings(false)).toBe(true);
   });
 
   // Bugfix 回归：刷新按钮点了没反应时，必须能区分"没发请求"和"发了但状态没变"。

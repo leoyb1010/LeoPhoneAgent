@@ -42,8 +42,6 @@ export function createWindow(options: {
   syncReadyUpdateToWindow: (win: BrowserWindow) => void;
   syncPostUpdateReleaseNotesToWindow: (win: BrowserWindow) => void;
   webRemoteControlManager: { disposeWindow(windowId: number): Promise<void> };
-  disposeRemoteWorkspaceSessionsForWindow: (windowId: number, reason: string) => void;
-  reattachRemoteWorkspaceSessionsForWindow: (win: BrowserWindow, reason: string) => void;
   bootstrap?: WindowBootstrapOptions;
   agentWarmupTargets?: readonly StartupWorkspaceWarmupTarget[];
   agentSpawnFallbackCwd: string;
@@ -165,7 +163,6 @@ export function createWindow(options: {
         options.syncAutoUpdaterStateToWindow(win);
         options.syncReadyUpdateToWindow(win);
         options.syncPostUpdateReleaseNotesToWindow(win);
-        options.reattachRemoteWorkspaceSessionsForWindow(win, `${label}:renderer-reload`);
         return;
       } catch (error) {
         options.logger.warn(
@@ -214,7 +211,6 @@ export function createWindow(options: {
       options.syncAutoUpdaterStateToWindow(win);
       options.syncReadyUpdateToWindow(win);
       options.syncPostUpdateReleaseNotesToWindow(win);
-      options.reattachRemoteWorkspaceSessionsForWindow(win, `${label}:renderer-ready`);
     };
 
     if (!options.runtimeProcessEnvPatchPromise) {
@@ -276,7 +272,6 @@ export function createWindow(options: {
       options.windowHostProcessMap.delete(wcId);
     }
     void options.webRemoteControlManager.disposeWindow(browserWindowId);
-    options.disposeRemoteWorkspaceSessionsForWindow(wcId, `${label}:window-closed`);
   });
 
   return win;

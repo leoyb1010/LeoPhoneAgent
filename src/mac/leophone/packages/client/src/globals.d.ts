@@ -8,7 +8,6 @@ import type {
   PrepareCuaHelperPermissionDragResult,
   AppSettings,
   BrowserViewOperationPayload,
-  BrowserGuestAttachResult,
   BrowserViewScreenshotSurfacePreparePayload,
   BrowserViewScreenshotSurfaceReadyPayload,
   BrowserViewScreenshotSurfaceReleasePayload,
@@ -21,7 +20,6 @@ import type {
   BrowserViewRestoreTabsRequest,
   BrowserViewportSize,
   ChromeBrowserDataImportResult,
-  DockerContainerInfo,
   EmbeddedBrowserOpenUrlRequest,
   EmbeddedBrowserPermissionPromptEvent,
   EmbeddedBrowserPermissionResolveRequest,
@@ -41,10 +39,6 @@ import type {
   WebRemoteControlWorkspaceTarget,
   OAuthStateRegistration,
   PostUpdateReleaseNotesPayload,
-  RemoteConnectionRuntimeLog,
-  RemoteSessionClosedEvent,
-  RemoteTarget,
-  SSHConfigAliasOption,
   RendererTelemetryEventPayload,
   RendererActionTraceBatchV1,
   RendererActionTraceConfigV1,
@@ -53,7 +47,6 @@ import type {
   TaskNotificationPayload,
   WindowScreenshotResult,
   EmbeddedBrowserDataClearResult,
-  WSLDistro,
   UpdateCheckResultPayload,
   UpdateStatePayload,
   OpenInEditorOptions,
@@ -77,23 +70,6 @@ declare global {
       consumeUserGesture(sandboxId: string): Promise<boolean>;
     };
     zcode: {
-      connectRemote(
-        options: RemoteTarget,
-        requestId?: string,
-        context?: {
-          workspacePath: string;
-          workspaceIdentity?: string;
-          connectTrigger?: import("@zcode/shared").RemoteWorkspaceConnectTrigger;
-        },
-      ): Promise<{ success: boolean; error?: string; sessionId?: string }>;
-      /** 取消当前窗口尚未建立完成的远程连接 */
-      cancelPendingRemoteConnection?(requestId?: string): Promise<void>;
-      /** 绑定远程 logical session 的 canonical workspace context */
-      bindRemoteWorkspaceSessionContext?(context: {
-        remoteSessionId: string;
-        workspacePath: string;
-        workspaceIdentity?: string;
-      }): Promise<BrowserGuestAttachResult>;
       /** 为当前 workspace 开启 Web 远程控制 */
       startWebRemoteControl(
         context: WebRemoteControlContext,
@@ -110,16 +86,6 @@ declare global {
       onWebRemoteControlStatusChanged?(
         handler: (status: WebRemoteControlStatus) => void,
       ): () => void;
-      /** 释放当前窗口里的远程 session */
-      disposeRemoteSession(sessionId: string): Promise<void>;
-      /** 检查本机 Docker daemon 是否可用 */
-      isDockerAvailable(): Promise<boolean>;
-      /** 列出本机可用的 WSL 发行版 */
-      listWSLDistros(): Promise<WSLDistro[]>;
-      /** 列出当前可连接的 Docker 容器 */
-      listDockerContainers(): Promise<DockerContainerInfo[]>;
-      /** 列出当前机器 SSH config 里可用于快速填表的 alias */
-      listSSHConfigAliases(): Promise<SSHConfigAliasOption[]>;
       /** renderer 日志通过 IPC 传到 main 进程统一存储 */
       log(level: "info" | "warn" | "error", args: unknown[]): void;
       /** 打开系统目录选择框，返回选中路径或 null */
@@ -140,10 +106,6 @@ declare global {
       materializeWorkflowArtifactFile(
         payload: import("@zcode/shared").MaterializeWorkflowArtifactFileRequest,
       ): Promise<import("@zcode/shared").MaterializeWorkflowArtifactFileResult>;
-      /** 订阅当前窗口内远程连接过程日志，返回 disposer */
-      onRemoteConnectionLog(handler: (entry: RemoteConnectionRuntimeLog) => void): () => void;
-      /** 订阅远程 workspace session 关闭事件，返回 disposer */
-      onRemoteSessionClosed(handler: (event: RemoteSessionClosedEvent) => void): () => void;
       /** 检查目录是否已在其他窗口打开 */
       activateOrSetWorkspace?(path: string): Promise<{ activated: boolean }>;
       /** 同步当前窗口所有 tab 的 workspace 路径到 main 进程 */

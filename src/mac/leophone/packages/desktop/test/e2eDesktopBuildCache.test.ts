@@ -106,37 +106,37 @@ describe("desktop E2E build cache", () => {
 
   it("invalidates when a workspace dependency or production env file changes", () => {
     mkdirSync(resolve(ROOT, "packages/desktop/src"), { recursive: true });
-    mkdirSync(resolve(ROOT, "packages/server/src"), { recursive: true });
+    mkdirSync(resolve(ROOT, "packages/services/src"), { recursive: true });
     writeFileSync(resolve(ROOT, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n");
     writeFileSync(resolve(ROOT, "package.json"), JSON.stringify({ name: "fixture" }));
     writeFileSync(resolve(ROOT, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
     writeFileSync(
       resolve(ROOT, "packages/desktop/package.json"),
       JSON.stringify({
-        dependencies: { "@zcode/server": "workspace:*" },
+        dependencies: { "@zcode/services": "workspace:*" },
         name: "@zcode/desktop",
       }),
     );
     writeFileSync(
-      resolve(ROOT, "packages/server/package.json"),
-      JSON.stringify({ name: "@zcode/server" }),
+      resolve(ROOT, "packages/services/package.json"),
+      JSON.stringify({ name: "@zcode/services" }),
     );
     writeFileSync(resolve(ROOT, "packages/desktop/src/main.ts"), "export const desktop = 1;\n");
-    writeFileSync(resolve(ROOT, "packages/server/src/index.ts"), "export const server = 1;\n");
+    writeFileSync(resolve(ROOT, "packages/services/src/index.ts"), "export const services = 1;\n");
     writeFileSync(resolve(ROOT, ".env"), "ZCODE_BASE_URL=https://one.example\n");
     writeFileSync(resolve(ROOT, ".env.production"), "CDN_DOMAIN=one.example\n");
 
     const inputPaths = resolveE2EDesktopBuildInputPaths({ repoRoot: ROOT });
-    expect(inputPaths).toContain("packages/server/package.json");
-    expect(inputPaths).toContain("packages/server/src");
+    expect(inputPaths).toContain("packages/services/package.json");
+    expect(inputPaths).toContain("packages/services/src");
     const fingerprint = () =>
       createE2EDesktopBuildFingerprint({ env: {}, gitHead: "head-a", repoRoot: ROOT });
     const base = fingerprint();
 
-    writeFileSync(resolve(ROOT, "packages/server/src/index.ts"), "export const server = 2;\n");
+    writeFileSync(resolve(ROOT, "packages/services/src/index.ts"), "export const services = 2;\n");
     expect(fingerprint()).not.toBe(base);
 
-    writeFileSync(resolve(ROOT, "packages/server/src/index.ts"), "export const server = 1;\n");
+    writeFileSync(resolve(ROOT, "packages/services/src/index.ts"), "export const services = 1;\n");
     writeFileSync(resolve(ROOT, ".env"), "ZCODE_BASE_URL=https://two.example\n");
     expect(fingerprint()).not.toBe(base);
 

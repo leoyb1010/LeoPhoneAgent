@@ -33,7 +33,6 @@ import {
 import { restartIntoWorkspace, seedReplayProvider } from "../helpers/model-provider-restart.js";
 import { sel } from "../helpers/selectors.js";
 import { prepareV4ConversationE2E } from "../helpers/v4-conversation.js";
-import { connectSSHWorkspace, readSSHRuntimeConfig } from "../helpers/ssh-remote-p0.js";
 
 const EMPTY_MODELS_PROVIDER_ID = "e2e-empty-models-provider";
 const REORDER_MODELS_PROVIDER_ID = "e2e-reorder-models-provider";
@@ -1089,33 +1088,6 @@ describe("设置页 UI polish E2E", () => {
       throw new Error(`视觉模型候选未显示：${JSON.stringify(menu)}`, { cause: error });
     }
     expect(await modelItem.$('[data-model-input-capability="vision"]').isDisplayed()).toBe(true);
-  });
-
-  it("MP-UI-05-remote: 远程 workspace 下也不显示配置同步入口", async function () {
-    this.timeout(10 * 60_000);
-    if (!process.env.ZCODE_E2E_SSH_HOST?.trim()) {
-      this.skip();
-      return;
-    }
-
-    const config = readSSHRuntimeConfig("MP-UI-05-remote");
-    await connectSSHWorkspace({
-      caseMarker: "MP-UI-05-remote",
-      config,
-      workspacePath: config.workspacePaths[0],
-    });
-    await openModelProviderSettings();
-
-    const remoteSyncActionVisible = await browser.execute(() =>
-      Array.from(document.querySelectorAll<HTMLElement>("button"))
-        .filter((element) => {
-          const rect = element.getBoundingClientRect();
-          return rect.width > 0 && rect.height > 0;
-        })
-        .some((element) => /同步到远端|Sync to remote/u.test(element.innerText.trim())),
-    );
-
-    expect(remoteSyncActionVisible).toBe(false);
   });
 });
 

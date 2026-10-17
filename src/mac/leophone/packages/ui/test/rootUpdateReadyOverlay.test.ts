@@ -65,7 +65,6 @@ vi.mock("@/hooks/usePlatform.js", () => ({
     getWebRemoteControlStatus: vi.fn(async () => ({ status: "idle" })),
   }),
   usePlatform: () => ({
-    cancelPendingRemoteConnection: vi.fn(async () => {}),
   }),
 }));
 
@@ -264,12 +263,6 @@ async function renderRoot(options?: {
       platform: {
         selectDirectory: vi.fn(async () => null),
         activateOrSetWorkspace: vi.fn(async () => ({ activated: false })),
-        connectRemote: vi.fn(async () => ({ success: true })),
-        disposeRemoteSession: vi.fn(async () => {}),
-        isDockerAvailable: vi.fn(async () => false),
-        listWSLDistros: vi.fn(async () => []),
-        listDockerContainers: vi.fn(async () => []),
-        listSSHConfigAliases: vi.fn(async () => []),
         openExternal: vi.fn(),
         openFeedback: vi.fn(async () => {}),
         openCommunity: vi.fn(async () => {}),

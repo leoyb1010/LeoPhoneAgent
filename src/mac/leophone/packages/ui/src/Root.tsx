@@ -5,6 +5,7 @@ import {
   APP_RUNTIME_PREFERENCES_CHANGED_BROADCAST_CHANNEL,
   DesktopCommandIds,
   appRuntimePreferencesChangedBroadcastPayloadSchema,
+  type AppSettings,
 } from "@zcode/shared";
 import { TooltipProvider } from "@/components/ui/tooltip.js";
 import { LeoWhatsNew } from "@/leo/LeoWhatsNew.js";
@@ -44,8 +45,10 @@ import { RootShell } from "@/root/RootShell.js";
 import { RootWorkspaceContent } from "@/root/RootWorkspaceContent.js";
 import { resolveRootWorkspaceShellTarget } from "@/root/rootWorkspaceShellTarget.js";
 import { OnboardingDialog } from "@/onboarding/OnboardingDialog.js";
-import { useRemoteWorkspaceHistory } from "@/root/useRemoteWorkspaceHistory.js";
-import { useRemoteWorkspaceTabLifecycle } from "@/root/useRemoteWorkspaceTabLifecycle.js";
+import {
+  buildWorkspacePersistPatch,
+  restorePersistedWorkspaceSessions,
+} from "@/root/workspaceSessionPersistence.js";
 import { useRootProviderStateRefresh } from "@/root/useRootProviderStateRefresh.js";
 import { useModelSelectionServiceView } from "@/hooks/useModelSelectionView.js";
 import { useRootProviderSettingsSnapshot } from "@/root/useRootProviderSettingsSnapshot.js";
@@ -149,7 +152,6 @@ function RootInner({
   allowOpenWorkspace = true,
   preferDirectoryBrowser,
   supportsEmbeddedBrowser: explicitSupportsEmbeddedBrowser,
-  allowRemoteWorkspace = true,
   initialWorkspaceLoadingFallback,
 }: RootProps) {
   useEffect(() => {
@@ -479,41 +481,48 @@ function RootInner({
     },
     userId: user?.id,
   });
-  const handleRemoteWorkspaceActivated = useCallback(
-    ({
-      workspacePath,
-      workspaceIdentity,
-    }: {
-      workspacePath: string;
-      workspaceIdentity: string;
-    }) => {
-      startDraftInWorkspace(workspacePath, workspaceIdentity);
+  // conversation backing workspace 只属于本地桌面主恢复链路；手机 shared-host
+  // attachment 不能因此创建独立本地 runtime 或改变 replayable 边界。
+  const ensureConversationWorkspaceOnRestore =
+    isDesktop && restoreSession && !initialWorkspaceIdentity;
+  // 仅 Desktop 主窗口：输入可用后再把 inactive workspace 加入 sidebar/task 数据源。
+  const deferInactiveWorkspaceRestore = isDesktop && restoreSession && !initialWorkspaceIdentity;
+  const restorePersistedSession = useCallback(
+    async (settings: AppSettings) => {
+      let conversationWorkspacePath: string | undefined;
+      if (ensureConversationWorkspaceOnRestore) {
+        try {
+          conversationWorkspacePath = (await services.fileService.ensureConversationWorkspace())
+            .path;
+        } catch (error) {
+          // 路径创建失败不能连带吞掉真实项目恢复；后续显式新建对话仍会走原有可重试错误入口。
+          logger.warn("[Root] 恢复阶段解析 conversation workspace 失败", { error });
+        }
+      }
+      const workspaceRestore = restorePersistedWorkspaceSessions({
+        settings,
+        tabStoreApi,
+        unavailableWorkspacePath,
+        conversationWorkspacePath,
+        restoreMode: deferInactiveWorkspaceRestore ? "active-first" : "all",
+      });
+      return {
+        ...(conversationWorkspacePath
+          ? { excludedRecentProjectPaths: [conversationWorkspacePath] }
+          : {}),
+        ...(workspaceRestore?.deferredRestore
+          ? { deferredRestore: workspaceRestore.deferredRestore }
+          : {}),
+      };
     },
-    [startDraftInWorkspace],
+    [
+      deferInactiveWorkspaceRestore,
+      ensureConversationWorkspaceOnRestore,
+      services.fileService,
+      tabStoreApi,
+      unavailableWorkspacePath,
+    ],
   );
-
-  const {
-    reconnectingRemoteWorkspaceKeys,
-    remoteWorkspaceErrorByWorkspaceKey,
-    reconnectingRemoteWorkspaceLogsByWorkspaceKey,
-    buildPersistedTabPatch,
-    restorePersistedSession,
-    handleReconnectRemoteWorkspace,
-    handleRemoteWorkspaceTabsClosed,
-  } = useRemoteWorkspaceHistory({
-    services,
-    platform,
-    supportsSettings,
-    allowRemoteWorkspace,
-    // conversation backing workspace 只属于本地桌面主恢复链路；远程窗口和手机
-    // shared-host attachment 不能因此创建独立本地 runtime 或改变 replayable 边界。
-    ensureConversationWorkspaceOnRestore: isDesktop && restoreSession && !initialWorkspaceIdentity,
-    deferInactiveWorkspaceRestore: isDesktop && restoreSession && !initialWorkspaceIdentity,
-    unavailableWorkspacePath,
-    tabStoreApi,
-    activateTabByPath,
-    onWorkspaceActivated: handleRemoteWorkspaceActivated,
-  });
 
   useEffect(() => {
     // fileDisplay 默认不传 basePath 时需要落到“当前激活 workspace”。
@@ -537,7 +546,7 @@ function RootInner({
     restoreSession: restoreSession && canRestoreWorkspaceSession,
     persistSession: restoreSession && canRestoreWorkspaceSession,
     restorePersistedSession,
-    buildPersistPatch: buildPersistedTabPatch,
+    buildPersistPatch: buildWorkspacePersistPatch,
   });
 
   useEffect(() => {
@@ -616,8 +625,6 @@ function RootInner({
     isDesktop,
     locale,
     tabs,
-    reconnectingRemoteWorkspaceKeys,
-    remoteWorkspaceErrorByWorkspaceKey,
     totalUnreadTaskCount,
     hasCompletedFullTabRestore: hasCompletedFullRestore,
     intl,
@@ -713,13 +720,6 @@ function RootInner({
     isDesktop,
     platform,
     theme,
-  });
-
-  useRemoteWorkspaceTabLifecycle({
-    tabs,
-    activeWorkspaceTab,
-    platform,
-    onRemoteWorkspaceTabsClosed: handleRemoteWorkspaceTabsClosed,
   });
 
   useEffect(() => {
@@ -938,7 +938,6 @@ function RootInner({
           workspaceRemoteSessionId={workspaceShellRemoteSessionId}
           activeWorkspacePath={activeWorkspacePath}
           isSettingsTabActive={isSettingsTabActive}
-          handleReconnectRemoteWorkspace={handleReconnectRemoteWorkspace}
           handleCreateTask={handleCreateTask}
           handleCreateConversationTask={handleCreateConversationTask}
           handleResolveConversationWorkspace={handleResolveConversationWorkspace}
@@ -949,11 +948,6 @@ function RootInner({
           handleLogout={user ? handleLogout : undefined}
           onLogin={!user ? handleOpenLoginEntry : undefined}
           user={user}
-          reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
-          remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
-          reconnectingRemoteWorkspaceLogsByWorkspaceKey={
-            reconnectingRemoteWorkspaceLogsByWorkspaceKey
-          }
           allowOpenWorkspace={allowOpenWorkspace}
           isDesktop={isDesktop}
           isMacDesktop={isMacDesktop}

@@ -27,7 +27,6 @@ export function WorkspaceHeader({
   remoteSessionId,
   workspaceIdentity,
   remoteTarget,
-  localWorkspacePath,
   projectName,
   activeTaskTitle,
   activeTaskChangeSummary,
@@ -74,7 +73,6 @@ export function WorkspaceHeader({
   remoteSessionId?: string;
   workspaceIdentity?: string;
   remoteTarget?: RemoteTarget;
-  localWorkspacePath?: string;
   projectName: string;
   activeTaskTitle: string;
   activeTaskChangeSummary?: ZCodeTaskChangeSummary | null;
@@ -174,8 +172,6 @@ export function WorkspaceHeader({
             workspaceAbsPath={workspaceAbsPath}
             remoteSessionId={remoteSessionId}
             workspaceIdentity={workspaceIdentity}
-            remoteTarget={remoteTarget}
-            localWorkspacePath={localWorkspacePath}
             projectName={projectName}
             activeTaskTitle={activeTaskTitle}
             activeTaskChangeSummary={activeTaskChangeSummary}

@@ -233,8 +233,6 @@ nodes:
         symbol: "createHelpAppConfigReader"
       - file: "packages/desktop/src/main/desktopHelpConfig.ts"
         symbol: "createDesktopHelpConfigReader"
-      - file: "packages/web/src/communityUrl.ts"
-        symbol: "resolveWebHelpConfig"
   - id: "capability.subagent-computer-use-boundary"
     kind: "capability"
     label: "Subagent official Computer Use boundary"
@@ -369,12 +367,7 @@ nodes:
         file: "apps/zcode-cli/packages/cli/scripts/sea-official-plugin-assets.mjs"
       - symbol: "NODE_REPL_SERVER_VERSION"
         file: "apps/zcode-cli/packages/node-repl-host/src/tool-contract.ts"
-      - symbol: "REMOTE_AGENT_OFFICIAL_PLUGIN_INCLUDED_TOP_LEVEL_PATHS"
-        file: "packages/server/src/remote/zcodeAgentOfficialPluginAssets.ts"
-      - symbol: "REMOTE_AGENT_OFFICIAL_PLUGIN_REQUIRED_RELATIVE_PATHS"
-        file: "packages/server/src/remote/zcodeAgentOfficialPluginAssets.ts"
       - file: "packages/desktop/scripts/prepare-agent-node-bundle.mjs"
-      - file: "scripts/prepare-prebuilds.mjs"
 
   - id: "capability.model-capabilities"
     kind: "capability"
@@ -4379,7 +4372,6 @@ nodes:
     codeSeeds:
       - symbol: "Root"
         file: "packages/ui/src/Root.tsx"
-      - file: "packages/web/src/main.tsx"
       - file: "packages/desktop/src/renderer/src/main.tsx"
 
   - id: "state.controller-server-directory"
@@ -4400,8 +4392,6 @@ nodes:
     docs:
       - "docs/architecture/unified-zcode-lite-server-multi-server-plan.md"
     codeSeeds:
-      - symbol: "connectRemote"
-        file: "packages/server/src/remote/connect.ts"
       - symbol: "createRemoteWorkspaceSessionManager"
         file: "packages/desktop/src/main/desktopRemoteSessions.ts"
 
@@ -4487,7 +4477,6 @@ nodes:
       - file: "apps/zcode-cli/packages/cli/tests/build-sea.test.mjs"
       - file: "apps/zcode-cli/packages/adapters/tests/plugins.test.ts"
       - file: "apps/zcode-cli/packages/node-repl-host/test/mcp-server.test.ts"
-      - file: "packages/server/test/remoteDeploy.test.ts"
       - file: "packages/desktop/test/runtime-asset-scripts.test.ts"
   - id: "capability.side-pane-tab-strip"
     kind: "capability"
@@ -4942,8 +4931,6 @@ nodes:
         file: "packages/ui/src/v4/composer/newTaskDraft.ts"
       - symbol: "useDraftConfigControl"
         file: "packages/ui/src/v4/composer/useDraftConfigControl.ts"
-      - symbol: "ConversationShareLandingPage"
-        file: "packages/web/src/share/ConversationShareLandingPage.tsx"
       - symbol: "useRootPlatformEffects"
         file: "packages/ui/src/root/useRootPlatformEffects.ts"
       - symbol: "ConversationShareImportNotice"

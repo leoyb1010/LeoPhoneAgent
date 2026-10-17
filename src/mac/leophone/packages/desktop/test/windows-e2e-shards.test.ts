@@ -135,16 +135,6 @@ describe("Windows E2E shard runner", () => {
     expect(specs).toContain("./test/e2e/smoke.test.ts");
     expect(specs).not.toContain("./test/e2e/upstream-provider.test.ts");
     expect(specs.some((spec) => spec.includes("/manual-review/"))).toBe(false);
-    expect(specs.some((spec) => spec.includes("conversation-session-ssh-remote"))).toBe(false);
-
-    const sshSpecs = listDefaultFormalE2ESpecs(resolve(process.cwd(), "packages/desktop"), {
-      ZCODE_E2E_SSH_HOST: "ssh.example.test",
-      ZCODE_E2E_SSH_USERNAME: "root",
-      ZCODE_E2E_SSH_PASSWORD: "secret-from-test-env",
-    });
-    expect(sshSpecs).toContain(
-      "./test/e2e/conversation-session/conversation-session-ssh-remote-connection-p0.test.ts",
-    );
   });
 
   it("uses deterministic LPT weights and a fallback for new specs", () => {

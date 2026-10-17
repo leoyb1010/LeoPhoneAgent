@@ -5,17 +5,16 @@ import {
   TID_WORKSPACE_MORE_BUTTON,
   TID_WORKSPACE_PATH,
   TID_WORKSPACE_TITLE,
-  type RemoteTarget,
   type ZCodeTaskMeta,
 } from "@zcode/shared";
 import { useMemo, useRef, useState } from "react";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
-import { Cloud, Ellipsis, Folder, GitBranch, LoaderIcon } from "lucide-react";
+import { Ellipsis, Folder, GitBranch, LoaderIcon } from "lucide-react";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
 import { useGlobalTaskList } from "@/hooks/useGlobalTaskList.js";
-import { useBaseWorkspaceServices, useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
+import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { useTaskListItemContextActions } from "@/useTaskListItemContextActions.js";
 import { TaskActionMenuContent } from "@/TaskActionMenuContent.js";
 import {
@@ -26,10 +25,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import {
-  formatRemoteWorkspaceDisplayLabel,
-  formatRemoteWorkspaceHeaderHostLabel,
-} from "@/lib/remoteWorkspaceHistory.js";
 import { resolveWorkspaceHeaderProvider } from "@/lib/workspaceHeaderProvider.js";
 import { toast } from "@/components/ui/toast.js";
 import { useModelTrajectoryStore } from "@/store/modelTrajectoryStore.js";
@@ -43,15 +38,6 @@ import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import { useRemotePinnedTaskStore } from "@/store/remotePinnedTaskStore.js";
 import { useRemoteTimelineTaskStore } from "@/store/remoteTimelineTaskStore.js";
 import { TaskRenameDialog } from "@/TaskRenameDialog.js";
-import {
-  RemoteSyncDialogs,
-  RemoteSyncMenuItems,
-  shouldShowRemoteSyncActions,
-} from "@/settings/RemoteSyncActions.js";
-import { invalidateDeferredDraftSessionForSkillChange } from "@/lib/zcodeDraftSkillInvalidation.js";
-import { refreshSharedSkillStoreForWorkspace } from "@/lib/skillStoreRefresh.js";
-import { refreshWorkspacePluginCapabilitiesAfterRemoteSync } from "@/lib/remotePluginSyncRefresh.js";
-import { useMcpStore } from "@/store/mcpStore.js";
 
 export type { WorkspaceHeaderState, WorkspaceHeaderTitleSectionProps };
 export {
@@ -59,23 +45,12 @@ export {
   type WorkspaceHeaderActionSectionProps,
 } from "@/WorkspaceHeaderSections/WorkspaceHeaderActionSection.js";
 
-export function shouldShowRemoteSkillSyncAction(params: {
-  remoteSessionId?: string | null;
-  remoteTarget?: RemoteTarget | null;
-  clientMode?: "desktop-continuous" | "web-remote-replayable";
-  hasLocalSourceService?: boolean;
-}): boolean {
-  return shouldShowRemoteSyncActions(params);
-}
-
 export function WorkspaceHeaderTitleSection({
   variant,
   readOnlyReason,
   workspaceAbsPath,
   remoteSessionId,
   workspaceIdentity,
-  remoteTarget,
-  localWorkspacePath,
   projectName,
   activeTaskTitle,
   activeTaskChangeSummary: _activeTaskChangeSummary,
@@ -107,7 +82,6 @@ export function WorkspaceHeaderTitleSection({
   const { intl } = useZCodeIntl();
   const confirmDialog = useConfirmDialog();
   const services = useWorkspaceServices(workspaceAbsPath, remoteSessionId, workspaceIdentity);
-  const baseServices = useBaseWorkspaceServices();
   const removeTaskState = useZCodeSessionStore((state) => state.removeTaskState);
   const upsertOptimisticTaskListItem = useZCodeSessionStore(
     (state) => state.upsertOptimisticTaskListItem,
@@ -120,9 +94,6 @@ export function WorkspaceHeaderTitleSection({
   const [workspaceContextOpen, setWorkspaceContextOpen] = useState(false);
   const [renamingTaskId, setRenamingTaskId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
-  const [remoteSkillSyncOpen, setRemoteSkillSyncOpen] = useState(false);
-  const [remoteMcpSyncOpen, setRemoteMcpSyncOpen] = useState(false);
-  const [remotePluginSyncOpen, setRemotePluginSyncOpen] = useState(false);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const headerWorkspaceTabs = useMemo(
     () => [
@@ -182,16 +153,7 @@ export function WorkspaceHeaderTitleSection({
     provider: menuTaskProvider,
     intl,
   });
-  const remoteWorkspaceHostLabel = remoteTarget
-    ? formatRemoteWorkspaceHeaderHostLabel(remoteTarget)
-    : null;
-  const workspaceDisplayLabel = formatRemoteWorkspaceDisplayLabel(projectName, remoteTarget);
-  const showRemoteWorkspaceHostLabel = Boolean(
-    remoteWorkspaceHostLabel && workspaceDisplayLabel === projectName,
-  );
-  const workspaceContextLabel = showRemoteWorkspaceHostLabel
-    ? `${workspaceDisplayLabel} @ ${remoteWorkspaceHostLabel}`
-    : workspaceDisplayLabel;
+  const workspaceContextLabel = projectName;
   const workspaceBranchLabel = gitSummary.isRepository
     ? resolveGitBranchTriggerLabel({
         headRefType: gitSummary.headRefType,
@@ -200,19 +162,6 @@ export function WorkspaceHeaderTitleSection({
         fallbackLabel: intl.formatMessage({ id: "git.branchSwitcher.label" }),
       })
     : null;
-  const isRemoteWorkspace = Boolean(
-    remoteWorkspaceHostLabel || workspaceIdentity?.trim() || remoteSessionId,
-  );
-  const showRemoteSkillSyncAction = shouldShowRemoteSkillSyncAction({
-    remoteSessionId,
-    remoteTarget,
-    clientMode: "desktop-continuous" as const,
-    hasLocalSourceService: Boolean(
-      baseServices.skillSyncService &&
-      baseServices.mcpSyncService &&
-      baseServices.pluginSyncService,
-    ),
-  });
   const workspaceActionLoading = reloadSessionPending;
   const workspaceActionLoadingTitle = intl.formatMessage({
     id: "appHeader.workspaceSessionActionLoading",
@@ -384,11 +333,7 @@ export function WorkspaceHeaderTitleSection({
               className="flex w-full min-w-0 flex-col gap-3 text-left"
             >
               <span className="flex min-w-0 items-start gap-2">
-                {isRemoteWorkspace ? (
-                  <Cloud className="size-4 shrink-0" />
-                ) : (
-                  <Folder className="size-4 shrink-0" />
-                )}
+                <Folder className="size-4 shrink-0" />
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="min-w-0 break-words [overflow-wrap:anywhere]">
                     {workspaceContextLabel}
@@ -426,11 +371,7 @@ export function WorkspaceHeaderTitleSection({
             aria-label={[workspaceContextLabel, workspaceBranchLabel].filter(Boolean).join(" · ")}
             onClick={() => setWorkspaceContextOpen(true)}
           >
-            {isRemoteWorkspace ? (
-              <Cloud className="size-4 text-foreground-subtle" />
-            ) : (
-              <Folder className="size-4 text-foreground-subtle" />
-            )}
+            <Folder className="size-4 text-foreground-subtle" />
           </Button>
         </ControlHintTooltip>
       ) : null}
@@ -474,19 +415,6 @@ export function WorkspaceHeaderTitleSection({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48">
-              {showRemoteSkillSyncAction && remoteTarget ? (
-                <>
-                  <RemoteSyncMenuItems
-                    canSyncSkills
-                    canSyncMcp
-                    canSyncPlugins
-                    onOpenSkillSync={() => setRemoteSkillSyncOpen(true)}
-                    onOpenMcpSync={() => setRemoteMcpSyncOpen(true)}
-                    onOpenPluginSync={() => setRemotePluginSyncOpen(true)}
-                  />
-                  <DropdownMenuSeparator />
-                </>
-              ) : null}
               <TaskActionMenuContent
                 intl={intl}
                 isPinned={isPinned}
@@ -684,66 +612,6 @@ export function WorkspaceHeaderTitleSection({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
-        <RemoteSyncDialogs
-          canSyncSkills={showRemoteSkillSyncAction}
-          canSyncMcp={showRemoteSkillSyncAction}
-          canSyncPlugins={showRemoteSkillSyncAction}
-          skillOpen={remoteSkillSyncOpen}
-          mcpOpen={remoteMcpSyncOpen}
-          pluginOpen={remotePluginSyncOpen}
-          onSkillOpenChange={setRemoteSkillSyncOpen}
-          onMcpOpenChange={setRemoteMcpSyncOpen}
-          onPluginOpenChange={setRemotePluginSyncOpen}
-          localSkillSyncService={baseServices.skillSyncService}
-          remoteSkillSyncService={services.skillSyncService}
-          localMcpSyncService={baseServices.mcpSyncService}
-          remoteMcpSyncService={services.mcpSyncService}
-          localPluginSyncService={baseServices.pluginSyncService}
-          remotePluginSyncService={services.pluginSyncService}
-          localZCodeAgentService={baseServices.zcodeAgentService}
-          remoteZCodeAgentService={services.zcodeAgentService}
-          remoteTarget={remoteTarget}
-          skillWorkspacePath={workspaceAbsPath}
-          mcpWorkspacePath={workspaceAbsPath}
-          pluginWorkspacePath={workspaceAbsPath}
-          pluginLocalWorkspacePath={localWorkspacePath}
-          mcpLocalWorkspacePath={localWorkspacePath}
-          workspaceIdentity={workspaceIdentity}
-          onSkillsSynced={async () => {
-            await invalidateDeferredDraftSessionForSkillChange({
-              zcodeSessionService: services.zcodeSessionService,
-              workspacePath: workspaceAbsPath,
-              workspaceIdentity,
-              reason: "header-remote-skill-sync",
-            });
-            await refreshSharedSkillStoreForWorkspace({
-              workspacePath: workspaceAbsPath,
-              workspaceIdentity,
-              skillsService: services.skillsService,
-            });
-          }}
-          onMcpSynced={async () => {
-            await useMcpStore
-              .getState()
-              .ensureLoadedForWorkspace(
-                workspaceAbsPath,
-                services.mcpSyncService,
-                workspaceIdentity,
-              );
-          }}
-          onPluginsSynced={async () => {
-            await refreshWorkspacePluginCapabilitiesAfterRemoteSync({
-              commandsService: services.commandsService,
-              mcpSyncService: services.mcpSyncService,
-              reason: "header-remote-plugin-sync",
-              skillsService: services.skillsService,
-              workspaceIdentity,
-              workspacePath: workspaceAbsPath,
-              zcodeAgentService: services.zcodeAgentService,
-              zcodeSessionService: services.zcodeSessionService,
-            });
-          }}
-        />
         {!isDraftNewTask && workspaceActionLoading ? (
           <ControlHintTooltip
             title={workspaceActionLoadingTitle}

@@ -12,7 +12,6 @@ describe("all E2E coverage runner", () => {
       args: ["--mochaOpts.timeout=120000"],
       env: { KEEP_ME: "1" },
       upstreamReady: true,
-      sshReady: false,
     });
 
     expect(plan.command).toBe(process.platform === "win32" ? "pnpm.cmd" : "pnpm");
@@ -28,10 +27,6 @@ describe("all E2E coverage runner", () => {
       "./test/e2e/**/*.test.ts",
       "--spec",
       "./test/e2e/conversation-session/manual-review/pending/conversation-session-turn-steer-probe.test.ts",
-      "--exclude",
-      "./test/e2e/conversation-session/conversation-session-ssh-remote*.test.ts",
-      "--exclude",
-      "./test/e2e/conversation-session/manual-review/**/conversation-session-ssh-remote*.test.ts",
       "--mochaOpts.timeout=120000",
     ]);
     expect(plan.notes).toEqual([]);
@@ -42,7 +37,6 @@ describe("all E2E coverage runner", () => {
       args: [],
       env: {},
       upstreamReady: false,
-      sshReady: false,
     });
 
     expect(plan.args).toContain("./test/e2e/upstream-provider.test.ts");
@@ -50,17 +44,6 @@ describe("all E2E coverage runner", () => {
     expect(plan.notes).toEqual([
       "skipping real provider smoke: configure E2E_PROVIDER_BASE_URL and E2E_PROVIDER_API_KEY to include it",
     ]);
-  });
-
-  it("keeps SSH cases when their environment is available", () => {
-    const plan = createAllE2ECoverageRunPlan({
-      args: [],
-      env: {},
-      upstreamReady: true,
-      sshReady: true,
-    });
-
-    expect(plan.args).not.toContain("--exclude");
   });
 
   it("exposes the same reusable command at the root and desktop package", () => {

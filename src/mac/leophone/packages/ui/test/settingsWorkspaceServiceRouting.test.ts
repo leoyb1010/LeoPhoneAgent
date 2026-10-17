@@ -87,13 +87,10 @@ describe("Settings target workspace service routing", () => {
       /useWorkspaceServicesResolution\(\s*activeWorkspacePath,\s*remoteSessionId,\s*activeWorkspaceIdentity,\s*remoteTarget,\s*\)/,
     );
     expect(source).toMatch(
-      /const \{ pluginManagementService, skillSyncService, skillsService \}\s*=\s*targetServiceResolution\.services;/,
+      /const \{ pluginManagementService, skillsService \}\s*=\s*targetServiceResolution\.services;/,
     );
     expect(source).toContain("if (!targetServiceResolution.rpcReady) return;");
     expect(source).toContain("open={importDialogOpen && targetServiceResolution.rpcReady}");
-    expect(source).toMatch(
-      /skillOpen=\{\s*remoteSkillSyncOpen && targetServiceResolution\.rpcReady\s*\}/,
-    );
     expect(source).toMatch(
       /!targetServiceResolution\.rpcReady\s*\?\s*\(\s*<PluginLoadingState[\s\S]*?id: "common\.connecting"/,
     );

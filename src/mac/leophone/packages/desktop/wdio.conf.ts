@@ -90,7 +90,6 @@ import { prepareOAuthCompletionRaceFixture } from "./test/e2e/helpers/oauth-comp
 import { prepareAccessToken401Fixture } from "./test/e2e/helpers/access-token-401-fixture.js";
 import { createE2EReplayFixtureVariables } from "./test/e2e/helpers/e2e-runtime-paths.js";
 import { stageE2EAppOutput } from "./test/e2e/helpers/e2e-app-output-stage.js";
-import { ensureSshRemoteReleaseAssets } from "./test/e2e/helpers/e2e-ssh-remote-release-assets.js";
 import { ASK_USER_QUESTION_E2E_CLOCK_SCALE_ENV, BIGMODEL_PROVIDER_ID } from "@zcode/shared";
 import {
   seedPersonalProviderConfig,
@@ -109,10 +108,6 @@ import {
   startCodingPlanUpgradeMockServer,
   type CodingPlanUpgradeMockServer,
 } from "./test/e2e/helpers/coding-plan-upgrade-mock-server.js";
-import {
-  hasRequiredSshE2EEnvironment,
-  resolveEnvironmentGatedFormalSpecExcludes,
-} from "./scripts/e2e-formal-spec-selection.mjs";
 import {
   applyDynamicWorkflowConfigMockEnv,
   clearDynamicWorkflowConfigMockEnv,
@@ -552,9 +547,6 @@ const configuredE2ESpecs =
 const pluginNoGitGitHubArchiveE2E = configuredE2ESpecs.some((spec) =>
   spec.includes(PLUGIN_NO_GIT_GITHUB_ARCHIVE_SPEC),
 );
-const workspacePluginRemoteExplicitSyncE2E = configuredE2ESpecs.some((spec) =>
-  spec.includes("conversation-session-plugin-remote-explicit-sync-workspace.test.ts"),
-);
 const e2eReporter = createE2EReporter({
   repoRoot: REPO_ROOT,
   desktopDir: DESKTOP_DIR,
@@ -573,25 +565,6 @@ const E2E_RUN_CACHE_DIR = resolve(DESKTOP_DIR, ".e2e-cache", E2E_RUN_ID);
 const E2E_APP_OUTPUT_DIR = resolve(E2E_RUN_CACHE_DIR, "app");
 const E2E_APP_ENTRY_POINT = resolve(E2E_APP_OUTPUT_DIR, "main/index.js");
 const E2E_APP_RENDERER_ASSETS_DIR = resolve(E2E_APP_OUTPUT_DIR, "renderer/assets");
-const E2E_REMOTE_ASSET_VERSION = String(
-  (
-    JSON.parse(readFileSync(resolve(REPO_ROOT, "package.json"), "utf-8")) as {
-      version?: string;
-    }
-  ).version ?? "",
-).trim();
-const E2E_REMOTE_RELEASE_SOURCE_DIR = resolve(
-  DESKTOP_DIR,
-  "mock-cdn",
-  "releases",
-  E2E_REMOTE_ASSET_VERSION,
-);
-const E2E_REMOTE_RELEASE_OUTPUT_DIR = resolve(
-  E2E_RUN_CACHE_DIR,
-  "mock-cdn",
-  "releases",
-  E2E_REMOTE_ASSET_VERSION,
-);
 const E2E_CHROMIUM_USER_DATA_ROOT_DIR = resolve(E2E_RUN_CACHE_DIR, "chromium-profiles");
 const containerChromeArgs = [
   "--no-sandbox",
@@ -936,16 +909,11 @@ function prepareDesktopAppBuild() {
   assertDesktopE2EBuildReady("onPrepare build");
 }
 
-function runPnpmWorkspaceCommand(args: string[], options?: { timeoutMs?: number }) {
+function runPnpmWorkspaceCommand(args: string[]) {
   execFileSync(PNPM_COMMAND, args, {
     cwd: REPO_ROOT,
     env: createPnpmChildEnv(),
     stdio: "inherit",
-    // Bug 根因：prepare:remote-assets 会在 CI 上下载 node 二进制并串行构建多个包，
-    // 无 timeout 时一旦下载/构建挂死，wdio onPrepare 会一直占住专用 runner 直到 job
-    // 全局超时。这里只给防挂死的宽裕上限（冷缓存全量 prepare 约 10 分钟），不参与限速；
-    // 其余调用点（本地构建）保持无 timeout。
-    ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
     // 修复原因：Windows runner 上 `pnpm` 由 cmd shim 提供，直接 execFileSync("pnpm.cmd")
     // 在部分 CI 环境会报 spawnSync EINVAL，导致 WDIO 继续用缺失/旧产物启动 Electron。
     shell: process.platform === "win32",
@@ -972,31 +940,6 @@ async function stageDesktopE2EAppOutput() {
   // 修复原因：8 个 shard 同时复制同一份约 90 MiB build 会把 prepare 固定成本
   // 放大到约 30 秒；硬链接保留 runId 隔离目录与不可变快照，并在不支持时逐文件回退 copy。
   await stageE2EAppOutput(DESKTOP_BUILD_OUTPUT_DIR, E2E_APP_OUTPUT_DIR);
-  if (
-    hasRequiredSshE2EEnvironment(process.env) ||
-    process.env.ZCODE_E2E_SSH_HOST?.trim() ||
-    process.env.ZCODE_E2E_SSH_A_HOST?.trim() ||
-    process.env.ZCODE_E2E_SSH_B_HOST?.trim()
-  ) {
-    // Bug 根因：CI 只有 build:remote:assets job 产出 mock-cdn/releases/<version>，且跑在通用
-    // macos runner 槽位；conversation e2e 在专用 runner 上，mock-cdn 工作区持久化目录互不
-    // 相通，版本 bump 后专用 runner 必然缺新版本 release，直接 fatal 会把每次升级变成
-    // CI-only 失败。改为缺目录时自动跑 prepare:remote-assets（幂等），产出后仍缺失才
-    // fail-closed。
-    ensureSshRemoteReleaseAssets({
-      releaseDir: E2E_REMOTE_RELEASE_SOURCE_DIR,
-      prepareReleaseAssets: () =>
-        runPnpmWorkspaceCommand(["--filter", "@zcode/desktop", "prepare:remote-assets"], {
-          // 防挂死上限：冷缓存全量 prepare 约 10 分钟，给到 30 分钟只兑现在「彻底卡死」时
-          // 让 onPrepare 失败退出，正常慢路径不受影响。
-          timeoutMs: 30 * 60 * 1000,
-        }),
-    });
-    // Bug 根因：dual-SSH case 只配置 A/B target；若这里只识别 common host，就不会把
-    // 当前源码构建的 remote release 放进 runId 隔离目录，远端会继续复用同版本的旧
-    // server bundle，并用旧协议 schema 拒绝 enabledSource 等新字段。
-    await stageE2EAppOutput(E2E_REMOTE_RELEASE_SOURCE_DIR, E2E_REMOTE_RELEASE_OUTPUT_DIR);
-  }
   if (!existsSync(E2E_APP_ENTRY_POINT)) {
     throw new Error(`[e2e] staged desktop main entrypoint missing: ${E2E_APP_ENTRY_POINT}`);
   }
@@ -4557,10 +4500,6 @@ export const config: WebdriverIO.Config = {
           BROWSER_PERMISSION_MANUAL_REVIEW_SPEC_GLOB,
         ]),
     ...(gitManualReviewSpecRequested ? [] : [GIT_MANUAL_REVIEW_SPEC_GLOB]),
-    ...resolveEnvironmentGatedFormalSpecExcludes({
-      env: process.env,
-      targeted: requestedE2ESpecs.length > 0,
-    }),
     // Bugfix: MR 自动门禁可以临时 quarantine 已知不稳定正式 spec，但本地默认
     // `test:e2e` 不受影响，避免把 flaky case 从开发者回归入口永久隐藏。
     ...requestedE2EExcludeSpecs,
@@ -4585,14 +4524,11 @@ export const config: WebdriverIO.Config = {
     // 修复原因：真实模型配置 + 首次会话预热可能超过 30s，保留更宽的单 case 上限，避免还没收到上游响应就被 Mocha 截断。
     // 真实 GitHub Archive smoke 会下载 Claude 官方市场和目标插件；E2E 抓包代理还会
     // 记录完整二进制响应，不能沿用只覆盖本地 fixture 的 120 秒上限。
-    // WPL-011 会经过 SSH asset、marketplace 镜像、远端安装与 runtime refresh；
-    // 固定 120 秒会在 UI 有机会报告具体同步结果前先截断 case。
     // Bug 根因：Mocha adapter 会在进入 test body 前按 config timeout 包裹用例，
     // 因此用例内的 this.timeout 无法为人工保留阶段追加预算。显式 hold 只扩展
     // manual-review 运行，不改变普通 E2E 的 120 秒上限。
     timeout:
       (pluginNoGitGitHubArchiveE2E ||
-      workspacePluginRemoteExplicitSyncE2E ||
       // 双 Host 参数化场景复用同一组已存在 session，覆盖完整保存/故障链后再核对整段轨迹。
       configuredE2ESpecs.some((spec) =>
         spec.endsWith("conversation-session-subagent-cross-host.test.ts"),

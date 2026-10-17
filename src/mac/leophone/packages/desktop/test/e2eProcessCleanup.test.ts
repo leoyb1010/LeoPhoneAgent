@@ -79,14 +79,6 @@ describe("desktop e2e process cleanup", () => {
   it("waits for each window Host once and keeps update install on the strict policy", () => {
     const mainSource = readFileSync(new URL("../src/main/index.ts", import.meta.url), "utf8");
 
-    // R1 后 remote session 是窗口 Host 内资源；manager 只清理请求关联，真正的连接释放由
-    // windowHostProcessMap 中唯一 Host 的 shutdown barrier 完成。
-    expect(mainSource).toMatch(
-      /async function prepareAppQuit[\s\S]*?remoteSessionManager\.disposeAllAndWaitForAppShutdown\(reason\)/u,
-    );
-    expect(mainSource).toMatch(
-      /async function prepareAppQuit[\s\S]*?stopRemoteUsageArmsPeriodicSampling\(\)[\s\S]*?remoteSessionManager\.disposeAllAndWaitForAppShutdown\(reason\)/u,
-    );
     expect(mainSource).toMatch(
       /async function prepareAppQuit[\s\S]*?stopDesktopResourceTelemetry\(\{ flushPendingWindows: true \}\)/u,
     );
@@ -99,11 +91,11 @@ describe("desktop e2e process cleanup", () => {
       /async function prepareAppQuit[\s\S]*?selectAppShutdownPolicy[\s\S]*?if \(hasPreparedAppQuit\)[\s\S]*?if \(appQuitPreparationInFlight\)/u,
     );
     expect(mainSource).toMatch(
-      /createRemoteWorkspaceSessionManager\(\{[\s\S]*?windowHostProcessMap[\s\S]*?const hostProcesses = \[[\s\S]*?windowHostProcessMap\.values\(\)[\s\S]*?disposeHostProcessAndWait\([\s\S]*?activeAppShutdownPolicy\.forceKillDelayMs[\s\S]*?activeAppShutdownPolicy\.waitTimeoutMs/u,
+      /const hostProcesses = \[[\s\S]*?windowHostProcessMap\.values\(\)[\s\S]*?disposeHostProcessAndWait\([\s\S]*?activeAppShutdownPolicy\.forceKillDelayMs[\s\S]*?activeAppShutdownPolicy\.waitTimeoutMs/u,
     );
     expect(mainSource).not.toMatch(/resolveRemoteHostShutdownPolicy/u);
     expect(mainSource).toMatch(
-      /const cronSchedulerToDispose = cronScheduler[\s\S]*?appQuitPreparationInFlight = Promise\.all\(\[[\s\S]*?cronSchedulerToDispose\?\.dispose\(\)[\s\S]*?remoteSessionManager\.disposeAllAndWaitForAppShutdown/u,
+      /const cronSchedulerToDispose = cronScheduler[\s\S]*?appQuitPreparationInFlight = Promise\.all\(\[[\s\S]*?cronSchedulerToDispose\?\.dispose\(\)[\s\S]*?disposeHostProcessAndWait\(/u,
     );
     // Bug 原因：退出屏障结束后窗口 close 还会启动异步设置写入，app.exit 可能留下锁。
     // 窗口尺寸只在 resize/maximize/unmaximize 阶段保存，退出屏障不得新建该写入。
@@ -127,14 +119,6 @@ describe("desktop e2e process cleanup", () => {
 
     expect(hostSource).toMatch(
       /process\.once\("disconnect"[\s\S]*?disposeHostResources\("disconnect"\)\.finally\(\(\) => process\.exit\(1\)\)/u,
-    );
-  });
-
-  it("Host waits for the remote stdio close handshake", () => {
-    const hostSource = readFileSync(new URL("../src/host/index.ts", import.meta.url), "utf8");
-
-    expect(hostSource).toMatch(
-      /async function disposeHostRemoteConnection[\s\S]*?connection\.disposeAndWait\(\{ timeoutMs: 5_000 \}\)[\s\S]*?name: "remote-registry-dispose"[\s\S]*?timeoutMs: 6_000/u,
     );
   });
 

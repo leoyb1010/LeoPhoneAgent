@@ -165,13 +165,9 @@ import {
 import { resolveZCodeBuiltinProviderConfigFilePath } from "./desktopProviderConfig.js";
 import {
   getCredentialsDir,
-  isDockerDaemonAvailable,
   listSSHConfigAliases,
-  listAvailableDockerContainers,
-  listAvailableWSLDistros,
   loadHostProcessEnvFromLocalFiles,
   resolveBundledGlmBinaryPath,
-  resolveRemoteAssetDirs,
   resolveZCodeEndpointEnvBaseOrigin,
   desktopRuntimeEnv,
   runtimeApplicationName,
@@ -205,13 +201,6 @@ import {
   extractOpenWorkspacePathFromArgs,
   isWorkspaceOpenUrl,
 } from "./desktopDeepLinkUrl.js";
-import { createRemoteWorkspaceSessionManager } from "./desktopRemoteSessions.js";
-import {
-  reportRemoteConnectionStateChangedToArms,
-  reportRemoteDisconnectToArms,
-  stopRemoteUsageArmsPeriodicSampling,
-} from "./desktopRemoteUsageArmsTelemetry.js";
-import { resolveCanonicalWslTarget } from "./desktopWslTargetResolver.js";
 import {
   listRegisteredHostAgentProcessIds,
   setBrowserUseGuestWebContentsIdsProvider,
@@ -821,21 +810,13 @@ app.on("browser-window-created", (_event, win) => {
   win.once("closed", () => cuaPipFocusRouter.removeWindow(windowKey));
 });
 
-const remoteSessionManager = createRemoteWorkspaceSessionManager({
-  logger,
-  windowHostProcessMap,
-  resolveRemoteAssetDirs: () =>
-    resolveRemoteAssetDirs({ locale: currentApplicationLocale }, hostProcessLocalEnv),
-  resolveWslTarget: resolveCanonicalWslTarget,
-  reportRemoteConnectionStateChanged: reportRemoteConnectionStateChangedToArms,
-  reportRemoteDisconnect: reportRemoteDisconnectToArms,
-  webRemoteControlManagerRef,
-});
-
 const webRemoteControlAuthProvider = createNodeWebRemoteControlRelayAuthProvider();
 const webRemoteControlSharedHostAttachments = createWebRemoteControlSharedHostAttachments({
   windowHostProcessMap,
-  attachRemoteWorkspaceSessionHost: remoteSessionManager.attachRemoteWorkspaceSessionHost,
+  // [leo] 远程工作区已删除：Web 远控（feature gate 恒关）只可能挂本地 Host。
+  attachRemoteWorkspaceSessionHost: () => {
+    throw new Error("远程工作区已移除");
+  },
   logger,
 });
 const deviceMid = ensureDesktopDeviceMidSync();
@@ -962,9 +943,10 @@ const webRemoteControlManager = createWebRemoteControlManager({
   logger,
   relayMessageLogger: webRemoteControlRelayLogger,
   platformHandlers: {
-    isDockerAvailable: () => isDockerDaemonAvailable(),
-    listWSLDistros: () => listAvailableWSLDistros(),
-    listDockerContainers: () => listAvailableDockerContainers(),
+    // [leo] 远程工作区已删除，Docker / WSL 探测恒为空。
+    isDockerAvailable: async () => false,
+    listWSLDistros: async () => [],
+    listDockerContainers: async () => [],
     listSSHConfigAliases: () => listSSHConfigAliases(),
     createTempTextAttachment: (payload) => createTempTextAttachment(payload),
     loadMcpFromUserDirectory: (payload) => loadCliMcpFromUserDirectory(payload),
@@ -1169,7 +1151,6 @@ async function prepareAppQuit(reason: string, kind: AppShutdownKind = "normal"):
   stopDesktopResourceTelemetry({ flushPendingWindows: true });
   stopDesktopZCodeDataSizeTelemetry();
   stopDesktopNetworkTelemetry();
-  stopRemoteUsageArmsPeriodicSampling();
   disposeRendererActionTraceIpc?.();
   disposeRendererActionTraceIpc = undefined;
   notifyStabilityAppExit(
@@ -1207,9 +1188,6 @@ async function prepareAppQuit(reason: string, kind: AppShutdownKind = "normal"):
         logger.warn(`[app-quit] cron scheduler dispose failed (${reason}):`, error);
       }
     })(),
-    // remote session、attachment 和 transport 都由窗口 Host 持有；这里先清理
-    // Main 的请求关联，再由下方每窗口唯一 Host 的 shutdown barrier 释放真实连接与 Agent。
-    remoteSessionManager.disposeAllAndWaitForAppShutdown(reason),
     ...hostProcesses.map((child, index) =>
       disposeHostProcessAndWait(
         child,
@@ -1923,10 +1901,6 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
     syncReadyUpdateToWindow,
     syncPostUpdateReleaseNotesToWindow,
     webRemoteControlManager,
-    disposeRemoteWorkspaceSessionsForWindow:
-      remoteSessionManager.disposeRemoteWorkspaceSessionsForWindow,
-    reattachRemoteWorkspaceSessionsForWindow:
-      remoteSessionManager.reattachRemoteWorkspaceSessionsForWindow,
     bootstrap: {
       restoreSession: startupBootstrap.restoreSession,
       initialWorkspacePath: startupBootstrap.initialWorkspacePath,
@@ -2385,7 +2359,6 @@ app.whenReady().then(async () => {
       void armsUserIdentitySync.refresh();
     },
     appTelemetryCore,
-    reportRemoteUsageEvent: reportRemoteUsageEventForRenderer,
     armsCustomContext: {
       deviceMid,
       platform: process.platform,
@@ -2393,17 +2366,6 @@ app.whenReady().then(async () => {
       armsEnv: mapZCodeEnvToArmsRumEnv(desktopRuntimeEnv),
     },
     finalArmsCustomEventE2EEnabled: shouldEnableE2ETestBridge(process.env),
-    createRemoteWorkspaceSession: remoteSessionManager.createRemoteWorkspaceSession,
-    getRemoteConnectionStats: remoteSessionManager.getRemoteConnectionStats,
-    disposeRemoteWorkspaceSession: remoteSessionManager.disposeRemoteWorkspaceSession,
-    cancelPendingRemoteWorkspaceSessionsForWindow:
-      remoteSessionManager.cancelPendingRemoteWorkspaceSessionsForWindow,
-    bindRemoteWorkspaceSessionContext: remoteSessionManager.bindRemoteWorkspaceSessionContext,
-    confirmRendererAttachmentReady: remoteSessionManager.confirmRendererAttachmentReady,
-    isDockerDaemonAvailable,
-    listAvailableWSLDistros,
-    listAvailableDockerContainers,
-    listSSHConfigAliases,
   });
 
   // 等待 ARMS 完成 init（含渲染进程注入监听），避免首窗 dom-ready 早于 SDK 注册导致无上报

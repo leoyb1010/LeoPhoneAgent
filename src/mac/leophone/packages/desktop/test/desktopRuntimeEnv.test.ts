@@ -1,10 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -149,9 +147,6 @@ vi.mock("@zcode/services/node", () => ({
   ZCODE_WINDOWS_APP_INSTALL_DIR_ENV: "ZCODE_WINDOWS_APP_INSTALL_DIR",
 }));
 
-const originalUseCdnSwitch = process.env["ZCODE_DEV_REMOTE_ASSET_USE_CDN"];
-const originalCdnBaseUrl = process.env["ZCODE_REMOTE_ASSET_CDN_BASE_URL"];
-const originalRemoteAssetCacheDir = process.env["ZCODE_REMOTE_ASSET_CACHE_DIR"];
 const originalNodeNoWarnings = process.env["NODE_NO_WARNINGS"];
 const originalNodeEnv = process.env["NODE_ENV"];
 const originalZCodeRuntimeEnv = process.env["ZCODE_RUNTIME_ENV"];
@@ -224,198 +219,11 @@ function deleteAmbientHostEnv(): void {
   }
 }
 
-function resolveTestMockCdnReleaseDir(): string {
-  return join(process.cwd(), "packages", "desktop", "mock-cdn", "releases", "0.0.0-test");
-}
-
-async function withTestMockCdnReleaseDir<T>(
-  mode: "present" | "missing",
-  task: () => Promise<T>,
-): Promise<T> {
-  const releaseDir = resolveTestMockCdnReleaseDir();
-  const backupDir = `${releaseDir}.backup-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const hadReleaseDir = existsSync(releaseDir);
-  if (hadReleaseDir) {
-    renameSync(releaseDir, backupDir);
-  }
-
-  try {
-    if (mode === "present") {
-      mkdirSync(releaseDir, { recursive: true });
-    } else {
-      rmSync(releaseDir, { recursive: true, force: true });
-    }
-    vi.resetModules();
-    return await task();
-  } finally {
-    rmSync(releaseDir, { recursive: true, force: true });
-    if (hadReleaseDir) {
-      renameSync(backupDir, releaseDir);
-    }
-  }
-}
 function expectRuntimePath(actualPath: string | undefined, expectedPath: string) {
   // Bugfix: macOS 的 /var 是 /private/var 的符号链接，chdir 后 process.cwd() 会返回真实路径。
   // buildHostProcessEnv 按 cwd 解析 bundled runtime，因此断言也要比较真实路径，避免路径拼写差异掩盖优先级语义。
   expect(actualPath).toBe(realpathSync(expectedPath));
 }
-
-describe("desktopRuntimeEnv resolveRemoteAssetDirs", () => {
-  beforeEach(() => {
-    vi.resetModules();
-    appMock.isPackaged = false;
-    appMock.getPath.mockImplementation((name: string) => `/mock/${name}`);
-    delete process.env["ZCODE_DEV_REMOTE_ASSET_USE_CDN"];
-    delete process.env["ZCODE_REMOTE_ASSET_CDN_BASE_URL"];
-    delete process.env["ZCODE_REMOTE_ASSET_CACHE_DIR"];
-  });
-
-  afterAll(() => {
-    if (originalUseCdnSwitch == null) {
-      delete process.env["ZCODE_DEV_REMOTE_ASSET_USE_CDN"];
-    } else {
-      process.env["ZCODE_DEV_REMOTE_ASSET_USE_CDN"] = originalUseCdnSwitch;
-    }
-
-    if (originalCdnBaseUrl == null) {
-      delete process.env["ZCODE_REMOTE_ASSET_CDN_BASE_URL"];
-    } else {
-      process.env["ZCODE_REMOTE_ASSET_CDN_BASE_URL"] = originalCdnBaseUrl;
-    }
-
-    if (originalRemoteAssetCacheDir == null) {
-      delete process.env["ZCODE_REMOTE_ASSET_CACHE_DIR"];
-    } else {
-      process.env["ZCODE_REMOTE_ASSET_CACHE_DIR"] = originalRemoteAssetCacheDir;
-    }
-
-    if (originalNodeNoWarnings == null) {
-      delete process.env["NODE_NO_WARNINGS"];
-    } else {
-      process.env["NODE_NO_WARNINGS"] = originalNodeNoWarnings;
-    }
-  });
-
-  it("开发态当前版本 mock-cdn 存在时默认走 mock-cdn", async () => {
-    await withTestMockCdnReleaseDir("present", async () => {
-      const { resolveRemoteAssetDirs } = await import("../src/main/desktopRuntimeEnv.js");
-      const dirs = resolveRemoteAssetDirs({
-        locale: "zh-CN",
-        timeZone: "Asia/Shanghai",
-      });
-
-      expect(dirs.mockCdnDir).toMatch(/[\\/]mock-cdn$/);
-      expect(dirs.remoteCdnBaseUrl).toBe(
-        "http://intranet.example.invalid:12345/ssh-remote-assets/0.0.0-test",
-      );
-      expect(dirs.remoteCdnBaseUrls).toEqual([
-        "http://intranet.example.invalid:12345/ssh-remote-assets/0.0.0-test",
-      ]);
-      expect(dirs.remoteCacheDir).toMatch(/[\\/]userData[\\/]remote-assets-cache$/);
-    });
-  });
-
-  it("开发态当前版本 mock-cdn 缺失时回退到 CDN cache", async () => {
-    await withTestMockCdnReleaseDir("missing", async () => {
-      const { resolveRemoteAssetDirs } = await import("../src/main/desktopRuntimeEnv.js");
-      const dirs = resolveRemoteAssetDirs({
-        locale: "zh-CN",
-        timeZone: "Asia/Shanghai",
-      });
-
-      expect(dirs.mockCdnDir).toBeUndefined();
-      expect(dirs.remoteCdnBaseUrl).toBe(
-        "http://intranet.example.invalid:12345/ssh-remote-assets/0.0.0-test",
-      );
-      expect(dirs.remoteCdnBaseUrls).toEqual([
-        "http://intranet.example.invalid:12345/ssh-remote-assets/0.0.0-test",
-      ]);
-      expect(dirs.remoteCacheDir).toMatch(/[\\/]userData[\\/]remote-assets-cache$/);
-    });
-  });
-  it("开发态打开开关后应直接走 CDN", async () => {
-    process.env["ZCODE_DEV_REMOTE_ASSET_USE_CDN"] = "TRUE";
-    const { resolveRemoteAssetDirs } = await import("../src/main/desktopRuntimeEnv.js");
-    const dirs = resolveRemoteAssetDirs({
-      locale: "en-US",
-      timeZone: "Asia/Shanghai",
-    });
-
-    expect(dirs.mockCdnDir).toBeUndefined();
-    expect(dirs.remoteCdnBaseUrl).toBe(
-      "http://intranet.example.invalid:12345/ssh-remote-assets/0.0.0-test",
-    );
-    expect(dirs.remoteCdnBaseUrls).toEqual([
-      "http://intranet.example.invalid:12345/ssh-remote-assets/0.0.0-test",
-    ]);
-    expect(dirs.remoteCacheDir).toMatch(/[\\/]userData[\\/]remote-assets-cache$/);
-  });
-
-  it("生产态应始终走 CDN 分支", async () => {
-    appMock.isPackaged = true;
-    process.env["ZCODE_DEV_REMOTE_ASSET_USE_CDN"] = "0";
-    process.env["ZCODE_REMOTE_ASSET_CDN_BASE_URL"] = "https://cdn.example.com/releases///";
-    const { resolveRemoteAssetDirs } = await import("../src/main/desktopRuntimeEnv.js");
-    const dirs = resolveRemoteAssetDirs({
-      locale: "zh-CN",
-      timeZone: "Asia/Shanghai",
-    });
-
-    expect(dirs.mockCdnDir).toBeUndefined();
-    expect(dirs.remoteCdnBaseUrl).toBe("https://cdn.example.com/releases");
-    expect(dirs.remoteCdnBaseUrls).toEqual(["https://cdn.example.com/releases"]);
-    expect(dirs.remoteCacheDir).toMatch(/[\\/]userData[\\/]remote-assets-cache$/);
-  });
-
-  it("remote asset cache 目录支持环境变量覆盖", async () => {
-    const overrideCacheDir = join(tmpdir(), "zcode-prod-remote-assets-cache");
-    process.env["ZCODE_REMOTE_ASSET_CACHE_DIR"] = overrideCacheDir;
-    const { resolveRemoteAssetDirs } = await import("../src/main/desktopRuntimeEnv.js");
-    const dirs = resolveRemoteAssetDirs({
-      locale: "zh-CN",
-      timeZone: "Asia/Shanghai",
-    });
-
-    expect(dirs.remoteCacheDir).toBe(overrideCacheDir);
-  });
-
-  it("remote asset cache 目录支持本地 env 文件覆盖", async () => {
-    const overrideCacheDir = join(tmpdir(), "zcode-local-env-remote-assets-cache");
-    const { resolveRemoteAssetDirs } = await import("../src/main/desktopRuntimeEnv.js");
-    const dirs = resolveRemoteAssetDirs(
-      {
-        locale: "zh-CN",
-        timeZone: "Asia/Shanghai",
-      },
-      {
-        ZCODE_REMOTE_ASSET_CACHE_DIR: overrideCacheDir,
-      },
-    );
-
-    expect(dirs.remoteCacheDir).toBe(overrideCacheDir);
-  });
-
-  it("开发态本地 env 文件可切到 CDN 并覆盖 CDN 与 cache", async () => {
-    const overrideCacheDir = join(tmpdir(), "zcode-local-env-cdn-remote-assets-cache");
-    const { resolveRemoteAssetDirs } = await import("../src/main/desktopRuntimeEnv.js");
-    const dirs = resolveRemoteAssetDirs(
-      {
-        locale: "zh-CN",
-        timeZone: "Asia/Shanghai",
-      },
-      {
-        ZCODE_DEV_REMOTE_ASSET_USE_CDN: "1",
-        ZCODE_REMOTE_ASSET_CDN_BASE_URL: "https://cdn.example.com/releases///",
-        ZCODE_REMOTE_ASSET_CACHE_DIR: overrideCacheDir,
-      },
-    );
-
-    expect(dirs.mockCdnDir).toBeUndefined();
-    expect(dirs.remoteCdnBaseUrl).toBe("https://cdn.example.com/releases");
-    expect(dirs.remoteCdnBaseUrls).toEqual(["https://cdn.example.com/releases"]);
-    expect(dirs.remoteCacheDir).toBe(overrideCacheDir);
-  });
-});
 
 describe("desktopRuntimeEnv buildHostProcessEnv", () => {
   beforeEach(() => {

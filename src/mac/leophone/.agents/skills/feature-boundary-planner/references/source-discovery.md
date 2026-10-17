@@ -16,7 +16,6 @@ Read the matching node and relationships referencing its ID, then inspect the de
 | Business services     | `packages/services/src`                   | authoritative owner, command admission, public contract, persistence |
 | Shared contracts      | `packages/shared/src`, `packages/rpc/src` | runtime schema, request/event shape, routing boundary                |
 | Desktop lifecycle     | `packages/desktop/src`                    | renderer/host/main responsibilities, process ownership               |
-| Web client and server | `packages/web/src`, `packages/server/src` | transport, authentication, attachment, client mode                   |
 | Agent runtime         | `apps/zcode-cli/packages`                 | command handler, runtime state, emitted events                       |
 | Module boundaries     | `architecture-policy.yaml`                | declared roots, layers, public entrypoints, dependencies             |
 

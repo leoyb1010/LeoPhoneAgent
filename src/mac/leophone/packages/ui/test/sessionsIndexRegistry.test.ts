@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { Emitter } from "@zcode/rpc";
-import type { IServiceAccessor } from "@zcode/services";
 import type {
   SessionSummary,
   SessionsIndexTopicFrame,
@@ -14,10 +13,6 @@ import {
   type SessionsIndexAgentService,
 } from "@/v4/sessionsIndexRegistry.js";
 import { SessionsIndexStore } from "@/v4/sessionsIndexStore.js";
-import {
-  registerRemoteWorkspaceSession,
-  unregisterRemoteWorkspaceSession,
-} from "@/store/remoteWorkspaceSessionStore.js";
 
 function mockAgentService(): SessionsIndexAgentService {
   const runtimeRestarts = new Emitter<{ workspaceKey: string }>();
@@ -393,43 +388,6 @@ describe("sessionsIndexRegistry", () => {
       releaseSessionsIndex(scope, latestStore);
       releaseSessionsIndex(scope, pendingStore);
       releaseSessionsIndex(scope, firstStore);
-    }
-  });
-
-  it("远程 service 连续换代时，迟到的中间代际不能把 transport 切回去", async () => {
-    const firstService = mockAgentService();
-    const staleMiddleService = mockAgentService();
-    const latestService = mockAgentService();
-    const scope = {
-      workspaceKey: "ssh:repo",
-      workspacePath: "/repo",
-      workspaceIdentity: "ssh:repo",
-      endpointKey: "remote-1",
-    };
-    const register = (agentService: SessionsIndexAgentService) =>
-      registerRemoteWorkspaceSession({
-        sessionId: scope.endpointKey,
-        services: { zcodeAgentService: agentService } as unknown as IServiceAccessor,
-      });
-    register(firstService);
-    register(staleMiddleService);
-    register(latestService);
-
-    const firstStore = acquireSessionsIndex(scope, firstService);
-    const latestStore = acquireSessionsIndex(scope, latestService);
-    await vi.waitFor(() => expect(latestService.subscribeSessionsIndexV4).toHaveBeenCalledTimes(1));
-    const staleStore = acquireSessionsIndex(scope, staleMiddleService);
-
-    try {
-      expect(latestStore).toBe(firstStore);
-      expect(staleStore).toBe(firstStore);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(staleMiddleService.subscribeSessionsIndexV4).not.toHaveBeenCalled();
-    } finally {
-      releaseSessionsIndex(scope, staleStore);
-      releaseSessionsIndex(scope, latestStore);
-      releaseSessionsIndex(scope, firstStore);
-      unregisterRemoteWorkspaceSession(scope.endpointKey);
     }
   });
 

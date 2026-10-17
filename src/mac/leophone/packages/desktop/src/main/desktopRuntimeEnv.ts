@@ -1,8 +1,7 @@
-/* eslint-disable max-lines -- desktop runtime/env 解析需要集中维护 main/host/remote assets 的启动边界，拆分会扩大远程连接回归面。 */
+/* eslint-disable max-lines -- desktop runtime/env 解析需要集中维护 main/host 的启动边界。 */
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve, win32 } from "node:path";
-import type { ConnectOptions } from "@zcode/server/remote";
 import { listSSHConfigAliasesFromLocalConfig } from "@zcode/services/node";
 import { DEV_HELPER_APP_NAME, HELPER_APP_NAME } from "@zcode/zcode-cua/broker/helperConstants";
 import {
@@ -32,10 +31,6 @@ import {
   ZCODE_CUA_BUNDLED_HELPER_APP_PATH_ENV,
   ZCODE_WINDOWS_APP_INSTALL_DIR_ENV,
 } from "@zcode/services/node";
-import {
-  resolveRemoteCdnBaseUrls as resolveOrderedRemoteCdnBaseUrls,
-  type ResolveRemoteCdnOptions,
-} from "./remoteCdn.js";
 import { getElectronAppPath, isElectronAppPackaged } from "./desktopElectronApp.js";
 
 declare const __ZCODE_PACKAGED_AGENT_TELEMETRY_ENV__: Readonly<Record<string, string>> | undefined;
@@ -100,26 +95,7 @@ export function getCredentialsDir() {
   return getAppConfigDir();
 }
 
-export type RemoteAssetDirs = Pick<
-  ConnectOptions,
-  "mockCdnDir" | "remoteCdnBaseUrl" | "remoteCdnBaseUrls" | "remoteCacheDir"
->;
 type LocalRuntimeEnv = Record<string, string | undefined>;
-
-export async function isDockerDaemonAvailable(): Promise<boolean> {
-  const { isDockerAvailable } = await import("@zcode/server/remote");
-  return isDockerAvailable();
-}
-
-export async function listAvailableWSLDistros() {
-  const { listWSLDistros } = await import("@zcode/server/remote");
-  return listWSLDistros();
-}
-
-export async function listAvailableDockerContainers() {
-  const { listDockerContainers } = await import("@zcode/server/remote");
-  return listDockerContainers();
-}
 
 export async function listSSHConfigAliases() {
   return await listSSHConfigAliasesFromLocalConfig();
@@ -235,48 +211,6 @@ export function resolvePackagedAgentTelemetryEnv(
   });
 }
 
-function resolveDevelopmentMockCdnDir(): string {
-  return join(import.meta.dirname, "../../mock-cdn");
-}
-
-function resolveAvailableDevelopmentMockCdnDir(): string | undefined {
-  const mockCdnDir = resolveDevelopmentMockCdnDir();
-  const releaseDir = join(mockCdnDir, "releases", ZCODE_VERSION);
-  // 开发态 mock-cdn 是可选离线缓存。当前版本目录不存在时继续传 mockCdnDir，
-  // 会让 WSL/SSH 重连先命中一个必然缺失的本地路径，遮蔽已有的 CDN/cache fallback。
-  return existsSync(releaseDir) ? mockCdnDir : undefined;
-}
-
-function isTruthyEnvFlag(value: string | undefined): boolean {
-  if (!value) {
-    return false;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
-}
-
-function shouldUseRemoteCdnInDevelopment(localEnv: LocalRuntimeEnv = {}): boolean {
-  return isTruthyEnvFlag(resolveEnvValue("ZCODE_DEV_REMOTE_ASSET_USE_CDN", localEnv));
-}
-
-function resolveRemoteCdnBaseUrls(
-  options: ResolveRemoteCdnOptions = {},
-  localEnv: LocalRuntimeEnv = {},
-): string[] {
-  const raw = resolveEnvValue("ZCODE_REMOTE_ASSET_CDN_BASE_URL", localEnv);
-  return resolveOrderedRemoteCdnBaseUrls({
-    ...options,
-    env: ZCODE_ENV,
-    overrideBaseUrl: raw,
-    version: ZCODE_VERSION,
-  });
-}
-
-function resolveEnvValue(envName: string, localEnv: LocalRuntimeEnv = {}): string | undefined {
-  return process.env[envName]?.trim() || localEnv[envName]?.trim() || undefined;
-}
-
 export function resolveZCodeEndpointEnvBaseOrigin(
   localEnv: LocalRuntimeEnv = {},
 ): string | undefined {
@@ -321,47 +255,6 @@ function applySelectedZCodeEnvLinks(env: Record<string, string>): Record<string,
 
 function resolveHostProcessNodeEnv(): ZCodeRuntimeEnv {
   return desktopRuntimeEnv;
-}
-
-function resolveRemoteAssetCacheDir(localEnv: LocalRuntimeEnv = {}): string {
-  const overrideCacheDir = resolveEnvValue("ZCODE_REMOTE_ASSET_CACHE_DIR", localEnv);
-  if (overrideCacheDir) {
-    // 开发态需要复用正式版 remote cache 验证下载判断，但不能整体切换 Electron userData。
-    // 因此只允许覆盖 remote assets cache 目录，避免污染登录态、窗口状态等其它开发数据。
-    return resolve(overrideCacheDir);
-  }
-
-  return join(getElectronAppPath("userData"), "remote-assets-cache");
-}
-
-export function resolveRemoteAssetDirs(
-  options: ResolveRemoteCdnOptions = {},
-  localEnv: LocalRuntimeEnv = {},
-): RemoteAssetDirs {
-  const remoteCdnBaseUrls = resolveRemoteCdnBaseUrls(options, localEnv);
-  const remoteCdnBaseUrl = remoteCdnBaseUrls[0];
-
-  // remote 资源之前和 desktop 本地 provider 资源共用安装包内路径，
-  // 结果打包后会把整套 Linux 远程运行时一起塞进 .app，和“remote 资源走 CDN / mock-cdn”的职责边界冲突。
-  // 这里改成显式分流：开发态只读仓库里的 mock-cdn；生产态统一走 CDN + 本地缓存目录，
-  // 不再暴露任何安装包内 remote-assets 路径，避免 remote 资源再次被塞回安装包。
-  // 功能开关：开发态默认继续走 mock-cdn，只有显式打开开关才切到公网 CDN。
-  // 这样能兼容离线开发场景，同时允许在开发环境提前验证真实 CDN 下载链路。
-  if (isElectronAppPackaged() || shouldUseRemoteCdnInDevelopment(localEnv)) {
-    return {
-      remoteCdnBaseUrl,
-      remoteCdnBaseUrls,
-      remoteCacheDir: resolveRemoteAssetCacheDir(localEnv),
-    };
-  }
-
-  const developmentMockCdnDir = resolveAvailableDevelopmentMockCdnDir();
-  return {
-    ...(developmentMockCdnDir ? { mockCdnDir: developmentMockCdnDir } : {}),
-    remoteCdnBaseUrl,
-    remoteCdnBaseUrls,
-    remoteCacheDir: resolveRemoteAssetCacheDir(localEnv),
-  };
 }
 
 function resolveBundledZCodeAgentBinaryPath(): string | undefined {

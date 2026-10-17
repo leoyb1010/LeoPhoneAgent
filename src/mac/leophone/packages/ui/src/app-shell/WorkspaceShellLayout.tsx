@@ -111,11 +111,6 @@ const WORKSPACE_SIDEBAR_RESIZE_KEYBOARD_STEP_PX = 16;
 const WORKSPACE_SIDEBAR_PANEL_WIDTH_CSS_VAR = "--workspace-sidebar-panel-width";
 const WORKSPACE_SIDEBAR_WIDTH_CSS_VAR = "--workspace-sidebar-width";
 const CONVERSATION_AUTO_COLLAPSE_SIDE_PANE_WIDTH_PX = 480;
-// WorkspaceShellLayout 是 memo 组件，默认 []/{} 会在缺省调用时每次创建新引用；
-// 入口缺省这些集合时复用常量，避免浅比较误判 props 变化。
-const EMPTY_RECONNECTING_REMOTE_WORKSPACE_LOGS_BY_WORKSPACE_KEY: NonNullable<
-  WorkspaceShellLayoutProps["reconnectingRemoteWorkspaceLogsByWorkspaceKey"]
-> = {};
 const CONVERSATION_AUTO_COLLAPSE_SIDEBAR_WIDTH_PX = 360;
 const CONVERSATION_AUTO_COLLAPSE_RESIZE_IDLE_MS = 300;
 // 性能修复：ResizablePanelGroup 收到深相等的新 panelIds 数组，
@@ -207,13 +202,9 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   handleOpenAutomations,
   handleOpenPluginStore,
   handleManageInstalledPlugins,
-  onReconnectRemoteWorkspace,
   onLogout,
   onLogin,
   user,
-  reconnectingRemoteWorkspaceKeys,
-  remoteWorkspaceErrorByWorkspaceKey,
-  reconnectingRemoteWorkspaceLogsByWorkspaceKey = EMPTY_RECONNECTING_REMOTE_WORKSPACE_LOGS_BY_WORKSPACE_KEY,
   onCreateTask,
   onCreateConversationTask,
   onResolveConversationWorkspace,
@@ -753,15 +744,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
           tab.workspacePath === workspaceAbsPath &&
           (!workspaceIdentity || tab.workspaceIdentity === workspaceIdentity),
       )?.remoteTarget,
-    [workspaceAbsPath, workspaceIdentity, workspaceTabs],
-  );
-  const workspaceLocalPathForRemoteMcpSync = useMemo(
-    () =>
-      workspaceTabs.find(
-        (tab) =>
-          tab.workspacePath === workspaceAbsPath &&
-          (!workspaceIdentity || tab.workspaceIdentity === workspaceIdentity),
-      )?.localWorkspacePath,
     [workspaceAbsPath, workspaceIdentity, workspaceTabs],
   );
   const workspaceShellSplitStyle = useMemo(
@@ -1562,12 +1544,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     onCreateConversationTask={handleCreateConversationTaskInChat}
                     onOpenFolderFromWorkspaceMenu={onOpenFolderFromWorkspaceMenu}
                     theme={theme}
-                    onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
-                    reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
-                    remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
-                    reconnectingRemoteWorkspaceLogsByWorkspaceKey={
-                      reconnectingRemoteWorkspaceLogsByWorkspaceKey
-                    }
                     onLogout={onLogout}
                     onLogin={onLogin}
                     user={user}
@@ -1690,7 +1666,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                           remoteSessionId={workspaceRemoteSessionId}
                           workspaceIdentity={workspaceIdentity}
                           remoteTarget={workspaceRemoteTarget}
-                          localWorkspacePath={workspaceLocalPathForRemoteMcpSync}
                           projectName={projectName}
                           activeTaskTitle={activeTaskTitle}
                           activeTaskChangeSummary={activeTaskChangeSummary}

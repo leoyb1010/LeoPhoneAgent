@@ -297,32 +297,6 @@ describe("Plugin settings section", () => {
     expect(source).not.toContain("homeDir");
   });
 
-  it("exposes the remote Plugin sync entry on the Plugins settings page", () => {
-    const source = readSource("src/settings/PluginsSection.tsx");
-
-    expect(source).toContain('id: "settings.plugins.remoteSync.open"');
-    expect(source).toContain("canSyncPlugins");
-    expect(source).toContain("remotePluginSyncOpen");
-    expect(source).toContain("localPluginSyncService={baseServices.pluginSyncService}");
-    expect(source).toContain(
-      "remotePluginSyncService={targetServiceResolution.services.pluginSyncService}",
-    );
-    expect(source).toContain("<RemoteSyncDialogs");
-  });
-
-  it("shows the connected remote workspace context on the Plugin tab", () => {
-    const source = readSource("src/settings/PluginsSection.tsx");
-
-    expect(source).toContain(
-      'import { formatRemoteSkillSyncTarget } from "@/settings/RemoteSkillSyncDialog.js";',
-    );
-    expect(source).toContain("const remotePluginSyncTargetLabel = connectedRemoteSyncTarget");
-    expect(source).toContain('id: "settings.plugins.remoteContext"');
-    expect(source).toMatch(
-      /connectedRemoteSyncTarget \? \([\s\S]*?settings\.plugins\.remoteContext[\s\S]*?remotePluginSyncTargetLabel/,
-    );
-  });
-
   it("reuses the complete Plugin scope menu in the MCP editor", () => {
     const scopeMenuSource = readSource("src/settings/PluginScopeMenu.tsx");
     const sectionSource = readSource("src/settings/PluginsSection.tsx");

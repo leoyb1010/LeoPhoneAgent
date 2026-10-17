@@ -110,7 +110,6 @@ import {
   readGroupedTaskCollapsedGroupIds,
 } from "@/lib/groupedTaskExpansionPreference.js";
 import type { Theme } from "@/useTheme.js";
-import type { RemoteConnectionLogEntry } from "@/hooks/useRemoteConnectionLogs.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import { WorkspaceFileTree } from "@/WorkspaceFileTree.js";
 import { WorkspaceArchivedTasksFlatSection } from "@/WorkspaceArchivedTasksFlatSection.js";
@@ -172,13 +171,6 @@ interface SidebarFileTreeTarget {
 // 流式 task 事件会让 sidebar 父级频繁刷新；缺任务分组时如果传新的 []
 // 会让 memo 的 workspace 行误判 taskItems 变化，穿透到 TaskList/TaskListItem 重渲染。
 const EMPTY_WORKSPACE_TASK_ITEMS: ZCodeTaskMeta[] = [];
-// WorkspaceSidebar 是 memo 组件，默认参数里的 {} 每次调用都会创建新引用；
-// 缺省远程重连日志时必须复用同一个对象，避免浅比较被默认值打穿。
-const EMPTY_RECONNECTING_REMOTE_WORKSPACE_LOGS_BY_WORKSPACE_KEY: Record<
-  string,
-  RemoteConnectionLogEntry[]
-> = {};
-
 function WorkspaceDragOverlay({ tab, width }: { tab: WorkspaceTabState; width: number | null }) {
   const isRemote = Boolean(tab.remoteSessionId || tab.remoteTarget || tab.workspaceIdentity);
   return (
@@ -233,13 +225,9 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onCreateConversationTask,
   onOpenFolderFromWorkspaceMenu,
   theme,
-  onReconnectRemoteWorkspace,
   onLogout,
   onLogin,
   user,
-  reconnectingRemoteWorkspaceKeys,
-  remoteWorkspaceErrorByWorkspaceKey,
-  reconnectingRemoteWorkspaceLogsByWorkspaceKey = EMPTY_RECONNECTING_REMOTE_WORKSPACE_LOGS_BY_WORKSPACE_KEY,
   isDesktop = false,
   isMacDesktop: _isMacDesktop = false,
   isWindowsDesktop = false,
@@ -277,13 +265,9 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onCreateConversationTask: () => void;
   onOpenFolderFromWorkspaceMenu: () => void;
   theme: Theme;
-  onReconnectRemoteWorkspace: (workspaceKey: string) => Promise<void>;
   onLogout?: () => void;
   onLogin?: () => void;
   user?: UserInfo | null;
-  reconnectingRemoteWorkspaceKeys: string[];
-  remoteWorkspaceErrorByWorkspaceKey: Record<string, string>;
-  reconnectingRemoteWorkspaceLogsByWorkspaceKey?: Record<string, RemoteConnectionLogEntry[]>;
   isDesktop?: boolean;
   isMacDesktop?: boolean;
   isWindowsDesktop?: boolean;
@@ -1491,16 +1475,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                                             }
                                             workspaceKey={workspaceKey}
                                             onShowMoreWorkspaceTasks={handleShowMoreWorkspaceTasks}
-                                            reconnectingRemoteWorkspaceKeys={
-                                              reconnectingRemoteWorkspaceKeys
-                                            }
-                                            remoteWorkspaceErrorByWorkspaceKey={
-                                              remoteWorkspaceErrorByWorkspaceKey
-                                            }
-                                            reconnectingRemoteWorkspaceLogsByWorkspaceKey={
-                                              reconnectingRemoteWorkspaceLogsByWorkspaceKey
-                                            }
-                                            onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
                                             onOpenFileTree={handleOpenWorkspaceFileTree}
                                           />
                                         );

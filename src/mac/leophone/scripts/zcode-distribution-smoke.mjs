@@ -1,14 +1,12 @@
 // 在仓库外验证发行包，避免开发机 node_modules 掩盖缺失的 TUI/native/worker 依赖。
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
-import { once } from "node:events";
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { promisify, stripVTControlCharacters } from "node:util";
-import { pathToFileURL } from "node:url";
 
 const exec = promisify(execFile);
 const archive = process.argv[2];
@@ -24,7 +22,6 @@ const env = {
   NODE_OPTIONS: "",
   TERM: "xterm-256color",
 };
-let web;
 let terminal;
 try {
   await exec("tar", ["-xzf", resolve(archive), "-C", directory]);
@@ -33,8 +30,8 @@ try {
   const version = (
     await exec(process.execPath, [runner, "--version"], { cwd: workspace, env })
   ).stdout.trim();
-  const require = createRequire(join(root, "package.json"));
-  const pty = require("node-pty");
+  // node-pty 只是驱动 TUI 的测试夹具，发行包本身不携带，从仓库依赖解析。
+  const pty = createRequire(import.meta.url)("node-pty");
   const runtimeCheck = join(root, "agent/check-tui.mjs");
   await writeFile(
     runtimeCheck,
@@ -80,70 +77,17 @@ try {
   assert.equal(tuiExit.exitCode, 0, screen);
   terminal = undefined;
 
-  let webOutput = "";
-  web = spawn(process.execPath, [runner, "--web", "--workspace", workspace, "--no-open"], {
-    cwd: workspace,
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  web.stdout.on("data", (data) => {
-    webOutput += data;
-  });
-  web.stderr.on("data", (data) => {
-    webOutput += data;
-  });
-  let base;
-  await until(
-    () => {
-      base = webOutput.match(/Local:\s+(http:\/\/127\.0\.0\.1:\d+\/)/)?.[1];
-      return Boolean(base);
-    },
-    "Web URL",
-    () => webOutput,
-  );
-  let info;
-  await until(
-    async () => {
-      try {
-        const response = await fetch(new URL("api/server-info", base), {
-          signal: AbortSignal.timeout(1000),
-        });
-        if (!response.ok) return false;
-        info = await response.json();
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    "Web readiness",
-    () => webOutput,
-  );
-  assert.equal(info.workspaces[0].path, workspace);
-  const html = await fetch(base);
-  assert.equal(html.status, 200);
-  assert.match(await html.text(), /<html/i);
-  const { default: WebSocket } = await import(pathToFileURL(require.resolve("ws")).href);
-  const socket = new WebSocket(new URL("ws", base.replace("http:", "ws:")));
-  await once(socket, "open");
-  socket.close();
-  await once(socket, "close");
-  const exited = once(web, "exit");
-  web.kill("SIGTERM");
-  assert.deepEqual(await exited, [0, null]);
-  web = undefined;
   console.log(
     JSON.stringify({
       version,
       platform: process.platform,
       arch: process.arch,
       tui: "native import, initialized render, keyboard exit passed",
-      web: "HTML, server-info, workspace, WebSocket, shutdown passed",
       isolated: true,
     }),
   );
 } finally {
   terminal?.kill();
-  web?.kill();
   await rm(directory, { recursive: true, force: true });
 }
 

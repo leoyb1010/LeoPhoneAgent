@@ -9,26 +9,6 @@ import { supportedTargets } from "../../apps/zcode-cli/packages/cli/scripts/sea-
 const root = resolve(import.meta.dirname, "../..");
 const readJson = async (file) => JSON.parse(await readFile(file, "utf8"));
 
-const runtimePackageNames = [
-  "@hono/node-server",
-  "@hono/node-ws",
-  "ssh2",
-  "node-pty",
-  "undici",
-  "axios",
-  "form-data",
-  "combined-stream",
-  "follow-redirects",
-  "proxy-from-env",
-  "ws",
-  "hono",
-  "yaml",
-  "yazl",
-  // HTTP bundle 将 yauzl 外置；发行包必须携带它，否则脱离仓库就无法启动后端。
-  "yauzl",
-  "node-forge",
-];
-
 export async function stageTuiRuntime(packageRoot) {
   const stagingDirectory = resolve(packageRoot, "../tui-staging");
   const copied = new Map();
@@ -57,13 +37,6 @@ export async function stageTuiRuntime(packageRoot) {
     await rm(stagingDirectory, { recursive: true, force: true });
   }
 }
-const lydellNodePtyPackages = [
-  "@lydell/node-pty-darwin-arm64",
-  "@lydell/node-pty-darwin-x64",
-  "@lydell/node-pty-linux-arm64",
-  "@lydell/node-pty-linux-x64",
-];
-
 function shouldCopyPackagePath(packageDirectory, source) {
   const rel = relative(packageDirectory, source);
   if (!rel) {
@@ -154,57 +127,13 @@ async function copyRuntimePackageTree({ packageName, packageRoot, requireFrom, s
 }
 
 export async function copyRuntimeNodeModules(packageRoot) {
-  const requireFromServer = createRequire(resolve(root, "packages", "server", "package.json"));
-  const seen = new Set();
-  for (const packageName of runtimePackageNames) {
-    await copyRuntimePackageTree({
-      packageName,
-      packageRoot,
-      requireFrom: requireFromServer,
-      seen,
-    });
-  }
-  // CLI 的浏览器运行时同样是外部依赖，不能依赖开发仓库的 hoisted node_modules。
+  // CLI 的浏览器运行时是外部依赖，不能依赖开发仓库的 hoisted node_modules。
   await copyRuntimePackageTree({
     packageName: "playwright-core",
     packageRoot: resolve(packageRoot, "agent"),
     requireFrom: createRequire(resolve(root, "apps/zcode-cli/packages/cli/package.json")),
     seen: new Set(),
   });
-}
-
-export async function patchNodePtyPrebuilds(packageRoot) {
-  const requireFromServer = createRequire(resolve(root, "packages", "server", "package.json"));
-  const nodePtyPrebuildRoot = resolve(packageRoot, "node_modules", "node-pty", "prebuilds");
-
-  for (const packageName of lydellNodePtyPackages) {
-    let packageJsonPath;
-    try {
-      packageJsonPath = await resolvePackageJsonPath(requireFromServer, packageName);
-    } catch {
-      console.warn(`[zcode] ${packageName} is unavailable; skipping node-pty prebuild patch`);
-      continue;
-    }
-    const sourcePrebuildRoot = resolve(dirname(packageJsonPath), "prebuilds");
-    const sourceStat = await stat(sourcePrebuildRoot).catch(() => null);
-    if (!sourceStat?.isDirectory()) {
-      continue;
-    }
-    await cp(sourcePrebuildRoot, nodePtyPrebuildRoot, {
-      dereference: true,
-      force: true,
-      recursive: true,
-    });
-  }
-
-  for (const helper of [
-    resolve(nodePtyPrebuildRoot, "darwin-arm64", "spawn-helper"),
-    resolve(nodePtyPrebuildRoot, "darwin-x64", "spawn-helper"),
-  ]) {
-    if (await pathExists(helper)) {
-      await chmod(helper, 0o755);
-    }
-  }
 }
 
 async function pathExists(path) {
