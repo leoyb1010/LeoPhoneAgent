@@ -6,6 +6,8 @@ import { join } from "node:path";
 
 import { app, desktopCapturer, screen, systemPreferences } from "electron";
 
+import { handlePeerRequest, type PeerRequest } from "./screenMediaHandler.js";
+
 /**
  * [leo][WP-50] 看屏 R0 的截图端(契约见 docs/specs/leo-screen.md)。
  *
@@ -20,6 +22,7 @@ export const SCREEN_PRIVACY_URL =
   "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
 
 let server: Server | null = null;
+type Logger = { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void };
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 const secretMatches = (candidate: unknown) =>
@@ -71,7 +74,7 @@ async function captureScreenFrame(options: {
   };
 }
 
-function ensureServer(logger: { warn: (...args: unknown[]) => void }): void {
+function ensureServer(logger: Logger): void {
   if (server || process.platform !== "darwin") return;
   try {
     unlinkSync(SOCKET_PATH);
@@ -81,7 +84,7 @@ function ensureServer(logger: { warn: (...args: unknown[]) => void }): void {
   server = createServer((req, res) => {
     if (
       req.method !== "POST" ||
-      req.url !== "/capture" ||
+      (req.url !== "/capture" && req.url !== "/peer") ||
       !secretMatches(req.headers["x-leo-screen"])
     ) {
       res.writeHead(403).end();
@@ -89,6 +92,29 @@ function ensureServer(logger: { warn: (...args: unknown[]) => void }): void {
     }
     const chunks: Buffer[] = [];
     req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    if (req.url === "/peer") {
+      // [WP-51] R1 信令里需要主进程做的那部分(采屏 + PeerConnection),见 screenMediaHandler.ts。
+      req.on("end", () => {
+        void (async () => {
+          let request: PeerRequest = { op: "status" };
+          try {
+            request = JSON.parse(Buffer.concat(chunks).toString("utf8")) as PeerRequest;
+          } catch {
+            // 坏请求按查询状态处理。
+          }
+          const result =
+            request.op === "open" && screenPermissionStatus() !== "granted"
+              ? {
+                  status: 428,
+                  body: { code: "screen_permission", message: "Mac 上还没允许 LeoBot 录制屏幕" },
+                }
+              : await handlePeerRequest(request, logger);
+          res.writeHead(result.status, { "content-type": "application/json" });
+          res.end(JSON.stringify(result.body));
+        })();
+      });
+      return;
+    }
     req.on("end", () => {
       void (async () => {
         let options: { maxEdge?: unknown; quality?: unknown; displayId?: unknown } = {};
@@ -141,9 +167,7 @@ function ensureServer(logger: { warn: (...args: unknown[]) => void }): void {
 }
 
 /** 交给 Host 的环境变量(fork 时合进去);第一次调用时顺手把 socket 开起来。 */
-export function leoScreenHostEnv(
-  logger: { warn: (...args: unknown[]) => void } = console,
-): Record<string, string> {
+export function leoScreenHostEnv(logger: Logger = console): Record<string, string> {
   if (process.platform !== "darwin") return {};
   ensureServer(logger);
   return { LEO_SCREEN_SOCKET: SOCKET_PATH, LEO_SCREEN_SECRET: SECRET };

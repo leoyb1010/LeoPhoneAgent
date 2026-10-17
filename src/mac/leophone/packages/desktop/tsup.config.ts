@@ -187,6 +187,7 @@ export default defineConfig([
       "preload/resourceManager": "src/preload/resourceManager.ts",
       "preload/cuaPermissionPanel": "src/preload/cuaPermissionPanel.ts",
       "preload/leoQuickPanel": "src/preload/leoQuickPanel.ts",
+      "preload/leoScreenPeer": "src/preload/leoScreenPeer.ts",
     },
     outDir: "out",
     format: "cjs",
