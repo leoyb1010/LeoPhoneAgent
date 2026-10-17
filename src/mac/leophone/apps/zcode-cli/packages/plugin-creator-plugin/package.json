@@ -2,7 +2,7 @@
   "name": "@zcode/plugin-creator-plugin",
   "version": "0.1.1",
   "private": true,
-  "description": "Built-in ZCode plugin authoring skill and scaffolding helpers.",
+  "description": "Built-in LeoBot plugin authoring skill and scaffolding helpers.",
   "license": "MIT",
   "type": "module",
   "scripts": {

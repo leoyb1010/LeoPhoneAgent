@@ -1,6 +1,6 @@
 ---
 name: diagnosing-skills
-description: Use to diagnose and fix ZCode skill configuration problems in the ZCode client. Applies when a skill is not discovered, is installed but does not trigger automatically, is shadowed by a higher-precedence skill of the same name, is disabled by configuration, has a SKILL.md frontmatter error, fails to load because its description is too long, or disappears because the plugin providing it is disabled. Provides the discovery order, how to inspect skills in the client, common pitfalls, and a step-by-step localization and repair workflow.
+description: Use to diagnose and fix LeoBot skill configuration problems in the LeoBot client. Applies when a skill is not discovered, is installed but does not trigger automatically, is shadowed by a higher-precedence skill of the same name, is disabled by configuration, has a SKILL.md frontmatter error, fails to load because its description is too long, or disappears because the plugin providing it is disabled. Provides the discovery order, how to inspect skills in the client, common pitfalls, and a step-by-step localization and repair workflow.
 ---
 
 # Diagnosing Skill Configuration
@@ -12,7 +12,7 @@ A person inspects skills in **Settings → Skills** and the **`/` menu** (the Sk
 ## 1. Discovery order (earlier locations take precedence)
 
 1. Explicitly configured roots
-2. User `~/.zcode/skills`
+2. User `~/.leophoneagent/skills`
 3. User `~/.agents/skills`
 4. Workspace `.zcode/skills` (from the current directory up to the repository root; every level counts, and a deeper location wins)
 5. Workspace `.agents/skills`
@@ -37,11 +37,11 @@ A skill is a directory containing a `SKILL.md`. Frontmatter is a `---`-delimited
 
 ## 4. Common pitfalls (symptom → cause → fix)
 
-1. **Not discovered — wrong directory** — absent from the Skills list. It is not directly under a discovery root, or the file is not named `SKILL.md` (case-sensitive on Linux). → Move the skill directory under a real root: `~/.zcode/skills/<name>/SKILL.md` or `<repo>/.zcode/skills/<name>/SKILL.md`.
-2. **Skipped inside a dot-directory** — a skill under, for example, `~/.zcode/skills/.foo/` never appears. Directories beginning with `.` (except `.system`) are excluded. → Rename to remove the leading `.`.
+1. **Not discovered — wrong directory** — absent from the Skills list. It is not directly under a discovery root, or the file is not named `SKILL.md` (case-sensitive on Linux). → Move the skill directory under a real root: `~/.leophoneagent/skills/<name>/SKILL.md` or `<repo>/.zcode/skills/<name>/SKILL.md`.
+2. **Skipped inside a dot-directory** — a skill under, for example, `~/.leophoneagent/skills/.foo/` never appears. Directories beginning with `.` (except `.system`) are excluded. → Rename to remove the leading `.`.
 3. **Not triggering — weak or empty description** — it appears but the model never invokes it. Without frontmatter the description is empty, and it is truncated to ~250 characters when presented. → Add a frontmatter `description` and `when_to_use`, front-loading the trigger wording within the first ~250 characters.
 4. **Shadowed by a higher-precedence skill of the same name** — your edits have no effect. On load the first same-named skill wins; user overrides workspace overrides plugin, and a deeper working-directory location overrides the repository root. → Find the higher-precedence copy in discovery order and rename or remove it.
-5. **Disabled by configuration** — a known-good skill disappears entirely. The configuration disables it by absolute path. → In `~/.zcode/cli/config.json` (or the workspace `.zcode/config.json`), set that path's `enable` to `true` or remove the override.
+5. **Disabled by configuration** — a known-good skill disappears entirely. The configuration disables it by absolute path. → In `~/.leophoneagent/cli/config.json` (or the workspace `.zcode/config.json`), set that path's `enable` to `true` or remove the override.
 6. **Frontmatter parse error or wrong shape** — `name`/`description` missing or garbled. The parser reads only top-level scalars; indented keys are ignored, and multi-line values need `>` or `|`. → Keep `name`/`description` as top-level scalars and use `description: >` with an indented continuation for long text.
 7. **Missing SKILL.md** — the directory exists but the skill never appears. → Ensure the file is named exactly `SKILL.md`.
 8. **Description too long (over 1024 characters)** — the skill is dropped. → Trim `description` under 1024 characters and move detail into the body.
@@ -52,7 +52,7 @@ A skill is a directory containing a `SKILL.md`. Frontmatter is a `---`-delimited
 
 ## 5. Localization workflow (in order; stop when the cause is found)
 
-1. **Is the subsystem on?** In `~/.zcode/cli/config.json` (and the workspace file) confirm the skill feature and `skills.enabled`; either being false disables discovery — pitfall 12.
+1. **Is the subsystem on?** In `~/.leophoneagent/cli/config.json` (and the workspace file) confirm the skill feature and `skills.enabled`; either being false disables discovery — pitfall 12.
 2. **Is it discovered at all?** Check **Settings → Skills**, and read the skill files from the **same working directory the session runs in** (discovery is relative to it). Absent entirely → pitfalls 1, 2, 5, 7, 10, or 12.
 3. **Check for load failures.** A skill present on disk but not listed usually has a frontmatter problem: missing `name`/`description`, an over-long `description`, or a malformed frontmatter line — pitfalls 6 and 8.
 4. **Which file actually wins?** Walk the discovery order for the name and compare the first matching `SKILL.md` to the file you edited. A mismatch means shadowing — pitfalls 4 and 9.

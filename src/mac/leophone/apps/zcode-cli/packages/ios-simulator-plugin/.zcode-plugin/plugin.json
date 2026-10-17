@@ -1,15 +1,19 @@
 {
   "name": "ios-simulator",
   "version": "0.1.0",
-  "description": "Provides iOS development workflows and simulator automation for ZCode.",
-  "author": { "name": "Z.ai" },
+  "description": "Provides iOS development workflows and simulator automation for LeoBot.",
+  "author": {
+    "name": "LeoBot"
+  },
   "license": "MIT",
   "skills": "skills",
   "commands": "commands",
   "mcpServers": {
     "ios-simulator": {
       "command": "node",
-      "args": ["${ZCODE_PLUGIN_ROOT}/dist/mcp/server.js"],
+      "args": [
+        "${ZCODE_PLUGIN_ROOT}/dist/mcp/server.js"
+      ],
       "cwd": "${ZCODE_PROJECT_DIR}",
       "env": {
         "IOS_SIM_PACKAGE_ROOT": "${ZCODE_PLUGIN_ROOT}",

@@ -5,7 +5,7 @@ description: Create new skills, edit existing skills, and iterate wording. Use w
 
 # Skill Creator
 
-A skill for authoring and iteratively improving local ZCode skills.
+A skill for authoring and iteratively improving local LeoBot skills.
 
 At a high level, the loop is:
 
@@ -38,11 +38,11 @@ Useful questions:
 
 ### Where skills live
 
-ZCode discovers skills in these directories (highest priority first):
+LeoBot discovers skills in these directories (highest priority first):
 
 - `<project>/.zcode/skills/<name>/SKILL.md`
 - `<project>/.agents/skills/<name>/SKILL.md`
-- `~/.zcode/skills/<name>/SKILL.md`
+- `~/.leophoneagent/skills/<name>/SKILL.md`
 - `~/.agents/skills/<name>/SKILL.md`
 
 **Default to creating new skills under `.agents/skills/`** — it's the standard, cross-tool location for new skills. Note that `.zcode/skills` still takes priority during discovery: if the same skill name exists in both, the `.zcode/skills` copy wins, so `.zcode/skills` is the place to *override* a skill. Pick the `<project>` path for skills that only make sense in this repo; pick the `~/` (user) path for personal skills you want everywhere.
@@ -65,11 +65,11 @@ Required frontmatter:
 - `name` — the skill's identifier. Lowercase kebab-case, 1–64 chars. Must match the directory name.
 - `description` — when this skill should trigger and what it does. This is the primary triggering signal — both *what* the skill does and *in what contexts* belong here, not in the body. Models tend to *under*-trigger skills, so write descriptions a little bit pushy: instead of "How to build a dashboard for internal data," write "How to build a fast dashboard for internal data. Use whenever the user mentions dashboards, data visualization, internal metrics, or wants to display any company data — even if they don't explicitly say 'dashboard'."
 
-Optional (reserved) frontmatter fields are listed in the ZCode skill spec; for most skills you only need `name` and `description`.
+Optional (reserved) frontmatter fields are listed in the LeoBot skill spec; for most skills you only need `name` and `description`.
 
 ### Progressive disclosure
 
-ZCode loads skills in three layers:
+LeoBot loads skills in three layers:
 
 1. **Metadata** (name + description) is always in context. Keep it short.
 2. **SKILL.md body** is loaded only when the skill triggers. Target under 500 lines.
@@ -98,7 +98,7 @@ Examples beat rules. If the skill produces structured output, include a literal 
 
 After writing the draft, come up with 2–3 realistic test prompts — the kind of thing a user would actually type, with concrete file paths, column names, casual phrasing, even typos. Share them with the user: "Here are a few cases I want to try. Anything to add or change?"
 
-Then run them: load the draft skill, hand the model the test prompt, and inspect what happens. ZCode does not currently spawn parallel evaluation subagents, so do this one prompt at a time and look at each result with the user.
+Then run them: load the draft skill, hand the model the test prompt, and inspect what happens. LeoBot does not currently spawn parallel evaluation subagents, so do this one prompt at a time and look at each result with the user.
 
 ---
 
@@ -106,8 +106,8 @@ Then run them: load the draft skill, hand the model the test prompt, and inspect
 
 For each test prompt:
 
-1. Make sure the draft skill is on disk where ZCode can discover it (one of the directories listed above).
-2. In a fresh ZCode turn, give the test prompt to the model. Either let the description trigger the skill, or use `/skill <name> <prompt>` to force-load it.
+1. Make sure the draft skill is on disk where LeoBot can discover it (one of the directories listed above).
+2. In a fresh LeoBot turn, give the test prompt to the model. Either let the description trigger the skill, or use `/skill <name> <prompt>` to force-load it.
 3. Look at the result *with the user*. Did the skill trigger? Did the output match what they wanted? Where did it go off the rails?
 
 Note both the *result* and the *trace*: if the skill caused the model to do a bunch of busywork (re-reading the same files, writing a throwaway script, going in circles), the skill is probably over-prescribing or unclear. That's a signal to cut, not to add more rules.

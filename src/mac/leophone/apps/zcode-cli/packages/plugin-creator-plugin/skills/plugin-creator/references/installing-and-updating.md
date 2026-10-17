@@ -1,6 +1,6 @@
 # Manual test marketplace: add, install, try and update
 
-Use the existing ZCode UI for the user handoff. The agent prepares source and the catalog; the user performs registration, installation, updates and trial. These steps require no global CLI or Node command.
+Use the existing LeoBot UI for the user handoff. The agent prepares source and the catalog; the user performs registration, installation, updates and trial. These steps require no global CLI or Node command.
 
 ## Source, catalog and installation
 

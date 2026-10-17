@@ -1,6 +1,6 @@
 ---
 name: diagnosing-commands
-description: Use to diagnose and fix ZCode custom slash-command (/command) configuration problems in the ZCode client. Applies when a command is missing, is overridden by a higher-precedence command of the same name, has a frontmatter parse error, is dropped for having an empty body, has an invalid name, does not substitute $ARGUMENTS/$1, uses a colon rather than a slash for nested names, has a misspelled frontmatter key, or disappears because the plugin providing it is disabled. Provides the discovery order, how to inspect commands in the client, common pitfalls, and a step-by-step localization and repair workflow.
+description: Use to diagnose and fix LeoBot custom slash-command (/command) configuration problems in the LeoBot client. Applies when a command is missing, is overridden by a higher-precedence command of the same name, has a frontmatter parse error, is dropped for having an empty body, has an invalid name, does not substitute $ARGUMENTS/$1, uses a colon rather than a slash for nested names, has a misspelled frontmatter key, or disappears because the plugin providing it is disabled. Provides the discovery order, how to inspect commands in the client, common pitfalls, and a step-by-step localization and repair workflow.
 ---
 
 # Diagnosing Command Configuration
@@ -14,7 +14,7 @@ A person inspects commands from the **`/` menu** (the Commands group) in the inp
 ## 1. Discovery order (earlier locations take precedence)
 
 1. Explicitly configured roots
-2. User `~/.zcode/commands`
+2. User `~/.leophoneagent/commands`
 3. User `~/.agents/commands`
 4. Workspace `.zcode/commands` (from the current directory up to the repository root; every level counts)
 5. Workspace `.agents/commands`
@@ -43,7 +43,7 @@ There is also an **interactive-surface-only** filter: a command whose name match
 
 ## 5. Common pitfalls (symptom → cause → fix)
 
-1. **Missing — wrong directory** — the `.md` is not under a scanned root (for example a singular `.zcode/command/`, or above the repository root). → Move it into `~/.zcode/commands/` or `<repo>/.zcode/commands/`.
+1. **Missing — wrong directory** — the `.md` is not under a scanned root (for example a singular `.zcode/command/`, or above the repository root). → Move it into `~/.leophoneagent/commands/` or `<repo>/.zcode/commands/`.
 2. **Missing — invalid name** — the file exists but no command appears. The file name violates the pattern (uppercase, spaces, dots, leading `-`/`_`, or over 64 characters). → Rename to a valid lowercase name; namespace with subdirectories (which become `:`), not dots.
 3. **Overridden by a higher-precedence duplicate** — a different command runs, or your edits have no effect. First match wins. → Find the higher-precedence copy in discovery order and rename or remove it. Local files always beat plugins.
 4. **Frontmatter parse error** — a key is silently missing. The flat parser reads only single-line top-level keys; indented lines and multi-line arrays are dropped. → Keep every value on one line; write lists inline, e.g. `allowed-tools: Read, Bash`.

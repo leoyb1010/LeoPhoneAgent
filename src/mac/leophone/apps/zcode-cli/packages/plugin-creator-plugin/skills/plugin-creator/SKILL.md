@@ -1,11 +1,11 @@
 ---
 name: plugin-creator
-description: Create or update ZCode plugin source and a local test marketplace, then guide the user to add, install, update and try it in the app. Use for new plugins or changes to an existing plugin's capabilities, manifest or local distribution.
+description: Create or update LeoBot plugin source and a local test marketplace, then guide the user to add, install, update and try it in the app. Use for new plugins or changes to an existing plugin's capabilities, manifest or local distribution.
 ---
 
 # Plugin Creator
 
-Deliver implemented plugin source, a local dev marketplace catalog, and precise UI instructions for the user to add the market, install/update the plugin and try it. Use ZCode manifests.
+Deliver implemented plugin source, a local dev marketplace catalog, and precise UI instructions for the user to add the market, install/update the plugin and try it. Use LeoBot manifests.
 
 The current handoff is manual. Do not register markets, install/update/enable plugins, or publish as part of this skill. Ordinary Desktop users are not expected to have a global `zcode` CLI or `node` command. Use existing file tools when helper runtimes are unavailable; do not ask users to install development tooling to complete the UI steps. A skill reference alone has no plugin requirements: ask what the plugin should do before generating files.
 
@@ -15,7 +15,7 @@ Read the target workspace's instructions. Reuse the user's choices for purpose, 
 
 Default source location: `<workspace>/plugins/<slug>/`. An explicit directory wins. Work on the target host for remote work. For an existing plugin, inspect its manifest and edit the original source while retaining its identity.
 
-Read [the ZCode manifest reference](references/plugin-json-spec.md) before choosing components. This step is complete when the source location and acceptance example are concrete.
+Read [the LeoBot manifest reference](references/plugin-json-spec.md) before choosing components. This step is complete when the source location and acceptance example are concrete.
 
 ## 2. Create and implement
 
@@ -29,7 +29,7 @@ Preserve existing source. Ordinary iteration edits implemented files and increme
 
 Check manifest JSON, declared resource existence, directory/name consistency, path containment and unresolved placeholders. Run the representative capability smoke test with available tools. Report unavailable runtime or credential-dependent checks explicitly.
 
-In an existing developer environment, `scripts/validate-plugin.mjs` can additionally invoke `zcode plugins validate`; use its `--cli` override only when an actual working entry is already known. This is optional developer verification, not a prerequisite or a command to give ordinary Desktop users. File inspection alone does not prove ZCode schema validation or runtime execution.
+In an existing developer environment, `scripts/validate-plugin.mjs` can additionally invoke `zcode plugins validate`; use its `--cli` override only when an actual working entry is already known. This is optional developer verification, not a prerequisite or a command to give ordinary Desktop users. File inspection alone does not prove LeoBot schema validation or runtime execution.
 
 ## 4. Prepare the local test marketplace
 

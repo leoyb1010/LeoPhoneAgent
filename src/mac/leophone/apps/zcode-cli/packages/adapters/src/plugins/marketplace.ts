@@ -50,7 +50,9 @@ const INSTALLED_PLUGINS_FILE = "installed_plugins.json";
 const MARKETPLACE_FILE = "marketplace.json";
 const CLAUDE_OFFICIAL_MARKETPLACE = "claude-plugins-official";
 const PLUGIN_ICON_SOURCES_FILE = "icon-sources.json";
-const PLUGIN_ICON_ASSETS_BASE_URL = "https://cdn-zcode.z.ai/zcode/official-plugin/assets/";
+// [leo] 官方图标 CDN 改为本机死端口：Claude 官方市场的图标增强请求直接失败、
+// 回落到空映射，不会把官方 CDN 图标地址写进 marketplace 缓存。
+const PLUGIN_ICON_ASSETS_BASE_URL = "http://127.0.0.1:9/zcode/official-plugin/assets/";
 const PLUGIN_ICON_SOURCES_URL = `${PLUGIN_ICON_ASSETS_BASE_URL}${PLUGIN_ICON_SOURCES_FILE}`;
 const MARKETPLACE_JSON_MAX_BYTES = 10 * 1024 * 1024;
 const MARKETPLACE_JSON_MAX_REDIRECTS = 5;

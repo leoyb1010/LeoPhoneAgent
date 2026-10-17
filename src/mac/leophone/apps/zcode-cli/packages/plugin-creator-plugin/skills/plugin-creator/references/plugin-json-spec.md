@@ -1,4 +1,4 @@
-# ZCode plugin and marketplace reference
+# LeoBot plugin and marketplace reference
 
 A plugin uses `.zcode-plugin/plugin.json`. Its `name` is its stable identifier; this scaffold uses lower-case hyphenated names, at most 64 characters, and initial version `0.1.0`.
 
@@ -18,7 +18,7 @@ Skills contain `<name>/SKILL.md` with `name` and `description` YAML frontmatter.
 
 ## Marketplace
 
-For a local marketplace, use `.claude-plugin/marketplace.json` at its root. The root-level `marketplace.json` is also supported by ZCode. Sources are resolved against that root, not the `.claude-plugin` directory.
+For a local marketplace, use `.claude-plugin/marketplace.json` at its root. The root-level `marketplace.json` is also supported by LeoBot. Sources are resolved against that root, not the `.claude-plugin` directory.
 
 ```json
 {
@@ -65,4 +65,4 @@ Scaffold components are selected with `--with-skills`, `--with-mcp`, `--with-hoo
 
 These helpers prepare files only. Their use does not authorize registration or installation. If Node is unavailable, use file tools and the manifest/catalog examples above; asking the user to install Node is not part of this handoff.
 
-Fields and conventions from other plugin formats, such as `interface`, availability/authentication `policy`, `.app.json`, implicit `~/.agents/plugins/marketplace.json` discovery and custom-scheme handoff links, are not this workflow's contract. Use ZCode's format, and distinguish source inspection from any schema/runtime validation actually performed.
+Fields and conventions from other plugin formats, such as `interface`, availability/authentication `policy`, `.app.json`, implicit `~/.agents/plugins/marketplace.json` discovery and custom-scheme handoff links, are not this workflow's contract. Use LeoBot's format, and distinguish source inspection from any schema/runtime validation actually performed.

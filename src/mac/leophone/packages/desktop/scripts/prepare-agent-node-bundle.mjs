@@ -8,8 +8,6 @@
 // - Electron 41 内置 Node 24.x，与 zcode-cli 的目标运行时一致；
 // - 单平台体积从 ~180MB 降到 ~16MB，且同一份 JS 跨平台通用；
 // - app-server 命令路径不会加载 @zcode/tui，所以这里天然不打包 TUI。
-//
-// 远端（SSH/WSL/Docker）没有 Electron，仍走 prepare:remote-assets 的原生二进制，互不影响。
 
 import { cpSync, existsSync, mkdirSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
@@ -93,49 +91,10 @@ const browserUseRequiredRuntimePaths = [
   "skills/web-gui-tester/SKILL.md",
 ];
 const officialPluginPackages = [
-  {
-    packageName: "@zcode/android-emulator-plugin",
-    relativePath: "apps/zcode-cli/packages/android-emulator-plugin",
-    requiresRuntime: true,
-    requiredRuntimePaths: ["dist/mcp/server.js"],
-    runtimeBuildScript: "scripts/build-mcp.mjs",
-    stagedPath: "packages/android-emulator-plugin",
-  },
-  {
-    packageName: "@zcode/documents-plugin",
-    relativePath: "apps/zcode-cli/packages/documents-plugin",
-    requiresRuntime: false,
-    requiredSeedPaths: ["agents/visual-judge.md", "skills/docx/SKILL.md"],
-    stagedPath: "packages/documents-plugin",
-  },
-  {
-    packageName: "@zcode/image-search-plugin",
-    relativePath: "apps/zcode-cli/packages/image-search-plugin",
-    requiresRuntime: false,
-    requiredSeedPaths: [".mcp.json"],
-    stagedPath: "packages/image-search-plugin",
-  },
-  {
-    packageName: "@zcode/pdf-plugin",
-    relativePath: "apps/zcode-cli/packages/pdf-plugin",
-    requiresRuntime: false,
-    requiredSeedPaths: ["agents/visual-judge.md", "skills/pdf/SKILL.md"],
-    stagedPath: "packages/pdf-plugin",
-  },
-  {
-    packageName: "@zcode/presentations-plugin",
-    relativePath: "apps/zcode-cli/packages/presentations-plugin",
-    requiresRuntime: false,
-    requiredSeedPaths: ["agents/visual-judge.md", "skills/pptx/SKILL.md"],
-    stagedPath: "packages/presentations-plugin",
-  },
-  {
-    packageName: "@zcode/spreadsheets-plugin",
-    relativePath: "apps/zcode-cli/packages/spreadsheets-plugin",
-    requiresRuntime: false,
-    requiredSeedPaths: ["agents/visual-judge.md", "skills/xlsx/SKILL.md"],
-    stagedPath: "packages/spreadsheets-plugin",
-  },
+  // [leo] LeoBot 随包官方插件：visualize、browser-use、ios-simulator、skill-creator、plugin-creator、
+  // zcode-guide、superpowers + node_repl 宿主（另有 bundled-skills 技能包）。不随包：android-emulator、
+  // documents / pdf / presentations / spreadsheets（官方 CDN 字体 + 官方作者元数据）、image-search
+  // （官方账号 + 官方 API）、restore-legacy-sessions（迁移 ~/.zcode 旧会话）、computer-use（开源树是占位）。
   {
     packageName: "@zcode/visualize-plugin",
     relativePath: "apps/zcode-cli/packages/visualize-plugin",
@@ -188,14 +147,6 @@ const officialPluginPackages = [
     stagedPath: "packages/ios-simulator-plugin",
   },
   {
-    // 修复原因：restore-legacy-sessions 已注册为官方插件，但 Electron 生产包只会拷贝
-    // 这里列出的资源。漏掉它会导致用户生产包首次启动后 plugins list 里看不到该插件。
-    packageName: "@zcode/restore-legacy-sessions-plugin",
-    relativePath: "apps/zcode-cli/packages/restore-legacy-sessions-plugin",
-    requiresRuntime: false,
-    stagedPath: "packages/restore-legacy-sessions-plugin",
-  },
-  {
     packageName: "@zcode/skill-creator-plugin",
     relativePath: "apps/zcode-cli/packages/skill-creator-plugin",
     requiresRuntime: false,
@@ -228,13 +179,13 @@ const officialPluginPackages = [
     stagedPath: "packages/node-repl-host",
   },
   {
-    // CUA 插件只携带 SDK/skill/docs；node_repl MCP runtime 归 @zcode/node-repl-host。
-    packageName: "@zcode/zcode-cua-plugin",
-    relativePath: "apps/zcode-cli/packages/zcode-cua-plugin",
+    // [leo] superpowers 随包（上游 3.15.1 改为从官方远端市场按需安装，我们切断了官方市场）。
+    packageName: "@zcode/superpowers-plugin",
+    relativePath: "apps/zcode-cli/packages/superpowers-plugin",
     requiresRuntime: false,
-    stagedPath: "packages/zcode-cua-plugin",
+    requiredSeedPaths: ["skills/using-superpowers/SKILL.md", "hooks/hooks.json"],
+    stagedPath: "packages/superpowers-plugin",
   },
-  // superpowers 已从内置插件下线，改走 UI 推荐区按需安装；这里不再 stage 它的资源。
 ];
 // 随 CLI 内置的技能包（不是插件）：bootstrap 的 resolveBundledSkillRoots 沿官方插件同款候选目录
 // 在 zcode.cjs 旁找 packages/bundled-skills 并原地读取。漏 stage 它，桌面包的 /workflow 会展开成

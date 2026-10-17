@@ -54,7 +54,8 @@ export interface OfficialPluginDefinition {
   version: string;
 }
 
-const ZAI_AUTHOR = { name: "Z.ai", url: "https://z.ai" } as const;
+// [leo] 插件商店里的作者显示为 LeoBot，不带官方网址。
+const ZAI_AUTHOR = { name: "LeoBot" } as const;
 // [leo] 内置插件的 listing 不再带 icon：原先指向官方 CDN（cdn-zcode.z.ai/zcode/official-plugin/assets），
 // 设置页渲染插件卡片时会自动请求官方服务器；缺 icon 时 UI 用默认图标。
 
@@ -194,54 +195,6 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
     // package、manifest、definition 三处版本应保持一致，避免发布内容和安装版本再次分叉。
     version: "0.5.1",
   },
-  ...(
-    [
-      ["documents", "docx", "Documents", "Word文档"],
-      ["pdf", "pdf", "PDF", "PDF"],
-      ["presentations", "pptx", "Presentations", "演示文档"],
-      ["spreadsheets", "xlsx", "Spreadsheets", "电子表格"],
-    ] as const
-  ).map(
-    ([name, skill, displayName, chineseName]): OfficialPluginDefinition => ({
-      defaultEnabled: true,
-      listing: {
-        author: ZAI_AUTHOR,
-        category: "productivity",
-        displayName,
-        displayName_i18n: { "zh-CN": chineseName },
-        description_i18n: { "zh-CN": `创建、编辑与审阅${chineseName}（${skill.toUpperCase()}）。` },
-      },
-      name,
-      requiredSeedPaths: ["agents/visual-judge.md", `skills/${skill}/SKILL.md`],
-      rootCandidates: [
-        `packages/${name}-plugin`,
-        `../${name}-plugin`,
-        `../../${name}-plugin`,
-        `../../../${name}-plugin`,
-      ],
-      version: "0.1.8",
-    }),
-  ),
-  {
-    // 沿用原聚合文档插件的官方搜图能力，仅拆出独立开关；认证仍由官方 MCP adapter 注入。
-    defaultEnabled: true,
-    listing: {
-      author: ZAI_AUTHOR,
-      category: "productivity",
-      displayName: "Image Search",
-      displayName_i18n: { "zh-CN": "搜图" },
-      description_i18n: { "zh-CN": "查找插图与参考配图。" },
-    },
-    name: "image-search",
-    requiredSeedPaths: [".mcp.json"],
-    rootCandidates: [
-      "packages/image-search-plugin",
-      "../image-search-plugin",
-      "../../image-search-plugin",
-      "../../../image-search-plugin",
-    ],
-    version: "0.1.1",
-  },
   {
     listing: {
       author: ZAI_AUTHOR,
@@ -328,6 +281,30 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       "../../../skill-creator-plugin",
     ],
     version: "0.1.0",
+  },
+  {
+    // [leo] superpowers（obra/superpowers，MIT）随包：上游 3.15.1 改成「UI 推荐区按需从官方远端
+    // 市场安装」，我们切断了官方市场，所以作为随包官方插件 seed。带 SessionStart hook，会给每个会话
+    // 注入技能目录，默认不启用，用户在插件页自行开启。文档类插件（documents / pdf / presentations /
+    // spreadsheets）与 image-search（官方账号 + 官方 API）不随包。
+    listing: {
+      author: { name: "Jesse Vincent", url: "https://github.com/obra/superpowers" },
+      category: "developer-tools",
+      displayName: "Superpowers",
+      displayName_i18n: { "zh-CN": "Superpowers 工程方法" },
+      description_i18n: {
+        "zh-CN": "头脑风暴、TDD、系统化调试、worktree、子智能体驱动开发与代码评审等工作流技能。",
+      },
+    },
+    name: "superpowers",
+    requiredSeedPaths: ["skills/using-superpowers/SKILL.md", "hooks/hooks.json"],
+    rootCandidates: [
+      "packages/superpowers-plugin",
+      "../superpowers-plugin",
+      "../../superpowers-plugin",
+      "../../../superpowers-plugin",
+    ],
+    version: "5.1.0",
   },
   {
     // 纯内容型插件（只有 commands + skills，无 MCP / 无系统依赖），默认启用，
