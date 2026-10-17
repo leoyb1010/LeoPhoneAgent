@@ -34,7 +34,8 @@ import {
 import type { RegularTurnLoopState } from "./turn-loop-state.js";
 import { consumeSettledProjectMemoryRecall } from "../helpers/project-memory-recall.js";
 import { consumePendingProjectMemoryUpdate } from "../helpers/project-memory-dream.js";
-import { ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH } from "../../memory/project-memory-retrieval-branch.js";
+import { getProjectMemoryRetrievalBranch } from "../../memory/project-memory-retrieval-branch.js";
+import { prepareTreasuryRecallEntry } from "../helpers/treasury-recall.js";
 import {
   appendTurnRequestEntries,
   commitTurnRequestEntries,
@@ -69,9 +70,16 @@ export async function runRegularTurnLoop(
       state.completedRealToolResultBatch = false;
       const recallEntry = consumeSettledProjectMemoryRecall(
         this,
-        ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH,
+        getProjectMemoryRetrievalBranch(this),
       );
       appendTurnRequestEntries(state.turnRequestState, recallEntry ? [recallEntry] : []);
+    }
+
+    // [leo][wp-61] 同一召回入口的第二个来源：藏宝阁。本地 HTTP 检索是毫秒级的，
+    // 所以在本回合第一次模型请求前同步取（有超时上限），纯问答回合（不调工具）也能用上。
+    if (state.modelStepCount === 0 && !outputTokenRecoveryActive) {
+      const treasuryEntry = await prepareTreasuryRecallEntry(this, state.turnAbortSignal);
+      appendTurnRequestEntries(state.turnRequestState, treasuryEntry ? [treasuryEntry] : []);
     }
 
     const compactPhase =
