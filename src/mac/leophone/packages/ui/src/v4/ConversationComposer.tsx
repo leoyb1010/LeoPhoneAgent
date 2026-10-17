@@ -168,6 +168,7 @@ import {
 import { WebElementContextAttachmentChip } from "@/v4/composer/WebElementContextAttachmentChip.js";
 import { ConversationSelectionReferenceChip } from "@/v4/composer/ConversationSelectionReferenceChip.js";
 import type { AttachmentPutFn } from "@/v4/composer/attachmentUpload.js";
+import { LeoComposerAgentTools } from "@/leo/LeoComposerAgentTools.js";
 import { useScopedConversationTelemetrySupervisor } from "@/v4/telemetry/ConversationTelemetryAttachment.js";
 import type { ConversationPromptTelemetrySeed } from "@/v4/telemetry/conversationTelemetrySupervisor.js";
 import type { ComposerSubmissionConfig } from "@/v4/composer/composerSubmissionConfig.js";
@@ -2171,6 +2172,8 @@ function ConversationComposerImpl({
           onConfigPickerOpenChange={handleConfigPickerOpenChange}
           onSwitchMode={onSwitchMode}
         />
+        {/* [leo][wp-31] 工具条五件：模型(右侧) · 模式 · agent · 附件(+ 菜单) · 麦克风。 */}
+        <LeoComposerAgentTools disabled={disabled} />
         {/* Bug 原因：附件画廊 rebase 曾整段覆盖 leadingActions，误删 staging 的 CUA 常驻入口。
             入口自身继续负责平台、远程与设置可见性，不在 composer 重复判定。 */}
         <V4ComposerCuaEntry

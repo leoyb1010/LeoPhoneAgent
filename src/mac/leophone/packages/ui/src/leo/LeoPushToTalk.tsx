@@ -17,6 +17,9 @@ import {
  * 只在 LeoBot 窗口有焦点时生效(文字写进的就是这个窗口的输入框);窗口底部显示一个「正在听」小条。
  */
 
+/** [wp-31] 工具条麦克风按钮 → 本组件:切换收音。收音状态只由本组件持有。 */
+export const LEO_DICTATION_TOGGLE_EVENT = "leo-dictation-toggle";
+
 type Phase =
   | { kind: "idle" }
   | { kind: "listening"; installing: boolean }
@@ -80,12 +83,7 @@ export function LeoPushToTalk() {
       setPhase({ kind: "finishing" });
       void bridge.stop();
     };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!isHotkey(event)) return;
-      // ⌥` 在美式键盘上是「重音符」死键:必须拦住,否则输入框里先冒出一个组字中的 `。
-      event.preventDefault();
-      event.stopPropagation();
-      if (event.repeat || activeRef.current) return;
+    const begin = () => {
       const target = findDictationTarget();
       if (!target) {
         setPhase({ kind: "error", message: "先点一下输入框再说话", micDenied: false });
@@ -101,6 +99,19 @@ export function LeoPushToTalk() {
         }
       });
     };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isHotkey(event)) return;
+      // ⌥` 在美式键盘上是「重音符」死键:必须拦住,否则输入框里先冒出一个组字中的 `。
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.repeat || activeRef.current) return;
+      begin();
+    };
+    // [wp-31] 输入框工具条的麦克风按钮:点一下开始,再点一下收尾。和快捷键共用同一条收音链路。
+    const onToggle = () => {
+      if (activeRef.current) stop();
+      else begin();
+    };
     const onKeyUp = (event: KeyboardEvent) => {
       if (!activeRef.current) return;
       // 松开主键或组合里任一修饰键都算松手。
@@ -109,10 +120,12 @@ export function LeoPushToTalk() {
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("keyup", onKeyUp, true);
     window.addEventListener("blur", stop);
+    window.addEventListener(LEO_DICTATION_TOGGLE_EVENT, onToggle);
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
       window.removeEventListener("blur", stop);
+      window.removeEventListener(LEO_DICTATION_TOGGLE_EVENT, onToggle);
     };
   }, [bridge, settings]);
 
@@ -148,7 +161,7 @@ export function LeoPushToTalk() {
               ? "正在收尾…"
               : phase.installing
                 ? "第一次使用，正在准备系统语音资源…"
-                : `正在听…  松开 ${hint} 结束`}
+                : `正在听…  松开 ${hint} 或再点麦克风结束`}
           </>
         )}
       </div>
