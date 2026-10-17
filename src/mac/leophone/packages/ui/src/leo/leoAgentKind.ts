@@ -18,11 +18,19 @@ export function isLeoAgentKind(value: unknown): value is LeoAgentKind {
   return typeof value === "string" && Object.hasOwn(LEO_AGENT_KIND_LABELS, value);
 }
 
-/** 从任务元数据读 agentKind;没有(或认不出)就是默认的 LeoBot。 */
+/**
+ * 从任务元数据读 agentKind;没有就看任务的模型:外部 agent 会话的模型是 `acp/<agent>`
+ * (tasks-index 里可能带 `$<思考档位>` 后缀)。都认不出就是默认的 LeoBot。
+ */
 export function resolveLeoAgentKind(task: unknown): LeoAgentKind {
   if (task && typeof task === "object" && "agentKind" in task) {
     const value = (task as { agentKind?: unknown }).agentKind;
     if (isLeoAgentKind(value)) return value;
+  }
+  if (task && typeof task === "object" && "model" in task) {
+    const model = (task as { model?: unknown }).model;
+    const match = typeof model === "string" ? /^acp\/([^$]+)/.exec(model) : null;
+    if (match && isLeoAgentKind(match[1]) && match[1] !== "leobot") return match[1];
   }
   return LEO_DEFAULT_AGENT_KIND;
 }

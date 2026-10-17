@@ -50,5 +50,10 @@ test("[wp-31] approval risk bar: medium → attention, high/critical → destruc
 test("[wp-31] agent kind defaults to LeoBot and ignores unknown values", () => {
   assert.equal(resolveLeoAgentKind({}), "leobot");
   assert.equal(resolveLeoAgentKind({ agentKind: "gemini" }), "gemini");
+  // ACP 会话(WP-21)的任务模型是 acp/<agent>,tasks-index 里可能带 $<思考档位>。
+  assert.equal(resolveLeoAgentKind({ model: "acp/claude-code" }), "claude-code");
+  assert.equal(resolveLeoAgentKind({ model: "acp/codex$default" }), "codex");
+  assert.equal(resolveLeoAgentKind({ model: "acp/leobot" }), "leobot");
+  assert.equal(resolveLeoAgentKind({ model: "openai/gpt-5" }), "leobot");
   assert.equal(resolveLeoAgentKind({ agentKind: "zcode-cloud" }), "leobot");
 });
