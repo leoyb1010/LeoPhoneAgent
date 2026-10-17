@@ -27,6 +27,7 @@ const { leoLocalKey, leoTreasuryKey } = await import("./leoPaths.js");
 
 let server: Server;
 const logs: string[] = [];
+const quickDispatched: Record<string, unknown>[] = [];
 
 before(async () => {
   server = startLeoHttpApi({
@@ -35,6 +36,13 @@ before(async () => {
     onSubscriptionChanged: () => {},
     onListening: () => {},
     onPortBusy: () => {},
+    quick: {
+      summary: async () => ({ waiting: [], running: [], recent: [], workspaces: ["/tmp"] }),
+      dispatch: async (body) => {
+        quickDispatched.push(body);
+        return { taskId: "t-quick", workspacePath: "/tmp" };
+      },
+    },
   });
   await new Promise<void>((resolve) => server.once("listening", () => resolve()));
 });
@@ -240,3 +248,21 @@ test("login-page API needs this launch's UI secret, not just the X-Leo-UI header
 function bearerHeaders(): Record<string, string> {
   return { authorization: `Bearer ${leoLocalKey()}` };
 }
+
+test("quick summary / dispatch need the in-memory pair secret, the key file alone is not enough", async () => {
+  const auth = { authorization: `Bearer ${leoLocalKey()}` };
+  assert.equal((await call("GET", "/api/leo/quick/summary")).status, 401);
+  assert.equal((await call("GET", "/api/leo/quick/summary", auth)).status, 403);
+  const body = JSON.stringify({ prompt: "整理一下 README", workspacePath: "/tmp" });
+  assert.equal((await call("POST", "/api/leo/quick/dispatch", auth, body)).status, 403);
+  assert.equal(quickDispatched.length, 0);
+
+  const withPair = { ...auth, "x-leo-pair": "pair-secret-for-test" };
+  const summary = await call("GET", "/api/leo/quick/summary", withPair);
+  assert.equal(summary.status, 200);
+  assert.deepEqual(summary.body["workspaces"], ["/tmp"]);
+  const dispatched = await call("POST", "/api/leo/quick/dispatch", withPair, body);
+  assert.equal(dispatched.status, 202);
+  assert.equal(dispatched.body["taskId"], "t-quick");
+  assert.deepEqual(quickDispatched, [{ prompt: "整理一下 README", workspacePath: "/tmp" }]);
+});

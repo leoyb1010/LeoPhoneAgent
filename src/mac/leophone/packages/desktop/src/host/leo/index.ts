@@ -5,6 +5,7 @@ import type { ServiceCollection } from "@zcode/services";
 import { ZCODE_VERSION } from "@zcode/shared";
 
 import { startLeoHttpApi } from "./httpApi.js";
+import { createLeoQuickEntry } from "./quickEntry.js";
 import { linkEnabled, relayConfigSignature, startLeoLink } from "./link/index.js";
 import { registerTreasuryMcpServer } from "./registerTreasuryMcp.js";
 import { syncSubscriptionProvider } from "./subscriptionProvider.js";
@@ -71,6 +72,7 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
         store,
         logger: deps.logger,
         onSubscriptionChanged: syncSubscriptions,
+        quick: createLeoQuickEntry(deps.services),
         onListening: () => {
           // 启动时对一次账:之前登过的订阅账号,模型清单要和它一致。
           syncSubscriptions();
