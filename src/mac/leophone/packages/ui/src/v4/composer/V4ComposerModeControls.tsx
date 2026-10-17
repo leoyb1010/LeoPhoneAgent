@@ -1,3 +1,4 @@
+import { LEO_DEFAULT_TASK_MODE } from "@/leo/leoDefaultTaskMode.js";
 import { memo, useCallback, useMemo } from "react";
 import { LightbulbIcon, XIcon, ChevronDownIcon } from "lucide-react";
 import {
@@ -77,7 +78,7 @@ function V4ComposerModeSwitchImpl({
       name: "Mode",
       category: "mode",
       type: "select",
-      currentValue: draftConfig?.mode ?? "build",
+      currentValue: draftConfig?.mode ?? LEO_DEFAULT_TASK_MODE, // [leo] 默认档 guarded
       options: getZCodeAgentAvailableModes()
         .filter((mode) => mode.id !== "plan")
         .map((mode) => ({ value: mode.id, name: mode.name })),

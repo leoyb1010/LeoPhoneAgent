@@ -1,3 +1,4 @@
+import { LEO_DEFAULT_TASK_MODE } from "@/leo/leoDefaultTaskMode.js";
 import type { ModelSelectionView } from "@zcode/services";
 import { readComposerRecent, resolveDraftInitialModelSelection } from "@/lib/composerRecent.js";
 import type { V4ComposerDraft } from "@/v4/composer/composerDraftStore.js";
@@ -13,7 +14,8 @@ export function initializeNewTaskDraft(
   return {
     ...draft,
     initializeFromNewTask: undefined,
-    mode: recent?.mode === "plan" ? "build" : (recent?.mode ?? "build"),
+    // [leo] 没有 Recent（或 Recent 是 plan）时落到默认档 guarded。
+    mode: recent?.mode === "plan" ? LEO_DEFAULT_TASK_MODE : (recent?.mode ?? LEO_DEFAULT_TASK_MODE),
     planEnabled: false,
     modelSelection:
       recent?.modelSelection ??

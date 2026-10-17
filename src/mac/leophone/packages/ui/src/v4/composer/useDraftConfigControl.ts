@@ -1,3 +1,4 @@
+import { LEO_DEFAULT_TASK_MODE } from "@/leo/leoDefaultTaskMode.js";
 import { applyComposerPermissionGrant } from "@/v4/composer/composerPermissionGrant.js";
 /* eslint-disable max-lines -- Composer 草稿 owner 同时收口选择、正文与提交生命周期，保持单一状态边界。 */
 // Composer 的模式/模型选择与正文使用同一 scope 草稿；Session 只提供一次初始化种子。
@@ -161,7 +162,7 @@ export function useDraftConfigControl(params: {
         ? initializeNewTaskDraft(draft, workspacePath, workspaceIdentity, modelSelectionView)
         : {
             ...draft,
-            mode: mode.success && mode.data !== "plan" ? mode.data : "build",
+            mode: mode.success && mode.data !== "plan" ? mode.data : LEO_DEFAULT_TASK_MODE, // [leo]
             planEnabled: resolveExecutionState(sessionConfig ?? {}).planEnabled,
             modelSelection: sessionConfig?.modelSelection,
           };
@@ -463,7 +464,9 @@ export function useDraftConfigControl(params: {
       if (mode === "plan" || mode === "plan-off") {
         updateComposerDraft((current) => ({
           ...current,
-          mode: current.mode === "plan" ? "build" : (current.mode ?? "build"),
+          // [leo] 关掉 plan 回到默认档 guarded
+          mode:
+            current.mode === "plan" ? LEO_DEFAULT_TASK_MODE : (current.mode ?? LEO_DEFAULT_TASK_MODE),
           planEnabled: mode === "plan",
           initializeFromNewTask: undefined,
         }));

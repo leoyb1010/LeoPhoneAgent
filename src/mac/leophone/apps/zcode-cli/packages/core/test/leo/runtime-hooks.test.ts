@@ -97,7 +97,9 @@ test("upstream files still carry the [leo] hooks", async () => {
     ["runtime/methods/turn-model-step.ts", [/recoverLeoPrematureLengthStop\(/u, /discardLeoAttempt\(LEO_CONTEXT_OVERFLOW_DISCARDED_FINISH\)/u]],
     ["runtime/methods/message-persistence.ts", [/providerVisibility: update\?\.providerVisibility \?\? "visible"/u]],
     ["runtime/helpers/tool-allowlist.ts", [/applyLeoLeanToolAllowlist\(/u]],
-    ["runtime/methods/mcp.ts", [/applyLeoLeanToolAllowlist\(this\.config/u]],
+    // initializeMcp 与 3.15.1 新增的 refreshMcpToolsIfChanged(list_changed 热刷新)都要套精简档白名单
+    ["runtime/methods/mcp.ts", [/applyLeoLeanToolAllowlist\(this\.config[\s\S]*applyLeoLeanToolAllowlist\(this\.config/u]],
+    ["permission/service.ts", [/\(context\.mode === "yolo" \|\| context\.mode === "guarded"\) && !\(context\.planEnabled/u]],
     ["runtime/methods/context.ts", [/buildLeoLeanSystemPrompt\(this\.config/u]],
     ["agent/session-history-hydrator.ts", [/providerVisibility === "hidden"\) continue;/u]],
     ["runtime/helpers/runtime-tools.ts", [/leoAgent: runtime\.config\.leoAgent/u]],
