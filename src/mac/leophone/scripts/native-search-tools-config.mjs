@@ -205,14 +205,9 @@ function resolveNativeSearchArchiveTarget(platform, arch) {
 }
 
 // 只有完成对应构建与发布校验的 platform key 才能进入 desktop 发行链路。
-const ENABLED_NATIVE_SEARCH_PLATFORM_KEYS = Object.freeze([
-  "darwin-arm64",
-  "darwin-x64",
-  "linux-arm64",
-  "linux-x64",
-  "win32-arm64",
-  "win32-x64",
-]);
+// [leo] LeoBot 只发 macOS arm64：仓库只留 darwin-arm64 的预编译归档（bfs / ripgrep / ugrep），
+// 其他平台的归档与远端（SSH/WSL/Docker）用的 legacy ripgrep 已删除。
+const ENABLED_NATIVE_SEARCH_PLATFORM_KEYS = Object.freeze(["darwin-arm64"]);
 const UGREP_SOURCE_IDS = Object.freeze(["ugrep", "pcre2", "zlib", "bzip2", "zstd", "brotli"]);
 
 export function normalizeNativeSearchPlatform(rawPlatform = process.platform) {

@@ -478,29 +478,23 @@ describe("native search build", () => {
     }
   });
 
-  it("只为已经完成 E2E 的 platform-arch 启用 desktop release", () => {
+  it("[leo] 只为 darwin-arm64 启用 desktop release（LeoBot 只发 macOS arm64）", () => {
     expect(resolveNativeSearchReleasePlan({ platform: "darwin", arch: "arm64" })).toMatchObject({
       enabled: true,
       runtimeToolIds: ["bfs", "ugrep", "ripgrep"],
       extraResourceToolIds: ["bfs", "ugrep"],
     });
-    expect(resolveNativeSearchReleasePlan({ platform: "darwin", arch: "x64" })).toMatchObject({
-      enabled: true,
-      runtimeToolIds: ["bfs", "ugrep", "ripgrep"],
-      extraResourceToolIds: ["bfs", "ugrep"],
-    });
-    for (const arch of ["arm64", "x64"]) {
-      expect(resolveNativeSearchReleasePlan({ platform: "linux", arch })).toMatchObject({
-        enabled: true,
-        runtimeToolIds: ["bfs", "ugrep", "ripgrep"],
-        extraResourceToolIds: ["bfs", "ugrep"],
-      });
-    }
-    for (const arch of ["arm64", "x64"] as const) {
-      expect(resolveNativeSearchReleasePlan({ platform: "win32", arch })).toMatchObject({
-        enabled: true,
-        runtimeToolIds: ["ugrep", "ripgrep"],
-        extraResourceToolIds: ["ugrep"],
+    for (const [platform, arch] of [
+      ["darwin", "x64"],
+      ["linux", "arm64"],
+      ["linux", "x64"],
+      ["win32", "arm64"],
+      ["win32", "x64"],
+    ] as const) {
+      expect(resolveNativeSearchReleasePlan({ platform, arch })).toMatchObject({
+        enabled: false,
+        runtimeToolIds: [],
+        extraResourceToolIds: [],
       });
     }
   });

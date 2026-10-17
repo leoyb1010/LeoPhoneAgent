@@ -31,18 +31,11 @@ vi.mock("../../../scripts/download-native-search-tools.mjs", () => ({
 
 import {
   NATIVE_SEARCH_DEPENDENCIES_DIR,
-  LEGACY_REMOTE_RIPGREP_ARCHIVE_SHA256_BY_TARGET as CONFIG_LEGACY_SHA256,
-  LEGACY_REMOTE_RIPGREP_VERSION as CONFIG_LEGACY_VERSION,
   resolveNativeSearchArtifactSource,
   resolveNativeSearchPrebuiltPlan,
 } from "../../../scripts/native-search-tools-config.mjs";
 import { prepareNativeSearchTools } from "../../../scripts/prepare-native-search-tools.mjs";
 import { verifyPrebuiltArchiveSha256 } from "../../../scripts/prebuilt-binary-extract.mjs";
-import {
-  LEGACY_REMOTE_RIPGREP_ARCHIVE_SHA256_BY_TARGET,
-  LEGACY_REMOTE_RIPGREP_VERSION,
-  resolveRemoteNativeSearchPrebuiltPlan,
-} from "../../../scripts/remote-native-search-tools-config.mjs";
 
 type PrebuiltArtifact = {
   toolId: string;
@@ -62,7 +55,8 @@ const localTargets = [
   ["win32", "arm64"],
   ["win32", "x64"],
 ] as const;
-const remoteTargets = localTargets.filter(([platform]) => platform !== "win32");
+// [leo] 仓库只留 darwin-arm64 的预编译归档；远端（SSH/WSL/Docker）计划随远程工作区删除。
+const repositoryTargets = [["darwin", "arm64"]] as const;
 
 const temporaryDirectories: string[] = [];
 async function createTemporaryDirectory(): Promise<string> {
@@ -123,15 +117,10 @@ describe("native search 归档来源判定", () => {
     expect(plan.artifacts.every((artifact) => artifact.downloadUrl === undefined)).toBe(true);
   });
 
-  it("本地与远端计划引用的仓库归档全部存在且摘要与固定值一致", () => {
-    const plans = [
-      ...localTargets.map(([platform, arch]) =>
-        resolveNativeSearchPrebuiltPlan({ platform, arch }),
-      ),
-      ...remoteTargets.map(([platform, arch]) =>
-        resolveRemoteNativeSearchPrebuiltPlan({ platform, arch }),
-      ),
-    ] as PrebuiltPlan[];
+  it("[leo] 仓库归档（仅 darwin-arm64）全部存在且摘要与固定值一致", () => {
+    const plans = repositoryTargets.map(([platform, arch]) =>
+      resolveNativeSearchPrebuiltPlan({ platform, arch }),
+    ) as PrebuiltPlan[];
     for (const plan of plans) {
       for (const artifact of plan.artifacts) {
         expect(artifact.archivePath.startsWith(NATIVE_SEARCH_DEPENDENCIES_DIR)).toBe(true);
@@ -140,16 +129,6 @@ describe("native search 归档来源判定", () => {
         ).not.toThrow();
       }
     }
-    // legacy rg13 常量只有一个所有者，远端配置只转出。
-    expect(LEGACY_REMOTE_RIPGREP_VERSION).toBe(CONFIG_LEGACY_VERSION);
-    expect(LEGACY_REMOTE_RIPGREP_ARCHIVE_SHA256_BY_TARGET).toBe(CONFIG_LEGACY_SHA256);
-    const darwinRemote = resolveRemoteNativeSearchPrebuiltPlan({
-      platform: "darwin",
-      arch: "arm64",
-    }) as PrebuiltPlan;
-    expect(darwinRemote.artifacts.map(({ toolId, release }) => [toolId, release])).toEqual([
-      ["ripgrep", CONFIG_LEGACY_VERSION],
-    ]);
   });
 });
 
@@ -195,8 +174,8 @@ describe("prepareNativeSearchTools", () => {
     const outputDir = join(await createTemporaryDirectory(), "tools");
 
     const plan = (await prepareNativeSearchTools({
-      platform: "linux",
-      arch: "x64",
+      platform: "darwin",
+      arch: "arm64",
       outputDir,
       env: {},
     })) as PrebuiltPlan;
@@ -210,7 +189,7 @@ describe("prepareNativeSearchTools", () => {
     }
 
     const binaryBeforeCacheHit = readFileSync(plan.artifacts[0].binaryPath);
-    await prepareNativeSearchTools({ platform: "linux", arch: "x64", outputDir, env: {} });
+    await prepareNativeSearchTools({ platform: "darwin", arch: "arm64", outputDir, env: {} });
     expect(readFileSync(plan.artifacts[0].binaryPath)).toEqual(binaryBeforeCacheHit);
     for (const artifact of plan.artifacts) {
       expect(existsSync(join(dirname(artifact.binaryPath), "THIRD-PARTY-NOTICES.txt"))).toBe(true);
@@ -222,8 +201,8 @@ describe("prepareNativeSearchTools", () => {
     const dependenciesDir = join(root, "dependencies");
     cpSync(NATIVE_SEARCH_DEPENDENCIES_DIR, dependenciesDir, { recursive: true });
     const plan = resolveNativeSearchPrebuiltPlan({
-      platform: "linux",
-      arch: "x64",
+      platform: "darwin",
+      arch: "arm64",
       outputDir: join(root, "tools"),
       dependenciesDir,
     }) as PrebuiltPlan;
