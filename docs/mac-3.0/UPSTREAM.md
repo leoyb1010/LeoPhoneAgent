@@ -230,3 +230,17 @@ cdn-preload.sh。上游首次公开的测试里,只能经已删模块运行的�
 主进程产物里 `ZCODE_AUTO_UPDATE_ENABLED` 编译为 true。隔离 HOME / ZCODE_HOME / userData 的 dev 冒烟(`ZCODE_PRODUCT_IDENTITY=leo`,
 窗口标题 LeoBot):首屏、设置 → 模型设置(本机 mock 供应商拉模型)、发消息收到回复、扩展 → MCP 服务器页均正常;
 新任务默认「自主模式」(guarded)。注意:dev 冒烟只设 `ZCODE_HOME` 不够,CLI 层多处直接用 `homedir()/.leophoneagent`,必须同时改 `HOME`。
+
+**主控决定(2026-10-17)**:红线按域名形态匹配(不扫裸词 bigmodel / zhipu);文档类插件不随包;superpowers 随包且默认启用
+(`official-plugin-definitions.ts` 的 `defaultEnabled` 与 `shared/plugin-marketplaces.ts` 名单同步);发给模型的提示词里
+ZCode 一律写 LeoBot(`core/src/context/sections/{identity,desktop}.ts`、子智能体 / 工作流 / system-reminder / 工具描述、
+`/init` 内置命令,测试同步改写);computer-use(上游 zcode-cua 占位,Mac 的电脑操作由 Peekaboo 提供)与
+restore-legacy-sessions 进 `INTERNAL_OFFICIAL_PLUGIN_IDS`,设置页与插件市场都不列出。
+
+**并入 Mac 线(merge upgrade/full-2026-10 @ 2099c4e8)**:WP-01 的删除优先(forceUpdateGuard / forceUpdatePrompt、
+`packages/zcode-server-cli`、`packages/formal-proof`、`harness/remote`、零引用 ai-elements 组件与无引用 i18n);
+例外:`ai-elements/plan.tsx` 被 3.15.1 的 TodoPanel 使用,保留。`main/index.ts` 用 3.15.1 的托盘 / 请求安全诊断接线,
+再挂 Leo 的菜单栏 + ⌥Space 快速派发、iMCP、电脑操作与语音 IPC;`electron-builder.config.js` 同时保留蓝牙与麦克风用途说明、
+Peekaboo(`leo/bin`)/ leo-speech / 菜单栏模板图标三类 extraResources;`leo:bundle:mac` 顺序为
+发布说明校验 → 源码红线 → 取 Peekaboo → 编 leo-speech → 打包 → 产物红线。删除清单重新生成(711 条 / 2346 个上游文件),
+已包含 WP-01 的删除,下次同步上游时自动套用。
