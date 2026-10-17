@@ -12,6 +12,7 @@ import {
   findExecutable,
   geminiAuthPreference,
   geminiEnvFromDotEnv,
+  geminiIsolatedHomeEnv,
   readClaudeOAuthToken,
   resolveClaudeAgentAcpEntry,
   resolveCodexAcpEntry,
@@ -90,8 +91,11 @@ export function resolveAcpLaunch(
     }
     case "gemini": {
       // [fix-remote] ~/.gemini/.env 里的 key（env 没有时）；HOME 用子进程实际的 HOME（LEO_ACP_AGENT_HOME 时是它）。
-      const env = { ...base, ...geminiEnvFromDotEnv(base) };
-      return { command: status.cliPath!, args: ["--acp"], env, authPreference: geminiAuthPreference(env) };
+      const keyed = { ...base, ...geminiEnvFromDotEnv(base) };
+      const authPreference = geminiAuthPreference(keyed);
+      const env = { ...keyed, ...geminiIsolatedHomeEnv(keyed) };
+      const model = env.GOOGLE_GEMINI_MODEL?.trim();
+      return { command: status.cliPath!, args: ["--acp", ...(model ? ["-m", model] : [])], env, authPreference };
     }
     case "opencode":
       return { command: status.cliPath!, args: ["acp"], env: base };

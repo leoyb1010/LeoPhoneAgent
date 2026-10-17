@@ -7,7 +7,7 @@
 // 探测路径与 LeoBot 一致（packages/shared/src/acp-detect.ts）：进程 PATH + 登录 shell 的 PATH + 常见用户级安装目录。
 // 退出码：0 = agent 回了话且正常结束；1 = 启动/握手/回合失败；2 = 用法错误或本机没装。
 import { spawn, spawnSync } from "node:child_process";
-import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { createInterface } from "node:readline";
@@ -204,7 +204,18 @@ function resolveLaunch(id) {
           // 没有 .env
         }
       }
-      return { cli, command: cli, args: ["--acp"], env };
+      // 与 LeoBot 一致：API Key 模式下用独立配置目录（用户 ~/.gemini 的钩子 / MCP 会让无界面 gemini 卡住）。
+      const authEnv = { ...env };
+      if (env.GEMINI_API_KEY?.trim()) {
+        const isoHome = join(env.ZCODE_HOME?.trim() || join(home, ".leophoneagent"), "acp", "gemini-home");
+        mkdirSync(join(isoHome, ".gemini"), { recursive: true, mode: 0o700 });
+        writeFileSync(join(isoHome, ".gemini", "settings.json"), JSON.stringify({ security: { auth: { selectedType: "gemini-api-key" } } }), { mode: 0o600 });
+        env.HOME = isoHome;
+        env.GEMINI_CLI_TRUST_WORKSPACE = "true";
+        console.log("· 环境     gemini 独立配置目录 " + isoHome);
+      }
+      const model = env.GOOGLE_GEMINI_MODEL?.trim();
+      return { cli, command: cli, args: ["--acp", ...(model ? ["-m", model] : [])], env, authEnv };
     }
     case "opencode": {
       const cli = which("opencode");
@@ -403,7 +414,7 @@ try {
   } catch (error) {
     if (!isAuthRequired(error) || methods.length === 0) throw error;
     // 与 LeoBot 一致：开会话要求登录时，按本机登录状态挑方法 authenticate 再重试。
-    const preference = agent === "gemini" ? geminiAuthPreference(launch.env) : agent === "grok" ? ["grok.com"] : [];
+    const preference = agent === "gemini" ? geminiAuthPreference(launch.authEnv ?? launch.env) : agent === "grok" ? ["grok.com"] : [];
     const ordered = [...preference.filter((id) => methods.includes(id)), ...methods.filter((id) => !preference.includes(id))];
     let authed = false;
     for (const methodId of ordered) {

@@ -1,7 +1,7 @@
 // [leo][WP-21] ACP 外部 agent 的本机检测（node-only：读 PATH 与文件系统）。
 // UI 状态（services）、Leo Link capabilities 与 CLI 启动（adapters/acp）共用同一份判断。
 import { execFile, spawnSync } from "node:child_process";
-import { accessSync, constants, readdirSync, readFileSync, statSync } from "node:fs";
+import { accessSync, constants, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
@@ -289,6 +289,29 @@ export function geminiAuthPreference(env: Record<string, string | undefined>): s
   }
   if (env.GOOGLE_API_KEY?.trim() && !selected) return ["gemini-api-key", "vertex-ai"];
   return selected ? [selected] : ["oauth-personal"];
+}
+
+/**
+ * [fix-remote] 用户自己的 ~/.gemini 常挂着钩子、MCP（如 exa 的 OAuth）、技能和受信目录检查，
+ * 无界面跑 `gemini --acp` 会卡在认证之后、一个模型请求都不发（实测 MBP 必现；换干净配置目录立即回 OK）。
+ * API Key 模式下给 gemini 一个只含鉴权设置的独立 HOME：<数据根>/acp/gemini-home。
+ * 返回要覆盖的 env；没有 API Key 时返回 {}（继续用用户自己的配置，比如 OAuth）。
+ */
+export function geminiIsolatedHomeEnv(env: Record<string, string | undefined>): Record<string, string> {
+  if (!env.GEMINI_API_KEY?.trim()) return {};
+  const dataRoot = env.ZCODE_HOME?.trim() || join(env.HOME?.trim() || homedir(), ".leophoneagent");
+  const home = join(dataRoot, "acp", "gemini-home");
+  try {
+    mkdirSync(join(home, ".gemini"), { recursive: true, mode: 0o700 });
+    writeFileSync(
+      join(home, ".gemini", "settings.json"),
+      `${JSON.stringify({ security: { auth: { selectedType: "gemini-api-key" } } }, null, 2)}\n`,
+      { mode: 0o600 },
+    );
+  } catch {
+    return {};
+  }
+  return { HOME: home, GEMINI_CLI_TRUST_WORKSPACE: "true" };
 }
 
 export function detectAcpAgent(id: AcpAgentId, environment: AcpEnvironment = {}): AcpAgentStatus {
