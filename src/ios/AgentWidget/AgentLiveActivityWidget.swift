@@ -1681,7 +1681,8 @@ struct AgentConsoleWidget: Widget {
         }
         .configurationDisplayName("Agent Console")
         .description("iPad only: task status, quick tasks, recent sessions and today's briefing in one panel.")
-        .supportedFamilies([.systemExtraLarge])
+        // [WP-43] iPadOS 27 adds the portrait extra-large slot: same four panes, stacked.
+        .supportedFamilies([.systemExtraLarge, .systemExtraLargePortrait])
     }
 }
 
@@ -1697,16 +1698,28 @@ private struct ConsoleWidgetContainer: View {
 
 private struct ConsoleWidgetView: View {
     let entry: ConsoleEntry
+    @Environment(\.widgetFamily) private var family
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                quadrant { statusPane }
-                quadrant { quickTaskPane }
-            }
-            HStack(spacing: 12) {
-                quadrant { sessionsPane }
-                quadrant { usagePane }
+        Group {
+            if family == .systemExtraLargePortrait {
+                VStack(spacing: 12) {
+                    quadrant { statusPane }
+                    quadrant { quickTaskPane }
+                    quadrant { sessionsPane }
+                    quadrant { usagePane }
+                }
+            } else {
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        quadrant { statusPane }
+                        quadrant { quickTaskPane }
+                    }
+                    HStack(spacing: 12) {
+                        quadrant { sessionsPane }
+                        quadrant { usagePane }
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
