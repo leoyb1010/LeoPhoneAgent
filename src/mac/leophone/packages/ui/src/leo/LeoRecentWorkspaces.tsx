@@ -45,7 +45,7 @@ function LeoRecentWorkspacesBody({
           const title =
             task.title?.trim() || intl.formatMessage({ id: "taskList.untitled" });
           return (
-            <li key={key} className="min-w-[8.5rem] flex-1 basis-0">
+            <li key={key} className="min-w-[8.5rem] max-w-56 flex-1 basis-0">
               <button
                 type="button"
                 data-leo-recent-workspace={key}
