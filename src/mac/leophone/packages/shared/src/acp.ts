@@ -6,7 +6,7 @@ export const ACP_PROVIDER_ID = "acp";
 export const ACP_REASONING_LEVEL = "default";
 export const ACP_TOOL_NAME = "AcpToolCall";
 
-export const ACP_AGENT_IDS = ["claude-code", "codex", "gemini", "opencode"] as const;
+export const ACP_AGENT_IDS = ["claude-code", "codex", "gemini", "opencode", "grok"] as const;
 export type AcpAgentId = (typeof ACP_AGENT_IDS)[number];
 
 export interface AcpAgentInfo {
@@ -21,6 +21,8 @@ export const ACP_AGENTS: readonly AcpAgentInfo[] = [
   { id: "codex", name: "Codex", harnessKey: "codex" },
   { id: "gemini", name: "Gemini", harnessKey: "gemini" },
   { id: "opencode", name: "opencode", harnessKey: "opencode" },
+  // [fix-remote] Grok Build：`grok agent stdio` 就是 ACP over stdio（旧 leoagent 里叫 grok_acp）。
+  { id: "grok", name: "Grok", harnessKey: "grok" },
 ];
 
 export function isAcpAgentId(value: unknown): value is AcpAgentId {

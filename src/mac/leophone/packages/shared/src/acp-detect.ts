@@ -1,6 +1,8 @@
 // [leo][WP-21] ACP 外部 agent 的本机检测（node-only：读 PATH 与文件系统）。
-// UI 状态（services）与 CLI 启动（adapters/acp）共用同一份判断。
-import { accessSync, constants } from "node:fs";
+// UI 状态（services）、Leo Link capabilities 与 CLI 启动（adapters/acp）共用同一份判断。
+import { execFile, spawnSync } from "node:child_process";
+import { accessSync, constants, readdirSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
@@ -37,19 +39,68 @@ export interface AcpEnvironment {
   resolveClaudeAgentAcpEntry?: () => string | undefined;
 }
 
-/** 桌面端从 Finder 启动时 PATH 很短：补上常见的用户级安装目录。 */
-export function acpSearchPath(env: NodeJS.ProcessEnv = process.env): string[] {
+let loginShellPathCache: string[] | undefined;
+
+/**
+ * [fix-remote] 用户登录 shell 的 PATH（只读一次、带超时）。LeoBot 从 Finder / launchd 启动时 PATH 只有
+ * /usr/bin 一类系统目录，而 CLI 往往装在 shell 配置里才加进 PATH 的目录（nvm、bun、自定义前缀）。
+ * 只对真实进程环境生效：测试注入的 env、VITEST、LEO_ACP_LOGIN_SHELL=off 都不读，结果不随开发机变化。
+ */
+export function loginShellPath(env: NodeJS.ProcessEnv = process.env): string[] {
+  if (env !== process.env || process.platform !== "darwin") return [];
+  if (process.env.VITEST || process.env.LEO_ACP_LOGIN_SHELL === "off") return [];
+  if (loginShellPathCache) return loginShellPathCache;
+  const shell = env.SHELL?.trim() || "/bin/zsh";
+  try {
+    // 交互式 rc 可能往 stdout 打招呼：用标记把 PATH 夹出来。
+    const result = spawnSync(shell, ["-lic", "printf '__LEOPATH__%s__LEOPATH__' \"$PATH\""], {
+      encoding: "utf8",
+      timeout: 3000,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const match = /__LEOPATH__(.*?)__LEOPATH__/s.exec(result.stdout ?? "");
+    loginShellPathCache = match ? match[1]!.split(delimiter).filter(Boolean) : [];
+  } catch {
+    loginShellPathCache = [];
+  }
+  return loginShellPathCache;
+}
+
+/** nvm 装的 node 全局包（gemini 等），新版本在前。 */
+function nvmBinDirs(home: string): string[] {
+  const root = join(home, ".nvm", "versions", "node");
+  try {
+    return readdirSync(root)
+      .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))
+      .map((version) => join(root, version, "bin"));
+  } catch {
+    return [];
+  }
+}
+
+/** 常见的用户级 / Homebrew 安装目录（不依赖进程 PATH）。 */
+export function acpExtraSearchDirs(env: NodeJS.ProcessEnv = process.env): string[] {
   const home = env.HOME?.trim() || homedir();
-  const fromEnv = (env.PATH ?? "").split(delimiter).filter(Boolean);
-  const extras = [
+  return [
     join(home, ".local", "bin"),
-    join(home, ".npm-global", "bin"),
+    join(home, ".grok", "bin"),
     join(home, ".bun", "bin"),
+    join(home, ".local", "npm-global", "bin"),
+    join(home, ".npm-global", "bin"),
     join(home, ".opencode", "bin"),
     "/opt/homebrew/bin",
     "/usr/local/bin",
+    ...nvmBinDirs(home),
   ];
-  return [...new Set([...fromEnv, ...extras])];
+}
+
+/**
+ * 探测与启动共用的搜索路径：进程 PATH → 登录 shell 的 PATH → 常见安装目录。
+ * 启动 agent 时整串写进子进程 PATH：`#!/usr/bin/env node` 一类的 CLI 也要能找到 node。
+ */
+export function acpSearchPath(env: NodeJS.ProcessEnv = process.env): string[] {
+  const fromEnv = (env.PATH ?? "").split(delimiter).filter(Boolean);
+  return [...new Set([...fromEnv, ...loginShellPath(env), ...acpExtraSearchDirs(env)])];
 }
 
 function findExecutableIn(dirs: readonly string[], name: string): string | undefined {
@@ -109,27 +160,76 @@ export function detectAcpAgent(id: AcpAgentId, environment: AcpEnvironment = {})
       if (!entry) return { id, available: false, unavailableReason: "随包的 Claude Code 适配器缺失" };
       return cliPath
         ? { id, available: true, cliPath, loginCommand: "claude /login" }
-        : { id, available: false, unavailableReason: "本机没有安装 Claude Code（claude 命令）" };
+        : { id, available: false, unavailableReason: notInstalled("claude") };
     }
     case "codex": {
       const cliPath = findExecutable("codex", env);
       const adapter = findExecutable("codex-acp", env);
-      if (!cliPath && !adapter) return { id, available: false, unavailableReason: "本机没有安装 codex" };
+      if (!cliPath && !adapter) return { id, available: false, unavailableReason: notInstalled("codex") };
       return { id, available: true, ...(cliPath ? { cliPath } : {}), loginCommand: "codex login" };
     }
     case "gemini": {
       const cliPath = findExecutable("gemini", env);
       return cliPath
         ? { id, available: true, cliPath, loginCommand: "gemini" }
-        : { id, available: false, unavailableReason: "本机没有安装 gemini" };
+        : { id, available: false, unavailableReason: notInstalled("gemini") };
     }
     case "opencode": {
       const cliPath = findExecutable("opencode", env);
       return cliPath
         ? { id, available: true, cliPath, loginCommand: "opencode auth login" }
-        : { id, available: false, unavailableReason: "本机没有安装 opencode" };
+        : { id, available: false, unavailableReason: notInstalled("opencode") };
+    }
+    case "grok": {
+      // Grok Build 的安装器放在 ~/.grok/bin（已在搜索路径里）。
+      const cliPath = findExecutable("grok", env);
+      return cliPath
+        ? { id, available: true, cliPath, loginCommand: "grok login" }
+        : { id, available: false, unavailableReason: notInstalled("grok") };
     }
   }
+}
+
+function notInstalled(command: string): string {
+  return `本机没有找到 ${command} 命令（已查 PATH、登录 shell 的 PATH 与 ~/.local/bin、~/.grok/bin、Homebrew、nvm 等常见目录）`;
+}
+
+const versionCache = new Map<string, { mtimeMs: number; version: string | undefined }>();
+
+/** [fix-remote] `<cli> --version` 的第一行（带超时；按文件修改时间缓存，升级后自动刷新）。 */
+export async function readCliVersion(
+  cliPath: string,
+  options: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {},
+): Promise<string | undefined> {
+  let mtimeMs = 0;
+  try {
+    mtimeMs = (await stat(cliPath)).mtimeMs;
+  } catch {
+    return undefined;
+  }
+  const cached = versionCache.get(cliPath);
+  if (cached && cached.mtimeMs === mtimeMs) return cached.version;
+  const env = options.env ?? process.env;
+  const version = await new Promise<string | undefined>((resolve) => {
+    execFile(
+      cliPath,
+      ["--version"],
+      {
+        timeout: options.timeoutMs ?? 3000,
+        env: { ...env, PATH: acpSearchPath(env).join(delimiter) },
+        maxBuffer: 64 * 1024,
+      },
+      (error, stdout, stderr) => {
+        const line = `${stdout || ""}\n${stderr || ""}`
+          .split("\n")
+          .map((item) => item.trim())
+          .find(Boolean);
+        resolve(error && !stdout ? undefined : line?.slice(0, 120));
+      },
+    );
+  });
+  versionCache.set(cliPath, { mtimeMs, version });
+  return version;
 }
 
 export function detectAcpAgents(environment: AcpEnvironment = {}): AcpAgentStatus[] {

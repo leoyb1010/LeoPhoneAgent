@@ -66,5 +66,9 @@ export function resolveAcpLaunch(
       return { command: status.cliPath!, args: ["--acp"], env: base };
     case "opencode":
       return { command: status.cliPath!, args: ["acp"], env: base };
+    case "grok":
+      // [fix-remote] `grok agent stdio` = ACP over stdio（裸 grok 是 TUI，无终端直接退出）。工作目录由 spawn cwd 与
+      // session/new 的 cwd 给出；审批走 session/request_permission（grok 配置里设了 always-approve 时它不会来问）。
+      return { command: status.cliPath!, args: ["agent", "stdio"], env: base };
   }
 }

@@ -2,7 +2,7 @@
  * [leo][wp-31] 任务由哪种 agent 在跑。ACP(WP-21)合入前只有 LeoBot 自己的 ZCode 内核,
  * 所以一律是 "leobot";ACP 合入后由任务元数据给出 agentKind,这里的映射表补上对应徽标即可。
  */
-export type LeoAgentKind = "leobot" | "claude-code" | "codex" | "gemini" | "opencode";
+export type LeoAgentKind = "leobot" | "claude-code" | "codex" | "gemini" | "opencode" | "grok";
 
 export const LEO_DEFAULT_AGENT_KIND: LeoAgentKind = "leobot";
 
@@ -12,6 +12,7 @@ const LEO_AGENT_KIND_LABELS: Record<LeoAgentKind, string> = {
   codex: "Codex",
   gemini: "Gemini",
   opencode: "opencode",
+  grok: "Grok",
 };
 
 export function isLeoAgentKind(value: unknown): value is LeoAgentKind {
