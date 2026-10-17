@@ -2,7 +2,7 @@
 // [leo][WP-22] 取随包的 Peekaboo CLI(openclaw/Peekaboo,MIT)到 packages/desktop/leo/bin/。
 //
 // - 版本与哈希钉在这里:tarball 的 sha256 与解包后两个文件各自的 sha256 都要对上,任何一个不符就失败,
-//   不会把不认识的二进制放进安装包。升级 = 改下面四个常量(从 Release 的 checksums.txt / SIGNING-MANIFEST.json 抄)。
+//   不会把不认识的二进制放进安装包。升级 = 改下面几个常量(从 Release 的 checksums.txt / SIGNING-MANIFEST.json 抄)。
 // - 已经在位且哈希一致就什么也不做(离线也能过);--force 重新下载。
 // - 上游二进制是 OpenClaw 的 Developer ID 签名 + 公证;打包时 electron-builder 会对 Resources/leo/bin 里的
 //   Mach-O 用 LeoBot 的 Developer ID + hardened runtime 重签(不在 signIgnore 里),所以这里不动签名。
@@ -15,12 +15,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const VERSION = "4.9.4";
-const ASSET = "peekaboo-macos-universal.tar.gz";
-const ASSET_SHA256 = "cf385eb18b94c4261c28b62e1e8033d993c6fe272a4254fbaa5dcb8ddf3c26bb";
+// 只装 Apple 芯片机器:用 arm64 单架构包,比 universal 小一半,也不带用不上的 x86_64 切片。
+const ARCH_DIR = "peekaboo-macos-arm64";
+const ASSET = `${ARCH_DIR}.tar.gz`;
+const ASSET_SHA256 = "a1d04316c526a5f1b933b16d284d05ff0c4b95e4f640939b1703fa36b2c461b9";
 const FILES = {
-  peekaboo: "c5d29ff2e8b159cb471d225a9f7571f2d8948cadcf9e2e77980792cbec7fa00e",
+  peekaboo: "be3313c3dcafe7ccf3ad16f0f48b5471cd228d7ba4650ec776e4da36fb5f0068",
   // peekaboo 经 @rpath(@loader_path)加载它,必须放同一目录。
-  "libswiftCompatibilitySpan.dylib": "31242bc7aa3a78a2a07018a5238fe37ec82b375f0447070cc0417c533322206c",
+  "libswiftCompatibilitySpan.dylib": "892792bc147a56c558f7dae1930bad249cd5abac6483a3ae1281d2f6fccb905c",
 };
 const URL = `https://github.com/openclaw/Peekaboo/releases/download/v${VERSION}/${ASSET}`;
 
@@ -54,7 +56,7 @@ try {
   const extracted = join(work, "x");
   mkdirSync(extracted);
   execFileSync("tar", ["-xzf", archive, "-C", extracted]);
-  const sourceDir = join(extracted, "peekaboo-macos-universal");
+  const sourceDir = join(extracted, ARCH_DIR);
   mkdirSync(outDir, { recursive: true });
   for (const [name, digest] of Object.entries(FILES)) {
     const source = join(sourceDir, name);

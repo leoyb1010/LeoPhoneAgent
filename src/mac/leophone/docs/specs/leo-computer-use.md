@@ -3,7 +3,7 @@
 ## Rule
 
 - LeoBot bundles the Peekaboo CLI (openclaw/Peekaboo, MIT). `scripts/leo-fetch-peekaboo.mjs`
-  pins the release (4.9.4, universal tarball sha256 plus per-file sha256 of `peekaboo` and
+  pins the release (4.9.4, arm64-only tarball sha256 — every LeoBot Mac is Apple silicon — plus per-file sha256 of `peekaboo` and
   `libswiftCompatibilitySpan.dylib`), refuses anything that does not match, and copies the files
   and the license to `packages/desktop/leo/bin/` (git-ignored). It runs first in `leo:bundle:mac`
   (after the release-notes gate) and is a no-op when the files are already in place.
