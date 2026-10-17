@@ -8,7 +8,8 @@ describe("DEFAULT_PLUGIN_MARKETPLACES", () => {
         id: "zcode-plugins-official",
         name: "zcode-plugins-official",
         pluginCount: 0,
-        source: "https://cdn-zcode.z.ai/zcode/official-plugin/marketplace.json",
+        // [leo] 官方市场远端分片指向本机死端口，只用随包内置分片。
+        source: "http://127.0.0.1:9/zcode/official-plugin/marketplace.json",
       }),
       expect.objectContaining({
         id: "claude-plugins-official",

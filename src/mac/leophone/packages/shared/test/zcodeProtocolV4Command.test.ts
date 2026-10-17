@@ -132,7 +132,8 @@ describe("zcode-protocol-v4 command", () => {
     ).toEqual({ text: "opposite follow-up", requestedDelivery: "queue" });
   });
 
-  it("validates bot delivery target on sendText", () => {
+  // [leo] Mac 1.9.0 起协议字段 botDeliveryTarget 已删除（机器人回推）。
+  it.skip("validates bot delivery target on sendText", () => {
     const payload = commandPayloadSchemas.sendText.parse({
       text: "创建一个定时任务",
       botDeliveryTarget: {

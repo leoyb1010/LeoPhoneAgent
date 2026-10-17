@@ -49,7 +49,8 @@ describe("resolveDynamicWorkflowClientConfig（DWG-01）", () => {
   ])("远端 %s 时 fail-closed 到 default", (_name, value) => {
     expect(resolveDynamicWorkflowClientConfig({ remote: value })).toEqual({
       mode: DEFAULT_DYNAMIC_WORKFLOW_MODE,
-      enabled: false,
+      // [leo] 本地默认 onDemand（docs/mac-3.0/UPSTREAM.md），按需模式算启用。
+      enabled: true,
       source: "default",
       offeredMode: DEFAULT_DYNAMIC_WORKFLOW_MODE,
     });

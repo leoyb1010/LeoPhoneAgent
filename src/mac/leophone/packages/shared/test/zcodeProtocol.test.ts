@@ -423,7 +423,8 @@ describe("ZCode Protocol", () => {
     ).toThrow();
   });
 
-  it("session/send and automation/create validate the bot delivery target strictly", () => {
+  // [leo] Mac 1.9.0 起协议字段 botDeliveryTarget 已删除（机器人回推）。
+  it.skip("session/send and automation/create validate the bot delivery target strictly", () => {
     const botDeliveryTarget = {
       provider: "weixin" as const,
       botId: "bot-weixin",

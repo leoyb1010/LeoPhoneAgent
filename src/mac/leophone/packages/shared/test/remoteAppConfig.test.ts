@@ -7,7 +7,8 @@ import {
 } from "../src/remoteAppConfig.js";
 
 describe("remoteAppConfig", () => {
-  it("读取 feedback_url", () => {
+  // [leo] feedback_url 随反馈中心在 Mac 1.9.0 删除。
+  it.skip("读取 feedback_url", () => {
     expect(
       getFeedbackUrlFromConfig({
         feedback_url: "https://example.com/feedback",

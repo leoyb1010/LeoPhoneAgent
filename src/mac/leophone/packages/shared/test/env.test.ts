@@ -13,10 +13,11 @@ describe("shared runtime env", () => {
   it("构建期可选能力未注入时关闭，事件上报端点取测试注入值", async () => {
     const env = await importFreshEnvModule();
 
-    // 单测不注入 ARMS 与自动更新；事件上报端点由 vitest.config.ts 固定注入。
+    // 单测不注入 ARMS 与自动更新。
     expect(env.ZCODE_ARMS_RUM_ENDPOINT).toBe("");
     expect(env.ZCODE_AUTO_UPDATE_ENABLED).toBe(false);
-    expect(env.ZCODE_TELEMETRY_REPORT_ENDPOINT).toBe("https://zcode.z.ai/api/v1/event/report");
+    // [leo] 事件上报端点恒为空：构建期 / vitest 注入的 __ZCODE_TELEMETRY_REPORT_ENDPOINT__ 一律不认。
+    expect(env.ZCODE_TELEMETRY_REPORT_ENDPOINT).toBe("");
   });
 
   it("未注入 ZCODE_ENV 时默认 test 并映射为 local", async () => {
