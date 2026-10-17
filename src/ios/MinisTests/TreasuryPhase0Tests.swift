@@ -75,10 +75,8 @@ final class TreasuryPhase0Tests: XCTestCase {
     }
 
     func testTreasuryIntentOpeningPolicyKeepsSearchInlineAndOpensWorkspace() {
-        if #available(iOS 16.0, *) {
-            XCTAssertFalse(SearchTreasuryIntent.openAppWhenRun)
-            XCTAssertTrue(OpenTreasuryIntent.openAppWhenRun)
-        }
+        XCTAssertFalse(SearchTreasuryIntent.openAppWhenRun)
+        XCTAssertTrue(OpenTreasuryIntent.openAppWhenRun)
     }
 
     func testTreasuryWorkspaceSplitUsesAvailableWidthWithoutKeyboardHeight() {

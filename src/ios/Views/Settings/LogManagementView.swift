@@ -190,17 +190,15 @@ struct LogManagementView: View {
                 }
             }
 
-            if #available(iOS 17.0, *) {
-                Section {
-                    NavigationLink {
-                        SyncLogView()
-                    } label: {
-                        HStack {
-                            Label("iCloud Sync Logs", systemImage: "icloud.fill")
-                            Spacer()
-                            Text("\(SyncLogStore.shared.entries.count)")
-                                .foregroundStyle(.secondary)
-                        }
+            Section {
+                NavigationLink {
+                    SyncLogView()
+                } label: {
+                    HStack {
+                        Label("iCloud Sync Logs", systemImage: "icloud.fill")
+                        Spacer()
+                        Text("\(SyncLogStore.shared.entries.count)")
+                            .foregroundStyle(.secondary)
                     }
                 }
             }

@@ -113,11 +113,7 @@ class ShareViewController: UIViewController {
         var responder: UIResponder? = self
         while responder != nil {
             if let application = responder as? UIApplication {
-                if #available(iOS 18.0, *) {
-                    application.open(url, options: [:], completionHandler: nil)
-                } else {
-                    application.perform(selectorOpenURL, with: url)
-                }
+                application.open(url, options: [:], completionHandler: nil)
                 break
             }
             responder = responder?.next

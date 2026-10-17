@@ -3753,7 +3753,7 @@ extension CollectionViewMessageListV3 {
         /// Base contentInset.top (without sub-viewport overflow compensation).
         /// iOS 26+ relies on system; older iOS uses an 8pt manual padding.
         var baseContentInsetTop: CGFloat {
-            if #available(iOS 26, *) { return 0 } else { return 8 }
+            return 0
         }
 
         /// Base contentInset.bottom = inputBarHeight + floatingBarHeight

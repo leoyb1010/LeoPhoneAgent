@@ -415,7 +415,6 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
 
     /// Launch-time probe from AppDelegate; does not create the singleton.
     static func probeOrphanedLocationSessionAtLaunch() {
-        guard #available(iOS 17.0, *) else { return }
         lastOrphanProbeAt = Date()
         CLBackgroundActivitySession().invalidate()
     }
@@ -1148,45 +1147,41 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     private func startBackgroundActivitySession() {
         guard liveUpdatesTask == nil else { return }
 
-        if #available(iOS 17.0, *) {
-            let session = CLBackgroundActivitySession()
-            bgActivitySession = session
-            logger.info("[BKA][LocationLA] CLBackgroundActivitySession created")
+        let session = CLBackgroundActivitySession()
+        bgActivitySession = session
+        logger.info("[BKA][LocationLA] CLBackgroundActivitySession created")
 
-            liveUpdatesTask = Task { @MainActor [weak self] in
-                guard let self else { return }
-                do {
-                    let updates = CLLocationUpdate.liveUpdates(.otherNavigation)
-                    for try await update in updates {
-                        guard !Task.isCancelled else { break }
-                        let now = Date()
-                        let elapsed = now.timeIntervalSince(self.lastLocationLAUpdate)
-                        guard elapsed >= Self.locationLAMinInterval else { continue }
-                        self.lastLocationLAUpdate = now
-                        let lat = update.location.map { Self.maskCoordinate($0.coordinate.latitude) } ?? "?"
-                        let lon = update.location.map { Self.maskCoordinate($0.coordinate.longitude) } ?? "?"
-                        logger.info("[BKA][LocationLA] tick (\(lat),\(lon)) — pushing LA update")
-                        self.updateLiveActivityIfNeeded(source: "locationLA")
-                    }
-                } catch {
-                    if !Task.isCancelled {
-                        logger.error("[BKA][LocationLA] liveUpdates stream error: \(error.localizedDescription)")
-                    }
+        liveUpdatesTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let updates = CLLocationUpdate.liveUpdates(.otherNavigation)
+                for try await update in updates {
+                    guard !Task.isCancelled else { break }
+                    let now = Date()
+                    let elapsed = now.timeIntervalSince(self.lastLocationLAUpdate)
+                    guard elapsed >= Self.locationLAMinInterval else { continue }
+                    self.lastLocationLAUpdate = now
+                    let lat = update.location.map { Self.maskCoordinate($0.coordinate.latitude) } ?? "?"
+                    let lon = update.location.map { Self.maskCoordinate($0.coordinate.longitude) } ?? "?"
+                    logger.info("[BKA][LocationLA] tick (\(lat),\(lon)) — pushing LA update")
+                    self.updateLiveActivityIfNeeded(source: "locationLA")
                 }
-                logger.info("[BKA][LocationLA] stream ended")
-                self.liveUpdatesTask = nil
+            } catch {
+                if !Task.isCancelled {
+                    logger.error("[BKA][LocationLA] liveUpdates stream error: \(error.localizedDescription)")
+                }
             }
-            logger.info("[BKA][LocationLA] liveUpdates stream started")
+            logger.info("[BKA][LocationLA] stream ended")
+            self.liveUpdatesTask = nil
         }
+        logger.info("[BKA][LocationLA] liveUpdates stream started")
     }
 
     private func stopBackgroundActivitySession() {
         let hadSomething = liveUpdatesTask != nil || bgActivitySession != nil
         liveUpdatesTask?.cancel()
         liveUpdatesTask = nil
-        if #available(iOS 17.0, *) {
-            (bgActivitySession as? CLBackgroundActivitySession)?.invalidate()
-        }
+        (bgActivitySession as? CLBackgroundActivitySession)?.invalidate()
         bgActivitySession = nil
         if hadSomething {
             logger.info("[BKA][LocationLA] stopped")
@@ -1214,7 +1209,6 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// run, the subsequent `evaluateBackgroundActivitySession()` recreates a
     /// fresh, owned session.
     private func retractOrphanedLocationSession(caller: String, force: Bool = false) {
-        guard #available(iOS 17.0, *) else { return }
         guard liveUpdatesTask == nil, bgActivitySession == nil else { return }
         let now = Date()
         guard force || now.timeIntervalSince(Self.lastOrphanProbeAt) >= Self.orphanProbeInterval else { return }
@@ -1695,7 +1689,6 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     }
 
     private func buildSessionSnapshots() -> [LiveSessionSnapshot] {
-        guard #available(iOS 16.2, *) else { return [] }
         let tracker = SessionActivityTracker.shared
         return tracker.activeSessions.sorted().map { sid in
             let info = tracker.sessionToolInfo[sid]

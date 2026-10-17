@@ -119,19 +119,16 @@ enum NativeActionExecutor {
     }
 
     private static func scheduleNativeAlarm(fire: Date, label: String) async -> Bool {
-        if #available(iOS 26.0, *) {
-            return await withCheckedContinuation { cont in
-                AlarmOffloadBridge.scheduleAlarm(
-                    withId: UUID().uuidString,
-                    fireDate: fire,
-                    label: label.isEmpty ? "闹钟" : label,
-                    repeatMode: "once"
-                ) { _, error in
-                    cont.resume(returning: error == nil)
-                }
+        return await withCheckedContinuation { cont in
+            AlarmOffloadBridge.scheduleAlarm(
+                withId: UUID().uuidString,
+                fireDate: fire,
+                label: label.isEmpty ? "闹钟" : label,
+                repeatMode: "once"
+            ) { _, error in
+                cont.resume(returning: error == nil)
             }
         }
-        return false
     }
 
     private static func nativeDate(hour: Int, minute: Int, dayOffset: Int) -> Date? {
@@ -152,14 +149,7 @@ enum NativeActionExecutor {
         location: String = ""
     ) async -> Bool {
         let store = EKEventStore()
-        let granted: Bool
-        if #available(iOS 17.0, *) {
-            granted = (try? await store.requestFullAccessToEvents()) ?? false
-        } else {
-            granted = await withCheckedContinuation { cont in
-                store.requestAccess(to: .event) { ok, _ in cont.resume(returning: ok) }
-            }
-        }
+        let granted = (try? await store.requestFullAccessToEvents()) ?? false
         guard granted, !Task.isCancelled else { return false }
         let ev = EKEvent(eventStore: store)
         ev.title = title.isEmpty ? "日程" : title
@@ -181,14 +171,7 @@ enum NativeActionExecutor {
 
     private static func saveReminder(_ title: String, dueDate: Date? = nil, notes: String = "") async -> Bool {
         let store = EKEventStore()
-        let granted: Bool
-        if #available(iOS 17.0, *) {
-            granted = (try? await store.requestFullAccessToReminders()) ?? false
-        } else {
-            granted = await withCheckedContinuation { cont in
-                store.requestAccess(to: .reminder) { ok, _ in cont.resume(returning: ok) }
-            }
-        }
+        let granted = (try? await store.requestFullAccessToReminders()) ?? false
         guard granted, !Task.isCancelled else { return false }
         let reminder = EKReminder(eventStore: store)
         reminder.title = title

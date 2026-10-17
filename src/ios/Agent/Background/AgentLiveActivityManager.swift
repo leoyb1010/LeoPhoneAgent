@@ -61,7 +61,6 @@ final class AgentLiveActivityManager {
         if ProcessInfo.processInfo.isiOSAppOnMac {
             return false
         }
-        guard #available(iOS 16.2, *) else { return false }
         // [T-ipad16-activitykit-crash] ActivityKit is WEAK-linked
         // (LC_LOAD_WEAK_DYLIB) and Live Activities came to iPad only with
         // iPadOS 17. `#available(iOS 16.2, *)` passes on iPadOS 16.2, so gated
@@ -84,10 +83,6 @@ final class AgentLiveActivityManager {
         //     resolve — if it doesn't, instantiating
         //     Activity<AgentActivityAttributes> metadata is what crashes.
         if UIDevice.current.userInterfaceIdiom == .pad {
-            guard #available(iOS 17.0, *) else {
-                logger.info("[LiveActivity][probe] unavailable: iPad on iPadOS 16.x")
-                return false
-            }
         }
         guard let handle = dlopen("/System/Library/Frameworks/ActivityKit.framework/ActivityKit", RTLD_LAZY) else {
             logger.info("[LiveActivity][probe] unavailable: dlopen failed")
@@ -114,9 +109,7 @@ final class AgentLiveActivityManager {
             logger.info("[LiveActivity][cleanup src=\(source)] skipped: ActivityKit unavailable")
             return
         }
-        if #available(iOS 16.2, *) {
-            _cleanupStaleActivities(source: source)
-        }
+        _cleanupStaleActivities(source: source)
     }
 
     /// [T-live-activity-toggle] User preference gate (Settings → Background →
@@ -129,23 +122,17 @@ final class AgentLiveActivityManager {
 
     func startActivity(sessions: [LiveSessionSnapshot]) {
         guard Self.isActivityKitAvailable, Self.isUserEnabled else { return }
-        if #available(iOS 16.2, *) {
-            _startActivity(sessions: sessions)
-        }
+        _startActivity(sessions: sessions)
     }
 
     func updateActivity(sessions: [LiveSessionSnapshot]) {
         guard Self.isActivityKitAvailable, Self.isUserEnabled else { return }
-        if #available(iOS 16.2, *) {
-            _updateActivity(sessions: sessions)
-        }
+        _updateActivity(sessions: sessions)
     }
 
     func endActivity() {
         guard Self.isActivityKitAvailable else { return }
-        if #available(iOS 16.2, *) {
-            _endActivity()
-        }
+        _endActivity()
     }
 
     /// [T-ios-live-activity-multisession-dismiss] Mark a single session as
@@ -154,9 +141,7 @@ final class AgentLiveActivityManager {
     /// message, while remaining sessions continue refreshing normally.
     func markSessionCompleted(sessionId: String, lastMessage: String) {
         guard Self.isActivityKitAvailable, Self.isUserEnabled else { return }
-        if #available(iOS 16.2, *) {
-            _markSessionCompleted(sessionId: sessionId, lastMessage: lastMessage)
-        }
+        _markSessionCompleted(sessionId: sessionId, lastMessage: lastMessage)
     }
 
     /// [T-ios-live-activity-soft-finish] Soft-finish: when the last task ends,
@@ -170,12 +155,10 @@ final class AgentLiveActivityManager {
         // Disabled → no soft-finish card; fall through to a hard end so any
         // activity left over from before the switch was flipped is removed.
         guard Self.isUserEnabled else {
-            if #available(iOS 16.2, *) { _endActivity() }
+            _endActivity()
             return
         }
-        if #available(iOS 16.2, *) {
-            await _finishActivity(lastMessages: lastMessages)
-        }
+        await _finishActivity(lastMessages: lastMessages)
     }
 
     /// [T-ios-delete-session-live-activity] Called when a session is deleted.
@@ -185,25 +168,21 @@ final class AgentLiveActivityManager {
     /// deleted one; otherwise it ends immediately (dismissalPolicy .immediate).
     func handleSessionDeleted(_ sessionId: String) {
         guard Self.isActivityKitAvailable else { return }
-        if #available(iOS 16.2, *) {
-            _handleSessionDeleted(sessionId)
-        }
+        _handleSessionDeleted(sessionId)
     }
 
     /// Called on foreground return. If a soft-finished ("completed") activity is
     /// lingering, end it now that the user is back in the app.
     func dismissFinishedActivityOnForeground() {
         guard Self.isActivityKitAvailable else { return }
-        if #available(iOS 16.2, *) {
-            let completedState = (lastPushedState as? AgentActivityAttributes.ContentState)?.allCompleted == true
-            guard awaitingDismissal || completedState else { return }
-            logger.info("[LiveActivity][finish] foreground return — dismissing completed activity (awaitingDismissal=\(awaitingDismissal) completedState=\(completedState))")
-            _endActivity()
-            let remaining = SessionActivityTracker.shared.activeSessions
-            if !remaining.isEmpty {
-                logger.info("[LiveActivity][finish] \(remaining.count) session(s) still active after dismiss — restarting activity")
-                BackgroundKeepAliveManager.shared.updateLiveActivityIfNeeded(source: "postDismissRecovery")
-            }
+        let completedState = (lastPushedState as? AgentActivityAttributes.ContentState)?.allCompleted == true
+        guard awaitingDismissal || completedState else { return }
+        logger.info("[LiveActivity][finish] foreground return — dismissing completed activity (awaitingDismissal=\(awaitingDismissal) completedState=\(completedState))")
+        _endActivity()
+        let remaining = SessionActivityTracker.shared.activeSessions
+        if !remaining.isEmpty {
+            logger.info("[LiveActivity][finish] \(remaining.count) session(s) still active after dismiss — restarting activity")
+            BackgroundKeepAliveManager.shared.updateLiveActivityIfNeeded(source: "postDismissRecovery")
         }
     }
 
@@ -252,9 +231,7 @@ final class AgentLiveActivityManager {
 
     func audioStateChanged(source: String) {
         guard Self.isActivityKitAvailable else { return }
-        if #available(iOS 16.2, *) {
-            _audioStateChanged(source: source)
-        }
+        _audioStateChanged(source: source)
     }
 
     @available(iOS 16.2, *)
@@ -541,9 +518,7 @@ final class AgentLiveActivityManager {
     /// so it simply disappears; other sessions keep their card.
     func dropSession(_ sessionId: String) {
         guard Self.isActivityKitAvailable else { return }
-        if #available(iOS 16.2, *) {
-            _removeSession(sessionId, tag: "dropSession")
-        }
+        _removeSession(sessionId, tag: "dropSession")
     }
 
     @available(iOS 16.2, *)

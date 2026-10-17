@@ -60,9 +60,7 @@ final class DebugViewOverlay {
     private func startDisplayLink() {
         let link = CADisplayLink(target: self, selector: #selector(tick))
         // 30fps is plenty — overlay accuracy doesn't need 60.
-        if #available(iOS 15.0, *) {
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
-        }
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
         link.add(to: .main, forMode: .common)
         self.displayLink = link
     }

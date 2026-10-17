@@ -1821,9 +1821,7 @@ struct AIChatView: View {
         forcePullToast = String(localized: "Marking for upload…")
         Task {
             let n = await ChatStore.shared.forceSyncSession(sid)
-            if #available(iOS 17.0, *) {
-                await MainActor.run { SyncCore.shared.scheduleSend(delay: 0.5) }
-            }
+            await MainActor.run { SyncCore.shared.scheduleSend(delay: 0.5) }
             await MainActor.run {
                 isForcePulling = false
                 forcePullToast = String(localized: "Marked \(n) records for sync. iCloud is uploading now.")
@@ -1985,10 +1983,6 @@ struct AIChatView: View {
 
         let isAuthed = hasBinding || hasProviders
 
-        let legacyLayout = !ProcessInfo.processInfo.isiOSAppOnMac && {
-            if #available(iOS 26, *) { return false }
-            return true
-        }()
 
         // Use the current session's title in place of the default name
         // when one exists (auto-generated or user-renamed). Tap opens the
@@ -2037,7 +2031,7 @@ struct AIChatView: View {
         // 4 → 1 and group vertical padding 3 → 2 on legacy), so the stack's
         // total height — the thing the May-18/19/20 clip saga fought — is
         // unchanged and the top-clip fix does not regress.
-        return VStack(spacing: legacyLayout ? -3 : -2) {
+        return VStack(spacing: -2) {
             Button {
                 if let s = titlePillSession { titlePillEditSession = s }
             } label: {
@@ -2073,8 +2067,8 @@ struct AIChatView: View {
                     //                 naturally has breathing room above
                     //                 and below.
                     // iOS 26 path unchanged (16pt works inside liquid-glass).
-                    .font(.system(size: legacyLayout ? 13 : 16, weight: .semibold))
-                    .minimumScaleFactor(legacyLayout ? 0.85 : 1.0)
+                    .font(.system(size: 16, weight: .semibold))
+                    .minimumScaleFactor(1.0)
                     .foregroundStyle(ChatColors.primaryText)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -2086,7 +2080,7 @@ struct AIChatView: View {
                     // positions the stack correctly, and 2pt keeps a little
                     // breathing room above the semibold cap height without
                     // re-introducing the top crop.
-                    .padding(.top, legacyLayout ? 0 : 2)
+                    .padding(.top, 2)
                     .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in
                         let n = SoulStore.cachedMetadata.name
                         soulName = n.isEmpty ? "LeoBot" : n
@@ -2105,7 +2099,7 @@ struct AIChatView: View {
             // the 9pt row's cap headroom); the calibrated title↔group overlap
             // (outer -3) and the group pill's vertical padding are untouched.
             // iOS 26 keeps spacing 1 — the liquid-glass band has no crowding.
-            VStack(spacing: legacyLayout ? -1 : 1) {
+            VStack(spacing: 1) {
                 HStack(spacing: 4) {
                     Button {
                         showModelPicker = true
@@ -2157,7 +2151,7 @@ struct AIChatView: View {
                                 .background(Circle().fill(Color.orange))
                                 // Match the row text's descender clearance so
                                 // the badge centers on the same visual band.
-                                .padding(.bottom, legacyLayout ? 1 : 4)
+                                .padding(.bottom, 4)
                         }
                         Button {
                             showModelPicker = true
@@ -2179,7 +2173,7 @@ struct AIChatView: View {
                                 // liquid-glass-band requirement; on 16-18 it
                                 // was pure height waste, now traded into the
                                 // title→model gap (see the outer VStack).
-                                .padding(.bottom, legacyLayout ? 1 : 4)
+                                .padding(.bottom, 4)
                                 // Force vertical sizing to fit the full
                                 // glyph including descender so the line's
                                 // own frame doesn't crop before the navbar
@@ -2204,7 +2198,7 @@ struct AIChatView: View {
                                 // navbar's bottom cutoff.
                                 // [T-navbar-title-model-gap] Match the
                                 // provider text's legacy clearance.
-                                .padding(.bottom, legacyLayout ? 1 : 4)
+                                .padding(.bottom, 4)
                         }
                     }
                 }
@@ -2212,7 +2206,7 @@ struct AIChatView: View {
             .padding(.horizontal, 8)
             // [T-navbar-title-model-gap] 3 → 2 on legacy: part of the
             // height-neutral trade that funds the wider title→model gap.
-            .padding(.vertical, legacyLayout ? 2 : 3)
+            .padding(.vertical, 3)
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.red.opacity(0.35 * fallbackPulseOpacity))
@@ -2254,7 +2248,6 @@ struct AIChatView: View {
         // OUTER stack shifts its rendered position downward without
         // resizing any individual row. iOS 26 leaves at 0 (liquid
         // glass centers correctly).
-        .padding(.top, legacyLayout ? 6 : 0)
         // iOS 26+: fix height to match liquid-glass navbar; older OS: let it size naturally
         .modifier(NavTitleFrameModifier())
         // [T-navbar-title-fontsize] Lock the entire principal-toolbar
@@ -2534,7 +2527,7 @@ struct AIChatView: View {
                     guard let sid = vm.sessionId else { return }
                     Task {
                         let count = await ChatStore.shared.forceSyncSession(sid)
-                        if #available(iOS 17.0, *), count > 0 {
+                        if count > 0 {
                             SyncCore.shared.scheduleSend(delay: 1)
                         }
                     }
@@ -5032,26 +5025,22 @@ private struct ProviderImportSheet: View {
 
 private struct NavTitleFrameModifier: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
-            // [NavTitleTopClip 2026-07-23] The principal titleView aligns to the
-            // liquid-glass navbar's ~44pt band. Give it 46pt centered so tall
-            // title glyphs (semibold 16pt + CJK/caps ascenders) render in full.
-            //
-            // [NavTitleTransitionClip 2026-07-23] Do NOT `.clipped()`. During a
-            // push/pop transition the system interpolates the principal item's
-            // frame/scale/alpha; a hard clip rectangle cuts the mid-transition
-            // frames along the 46pt box far more aggressively than the steady
-            // state (users saw the title sliced to half a line during the
-            // animation). The 46pt frame only *sizes* the item for band
-            // alignment — the 3-row stack's natural height already fits within
-            // it at steady state (spacing -2, ~44pt), so there is nothing to clip
-            // away, and letting transition frames render uncropped restores the
-            // standard system title transition.
-            content
-                .frame(height: 46, alignment: .center)
-        } else {
-            content
-        }
+        // [NavTitleTopClip 2026-07-23] The principal titleView aligns to the
+        // liquid-glass navbar's ~44pt band. Give it 46pt centered so tall
+        // title glyphs (semibold 16pt + CJK/caps ascenders) render in full.
+        //
+        // [NavTitleTransitionClip 2026-07-23] Do NOT `.clipped()`. During a
+        // push/pop transition the system interpolates the principal item's
+        // frame/scale/alpha; a hard clip rectangle cuts the mid-transition
+        // frames along the 46pt box far more aggressively than the steady
+        // state (users saw the title sliced to half a line during the
+        // animation). The 46pt frame only *sizes* the item for band
+        // alignment — the 3-row stack's natural height already fits within
+        // it at steady state (spacing -2, ~44pt), so there is nothing to clip
+        // away, and letting transition frames render uncropped restores the
+        // standard system title transition.
+        content
+            .frame(height: 46, alignment: .center)
     }
 }
 
@@ -5059,34 +5048,13 @@ private struct NavBarStyleModifier: ViewModifier {
     @Binding var topSafeAreaInset: CGFloat
 
     func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
-            // iOS 26: extend content behind nav bar so liquid-glass has
-            // something to show through; the collection view's
-            // contentInsetAdjustmentBehavior = .automatic keeps messages
-            // starting below the bar.
-            content
-                .ignoresSafeArea(.container, edges: .top)
-                .toolbarBackgroundVisibility(.visible, for: .navigationBar)
-        } else {
-            // iOS 16–18: opaque navbar background
-            content
-                .toolbarBackground(ChatColors.background, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
-                .overlay(alignment: .top) {
-                    // [T-ios-geometry-observer-crash] onGeometryChange replaces
-                    // the GeometryReader scaffold (async-renderer SIGTRAP — see
-                    // the floating-bar site). The proxy measures the same
-                    // Color.clear the reader wrapped; ignoresSafeArea/frame
-                    // stay outside it exactly as before, and the action's
-                    // initial fire covers the old onAppear seed.
-                    Color.clear
-                        .onGeometryChange(for: CGFloat.self) { proxy in
-                            proxy.safeAreaInsets.top
-                        } action: { topSafeAreaInset = $0 }
-                        .ignoresSafeArea()
-                        .frame(height: 0)
-                }
-        }
+        // iOS 26: extend content behind nav bar so liquid-glass has
+        // something to show through; the collection view's
+        // contentInsetAdjustmentBehavior = .automatic keeps messages
+        // starting below the bar.
+        content
+            .ignoresSafeArea(.container, edges: .top)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
     }
 }
 
@@ -5430,7 +5398,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
 
         // Same gate as before: iOS 17+ (v2 sync engine) AND the user's
         // iCloud Sync toggle on.
-        if #available(iOS 17.0, *), key.iCloudSyncEnabled {
+        if key.iCloudSyncEnabled {
             let disabled: UIMenuElement.Attributes = (!key.hasSession || key.isForcePulling) ? [.disabled] : []
             groups.append(UIMenu(options: .displayInline, children: [
                 UIAction(title: String(localized: "Force iCloud Sync"),

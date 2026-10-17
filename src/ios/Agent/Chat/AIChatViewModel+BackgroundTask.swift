@@ -14,35 +14,33 @@ extension AIChatViewModel {
         guard backgroundTaskID == .invalid else { return }
         let continuedKey = continuedProcessingSessionKey ?? sessionId ?? draftId ?? UUID().uuidString
         continuedProcessingSessionKey = continuedKey
-        if #available(iOS 26.0, *) {
-            AgentContinuedProcessingManager.shared.begin(
-                sessionKey: continuedKey,
-                title: "LeoBot",
-                subtitle: String(localized: "Preparing"),
-                onExpiration: { [weak self] in
-                    guard let self else { return }
-                    // [T-bg-false-fail] 继续处理授权到期 ≠ 任务失败。静音
-                    // 保活生效时进程不会死,任务照常跑——这里必须什么都
-                    // 不做。之前无条件 stop + endBackgroundProcessing,系统
-                    // 横幅立刻报"任务失败",用户点回对话却看到任务还在
-                    // 继续(实际也确实在继续)。
-                    if BackgroundKeepAliveManager.shared.enhancedBackgroundEffective {
-                        logger.info("[Background][Continued] grant expired but keep-alive active — task continues untouched")
-                        return
-                    }
-                    logger.warning("[Background][Continued] system expiration session=\(continuedKey.prefix(8))")
-                    self.backgroundSuspended = true
-                    SessionActivityTracker.shared.updateActivityPhase(
-                        continuedKey,
-                        phase: .suspended,
-                        reason: .backgroundTimeExpired
-                    )
-                    BackgroundInterruptionTracker.shared.recordInterruption()
-                    self.stopCurrentCommand(byUser: false)
-                    self.endBackgroundProcessing()
+        AgentContinuedProcessingManager.shared.begin(
+            sessionKey: continuedKey,
+            title: "LeoBot",
+            subtitle: String(localized: "Preparing"),
+            onExpiration: { [weak self] in
+                guard let self else { return }
+                // [T-bg-false-fail] 继续处理授权到期 ≠ 任务失败。静音
+                // 保活生效时进程不会死,任务照常跑——这里必须什么都
+                // 不做。之前无条件 stop + endBackgroundProcessing,系统
+                // 横幅立刻报"任务失败",用户点回对话却看到任务还在
+                // 继续(实际也确实在继续)。
+                if BackgroundKeepAliveManager.shared.enhancedBackgroundEffective {
+                    logger.info("[Background][Continued] grant expired but keep-alive active — task continues untouched")
+                    return
                 }
-            )
-        }
+                logger.warning("[Background][Continued] system expiration session=\(continuedKey.prefix(8))")
+                self.backgroundSuspended = true
+                SessionActivityTracker.shared.updateActivityPhase(
+                    continuedKey,
+                    phase: .suspended,
+                    reason: .backgroundTimeExpired
+                )
+                BackgroundInterruptionTracker.shared.recordInterruption()
+                self.stopCurrentCommand(byUser: false)
+                self.endBackgroundProcessing()
+            }
+        )
         let remaining = UIApplication.shared.backgroundTimeRemaining
         let remainingStr = remaining > 99999 ? "unlimited" : String(format: "%.1fs", remaining)
         let sessions = SessionActivityTracker.shared.activeSessions.count
@@ -62,7 +60,6 @@ extension AIChatViewModel {
             // app was in no danger of termination. Instead, just re-arm a fresh
             // finite task to reset the clock and let the agent loop continue.
             let continuedProcessingActive: Bool = {
-                guard #available(iOS 26.0, *) else { return false }
                 return AgentContinuedProcessingManager.shared.isActive(sessionKey: continuedKey)
             }()
             if BackgroundKeepAliveManager.shared.enhancedBackgroundEffective || continuedProcessingActive {
@@ -142,7 +139,7 @@ extension AIChatViewModel {
         // 于是给一次失败的回合推送"任务完成"。同一坑本文件别处已修过。
         let lastAssistantError = messages.last(where: { $0.role == .assistant })?.error
         let completionHasError = lastAssistantError != nil || errorMessage != nil
-        if #available(iOS 26.0, *), !continuedKey.isEmpty {
+        if !continuedKey.isEmpty {
             // 与通知同一套语义:挂起、用户主动停止都不算失败;可恢复的中断如实说
             // "已中断",不可恢复的错误才报失败。系统横幅只有成功/失败两态,
             // 所以把真实情况写进副标题再收尾。
@@ -467,12 +464,10 @@ extension AIChatViewModel {
             // same tool is still the one running.
             let detail = existing?.toolName == liveTool ? (existing?.toolStatus ?? "") : ""
             tracker.updateToolInfo(sessionId: sid, toolName: liveTool, toolStatus: detail)
-            if #available(iOS 26.0, *) {
-                AgentContinuedProcessingManager.shared.noteProgress(
-                    sessionKey: continuedProcessingSessionKey ?? sid,
-                    subtitle: AgentToolPresentation.displayName(for: liveTool)
-                )
-            }
+            AgentContinuedProcessingManager.shared.noteProgress(
+                sessionKey: continuedProcessingSessionKey ?? sid,
+                subtitle: AgentToolPresentation.displayName(for: liveTool)
+            )
         }
         return summary
     }
@@ -840,27 +835,18 @@ final class AgentContinuedProcessingManager {
         request.strategy = .queue
         // [T-ios27-bg-submit] iOS 27 submits without blocking the main thread
         // and reports every refusal as an error; the old sync call is deprecated.
-        if #available(iOS 27, *) {
-            Task { @MainActor [weak self] in
-                do {
-                    try await BGTaskScheduler.shared.submitTaskRequest(request)
-                    logger.info("[Background][Continued] submitted session=\(sessionKey.prefix(8))")
-                    // The run may have finished while this was in flight; finish()'s
-                    // cancel came too early then, and the system would start a task
-                    // nobody claims (a false "failed" banner).
-                    if self?.runs[sessionKey]?.identifier != identifier {
-                        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
-                    }
-                } catch {
-                    self?.submitFailed(sessionKey: sessionKey, identifier: identifier, error: error)
-                }
-            }
-        } else {
+        Task { @MainActor [weak self] in
             do {
-                try BGTaskScheduler.shared.submit(request)
+                try await BGTaskScheduler.shared.submitTaskRequest(request)
                 logger.info("[Background][Continued] submitted session=\(sessionKey.prefix(8))")
+                // The run may have finished while this was in flight; finish()'s
+                // cancel came too early then, and the system would start a task
+                // nobody claims (a false "failed" banner).
+                if self?.runs[sessionKey]?.identifier != identifier {
+                    BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
+                }
             } catch {
-                submitFailed(sessionKey: sessionKey, identifier: identifier, error: error)
+                self?.submitFailed(sessionKey: sessionKey, identifier: identifier, error: error)
             }
         }
     }

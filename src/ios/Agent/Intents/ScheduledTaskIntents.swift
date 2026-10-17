@@ -105,11 +105,7 @@ struct RunScheduledTaskNowIntent: AppIntent {
                                               waitForResult: true, inputValues: [:]).value
         }
         let value: SendPromptResult?
-        if #available(iOS 27, *) {
-            value = try await performBackgroundTask { try await run() }
-        } else {
-            value = try await run()
-        }
+        value = try await performBackgroundTask { try await run() }
         // [E3] 手动运行也回写结果，设置页那一行跟着更新。
         let store = ScheduledTaskStore.shared
         store.recordStart(id: stored.id, sessionId: value?.sessionId)
@@ -118,7 +114,7 @@ struct RunScheduledTaskNowIntent: AppIntent {
         let summary = String((value?.responseText ?? "").trimmingCharacters(in: .whitespacesAndNewlines).prefix(240))
         let spoken = summary.isEmpty ? "「\(definition.displayName)」已运行，打开 App 查看结果。" : summary
         var voiceOnly = false
-        if #available(iOS 27, *) { voiceOnly = systemContext.isVoiceOnly }
+        voiceOnly = systemContext.isVoiceOnly
         let dialog = SiriReplyPrivacy.dialogText(
             spoken, deviceLocked: !UIApplication.shared.isProtectedDataAvailable,
             privacyMode: SiriReplyPrivacy.privacyModeEnabled, voiceOnly: voiceOnly)

@@ -54,10 +54,8 @@ enum HarnessApprovalNotifier {
         content.body = lockScreenBody(for: approval)
         content.sound = .default
         content.categoryIdentifier = categoryId
-        if #available(iOS 15.0, *) {
-            // 时效性:锁屏置顶 + AirPods「Siri 播报通知」可念出来
-            content.interruptionLevel = .timeSensitive
-        }
+        // 时效性:锁屏置顶 + AirPods「Siri 播报通知」可念出来
+        content.interruptionLevel = .timeSensitive
         content.userInfo = [
             "harnessApproval": true,
             "hostId": hostId ?? "",

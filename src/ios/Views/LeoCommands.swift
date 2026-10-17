@@ -267,7 +267,7 @@ struct SceneSessionHost: View {
     }
 
     private func updateClosureConfirmation() {
-        guard #available(iOS 27, *), let scene = window?.windowScene else { return }
+        guard let scene = window?.windowScene else { return }
         guard let sid = runningId else {
             scene.closureConfirmation = nil
             return

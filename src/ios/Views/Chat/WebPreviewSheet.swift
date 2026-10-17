@@ -216,13 +216,9 @@ final class WebViewHolder: NSObject, ObservableObject {
             loadError = WebLoadError(error: URLError(.noPermissionsToReadFile), failedURL: url)
             return
         }
-        if #available(iOS 15.0, *) {
-            var req = URLRequest(url: url)
-            req.cachePolicy = .reloadIgnoringLocalCacheData
-            webView.loadFileRequest(req, allowingReadAccessTo: readAccess)
-        } else {
-            webView.loadFileURL(url, allowingReadAccessTo: readAccess)
-        }
+        var req = URLRequest(url: url)
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        webView.loadFileRequest(req, allowingReadAccessTo: readAccess)
     }
 
     func reload() {

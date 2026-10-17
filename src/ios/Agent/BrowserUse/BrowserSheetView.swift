@@ -491,19 +491,8 @@ private struct DownloadPulseModifier: ViewModifier {
         if reduceMotion {
             content
                 .opacity(1)
-        } else if #available(iOS 17, *) {
-            content.symbolEffect(.pulse, options: .repeating, isActive: active)
         } else {
-            content
-                .opacity(active && legacyPulse ? 0.35 : 1.0)
-                .animation(active
-                           ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
-                           : .default,
-                           value: legacyPulse)
-                .onAppear { if active { legacyPulse = true } }
-                .onChange(of: active) { nowActive in
-                    legacyPulse = nowActive
-                }
+            content.symbolEffect(.pulse, options: .repeating, isActive: active)
         }
     }
 }
@@ -783,11 +772,7 @@ struct BrowserDownloadCardRow: View {
 private extension View {
     /// Gentle pulse on the in-progress icon where the OS supports it.
     @ViewBuilder func symbolEffectPulseIfAvailable() -> some View {
-        if #available(iOS 17, *) {
-            self.symbolEffect(.pulse)
-        } else {
-            self
-        }
+        self.symbolEffect(.pulse)
     }
 }
 

@@ -250,13 +250,12 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         // NFCNDEFReaderSession.readingAvailable is a capability check, not an
         // authorization one — NFC has no user-facing permission.
         #if canImport(CoreNFC)
-        if #available(iOS 13.0, *) {
-            return NFCAvailability.isAvailable
-                ? .limited(String(localized: "Hardware available; authorized per use"))
-                : .unavailable(String(localized: "This device does not support NFC"))
-        }
-        #endif
+        return NFCAvailability.isAvailable
+            ? .limited(String(localized: "Hardware available; authorized per use"))
+            : .unavailable(String(localized: "This device does not support NFC"))
+        #else
         return .unavailable(String(localized: "This device does not support NFC"))
+        #endif
     }
 }
 

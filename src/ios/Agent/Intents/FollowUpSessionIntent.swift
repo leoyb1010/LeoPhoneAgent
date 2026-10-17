@@ -140,7 +140,7 @@ struct FollowUpSessionIntent: AppIntent {
             )
             // [C11] 锁屏 + 隐私模式下不朗读正文;仅语音场景照常朗读。
             var voiceOnly = false
-            if #available(iOS 27, *) { voiceOnly = systemContext.isVoiceOnly }
+            voiceOnly = systemContext.isVoiceOnly
             let dialog = SiriReplyPrivacy.dialogText(
                 String(responseText.prefix(500)), deviceLocked: !UIApplication.shared.isProtectedDataAvailable,
                 privacyMode: SiriReplyPrivacy.privacyModeEnabled, voiceOnly: voiceOnly)

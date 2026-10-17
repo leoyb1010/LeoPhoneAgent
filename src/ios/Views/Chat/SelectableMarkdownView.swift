@@ -1403,18 +1403,6 @@ final class CodeBlockAttachment: NSTextAttachment {
     static let topMargin: CGFloat = 6
     static let bottomMargin: CGFloat = 4
 
-    /// Associated-object key retaining the iOS 16 copy-tap gesture target
-    /// for the button's lifetime (see makeView).
-    static var copyTapHandlerKey: UInt8 = 0
-
-    /// Target object for the iOS 16 fallback tap gesture on the copy button —
-    /// UITapGestureRecognizer needs an @objc target/action pair.
-    final class CodeCopyTapHandler: NSObject {
-        private let perform: () -> Void
-        init(perform: @escaping () -> Void) { self.perform = perform }
-        @objc func handleTap() { perform() }
-    }
-
     /// Cached content height from sizeThatFits, keyed by code hash + width.
     private var cachedContentHeight: (hash: Int, height: CGFloat)?
 
@@ -1586,22 +1574,6 @@ final class CodeBlockAttachment: NSTextAttachment {
             }
         }
         copyButton.addAction(UIAction { _ in performCopy() }, for: .touchUpInside)
-        // [T-ios16-codeblock-copy-regression] iOS 16 ONLY: also bind an
-        // independent tap gesture on the button. On iOS 16 the UIControl
-        // .touchUpInside event stopped firing for this button (regressed
-        // between TF26 and TF28; exact toucher unidentified — the host text
-        // view's gesture/interaction graph cancels the control's touches).
-        // A UITapGestureRecognizer attached to the button itself recognizes
-        // through the gesture system rather than the control-event path, so
-        // it survives the cancellation. Gated to <17: iOS 17+ button works,
-        // and double-binding there would just be dead weight.
-        if #unavailable(iOS 17.0) {
-            let tapHandler = CodeCopyTapHandler(perform: performCopy)
-            let tap = UITapGestureRecognizer(target: tapHandler, action: #selector(CodeCopyTapHandler.handleTap))
-            tap.cancelsTouchesInView = false
-            copyButton.addGestureRecognizer(tap)
-            objc_setAssociatedObject(copyButton, &Self.copyTapHandlerKey, tapHandler, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        }
         container.addSubview(copyButton)
 
         container.frame.origin.y = Self.topMargin
@@ -2767,18 +2739,6 @@ private final class TableCellTextView: UITextView, UITextViewDelegate {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
-
-    // [T-ios-table-cell-image-menu] iOS 16 ONLY: drop the system
-    // UIContextMenuInteraction so a promoted table cell never pops the
-    // "Copy Image" / "Save to Camera Roll" preview menu for the cell's inline
-    // attachments. Same rationale as SelectableMarkdownTextView.addInteraction;
-    // iOS 17+ keeps the (handled) system menu.
-    override func addInteraction(_ interaction: any UIInteraction) {
-        if #unavailable(iOS 17.0), interaction is UIContextMenuInteraction {
-            return
-        }
-        super.addInteraction(interaction)
-    }
 
     override func becomeFirstResponder() -> Bool {
         let cv = findCollectionView()
@@ -4846,26 +4806,6 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         tracker.delegate = self
         addGestureRecognizer(tracker)
         selectionDragTracker = tracker
-    }
-
-    // [T-ios-table-cell-image-menu] iOS 16 ONLY: UITextView attaches a built-in
-    // UIContextMenuInteraction that, when an inline NSTextAttachment carries an
-    // image (our TableAttachment / CodeBlockAttachment / MathAttachment all use a
-    // transparent placeholder image for layout), long-press pops the system
-    // image preview menu — "Copy Image" / "Save to Camera Roll" over an all-black
-    // (transparent-placeholder) preview. There is no delegate hook to suppress
-    // it on iOS 16 (the UITextItem.menuConfiguration API is iOS 17+, which is why
-    // 17/18 are handled in menuConfigurationFor and 16 slipped through). We strip
-    // the system context-menu interaction as UIKit installs it; the app's own
-    // affordances don't depend on it — text selection/copy uses the edit menu
-    // (UIMenuController) and table cells promote to TableCellTextView with their
-    // own Copy Table / Copy Table Image menu. Gated to iOS <17 so 17+ keeps the
-    // (handled) system menu and link/text-item previews.
-    override func addInteraction(_ interaction: any UIInteraction) {
-        if #unavailable(iOS 17.0), interaction is UIContextMenuInteraction {
-            return
-        }
-        super.addInteraction(interaction)
     }
 
     private weak var selectionDragTracker: UILongPressGestureRecognizer?

@@ -793,18 +793,7 @@ extension VoiceActivityDetector {
     enum MicrophonePermission { case granted, denied, undetermined }
 
     static var microphonePermission: MicrophonePermission {
-        let raw: AVAudioSession.RecordPermission
-        if #available(iOS 17.0, *) {
-            switch AVAudioApplication.shared.recordPermission {
-            case .granted:      return .granted
-            case .denied:       return .denied
-            case .undetermined: return .undetermined
-            @unknown default:   return .undetermined
-            }
-        } else {
-            raw = AVAudioSession.sharedInstance().recordPermission
-        }
-        switch raw {
+        switch AVAudioApplication.shared.recordPermission {
         case .granted:      return .granted
         case .denied:       return .denied
         case .undetermined: return .undetermined
@@ -813,13 +802,6 @@ extension VoiceActivityDetector {
     }
 
     static func requestMicrophonePermission() async -> Bool {
-        if #available(iOS 17.0, *) {
-            return await AVAudioApplication.requestRecordPermission()
-        }
-        return await withCheckedContinuation { continuation in
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                continuation.resume(returning: granted)
-            }
-        }
+        return await AVAudioApplication.requestRecordPermission()
     }
 }

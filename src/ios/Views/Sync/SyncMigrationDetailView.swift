@@ -145,7 +145,7 @@ struct SyncMigrationDetailView: View {
                             Spacer().frame(width: 12)
                             if vm.pausedUntil != nil {
                                 Button {
-                                    if #available(iOS 17.0, *) { SyncCore.shared.resume() }
+                                    SyncCore.shared.resume()
                                     Task { await refresh() }
                                 } label: {
                                     Image(systemName: "play.fill")
@@ -367,12 +367,10 @@ struct SyncMigrationDetailView: View {
         }
         .confirmationDialog("Request Migration", isPresented: $showRequestMigrationConfirm, titleVisibility: .visible) {
             Button("Start Migration") {
-                if #available(iOS 17.0, *) {
-                    MigrationEngine.shared.requestMigration()
-                    Task {
-                        await MigrationEngine.shared.runIfNeeded()
-                        await refresh()
-                    }
+                MigrationEngine.shared.requestMigration()
+                Task {
+                    await MigrationEngine.shared.runIfNeeded()
+                    await refresh()
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -383,11 +381,9 @@ struct SyncMigrationDetailView: View {
         }
         .confirmationDialog("Cancel Migration?", isPresented: $showCancelMigrationConfirm, titleVisibility: .visible) {
             Button("Cancel Migration", role: .destructive) {
-                if #available(iOS 17.0, *) {
-                    Task {
-                        await MigrationEngine.shared.cancelMigration()
-                        await refresh()
-                    }
+                Task {
+                    await MigrationEngine.shared.cancelMigration()
+                    await refresh()
                 }
             }
             Button("Keep Migrating", role: .cancel) {}
@@ -400,21 +396,19 @@ struct SyncMigrationDetailView: View {
             titleVisibility: .visible
         ) {
             Button("Delete V1 Zone", role: .destructive) {
-                if #available(iOS 17.0, *) {
-                    forceDeleteV1InProgress = true
-                    forceDeleteV1Status = nil
-                    Task {
-                        do {
-                            let myDeviceId = DeviceIdentity.deviceId
-                            try await V1FetcherShim.deleteOwnZone(zoneName: "device-\(myDeviceId)")
-                            forceDeleteV1Status = nil
-                            v1ZoneForceDeletedAtTs = Date().timeIntervalSince1970
-                        } catch {
-                            forceDeleteV1Status = String(localized: "⚠️ Failed: \(error.localizedDescription)")
-                        }
-                        forceDeleteV1InProgress = false
-                        await refresh()
+                forceDeleteV1InProgress = true
+                forceDeleteV1Status = nil
+                Task {
+                    do {
+                        let myDeviceId = DeviceIdentity.deviceId
+                        try await V1FetcherShim.deleteOwnZone(zoneName: "device-\(myDeviceId)")
+                        forceDeleteV1Status = nil
+                        v1ZoneForceDeletedAtTs = Date().timeIntervalSince1970
+                    } catch {
+                        forceDeleteV1Status = String(localized: "⚠️ Failed: \(error.localizedDescription)")
                     }
+                    forceDeleteV1InProgress = false
+                    await refresh()
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -423,9 +417,7 @@ struct SyncMigrationDetailView: View {
         }
         .sheet(isPresented: $showPauseDialog) {
             PauseSyncSheet { hours in
-                if #available(iOS 17.0, *) {
-                    SyncCore.shared.pause(for: TimeInterval(hours * 3600))
-                }
+                SyncCore.shared.pause(for: TimeInterval(hours * 3600))
                 showPauseDialog = false
                 Task { await refresh() }
             } onCancel: {
@@ -448,11 +440,11 @@ struct SyncMigrationDetailView: View {
         // mid-transaction (the crash that pattern caused — see refreshIntervalSeconds).
         .task { await refreshLoop() }
         .onAppear {
-            if #available(iOS 17.0, *) { SyncCore.shared.userOnSyncSheet = true }
+            SyncCore.shared.userOnSyncSheet = true
             updateIdleTimer()
         }
         .onDisappear {
-            if #available(iOS 17.0, *) { SyncCore.shared.userOnSyncSheet = false }
+            SyncCore.shared.userOnSyncSheet = false
             // Always release the idle-timer hold when the sheet goes away.
             setIdleTimerDisabled(false)
         }
@@ -707,7 +699,6 @@ struct SyncMigrationDetailView: View {
     }
 
     private func refreshZones(force: Bool) async {
-        guard #available(iOS 17.0, *) else { return }
         guard !zonesLoading else { return }
         zonesLoading = true
         zonesLoadError = nil
@@ -747,7 +738,6 @@ struct SyncMigrationDetailView: View {
     }
 
     private func deletePendingZone(_ row: ZoneRow) {
-        guard #available(iOS 17.0, *) else { return }
         pendingZoneDelete = nil
         guard row.kind != .v2, row.kind != .system else { return }
         zoneDeleteInProgress = row.name
@@ -918,11 +908,7 @@ struct SyncMigrationDetailView: View {
                 return  // cancelled during sleep
             }
             let backgrounded: Bool
-            if #available(iOS 17.0, *) {
-                backgrounded = SyncCore.shared.isAppInBackground
-            } else {
-                backgrounded = false
-            }
+            backgrounded = SyncCore.shared.isAppInBackground
             if !backgrounded {
                 await refresh()
             }
@@ -931,7 +917,6 @@ struct SyncMigrationDetailView: View {
 
     @MainActor
     private func refresh() async {
-        guard #available(iOS 17.0, *) else { return }
         var next = VM()
         next.v2Enabled = SyncV2Bootstrap.isEnabled
         next.isRunning = SyncCore.shared.isRunning

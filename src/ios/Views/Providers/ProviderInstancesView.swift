@@ -112,7 +112,7 @@ struct ProviderInstancesView: View {
                             Label("全部发送到 Mac（含密钥）", systemImage: "laptopcomputer.and.arrow.down")
                         }
                     }
-                    if #available(iOS 17.0, *), iCloudSyncEnabled {
+                    if iCloudSyncEnabled {
                         Divider()
                         Button {
                             Task { await forceSyncProviders() }

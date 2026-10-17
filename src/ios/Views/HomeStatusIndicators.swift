@@ -30,11 +30,7 @@ struct PulseRotateIcon: View {
     /// hold phase ≈ delay/4. Clamped so it never feels frozen or frantic.
     private func currentPeriod() -> (anim: TimeInterval, hold: TimeInterval) {
         let delay: TimeInterval
-        if #available(iOS 17.0, *) {
-            delay = SyncCore.shared.currentSendDelay
-        } else {
-            delay = 10
-        }
+        delay = SyncCore.shared.currentSendDelay
         // 5s → 1.0s anim + 1.0s hold → ~2s period (active)
         // 15s → 1.5s anim + 1.5s hold
         // 30s → 2.0s anim + 2.0s hold

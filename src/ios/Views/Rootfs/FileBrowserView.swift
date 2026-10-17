@@ -1319,9 +1319,7 @@ class FileBrowserViewModel: ObservableObject {
             // upsert event recorded just before the user-driven delete
             // doesn't race the explicit op=delete row we just queued.
             _ = await SessionFileChangeTracker.shared.drainSession(sid)
-            if #available(iOS 17.0, *) {
-                await MainActor.run { SyncCore.shared.scheduleSend() }
-            }
+            await MainActor.run { SyncCore.shared.scheduleSend() }
         }
     }
 

@@ -643,11 +643,7 @@ private struct MinisTextView: UIViewRepresentable {
 // [T-ios-html-preview-wide-sheet]
 struct WideSheetSizingModifier: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.presentationSizing(.page)
-        } else {
-            content
-        }
+        content.presentationSizing(.page)
     }
 }
 

@@ -293,7 +293,7 @@ final class VoiceInputViewModel: ObservableObject {
     /// the first request or two produce no result.
     private func ensureSystemSpeechAuthorizationIfNeeded() async throws {
         guard inputProvider is SystemVoiceProvider else { return }
-        if #available(iOS 26.0, *), await AppleSpeechAnalyzer.availability(locale: Locale(identifier: language)).state == .installed { return }
+        if await AppleSpeechAnalyzer.availability(locale: Locale(identifier: language)).state == .installed { return }
         try Task.checkCancellation()
         let allowed = await SystemVoiceProvider.ensureSpeechAuthorization()
         try Task.checkCancellation()

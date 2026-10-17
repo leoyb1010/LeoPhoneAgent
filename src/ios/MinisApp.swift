@@ -319,9 +319,7 @@ struct MinisApp: App {
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .quickTaskCatalogDidChange)) { _ in
-                    if #available(iOS 17.0, *) {
-                        MinisShortcutsProvider.updateAppShortcutParameters()
-                    }
+                    MinisShortcutsProvider.updateAppShortcutParameters()
                 }
                 .onAppear {
                     // [S5/S6] Only what the first frame (or launch routing)
@@ -362,12 +360,10 @@ struct MinisApp: App {
                     // feature flag is on (see SyncV2Bootstrap); v1 stays
                     // paused while v2 is active. When v2 is off, v1 boots
                     // exactly as before.
-                    if #available(iOS 17.0, *) {
-                        Task { @MainActor in
-                            await SyncV2Bootstrap.startIfEnabled()
-                            if !SyncV2Bootstrap.shouldPauseV1() {
-                                await CloudSyncEngine.shared.start()
-                            }
+                    Task { @MainActor in
+                        await SyncV2Bootstrap.startIfEnabled()
+                        if !SyncV2Bootstrap.shouldPauseV1() {
+                            await CloudSyncEngine.shared.start()
                         }
                     }
                     LeoPerf.afterNextFrame {
@@ -478,9 +474,7 @@ struct MinisApp: App {
             }
         }
         fgSteps.next("fg.step.skillNotifierDrain")
-        if #available(iOS 17.0, *) {
-            SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase active")
-        }
+        SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase active")
 
         // [T-widget-mirror] Keep the usage / memory widgets current.
         // Cheap (one SQL scan + one small file read) and only on
@@ -548,9 +542,7 @@ struct MinisApp: App {
         guard !didRunAfterFirstLaunchFrame else { return }
         didRunAfterFirstLaunchFrame = true
         // Register App Shortcuts with the system so Siri and Spotlight discover them
-        if #available(iOS 17.0, *) {
-            MinisShortcutsProvider.updateAppShortcutParameters()
-        }
+        MinisShortcutsProvider.updateAppShortcutParameters()
         // Monitor network changes to keep iSH DNS up to date (its first DNS
         // write and proxy probe run on the monitor's own queue).
         NetworkMonitor.shared.start()
@@ -707,18 +699,16 @@ struct MinisApp: App {
             // SKIP (local newer)` log spam plus continuous v1-side dirty
             // drain that competes with v2's send pipeline.
             fgSteps.next("fg.step.syncKick")
-            if #available(iOS 17.0, *) {
-                Task { @MainActor in
-                    // 墙钟区间:await 期间主线程是空的,和主线程耗时分开看。
-                    let syncKick = FgStep.begin("fg.step.syncKick.async")
-                    defer { syncKick.end() }
-                    if SyncV2Bootstrap.shouldPauseV1() {
-                        await SyncCore.shared.fetchNow(trigger: .foregroundTimer)
-                        await SyncCore.shared.sendNow(trigger: .foregroundTimer)
-                    } else {
-                        await CloudSyncEngine.shared.triggerFetch()
-                        await CloudSyncEngine.shared.triggerSend()
-                    }
+            Task { @MainActor in
+                // 墙钟区间:await 期间主线程是空的,和主线程耗时分开看。
+                let syncKick = FgStep.begin("fg.step.syncKick.async")
+                defer { syncKick.end() }
+                if SyncV2Bootstrap.shouldPauseV1() {
+                    await SyncCore.shared.fetchNow(trigger: .foregroundTimer)
+                    await SyncCore.shared.sendNow(trigger: .foregroundTimer)
+                } else {
+                    await CloudSyncEngine.shared.triggerFetch()
+                    await CloudSyncEngine.shared.triggerSend()
                 }
             }
 
@@ -755,9 +745,7 @@ struct MinisApp: App {
             // app is leaving the foreground — last chance to run the
             // heavier disk-scan + markDirty pass while we still have
             // CPU before iOS suspends us.
-            if #available(iOS 17.0, *) {
-                SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase background")
-            }
+            SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase background")
             // "Lock on exit" mode — drop every cached unlock
             // stamp so re-entering any locked session requires Face ID.
             // Per-session AIChatView observer only covers the session

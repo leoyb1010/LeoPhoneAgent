@@ -315,11 +315,7 @@ enum LeoDuration {
 /// Lives on the small wrappers, outside AIChatView's deep modifier chain.
 struct ChatToolbarMinimization: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 27, *) {
-            content.toolbarMinimizationBehavior(.never, for: .navigationBar)
-        } else {
-            content
-        }
+        content.toolbarMinimizationBehavior(.never, for: .navigationBar)
     }
 }
 
@@ -327,11 +323,7 @@ struct ChatToolbarMinimization: ViewModifier {
 /// it was opened from, instead of covering the conversation.
 struct TrailingSheetPlacement: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 27, *) {
-            content.presentationPlacement(.trailing)
-        } else {
-            content
-        }
+        content.presentationPlacement(.trailing)
     }
 }
 
@@ -341,13 +333,9 @@ struct UnsentDraftDismissConfirmation: ViewModifier {
     let hasDraft: Bool
 
     func body(content: Content) -> some View {
-        if #available(iOS 27, *) {
-            content.dismissalConfirmationDialog("放弃还没发送的内容？", shouldPresent: hasDraft) {
-                // The system finishes the dismissal after the action runs.
-                Button("放弃", role: .destructive) { LeoHaptics.impact(.light) }
-            }
-        } else {
-            content
+        content.dismissalConfirmationDialog("放弃还没发送的内容？", shouldPresent: hasDraft) {
+            // The system finishes the dismissal after the action runs.
+            Button("放弃", role: .destructive) { LeoHaptics.impact(.light) }
         }
     }
 }

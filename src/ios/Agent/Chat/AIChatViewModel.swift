@@ -699,9 +699,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
 
         // Drain one deferred skill-filesystem rescan at quiet time.
-        if #available(iOS 17.0, *) {
-            SkillFilesystemNotifier.shared.drainIfDirty(reason: "agent turn finished")
-        }
+        SkillFilesystemNotifier.shared.drainIfDirty(reason: "agent turn finished")
         scheduleFollowUpSuggestions()
     }
 

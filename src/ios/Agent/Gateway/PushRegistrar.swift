@@ -91,7 +91,6 @@ final class PushRegistrar {
     /// 就能在任务开跑时远程拉起灵动岛任务卡,不需要 app 在前台。
     private func observePushToStart() {
         #if canImport(ActivityKit)
-        guard #available(iOS 17.2, *) else { return }
         guard AgentLiveActivityManager.isLiveActivitySupported else { return }
         Task {
             for await data in Activity<AgentActivityAttributes>.pushToStartTokenUpdates {

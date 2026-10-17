@@ -47,7 +47,7 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
     }
 
     var supportsVoiceInput: Bool {
-        if #available(iOS 26.0, *), SpeechTranscriber.isAvailable { return true }
+        if SpeechTranscriber.isAvailable { return true }
         return Self.speechAuthStatus == .authorized
     }
     var supportsVoiceOutput: Bool { true }
@@ -119,9 +119,7 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
         }
         let loc = resolveLocale(forLanguage: request.language)
         let requestedLocale = Locale(identifier: request.language ?? locale.identifier)
-        let assets: SystemSpeechAvailability
-        if #available(iOS 26.0, *) { assets = await AppleSpeechAnalyzer.availability(locale: requestedLocale) }
-        else { assets = .init(requestedLocale: loc.identifier, resolvedLocale: nil, state: .unsupported) }
+        let assets = await AppleSpeechAnalyzer.availability(locale: requestedLocale)
         let recognizer = cachedRecognizer(for: loc)
         let route = try SystemSpeechPolicy.choose(
             mode: SystemSpeechPolicy.mode(onDevice: request.onDeviceRecognition, modelID: request.model),
@@ -131,11 +129,8 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
             legacySupportsOnDevice: recognizer?.supportsOnDeviceRecognition == true,
             legacyAuthorized: Self.speechAuthStatus == .authorized)
         if case .analyzer(let locale) = route {
-            if #available(iOS 26.0, *) {
-                return try await AppleSpeechAnalyzer.transcribe(data: request.audioData, localeIdentifier: locale,
-                                                                contextualStrings: request.hotwords)
-            }
-            throw SystemSpeechError.offlineUnavailable(loc.identifier)
+            return try await AppleSpeechAnalyzer.transcribe(data: request.audioData, localeIdentifier: locale,
+                                                            contextualStrings: request.hotwords)
         }
         guard case .legacy(let useOnDevice) = route, let recognizer else { throw SystemSpeechError.recognizerUnavailable }
         try Task.checkCancellation()

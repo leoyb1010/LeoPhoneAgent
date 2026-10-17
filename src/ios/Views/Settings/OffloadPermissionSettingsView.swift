@@ -228,33 +228,19 @@ private final class NativeCapabilityProbe: ObservableObject {
         next["widget"] = .ready
         next["icloud"] = FileManager.default.ubiquityIdentityToken == nil ? .limited : .ready
         next["files-share"] = .ready
-        if #available(iOS 26.0, *) {
-            next["background-processing"] = .ready
-        } else {
-            next["background-processing"] = .limited
-        }
+        next["background-processing"] = .ready
 
         states = next
         isRefreshing = false
     }
 
     private func eventState(_ status: EKAuthorizationStatus) -> CapabilityAuthorizationState {
-        if #available(iOS 17.0, *) {
-            switch status {
-            case .notDetermined: return .notDetermined
-            case .restricted, .denied: return .denied
-            case .fullAccess: return .authorized
-            case .writeOnly: return .limited
-            @unknown default: return .limited
-            }
-        } else {
-            switch status {
-            case .notDetermined: return .notDetermined
-            case .restricted, .denied: return .denied
-            case .authorized, .fullAccess: return .authorized
-            case .writeOnly: return .limited
-            @unknown default: return .limited
-            }
+        switch status {
+        case .notDetermined: return .notDetermined
+        case .restricted, .denied: return .denied
+        case .fullAccess: return .authorized
+        case .writeOnly: return .limited
+        @unknown default: return .limited
         }
     }
 

@@ -2220,9 +2220,7 @@ extension SkillStore {
     /// removed above — fakefs cleanup is a niceness, not a correctness
     /// requirement.
     private func removeFakefsPathIfPresent(_ linuxPath: String) {
-        if #available(iOS 17.0, *) {
-            RootfsManager.shared.removeFakefsPath(linuxPath)
-        }
+        RootfsManager.shared.removeFakefsPath(linuxPath)
     }
 
     // MARK: - Minimal ZIP Writer

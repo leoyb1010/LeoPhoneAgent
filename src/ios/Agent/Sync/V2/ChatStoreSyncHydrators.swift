@@ -281,10 +281,8 @@ enum ChatStoreSyncHydrators {
                 }
             }
         case .memory:
-            if #available(iOS 17.0, *) {
-                _ = await ForceSyncHelper.markMemoryDirty(preservingPending: true)
-                _ = await ForceSyncHelper.markSoulDirty(preservingPending: true)
-            }
+            _ = await ForceSyncHelper.markMemoryDirty(preservingPending: true)
+            _ = await ForceSyncHelper.markSoulDirty(preservingPending: true)
         case .artifacts:
             await stageAllArtifacts(preservingPending: true)
         }
@@ -815,20 +813,13 @@ enum ChatStoreSyncHydrators {
               let json = String(data: data, encoding: .utf8) else { return nil }
         // Reuse v1's export — it already pulls API keys out of the
         // Keychain and base64-encodes them with savedAt timestamps.
-        let secrets: String = {
-            if #available(iOS 17.0, *) {
-                return CloudSyncEngine.exportProviderSecrets(configJson: json)
-            }
-            return "[]"
-        }()
+        let secrets = CloudSyncEngine.exportProviderSecrets(configJson: json)
         // [T-apikey fc9a35ec] Stamp the upload hash so V1's merger echo
         // detection recognises our own record bouncing back via fetchRecentV2.
         // Without this, the v2 hydrator's inbound merge sees its own upload
         // as a "remote change" and may clobber later in-memory edits.
-        if #available(iOS 17.0, *) {
-            CloudSyncEngine.lastUploadedProviderConfigHash =
-                SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        }
+        CloudSyncEngine.lastUploadedProviderConfigHash =
+            SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         let synced = SyncedProviderConfig(
             configJson: json,
             secretsJsonBase64: secrets,
@@ -869,35 +860,31 @@ enum ChatStoreSyncHydrators {
         //
         // The v1 merger writes the merged result to disk and reloads the
         // store internally, so we don't repeat the file write here.
-        if #available(iOS 17.0, *) {
-            let outcome = await CloudSyncEngine.mergeProviderConfig(remoteJson: json)
-            // Import remote secrets after the config merge so any instance
-            // newly added by the merger has its Keychain entry seeded.
-            // V1's importProviderSecrets is itself last-write-wins by
-            // remote updatedAt vs local Keychain savedAt — it will not
-            // overwrite a locally-newer key.
-            if let secretsJson = stringField(record, "secretsJson"), !secretsJson.isEmpty {
-                guard CloudSyncEngine.importProviderSecrets(secretsJson: secretsJson) else { throw CocoaError(.fileWriteUnknown) }
-            }
-            // Honest outcome log. The previous "applied via v1 merger" line
-            // was printed unconditionally, even when the merger had bailed
-            // out at the echo or dirty-state guard — which masked the
-            // dirty-zombie ping-pong that prevented two devices' provider
-            // lists from converging.
-            switch outcome {
-            case .applied:
-                logger.info("[SyncCore] applied ProviderConfigV2 via v1 merger (\(json.count) chars)")
-            case .skippedDecodeFailure:
-                throw CocoaError(.fileReadCorruptFile)
-            case .storageFailure:
-                throw CocoaError(.fileWriteUnknown)
-            case .skippedOwnEcho:
-                logger.info("[SyncCore] ProviderConfigV2 merge skipped: own echo (\(json.count) chars)")
-            case .skippedLocalDirty:
-                throw CocoaError(.fileWriteUnknown)
-            }
-        } else {
-            logger.info("[SyncCore] ProviderConfigV2 merge skipped: pre-iOS-17 (\(json.count) chars)")
+        let outcome = await CloudSyncEngine.mergeProviderConfig(remoteJson: json)
+        // Import remote secrets after the config merge so any instance
+        // newly added by the merger has its Keychain entry seeded.
+        // V1's importProviderSecrets is itself last-write-wins by
+        // remote updatedAt vs local Keychain savedAt — it will not
+        // overwrite a locally-newer key.
+        if let secretsJson = stringField(record, "secretsJson"), !secretsJson.isEmpty {
+            guard CloudSyncEngine.importProviderSecrets(secretsJson: secretsJson) else { throw CocoaError(.fileWriteUnknown) }
+        }
+        // Honest outcome log. The previous "applied via v1 merger" line
+        // was printed unconditionally, even when the merger had bailed
+        // out at the echo or dirty-state guard — which masked the
+        // dirty-zombie ping-pong that prevented two devices' provider
+        // lists from converging.
+        switch outcome {
+        case .applied:
+            logger.info("[SyncCore] applied ProviderConfigV2 via v1 merger (\(json.count) chars)")
+        case .skippedDecodeFailure:
+            throw CocoaError(.fileReadCorruptFile)
+        case .storageFailure:
+            throw CocoaError(.fileWriteUnknown)
+        case .skippedOwnEcho:
+            logger.info("[SyncCore] ProviderConfigV2 merge skipped: own echo (\(json.count) chars)")
+        case .skippedLocalDirty:
+            throw CocoaError(.fileWriteUnknown)
         }
     }
 

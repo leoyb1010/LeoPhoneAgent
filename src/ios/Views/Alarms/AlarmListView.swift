@@ -105,7 +105,6 @@ class AlarmListViewModel: ObservableObject {
     @Published private(set) var cancellingIDs: Set<String> = []
 
     func load() {
-        guard #available(iOS 26.0, *) else { return }
         error = nil
         isLoading = true
         _loadImpl()
@@ -130,7 +129,7 @@ class AlarmListViewModel: ObservableObject {
     }
 
     func delete(id: String) {
-        guard #available(iOS 26.0, *), alarms.contains(where: { $0.id == id }),
+        guard alarms.contains(where: { $0.id == id }),
               cancellingIDs.insert(id).inserted else { return }
         error = nil
         _cancelImpl(id: id)
@@ -333,14 +332,9 @@ private struct AlarmRowView: View {
     private var stateIndicator: some View {
         switch alarm.state {
         case "alerting":
-            if #available(iOS 17.0, *) {
-                Image(systemName: "bell.fill")
-                    .foregroundStyle(.orange)
-                    .symbolEffect(.pulse)
-            } else {
-                Image(systemName: "bell.fill")
-                    .foregroundStyle(.orange)
-            }
+            Image(systemName: "bell.fill")
+                .foregroundStyle(.orange)
+                .symbolEffect(.pulse)
         case "countdown":
             Image(systemName: "timer")
                 .foregroundStyle(.blue)

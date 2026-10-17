@@ -29,7 +29,6 @@ enum RecordingTranscriber {
                            localeIdentifier: String) async throws -> [TranscriptAssembler.LocalSegment] {
         switch engine {
         case .onDevice:
-            guard #available(iOS 26.0, *) else { throw TranscribeError.unsupportedOS }
             return try await AppleSpeechAnalyzer.transcribeWindow(url: fileURL, start: unit.localStart,
                                                                   duration: unit.duration,
                                                                   localeIdentifier: localeIdentifier)

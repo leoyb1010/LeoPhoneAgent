@@ -153,7 +153,6 @@ enum SyncV2Bootstrap {
 
     @MainActor
     private static func reconcile() async {
-        guard #available(iOS 17.0, *) else { return }
         // Preserve inherited opt-in before pausing V1; its setter also persists
         // cloudSync.enabled, which must not alter the V2 user's choice.
         if UserDefaults.standard.object(forKey: "cloudSync.v2.enabled") == nil {

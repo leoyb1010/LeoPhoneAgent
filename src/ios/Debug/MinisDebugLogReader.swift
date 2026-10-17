@@ -67,7 +67,6 @@ import OSLog
     // MARK: - OSLogStore
 
     private func readFromOSLogStore(lastN: Int, since: Date?, keyword: String?) -> [String]? {
-        guard #available(iOS 15.0, *) else { return nil }
         do {
             let store = try OSLogStore(scope: .currentProcessIdentifier)
             // Bound the scan: prefer the explicit time window; otherwise look

@@ -117,12 +117,8 @@ private let rowHeightLog = AppLogger(category: "RowHeight")
 // Availability-gated scroll-phase probe (onScrollPhaseChange is iOS 18+).
 private struct ScrollPhaseProbe: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.onScrollPhaseChange { old, new in
-                rowHeightLog.info("[SCROLL] \(old) -> \(new)")
-            }
-        } else {
-            content
+        content.onScrollPhaseChange { old, new in
+            rowHeightLog.info("[SCROLL] \(old) -> \(new)")
         }
     }
 }
@@ -1389,9 +1385,7 @@ struct ContentView: View {
                         // Guard against rapid bg→fg→bg: if scenePhase already
                         // changed back, skip the stale .active work.
                         guard scenePhase == .active else { return }
-                        if #available(iOS 17.0, *) {
-                            SyncCore.shared.isAppInBackground = false
-                        }
+                        SyncCore.shared.isAppInBackground = false
                         // [S4] Home device state + alarms are not needed for
                         // the returning frame.
                         LeoPerf.afterNextFrame {
@@ -1417,9 +1411,7 @@ struct ContentView: View {
                         }
                     }
                 } else {
-                    if #available(iOS 17.0, *) {
-                        SyncCore.shared.isAppInBackground = (phase != .active)
-                    }
+                    SyncCore.shared.isAppInBackground = (phase != .active)
                 }
             }
     }
@@ -2352,11 +2344,7 @@ struct ContentView: View {
             // rather than the `@Environment(\.scenePhase)` captured in this `.task`
             // closure's `self` snapshot, which would be stale.
             let backgrounded: Bool
-            if #available(iOS 17.0, *) {
-                backgrounded = SyncCore.shared.isAppInBackground
-            } else {
-                backgrounded = false
-            }
+            backgrounded = SyncCore.shared.isAppInBackground
             // [P2] Only while the list is what the user sees: on compact a
             // pushed chat covers it (the sidebar stays mounted underneath).
             let listCovered = !isWideLayout && !navigationPath.isEmpty
@@ -2367,7 +2355,7 @@ struct ContentView: View {
     }
 
     private func refreshMigrationSubtitle() {
-        guard #available(iOS 17.0, *), SyncV2Bootstrap.isEnabled else {
+        guard SyncV2Bootstrap.isEnabled else {
             if migrationSubtitle != nil { migrationSubtitle = nil }
             return
         }
@@ -2456,10 +2444,7 @@ struct ContentView: View {
                 Text(selectedIds.isEmpty ? "Select Sessions" : "\(selectedIds.count) Selected")
                     .font(.headline)
             } else {
-                let canOpenSync: Bool = {
-                    if #available(iOS 17.0, *) { return SyncV2Bootstrap.isEnabled }
-                    return false
-                }()
+                let canOpenSync = SyncV2Bootstrap.isEnabled
                 // Title text comes from SOUL.md (falls back to "LeoPhoneAgent"). The
                 // leading sync indicator floats as an overlay so it doesn't
                 // take layout space — title stays perfectly centered in the
@@ -2672,7 +2657,6 @@ struct ContentView: View {
         // merely referencing the class triggers Swift runtime type resolution
         // that crashes in swift_getTypeByMangledNameInContextImpl.
         // Use a helper that isolates the reference behind @available.
-        guard #available(iOS 26.0, *) else { return }
         _fetchAlarmsImpl()
     }
 
@@ -4176,7 +4160,7 @@ struct ContentView: View {
             // without this button rather than seeing it hit a no-op.
             // Same gate as the single-session menu — drop the action bar
             // entry entirely when iCloud sync is off.
-            if #available(iOS 17.0, *), iCloudSyncEnabled {
+            if iCloudSyncEnabled {
                 Button {
                     runForceSyncOnSelection()
                 } label: {
@@ -4242,9 +4226,7 @@ struct ContentView: View {
             // Kick the v2 transport so the freshly-marked rows leave
             // local SQLite in this minute rather than waiting for the
             // ambient debounce.
-            if #available(iOS 17.0, *) {
-                await MainActor.run { SyncCore.shared.scheduleSend(delay: 0.5) }
-            }
+            await MainActor.run { SyncCore.shared.scheduleSend(delay: 0.5) }
             await MainActor.run {
                 let sessionCount = ids.count
                 forceSyncToast = String(localized: "Marked \(sessionCount) sessions (\(totalMarked) records) for sync. iCloud is syncing now.")

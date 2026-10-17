@@ -98,12 +98,7 @@ enum SystemVoiceCatalog {
 
         let usable = all.filter { voice in
             // 1. Drop Novelty voices (robotic / joke voices).
-            if #available(iOS 17, *) {
-                if voice.voiceTraits.contains(.isNoveltyVoice) { return false }
-            } else if voice.identifier.hasPrefix("com.apple.speech.synthesis.voice.") {
-                // Pre-iOS-17 fallback: the legacy id prefix is the Novelty family.
-                return false
-            }
+            if voice.voiceTraits.contains(.isNoveltyVoice) { return false }
             // 2. Drop Eloquence robot voices (low quality, heavily duplicated names).
             if voice.identifier.lowercased().contains("eloquence") { return false }
             // 3. Keep only the app-supported + user-preferred languages.
@@ -122,7 +117,6 @@ enum SystemVoiceCatalog {
     /// Gender word, LOCALIZED to the current UI language (e.g. "男声"/"女声" in zh,
     /// "Male"/"Female" in en). nil when the voice doesn't report a gender.
     private static func genderWord(for voice: AVSpeechSynthesisVoice) -> String? {
-        guard #available(iOS 17, *) else { return nil }
         switch voice.gender {
         case .male:   return String(localized: "Male voice", comment: "TTS voice gender label")
         case .female: return String(localized: "Female voice", comment: "TTS voice gender label")
@@ -253,7 +247,6 @@ final class SystemVoiceRoster: ObservableObject {
         guard !observerInstalled else { return }
         // availableVoicesDidChangeNotification is iOS 17+. On older systems the
         // roster simply never refreshes live (the picker still rebuilds on open).
-        guard #available(iOS 17, *) else { observerInstalled = true; return }
         observerInstalled = true
         NotificationCenter.default.addObserver(
             forName: AVSpeechSynthesizer.availableVoicesDidChangeNotification,

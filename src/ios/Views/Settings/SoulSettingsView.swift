@@ -77,7 +77,7 @@ struct SoulSettingsView: View {
                 // as SkillDetailView (47fd61ef / 3a4fe546): hidden
                 // entirely when the user has iCloud sync off, since
                 // the action would no-op on a disabled engine.
-                if #available(iOS 17.0, *), iCloudSyncEnabled {
+                if iCloudSyncEnabled {
                     Button {
                         Task { await forceSyncSoul() }
                     } label: {

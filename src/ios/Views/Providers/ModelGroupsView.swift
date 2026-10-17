@@ -133,7 +133,7 @@ struct ModelGroupsView: View {
                     } label: {
                         Label(String(localized: "New Group"), systemImage: "plus")
                     }
-                    if #available(iOS 17.0, *), iCloudSyncEnabled {
+                    if iCloudSyncEnabled {
                         Divider()
                         Button {
                             Task { await forceSyncGroups() }

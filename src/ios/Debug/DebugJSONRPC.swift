@@ -950,38 +950,32 @@ final class DebugJSONRPC: @unchecked Sendable {
 
     /// debug.sync.transports — list registered transports + capabilities.
     private func handleSyncTransports() async -> Any {
-        if #available(iOS 17.0, *) {
-            let core = await MainActor.run { SyncCore.shared }
-            let entries = await MainActor.run {
-                core.transports.map { t -> [String: Any] in
-                    [
-                        "name": t.name,
-                        "capabilities": t.capabilities.rawValue,
-                        "isLan": t is LANTransport,
-                    ] as [String: Any]
-                }
+        let core = await MainActor.run { SyncCore.shared }
+        let entries = await MainActor.run {
+            core.transports.map { t -> [String: Any] in
+                [
+                    "name": t.name,
+                    "capabilities": t.capabilities.rawValue,
+                    "isLan": t is LANTransport,
+                ] as [String: Any]
             }
-            return [
-                "isRunning": await MainActor.run { core.isRunning },
-                "transports": entries,
-                "lanImplemented": LANTransport.isImplemented,
-                "registeredRecordTypes": SyncableTypeRegistry.shared.allRecordTypes,
-            ] as [String: Any]
         }
-        return ["status": "unavailable"] as [String: Any]
+        return [
+            "isRunning": await MainActor.run { core.isRunning },
+            "transports": entries,
+            "lanImplemented": LANTransport.isImplemented,
+            "registeredRecordTypes": SyncableTypeRegistry.shared.allRecordTypes,
+        ] as [String: Any]
     }
 
     /// debug.sync.tombstones — current tombstoned session ids.
     private func handleSyncTombstones(params: [String: Any]) async -> Any {
-        if #available(iOS 17.0, *) {
-            if let sid = params["sessionId"] as? String, !sid.isEmpty {
-                let tomb = await TombstoneManager.shared.isTombstoned(sessionId: sid)
-                return ["sessionId": sid, "tombstoned": tomb] as [String: Any]
-            }
-            let all = await TombstoneManager.shared.allTombstonedSessionIds()
-            return ["count": all.count, "sessionIds": all] as [String: Any]
+        if let sid = params["sessionId"] as? String, !sid.isEmpty {
+            let tomb = await TombstoneManager.shared.isTombstoned(sessionId: sid)
+            return ["sessionId": sid, "tombstoned": tomb] as [String: Any]
         }
-        return ["status": "unavailable"] as [String: Any]
+        let all = await TombstoneManager.shared.allTombstonedSessionIds()
+        return ["count": all.count, "sessionIds": all] as [String: Any]
     }
 
     /// debug.sync.providerV3.status — report the v3 per-record provider

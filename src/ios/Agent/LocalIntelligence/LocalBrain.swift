@@ -68,22 +68,19 @@ final class LocalBrain: ObservableObject {
 
     var availability: Availability {
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, *) {
-            switch SystemLanguageModel.default.availability {
-            case .available:
-                return .ready
-            case .unavailable(let reason):
-                switch reason {
-                case .deviceNotEligible: return .unsupportedDevice
-                case .appleIntelligenceNotEnabled: return .notEnabled
-                case .modelNotReady: return .modelNotReady
-                @unknown default: return .unavailableOnOS
-                }
-            @unknown default:
-                return .unavailableOnOS
+        switch SystemLanguageModel.default.availability {
+        case .available:
+            return .ready
+        case .unavailable(let reason):
+            switch reason {
+            case .deviceNotEligible: return .unsupportedDevice
+            case .appleIntelligenceNotEnabled: return .notEnabled
+            case .modelNotReady: return .modelNotReady
+            @unknown default: return .unavailableOnOS
             }
+        @unknown default:
+            return .unavailableOnOS
         }
-        return .unavailableOnOS
         #else
         return .unavailableOnOS
         #endif
@@ -112,7 +109,7 @@ final class LocalBrain: ObservableObject {
     /// 调用方保持原样(不显示摘要),不报错。
     func summarizeCollection(title: String?, text: String) async -> CollectionInsight? {
         #if canImport(FoundationModels)
-        guard #available(iOS 26.0, *), isReady else { return nil }
+        guard isReady else { return nil }
         let material = [title, text].compactMap { $0 }
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -203,7 +200,7 @@ final class LocalBrain: ObservableObject {
     /// 改写输入框里的文本。不可用返回 nil,调用方保留原文。
     func rewrite(_ text: String, style: RewriteStyle) async -> String? {
         #if canImport(FoundationModels)
-        guard #available(iOS 26.0, *), isReady else { return nil }
+        guard isReady else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         let prompt = "\(style.instruction)\n\n只输出改写后的文字本身,不要解释、不要加引号。\n\n\(String(trimmed.prefix(4000)))"
@@ -225,7 +222,7 @@ final class LocalBrain: ObservableObject {
     /// 把一段口述整理成"标题 + 要点"。用于语音下任务时先给个可确认的草稿。
     func structureTask(from speech: String) async -> StructuredTask? {
         #if canImport(FoundationModels)
-        guard #available(iOS 26.0, *), isReady else { return nil }
+        guard isReady else { return nil }
         let trimmed = speech.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 8 else { return nil }
         do {
@@ -262,7 +259,7 @@ final class LocalBrain: ObservableObject {
     /// 不可用、超时、出错或输出不合格时返回 nil,调用方照旧走云端生成。
     func generateSessionTitle(firstUser: String, replyStart: String, languageHint: String) async -> SessionTitle? {
         #if canImport(FoundationModels)
-        guard #available(iOS 26.0, *), isReady else { return nil }
+        guard isReady else { return nil }
         let input = OnDeviceTextBudget.titleInput(firstUser: firstUser, replyStart: replyStart)
         guard !input.user.isEmpty else { return nil }
         let instructions = """
@@ -292,7 +289,7 @@ final class LocalBrain: ObservableObject {
     /// 最多 3 条简短追问。只用本机模型;不可用或失败返回空数组,绝不联网。
     func suggestFollowUps(lastUser: String, reply: String) async -> [String] {
         #if canImport(FoundationModels)
-        guard #available(iOS 26.0, *), isReady else { return [] }
+        guard isReady else { return [] }
         let user = OnDeviceTextBudget.clip(lastUser, limit: OnDeviceTextBudget.followUpUserChars)
         let answer = OnDeviceTextBudget.clip(reply, limit: OnDeviceTextBudget.followUpReplyChars)
         guard !answer.isEmpty else { return [] }
@@ -338,7 +335,6 @@ final class LocalBrain: ObservableObject {
     /// 由调用方回落到原有行为——本机模型是加分项,不是依赖项。
     private func respond(to prompt: String, instructions: String) async -> String? {
         #if canImport(FoundationModels)
-        guard #available(iOS 26.0, *) else { return nil }
         do {
             let session = LanguageModelSession(instructions: instructions)
             let response = try await session.respond(to: prompt)

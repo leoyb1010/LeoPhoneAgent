@@ -170,7 +170,7 @@ struct SendPromptIntent: AppIntent {
         // [T-ios27-voice-only] Siri with no screen (AirPods, CarPlay, a locked
         // phone): the answer is heard, not read — ask for a short spoken reply.
         var voiceOnly = false
-        if #available(iOS 27, *) { voiceOnly = systemContext.isVoiceOnly }
+        voiceOnly = systemContext.isVoiceOnly
         let sid = vm.sessionId ?? "unknown"
         // [C4] 选中的藏宝阁条目 → 与「发给 Agent」同一个构造器生成的资料上下文。
         let treasuryContext = await Self.treasuryContext(for: treasuryItems)
@@ -215,17 +215,13 @@ struct SendPromptIntent: AppIntent {
             // [T-ios27-long-running] iOS 27 lets a waiting shortcut outlive the
             // ~30 s intent budget instead of being cut off mid-answer.
             let settled: (outcome: AgentRunOutcome, text: String)
-            if #available(iOS 27, *) {
-                // [C12] 按工具步数汇报进度,系统据此延长运行时间。
-                let progress = self.progress
-                let reporter = Task { @MainActor in
-                    await Self.reportToolProgress(progress, runId: runId, sessionId: sid)
-                }
-                defer { reporter.cancel() }
-                settled = try await performBackgroundTask { await settle() }
-            } else {
-                settled = await settle()
+            // [C12] 按工具步数汇报进度,系统据此延长运行时间。
+            let progress = self.progress
+            let reporter = Task { @MainActor in
+                await Self.reportToolProgress(progress, runId: runId, sessionId: sid)
             }
+            defer { reporter.cancel() }
+            settled = try await performBackgroundTask { await settle() }
             let responseText = settled.text
 
             let result = SendPromptResult(

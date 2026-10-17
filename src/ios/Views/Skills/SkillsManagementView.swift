@@ -189,7 +189,7 @@ struct SkillsManagementView: View {
                     // Skill iCloud sync is wired through SyncV2; hide the
                     // force-sync entry entirely when the user has the
                     // feature off in Settings (no-op otherwise).
-                    if #available(iOS 17.0, *), iCloudSyncEnabled {
+                    if iCloudSyncEnabled {
                         Divider()
                         Button {
                             forceSyncAllSkills()
@@ -661,7 +661,7 @@ private struct SkillDetailView: View {
                     // plus-menu uses (47fd61ef). Hide the button outright
                     // when iCloud sync is disabled — the action would no-op
                     // (markDirty + scheduleSend on a disabled engine).
-                    if #available(iOS 17.0, *), iCloudSyncEnabled {
+                    if iCloudSyncEnabled {
                         Button {
                             store.forceMarkDirty(skillId)
                             SyncCore.shared.scheduleSend(delay: 0.5)

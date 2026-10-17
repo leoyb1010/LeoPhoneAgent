@@ -350,18 +350,16 @@ final class MigrationEngine {
     func refreshV1ZoneCount() async {
         let status = currentStatus()
         if status == .completed || status == .failed { return }
-        if #available(iOS 17.0, *) {
-            do {
-                let count = try await V1FetcherShim.countOwnZone()
-                if var s = loadState() {
-                    s.progress["v1Zone.liveCount"] = count
-                    s.lastUpdatedAt = Date()
-                    saveState(s)
-                }
-                logger.info("[SyncMigration] refreshV1ZoneCount: liveCount=\(count)")
-            } catch {
-                logger.warning("[SyncMigration] refreshV1ZoneCount failed: \(error.localizedDescription)")
+        do {
+            let count = try await V1FetcherShim.countOwnZone()
+            if var s = loadState() {
+                s.progress["v1Zone.liveCount"] = count
+                s.lastUpdatedAt = Date()
+                saveState(s)
             }
+            logger.info("[SyncMigration] refreshV1ZoneCount: liveCount=\(count)")
+        } catch {
+            logger.warning("[SyncMigration] refreshV1ZoneCount failed: \(error.localizedDescription)")
         }
     }
 
@@ -401,7 +399,7 @@ final class MigrationEngine {
         // failure / stall. startIfEnabled is idempotent (SyncCore.start guards
         // on isRunning, register dedups by name), so calling it here is safe
         // even if launch already ran it.
-        if #available(iOS 17.0, *), SyncV2Bootstrap.isEnabled, !SyncCore.shared.isRunning {
+        if SyncV2Bootstrap.isEnabled, !SyncCore.shared.isRunning {
             logger.info("[SyncMigration] runIfNeeded: SyncCore not running — bootstrapping v2 stack before migration")
             await SyncV2Bootstrap.startIfEnabled()
             // startIfEnabled defers the network boot; give the core a brief
@@ -665,11 +663,7 @@ final class MigrationEngine {
         // countCloudSessionsV2 returns nil when the COUNT QUERY ITSELF failed
         // (transient CloudKit error), distinct from a confirmed low count.
         let cloudCount: Int?
-        if #available(iOS 17.0, *) {
-            cloudCount = await Self.countCloudSessionsV2()
-        } else {
-            cloudCount = 0
-        }
+        cloudCount = await Self.countCloudSessionsV2()
         switch SyncPollPlan.v1DeleteVerdict(localSessions: localSessions, cloudCount: cloudCount) {
         case .deferUntilNextLaunch:
             // A deferral, not a failure: v1FetchFailed burned the 5-attempt cap
@@ -791,22 +785,18 @@ enum V1FetcherShim {
     /// accept that the v2 push from local SQLite is the authoritative
     /// source and treat phase 1 as a no-op.
     static func fetchAll() async throws -> Result {
-        if #available(iOS 17.0, *) {
-            // If v2 is enabled, shouldPauseV1 == true and v1 was never
-            // started this launch — there's no v1 engine instance to
-            // drive a fetch through. Local SQLite already contains
-            // everything pre-existing v1 fetched in past launches, so
-            // phase 4 (v2 initial push) writes from local data, which
-            // is the authoritative source per §6.0 / §10.2.6.
-            //
-            // We still return a positive zonesProcessed so the state
-            // machine advances; granular per-zone log lines are emitted
-            // by v1's existing fetch path on previous launches and are
-            // not re-emitted here.
-            return Result(zonesProcessed: 0, recordsFetched: 0)
-        } else {
-            return Result(zonesProcessed: 0, recordsFetched: 0)
-        }
+        // If v2 is enabled, shouldPauseV1 == true and v1 was never
+        // started this launch — there's no v1 engine instance to
+        // drive a fetch through. Local SQLite already contains
+        // everything pre-existing v1 fetched in past launches, so
+        // phase 4 (v2 initial push) writes from local data, which
+        // is the authoritative source per §6.0 / §10.2.6.
+        //
+        // We still return a positive zonesProcessed so the state
+        // machine advances; granular per-zone log lines are emitted
+        // by v1's existing fetch path on previous launches and are
+        // not re-emitted here.
+        return Result(zonesProcessed: 0, recordsFetched: 0)
     }
 
     /// Count records currently in this device's v1 zone (device-<myId>)
@@ -889,22 +879,20 @@ enum V1FetcherShim {
     /// Delete this device's own v1 zone (device-<myId>). Other devices'
     /// v1 zones are NOT touched — they belong to those devices.
     static func deleteOwnZone(zoneName: String) async throws {
-        if #available(iOS 17.0, *) {
-            let container = CKContainer(identifier: ICloudSharedZoneTransport.containerIdentifier)
-            let zoneID = CKRecordZone.ID(zoneName: zoneName)
-            do {
-                _ = try await container.privateCloudDatabase.deleteRecordZone(withID: zoneID)
-                logger.info("[SyncMigration] deleted v1 zone: \(zoneName)")
-            } catch let error as CKError where error.code == .zoneNotFound {
-                logger.info("[SyncMigration] v1 zone already gone: \(zoneName)")
-            } catch let error as CKError where SyncPollPlan.transientCKCodes.contains(error.code.rawValue) {
-                // Throttling / network is not a broken migration; defer to the
-                // next launch instead of burning the failure cap.
-                logger.warning("[SyncMigration] v1 zone delete deferred (transient CK error \(error.code.rawValue))")
-                throw MigrationError.deferredUntilNextLaunch(remaining: 0)
-            } catch {
-                throw MigrationError.zoneDeleteFailed(zone: zoneName, reason: error.localizedDescription)
-            }
+        let container = CKContainer(identifier: ICloudSharedZoneTransport.containerIdentifier)
+        let zoneID = CKRecordZone.ID(zoneName: zoneName)
+        do {
+            _ = try await container.privateCloudDatabase.deleteRecordZone(withID: zoneID)
+            logger.info("[SyncMigration] deleted v1 zone: \(zoneName)")
+        } catch let error as CKError where error.code == .zoneNotFound {
+            logger.info("[SyncMigration] v1 zone already gone: \(zoneName)")
+        } catch let error as CKError where SyncPollPlan.transientCKCodes.contains(error.code.rawValue) {
+            // Throttling / network is not a broken migration; defer to the
+            // next launch instead of burning the failure cap.
+            logger.warning("[SyncMigration] v1 zone delete deferred (transient CK error \(error.code.rawValue))")
+            throw MigrationError.deferredUntilNextLaunch(remaining: 0)
+        } catch {
+            throw MigrationError.zoneDeleteFailed(zone: zoneName, reason: error.localizedDescription)
         }
     }
 

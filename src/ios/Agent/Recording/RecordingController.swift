@@ -302,8 +302,7 @@ final class RecordingController: ObservableObject {
 
     private func startLiveCaptions(localeIdentifier: String) {
         live.captionsAvailable = false
-        guard #available(iOS 26.0, *),
-              UserDefaults.standard.object(forKey: VoiceExperiencePreferences.liveCaptionsKey) as? Bool ?? true else { return }
+        guard UserDefaults.standard.object(forKey: VoiceExperiencePreferences.liveCaptionsKey) as? Bool ?? true else { return }
         let id = active?.id
         Task { @MainActor [weak self] in
             await AppleLiveTranscriber.prewarm(localeIdentifier: localeIdentifier)
@@ -322,7 +321,7 @@ final class RecordingController: ObservableObject {
 
     private func stopLiveCaptions() {
         session?.liveSamples = nil
-        if #available(iOS 26.0, *), let t = liveTranscriber as? AppleLiveTranscriber { t.cancel() }
+        if let t = liveTranscriber as? AppleLiveTranscriber { t.cancel() }
         liveTranscriber = nil
         live.captionsAvailable = false
     }

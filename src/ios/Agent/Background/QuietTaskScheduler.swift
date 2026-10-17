@@ -84,13 +84,8 @@ final class QuietTaskScheduler {
         request.requiresNetworkConnectivity = true
         request.earliestBeginDate = QuietTaskBudget.nextWindowStart(
             after: Date(), lastRun: UserDefaults.standard.object(forKey: Self.lastRunKey) as? Date)
-        if #available(iOS 27, *) {
-            Task { @MainActor in
-                do { try await BGTaskScheduler.shared.submitTaskRequest(request) }
-                catch { logger.info("submit failed: \(error.localizedDescription)") }
-            }
-        } else {
-            do { try BGTaskScheduler.shared.submit(request) }
+        Task { @MainActor in
+            do { try await BGTaskScheduler.shared.submitTaskRequest(request) }
             catch { logger.info("submit failed: \(error.localizedDescription)") }
         }
     }

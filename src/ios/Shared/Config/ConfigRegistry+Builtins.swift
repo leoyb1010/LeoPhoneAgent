@@ -695,12 +695,7 @@ extension ConfigRegistry {
             min: 0, max: 100_000_000
         ))
 
-        if #available(iOS 17.0, *) {
-            syncFields.forEach { r.register($0) }
-        } else {
-            let reason = "iCloud Sync requires iOS 17 or later and is unavailable on this device. There is no sync settings screen on this iOS version either."
-            syncFields.forEach { r.register(UnavailableField(base: $0, reason: reason)) }
-        }
+        syncFields.forEach { r.register($0) }
     }
 
     // MARK: Rootfs mirrors (alpine / pip / npm)
