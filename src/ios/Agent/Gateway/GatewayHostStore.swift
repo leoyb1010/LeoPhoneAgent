@@ -46,6 +46,18 @@ struct GatewayHost: Codable, Identifiable, Hashable {
     var outboxIdentity: String? = nil
     /// [fix-remote] 这台 Mac 上次报的可开任务类型（/v1/capabilities），菜单据此列出；nil = 还没问过。
     var harnesses: [HarnessKind]? = nil
+    /// [fix-remote] SSH 兜底：Mac 在 capabilities 里广播的目标（tailnet 名 + 用户）、设置里改过的、
+    /// 以及经已配对的加密通道读到的 sshd 公钥（ssh-ed25519，固定为这台 Mac 的 SSH 身份）。
+    var sshTarget: MacSSHTarget? = nil
+    var sshTargetOverride: MacSSHTarget? = nil
+    var sshHostKey: String? = nil
+
+    /// SSH 兜底实际用的目标：广播的 → 设置的 → 内置默认（按中继里的机器名）。
+    var resolvedSSHTarget: MacSSHTarget? {
+        MacSSHTarget.resolve(advertised: sshTarget, override: sshTargetOverride,
+                             machine: harnessURL.flatMap { url in url.range(of: "/m/", options: .backwards).map { String(url[$0.upperBound...]) } }
+                                ?? device?.aliases?.first ?? id)
+    }
 
     var isAndroidBody: Bool { platform == "android" || server == "minis" }
     /// Mac 1.2 起由 LeoPhoneAgent 自己接中继(`info.server = leophoneagent`):
@@ -220,7 +232,12 @@ final class GatewayHostStore: ObservableObject {
                 saved.server = host.server ?? previous.server
                 saved.directOnly = host.directOnly ?? previous.directOnly
                 saved.relayServices = host.relayServices ?? previous.relayServices
+                saved.harnesses = host.harnesses ?? previous.harnesses
+                saved.sshTarget = host.sshTarget ?? previous.sshTarget
+                saved.sshHostKey = host.sshHostKey ?? previous.sshHostKey
             }
+            // 设置里填的 SSH 兜底目标跟着编辑走；没填就保留原来的。
+            saved.sshTargetOverride = host.sshTargetOverride ?? previous.sshTargetOverride
             saved.outboxIdentity = HarnessOutboxIdentity.next(existing: previous.outboxIdentity, hostId: host.id,
                 previousEndpoint: previous.harnessURL, previousDeviceId: previous.device?.deviceId,
                 endpoint: saved.harnessURL, deviceId: saved.device?.deviceId)
@@ -301,10 +318,44 @@ final class GatewayHostStore: ObservableObject {
         }
     }
 
-    func recordHarnesses(_ kinds: [HarnessKind], for id: String) {
-        guard let index = hosts.firstIndex(where: { $0.id == id }), hosts[index].harnesses != kinds else { return }
-        hosts[index].harnesses = kinds
+    /// [fix-remote] 记下 capabilities 里对手机有用的事实：可开的任务类型、SSH 兜底目标与 sshd 公钥。
+    /// 公钥只认 ssh-ed25519（Citadel 只能固定这一种），来源是已配对、已鉴权的通道。
+    func recordCapabilities(id: String, kinds: [HarnessKind], ssh: MacSSHTarget?, hostKeys: [String]) {
+        guard let index = hosts.firstIndex(where: { $0.id == id }) else { return }
+        var host = hosts[index]
+        if !kinds.isEmpty { host.harnesses = kinds }
+        if let ssh { host.sshTarget = ssh }
+        if let key = hostKeys.first(where: { $0.hasPrefix("ssh-ed25519 ") }) { host.sshHostKey = key }
+        guard host != hosts[index] else { return }
+        hosts[index] = host
         persist()
+    }
+
+    func setSSHTargetOverride(_ target: MacSSHTarget?, for id: String) {
+        guard let index = hosts.firstIndex(where: { $0.id == id }) else { return }
+        hosts[index].sshTargetOverride = target
+        persist()
+    }
+
+    // MARK: - [fix-remote] 路径（直连 / 中继 / SSH）
+
+    @Published private(set) var routeSelectors: [String: MacRouteSelector] = [:]
+    /// 直连探测失败且地址被解析成 198.18.x（代理 App 的 fake-ip）的主机：界面给出小火箭规则。
+    @Published private(set) var fakeIPHosts: Set<String> = []
+
+    func recordPath(id: String, route: MacRoute, success: Bool, latencyMilliseconds: Int? = nil) {
+        var selector = routeSelectors[id] ?? MacRouteSelector()
+        let before = selector
+        selector.record(route, success: success, latencyMilliseconds: latencyMilliseconds)
+        // 延迟抖动不重绘：只在路换了或延迟变化 ≥100ms 时发布。
+        if before.current != selector.current || abs((before.latencyMilliseconds ?? -1000) - (selector.latencyMilliseconds ?? -1000)) >= 100
+            || before.lastFailure != selector.lastFailure {
+            routeSelectors[id] = selector
+        }
+    }
+
+    func markFakeIP(_ hostId: String, detected: Bool) {
+        if detected { fakeIPHosts.insert(hostId) } else if fakeIPHosts.contains(hostId) { fakeIPHosts.remove(hostId) }
     }
 
     func markSeen(id: String) {
@@ -381,6 +432,9 @@ final class GatewayHostStore: ObservableObject {
                                    hostId: host.id, hostName: host.name, supportsDirectDiscovery: host.runsLeoPhoneAgent, expectedDeviceId: host.device?.deviceId, directOnly: host.directOnly == true, relayServices: services,
                                    outboxIdentity: outboxIdentity)
         clients[host.id] = built
+        // [fix-remote] 建好 client 就在后台问一次 capabilities：可开的 agent 列表、SSH 兜底目标与 sshd 公钥都记下来，
+        // 之后直连与中继都不通时 SSH 兜底才有固定好的主机身份可用。
+        if !host.isAndroidBody { Task.detached { _ = try? await built.harnessKinds() } }
         return built
     }
 

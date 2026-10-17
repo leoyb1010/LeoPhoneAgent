@@ -127,7 +127,13 @@ struct GatewaySettingsView: View {
                             } label: {
                                 VStack(alignment: .leading, spacing: 4) {
                                     GatewayHostRow(host: host, isReachable: reachable[host.id],
-                                                   route: store.routeStatuses[host.id], problem: problem)
+                                                   route: store.routeStatuses[host.id] ?? store.routeSelectors[host.id].flatMap {
+                                                       $0.current.map { GatewayRouteStatus(direct: $0 == .direct, latencyMilliseconds: nil, failedAt: nil) }
+                                                   },
+                                                   path: store.routeSelectors[host.id], problem: problem)
+                                    if store.fakeIPHosts.contains(host.id) {
+                                        FakeIPHintCard()
+                                    }
                                     if let deviceId = host.device?.deviceId,
                                        sshStore.hosts.contains(where: { $0.deviceId == deviceId }) {
                                         Label("SSH 已配置", systemImage: "terminal").font(.caption).foregroundStyle(.secondary)
@@ -520,6 +526,8 @@ private struct GatewayHostRow: View {
     let host: GatewayHost
     let isReachable: Bool?
     var route: GatewayRouteStatus? = nil
+    /// [fix-remote] 当前走的路（直连 / 中继 / SSH）与延迟。
+    var path: MacRouteSelector? = nil
     /// [T-link-problem] 有问题时状态行写「谁的问题」,不再只有一句「连不上」。
     var problem: LeoLinkProblem? = nil
 
@@ -533,8 +541,8 @@ private struct GatewayHostRow: View {
                 Text(host.name).font(.system(size: 16, weight: .medium))
                 if let route {
                     HStack {
-                        Text(!route.available ? "连接不可用" : (route.direct ? "直连目标" : "经应用中继"))
-                        if let ms = route.latencyMilliseconds { Text("\(ms) ms") }
+                        Text(!route.available ? "连接不可用" : (path?.current?.label ?? (route.direct ? "直连" : "中继")))
+                        if let ms = path?.latencyMilliseconds ?? route.latencyMilliseconds { Text("\(ms) ms") }
                     }.font(.caption).foregroundStyle(.secondary)
                 }
                 if let device = host.device {
@@ -588,6 +596,11 @@ final class GatewayHostDraft: ObservableObject, Identifiable {
     @Published var baseURL: String
     @Published var harnessURL: String
     @Published var accessKey: String
+    /// [fix-remote] SSH 兜底目标（tailnet 名 / 用户）；空 = 用 Mac 广播的或内置默认。
+    @Published var sshHost: String
+    @Published var sshUser: String
+    /// 当前实际会用的目标（给占位提示看）。
+    let sshPlaceholder: MacSSHTarget?
     let isNew: Bool
     // Carried through an edit untouched; rebuilding the host from the three
     // visible fields silently reset these two.
@@ -600,6 +613,9 @@ final class GatewayHostDraft: ObservableObject, Identifiable {
         baseURL = "https://"
         harnessURL = ""
         accessKey = ""
+        sshHost = ""
+        sshUser = ""
+        sshPlaceholder = nil
         isNew = true
         isEnabled = true
         lastSeenAt = nil
@@ -611,6 +627,9 @@ final class GatewayHostDraft: ObservableObject, Identifiable {
         baseURL = host.baseURL
         harnessURL = host.harnessURL ?? ""
         accessKey = GatewayHostStore.accessKey(hostId: host.id) ?? ""
+        sshHost = host.sshTargetOverride?.host ?? ""
+        sshUser = host.sshTargetOverride?.user ?? ""
+        sshPlaceholder = host.resolvedSSHTarget
         isNew = false
         isEnabled = host.isEnabled
         lastSeenAt = host.lastSeenAt
@@ -621,12 +640,18 @@ final class GatewayHostDraft: ObservableObject, Identifiable {
         var trimmedEngine = baseURL.trimmingCharacters(in: .whitespaces)
         // 新建草稿的占位前缀没被填过 = 引擎留空。
         if trimmedEngine == "https://" { trimmedEngine = "" }
-        return GatewayHost(id: id,
-                           name: name.trimmingCharacters(in: .whitespaces),
-                           baseURL: trimmedEngine,
-                           harnessURL: trimmedHarness.isEmpty ? nil : trimmedHarness,
-                           isEnabled: isEnabled,
-                           lastSeenAt: lastSeenAt)
+        var host = GatewayHost(id: id,
+                               name: name.trimmingCharacters(in: .whitespaces),
+                               baseURL: trimmedEngine,
+                               harnessURL: trimmedHarness.isEmpty ? nil : trimmedHarness,
+                               isEnabled: isEnabled,
+                               lastSeenAt: lastSeenAt)
+        let sshHostValue = sshHost.trimmingCharacters(in: .whitespaces)
+        let sshUserValue = sshUser.trimmingCharacters(in: .whitespaces)
+        if MacSSHTarget.valid(host: sshHostValue), MacSSHTarget.valid(user: sshUserValue) {
+            host.sshTargetOverride = MacSSHTarget(host: sshHostValue, user: sshUserValue)
+        }
+        return host
     }
 }
 
@@ -711,6 +736,19 @@ private struct GatewayHostEditor: View {
                     Text("访问密钥(必填)")
                 } footer: {
                     Text("就是那台 Mac 上 ~/.leoagent/key 文件的内容,每台 Mac 各不相同。在那台 Mac 的终端里运行 cat ~/.leoagent/key 复制过来。只存在本机钥匙串,不会同步 iCloud。")
+                }
+
+                Section {
+                    TextField(draft.sshPlaceholder?.host ?? "tailnet 名，例如 leomac-studio", text: $draft.sshHost)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    TextField(draft.sshPlaceholder?.user ?? "用户名", text: $draft.sshUser)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("SSH 兜底（可选）")
+                } footer: {
+                    Text("直连和中继都连不上时，经 Tailscale 直接 SSH 到这台 Mac 跑命令行（没有审批与工具卡）。留空就用 Mac 自己报的地址或内置默认。")
                 }
 
                 Section {
@@ -1124,6 +1162,7 @@ struct HarnessLauncherView: View {
     @State private var pairMessage: String?
     @State private var isLoading = true
     @State private var liveSessions: [HarnessSessionSummary] = []
+    @State private var loginTarget: HarnessKind?
 
     var body: some View {
         List {
@@ -1200,6 +1239,12 @@ struct HarnessLauncherView: View {
                                     }
                                 }
                                 Spacer()
+                                // [fix-remote] Mac 上这个 agent 没登录：在手机上直接网页登录。
+                                if kind.canLogin, kind.loggedIn != true {
+                                    Button(kind.loggedIn == false ? "登录" : "重新登录") { loginTarget = kind }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                }
                                 if selected?.key == kind.key {
                                     Image(systemName: "checkmark").foregroundStyle(.tint)
                                 }
@@ -1259,6 +1304,9 @@ struct HarnessLauncherView: View {
         }
         .navigationTitle(Text("编码任务"))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $loginTarget) { kind in
+            AgentLoginSheet(client: client, kind: kind) { ok in if ok { Task { await load() } } }
+        }
         .task { await load() }
         .pairingResultAlert($pairMessage)
         .refreshable {
@@ -1336,6 +1384,7 @@ struct HarnessConsoleView: View {
     @State private var input = ""
     @State private var started = false
     @State private var pairMessage: String?
+    @State private var showAgentLogin = false
     /// [WP-50 R0] 「Mac 画面」卡片:工具栏开关,记住上次的选择;只在卡片显示时轮询。
     @AppStorage("leo.macScreen.cardVisible") private var showScreen = false
     @StateObject private var screen = MacScreenPoller()
@@ -1397,6 +1446,22 @@ struct HarnessConsoleView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14).padding(.vertical, 4)
                 .accessibilityIdentifier("harness.retryFullAuto")
+            }
+
+            // [fix-remote] 外部 agent 在 Mac 上没登录：失败卡下面直接给「去登录」。
+            if driver.needsAgentLogin {
+                Button { showAgentLogin = true } label: {
+                    Label("去登录 \(driver.harness.displayName)", systemImage: "person.badge.key")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14).padding(.vertical, 4)
+                .sheet(isPresented: $showAgentLogin) {
+                    AgentLoginSheet(client: driver.macScreenClient, kind: driver.harness) { ok in
+                        if ok { driver.clearAgentLoginSuggestion() }
+                    }
+                }
             }
 
             // [T-composer-send-dead] 状态可见:连接中给进度,出错给原因。
@@ -1558,5 +1623,36 @@ struct ComposerMacChatCover: View {
                 }
             }
         }
+    }
+}
+
+
+/// [fix-remote] 直连被手机上的代理 App 截走（*.ts.net 解析成 198.18.x 的 fake-ip）：给出一键复制的小火箭规则。
+struct FakeIPHintCard: View {
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("直连被代理 App 截走了", systemImage: "exclamationmark.shield")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.orange)
+            Text("这台 Mac 的 Tailscale 地址被解析成了 198.18.x（小火箭等的 fake-ip），直连握手失败，只能走中继。在小火箭里加上这几条规则（ts.net 与 100.64.0.0/10 直连、不进隧道）就能直连：")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(FakeIPAdvisor.shadowrocketRules)
+                .font(.system(size: 11, design: .monospaced))
+                .textSelection(.enabled)
+            Button {
+                UIPasteboard.general.string = FakeIPAdvisor.shadowrocketRules
+                copied = true
+                LeoHaptics.notification(.success)
+            } label: {
+                Label(copied ? "已复制规则" : "复制小火箭规则", systemImage: copied ? "checkmark.circle.fill" : "doc.on.doc")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(10)
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
     }
 }

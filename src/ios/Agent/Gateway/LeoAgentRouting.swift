@@ -81,12 +81,50 @@ extension LeoAgentClient {
         directCooldownUntil = Date().addingTimeInterval(30)
         directProbeUntil = .distantPast
         if let hostId {
+            await GatewayHostStore.shared.recordPath(id: hostId, route: .direct, success: false)
+            // [fix-remote] 直连失败且地址被解析到 198.18.x：手机上的代理 App 对 *.ts.net 做了 fake-ip。
+            if let host = directRoute?.endpoint()?.host {
+                let fake = await Self.resolvesToFakeIP(host)
+                await GatewayHostStore.shared.markFakeIP(hostId, detected: fake)
+            }
+        }
+        if let hostId {
             await GatewayHostStore.shared.recordRoute(id: hostId,
                 status: GatewayRouteStatus(direct: directOnly, latencyMilliseconds: nil, failedAt: directLastFailure, available: !directOnly))
         }
     }
 
+    /// 解析一次主机名，看是否落在 198.18.0.0/15（fake-ip）。
+    nonisolated static func resolvesToFakeIP(_ host: String) async -> Bool {
+        await Task.detached {
+            var hints = addrinfo(ai_flags: 0, ai_family: AF_INET, ai_socktype: SOCK_STREAM, ai_protocol: 0,
+                                 ai_addrlen: 0, ai_canonname: nil, ai_addr: nil, ai_next: nil)
+            var result: UnsafeMutablePointer<addrinfo>?
+            guard getaddrinfo(host, nil, &hints, &result) == 0, let first = result else { return false }
+            defer { freeaddrinfo(first) }
+            var cursor: UnsafeMutablePointer<addrinfo>? = first
+            while let info = cursor {
+                if let addr = info.pointee.ai_addr, info.pointee.ai_family == AF_INET {
+                    let ip = addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { pointer -> String in
+                        var address = pointer.pointee.sin_addr
+                        var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+                        inet_ntop(AF_INET, &address, &buffer, socklen_t(INET_ADDRSTRLEN))
+                        return String(cString: buffer)
+                    }
+                    if FakeIPAdvisor.isFakeIP(ip) { return true }
+                }
+                cursor = info.pointee.ai_next
+            }
+            return false
+        }.value
+    }
+
     private func reportRoute(direct: Bool, start: Date) async {
+        if let hostId {
+            await GatewayHostStore.shared.recordPath(id: hostId, route: direct ? .direct : .relay, success: true,
+                                                     latencyMilliseconds: Int(Date().timeIntervalSince(start) * 1000))
+            if direct { await GatewayHostStore.shared.markFakeIP(hostId, detected: false) }
+        }
         if direct { directLastFailure = nil }
         if let hostId {
             await GatewayHostStore.shared.recordRoute(id: hostId,
@@ -126,8 +164,12 @@ extension LeoAgentClient {
             let result = try await RelayRootRouter.shared.perform(original) { try await session.data(for: $0) }
             await reportRoute(direct: false, start: start)
             return result
-        } catch let error as URLError where directAttempted && mutating {
-            throw error.code == .cancelled ? error : GatewayError.uncertainAfterDirectAttempt
+        } catch let error as URLError {
+            if error.code != .cancelled, let hostId {
+                await GatewayHostStore.shared.recordPath(id: hostId, route: .relay, success: false)
+            }
+            if directAttempted && mutating { throw error.code == .cancelled ? error : GatewayError.uncertainAfterDirectAttempt }
+            throw error
         }
     }
 

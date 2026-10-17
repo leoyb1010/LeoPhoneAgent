@@ -738,6 +738,10 @@
 		E5GWD0001 /* GatewayRunDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWD0002 /* GatewayRunDriver.swift */; };
 		E5GWH0001 /* GatewayHostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH0002 /* GatewayHostStore.swift */; };
 		E5RMC0001 /* RelayMachinesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RMC0002 /* RelayMachinesClient.swift */; };
+		E5ALV0001 /* AgentLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ALV0002 /* AgentLoginView.swift */; };
+		E5MSF0001 /* MacSSHFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MSF0002 /* MacSSHFallback.swift */; };
+		E5MRF0001 /* MacRouteFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MRF0002 /* MacRouteFallback.swift */; };
+		E5MRF0003 /* MacRouteFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MRF0002 /* MacRouteFallback.swift */; };
 		E5HCT0001 /* HarnessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HCT0002 /* HarnessCatalog.swift */; };
 		E5HCT0003 /* HarnessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HCT0002 /* HarnessCatalog.swift */; };
 		E5RRR0001 /* RelayRootRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RRR0002 /* RelayRootRouter.swift */; };
@@ -1768,6 +1772,9 @@
 		E5GWD0002 /* GatewayRunDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayRunDriver.swift; sourceTree = SOURCE_ROOT; };
 		E5GWH0002 /* GatewayHostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayHostStore.swift; sourceTree = SOURCE_ROOT; };
 		E5RMC0002 /* RelayMachinesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/RelayMachinesClient.swift; sourceTree = SOURCE_ROOT; };
+		E5ALV0002 /* AgentLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/AgentLoginView.swift; sourceTree = SOURCE_ROOT; };
+		E5MSF0002 /* MacSSHFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/MacSSHFallback.swift; sourceTree = SOURCE_ROOT; };
+		E5MRF0002 /* MacRouteFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/MacRouteFallback.swift; sourceTree = SOURCE_ROOT; };
 		E5HCT0002 /* HarnessCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/HarnessCatalog.swift; sourceTree = SOURCE_ROOT; };
 		E5RRR0002 /* RelayRootRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/RelayRootRouter.swift; sourceTree = SOURCE_ROOT; };
 		LFB557B4F4FD /* LeoLinkProblem+Errors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/LeoLinkProblem+Errors.swift"; sourceTree = SOURCE_ROOT; };
@@ -2835,6 +2842,9 @@
 				E5GWD0002 /* GatewayRunDriver.swift */,
 				E5GWH0002 /* GatewayHostStore.swift */,
 				E5RMC0002 /* RelayMachinesClient.swift */,
+				E5ALV0002 /* AgentLoginView.swift */,
+				E5MSF0002 /* MacSSHFallback.swift */,
+				E5MRF0002 /* MacRouteFallback.swift */,
 				E5HCT0002 /* HarnessCatalog.swift */,
 				E5RRR0002 /* RelayRootRouter.swift */,
 				LFB557B4F4FD /* LeoLinkProblem+Errors.swift */,
@@ -3818,6 +3828,7 @@
 				E5TRP005 /* SharedContainerStore.swift in Sources */,
 				E5TRP007 /* CollectionIntents.swift in Sources */,
 				E5RMC0003 /* RelayMachinesClient.swift in Sources */,
+				E5MRF0003 /* MacRouteFallback.swift in Sources */,
 				E5HCT0003 /* HarnessCatalog.swift in Sources */,
 				E5RRR0003 /* RelayRootRouter.swift in Sources */,
 				LFB90A6BC484 /* LeoLinkProblem+Errors.swift in Sources */,
@@ -4299,6 +4310,9 @@
 				E5GWD0001 /* GatewayRunDriver.swift in Sources */,
 				E5GWH0001 /* GatewayHostStore.swift in Sources */,
 				E5RMC0001 /* RelayMachinesClient.swift in Sources */,
+				E5ALV0001 /* AgentLoginView.swift in Sources */,
+				E5MSF0001 /* MacSSHFallback.swift in Sources */,
+				E5MRF0001 /* MacRouteFallback.swift in Sources */,
 				E5HCT0001 /* HarnessCatalog.swift in Sources */,
 				E5RRR0001 /* RelayRootRouter.swift in Sources */,
 				LF3C05D63FF2 /* LeoLinkProblem+Errors.swift in Sources */,

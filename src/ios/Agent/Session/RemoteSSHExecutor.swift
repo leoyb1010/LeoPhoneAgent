@@ -132,6 +132,73 @@ actor RemoteSSHExecutor {
         }
     }
 
+    /// [fix-remote] 流式执行一条命令（SSH 兜底跑 CLI 的一轮回复）：按行回调 stdout，stderr 留最后几行做失败说明。
+    /// 只用设备 Ed25519 钥匙 + 显式固定的主机公钥；凭据与命令都不进错误文字。
+    func stream(host: RemoteHost, command: String, timeout: TimeInterval,
+                onLine: @escaping @Sendable (String) async -> Void) async -> ExecResult {
+        guard let keyLine = RemoteSSHTrust.pinnedKey(host: host.host, port: host.port,
+                key: host.trustedHostKey, trustedEndpoint: host.trustedHostKeyEndpoint),
+              RemoteSSHTrust.directPublicKey(keyLine) != nil,
+              let hostKey = try? NIOSSHPublicKey(openSSHPublicKey: keyLine) else {
+            return ExecResult(output: "这台 Mac 的 SSH 主机公钥还没固定（需要先经直连或中继连上一次，读到它的 ssh-ed25519 公钥）。", succeeded: false)
+        }
+        guard let key = RemoteHostStore.devicePrivateKey() else {
+            return ExecResult(output: "这台 iPhone 还没有 SSH 钥匙：到 设置 → 远程主机 生成，并把公钥加进 Mac 的 ~/.ssh/authorized_keys。", succeeded: false)
+        }
+        let clamped = min(max(timeout, 10), 1800)
+        do {
+            let client = try await SSHClient.connect(
+                host: host.host, port: host.port,
+                authenticationMethod: .ed25519(username: host.username, privateKey: key),
+                hostKeyValidator: .trustedKeys([hostKey]), reconnect: .never)
+            defer { Task { try? await client.close() } }
+            let wrapped = "{ \(command)\n}; printf '\\n[leo-exit:%d]\\n' \"$?\""
+            let (exitCode, stderrTail) = try await withThrowingTaskGroup(of: (String?, [String]).self) { group in
+                group.addTask {
+                    var pending = ""
+                    var exitCode: String?
+                    var stderrTail: [String] = []
+                    for try await chunk in try await client.executeCommandStream(wrapped) {
+                        switch chunk {
+                        case .stdout(let buffer):
+                            pending += String(buffer: buffer)
+                            while let newline = pending.firstIndex(of: "\n") {
+                                let line = String(pending[..<newline])
+                                pending = String(pending[pending.index(after: newline)...])
+                                if line.hasPrefix("[leo-exit:"), line.hasSuffix("]") {
+                                    exitCode = String(line.dropFirst(10).dropLast())
+                                } else {
+                                    await onLine(line)
+                                }
+                            }
+                        case .stderr(let buffer):
+                            for line in String(buffer: buffer).split(separator: "\n") where !line.isEmpty {
+                                stderrTail.append(String(line.prefix(300)))
+                            }
+                            if stderrTail.count > 6 { stderrTail.removeFirst(stderrTail.count - 6) }
+                        }
+                    }
+                    if !pending.isEmpty { await onLine(pending) }
+                    return (exitCode, stderrTail)
+                }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(clamped * 1_000_000_000))
+                    throw RemoteSSHError.timeout
+                }
+                guard let first = try await group.next() else { throw RemoteSSHError.timeout }
+                group.cancelAll()
+                return first
+            }
+            let ok = exitCode == "0"
+            return ExecResult(output: ok ? "" : (stderrTail.joined(separator: "\n").isEmpty ? "退出码 \(exitCode ?? "?")" : stderrTail.joined(separator: "\n")), succeeded: ok)
+        } catch RemoteSSHError.timeout {
+            return ExecResult(output: "SSH 上的命令 \(Int(clamped)) 秒没跑完，已断开。", succeeded: false)
+        } catch {
+            logger.error("ssh fallback failed host=\(host.name): \(error.localizedDescription)")
+            return ExecResult(output: "SSH 连不上 \(host.username)@\(host.host)：\(error.localizedDescription)", succeeded: false)
+        }
+    }
+
     /// [T-remote-gateway] Cindy-style relay, automated: try the target
     /// directly; if its TCP is unreachable but ANOTHER configured host is
     /// reachable, run the command THERE wrapped in `ssh target`. One reachable

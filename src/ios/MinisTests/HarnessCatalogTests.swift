@@ -42,4 +42,31 @@ final class HarnessCatalogTests: XCTestCase {
         let decoded = try JSONDecoder().decode(HarnessKind.self, from: JSONEncoder().encode(kind))
         XCTAssertEqual(decoded, kind)
     }
+
+    func testAuthStateAndLoginFlowParsing() {
+        let kinds = HarnessCatalog.parse([
+            ["key": "grok", "name": "Grok", "auth": ["logged_in": false, "login_kind": "device"]],
+            ["key": "claude", "name": "Claude Code", "auth": ["logged_in": NSNull(), "login_kind": "auth_code"]],
+            ["key": "codex", "name": "Codex"],
+        ])
+        XCTAssertEqual(kinds[0].loggedIn, false)
+        XCTAssertTrue(kinds[0].canLogin)
+        XCTAssertNil(kinds[1].loggedIn)
+        XCTAssertFalse(kinds[2].canLogin, "旧版 Mac 不报 auth：不显示登录")
+
+        let device = AgentLoginFlow.parse([
+            "flow_id": "f1", "status": "waiting_for_user", "url": "https://accounts.x.ai/oauth2/device?user_code=FARH-KCGZ",
+            "user_code": "FARH-KCGZ", "needs_code": false,
+        ])
+        XCTAssertEqual(device?.userCode, "FARH-KCGZ")
+        XCTAssertEqual(device?.url?.host, "accounts.x.ai")
+        XCTAssertEqual(device?.isFinished, false)
+        let claude = AgentLoginFlow.parse(["flow_id": "f2", "status": "verifying", "needs_code": true, "code_kind": "auth_code",
+                                           "url": "javascript:alert(1)"])
+        XCTAssertNil(claude?.url, "只打开 https")
+        XCTAssertEqual(claude?.needsCode, true)
+        XCTAssertNil(AgentLoginFlow.parse(["flow_id": "x", "status": "weird"]))
+        XCTAssertTrue(AgentLoginFlow.failureNeedsLogin("Grok 在这台 Mac 上未登录或读不到登录态：在这台 Mac 的终端运行 grok login --device-auth"))
+        XCTAssertFalse(AgentLoginFlow.failureNeedsLogin("Codex 出错：rate limited"))
+    }
 }

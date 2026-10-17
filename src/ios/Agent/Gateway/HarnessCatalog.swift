@@ -12,17 +12,25 @@ struct HarnessKind: Sendable, Identifiable, Hashable, Codable {
     var unavailableReason: String? = nil
     var version: String? = nil
     var cliPath: String? = nil
+    /// [fix-remote] Mac 判断的登录状态（true / false / nil = 判断不了或旧版 Mac 不报）与登录方式。
+    var loggedIn: Bool? = nil
+    var loginKind: String? = nil
     var id: String { key }
 
     init(key: String, name: String, available: Bool = true, unavailableReason: String? = nil,
-         version: String? = nil, cliPath: String? = nil) {
+         version: String? = nil, cliPath: String? = nil, loggedIn: Bool? = nil, loginKind: String? = nil) {
         self.key = key
         self.name = name
         self.available = available
         self.unavailableReason = unavailableReason
         self.version = version
         self.cliPath = cliPath
+        self.loggedIn = loggedIn
+        self.loginKind = loginKind
     }
+
+    /// 可以在手机上登录（Mac 支持远程登录、这个 agent 能用）。未登录时界面突出「登录」。
+    var canLogin: Bool { available && loginKind != nil }
 
     /// 显示名：Mac 给了就用 Mac 的，常见的几个统一写法。
     var displayName: String { HarnessCatalog.displayName(key: key, fallback: name) }
@@ -70,7 +78,9 @@ enum HarnessCatalog {
                 available: row["available"] as? Bool ?? true,
                 unavailableReason: reason.map { String($0.prefix(300)) },
                 version: (row["version"] as? String).flatMap { $0.isEmpty ? nil : String($0.prefix(80)) },
-                cliPath: row["cli_path"] as? String)
+                cliPath: row["cli_path"] as? String,
+                loggedIn: (row["auth"] as? [String: Any])?["logged_in"] as? Bool,
+                loginKind: (row["auth"] as? [String: Any])?["login_kind"] as? String)
         }
     }
 
@@ -83,5 +93,42 @@ enum HarnessCatalog {
         }
         let clis = [("claude", "Claude Code"), ("codex", "Codex"), ("grok", "Grok")]
         return runsLeoPhoneAgent ? [("zcode", "LeoBot")] + clis : clis
+    }
+}
+
+/// [fix-remote] Mac 上一个外部 agent 的登录流程（`/agents/<key>/login`）。
+struct AgentLoginFlow: Equatable, Sendable {
+    enum Status: String, Sendable {
+        case starting, waitingForUser = "waiting_for_user", verifying, succeeded, failed, cancelled
+    }
+    let flowId: String
+    let status: Status
+    let url: URL?
+    let userCode: String?
+    let needsCode: Bool
+    /// "auth_code"（Claude：网页给的授权码）或 "api_key"（Gemini / opencode）。
+    let codeKind: String?
+    let message: String?
+
+    var isFinished: Bool { [.succeeded, .failed, .cancelled].contains(status) }
+
+    static func parse(_ obj: [String: Any]) -> AgentLoginFlow? {
+        guard let id = obj["flow_id"] as? String, !id.isEmpty,
+              let status = Status(rawValue: obj["status"] as? String ?? "") else { return nil }
+        // 只打开 https 网址（授权页 / 设备码页 / 取 API key 的页面）。
+        let url = (obj["url"] as? String).flatMap(URL.init(string:)).flatMap { $0.scheme == "https" ? $0 : nil }
+        return AgentLoginFlow(
+            flowId: id, status: status, url: url,
+            userCode: (obj["user_code"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            needsCode: obj["needs_code"] as? Bool ?? false,
+            codeKind: obj["code_kind"] as? String,
+            message: obj["message"] as? String)
+    }
+
+    /// 外部 agent 的失败是不是「没登录」（Mac 给的 run.failed 文本），是就给「去登录」。
+    static func failureNeedsLogin(_ message: String?) -> Bool {
+        guard let message else { return false }
+        return message.contains("未登录或读不到登录态") || message.contains("卡在登录（authenticate）")
+            || message.contains("没有任何输出就结束了") && message.contains("API_KEY")
     }
 }

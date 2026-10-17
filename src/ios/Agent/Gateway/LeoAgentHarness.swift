@@ -60,8 +60,10 @@ extension LeoAgentClient {
         let obj = try await getJSON("/v1/capabilities", service: .harness)
         // [fix-remote] 以 Mac 为准，不过滤；记到主机上，对话框的「指挥 Mac」菜单也用这份。
         let kinds = HarnessCatalog.parse(obj["harnesses"] as? [[String: Any]] ?? [])
-        if let hostId, !kinds.isEmpty {
-            await GatewayHostStore.shared.recordHarnesses(kinds, for: hostId)
+        if let hostId {
+            await GatewayHostStore.shared.recordCapabilities(
+                id: hostId, kinds: kinds, ssh: MacSSHTarget.parse(obj["ssh"]),
+                hostKeys: (obj["ssh_host_keys"] as? [String] ?? []).compactMap(RemoteSSHTrust.normalizedPublicKey))
         }
         return kinds
     }
@@ -259,6 +261,10 @@ final class HarnessSessionDriver: ObservableObject {
     @Published private(set) var problem: LeoLinkProblem?
     /// A follow-up that never reached the Mac; the console puts it back in its input.
     @Published var unsentText: String?
+    /// [fix-remote] 上一轮因为 Mac 上的 agent 没登录而失败：控制台给「去登录」。
+    @Published private(set) var needsAgentLogin = false
+
+    func clearAgentLoginSuggestion() { needsAgentLogin = false }
     /// How the last turn ended; "idle" alone can't tell a finished turn from a failed one.
     private(set) var lastTurnFailed = false
 
@@ -339,6 +345,8 @@ final class HarnessSessionDriver: ObservableObject {
                 }
                 await self.follow(sessionId: id)
             } catch {
+                // [fix-remote] 直连与中继都连不上：能走 SSH 兜底就在 Mac 上直接跑这一轮。
+                if MacSSHFallback.isRouteFailure(error), await self.runViaSSH(prompt: prompt) { return }
                 await MainActor.run {
                     self.fail(error.localizedDescription)
                     self.status = "pending"   // recoverable: nothing was created
@@ -346,6 +354,38 @@ final class HarnessSessionDriver: ObservableObject {
                 }
             }
         }
+    }
+
+    private func appendSSHText(_ text: String) {
+        if let index = items.indices.last, case .assistantText = items[index].kind {
+            items[index].text += (items[index].text.isEmpty ? "" : "\n") + text
+        } else {
+            items.append(GatewayTranscriptItem(kind: .assistantText, text: text))
+        }
+    }
+
+    /// [fix-remote] SSH 兜底跑一轮。返回 false = 这台 Mac 走不了 SSH（原错误照常显示）。
+    private func runViaSSH(prompt: String) async -> Bool {
+        let (remote, reason) = MacSSHFallback.readiness(hostId: client.hostId, cliKey: harness.key)
+        guard let remote, let hostId = client.hostId else {
+            if let reason { note("SSH 兜底不可用：\(reason)") }
+            return false
+        }
+        note(MacSSHFallback.notice)
+        status = "running"
+        let failure = await MacSSHFallback.run(remote: remote, hostId: hostId, cliKey: harness.key, prompt: prompt, cwd: cwd) { [weak self] text in
+            await self?.appendSSHText(text)
+        }
+        if let failure {
+            items.append(GatewayTranscriptItem(kind: .failure, text: "SSH 兜底失败：\(failure)"))
+            lastTurnFailed = true
+        } else {
+            lastTurnFailed = false
+        }
+        // 没有 Mac 上的任务（sessionId 仍为空）：下一条消息照常先试直连 / 中继，不通再走 SSH。
+        status = "pending"
+        isRunning = false
+        return true
     }
 
     private func flushQueuedSteers() {
@@ -973,6 +1013,7 @@ final class HarnessSessionDriver: ObservableObject {
             // A failed TURN, not a dead session — surface it and stay
             // steerable; a dead process ends via stream close + reconcile.
             lastError = message
+            if AgentLoginFlow.failureNeedsLogin(message) { needsAgentLogin = true }
             items.append(GatewayTranscriptItem(
                 kind: .failure,
                 text: message ?? AppLocalized("The turn failed.")))
