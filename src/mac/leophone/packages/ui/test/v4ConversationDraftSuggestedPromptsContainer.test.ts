@@ -473,7 +473,8 @@ describe("ConversationDraftSuggestedPromptsContainer", () => {
     fireEvent.click(await screen.findByRole("button", { name: offPeakLabel }));
 
     expect(onOpenAutomations).toHaveBeenCalledOnce();
-    expect(onOpenAutomations).toHaveBeenCalledWith("idle");
+    // [leo] the Idle-time (off-peak) tab was removed; the OFFPEAK action falls back to the default Automations tab.
+    expect(onOpenAutomations).toHaveBeenCalledWith();
     expect(
       useZCodeSessionStore.getState().getWorkspaceState(workspacePath).composerTextInsertRequest,
     ).toBeNull();

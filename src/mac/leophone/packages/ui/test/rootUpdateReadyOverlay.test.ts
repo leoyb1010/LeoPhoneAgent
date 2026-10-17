@@ -132,6 +132,8 @@ vi.mock("@/i18n/IntlProvider.js", () => ({
       formatMessage: vi.fn(() => "loading"),
     },
   }),
+  // [leo] Leo's dialog.tsx reads the optional intl context for the close label.
+  useOptionalZCodeIntl: () => null,
 }));
 
 vi.mock("@/logger.js", () => ({

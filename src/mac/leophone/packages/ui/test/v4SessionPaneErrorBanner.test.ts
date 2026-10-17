@@ -266,7 +266,8 @@ describe("SessionPane error banner wiring", () => {
     const html = renderPane();
 
     expect(html).toContain("EPERM: operation not permitted");
-    expect(html).toContain("反馈问题");
+    // [leo] 「反馈问题」走官方反馈服务，Leo 已去掉；订阅失败态只留重新连接。
+    expect(html).not.toContain("反馈问题");
     expect(html).toContain("重新连接");
   });
 });

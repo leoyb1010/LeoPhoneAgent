@@ -46,6 +46,13 @@ vi.mock("@/hooks/useModelSelectionView.js", () => ({
   useModelSelectionView: () => ({ state: modelRead.state, reload: vi.fn() }),
 }));
 
+// [leo] Leo 的模型选择器加了「常用 / 最近使用」，WorkflowRunSettingsModelField 经 useModelPickerQuickAccess 读 Setting
+// Service；宿主里有 ServiceProvider，这里给一份空快速区即可（快速区本身在 modelPickerQuickAccess.test.ts 里钉）。
+vi.mock("@/hooks/useModelPickerQuickAccess.js", () => ({
+  useModelPickerQuickAccess: () => ({ pinnedValues: [], recentValues: [], maxPinned: 8, togglePinned: () => {} }),
+  useRecordModelUsed: () => () => {},
+}));
+
 // eslint-disable-next-line import/first -- 必须在 mock 之后再引入被测组件。
 import { ZCodeIntlProvider } from "@/i18n/IntlProvider.js";
 // eslint-disable-next-line import/first

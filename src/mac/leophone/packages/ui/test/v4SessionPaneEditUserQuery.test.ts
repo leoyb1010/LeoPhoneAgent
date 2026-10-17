@@ -87,16 +87,6 @@ const projectionState = vi.hoisted(() => ({
 }));
 
 const servicesMock = vi.hoisted(() => ({
-  highspeedCardService: {
-    getSnapshot: vi.fn(async () => ({ card: null, nextDrawAt: null, drawing: false })),
-    prepareTurn: vi.fn(async () => ({
-      kind: "fallback" as const,
-      reason: "draw-miss" as const,
-      nextDrawAt: null,
-    })),
-    healthy: vi.fn(),
-    share: vi.fn(),
-  },
   // 修复原因：readiness hook 将 service 作为 effect 依赖；每次 render 重建会导致无限重渲染直至 OOM。
   zcodeSessionService: {
     updateProviderRegistry: vi.fn(),
@@ -397,12 +387,6 @@ afterEach(() => {
   headerProps.length = 0;
   queueProps.length = 0;
   timelineProps.length = 0;
-  servicesMock.highspeedCardService.prepareTurn.mockReset();
-  servicesMock.highspeedCardService.prepareTurn.mockResolvedValue({
-    kind: "fallback",
-    reason: "draw-miss",
-    nextDrawAt: null,
-  });
   projectionState.current = null;
   delete (globalThis as { document?: unknown }).document;
   delete (globalThis as { window?: unknown }).window;
@@ -410,6 +394,7 @@ afterEach(() => {
 });
 
 describe("SessionPane user query editing", () => {
+  // [leo] Highspeed 抽卡加速已删除，原「重新编辑时重新准备 Highspeed…」「手动发送 Highspeed 队列项…」两条用例随之删除。
   it("builds pane-isolated timeline scroll memory keys for bound sessions", async () => {
     projectionState.current = {
       status: "live",
@@ -1003,201 +988,6 @@ describe("SessionPane user query editing", () => {
     await act(async () => {
       root.unmount();
     });
-  });
-
-  it("重新编辑时重新准备 Highspeed，并随 editUserQuery 提交本次卡和 runtime", async () => {
-    const snapshot = makeSnapshot();
-    snapshot.config = {
-      ...snapshot.config,
-      provider: "builtin:bigmodel-coding-plan",
-      model: "GLM-5.3",
-    };
-    projectionState.current = {
-      status: "live",
-      snapshot,
-      subscriptionId: "sub-1",
-      lastError: null,
-      optimisticCommands: [],
-      loadingOlder: false,
-    };
-    const highspeedMeta = {
-      schemaVersion: 1 as const,
-      cardId: "card-edit",
-      taskId: "session-1",
-      provider: "builtin:bigmodel-coding-plan",
-      model: "GLM-5.3",
-      issuedAt: 1,
-      expiresAt: Date.now() + 60_000,
-    };
-    const execution = {
-      modelSelection: { providerId: "account:bigmodel-highspeed-card", modelId: "GLM-5.3" },
-      requestAuth: {
-        apiKey: "card-jwt",
-        headers: { Authorization: "Bearer card-jwt", "X-Highspeed-Card-ID": "card-edit" },
-      },
-      selectionFallback: {
-        providerId: "account:bigmodel-highspeed-card",
-        rules: [
-          { reason: "highspeed_card_expired" as const, providerErrorCode: "3402" },
-          { reason: "highspeed_request_failed" as const },
-        ],
-      },
-    };
-    servicesMock.highspeedCardService.prepareTurn.mockResolvedValueOnce({
-      kind: "accelerated",
-      card: highspeedMeta,
-      nextDrawAt: highspeedMeta.expiresAt,
-      execution,
-    });
-    const root: Root = createRoot(installMinimalDom());
-
-    await act(async () => {
-      root.render(
-        createElement(
-          ZCodeIntlProvider,
-          { initialLocale: "zh-CN" },
-          createElement(SessionPane, {
-            paneId: "workspace-main",
-            sessionId: "session-1",
-            workspacePath: "/workspace",
-          }),
-        ),
-      );
-      await flushMicrotasks();
-    });
-    expect(timelineProps.at(-1)?.onEdit).toBeTypeOf("function");
-    await act(async () => {
-      await timelineProps
-        .at(-1)
-        ?.onEdit?.({ rowId: 42, entityId: "message-user-42" }, "重新加速的问题", []);
-    });
-
-    expect(servicesMock.highspeedCardService.prepareTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ taskId: "session-1" }),
-    );
-    expect(sendCommandMock.mock.calls[0]?.[0]).toMatchObject({
-      type: "editUserQuery",
-      payload: {
-        highspeedMeta,
-        // 显式重编辑会重新抽卡：Selection 与执行材料必须整体刷新，且永远是 execution 作用域，
-        // 不允许把会话常驻 Selection 改成加速卡 Provider。
-        modelSelection: execution.modelSelection,
-        modelExecution: {
-          selectionScope: "execution",
-          requestAuth: execution.requestAuth,
-          selectionFallback: execution.selectionFallback,
-        },
-      },
-    });
-
-    await act(async () => root.unmount());
-  });
-
-  it("手动发送 Highspeed 队列项时刷新同卡 runtime 后再提升", async () => {
-    const snapshot = makeSnapshot();
-    const highspeedMeta = {
-      schemaVersion: 1 as const,
-      cardId: "card-queue",
-      taskId: "session-1",
-      provider: "builtin:bigmodel-coding-plan",
-      model: "GLM-5.3",
-      issuedAt: 1,
-      expiresAt: Date.now() + 60_000,
-    };
-    snapshot.queue = {
-      autoDrain: false,
-      items: [
-        {
-          sourceCommandId: "source-queue",
-          queueItemId: "queue-1",
-          clientId: "client-1",
-          kind: "sendText",
-          text: "排队消息",
-          attachments: [],
-          delivery: { requested: "queue", admitted: "queue" },
-          order: { admissionSeq: 1, queuePosition: 0 },
-          steer: { state: "notRequested" },
-          dispatch: { state: "queued" },
-          admittedAt: 1,
-          highspeed: highspeedMeta,
-        },
-      ],
-    };
-    snapshot.availability = {
-      ...snapshot.availability,
-      sendQueuedNow: { allowed: true },
-    };
-    snapshot.config = {
-      ...snapshot.config,
-      provider: "builtin:bigmodel-coding-plan",
-      model: "GLM-5.3",
-    };
-    projectionState.current = {
-      status: "live",
-      snapshot,
-      subscriptionId: "sub-1",
-      lastError: null,
-      optimisticCommands: [],
-      loadingOlder: false,
-    };
-    const execution = {
-      modelSelection: { providerId: "account:bigmodel-highspeed-card", modelId: "GLM-5.3" },
-      requestAuth: {
-        apiKey: "card-jwt",
-        headers: { Authorization: "Bearer card-jwt", "X-Highspeed-Card-ID": "card-queue" },
-      },
-      selectionFallback: {
-        providerId: "account:bigmodel-highspeed-card",
-        rules: [
-          { reason: "highspeed_card_expired" as const, providerErrorCode: "3402" },
-          { reason: "highspeed_request_failed" as const },
-        ],
-      },
-    };
-    servicesMock.highspeedCardService.prepareTurn.mockResolvedValueOnce({
-      kind: "accelerated",
-      card: highspeedMeta,
-      nextDrawAt: highspeedMeta.expiresAt,
-      execution,
-    });
-    const root: Root = createRoot(installMinimalDom());
-
-    await act(async () => {
-      root.render(
-        createElement(
-          ZCodeIntlProvider,
-          { initialLocale: "zh-CN" },
-          createElement(SessionPane, {
-            paneId: "workspace-main",
-            sessionId: "session-1",
-            workspacePath: "/workspace",
-          }),
-        ),
-      );
-      await flushMicrotasks();
-    });
-    expect(queueProps.at(-1)?.onSendNow).toBeTypeOf("function");
-    await act(async () => {
-      queueProps.at(-1)?.onSendNow?.("queue-1");
-      await flushMicrotasks();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    expect(sendCommandMock.mock.calls[0]?.[0]).toMatchObject({
-      type: "sendQueuedNow",
-      payload: {
-        queueItemId: "queue-1",
-        highspeedMeta,
-        modelSelection: execution.modelSelection,
-        modelExecution: {
-          selectionScope: "execution",
-          requestAuth: execution.requestAuth,
-          selectionFallback: execution.selectionFallback,
-        },
-      },
-    });
-
-    await act(async () => root.unmount());
   });
 
   it("serializes an explicit empty attachment list when edit removes every ref", async () => {

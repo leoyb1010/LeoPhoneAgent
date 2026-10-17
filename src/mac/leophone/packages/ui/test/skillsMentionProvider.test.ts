@@ -88,8 +88,9 @@ describe("skills mention provider", () => {
     expect(mapSkillsToMentionItemsForTest([skill], "en-US")[0]?.description).toContain(
       "Plugin · Run pure GUI black-box tests",
     );
+    // [leo] 产品名为 LeoBot。
     expect(mapSkillsToMentionItemsForTest([skill], "zh-CN")[0]?.description).toContain(
-      "插件 · 使用 ZCode Browser Use 对网页和本地 Web 前端执行纯 GUI 黑盒测试",
+      "插件 · 使用 LeoBot Browser Use 对网页和本地 Web 前端执行纯 GUI 黑盒测试",
     );
   });
 });

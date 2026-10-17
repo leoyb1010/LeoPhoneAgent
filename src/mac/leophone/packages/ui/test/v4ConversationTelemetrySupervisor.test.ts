@@ -486,11 +486,7 @@ describe("ConversationTelemetrySupervisor", () => {
         modelName: "custom-model",
         askMode: "plan",
         providerBaseURL: "https://api.example.com/v1/messages?token=secret",
-        planIdentitySnapshot: {
-          generatedAt: 123,
-          planStatus: "coding_plan",
-          planProductId: "product-1",
-        },
+        // [leo] no planIdentitySnapshot / plan_status / plan_product_id: official plans were removed.
       }),
     ).toEqual({
       ask_mode: "plan",
@@ -498,8 +494,6 @@ describe("ConversationTelemetrySupervisor", () => {
       model_provider: "custom-provider-id",
       provider_name: "api.example.com",
       agent: "glm",
-      plan_status: "coding_plan",
-      plan_product_id: "product-1",
       message_source: "chat",
       task_trigger: "",
     });

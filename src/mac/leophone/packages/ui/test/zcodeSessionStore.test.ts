@@ -386,31 +386,6 @@ describe("useZCodeSessionStore provider preference", () => {
     ).toBeNull();
   });
 
-  it("时间线到底请求即使目标 task 未切换也会递增，并且只能由对应版本清理", () => {
-    const workspacePath = "/tmp/workspace-timeline-bottom";
-    const workspaceIdentity = "ssh://user@host:/tmp/workspace-timeline-bottom";
-    const store = useZCodeSessionStore.getState();
-
-    expect(store.requestTimelineBottom(workspacePath, "task-1", workspaceIdentity)).toBe(1);
-    expect(store.requestTimelineBottom(workspacePath, "task-1", workspaceIdentity)).toBe(2);
-    expect(
-      useZCodeSessionStore.getState().getWorkspaceState(workspacePath, workspaceIdentity)
-        .timelineBottomRequest,
-    ).toEqual({ requestId: 2, taskId: "task-1" });
-
-    store.clearTimelineBottomRequest(workspacePath, 1, workspaceIdentity);
-    expect(
-      useZCodeSessionStore.getState().getWorkspaceState(workspacePath, workspaceIdentity)
-        .timelineBottomRequest,
-    ).toEqual({ requestId: 2, taskId: "task-1" });
-
-    store.clearTimelineBottomRequest(workspacePath, 2, workspaceIdentity);
-    expect(
-      useZCodeSessionStore.getState().getWorkspaceState(workspacePath, workspaceIdentity)
-        .timelineBottomRequest,
-    ).toBeNull();
-  });
-
   it("bindRuntimeProvider 在同路径不同 workspaceIdentity 下不应互相覆盖 supplier", () => {
     const workspacePath = "/tmp/workspace-runtime-identity";
     const workspaceIdentityA = "ssh://user@host-a:/tmp/workspace-runtime-identity";

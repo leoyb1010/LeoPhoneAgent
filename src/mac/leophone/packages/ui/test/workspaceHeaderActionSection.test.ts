@@ -20,8 +20,6 @@ const capturedHeaderHelp = vi.hoisted(() => {
     openExternal: vi.fn(),
     exportLogs: vi.fn(async () => ({ success: true })),
     captureWindowScreenshot: vi.fn(async () => screenshot),
-    openSubmit: vi.fn(),
-    openFeatureRequest: vi.fn(),
     menuItems: [] as Array<{
       onSelect: (() => void | Promise<void>) | undefined;
     }>,
@@ -82,20 +80,10 @@ vi.mock("@/components/ui/toast.js", () => ({
   toast: vi.fn(() => 1),
 }));
 
-vi.mock("@/feedback/feedbackStore.js", () => ({
-  useFeedbackStore: (
-    selector: (state: {
-      openSubmit: (draft?: unknown) => void;
-      openFeatureRequest: () => void;
-    }) => unknown,
-  ) =>
-    selector({
-      openSubmit: capturedHeaderHelp.openSubmit,
-      openFeatureRequest: capturedHeaderHelp.openFeatureRequest,
-    }),
-}));
-
 describe("WorkspaceHeaderActionSection", () => {
+  // [leo] 帮助菜单里的问题上报 / 产品需求 / 社群 / 文档（官方反馈服务与站点）已删除，
+  // 原「routes help menu items to feedback…」「opens issue report without screenshots…」两条用例随之删除；
+  // 剩下的帮助菜单只在桌面端渲染（见 WorkspaceHelpMenuButton），其菜单项在 workspaceHelpMenuButton.test.ts 里钉。
   // 快捷键特性后组件经 useShortcutCommandLabel 读设置，裸渲染需提供最小 ServiceProvider。
   // 等形包装：withSettingsServices(Comp, props) ≡ createElement(ServiceProvider, …, createElement(Comp, props))。
   function withSettingsServices(
@@ -134,6 +122,8 @@ describe("WorkspaceHeaderActionSection", () => {
     const html = renderToStaticMarkup(
       withSettingsServices(WorkspaceHeaderActionSection, {
         variant: "draft",
+        // [leo] 帮助菜单只在桌面端渲染。
+        isDesktop: true,
         workspaceAbsPath: "/workspace",
         isTerminalOpen: false,
         isSidePaneOpen: false,
@@ -150,6 +140,7 @@ describe("WorkspaceHeaderActionSection", () => {
   });
 
   it("只在 Desktop local/SSH/WSL/Docker 已有任务显示分享入口", async () => {
+    // [leo] 分享会话发布到官方分享站点、依赖官方账号，Leo 不提供：任何组合下都不出现分享入口。
     const { WorkspaceHeaderActionSection } =
       await import("@/WorkspaceHeaderSections/WorkspaceHeaderActionSection.js");
     const renderSection = (extra: Record<string, unknown>) =>
@@ -167,12 +158,8 @@ describe("WorkspaceHeaderActionSection", () => {
         }),
       );
 
-    expect(renderSection({})).toContain("conversationShare.trigger");
-    expect(renderSection({ remoteTarget: { kind: "ssh" } })).toContain("conversationShare.trigger");
+    expect(renderSection({})).not.toContain("conversationShare.trigger");
     expect(renderSection({ isWebRemoteControl: true })).not.toContain("conversationShare.trigger");
-    expect(renderSection({ remoteTarget: { kind: "server" } })).not.toContain(
-      "conversationShare.trigger",
-    );
   });
 
   it("未登录时不展示分享入口", async () => {
@@ -201,6 +188,8 @@ describe("WorkspaceHeaderActionSection", () => {
 
     const html = renderToStaticMarkup(
       withSettingsServices(WorkspaceHeaderActionSection, {
+        // [leo] 帮助菜单只在桌面端渲染，内容是导出日志 / 资源管理器 / 关于；官方帮助项已删除。
+        isDesktop: true,
         workspaceAbsPath: "/workspace",
         isTerminalOpen: false,
         isSidePaneOpen: false,
@@ -211,11 +200,11 @@ describe("WorkspaceHeaderActionSection", () => {
 
     expect(html).not.toContain("chat.summaryPanel.toggle");
     expect(html).toContain("workspaceHeader.help.menu");
-    expect(html).toContain("workspaceHeader.help.issueReport");
-    expect(html).toContain("workspaceHeader.help.productRequest");
-    expect(html).toContain("workspaceHeader.help.community");
-    expect(html).toContain("workspaceHeader.help.docs");
-    expect(html).not.toContain("titleBar.menu.help.exportLogs");
+    expect(html).not.toContain("workspaceHeader.help.issueReport");
+    expect(html).not.toContain("workspaceHeader.help.productRequest");
+    expect(html).not.toContain("workspaceHeader.help.community");
+    expect(html).not.toContain("workspaceHeader.help.docs");
+    expect(html).toContain("titleBar.menu.help.exportLogs");
     expect(html).toContain("terminal.toggle");
     expect(html).toContain("sidePane.expand");
     expect(html.indexOf("workspaceHeader.help.menu")).toBeLessThan(html.indexOf("terminal.toggle"));
@@ -233,6 +222,8 @@ describe("WorkspaceHeaderActionSection", () => {
         onToggleTerminal: vi.fn(),
         onToggleSidePane: vi.fn(),
         simplifyForNarrowRemote: true,
+        // [leo] 帮助菜单只在桌面端渲染；带上 isDesktop 才能证明它是被这个开关藏起来的。
+        isDesktop: true,
       }),
     );
 
@@ -254,6 +245,8 @@ describe("WorkspaceHeaderActionSection", () => {
         onToggleTerminal: vi.fn(),
         onToggleSidePane: vi.fn(),
         hideHelpMenu: true,
+        // [leo] 帮助菜单只在桌面端渲染；带上 isDesktop 才能证明它是被这个开关藏起来的。
+        isDesktop: true,
       }),
     );
 
@@ -261,78 +254,6 @@ describe("WorkspaceHeaderActionSection", () => {
     expect(html).not.toContain("workspaceHeader.help.issueReport");
     expect(html).toContain("terminal.toggle");
     expect(html).toContain("sidePane.expand");
-  });
-
-  it("routes help menu items to feedback, community, and docs entries", async () => {
-    capturedHeaderHelp.menuItems = [];
-    capturedHeaderHelp.openSubmit.mockClear();
-    capturedHeaderHelp.openFeatureRequest.mockClear();
-    capturedHeaderHelp.openCommunity.mockClear();
-    capturedHeaderHelp.openExternal.mockClear();
-    capturedHeaderHelp.exportLogs.mockClear();
-    capturedHeaderHelp.captureWindowScreenshot.mockClear();
-    capturedHeaderHelp.captureWindowScreenshot.mockResolvedValue(capturedHeaderHelp.screenshot);
-    const { WorkspaceHeaderActionSection } =
-      await import("@/WorkspaceHeaderSections/WorkspaceHeaderActionSection.js");
-
-    renderToStaticMarkup(
-      withSettingsServices(WorkspaceHeaderActionSection, {
-        workspaceAbsPath: "/workspace",
-        isTerminalOpen: false,
-        isSidePaneOpen: false,
-        onToggleTerminal: vi.fn(),
-        onToggleSidePane: vi.fn(),
-      }),
-    );
-
-    expect(capturedHeaderHelp.menuItems).toHaveLength(4);
-    await capturedHeaderHelp.menuItems[2]?.onSelect?.();
-    capturedHeaderHelp.menuItems[1]?.onSelect?.();
-    capturedHeaderHelp.menuItems[0]?.onSelect?.();
-    capturedHeaderHelp.menuItems[3]?.onSelect?.();
-
-    expect(capturedHeaderHelp.captureWindowScreenshot).not.toHaveBeenCalled();
-    expect(capturedHeaderHelp.openSubmit).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        type: "bug",
-        includeLogs: true,
-        screenshots: [],
-      }),
-    );
-    expect(capturedHeaderHelp.openFeatureRequest).toHaveBeenCalledTimes(1);
-    expect(capturedHeaderHelp.openCommunity).toHaveBeenCalledTimes(1);
-    expect(capturedHeaderHelp.openExternal).toHaveBeenCalledWith("https://zcode.z.ai/docs");
-    expect(capturedHeaderHelp.exportLogs).not.toHaveBeenCalled();
-  });
-
-  it("opens issue report without screenshots when window screenshot fails", async () => {
-    capturedHeaderHelp.menuItems = [];
-    capturedHeaderHelp.openSubmit.mockClear();
-    capturedHeaderHelp.captureWindowScreenshot.mockReset();
-    capturedHeaderHelp.captureWindowScreenshot.mockRejectedValue(new Error("capture failed"));
-    const { WorkspaceHeaderActionSection } =
-      await import("@/WorkspaceHeaderSections/WorkspaceHeaderActionSection.js");
-
-    renderToStaticMarkup(
-      withSettingsServices(WorkspaceHeaderActionSection, {
-        workspaceAbsPath: "/workspace",
-        isTerminalOpen: false,
-        isSidePaneOpen: false,
-        onToggleTerminal: vi.fn(),
-        onToggleSidePane: vi.fn(),
-      }),
-    );
-
-    await capturedHeaderHelp.menuItems[2]?.onSelect?.();
-
-    expect(capturedHeaderHelp.openSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "bug",
-        includeLogs: true,
-        screenshots: [],
-      }),
-    );
   });
 
   it("passes SSH remote context to the editor button group", async () => {

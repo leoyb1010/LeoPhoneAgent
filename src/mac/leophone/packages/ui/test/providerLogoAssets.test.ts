@@ -28,10 +28,11 @@ function readSvgSize(source: string): { width: number; height: number } {
 }
 
 describe("Provider built-in logo assets", () => {
-  it("Z.AI PNG 原样复用无额外留白的应用图标，不再误用同名旧 SVG", () => {
+  it("Z.AI PNG 保持上游 Z.AI 应用图标，不跟随 LeoBot 应用图标变化", () => {
     const source = readFileSync(new URL("../../desktop/build/icons/128x128.png", import.meta.url));
     const packaged = readFileSync(new URL("model-provider-zai-app.png", assetDirectory));
-    expect(packaged.equals(source)).toBe(true);
+    // [leo] 应用图标已换成 LeoBot，Z.AI 供应商 Logo 仍是上游 Z.AI 图标，二者不应再相同。
+    expect(packaged.equals(source)).toBe(false);
     expect(readPngSize(packaged)).toEqual({ width: 128, height: 128 });
   });
   it("来源清单中的每个内置 Logo 素材本身都是方形", () => {

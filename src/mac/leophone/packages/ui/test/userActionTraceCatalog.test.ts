@@ -10,7 +10,8 @@ describe("user action trace catalog", () => {
     expect(Object.keys(CORE_USER_ACTION_FEATURES)).toHaveLength(24);
     expect(Object.keys(SETTINGS_USER_ACTION_FEATURES)).toHaveLength(15);
     expect(USER_ACTION_CATALOG.filter((entry) => entry.group === "core")).toHaveLength(94);
-    expect(USER_ACTION_CATALOG.filter((entry) => entry.group === "settings")).toHaveLength(44);
+    // [leo] 43, not 44: settings.update drops toggle_preview_updates (no prerelease channel; Leo reads a single manifest).
+    expect(USER_ACTION_CATALOG.filter((entry) => entry.group === "settings")).toHaveLength(43);
   });
 
   it("feature/action 组合唯一且不使用动态标识", () => {

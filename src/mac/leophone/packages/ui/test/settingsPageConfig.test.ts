@@ -22,6 +22,8 @@ afterEach(() => {
 });
 
 describe("settingsPageConfig", () => {
+  // [leo] Leo settings IA mirrors iOS: providers / agent / devices / general groups, with
+  // plugin/mcp/skill/commands/hooks folded into one "extensions" nav entry (see settingsPageConfig.ts).
   it("按设置页心智顺序展示 test 分区", async () => {
     const { createSettingsPageConfig } = await loadSettingsPageConfig("test");
     const { settingsSectionGroups, settingsSections } = createSettingsPageConfig({});
@@ -32,23 +34,13 @@ describe("settingsPageConfig", () => {
         sections: group.sections.map((section) => section.id),
       })),
     ).toEqual([
-      {
-        id: "basics",
-        sections: ["general", "appearance", "modelProvider", "browser", "shortcuts"],
-      },
-      {
-        id: "agentCapabilities",
-        sections: ["memory", "subagents", "plugin", "mcp", "skill", "commands", "hooks"],
-      },
-      {
-        id: "dataAndStats",
-        sections: ["usage"],
-      },
+      { id: "providers", sections: ["modelProvider"] },
+      { id: "agent", sections: ["memory", "subagents", "extensions"] },
+      { id: "devices", sections: ["browser"] },
+      { id: "general", sections: ["general", "appearance", "shortcuts", "usage"] },
     ]);
 
     expect(settingsSections.map((section) => section.id)).toEqual([
-      "general",
-      "appearance",
       "modelProvider",
       "memory",
       "subagents",
@@ -58,6 +50,8 @@ describe("settingsPageConfig", () => {
       "commands",
       "hooks",
       "browser",
+      "general",
+      "appearance",
       "shortcuts",
       "usage",
     ]);
@@ -67,9 +61,8 @@ describe("settingsPageConfig", () => {
     const { createSettingsPageConfig } = await loadSettingsPageConfig("production");
     const { settingsSections } = createSettingsPageConfig({});
 
+    // [leo] Same Leo IA ordering as the test environment.
     expect(settingsSections.map((section) => section.id)).toEqual([
-      "general",
-      "appearance",
       "modelProvider",
       "memory",
       "subagents",
@@ -79,6 +72,8 @@ describe("settingsPageConfig", () => {
       "commands",
       "hooks",
       "browser",
+      "general",
+      "appearance",
       "shortcuts",
       "usage",
     ]);
@@ -104,24 +99,29 @@ describe("settingsPageConfig", () => {
     const usageSection = SETTINGS_SECTIONS.find((section) => section.id === "usage");
 
     expect(usageSection?.icon).toBe(BarChart3);
-    expect(enUS["settings.usageTitle"]).toBe(enUS["sidebar.usage.plan.openStats"]);
-    expect(enUS["settings.usage.sectionTitle"]).toBe(enUS["sidebar.usage.plan.openStats"]);
-    expect(zhCN["settings.usageTitle"]).toBe(zhCN["sidebar.usage.plan.openStats"]);
+    // [leo] No coding-plan avatar menu; the local usage stats entry uses sidebar.usage.openStats.
+    expect(enUS["settings.usageTitle"]).toBe(enUS["sidebar.usage.openStats"]);
+    expect(enUS["settings.usage.sectionTitle"]).toBe(enUS["sidebar.usage.openStats"]);
+    expect(zhCN["settings.usageTitle"]).toBe(zhCN["sidebar.usage.openStats"]);
   });
 
   it("侧栏分组标题同时提供中英文文案", () => {
-    expect(enUS["settings.sidebar.group.basics"]).toBe("Basics");
-    expect(enUS["settings.sidebar.group.agentCapabilities"]).toBe("Agent capabilities");
-    expect(enUS["settings.sidebar.group.dataAndStats"]).toBe("Data and statistics");
-    expect(zhCN["settings.sidebar.group.basics"]).toBe("基础设置");
-    expect(zhCN["settings.sidebar.group.agentCapabilities"]).toBe("Agent 能力");
-    expect(zhCN["settings.sidebar.group.dataAndStats"]).toBe("数据与统计");
+    // [leo] Leo groups (aligned with iOS settings).
+    expect(enUS["settings.sidebar.group.providers"]).toBe("AI Providers");
+    expect(enUS["settings.sidebar.group.agent"]).toBe("Agent");
+    expect(enUS["settings.sidebar.group.devices"]).toBe("Devices");
+    expect(enUS["settings.sidebar.group.general"]).toBe("General");
+    expect(zhCN["settings.sidebar.group.providers"]).toBe("AI 服务商");
+    expect(zhCN["settings.sidebar.group.agent"]).toBe("智能体");
+    expect(zhCN["settings.sidebar.group.devices"]).toBe("我的设备");
+    expect(zhCN["settings.sidebar.group.general"]).toBe("通用");
   });
 
+  // [leo] Computer use is backed by the bundled Peekaboo, which only ships for macOS.
   it.each([
     ["macOS", { isMacDesktop: true }, true],
-    ["Windows", { isWindowsDesktop: true }, true],
-    ["Linux 桌面", { isDesktop: true }, true],
+    ["Windows", { isWindowsDesktop: true }, false],
+    ["Linux 桌面", { isDesktop: true }, false],
     ["Web", {}, false],
   ] as const)("%s 的电脑控制入口符合桌面平台边界", async (_name, options, expected) => {
     const { createSettingsPageConfig } = await loadSettingsPageConfig("test");
@@ -130,22 +130,20 @@ describe("settingsPageConfig", () => {
     expect(settingsSections.some((section) => section.id === "computerUse")).toBe(expected);
   });
 
-  it("桌面平台的电脑控制排在基础设置的浏览器之后", async () => {
+  it("桌面平台的电脑控制排在我的设备的浏览器之后", async () => {
     const { createSettingsPageConfig } = await loadSettingsPageConfig("test");
     const { settingsSectionGroups } = createSettingsPageConfig({ isMacDesktop: true });
-    const basics = settingsSectionGroups.find((group) => group.id === "basics");
+    // [leo] Computer use lives in the Leo "devices" group, after phone pairing and browser.
+    const devices = settingsSectionGroups.find((group) => group.id === "devices");
 
-    expect(basics?.sections.map((section) => section.id)).toEqual([
-      "general",
-      "appearance",
-      "modelProvider",
+    expect(devices?.sections.map((section) => section.id)).toEqual([
+      "phone",
       "browser",
       "computerUse",
-      "shortcuts",
     ]);
     expect(
       settingsSectionGroups
-        .find((group) => group.id === "agentCapabilities")
+        .find((group) => group.id === "agent")
         ?.sections.some((section) => section.id === "computerUse"),
     ).toBe(false);
   });

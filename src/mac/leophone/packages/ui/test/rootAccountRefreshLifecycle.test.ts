@@ -19,7 +19,10 @@ vi.mock("@/logger.js", () => ({
 }));
 
 describe("Root 账号刷新生命周期", () => {
-  it("启动刷新失败后仍订阅后续账号事实，卸载时取消订阅", async () => {
+  // [leo] Leo removed the official-account connection-loss subscription
+  // (useAccountConnectionLossNotification -> providerSettingsService.onDidChange); only the
+  // "startup refresh failure is logged and does not throw" half of this contract still applies.
+  it("启动刷新失败后仅记录告警，不中断启动流程", async () => {
     const dispose = vi.fn();
     const onDidChange = vi.fn(() => ({ dispose }));
     const services = {
@@ -59,11 +62,10 @@ describe("Root 账号刷新生命周期", () => {
         }),
       );
       expect(refreshProviderState).toHaveBeenCalledOnce();
-      expect(onDidChange).toHaveBeenCalledOnce();
-      expect(dispose).not.toHaveBeenCalled();
+      expect(onDidChange).not.toHaveBeenCalled();
     } finally {
       unmount();
     }
-    expect(dispose).toHaveBeenCalledOnce();
+    expect(dispose).not.toHaveBeenCalled();
   });
 });

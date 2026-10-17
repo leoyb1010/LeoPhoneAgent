@@ -6,7 +6,7 @@ const readSource = (path: string) => readFileSync(path, "utf8");
 describe("UI font token migration", () => {
   it("maps legacy 13px UI text to text-ui-base", () => {
     const tokenSpec = readSource("docs/ui/ui-font-tokens.md");
-    const remoteFields = readSource("packages/ui/src/RemoteConnectionFields.tsx");
+    // [leo] RemoteConnectionFields (SSH/WSL/Docker remote workspaces) was removed in Leo.
     const automationEditor = readSource(
       "packages/ui/src/settings/AutomationEditView.tsx",
     );
@@ -16,7 +16,6 @@ describe("UI font token migration", () => {
     expect(tokenSpec).not.toContain(
       "Normalize arbitrary 10px through 13px UI text to `text-ui-xs`",
     );
-    expect(remoteFields).toContain('className="h-9 text-ui-base"');
     // Bug 原因：调度选择器已收敛为共享的 SelectItem 样式，旧断言仍绑定被删除的 trigger class。
     expect(automationEditor).toContain(
       '"min-h-8 rounded-[8px] px-2 py-1.5 pr-8 text-ui-base leading-5',
@@ -46,10 +45,7 @@ describe("UI font token migration", () => {
       readSource("packages/ui/src/settings/AutomationsSection.tsx"),
       readSource("packages/ui/src/settings/AutomationEditView.tsx"),
       readSource("packages/ui/src/settings/AutomationDesignPrimitives.tsx"),
-      readSource("packages/ui/src/settings/OffPeakEditView.tsx"),
-      readSource("packages/ui/src/settings/OffPeakHistoryTab.tsx"),
-      readSource("packages/ui/src/settings/OffPeakTaskList.tsx"),
-      readSource("packages/ui/src/v4/OffPeakNewTaskEntry.tsx"),
+      // [leo] OffPeak (idle-time task) views were removed in Leo.
       readSource("packages/ui/src/components/ui/toast.tsx"),
     ];
 

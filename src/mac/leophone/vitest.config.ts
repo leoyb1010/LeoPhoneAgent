@@ -38,6 +38,27 @@ const forkIsolatedTests = [
   "packages/ui/test/pdfJsCMapSupport.test.ts",
 ];
 
+// [leo] Leo 自有的 node:test 用例（import from "node:test"），vitest 无法收集；
+// 由 `node --import tsx --test <file>` 运行（ui 用例需在 packages/ui 目录下执行以解析 `@/` 别名）。
+const leoNodeTestFiles = [
+  "packages/ui/test/internalPluginHidden.test.ts",
+  "packages/ui/test/leoStatusRows.test.ts",
+  "packages/ui/test/leoUiAudit.test.ts",
+  "packages/ui/test/modelPickerQuickAccess.test.ts",
+  "packages/ui/test/modelSearchScorer.test.ts",
+  "packages/ui/test/newTaskDraftFill.test.ts",
+  "packages/ui/test/phonePairingSession.test.ts",
+  "packages/ui/test/quickEntryAccelerator.test.ts",
+  "packages/ui/test/settingsIa.test.ts",
+  "packages/ui/test/taskListLoadCoordinator.test.ts",
+  "packages/ui/test/terminalPanelSplit.test.ts",
+  "packages/services/test/iosProviderImport.test.ts",
+  "packages/services/test/leoProxyNetworkGuard.test.ts",
+  "packages/services/test/providerCustomDefaults.test.ts",
+  "packages/services/test/providerModelDiscovery.test.ts",
+  "packages/services/test/settingServiceNoWipe.test.ts",
+];
+
 export default defineConfig({
   // 测试固定注入事件上报端点，使遥测上报链路在单测中可验证；真实构建由 scripts/build-time-config.mjs 决定。
   define: {
@@ -93,7 +114,7 @@ export default defineConfig({
             "scripts/assert-safe-cua-helper-zip.test.mjs",
             "scripts/ci/ci-telemetry-keyword-guard.test.mjs",
           ],
-          exclude: ["packages/desktop/test/e2e/**", ...forkIsolatedTests],
+          exclude: ["packages/desktop/test/e2e/**", ...forkIsolatedTests, ...leoNodeTestFiles],
           // Node 24/macOS 的 threads 全量运行可触发 V8 SIGSEGV；诊断时切换进程隔离，测试范围不变。
           pool: process.env.ZCODE_TEST_POOL === "forks" ? "forks" : "threads",
           maxWorkers: process.env.ZCODE_TEST_POOL === "forks" ? 2 : 4,

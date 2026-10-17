@@ -150,20 +150,20 @@ function renderComposer(overrides: Record<string, unknown> = {}) {
 
 describe("ConversationComposer attachment upload progress", () => {
   it("只让聚焦且未禁用的 composer 监听 add-to-chat，并保留 CUA 常驻入口", () => {
+    // [leo] Whiteboard (the only add-to-chat consumer inside useComposerAttachments) and
+    // web-remote control were removed in Mac 1.9, so the attachment hook no longer takes
+    // listenAddToChatEvents and the CUA entry gets no isWebRemoteControl prop.
     const html = renderComposer({
       disabled: true,
-      isWebRemoteControl: true,
       listenAddToChatEvents: false,
       remoteSessionId: "remote-1",
     });
 
-    expect(attachmentState.hookOptions.at(-1)).toMatchObject({
-      listenAddToChatEvents: false,
-    });
+    expect(attachmentState.hookOptions.at(-1)).toMatchObject({ disabled: true });
+    expect(attachmentState.hookOptions.at(-1)).not.toHaveProperty("listenAddToChatEvents");
     expect(html).toContain('data-cua-entry="true"');
     expect(cuaEntryProps.at(-1)).toMatchObject({
       currentSessionBusy: false,
-      isWebRemoteControl: true,
       remoteSessionId: "remote-1",
       workspacePath: "/workspace",
     });

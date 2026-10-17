@@ -17,7 +17,8 @@ describe("Settings breadcrumb replaces detail back navigation", () => {
     expect(readSource(name)).not.toContain("SettingsBackButton");
   });
 
-  it.each(["AutomationEditView", "OffPeakEditView"])(
+  // [leo] OffPeakEditView (idle-time tasks) was removed in Leo.
+  it.each(["AutomationEditView"])(
     "moves %s back navigation into the breadcrumb",
     (name) => {
       const source = readSource(name);

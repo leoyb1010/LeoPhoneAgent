@@ -12,14 +12,7 @@ describe("ConversationTimeline scrollbar gutter", () => {
     expect(source).toContain("overflow-y-auto [scrollbar-gutter:stable]");
   });
 
-  it("exposes and applies the share selection scroll lock", () => {
-    const source = readTimelineSource();
-
-    expect(source).toContain(
-      'data-v4-timeline-scroll-locked={backgroundScrollLocked ? "true" : "false"}',
-    );
-    expect(source).toContain('backgroundScrollLocked && "!overflow-y-hidden"');
-  });
+  // [leo] share selection scroll-lock case removed: conversation share was deleted in Mac 1.9.
 
   it("share selection mode hides the turn navigator so the share flow owns the left rail", () => {
     const source = readTimelineSource();

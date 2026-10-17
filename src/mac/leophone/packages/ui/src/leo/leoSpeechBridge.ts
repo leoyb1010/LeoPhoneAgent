@@ -36,5 +36,7 @@ interface LeoSpeechBridge {
 }
 
 export function leoSpeechBridge(): LeoSpeechBridge | null {
+  // [leo] 非浏览器环境（SSR/Node 测试）没有 window。
+  if (typeof window === "undefined") return null;
   return (window as unknown as { leoSpeech?: LeoSpeechBridge }).leoSpeech ?? null;
 }

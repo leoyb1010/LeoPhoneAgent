@@ -128,8 +128,9 @@ describe("WorkflowSavePopover", () => {
   it("zh：先是整条宽的 ZCode 主路，细线之下才是三个字段；名字按 run 名预填、名字框拿到焦点", () => {
     renderPopover(popoverHost(), "zh-CN");
     expect(screen.getByText("保存工作流")).toBeTruthy();
-    expect(screen.getByTestId("workflow-save-lead").textContent).toBe("让 ZCode 帮我提炼保存");
-    expect(screen.getByText("ZCode 会帮你提炼出可复用的工作流，再交你确认。")).toBeTruthy();
+    // [leo] 产品名是 LeoBot。
+    expect(screen.getByTestId("workflow-save-lead").textContent).toBe("让 LeoBot 帮我提炼保存");
+    expect(screen.getByText("LeoBot 会帮你提炼出可复用的工作流，再交你确认。")).toBeTruthy();
     expect(screen.getByText("或按原样直接保存")).toBeTruthy();
     const name = screen.getByTestId<HTMLInputElement>("workflow-save-name");
     expect(name.value).toBe("pr-review");

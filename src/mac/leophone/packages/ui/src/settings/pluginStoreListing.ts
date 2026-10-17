@@ -232,15 +232,18 @@ export function buildStoreItems(input: {
   const metaById = new Map(input.installedPlugins.map((item) => [item.id, item]));
   const marketplaceIds = new Set(input.marketplaces.map((item) => item.id));
   const items = new Map<string, StorePluginItem>();
+  const restorableIds = new Set(input.restorableBuiltins.map((item) => item.id));
 
   for (const summary of input.availablePlugins) {
     const info = infoById.get(summary.id);
     // [leo] 官方市场里既没随包内置、也没安装过的条目只能从官方 CDN 下载，商店不展示；
     // 已卸载的内置插件仍由下面的 restorableBuiltins 以「可恢复」出现，本地插件不受影响。
+    // 可恢复的内置插件保留目录条目，供下面合并 listing（分类/展示名等详情元数据）。
     if (
       summary.marketplace === ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID &&
       !summary.installed &&
-      info === undefined
+      info === undefined &&
+      !restorableIds.has(summary.id)
     ) {
       continue;
     }

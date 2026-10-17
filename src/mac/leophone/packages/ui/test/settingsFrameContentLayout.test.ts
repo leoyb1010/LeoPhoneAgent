@@ -9,7 +9,7 @@ const settingsPagePartsSource = readSource("../src/settings/SettingsPageParts.ts
 const settingsPageSource = readSource("../src/SettingsPage.tsx");
 const automationsSectionSource = readSource("../src/settings/AutomationsSection.tsx");
 const automationEditViewSource = readSource("../src/settings/AutomationEditView.tsx");
-const offPeakEditViewSource = readSource("../src/settings/OffPeakEditView.tsx");
+// [leo] OffPeakEditView (idle-time tasks) was removed in Leo; its frame assertions are dropped.
 const workspaceShellSource = readSource("../src/app-shell/WorkspaceShellLayout.tsx");
 const automationsBreadcrumbFrameSource = readSource(
   "../src/settings/AutomationsMainBreadcrumbFrame.tsx",
@@ -25,7 +25,6 @@ describe("settings frame content layout", () => {
       settingsPageSource,
       automationsSectionSource,
       automationEditViewSource,
-      offPeakEditViewSource,
     ]) {
       expect(source).toContain("SETTINGS_FRAME_CONTENT_CLASSNAME");
     }
@@ -33,7 +32,6 @@ describe("settings frame content layout", () => {
     for (const source of [
       automationsSectionSource,
       automationEditViewSource,
-      offPeakEditViewSource,
     ]) {
       expect(source).not.toContain("max-w-[866px]");
     }
@@ -60,7 +58,8 @@ describe("settings frame content layout", () => {
       workspaceShellSource.match(
         /className="mx-auto flex w-full max-w-4xl flex-col px-4 py-4 md:px-6 md:py-6"[\s\S]{0,120}<PluginStorePage/g,
       ),
-    ).toHaveLength(2);
+      // [leo] Web remote-control mobile shell was removed, so only the desktop shell mounts PluginStorePage.
+    ).toHaveLength(1);
   });
 
   it("returns to chat before creating a task from plugin detail prompts", () => {
@@ -68,8 +67,9 @@ describe("settings frame content layout", () => {
       /<PluginStorePage[\s\S]{0,500}?onCreateTask=\{handleCreateTaskInChat\}/g,
     );
 
-    // Desktop 与窄屏 Shell 都必须使用包含 showChatMainView 的包装回调。
-    expect(pluginStoreUsages).toHaveLength(2);
+    // Desktop Shell 必须使用包含 showChatMainView 的包装回调。
+    // [leo] Web remote-control mobile shell was removed, so only one PluginStorePage usage remains.
+    expect(pluginStoreUsages).toHaveLength(1);
     expect(workspaceShellSource).not.toMatch(
       /<PluginStorePage[\s\S]{0,500}?onCreateTask=\{onCreateTask\}/,
     );

@@ -16,7 +16,6 @@ import {
   resolveUniquePluginListingByName,
   resolveLocalizedList,
   resolveLocalizedText,
-  selectFeaturedItems,
   sortMarketplaceSources,
   sortInstalledStripItems,
   sortPersonalMarketplaceGroups,
@@ -150,7 +149,8 @@ describe("pluginStoreListing", () => {
     expect(byId.get("a@zcode-plugins-official")?.installed).toBe(true);
     expect(byId.get("a@zcode-plugins-official")?.info).toBeDefined();
     expect(byId.get("a@zcode-plugins-official")?.installedMeta).toBeDefined();
-    expect(byId.get("b@zcode-plugins-official")?.installed).toBe(false);
+    // [leo] 官方市场中未内置、未安装的条目只能从官方 CDN 下载，商店不展示。
+    expect(byId.has("b@zcode-plugins-official")).toBe(false);
     expect(byId.get("c@inline")?.installed).toBe(true);
     expect(byId.get("c@inline")?.orphaned).toBe(false);
     expect(byId.get("d@zcode-plugins-official")?.restorable).toBe(true);
@@ -359,44 +359,22 @@ describe("pluginStoreListing", () => {
     ).toBe(false);
   });
 
-  it("selects featured items from public marketplaces in catalog order", () => {
-    const items = buildStoreItems({
-      marketplaces: [
-        makeMarketplace({ id: "zcode-plugins-official" }),
-        makeMarketplace({ id: "claude-plugins-official" }),
-      ],
-      marketplaceAvailabilityKnown: true,
-      availablePlugins: [
-        makeSummary({ id: "alpha@zcode-plugins-official" }),
-        makeSummary({ id: "beta@zcode-plugins-official" }),
-        makeSummary({ id: "gamma@claude-plugins-official" }),
-      ],
-      installedPlugins: [],
-      plugins: [],
-      restorableBuiltins: [],
-    });
-    const publicItems = items.filter((item) => item.marketplace === "zcode-plugins-official");
-    const featured = selectFeaturedItems(publicItems, [
-      makeMarketplace({ id: "zcode-plugins-official", featured: ["beta", "missing", "alpha"] }),
-      // 非公开市场的 featured 名单不参与。
-      makeMarketplace({ id: "claude-plugins-official", featured: ["gamma"] }),
-    ]);
-    expect(featured.map((item) => item.name)).toEqual(["beta", "alpha"]);
-  });
+  // [leo] Mac 1.9 删除了商店重复的「精选」区块及 selectFeaturedItems，对应用例已移除。
 
   it("orders category groups identically across locales with a fixed product order", () => {
     const items = buildStoreItems({
-      marketplaces: [makeMarketplace({ id: "zcode-plugins-official" })],
+      // [leo] 官方市场中未安装条目不展示，改用第三方市场验证目录 listing 行为。
+      marketplaces: [makeMarketplace({ id: "community-market" })],
       marketplaceAvailabilityKnown: true,
       availablePlugins: [
-        makeSummary({ id: "a@zcode-plugins-official", listing: { category: "productivity" } }),
-        makeSummary({ id: "b@zcode-plugins-official", listing: { category: "developer-tools" } }),
-        makeSummary({ id: "c@zcode-plugins-official", listing: { category: "legal" } }),
-        makeSummary({ id: "d@zcode-plugins-official", listing: { category: "template" } }),
-        makeSummary({ id: "e@zcode-plugins-official", listing: { category: "utilities" } }),
-        makeSummary({ id: "f@zcode-plugins-official", listing: { category: "zebra-unknown" } }),
-        makeSummary({ id: "h@zcode-plugins-official", listing: { category: "finance" } }),
-        makeSummary({ id: "g@zcode-plugins-official" }),
+        makeSummary({ id: "a@community-market", listing: { category: "productivity" } }),
+        makeSummary({ id: "b@community-market", listing: { category: "developer-tools" } }),
+        makeSummary({ id: "c@community-market", listing: { category: "legal" } }),
+        makeSummary({ id: "d@community-market", listing: { category: "template" } }),
+        makeSummary({ id: "e@community-market", listing: { category: "utilities" } }),
+        makeSummary({ id: "f@community-market", listing: { category: "zebra-unknown" } }),
+        makeSummary({ id: "h@community-market", listing: { category: "finance" } }),
+        makeSummary({ id: "g@community-market" }),
       ],
       installedPlugins: [],
       plugins: [],
@@ -421,11 +399,12 @@ describe("pluginStoreListing", () => {
 
   it("prefers listing display name with locale resolution", () => {
     const [item] = buildStoreItems({
-      marketplaces: [makeMarketplace({ id: "zcode-plugins-official" })],
+      // [leo] 官方市场中未安装条目不展示，改用第三方市场验证目录 listing 行为。
+      marketplaces: [makeMarketplace({ id: "community-market" })],
       marketplaceAvailabilityKnown: true,
       availablePlugins: [
         makeSummary({
-          id: "a@zcode-plugins-official",
+          id: "a@community-market",
           listing: { displayName: "Alpha", displayNameI18n: { "zh-CN": "阿尔法" } },
         }),
       ],
@@ -440,11 +419,12 @@ describe("pluginStoreListing", () => {
 
   it("formats a canonical plugin name when no display name is configured", () => {
     const [item] = buildStoreItems({
-      marketplaces: [makeMarketplace({ id: "zcode-plugins-official" })],
+      // [leo] 官方市场中未安装条目不展示，改用第三方市场验证目录 listing 行为。
+      marketplaces: [makeMarketplace({ id: "community-market" })],
       marketplaceAvailabilityKnown: true,
       availablePlugins: [
         makeSummary({
-          id: "cloudbase-skills@zcode-plugins-official",
+          id: "cloudbase-skills@community-market",
           name: "cloudbase-skills",
         }),
       ],

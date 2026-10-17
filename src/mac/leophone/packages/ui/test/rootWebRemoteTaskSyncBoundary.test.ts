@@ -5,25 +5,21 @@ function readUiSource(relativePath: string): string {
   return readFileSync(new URL(`../src/${relativePath}`, import.meta.url), "utf8");
 }
 
+// [leo] Web remote control was removed in Leo, so Root no longer mounts the
+// WebRemoteControlTaskSync node at all; the remaining contract is that Root keeps the global
+// database gate out and never subscribes to the whole workspace table.
 describe("Root Web remote task sync subscription boundary", () => {
-  it("全局数据库门禁移出 Root，正常启动壳仍保留远控同步边界", () => {
+  it("全局数据库门禁移出 Root，Root 不再挂载远控 task 同步", () => {
     const rootSource = readUiSource("Root.tsx");
     expect(rootSource).not.toContain("useStorageStartup");
-    const startupBranch = rootSource.slice(rootSource.indexOf("if (isStartupRenderBlocked)"));
-    expect(startupBranch).toContain("{webRemoteControlTaskSyncNode}");
+    expect(rootSource).not.toContain("WebRemoteControlTaskSync");
+    expect(rootSource).not.toContain("webRemoteControlTaskSyncNode");
   });
-  it("keeps the Root shell from subscribing to all workspaces when Web remote task sync is disabled", () => {
+  it("keeps the Root shell from subscribing to all workspaces", () => {
     const rootSource = readUiSource("Root.tsx");
     const rootInnerSource = rootSource.slice(rootSource.indexOf("function RootInner"));
-    const webRemoteTaskSyncSource = rootSource.slice(
-      rootSource.indexOf("function WebRemoteControlTaskSync"),
-      rootSource.indexOf("/**\n * Root"),
-    );
 
-    // 性能回归保护：桌面 continuous 主链路没有开启 Web remote 时，
-    // Root 不能为了远控 task 索引订阅整张 workspace 表，否则流式更新会唤醒整棵 shell。
+    // 性能回归保护：Root 不能订阅整张 workspace 表，否则流式更新会唤醒整棵 shell。
     expect(rootInnerSource).not.toContain("useZCodeSessionStore((state) => state.workspaces)");
-    expect(webRemoteTaskSyncSource).toContain("useZCodeSessionStore((state) => state.workspaces)");
-    expect(rootSource).toMatch(/hasCompletedFullRestore\s*&&\s*webRemoteControlTaskSyncEnabled/);
   });
 });

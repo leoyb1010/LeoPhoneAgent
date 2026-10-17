@@ -185,75 +185,6 @@ describe("settingsNavigation", () => {
     dispose();
   });
 
-  it("剩余额度详情入口写入 usage coding plan 跳转意图", async () => {
-    const eventTarget = new EventTarget();
-    const storage = new Map<string, string>();
-    vi.stubGlobal("window", {
-      addEventListener: eventTarget.addEventListener.bind(eventTarget),
-      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
-      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
-      sessionStorage: {
-        getItem: (key: string) => storage.get(key) ?? null,
-        removeItem: (key: string) => storage.delete(key),
-        setItem: (key: string, value: string) => {
-          storage.set(key, value);
-        },
-      },
-      localStorage: {
-        getItem: () => null,
-        removeItem: () => undefined,
-        setItem: () => undefined,
-      },
-    });
-    const navigation = await loadSettingsNavigation("test");
-    const listener = vi.fn();
-    const dispose = navigation.addPendingSettingsSectionListener(listener);
-
-    navigation.setPendingSettingsUsageCodingPlanIntent();
-
-    expect(listener).toHaveBeenCalledWith("usage", {
-      section: "usage",
-      usageTab: "codingPlan",
-      modelProviderId: undefined,
-    });
-    expect(navigation.consumePendingSettingsUsageTab()).toBeUndefined();
-
-    dispose();
-    navigation.setPendingSettingsUsageCodingPlanIntent();
-
-    expect(navigation.consumeInitialSettingsSection("general")).toBe("usage");
-    expect(navigation.consumePendingSettingsUsageTab()).toBe("codingPlan");
-  });
-
-  it("provider loading 期间保留 coding plan 使用统计 tab 意图", async () => {
-    const navigation = await loadSettingsNavigation("test");
-
-    expect(
-      navigation.shouldFallbackSettingsUsageTabToApp({
-        activeTab: "codingPlan",
-        checkingCodingPlanTab: false,
-        loadingModelProviders: true,
-        showCodingPlanTab: false,
-      }),
-    ).toBe(false);
-    expect(
-      navigation.shouldFallbackSettingsUsageTabToApp({
-        activeTab: "codingPlan",
-        checkingCodingPlanTab: true,
-        loadingModelProviders: false,
-        showCodingPlanTab: false,
-      }),
-    ).toBe(false);
-    expect(
-      navigation.shouldFallbackSettingsUsageTabToApp({
-        activeTab: "codingPlan",
-        checkingCodingPlanTab: false,
-        loadingModelProviders: false,
-        showCodingPlanTab: false,
-      }),
-    ).toBe(true);
-  });
-
   it("旧版已删除分区意图会回落到安全分区", async () => {
     const storage = new Map<string, string>([
       ["zcode-settings-section-intent", "legacy-removed-section"],
@@ -298,7 +229,10 @@ describe("settingsNavigation", () => {
     });
     const navigation = await loadSettingsNavigation("test");
 
-    expect(navigation.consumeInitialSettingsSection("general")).toBe("mcp");
+    // [leo] Leo no longer remembers the last settings section (matches iOS: always open on the
+    // fallback section); a stale "mcp" preference is ignored, while MCP stays its own section.
+    expect(navigation.consumeInitialSettingsSection("general")).toBe("general");
+    expect(navigation.resolveSettingsSection("mcp")).toBe("mcp");
     expect(localStorage.get("zcode-settings-last-section")).toBe("mcp");
   });
 
@@ -321,47 +255,6 @@ describe("settingsNavigation", () => {
     const navigation = await loadSettingsNavigation("test");
 
     expect(navigation.consumeInitialSettingsSection("general")).toBe("skill");
-  });
-
-  it("清理不再保留的 customize 分区", async () => {
-    const localStorage = new Map<string, string>([
-      ["zcode-settings-last-section", "customize"],
-    ]);
-    vi.stubGlobal("window", {
-      localStorage: {
-        getItem: (key: string) => localStorage.get(key) ?? null,
-        removeItem: (key: string) => localStorage.delete(key),
-        setItem: (key: string, value: string) => localStorage.set(key, value),
-      },
-      sessionStorage: {
-        getItem: () => null,
-        removeItem: () => undefined,
-        setItem: () => undefined,
-      },
-    });
-    const navigation = await loadSettingsNavigation("test");
-
-    expect(navigation.readLastSettingsSectionPreference("general")).toBe(
-      "general",
-    );
-    expect(localStorage.has("zcode-settings-last-section")).toBe(false);
-  });
-
-  it("把旧代码预览分区迁移到外观", async () => {
-    const localStorage = new Map<string, string>([
-      ["zcode-settings-last-section", "codePreview"],
-    ]);
-    vi.stubGlobal("window", {
-      localStorage: {
-        getItem: (key: string) => localStorage.get(key) ?? null,
-        removeItem: (key: string) => localStorage.delete(key),
-        setItem: (key: string, value: string) => localStorage.set(key, value),
-      },
-    });
-    const navigation = await loadSettingsNavigation("test");
-
-    expect(navigation.readLastSettingsSectionPreference()).toBe("appearance");
-    expect(localStorage.get("zcode-settings-last-section")).toBe("appearance");
   });
 
   it("显式设置分区意图优先于上次停留分区", async () => {
@@ -393,64 +286,5 @@ describe("settingsNavigation", () => {
       "modelProvider",
     );
     expect(sessionStorage.has("zcode-settings-section-intent")).toBe(false);
-  });
-
-  it("记录设置页最后停留分区并清理非法旧值", async () => {
-    const localStorage = new Map<string, string>([
-      ["zcode-settings-last-section", "legacy-removed-section"],
-    ]);
-    vi.stubGlobal("window", {
-      localStorage: {
-        getItem: (key: string) => localStorage.get(key) ?? null,
-        removeItem: (key: string) => localStorage.delete(key),
-        setItem: (key: string, value: string) => {
-          localStorage.set(key, value);
-        },
-      },
-      sessionStorage: {
-        getItem: () => null,
-        removeItem: () => undefined,
-        setItem: () => undefined,
-      },
-    });
-    const navigation = await loadSettingsNavigation("test");
-
-    expect(navigation.readLastSettingsSectionPreference("general")).toBe(
-      "general",
-    );
-    expect(localStorage.has("zcode-settings-last-section")).toBe(false);
-
-    navigation.writeLastSettingsSectionPreference("plugin");
-
-    expect(localStorage.get("zcode-settings-last-section")).toBe("plugin");
-  });
-
-  it("保留 hooks 分区的历史偏好", async () => {
-    const localStorage = new Map<string, string>([
-      ["zcode-settings-last-section", "hooks"],
-    ]);
-    vi.stubGlobal("window", {
-      localStorage: {
-        getItem: (key: string) => localStorage.get(key) ?? null,
-        removeItem: (key: string) => localStorage.delete(key),
-        setItem: (key: string, value: string) => {
-          localStorage.set(key, value);
-        },
-      },
-      sessionStorage: {
-        getItem: () => null,
-        removeItem: () => undefined,
-        setItem: () => undefined,
-      },
-    });
-    const navigation = await loadSettingsNavigation("test");
-
-    expect(navigation.readLastSettingsSectionPreference("general")).toBe(
-      "hooks",
-    );
-
-    navigation.writeLastSettingsSectionPreference("hooks");
-
-    expect(localStorage.get("zcode-settings-last-section")).toBe("hooks");
   });
 });

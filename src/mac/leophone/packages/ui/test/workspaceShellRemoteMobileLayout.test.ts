@@ -2,8 +2,6 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { V4ChatPaneProps } from "@/v4/V4ChatPane.js";
-import { V4_PRIMARY_PANE_ID } from "@/v4/paneLayoutStore.js";
-import { useWorkbenchGroupStore } from "@/v4/workbenchGroupStore.js";
 
 vi.mock("@/app-shell/AnimatedSidePanePanel.js", () => ({
   AnimatedSidePanePanel: ({
@@ -385,6 +383,7 @@ async function renderWorkspaceShell(
 }
 
 describe("WorkspaceShellLayout Web remote control mobile layout", () => {
+  // [leo] Web 远程控制（含手机端外壳 / 远程侧栏工作区切换）已删除，相关用例随之删除；这里只保留桌面外壳布局用例。
   // Bugfix: 这些断言只覆盖远控导航纯计算逻辑，直接导入小模块，避免全量并发单测时拉起整页组件。
   it("resolves draggable navigation heights and collapse thresholds", async () => {
     const {
@@ -509,132 +508,6 @@ describe("WorkspaceShellLayout Web remote control mobile layout", () => {
     expect(chatHtml).toContain('data-panel-visible="true"');
   }, 15_000);
 
-  it("adds mobile stacking classes only for Web remote control mode", async () => {
-    const html = await renderWorkspaceShell({
-      webRemoteControlWorkspaceSwitcher: {
-        listWorkspaces: vi.fn(async () => ({ workspaces: [] })),
-        switchWorkspace: vi.fn(async () => {}),
-      },
-    });
-
-    expect(html).toContain("max-md:!flex-col");
-    expect(html).toContain("max-md:!flex-1");
-    expect(html).not.toContain("max-md:data-[state=collapsed]");
-    expect(html).not.toContain('data-layout-id="workspace-shell-layout"');
-    expect(html).toContain("max-md:!w-full");
-    expect(html).not.toContain('data-web-remote-navigation-toggle="true"');
-    expect(html).toContain('data-web-remote-navigation-resize-handle="true"');
-    expect(html).toContain("--web-remote-navigation-height:352px");
-    expect(html).toContain("max-md:!h-[var(--web-remote-navigation-height)]");
-    expect(html).toContain('aria-controls="web-remote-control-navigation-panel"');
-    expect(html).toContain("webRemoteControl.collapseNavigation");
-    expect(html).not.toContain("webRemoteControl.navigationPanel");
-    expect(html).not.toContain("max-md:!h-10");
-    expect(html).toContain('data-mobile-stacked="true"');
-  });
-
-  it("keeps remote sidebar selection out of hidden workbench group context", async () => {
-    capturedWorkspaceSidebarProps.props = [];
-    useWorkbenchGroupStore.getState().configureClientMode("desktop-continuous");
-    useWorkbenchGroupStore.getState().resetWorkbenchGroups();
-    useWorkbenchGroupStore.getState().splitSessionIntoGroup(
-      V4_PRIMARY_PANE_ID,
-      "right",
-      {
-        workspaceScope: { workspacePath: "/workspace-b" },
-        sessionId: "secondary-session",
-      },
-      {
-        workspaceScope: { workspacePath: "/tmp/project" },
-        sessionId: "main-session",
-      },
-    );
-    const groupId = useWorkbenchGroupStore.getState().activeGroupId;
-    const handleSelectTask = vi.fn();
-
-    await renderWorkspaceShell({
-      activeTaskId: "main-session",
-      handleSelectTask,
-      webRemoteControlWorkspaceSwitcher: {
-        listWorkspaces: vi.fn(async () => ({ workspaces: [] })),
-        switchWorkspace: vi.fn(async () => {}),
-      },
-    });
-    const onSelectTask = capturedWorkspaceSidebarProps.props.at(-1)?.onSelectTask;
-    expect(onSelectTask).toBeTypeOf("function");
-    onSelectTask?.("/tmp/project", "main-session");
-
-    expect(handleSelectTask).toHaveBeenCalledWith("/tmp/project", "main-session", undefined);
-    expect(useWorkbenchGroupStore.getState().groups[groupId!]?.focusedPaneId).toBe("pane-1");
-    useWorkbenchGroupStore.getState().resetWorkbenchGroups();
-  });
-
-  it("renders the dedicated mobile task shell on Web remote control mobile viewports", async () => {
-    vi.stubGlobal("window", {
-      innerHeight: 800,
-      matchMedia: vi.fn(() => ({
-        addEventListener: vi.fn(),
-        addListener: vi.fn(),
-        matches: true,
-        removeEventListener: vi.fn(),
-        removeListener: vi.fn(),
-      })),
-      sessionStorage: {
-        getItem: vi.fn(() => null),
-        removeItem: vi.fn(),
-        setItem: vi.fn(),
-      },
-    });
-
-    const html = await renderWorkspaceShell({
-      webRemoteControlWorkspaceSwitcher: {
-        listWorkspaces: vi.fn(async () => ({ workspaces: [] })),
-        switchWorkspace: vi.fn(async () => {}),
-      },
-    });
-
-    expect(html).toContain('data-testid="web-remote-mobile-shell"');
-    expect(html).not.toContain('data-testid="workspace-sidebar"');
-
-    vi.unstubAllGlobals();
-  });
-
-  it("keeps mobile remote chat content in a flex height chain", async () => {
-    vi.stubGlobal("window", {
-      innerHeight: 800,
-      matchMedia: vi.fn(() => ({
-        addEventListener: vi.fn(),
-        addListener: vi.fn(),
-        matches: true,
-        removeEventListener: vi.fn(),
-        removeListener: vi.fn(),
-      })),
-      sessionStorage: {
-        getItem: vi.fn(() => null),
-        removeItem: vi.fn(),
-        setItem: vi.fn(),
-      },
-    });
-
-    const html = await renderWorkspaceShell({
-      activeTaskId: null,
-      initialWebRemoteControlMobileNavigationIntent: "chat",
-      webRemoteControlWorkspaceSwitcher: {
-        listWorkspaces: vi.fn(async () => ({ workspaces: [] })),
-        switchWorkspace: vi.fn(async () => {}),
-      },
-      workspaceShellZCodeState: {
-        ...createWorkspaceShellProps().workspaceShellZCodeState,
-        activeTaskId: null,
-      },
-    });
-
-    expect(html).toContain("relative flex h-full min-h-0 min-w-0 flex-1 flex-col");
-    expect(html).not.toContain('class="relative h-full min-h-0"');
-
-    vi.unstubAllGlobals();
-  });
-
   it("passes workspace identity to mobile V4ChatPane for remote workspaces", async () => {
     capturedChatPaneProps.length = 0;
     vi.stubGlobal("window", {
@@ -698,99 +571,6 @@ describe("WorkspaceShellLayout Web remote control mobile layout", () => {
     });
 
     expect(capturedChatPaneProps[0]?.onOpenPlanDetail).toBe(handleOpenPlanDetail);
-
-    vi.unstubAllGlobals();
-  });
-
-  it("passes side pane content as a right-side overlay into the dedicated mobile chat shell", async () => {
-    vi.stubGlobal("window", {
-      innerHeight: 800,
-      matchMedia: vi.fn(() => ({
-        addEventListener: vi.fn(),
-        addListener: vi.fn(),
-        matches: true,
-        removeEventListener: vi.fn(),
-        removeListener: vi.fn(),
-      })),
-      sessionStorage: {
-        getItem: vi.fn(() => null),
-        removeItem: vi.fn(),
-        setItem: vi.fn(),
-      },
-    });
-
-    const html = await renderWorkspaceShell({
-      isSidePaneOpen: true,
-      sidePaneState: {
-        activeTabId: "git",
-        tabs: [{ id: "git", type: "git" }],
-      },
-      webRemoteControlWorkspaceSwitcher: {
-        listWorkspaces: vi.fn(async () => ({ workspaces: [] })),
-        switchWorkspace: vi.fn(async () => {}),
-      },
-    });
-
-    expect(html).toContain('data-testid="web-remote-mobile-shell"');
-    expect(html).toContain('data-mobile-side-pane-open="true"');
-    expect(html).toContain('data-testid="mobile-side-pane-overlay"');
-    expect(html).toContain('data-testid="side-pane-panel"');
-    expect(html).toContain('data-mobile-overlay="true"');
-    expect(html).toContain('data-panel-visible="true"');
-
-    vi.unstubAllGlobals();
-  });
-
-  it("routes mobile task find through the shell overlay instead of chat content", async () => {
-    vi.stubGlobal("window", {
-      innerHeight: 800,
-      matchMedia: vi.fn(() => ({
-        addEventListener: vi.fn(),
-        addListener: vi.fn(),
-        matches: true,
-        removeEventListener: vi.fn(),
-        removeListener: vi.fn(),
-      })),
-      sessionStorage: {
-        getItem: vi.fn(() => null),
-        removeItem: vi.fn(),
-        setItem: vi.fn(),
-      },
-    });
-
-    const html = await renderWorkspaceShell({
-      initialWebRemoteControlMobileNavigationIntent: "chat",
-      isSidePaneOpen: true,
-      taskFindDialogProps: {
-        open: true,
-        placement: "chat",
-        focusRequestId: 1,
-        conversationMatchCount: 1,
-        conversationMatchIndex: 0,
-        fileChangeMatchCount: 1,
-        fileChangeMatchIndex: 0,
-        onOpenChange: vi.fn(),
-        onConversationFindChange: vi.fn(),
-        onConversationFindNavigate: vi.fn(),
-        onFileChangeFindChange: vi.fn(),
-        onFileChangeFindNavigate: vi.fn(),
-        onOpenFileChanges: vi.fn(),
-      },
-      webRemoteControlWorkspaceSwitcher: {
-        listWorkspaces: vi.fn(async () => ({ workspaces: [] })),
-        switchWorkspace: vi.fn(async () => {}),
-      },
-    });
-    const chatContentStart = html.indexOf('data-testid="mobile-chat-content"');
-    const chatOverlayStart = html.indexOf('data-testid="mobile-chat-overlay-prop"');
-
-    expect(chatOverlayStart).toBeGreaterThan(chatContentStart);
-    expect(html.slice(chatContentStart, chatOverlayStart)).not.toContain(
-      'placeholder="quickPick.find.placeholder.conversation"',
-    );
-    expect(html.slice(chatOverlayStart)).toContain(
-      'placeholder="quickPick.find.placeholder.conversation"',
-    );
 
     vi.unstubAllGlobals();
   });
@@ -880,42 +660,6 @@ describe("WorkspaceShellLayout Web remote control mobile layout", () => {
     expect(html).toContain('data-testid="workspace-header"');
     expect(html).toContain('data-workspace-header-variant="task"');
     expect(html).not.toContain('data-testid="new-task-draft-drag-region"');
-  });
-
-  it("does not inject the workspace header into mobile remote chat while a new task draft is active", async () => {
-    vi.stubGlobal("window", {
-      innerHeight: 800,
-      matchMedia: vi.fn(() => ({
-        addEventListener: vi.fn(),
-        addListener: vi.fn(),
-        matches: true,
-        removeEventListener: vi.fn(),
-        removeListener: vi.fn(),
-      })),
-      sessionStorage: {
-        getItem: vi.fn(() => null),
-        removeItem: vi.fn(),
-        setItem: vi.fn(),
-      },
-    });
-
-    const html = await renderWorkspaceShell({
-      activeTaskId: null,
-      initialWebRemoteControlMobileNavigationIntent: "chat",
-      webRemoteControlWorkspaceSwitcher: {
-        listWorkspaces: vi.fn(async () => ({ workspaces: [] })),
-        switchWorkspace: vi.fn(async () => {}),
-      },
-      workspaceShellZCodeState: {
-        ...createWorkspaceShellProps().workspaceShellZCodeState,
-        activeTaskId: null,
-      },
-    });
-
-    expect(html).toContain('data-testid="web-remote-mobile-shell"');
-    expect(html).not.toContain('data-testid="workspace-header"');
-
-    vi.unstubAllGlobals();
   });
 
   it("removes the legacy Linux floating chrome", async () => {

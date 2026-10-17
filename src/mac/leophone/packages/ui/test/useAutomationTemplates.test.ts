@@ -15,14 +15,16 @@ vi.mock("@/logger.js", () => ({
   logger: { warn: loggerWarn },
 }));
 
-function offPeakResponse(id: string, title: string): ClientScenesResponse {
+// [leo] Off-peak task UI was removed (Mac 1.9); the catalog only exposes scheduled templates,
+// so the fixture uses a scheduled-task scene instead of the upstream off-peak-task scene.
+function scheduledResponse(id: string, title: string): ClientScenesResponse {
   return {
     code: 0,
     msg: "success",
     data: [
       {
         namespace: "zcode",
-        scene: "off-peak-task",
+        scene: "scheduled-task",
         options: {
           prompts: {
             id: "prompts",
@@ -34,6 +36,24 @@ function offPeakResponse(id: string, title: string): ClientScenesResponse {
                 type: "prompts",
                 contents: { en: `${title} prompt` },
                 labels: { en: title },
+                defaults: { cronExpr: ["cron-daily"] },
+                on_finish: null,
+                img: null,
+              },
+            ],
+            refer: "",
+            templates: {},
+          },
+          cronExpr: {
+            id: "cronExpr",
+            type: "cronExpr",
+            contents: {},
+            items: [
+              {
+                id: "cron-daily",
+                type: "cronExpr",
+                contents: { en: "0 9 * * *" },
+                labels: { en: "Daily" },
                 on_finish: null,
                 img: null,
               },
@@ -71,12 +91,12 @@ describe("useAutomationTemplates", () => {
 
     expect(result.current.loading).toBe(true);
     await act(async () => {
-      resolveList(offPeakResponse("item-loaded", "Loaded"));
+      resolveList(scheduledResponse("item-loaded", "Loaded"));
       await Promise.resolve();
     });
 
     expect(result.current.loading).toBe(false);
-    expect(result.current.offPeak[0]?.id).toBe("item-loaded");
+    expect(result.current.scheduled[0]?.id).toBe("item-loaded");
   });
 
   it("returns an empty remote catalog when Client Scenes fails", async () => {
@@ -87,7 +107,6 @@ describe("useAutomationTemplates", () => {
     expect(result.current.loading).toBe(true);
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.scheduled).toEqual([]);
-    expect(result.current.offPeak).toEqual([]);
     expect(loggerWarn).toHaveBeenCalledWith(
       "[automation-templates] Client Scenes 请求失败，保留手动创建入口",
       { error: "offline" },
@@ -106,7 +125,6 @@ describe("useAutomationTemplates", () => {
     expect(result.current.loading).toBe(true);
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.scheduled).toEqual([]);
-    expect(result.current.offPeak).toEqual([]);
   });
 
   it("ignores a late response from the previous service attachment", async () => {
@@ -117,21 +135,21 @@ describe("useAutomationTemplates", () => {
           resolveFirst = resolve;
         }),
     );
-    const second = service(async () => offPeakResponse("item-new", "New"));
+    const second = service(async () => scheduledResponse("item-new", "New"));
     const { result, rerender } = renderHook(
       ({ currentService }) => useAutomationTemplates(currentService),
       { initialProps: { currentService: first } },
     );
 
     rerender({ currentService: second });
-    await waitFor(() => expect(result.current.offPeak[0]?.id).toBe("item-new"));
+    await waitFor(() => expect(result.current.scheduled[0]?.id).toBe("item-new"));
     expect(result.current.loading).toBe(false);
     await act(async () => {
-      resolveFirst(offPeakResponse("item-old", "Old"));
+      resolveFirst(scheduledResponse("item-old", "Old"));
       await Promise.resolve();
     });
 
-    expect(result.current.offPeak[0]?.id).toBe("item-new");
+    expect(result.current.scheduled[0]?.id).toBe("item-new");
     expect(result.current.loading).toBe(false);
   });
 });

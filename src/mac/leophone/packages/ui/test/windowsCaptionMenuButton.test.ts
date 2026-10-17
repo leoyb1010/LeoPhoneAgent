@@ -186,34 +186,20 @@ describe("WindowsCaptionMenuButton", () => {
 
     const html = await renderButton("header");
 
-    expect(html).toContain("titleBar.menu.help.feedback");
-    expect(html).toContain("workspaceHeader.help.productRequest");
-    expect(html).toContain("workspaceHeader.help.docs");
+    // [leo] 问题反馈 / 产品需求 / 官方文档连到官方站点或官方反馈服务，Leo 已去掉；只保留导出日志。
+    expect(html).not.toContain("titleBar.menu.help.feedback");
+    expect(html).not.toContain("workspaceHeader.help.productRequest");
+    expect(html).not.toContain("workspaceHeader.help.docs");
     expect(html).toContain("titleBar.menu.help.exportLogs");
 
-    await capturedWindowsCaptionMenu.menuItems
-      .find((item) => item.label === "titleBar.menu.help.feedback")
-      ?.onSelect?.();
-    capturedWindowsCaptionMenu.menuItems
-      .find((item) => item.label === "workspaceHeader.help.productRequest")
-      ?.onSelect?.();
-    capturedWindowsCaptionMenu.menuItems
-      .find((item) => item.label === "workspaceHeader.help.docs")
-      ?.onSelect?.();
     capturedWindowsCaptionMenu.menuItems
       .find((item) => item.label === "titleBar.menu.help.exportLogs")
       ?.onSelect?.();
 
     expect(capturedWindowsCaptionMenu.captureWindowScreenshot).not.toHaveBeenCalled();
-    expect(capturedWindowsCaptionMenu.openSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "bug",
-        includeLogs: true,
-        screenshots: [],
-      }),
-    );
-    expect(capturedWindowsCaptionMenu.openFeatureRequest).toHaveBeenCalledTimes(1);
-    expect(capturedWindowsCaptionMenu.openExternal).toHaveBeenCalledWith("https://zcode.z.ai/docs");
+    expect(capturedWindowsCaptionMenu.openSubmit).not.toHaveBeenCalled();
+    expect(capturedWindowsCaptionMenu.openFeatureRequest).not.toHaveBeenCalled();
+    expect(capturedWindowsCaptionMenu.openExternal).not.toHaveBeenCalled();
     expect(capturedWindowsCaptionMenu.exportLogs).toHaveBeenCalledTimes(1);
   });
 

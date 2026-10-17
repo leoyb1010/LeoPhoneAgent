@@ -299,51 +299,6 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
 }
 
-function addAccountProviderAccess(
-  providerId: string,
-  access:
-    | {
-        accountType: "zai" | "bigmodel";
-        mode: "individual-coding-plan";
-      }
-    | {
-        accountType: "zai" | "bigmodel";
-        mode: "team-coding-plan";
-      },
-  label = providerId,
-) {
-  mocks.providerSettingsView = {
-    revision: mocks.providerSettingsView.revision + 1,
-    addableProviders: mocks.providerSettingsView.addableProviders,
-    providerOrder: mocks.providerSettingsView.providerOrder,
-    providers: [
-      ...mocks.providerSettingsView.providers.filter(
-        (provider) => provider.providerId !== providerId,
-      ),
-      {
-        providerId,
-        enabled: true,
-        executable: true,
-        effectiveConfig: {
-          access: {
-            type: "zhipu-account",
-            entitled: true,
-            ...access,
-          },
-          api: {
-            type: "anthropic-messages",
-            baseUrl: "https://example.com",
-          },
-          label,
-          builtinModelIds: [],
-        },
-        issues: [],
-        models: [],
-      },
-    ],
-  };
-}
-
 function createActiveEntitlement(providerId: string, extra: Record<string, unknown> = {}) {
   return {
     generatedAt: 1,
@@ -476,43 +431,7 @@ afterEach(() => {
 });
 
 describe("V4ComposerModelControls recovery", () => {
-  it("Highspeed 卡生效期间隐藏 context token usage 圈圈", () => {
-    const normalHtml = renderToolbarMarkup();
-    const highspeedHtml = renderToolbarMarkup({ modelLocked: true });
-
-    expect(normalHtml).toContain('data-testid="mock-usage"');
-    expect(highspeedHtml).not.toContain('data-testid="mock-usage"');
-  });
-
-  it("把无晃动的固定宽度倒计时放在模型和 Think 之间", () => {
-    vi.spyOn(Date, "now").mockReturnValue(1_000);
-
-    const html = renderToolbarMarkup({
-      highspeedExpiresAt: 60_000,
-      highspeedModel: "GLM-5.3",
-      highspeedPresented: true,
-    });
-    const modelIndex = html.indexOf('data-highspeed-model-indicator="true"');
-    const countdownIndex = html.indexOf('data-highspeed-countdown="true"');
-    const thoughtIndex = html.indexOf('data-testid="mock-thought"');
-
-    expect(modelIndex).toBeGreaterThanOrEqual(0);
-    expect(countdownIndex).toBeGreaterThan(modelIndex);
-    expect(thoughtIndex).toBeGreaterThan(countdownIndex);
-    expect(html).toContain("00:00:59");
-    expect(html).toContain("h-7");
-    expect(html).toContain("w-[82px]");
-    expect(html).toContain("w-[54px]");
-    expect(html).toContain("tabular-nums");
-    expect(html).toMatch(/data-highspeed-countdown="true"[^>]*@max-xl\/composer:w-7/);
-    expect(html).toMatch(
-      /title="chat.highspeed.remainingTime"[^>]*data-highspeed-countdown="true"/,
-    );
-    expect(html).toMatch(/data-highspeed-countdown-value="true"[^>]*@max-xl\/composer:hidden/);
-    expect(html).not.toContain("animate-zcode-alarm-ring");
-    expect(html).not.toMatch(/data-highspeed-countdown="true"[^>]*text-icon-purple/);
-  });
-
+  // [leo] Highspeed card cases removed: Leo has no Highspeed (official Z.ai entitlement) feature.
   it("已有会话的 Composer 模型留空时仍能打开模型菜单重选", () => {
     renderToolbarMarkup({
       sessionId: "existing-session",
@@ -609,7 +528,8 @@ describe("V4ComposerModelControls recovery", () => {
   it("将供应商配置名称传给模型触发器展示", () => {
     renderToolbarMarkup();
 
-    expect(captured.modelSelectProps?.triggerLabel).toBe("Custom OpenAI/gpt-4o");
+    // [leo] model picker shows prettified model ids (prettifyModelId: gpt-4o -> GPT-4o).
+    expect(captured.modelSelectProps?.triggerLabel).toBe("Custom OpenAI/GPT-4o");
     expect(captured.modelSelectProps?.indicatorClassName).not.toContain("@sm/composer");
     expect(captured.modelSelectProps?.indicatorClassName).toContain(
       "group-data-[composer-model-icon=true]/toolbar:hidden",
@@ -645,7 +565,8 @@ describe("V4ComposerModelControls recovery", () => {
 
     renderToolbarMarkup();
 
-    expect(captured.modelSelectProps?.triggerLabel).toBe("Registry OpenAI/gpt-4o");
+    // [leo] model picker shows prettified model ids (prettifyModelId: gpt-4o -> GPT-4o).
+    expect(captured.modelSelectProps?.triggerLabel).toBe("Registry OpenAI/GPT-4o");
   });
 
   it("prewarm 未就绪时不把旧 configOptions 模型当作 Selection 来源", async () => {
@@ -919,59 +840,7 @@ describe("V4ComposerModelControls recovery", () => {
     expect(captured.modelSelectProps).toBeNull();
   });
 
-  it("passes Coding Plan usage only when the current connection is the selected OAuth Coding Plan", () => {
-    addAccountProviderAccess(
-      BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
-      { accountType: "zai", mode: "individual-coding-plan" },
-      "Z.ai - Coding Plan",
-    );
-    mocks.codingPlanEntitlements = {
-      [BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan]: {
-        snapshot: createActiveEntitlement(BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan),
-        loading: false,
-        error: null,
-      },
-    };
-
-    renderToolbarMarkup({
-      config: {
-        provider: BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
-        model: "glm-5",
-        thought: "medium",
-        thoughtLevels: ["medium"],
-        followupMode: "queue",
-        mode: "build",
-      },
-      usage: null,
-    });
-    expect(latestUsageProps().codingPlanUsageRemaining).toBeUndefined();
-
-    captured.usageProps = [];
-    mocks.settings = {
-      providerFamilyConnectionSelections: {
-        zai: { kind: "individual-coding-plan" },
-      },
-      providerFamilyDomain: {},
-    };
-    renderToolbarMarkup({
-      config: {
-        provider: BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
-        model: "glm-5",
-        thought: "medium",
-        thoughtLevels: ["medium"],
-        followupMode: "queue",
-        mode: "build",
-      },
-      usage: null,
-    });
-
-    const props = latestUsageProps();
-    expect(props.codingPlanUsageRemaining).toMatchObject({
-      selectedProviderId: BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
-    });
-    expect(props.startPlanBalance).toBeUndefined();
-  });
-
+  // [leo] Coding Plan / Start Plan / Team Plan usage & balance cases removed: Leo has no official Z.ai/BigModel plans.
   it("does not derive Coding Plan usage from a legacy provider without Account Access", () => {
     mocks.codingPlanEntitlements = {
       [BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan]: {
@@ -1001,53 +870,6 @@ describe("V4ComposerModelControls recovery", () => {
 
     expect(latestUsageProps().codingPlanUsageRemaining).toBeUndefined();
   });
-
-  it.each([
-    undefined,
-    { kind: "start-plan" },
-    { kind: "individual-coding-plan" },
-    { kind: "team-coding-plan", organizationId: "org", projectId: "project", productId: "plan" },
-  ] as const)(
-    "Start balance follows composer selection independent of saved connection %j",
-    (selection) => {
-      mocks.codingPlanEntitlements = {
-        [BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan]: {
-          snapshot: createActiveEntitlement(BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan),
-          loading: false,
-          error: null,
-        },
-      };
-      mocks.settings = {
-        providerFamilyConnectionSelections: {
-          zai: selection,
-        },
-        providerFamilyDomain: {},
-      };
-
-      renderToolbarMarkup({
-        config: {
-          provider: BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan,
-          model: "glm-5",
-          thought: "medium",
-          thoughtLevels: ["medium"],
-          followupMode: "queue",
-          mode: "build",
-        },
-        usage: null,
-      });
-
-      const props = latestUsageProps();
-      expect(props.codingPlanUsageRemaining).toBeUndefined();
-      expect(props.startPlanBalance).toMatchObject({
-        loading: false,
-        snapshot: {
-          provider: {
-            id: BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan,
-          },
-        },
-      });
-    },
-  );
 
   it("does not pass Start Plan balance when the entitlement hook hides fallback balance", () => {
     mocks.codingPlanEntitlements = {
@@ -1082,116 +904,6 @@ describe("V4ComposerModelControls recovery", () => {
     });
 
     expect(latestUsageProps().startPlanBalance).toBeUndefined();
-  });
-
-  it("attaches the hover access refresh entry when the Start Plan entitlement is enabled", () => {
-    mocks.codingPlanEntitlements = {
-      [BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan]: {
-        snapshot: null,
-        loading: false,
-        error: null,
-      },
-    };
-    mocks.codingPlanEntitlementsEnabledStartPlanIds = [BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan];
-    mocks.settings = {
-      providerFamilyConnectionSelections: {
-        zai: { kind: "start-plan" },
-      },
-      providerFamilyDomain: {},
-    };
-
-    renderToolbarMarkup({
-      config: {
-        provider: BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan,
-        model: "glm-5",
-        thought: "medium",
-        thoughtLevels: ["medium"],
-        followupMode: "queue",
-        mode: "build",
-      },
-      usage: null,
-    });
-
-    const startPlanBalance = latestUsageProps().startPlanBalance as {
-      onAccess?: () => unknown;
-    };
-    // 修复原因：start plan 用户原先没有 hover onAccess 入口，context 面板从不主动刷新今日余额。
-    expect(typeof startPlanBalance?.onAccess).toBe("function");
-    expect(startPlanBalance.onAccess).not.toBeNull();
-  });
-
-  it("recovers a Team Plan usage source from entitlement snapshot when products are not hydrated", () => {
-    const teamSourceId = "team:bigmodel:team-pro:org-1:project-1";
-    addAccountProviderAccess(BUILTIN_MODEL_PROVIDER_IDS.bigmodelTeamCodingPlan, {
-      accountType: "bigmodel",
-      mode: "team-coding-plan",
-    });
-    mocks.settings = {
-      providerFamilyConnectionSelections: {
-        bigmodel: {
-          kind: "team-coding-plan",
-          productId: "team-pro",
-          organizationId: "org-1",
-          projectId: "project-1",
-        },
-      },
-      providerFamilyDomain: {},
-    };
-    mocks.codingPlanEntitlements = {
-      [BUILTIN_MODEL_PROVIDER_IDS.bigmodelTeamCodingPlan]: {
-        snapshot: createActiveEntitlement(BUILTIN_MODEL_PROVIDER_IDS.bigmodelTeamCodingPlan, {
-          context: {
-            scope: "team",
-            organizationId: "org-1",
-            projectId: "project-1",
-            productId: "team-pro",
-            displayName: "Platform",
-          },
-          subscription: {
-            details: [
-              {
-                beginTime: "2026-01-01T00:00:00Z",
-                expireTime: "2026-12-31T00:00:00Z",
-                productId: "team-pro",
-                productName: "Platform",
-                purchaseTime: "2026-01-01T00:00:00Z",
-              },
-            ],
-          },
-        }),
-        loading: false,
-        error: null,
-      },
-    };
-    mocks.usageEntitlement = {
-      snapshot: createActiveEntitlement(BUILTIN_MODEL_PROVIDER_IDS.bigmodelTeamCodingPlan, {
-        context: {
-          scope: "team",
-          organizationId: "org-1",
-          projectId: "project-1",
-          productId: "team-pro",
-          displayName: "Platform",
-        },
-      }),
-      loading: false,
-      error: null,
-    };
-
-    renderToolbarMarkup({
-      config: {
-        provider: BUILTIN_MODEL_PROVIDER_IDS.bigmodelTeamCodingPlan,
-        model: "glm-5",
-        thought: "medium",
-        thoughtLevels: ["medium"],
-        followupMode: "queue",
-        mode: "build",
-      },
-      usage: null,
-    });
-
-    expect(latestUsageProps().codingPlanUsageRemaining).toMatchObject({
-      selectedProviderId: teamSourceId,
-    });
   });
 
   it("routes custom model selection to the recovery callback when configOptions failed", async () => {

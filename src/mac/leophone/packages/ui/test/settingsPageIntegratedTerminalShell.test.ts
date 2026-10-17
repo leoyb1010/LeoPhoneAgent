@@ -179,7 +179,9 @@ vi.mock("@/store/TabStoreProvider.js", () => ({
     }),
 }));
 
-vi.mock("@/lib/settingsNavigation.js", () => ({
+// [leo] settingsPageConfig imports isSettingsSectionEnabled from this module; keep real exports.
+vi.mock("@/lib/settingsNavigation.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/lib/settingsNavigation.js")>()),
   addPendingSettingsSectionListener: () => () => {},
   consumeInitialSettingsSection: () => "general",
   consumePendingSettingsPluginTab: () => undefined,
@@ -263,6 +265,9 @@ vi.mock("../src/settingsPageHelpers.js", () => ({
         },
       ],
       settingsSections,
+      // [leo] Leo settings IA folds plugin/mcp/skill/commands/hooks into an "extensions" entry.
+      extensionSections: [],
+      extensionsNavEntry: null,
     };
   },
   resolveSettingsSectionForPlatform: (section: string) => section,

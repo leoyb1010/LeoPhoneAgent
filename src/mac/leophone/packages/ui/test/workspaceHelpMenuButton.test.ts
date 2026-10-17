@@ -14,8 +14,6 @@ vi.mock("@/i18n/IntlProvider.js", () => ({
 }));
 
 const captured = vi.hoisted(() => ({
-  zsrcUrl: null as string | null,
-  loading: false,
   openExternal: vi.fn(),
   exportLogs: vi.fn(async () => ({ success: true })),
   toast: vi.fn(() => 7),
@@ -73,15 +71,6 @@ vi.mock("@/components/ui/toast.js", () => ({
   dismissToast: captured.dismissToast,
 }));
 
-vi.mock("@/feedback/feedbackStore.js", () => ({
-  useFeedbackStore: (
-    selector: (state: {
-      openSubmit: (draft?: unknown) => void;
-      openFeatureRequest: () => void;
-    }) => unknown,
-  ) => selector({ openSubmit: vi.fn(), openFeatureRequest: vi.fn() }),
-}));
-
 vi.mock("@/hooks/useDesktopUpdateMenu.js", () => ({
   useDesktopUpdateMenu: (isDesktop: boolean) => ({
     ...captured.updateMenu,
@@ -100,10 +89,6 @@ vi.mock("@/hooks/usePlatform.js", () => ({
   }),
 }));
 
-vi.mock("@/hooks/useVulnerabilityReportUrl.js", () => ({
-  useVulnerabilityReportUrl: () => ({ url: captured.zsrcUrl, loading: captured.loading }),
-}));
-
 describe("WorkspaceHelpMenuButton", () => {
   async function render(isDesktop: boolean | undefined) {
     captured.menuItems = [];
@@ -115,51 +100,7 @@ describe("WorkspaceHelpMenuButton", () => {
     return renderToStaticMarkup(createElement(WorkspaceHelpMenuButton, { isDesktop }));
   }
 
-  it("桌面和 Web 的漏洞入口紧跟问题上报，打开配置地址；缺失时隐藏", async () => {
-    for (const desktop of [true, false]) {
-      captured.zsrcUrl = "https://security.example.test/report";
-      captured.openExternal.mockClear();
-      try {
-        await render(desktop);
-        const index = captured.menuItems.findIndex(
-          (item) => item.label === "workspaceHeader.help.reportVulnerability",
-        );
-        expect(index).toBeGreaterThan(0);
-        expect(captured.menuItems[index - 1]?.label).toBe("workspaceHeader.help.issueReport");
-        await captured.menuItems[index]?.onSelect?.();
-        expect(captured.openExternal).toHaveBeenCalledExactlyOnceWith(captured.zsrcUrl);
-      } finally {
-        captured.zsrcUrl = null;
-      }
-      expect(await render(desktop)).not.toContain("workspaceHeader.help.reportVulnerability");
-    }
-  });
-
-  it("冷缓存加载项不可触发外链，有效配置到达时保留原位置与文案", async () => {
-    captured.loading = true;
-    captured.openExternal.mockClear();
-    try {
-      await render(true);
-      const before = captured.menuItems.map((item) => item.label);
-      const item = captured.menuItems.find(
-        (item) => item.label === "workspaceHeader.help.reportVulnerability",
-      );
-      expect(item).toMatchObject({ disabled: true, onSelect: undefined });
-      captured.loading = false;
-      captured.zsrcUrl = "https://security.example.test/report";
-      await render(true);
-      expect(captured.menuItems.map((item) => item.label)).toEqual(before);
-      expect(
-        captured.menuItems.find((item) => item.label === "workspaceHeader.help.reportVulnerability")
-          ?.disabled,
-      ).toBe(false);
-      expect(captured.openExternal).not.toHaveBeenCalled();
-    } finally {
-      captured.loading = false;
-      captured.zsrcUrl = null;
-    }
-  });
-
+  // [leo] 漏洞上报入口（官方 ZSRC 配置地址）已删除，对应两条用例随之删除。
   it("桌面端渲染资源管理器项，点击走 OpenResourceManager 命令", async () => {
     // 原因：Windows/Linux 没有原生菜单栏，自绘箭头菜单也已下线，问号菜单是资源管理器唯一入口。
     const html = await render(true);
@@ -251,27 +192,26 @@ describe("WorkspaceHelpMenuButton", () => {
   });
 
   it("桌面两组一条分隔线，导出日志位于桌面组首项，Web 仅帮助组", async () => {
+    // [leo] 帮助组（文档 / 社群 / 问题上报 / 产品需求）连官方站点，已删除：桌面只剩一组、没有分隔线，Web 不渲染菜单。
     for (const desktop of [true, false]) {
       const html = await render(desktop);
-      expect(captured.menuItems.map((item) => item.label)).toEqual([
-        "workspaceHeader.help.docs",
-        "workspaceHeader.help.community",
-        "workspaceHeader.help.issueReport",
-        "workspaceHeader.help.productRequest",
-        ...(desktop
+      expect(captured.menuItems.map((item) => item.label)).toEqual(
+        desktop
           ? [
               "titleBar.menu.help.exportLogs",
               "titleBar.menu.help.resourceManager",
               "titleBar.menu.help.checkForUpdates",
               "titleBar.menu.help.about",
             ]
-          : []),
-      ]);
-      expect((html.match(/<hr/g) ?? []).length).toBe(desktop ? 1 : 0);
+          : [],
+      );
+      expect((html.match(/<hr/g) ?? []).length).toBe(0);
+      if (!desktop) expect(html).toBe("");
     }
   });
 
   it("桌面端与 Web 端都保留原有帮助项", async () => {
+    // [leo] 原有帮助项连官方站点或官方反馈服务，桌面端与 Web 端都不再出现。
     for (const isDesktop of [true, false]) {
       const html = await render(isDesktop);
       for (const id of [
@@ -280,7 +220,7 @@ describe("WorkspaceHelpMenuButton", () => {
         "workspaceHeader.help.community",
         "workspaceHeader.help.docs",
       ]) {
-        expect(html).toContain(id);
+        expect(html).not.toContain(id);
       }
     }
   });

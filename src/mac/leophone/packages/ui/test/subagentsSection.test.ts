@@ -670,7 +670,8 @@ describe("SubagentsSection", () => {
     expect(html).toContain("Explore");
     expect(html).toContain("code-reviewer");
     expect(html).toContain("Inherit default");
-    expect(html).toContain("gpt-5.4");
+    // [leo] Registry provider models show a prettified display name (prettifyModelId).
+    expect(html).toContain("GPT-5.4");
     const container = document.createElement("div");
     container.innerHTML = html;
     const builtInRow = container.querySelector(
@@ -826,7 +827,8 @@ describe("SubagentsSection", () => {
     expect(html).toContain("Inherit default");
     expect(explorePicker).toMatchObject({
       normalizedValue: "custom:custom-openai:glm-5.2",
-      triggerLabel: "glm-5.2",
+      // [leo] Registry provider models show a prettified display name (prettifyModelId).
+      triggerLabel: "GLM 5.2",
       showManageModelsAction: false,
     });
     expect(explorePicker?.tooltipTitle).toBeUndefined();
@@ -966,7 +968,8 @@ describe("SubagentsSection", () => {
     const picker = capturedModelConfigSelects.find(
       (candidate) => candidate.normalizedValue === "custom:custom-openai:glm-5.2",
     );
-    expect(picker).toMatchObject({ triggerLabel: "glm-5.2", showManageModelsAction: false });
+    // [leo] Registry provider models show a prettified display name (prettifyModelId).
+    expect(picker).toMatchObject({ triggerLabel: "GLM 5.2", showManageModelsAction: false });
     (picker!.onValueChange as (value: string) => void)("custom:custom-openai:gpt-5.4");
     await waitFor(() =>
       expect(mockSubagentsService.setPluginAgentModelOverride).toHaveBeenCalledWith({

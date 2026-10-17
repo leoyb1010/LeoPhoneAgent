@@ -35,33 +35,8 @@ function renderNotice(error: string): string {
   );
 }
 
-describe("UsageStatsErrorNotice 团队套餐业务错误", () => {
-  it("原文展示企业主账号权限错误，参考 teamUnavailable 内联样式（InfoIcon + warning，无容器）", () => {
-    const html = renderNotice("仅企业主账号可查询企业汇总数据");
-
-    expect(html).toContain("仅企业主账号可查询企业汇总数据");
-    expect(html).not.toContain("usage.error.stats.generic");
-    expect(html).toContain("lucide-info");
-    expect(html).toContain("text-warning");
-    // 参考 Plan Card teamUnavailable：内联展示，无边框无背景容器
-    expect(html).not.toContain("rounded-lg");
-    expect(html).not.toContain("border-warning/30");
-    expect(html).not.toContain("bg-warning/10");
-    // 业务错误不是凭据问题：不出现检查 API Key 入口
-    expect(html).not.toContain("settings.usage.checkApiKey");
-    expect(html).not.toContain("border-destructive");
-  });
-
-  it("原文展示团队 API Key 创建失败 msg，即使包含授权字样也不走 credential 翻译", () => {
-    const html = renderNotice("您当前暂无有效的团队套餐授权记录，无法创建API Key");
-
-    expect(html).toContain("您当前暂无有效的团队套餐授权记录，无法创建API Key");
-    expect(html).not.toContain("usage.error.stats.credential");
-    expect(html).not.toContain("settings.usage.checkApiKey");
-    expect(html).toContain("lucide-info");
-    expect(html).not.toContain("rounded-lg");
-  });
-
+describe("UsageStatsErrorNotice", () => {
+  // [leo] Leo 没有官方团队套餐，团队套餐业务错误原文展示分支已随 official-plan 残留一起删除，对应用例已移除。
   it("凭据错误保持翻译文案与检查 API Key 入口", () => {
     const html = renderNotice("token expired");
 

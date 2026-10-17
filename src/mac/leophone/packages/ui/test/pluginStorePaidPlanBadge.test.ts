@@ -72,32 +72,15 @@ async function renderDetail(item: StorePluginItem): Promise<string> {
 }
 
 describe("plugin store paid plan badge", () => {
-  it("marks a plugin that needs a paid plan on the store card title", async () => {
-    const html = await renderCard(makeItem(true));
-    expect(html).toContain('data-testid="plugin-store-paid-plan-badge"');
-    expect(html).toContain("bg-[var(--color-plugin-paid-plan-badge)]");
-    expect(html).toContain("text-[var(--color-plugin-paid-plan-badge-foreground)]");
-    expect(html).not.toContain("button-gradient");
-    expect(html).toContain("text-ui-sm");
-    expect(html).toContain("lucide-crown");
-    expect(html).toContain("Coding Plan");
-    expect(html).toContain("lucide-crown");
-    expect(html).not.toContain("lucide-trending-up");
-    expect(html).toContain('data-tooltip-title="This plugin works better with a Coding Plan"');
-  });
-
-  it("marks a plugin that needs a paid plan on the detail title", async () => {
-    const html = await renderDetail(makeItem(true));
-    expect(html).toContain('data-testid="plugin-store-paid-plan-badge"');
-    expect(html).toContain("bg-[var(--color-plugin-paid-plan-badge)]");
-    expect(html).toContain("Coding Plan");
-    expect(html).toContain('data-tooltip-title="This plugin works better with a Coding Plan"');
-  });
-
-  it("uses the concise coding plan label in Chinese", async () => {
-    const html = await renderCard(makeItem(true), "zh-CN");
-    expect(html).toContain("编程套餐");
-    expect(html).not.toContain("支持编程套餐");
+  it("never shows the Coding Plan badge, even when the listing requires a paid plan", async () => {
+    // [leo] Leo 没有官方 Coding Plan，付费套餐徽标已去掉（1.0.1 去官方化），requiresPaidPlan 不再渲染任何标记。
+    const card = await renderCard(makeItem(true));
+    expect(card).not.toContain("plugin-store-paid-plan-badge");
+    expect(card).not.toContain("Coding Plan");
+    expect(await renderCard(makeItem(true), "zh-CN")).not.toContain("编程套餐");
+    const detail = await renderDetail(makeItem(true));
+    expect(detail).not.toContain("plugin-store-paid-plan-badge");
+    expect(detail).not.toContain("Coding Plan");
   });
 
   it("omits the badge when the plan is not required and when the field is absent", async () => {

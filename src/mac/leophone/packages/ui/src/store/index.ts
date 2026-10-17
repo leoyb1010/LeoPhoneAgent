@@ -321,7 +321,12 @@ export function createZCodeStore(
     cleanupSystemThemeListener?.();
     cleanupSystemThemeListener = null;
 
-    if (theme !== "system" || typeof window === "undefined") {
+    // [leo] 默认主题为 "system"；无 matchMedia 的环境（Node 测试桩 window）不订阅。
+    if (
+      theme !== "system" ||
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
       return;
     }
 

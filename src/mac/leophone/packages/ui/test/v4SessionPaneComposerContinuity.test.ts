@@ -585,16 +585,16 @@ describe("SessionPane composer continuity", () => {
       await act(async () => {
         await scrollFocus.composerProps?.onSendText("create session");
       });
-      // Highspeed 统一了首发链路：无附件首发也走「空 createSession + sendText」两段式，
-      // 好让抽卡 admission 拿到真实 sessionId，因此首发 message_id 是 sendText 的 commandId
-      // （calls[1]），不是空创建的 commandId（calls[0]）。埋点不变量仍成立：accepted 后只报一次。
+      // [leo] Highspeed 已删除：无附件首发回到单段 createSession(firstInput)，
+      // 首发 message_id 就是这次 createSession 的 commandId。埋点不变量仍成立：accepted 后只报一次。
       const firstSendCalls = conversationMock.sendCommand.mock.calls;
-      expect(firstSendCalls).toHaveLength(2);
+      expect(firstSendCalls).toHaveLength(1);
+      expect(firstSendCalls[0]![0].type).toBe("createSession");
       expect(sessionCreateCapture.report).toHaveBeenCalledExactlyOnceWith(
         null,
         expect.objectContaining({
           sessionId: `created-${source}`,
-          messageId: firstSendCalls[1]![0].commandId,
+          messageId: firstSendCalls[0]![0].commandId,
           source,
         }),
       );
@@ -662,8 +662,9 @@ describe("SessionPane composer continuity", () => {
       result: { type: "createSession", sessionId: "two-phase" },
     }));
     await act(async () => {
+      // [leo] 会话分享导入（sharedContextRefs）已删除；引用片段只能随 sendText 携带，仍走两段式。
       await scrollFocus.composerProps?.onSendText("context", {
-        sharedContextRefs: [{ kind: "shared_context_import", context_id: "context-1" }],
+        conversationQuotes: [{ text: "quoted" }],
       });
     });
     const calls = conversationMock.sendCommand.mock.calls;

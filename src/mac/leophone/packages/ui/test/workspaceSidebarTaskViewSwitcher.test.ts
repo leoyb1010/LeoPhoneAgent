@@ -18,8 +18,9 @@ describe("WorkspaceSidebar task view switcher", () => {
     expect(groupedTriggerIndex).toBeGreaterThan(-1);
     expect(workspaceTriggerIndex).toBeGreaterThan(-1);
     expect(groupedTriggerIndex).toBeLessThan(workspaceTriggerIndex);
+    // [leo] Web 远程控制侧栏已删除，主视图只跟 taskOrganizeBy 走。
     expect(source).toMatch(
-      /const activePrimaryTaskMode: PrimaryTaskMode =\s*!isWebRemoteControlSidebar && taskOrganizeBy === "grouped"\s*\? "grouped"\s*: "workspace";/,
+      /const activePrimaryTaskMode: PrimaryTaskMode =\s*taskOrganizeBy === "grouped" \? "grouped" : "workspace";/,
     );
   });
 
@@ -135,7 +136,8 @@ describe("WorkspaceSidebar task view switcher", () => {
 
     expect(source).toContain("onCreateConversationTask");
     expect(source).toContain("onOpenFolderFromWorkspaceMenu");
-    expect(source).toContain("onOpenRemoteWorkspace");
+    // [leo] 远程 SSH/WSL/Docker 工作区已删除，项目区不再有「打开远程工作区」入口。
+    expect(source).not.toContain("onOpenRemoteWorkspace");
   });
 
   it("labels the conversation-purpose section as tasks in both shipped locales", () => {

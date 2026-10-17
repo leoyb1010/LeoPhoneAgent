@@ -40,8 +40,7 @@ function expectedTelemetrySendOptions() {
         model_name: "",
         model_provider: "glm",
         agent: "glm",
-        plan_status: "unknown",
-        plan_product_id: "",
+        // [leo] no plan_status / plan_product_id: Leo has no official coding plans in telemetry seeds.
         message_source: "chat",
         task_trigger: "",
       },

@@ -28,10 +28,11 @@ describe("Workspace Sidebar terminology", () => {
   });
 
   it("uses the plugin marketplace terminology for desktop and mobile detail breadcrumbs", () => {
+    // [leo] Web 远程控制（含手机端外壳）已删除，只剩桌面这一处面包屑。
     expect(
       workspaceShellSource.match(
         /sectionLabel=\{intl\.formatMessage\(\{\s*id: "workspace\.openPluginsSettings",\s*\}\)\}/g,
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
   });
 });

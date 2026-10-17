@@ -743,22 +743,4 @@ describe("resolveSoleRunningWorkflowRunTarget", () => {
   });
 });
 
-describe("通用模式 Git 投影", () => {
-  it("隐藏 Git 但保留目标和计划，切回后恢复原始 Git 数据", () => {
-    const input = {
-      gitSummary: gitSummary(),
-      gitWorktreeChangeSummary: { added: 7, removed: 2 },
-      goal: goalState(),
-      plan: planState(),
-    };
-    const original = JSON.stringify(input);
-    const coding = buildConversationStatusPanelModel(input);
-    const general = buildConversationStatusPanelModel({ ...input, isOfficeMode: true });
-    expect(general.git).toBeNull();
-    expect(general.goal).toEqual(coding.goal);
-    expect(general.plan).toEqual(coding.plan);
-    expect(general.hasContent).toBe(true);
-    expect(buildConversationStatusPanelModel(input).git).toMatchObject({ added: 7, removed: 2 });
-    expect(JSON.stringify(input)).toBe(original);
-  });
-});
+// [leo] "通用模式 Git 投影" removed: interface mode (coding/office) was deleted in Mac 1.9; the app is always coding mode.

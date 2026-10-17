@@ -20,7 +20,8 @@ describe("Settings breadcrumb coverage", () => {
   });
 
   it("projects automation edit navigation from the views that own dirty-state back handling", () => {
-    for (const section of ["AutomationEditView", "OffPeakEditView"]) {
+    // [leo] OffPeakEditView (idle-time tasks) was removed in Leo; only AutomationEditView remains.
+    for (const section of ["AutomationEditView"]) {
       const source = readSettingsSection(section);
       expect(source).toContain("SettingsBreadcrumbReporter");
       expect(source).toContain("onSectionSelect");
@@ -37,7 +38,8 @@ describe("Settings breadcrumb coverage", () => {
     const source = readSettingsSection("PluginStorePage");
     expect(source).toContain('data-testid="plugin-store-title"');
     expect(source).toContain('id: "workspace.openPluginsSettings"');
-    expect(source).toContain("text-2xl font-semibold tracking-tight text-foreground lg:text-3xl");
+    // [leo] Mac 1.9 denser UI: the marketplace title uses the xl UI token instead of text-2xl/lg:text-3xl.
+    expect(source).toContain("text-ui-xl font-semibold tracking-tight text-foreground");
   });
 
   it("uses the plugin settings title after navigating from the marketplace", () => {

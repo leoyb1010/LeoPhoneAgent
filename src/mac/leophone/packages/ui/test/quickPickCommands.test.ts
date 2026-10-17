@@ -36,27 +36,7 @@ const shortcuts = {
 };
 
 describe("createQuickPickCommands", () => {
-  it("通用模式过滤技术面板命令并保留浏览器和普通命令", () => {
-    const commands = createQuickPickCommands({
-      allowOpenWorkspace: true,
-      canOpenCommunity: true,
-      isSidebarVisible: true,
-      isLoggedIn: false,
-      supportsTerminal: false,
-      supportsReview: false,
-      themeTarget: "dark",
-      shortcuts,
-      handlers: createHandlers(),
-    });
-    const ids = commands.map((command) => command.id);
-    expect(ids).not.toContain("toggle-terminal");
-    expect(ids).not.toContain("add-terminal-tab");
-    expect(ids).not.toContain("add-review-tab");
-    expect(ids).toContain("add-browser-tab");
-    expect(ids).toContain("new-task");
-    expect(ids).toContain("settings");
-  });
-
+  // [leo] Mac 1.9 删除了界面模式（通用/办公模式），通用模式过滤技术面板命令的用例已移除。
   it("creates the starter command registry in stable sections", () => {
     const commands = createQuickPickCommands({
       allowOpenWorkspace: true,
@@ -82,10 +62,7 @@ describe("createQuickPickCommands", () => {
       "switch-theme",
       "skills-settings",
       "mcp-settings",
-      "feedback",
-      "community",
-      "product-docs",
-      "login",
+      // [leo] 反馈 / 用户社群 / 产品文档 / 登录·登出命令依赖官方服务，Leo 不提供。
     ]);
     expect(commands.find((command) => command.id === "open-workspace")).toMatchObject({
       sectionId: "suggested",
@@ -144,11 +121,6 @@ describe("createQuickPickCommands", () => {
       sectionId: "panels",
       titleId: "quickPick.command.addReviewTab",
       icon: "diff",
-    });
-    expect(commands.find((command) => command.id === "product-docs")).toMatchObject({
-      sectionId: "app",
-      titleId: "quickPick.command.productDocs",
-      icon: "book",
     });
   });
 
@@ -230,10 +202,11 @@ describe("createQuickPickCommands", () => {
     });
 
     commands.find((item) => item.id === "skills-settings")?.run();
-    commands.find((item) => item.id === "product-docs")?.run();
+    commands.find((item) => item.id === "mcp-settings")?.run();
 
     expect(handlers.openSkillsSettings).toHaveBeenCalledTimes(1);
-    expect(handlers.openProductDocs).toHaveBeenCalledTimes(1);
+    // [leo] 产品文档命令已移除（依赖官方站点），改验证 MCP 配置入口。
+    expect(handlers.openMcpSettings).toHaveBeenCalledTimes(1);
   });
 
   it("has locale messages for every visible command label", () => {
@@ -286,7 +259,7 @@ describe("createQuickPickCommands", () => {
     ]);
   });
 
-  it("uses logout instead of login for authenticated users", () => {
+  it("never offers official account login/logout or community commands", () => {
     const commands = createQuickPickCommands({
       allowOpenWorkspace: true,
       canOpenCommunity: false,
@@ -297,11 +270,9 @@ describe("createQuickPickCommands", () => {
       handlers: createHandlers(),
     });
 
+    // [leo] 无官方账号：已登录状态下也不出现登录 / 登出 / 社群命令。
     expect(commands.some((command) => command.id === "login")).toBe(false);
-    expect(commands.find((command) => command.id === "logout")).toMatchObject({
-      sectionId: "app",
-      titleId: "quickPick.command.logout",
-    });
+    expect(commands.some((command) => command.id === "logout")).toBe(false);
     expect(commands.some((command) => command.id === "community")).toBe(false);
   });
 

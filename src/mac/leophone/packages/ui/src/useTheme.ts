@@ -7,6 +7,8 @@ const STORAGE_KEY = "zcode-theme";
 const BROWSER_THEME_SURFACE_ATTRIBUTE = "data-zcode-browser-theme-surface";
 
 function getSystemTheme(): ResolvedTheme {
+  // [leo] 默认主题为 "system"，非浏览器环境（SSR/Node 测试）没有 window/matchMedia 时回落 light。
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "light";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
