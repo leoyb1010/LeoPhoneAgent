@@ -49,9 +49,6 @@ modules:
   - id: desktop
     roots: [packages/desktop/src]
     managed: false
-  - id: formal-proof
-    roots: [packages/formal-proof/src]
-    managed: false
   - id: zcode-cli
     roots: [apps/zcode-cli]
     managed: false

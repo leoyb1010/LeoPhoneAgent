@@ -39,7 +39,6 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/yazl": "^3.3.1",
-    "@zcode/formal-proof": "workspace:*",
     "yazl": "^3.3.1"
   }
 }

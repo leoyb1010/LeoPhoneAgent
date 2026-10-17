@@ -112,16 +112,16 @@ interface AvailabilityContext {
   autoDrain: boolean;
 }
 
-// 裁决表与 packages/formal-proof/src/model.ts 的 evaluate 逐条对齐
-// （黄金测试 formal-proof-consistency 背书）；reasonCode = product-protocol guard id。
+// 裁决表与历史形式化模型（已移除，原 packages/formal-proof）的 evaluate 逐条对齐
+// （原由其黄金测试背书）；reasonCode = product-protocol guard id。
 export function computeAvailability(context: AvailabilityContext): SessionActionAvailability {
   const { phase, goalStatus, compacting } = context;
   const running = phase === "running" || phase === "prewarming";
   const compact = compacting
-    ? // formal-proof: duplicateCompactRejected —— running/queued compact 操作锁去重。
+    ? // 历史形式化模型（已移除）: duplicateCompactRejected —— running/queued compact 操作锁去重。
       denied("compactOperationLock")
     : phase === "draft"
-      ? // formal-proof: idleCannotCompact —— 没有可压缩上下文。
+      ? // 历史形式化模型（已移除）: idleCannotCompact —— 没有可压缩上下文。
         denied("idleCannotCompact")
       : // running/goal verifier 时命令进入 typed FIFO，completed 时立即执行或进入 held queue。
         ALLOWED;
@@ -158,7 +158,7 @@ export function computeInputRouting(
   context: AvailabilityContext,
   followupMode: "queue" | "guide",
 ): InputRouting {
-  // formal-proof: compactingAcceptsFutureInput
+  // 历史形式化模型（已移除）: compactingAcceptsFutureInput
   // —— compact 是维护步骤，输入是未来意图 → 入队，不打断 compact。
   if (context.compacting) {
     return { mode: "enqueue", reasonCode: "compactingAcceptsFutureInput" };
