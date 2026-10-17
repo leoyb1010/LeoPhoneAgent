@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LeoBot 快速派发</title>
+    <style>
+      /* LeoBot Design token（docs 施工详案 §3.2）：brand / bg 阶 / radius.field 16 / dur.1-2 / ease.out */
+      :root {
+        color-scheme: light dark;
+        --leo-brand: #2a8282;
+        --leo-brand-soft: rgba(42, 130, 130, 0.1);
+        --leo-attention: #b86e12;
+        --leo-destructive: #d92d20;
+        --leo-panel: #ffffff;
+        --leo-card: #f4f4f5;
+        --leo-fg: #18181b;
+        --leo-fg-subtle: #71717a;
+        --leo-border: rgba(0, 0, 0, 0.08);
+        --leo-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px -16px rgba(0, 0, 0, 0.18),
+          0 18px 40px -12px rgba(0, 0, 0, 0.22);
+        --leo-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --leo-dur-1: 120ms;
+        --leo-dur-2: 200ms;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --leo-brand: #2e9c9c;
+          --leo-brand-soft: rgba(46, 156, 156, 0.14);
+          --leo-attention: #f0b86e;
+          --leo-destructive: #f97066;
+          --leo-panel: #18181b;
+          --leo-card: #1f1f22;
+          --leo-fg: #f4f4f5;
+          --leo-fg-subtle: #a1a1aa;
+          --leo-border: rgba(255, 255, 255, 0.08);
+          --leo-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 32px -16px rgba(0, 0, 0, 0.7),
+            0 18px 40px -12px rgba(0, 0, 0, 0.55);
+        }
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+        font:
+          14px -apple-system,
+          BlinkMacSystemFont,
+          "PingFang SC",
+          system-ui,
+          sans-serif;
+        color: var(--leo-fg);
+        -webkit-user-select: none;
+        user-select: none;
+        cursor: default;
+      }
+      .panel {
+        position: absolute;
+        inset: 10px 10px 14px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 10px;
+        padding: 12px 16px 10px;
+        box-sizing: border-box;
+        border-radius: 16px;
+        background: var(--leo-panel);
+        border: 1px solid var(--leo-border);
+        box-shadow: var(--leo-shadow);
+        opacity: 0;
+        transform: scale(0.98);
+      }
+      body.shown .panel {
+        opacity: 1;
+        transform: scale(1);
+        transition:
+          opacity var(--leo-dur-2) var(--leo-ease),
+          transform var(--leo-dur-2) var(--leo-ease);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        body.shown .panel {
+          transition: none;
+        }
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .mark {
+        flex: none;
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: var(--leo-brand);
+      }
+      input {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--leo-fg);
+        font: inherit;
+        font-size: 18px;
+        line-height: 26px;
+        -webkit-user-select: text;
+        user-select: text;
+      }
+      input::placeholder {
+        color: var(--leo-fg-subtle);
+      }
+      .meta {
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--leo-fg-subtle);
+      }
+      select {
+        max-width: 260px;
+        height: 24px;
+        padding: 0 8px;
+        border: 1px solid var(--leo-border);
+        border-radius: 8px;
+        background: var(--leo-card);
+        color: var(--leo-fg);
+        font: inherit;
+        font-size: 12px;
+        outline: 0;
+      }
+      select:focus-visible {
+        border-color: var(--leo-brand);
+        box-shadow: 0 0 0 2px var(--leo-brand-soft);
+      }
+      .status {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-align: right;
+      }
+      .status[data-tone="ok"] {
+        color: var(--leo-brand);
+      }
+      .status[data-tone="error"] {
+        color: var(--leo-destructive);
+      }
+      .status[data-tone="busy"] {
+        color: var(--leo-attention);
+      }
+      kbd {
+        font: inherit;
+        padding: 0 4px;
+        border-radius: 4px;
+        background: var(--leo-card);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="panel" role="dialog" aria-label="LeoBot 快速派发">
+      <div class="row">
+        <span class="mark" aria-hidden="true"></span>
+        <input id="prompt" type="text" autocomplete="off" spellcheck="false" placeholder="让 LeoBot 做点什么…" aria-label="任务内容" />
+      </div>
+      <div class="row meta">
+        <select id="workspace" aria-label="工作区"></select>
+        <span id="status" class="status" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+    <script type="module" src="./leoQuickPanel.ts"></script>
+  </body>
+</html>

@@ -681,6 +681,9 @@ export default {
             from: "resources/macos-window-bounds/zcode-window-bounds",
             to: "macos-window-bounds/zcode-window-bounds",
           },
+          // [leo] 菜单栏模板图标(docs/specs/leo-quick-entry.md);nativeImage 按同目录 @2x 自动取高清版。
+          { from: "build/trayTemplate.png", to: "trayTemplate.png" },
+          { from: "build/trayTemplate@2x.png", to: "trayTemplate@2x.png" },
         ]
       : []),
     {

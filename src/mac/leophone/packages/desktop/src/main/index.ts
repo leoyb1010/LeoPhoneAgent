@@ -3,6 +3,7 @@ import "@zcode/shared/leo-network-guard";
 import "./leoEarlyEnv.js";
 import { installLeoSessionGuard } from "./leoSessionGuard.js";
 import { registerLeoLinkIpc } from "./leoLinkIpc.js";
+import { isLeoQuickPanelWindow, startLeoQuickEntry } from "./leo/quickEntry.js";
 import { createLocalTtftExporter } from "./localTtftExporter.js";
 /* eslint-disable max-lines */
 import "./desktopEarlyDataBaseDirBootstrap.js";
@@ -1428,7 +1429,11 @@ function resolveFocusedDesktopZoomLevel(): number {
 
 function getApplicationWindowsExcludingCuaIndicator(): BrowserWindow[] {
   return BrowserWindow.getAllWindows().filter(
-    (win) => !win.isDestroyed() && !windowsCuaOperationIndicator.ownsWindow(win),
+    (win) =>
+      !win.isDestroyed() &&
+      !windowsCuaOperationIndicator.ownsWindow(win) &&
+      // [leo] ⌥Space 浮窗不是应用主窗口(见 leo/quickEntry.ts)。
+      !isLeoQuickPanelWindow(win),
   );
 }
 
@@ -1958,6 +1963,30 @@ app.whenReady().then(async () => {
       app.quit();
     },
     logger,
+  });
+  // [leo] macOS 菜单栏图标 + ⌥Space 快速派发(docs/specs/leo-quick-entry.md);其它平台内部直接返回。
+  startLeoQuickEntry({
+    logger,
+    trayIconPath: app.isPackaged
+      ? join(process.resourcesPath, "trayTemplate.png")
+      : join(import.meta.dirname, "../../build/trayTemplate.png"),
+    preloadPath: join(import.meta.dirname, "../preload/leoQuickPanel.cjs"),
+    rendererDir: join(import.meta.dirname, "../renderer"),
+    rendererDevUrl: process.env["ELECTRON_RENDERER_URL"],
+    showMainWindow: async () => {
+      await primaryWindowCoordinator.ensurePrimaryWindow("leo-quick-entry");
+      const window = getApplicationWindowsExcludingCuaIndicator()[0] ?? null;
+      if (window) {
+        if (window.isMinimized()) window.restore();
+        if (!window.isVisible()) window.show();
+        window.focus();
+      }
+      return window;
+    },
+    quitApp: () => {
+      markExplicitQuit("leo-tray-quit");
+      app.quit();
+    },
   });
 
   registerPlatformIpcHandlers({

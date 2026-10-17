@@ -226,6 +226,8 @@ export default defineConfig(({ mode }) => {
           index: resolve(__dirname, "src/renderer/index.html"),
           "resource-manager": resolve(__dirname, "src/renderer/resource-manager.html"),
           "cua-permission-panel": resolve(__dirname, "src/renderer/cua-permission-panel.html"),
+          // [leo] ⌥Space 快速派发浮窗(docs/specs/leo-quick-entry.md)
+          "leo-quick-panel": resolve(__dirname, "src/renderer/leo-quick-panel.html"),
         },
       },
     },
