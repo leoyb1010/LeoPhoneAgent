@@ -1,19 +1,31 @@
 # ZCode 上游同步
 
-- 当前上游:`29628c9a`(v3.14.3,2026-09-24 同步;上一次 `872ad960`,3.14.0)
+- 当前上游:`aac47556`(v3.15.1,2026-10-17 同步,WP-11;上一次 `29628c9a`,v3.14.3)
+- subtree 同步点:squash 提交 `6914fec0`(`git-subtree-split: aac47556`),合并提交 `de29cde3`;下次 `subtree pull` 直接接上。
 - 引入方式:`git subtree add --prefix=src/mac/leophone https://github.com/zai-org/ZCode.git <sha> --squash`
 
 ## 同步
 ```bash
-git -c core.hooksPath=/dev/null subtree pull --prefix=src/mac/leophone \
-  https://github.com/zai-org/ZCode.git <新 sha> --squash
+git fetch https://github.com/zai-org/ZCode.git <tag>          # 或已有本地引用 refs/zcode/vX.Y.Z
+git -c core.hooksPath=/dev/null -c merge.renames=false \
+  subtree merge --prefix=src/mac/leophone --squash <新 commit>   # 关掉 rename 检测,免得把上游改动套到我们新增的文件上
+cd src/mac/leophone
+node scripts/leo-upstream-delete.mjs --apply    # 先把删除面清掉(modify/delete 冲突 + 已删目录里的新增文件)
+# ……解冲突(三方版本:git show :1:/:2:/:3:<path>)……
+node scripts/leo-upstream-delete.mjs --check    # 删除面没有回潮
+node scripts/leo-redline-check.mjs              # 红线:源码 0 命中
+node scripts/leo-upstream-delete.mjs --generate <新 commit>   # 收尾:按「上游有、我们没有」重写清单
 ```
+删除清单 `src/mac/leophone/scripts/leo-upstream-delete-list.txt`:一行一个路径,`dir/` 表示整目录
+(上游以后在其中新增的文件也删)。红线闸门 `scripts/leo-redline-check.mjs` 挂在 `leo:bundle:mac` 链首,
+打包后再扫一遍产物(含 .app 里的 app.asar)。
+
 冲突只会出现在下面这几处(其余都是上游原样):
 
 | 文件 | 我们改了什么 |
 |---|---|
 | `packages/desktop/scripts/desktop-product-identity.mjs` | 增加 `leo` 身份 |
-| `packages/shared/src/env.ts` | `ZCODE_TELEMETRY_ENABLED = false` |
+| `packages/shared/src/env.ts` | 遥测 / ARMS 上报端点恒为空(3.15.1 删了 `ZCODE_TELEMETRY_ENABLED`,改为「端点为空即关」);`ZCODE_AUTO_UPDATE_ENABLED` 走构建期注入 |
 | `packages/desktop/src/main/autoUpdater.ts` | manifest 默认走 `LEO_UPDATE_MANIFEST_URL` |
 | `packages/ui/src/Root.tsx` | 挂 `<LeoWhatsNew />` |
 | `packages/ui/src/App.tsx`、`WindowsTopLeftLogo.tsx`、`components/ui/ZCodeAboutLogo.tsx` | 换标志 |
@@ -21,12 +33,12 @@ git -c core.hooksPath=/dev/null subtree pull --prefix=src/mac/leophone \
 | `packages/desktop/electron-builder.config.js` | extraResources 带上 `leo/` |
 | `packages/desktop/src/host/index.ts` | 启动 Leo 层 |
 | 根 `package.json` | 版本号与 `leo:*` 脚本 |
-| `packages/shared/src/zcodeEndpoint.ts` | 官方 endpoint / BigModel / Z.ai OAuth / 业务 API 默认值全部指向 `http://127.0.0.1:9`,不内置官方 OAuth client id |
+| `packages/shared/src/zcodeEndpoint.ts` | 官方 endpoint / BigModel / Z.ai OAuth / 业务 API 的 `DEFAULT_*` 与 3.15.1 新增的 `TEST_*`、`CODING_PLAN_LOCAL_WEBVIEW_ORIGIN` 全部指向 `http://127.0.0.1:9`,Web 远控中继 `ws://127.0.0.1:9/ws`,不内置官方 OAuth client id |
 | `packages/shared/src/plugin-marketplaces.ts` | 官方市场远端分片指向死端口,只保留随包插件 |
 | `packages/shared/package.json` | 导出 `./leo-network-guard` |
 | `packages/desktop/src/main/index.ts`、`src/host/index.ts`、`src/scheduler/index.ts` | 第一行 import 网络兜底;main 在 ready 时装 session 拦截、导出 `ZCODE_HOME=~/.leophoneagent` |
 | `packages/desktop/src/main/forceUpdateGuard.ts` | 官方远程强制升级直接放行 |
-| `packages/desktop/src/main/remoteCdn.ts` | 不再默认官方 CDN(远程工作区运行时暂不可用) |
+| ~~`packages/desktop/src/main/remoteCdn.ts`~~ | 3.15.1 起随 SSH/WSL/Docker 远程工作区整体删除 |
 | `packages/desktop/src/main/{desktopDataBaseDirBootstrap,desktopRuntimeEnv,desktopCommandHandlers,exportLogs}.ts`、`index.ts` 的 settingsFile | `~/.zcode` → `~/.leophoneagent` |
 | `packages/desktop/src/main/{desktopOAuthDeepLink,desktopDeepLinkUrl,desktopFinderOpenFolderWorkflow}.ts` | URL scheme `zcode` → `leophoneagent` |
 | `packages/desktop/electron-builder.config.js` | scheme、版权行、updater 缓存目录名、随包 ZCode LICENSE/NOTICE、嵌套二进制补签 |
@@ -147,6 +159,7 @@ git -c core.hooksPath=/dev/null subtree pull --prefix=src/mac/leophone \
 - 随之删除的接线:`IBotsService` / channel `bots`(services node/index/accessor、client `remoteServiceAccess`、desktop `remoteWorkspaceServiceCollection`)、server `POST /api/bots/:provider[/:botId]`、host↔main 的 `bot-remote-workspace-*` 消息与 `PlatformChannels.BotRemoteWorkspaceReconnected`(validation / channels / platform / preload / renderer / web 平台桩 / `desktopRemoteSessions` / `desktopHostProcess` / `useRemoteWorkspaceHistory`)、Bot 运行时偏好同步(`Root.tsx`、`useSettingService.ts`)。
 - 定时任务的 Bot 回推:协议字段 `botDeliveryTarget`(`zcode-protocol` 两处 + v4 `sendText`)、`ZCodeAutomationCreateParams.botDeliveryTarget`、CLI 的 `activeBotDeliveryTarget` 全删;tasks 库的 `automations.bot_delivery_target` 列保留(不迁移用户数据),新建任务一律写 NULL。
 - 依赖与打包:`@larksuiteoapi/node-sdk`(desktop、services、tsup/bundle/electron-builder 外置名单)、`lark-cli` 运行时工具与 `ZCODE_LARK_CLI_BINARY` 环境变量;`config/default.json` 去掉飞书反馈表单与飞书社群链接,README 去掉飞书社群。
+- (3.15.1 更新:下面说的 `packages/server`、`packages/web`、远程会话 / 连接注册表已在 WP-11 删除,见文末「v3.15.1 同步记录」。)
 - 保留:Leo Link 依赖的 attachment 层(`deliveryKind: "bot-channel-continuous"` 只是投递语义名,不是机器人模块)与 `/remote` Web 远控基础设施(`packages/server`、`packages/web`、`web-remote-replayable`)。上游的「移动端远程控制」弹层不再存在,侧栏手机图标改为打开 设置 →「连接手机」(`settings` 分区 `phone`,内容是 `leo/LeoPhoneLinkSection.tsx` + `leo/DirectConnectionSettings.tsx`)。同步时上游对 `WebRemoteControlDialog` / `WorkspaceWebRemoteControlTrigger` 的改动一律丢弃。
 - `settings/SettingsPageParts.tsx` 的 `SettingsRow` / `SettingsGroupCard` 挪到 `settings/SettingsRow.tsx`(原文件 re-export),让手机页与 `scripts/audit-phone-link` 隔离夹具不拖入代码预览依赖。
 - 会话分享 / 导入(官方分享服务,入口早已撤下):`packages/services/src/conversation-share/**`、`packages/shared/src/conversation-share.ts`、`packages/ui/src/ConversationSharePermissionPicker.tsx`、`packages/ui/src/v4/{ConversationShare*.tsx,conversationShare*.ts,useConversationShareSelectionOutsideDismiss.ts,ConversationBottomDockTransition.tsx}`、`ui/src/store/conversationShareSelectionStore.ts`、`ui/src/lib/{conversationShareContext,conversationShareError}.ts`、`ui/src/root/shareImportIntent.ts`、`packages/web/src/share/**`(分享落地页与 `/share` 路由)、`packages/desktop/src/host/conversationShareAttachmentService.ts`;`@zcode/ui` 的 `./conversation-share-readonly` 导出。接线:channel `conversation-share`(services node/index/accessor、client、host attachment 覆盖、`remoteWorkspaceServiceCollection`、renderer `remoteWorkspaceSessionServices`)、`leophoneagent://share/import` deep link(`desktopDeepLinkUrl` / `desktopOAuthDeepLink` / preload / `PlatformChannels.ShareImport` / `IPlatformService.onShareImport`)、Root 的导入流程(`useRootPlatformEffects`)、`seedImportedSessionDraft`、session store 的 `timelineBottomRequest`、SessionPane / Timeline / TurnGroup / Composer / RowView 里的分享勾选与 `sharedContextRefs` 注入;i18n `conversationShare.*`。协议里的 `sharedContextImport` / `context_refs` 字段(CLI 共用)保留,桌面端不再产生。
@@ -158,3 +171,62 @@ git -c core.hooksPath=/dev/null subtree pull --prefix=src/mac/leophone \
   - 接线:`Root.tsx` 不再包 `<CodingPlanUpgradeDialogProvider>`;侧栏页脚 / 设置页去掉 `onUpgradeClick`;输入框工具条只剩上下文用量(`ChatContextUsage` 去掉 `codingPlanUsageRemaining` / `startPlanBalance`);`SessionPane` 去掉额度横幅、升级入口、Start Plan 推荐与 `readPlanIdentitySnapshot`(连带 `ConversationComposer` / `ChatErrorBanner` 的 `onOpenModelUpgrade` / `onOpenUpgrade`、遥测 `plan_status` / `plan_product_id`);自动化 / 子智能体保存不再弹 Start Plan 推荐;模型供应商设置页只剩「自定义供应商」(导航项类型只有 `custom`,`Detail` / `StatusCards` / `useModelProviderNavigation` / `constants` 精简);使用统计只剩「应用用量」(`UsageStatsSection` 无 tab 参数,`settingsNavigation` 去掉 `setPendingSettingsUsageCodingPlanIntent` / `shouldFallbackSettingsUsageTabToApp` / `consumePendingSettingsUsageTab`);`buildRegistryModelSelectGroups` 去掉套餐分组与徽标参数;`formatModelChangeLabel` 不再拼套餐名;`useRootOAuthEffects` 去掉登录后按套餐重选连接方式与账号连接丢失提示;插件商店去掉「编程套餐」徽标;test-id `TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON` 改名 `TID_SIDEBAR_USAGE_BUTTON`,删掉 Start Plan / 连接方式相关 test-id;i18n 删掉无引用的 `settings.modelProvider.{codingPlan,startPlan,planCard,connectionMode}.*`、`codingPlan.quotaReset.*`、`chat.quota.*`、`chat.planUsage.*`、`sidebar.usage.plan.*`(`openStats` 改名 `sidebar.usage.openStats`)、`settings.usage.{codingPlan*,entitlement*,billingBanner.*}`、`startPlan.recommendation.*`、`usage.error.{chatPlan,entitlement}.*`、`purchase.entry.*` 等约 600 条。
   - 服务 / 协议:`packages/services/src/coding-plan-subscription/**`(订阅、购买、企业订单接口)换成本地 `services/src/feature-config/`(`IFeatureConfigService`,channel `feature-config`,只裁决闲时任务与动态工作流开关;accessor 字段 `featureConfigService`);`services/src/usage-stats/providers/**`(套餐额度、用量监控、额度重置)删除,`IUsageStatsService` 只剩 `getAppUsageSnapshot`;`shared` 删 `coding-plan-subscription.ts`、`coding-plan-reset.ts`、`usage-quota.ts`、`plan-identity.ts` 与 `usage-stats.ts` 里的套餐 / Entitlement 类型,`ForceUpdateConfig` 并入 `forceUpdate.ts`;`CodingPlanWebviewChannels`、`DesktopCommandIds.ClearCodingPlanWebviewStorage`、`isTrustedCodingPlanWebviewOrigin`、`buildBigModelCodingPlan{Personal,Team}ManageUrl`、family spec 的 `teamCodingPlanManageUrl` 删除;desktop 删 `preload/codingPlanWebview.ts`(tsup 入口、vite `VITE_CODING_PLAN_WEBVIEW_ORIGIN`)、`desktopWindowChrome` / `desktopMainIpcRemote` 里的官网购买页 / PayPal webview 路由、`clearCodingPlanWebviewStorage`。
   - **保留**:`BUILTIN_MODEL_PROVIDER_IDS` 与账号 Provider 适配层(`model-provider/{accountProvider*,codingPlanProviderAvailability,zaiStartPlanBilling,bigmodelStartPlanZcodeJwt}.ts`、`bigmodel/{codingPlanEntitlement,teamPlanApiKey}.ts`、`legacy*Provider*`、CLI 侧 `coding-plan-api-key` / `official-coding-plan-gateway`):它们是官方账号的运行时解析与旧配置读取,和 CLI 协议(`ZCodeProviderAccountAccess`)共用,Leo 从不产生账号 Provider,只读不写;设置字段 `startPlanRecommendationDismissed` / `providerFamilyConnectionSelections` 保留可读(旧数据不报错);离线闲时任务(`offPeak*`)与官方 MCP 错误码映射照旧;聊天报错归因表里的官方错误码与 provider id 保留。账号凭据请求头构造从被删的订阅服务挪到 `model-provider/officialLoginAuthHeaders.ts`。
+
+## v3.15.1 同步记录(2026-10-17,WP-11,分支 sync/zcode-3.15.1)
+
+上游单个提交 aac47556,11,736 个文件变更(9.8k 新增,多为首次公开的测试与文档)。合并:126 个内容冲突、
+132 个 modify/delete(131 个我们已删的文件保持删除,上游删除的 `services/device/deviceMid.ts` 接受删除)。
+
+**三处静默失效(必须修,已修)**
+1. 自动更新:3.15.1 改成 `enabled: ZCODE_PRODUCT_FLAVOR === "production" && ZCODE_AUTO_UPDATE_ENABLED`,后者默认关。
+   `leo:bundle:mac` 显式注入 `ZCODE_AUTO_UPDATE=1`,并把 `ZCODE_ARMS_RUM_ENDPOINT` / `ZCODE_TELEMETRY_REPORT_ENDPOINT` 置空。
+2. 官方地址:`zcodeEndpoint.ts` 的 `TEST_*`、Web 远控中继默认值;`.env.production` / `.env.development` 的官方地址与
+   OAuth client id 改成死端口 / 空(vite / tsup 会编进产物,`desktop/test/viteRendererConfig.test.ts` 断言渲染层是死端口)。
+3. 网络兜底:3.15.1 的 `main/observeBeforeRequest.ts` 统一分发 `onBeforeRequest`,资源管理器抓包开 / 关会重装、清除监听。
+   `observeBeforeRequest.ts` 增加「拦截者」(`blockBeforeRequest`),`leoSessionGuard.ts` 登记为拦截者;插件 UI 沙箱分区
+   `persist:plugin-sandbox-v1-*` 自己的监听里(`pluginSandbox/session.ts`)先判官方域名并取消;`leoNetworkGuard.ts` 补 `codegeex\.cn`。
+   测试:`desktop/test/unit/leoSessionGuard.test.ts`。
+
+**新增 / 变化的补丁(同步时复查,改动处标 `[leo]`)**
+| 文件 | 内容 |
+|---|---|
+| `apps/zcode-cli/packages/adapters/src/model/official-coding-plan-gateway.ts` | 3.15.1 把官方网关改写搬到 endpoint-routing 端口;`createStaticProviderEndpointRoutingPort` 恒 `routed:false`,官方端点映射表删除 |
+| `apps/zcode-cli/packages/core/src/runtime/methods/mcp.ts` | 新增的 `refreshMcpToolsIfChanged`(list_changed 热刷新)同样套 `applyLeoLeanToolAllowlist` |
+| `apps/zcode-cli/packages/core/src/permission/service.ts` | `[leo]` alwaysAsk 放行同时适用 yolo 与 guarded |
+| `packages/ui/src/leo/leoDefaultTaskMode.ts` + `v4/composer/{newTaskDraft,draftWorkspaceDefaults,useDraftConfigControl,V4ComposerModeControls}` | 新任务默认权限档 guarded(用户拍板),yolo 仍可选 |
+| `apps/zcode-cli/packages/adapters/src/auth/coding-plan-api-key.ts` | 出网口 `request` 在发请求前失败;官方主机指向死端口 |
+| `apps/zcode-cli/packages/adapters/src/http/{index,raw-response}.ts` | 公网 DNS transport 用我们的 raw-response:返回 ResponseLike,接受 100–999 状态码(同上游),并做 gzip/deflate/br 解压(上游不解压) |
+| `apps/zcode-cli/packages/adapters/src/plugins/marketplace.ts` | 官方图标 CDN 基址指向死端口(该文件三方合并 clean,最容易漏) |
+| `apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts` | 作者 LeoBot、不带官网;删 image-search 与 documents/pdf/presentations/spreadsheets;新增 superpowers(默认不启用) |
+| `packages/desktop/scripts/prepare-agent-node-bundle.mjs` | 随包:visualize、browser-use、ios-simulator、skill-creator、plugin-creator、zcode-guide、superpowers、node-repl-host + bundled-skills |
+| `packages/shared/src/plugin-marketplaces.ts` | 默认启用名单去掉 image-search 与文档四件套 |
+| 随包插件 `.zcode-plugin/plugin.json` 与技能文档 | ZCode→LeoBot、作者 Z.ai→LeoBot、用户级 `~/.zcode`→`~/.leophoneagent` |
+| `config/provider/zcode-builtin(.test).json` | revision 32;删 highspeed 两个隐藏 provider;官方主机统一换成 RFC 2606 保留域(`api.zai.invalid`、`open.bigmodel.invalid`…,URL 与站点规则正则同步);opencode-go-chat 默认启用成员排前 |
+| `packages/services/src/feature-config/featureConfigService.ts` | 接上 3.15.1 的动态工作流用户选择(`resolveDynamicWorkflowUserMode`) |
+| `packages/services/src/node.ts` | 不注册 output-style(读写 `~/.claude`)、highspeed、marketing-touch、cloud-content;机器人频道回复 / 话题资源直接报不可用 |
+| `packages/desktop/src/main/index.ts` | Web 远控 manager 的 feature gate 恒关,IPC 不注册 |
+| `packages/desktop/src/main/desktopWindowChrome.ts` | 只有内置浏览器与插件 UI 沙箱两类 webview guest(官网购买页 / PayPal / 奖励页不接线) |
+| `packages/desktop/src/main/desktopMainIpcRemote.ts` | 只剩通用 IPC;`file:` 链接交给默认应用打开(吸收 3.15.1) |
+| `packages/desktop/src/main/desktopArchitectureGuard.ts` | 架构不匹配的下载页 → leocodebox-updates 发布页 |
+| `packages/shared/src/{bots.ts,zcode-protocol/index.ts,zcode-protocol-v4/*}` | 机器人只保留协议 schema(CLI bootstrap 在用);`botDeliveryTarget` 维持 1.9.0 删除 |
+| `packages/services/package.json` | `@agentclientprotocol/sdk` ^1.9.0(WP-21 用),去掉 lark |
+| `packages/services/src/gen-ui/contract.test.ts` | 补上游缺的契约测试(architecture:check 的 missing-module-artifact) |
+| `scripts/native-search-tools-config.mjs` + `apps/zcode-cli/dependencies/native-search/` | 只留 darwin-arm64 归档(22M→2.7M),启用平台只剩 darwin-arm64 |
+| `packages/desktop/electron-builder.config.js` | computer-use 插件不随包,未 stage 时跳过 CUA koffi 校验(否则 afterPack 失败) |
+| `scripts/leo-redline-check.mjs` | 红线闸:`leo:bundle:mac` 打包前扫源码、打包后扫产物;app.asar 按索引逐条目扫,包内第三方 node_modules(pi-ai、tokenlens 的供应商目录)与磁盘产物同一排除规则 |
+
+**删除面(随合并)**:`packages/server`、`packages/web`、`packages/android`、`packages/web-share`、`packages/share-ui`、
+`packages/stream-animate`;SSH/WSL/Docker/server 远程工作区(desktop host / main / preload / UI 恢复与重连 / 远端资产脚本);
+加速卡 highspeed、营销触达、云内容、奖励、全局通知、手动领取套餐、Web 远控移动壳 / 任务索引、机器人群聊 UI 等上游新增模块;
+cdn-preload.sh。上游首次公开的测试里,只能经已删模块运行的测试文件一并删除。完整路径见删除清单(672 条,覆盖 2221 个上游文件)。
+
+**已知未跟上的上游测试**:上游 3.15.1 首次公开约 6k 个测试文件,我们的分支此前从未跑过它们。与 WP-11 改动相关的已改写或
+按 `[leo]` 理由 skip;其余失败来自更早的 Leo 补丁(数据根 `~/.leophoneagent`、产品名 / 深链 scheme、官方账号与遥测切断、
+1.9.0 删除的分享 / 额度 / 模型选择器改版等),逐个对齐留待后续。`node scripts/licenses.mjs notices` 因 Leo 自有依赖
+(pi 系、aws-sdk 等)缺少人工核对的声明而失败,THIRD-PARTY-NOTICES.md 暂取上游版本。
+
+**验证(WP-11 收尾)**:install / typecheck / lint(0 error)/ 全量 architecture:check / leo:test:agent 78/78 绿;红线源码 0 命中,
+反向验证(源码与 asar 内一方代码植入官方地址均 exit 1);无签名 `bundle --os mac --arch arm64` 成功,产物红线 0 命中,
+主进程产物里 `ZCODE_AUTO_UPDATE_ENABLED` 编译为 true。隔离 HOME / ZCODE_HOME / userData 的 dev 冒烟(`ZCODE_PRODUCT_IDENTITY=leo`,
+窗口标题 LeoBot):首屏、设置 → 模型设置(本机 mock 供应商拉模型)、发消息收到回复、扩展 → MCP 服务器页均正常;
+新任务默认「自主模式」(guarded)。注意:dev 冒烟只设 `ZCODE_HOME` 不够,CLI 层多处直接用 `homedir()/.leophoneagent`,必须同时改 `HOME`。
