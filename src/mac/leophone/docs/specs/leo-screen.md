@@ -1,7 +1,7 @@
-# Leo screen view — R0 snapshot / R1 WebRTC video contract (WP-50, WP-51)
+# Leo screen view — R0 snapshot / R1 WebRTC video / R2 input contract (WP-50, WP-51, WP-52)
 
-Status: Mac side implemented for R0 (snapshot) and R1 (WebRTC video). iOS / iPad / Watch consume
-this contract. R2 input control (WP-52) is in its own section below.
+Status: Mac side implemented for R0 (snapshot), R1 (WebRTC video) and R2 (input control).
+iOS / iPad / Watch consume this contract.
 
 ## Owners
 
@@ -252,6 +252,75 @@ Local test client = headless Chrome 155 (libwebrtc) on the same Mac, `jitterBuff
 Not yet measured: a truly static desktop (the dev machine always had UI animations), real tailnet /
 TURN paths from an iPhone, 30-minute stability, iPhone battery.
 
+## R2 — input control (`leo-input` DataChannel, WP-52)
+
+Off by default. Allowed only when the Mac switch 「允许手机操控」 is on **and** the caller passes the
+`screen.view` device check (scope `screen.control`, derived, not stored in grants). Turning the
+switch off closes running sessions immediately.
+
+### Channel
+
+- The phone creates the data channel before the offer: `createDataChannel("leo-input", ordered: true)`
+  (reliable, ordered — text must not be lost or reordered) and sends `"control": true` in
+  `POST /screen/session`.
+- If the response has `"control": false`, the Mac closes the channel as soon as it opens: view only.
+- Messages are UTF-8 JSON strings, ≤ 16 KB each, one event per message. The Mac validates every event
+  (`main/leo/screenInputCore.ts`): unknown shapes are dropped silently, coordinates clamped to 0–1,
+  scroll to ±5000 px, text to 2000 characters per message (control characters other than `\n` / `\t`
+  are removed).
+
+### Events (phone → Mac)
+
+Coordinates `x` / `y` are **normalized 0–1 relative to the video frame** (= the captured display),
+top-left origin. Map from the `RTCMTLVideoView` content rect, not the view bounds.
+
+| event | fields | notes |
+|---|---|---|
+| `{"t":"move","x":…,"y":…}` | | sends a drag instead while a button is held |
+| `{"t":"down","b":"left","x":…,"y":…}` / `{"t":"up",…}` | `b`: `left` \| `right` \| `middle` (default left); `x`/`y` optional (last position) | press-and-hold, drag |
+| `{"t":"click","b":"left","n":1,"x":…,"y":…}` | `n`: 1–3 (double / triple click) | |
+| `{"t":"scroll","dx":0,"dy":-120,"x":…,"y":…}` | pixels; `dy > 0` = finger moved up = content scrolls down | two-finger pan |
+| `{"t":"key","code":"KeyC","mods":["cmd"],"phase":"press"}` | `code`: W3C `KeyboardEvent.code` (letters, digits, punctuation, F1–F17, arrows, Enter, Tab, Space, Backspace, Delete, Escape, Home/End/PageUp/PageDown, numpad, modifier keys); `mods`: `cmd` `shift` `alt` `ctrl`; `phase`: `press` (default) \| `down` \| `up` | shortcuts; iPad `GCKeyboard` → map HID usage to `code` |
+| `{"t":"text","s":"你好 hello"}` | any Unicode | IME-independent: inserted as text, not key presses; send long text in several messages |
+
+### Mac → phone (same channel)
+
+`{"t":"status","ok":true|false,"reason":null|"accessibility"|"helper_missing"}` — sent when the
+injector starts and whenever the Accessibility permission changes. `ok: false` with
+`reason: "accessibility"` means macOS drops injected events: show 「到 Mac 上给 LeoBot 打开辅助功能权限」.
+
+### Mac side
+
+- `main/leo/screenInput.ts`: when a session's `leo-input` channel opens, starts
+  `Contents/Resources/leo-input/leo-input serve --display <id>` (Swift, `native/leo-input/main.swift`,
+  built by `scripts/build-leo-input.mjs`, arm64); events go to its stdin as JSON lines and are posted
+  with `CGEvent` (`.cghidEventTap`) in order on one serial queue. Text uses
+  `keyboardSetUnicodeString` in ≤ 20-UTF-16-unit chunks split on grapheme boundaries.
+- While controlled: a red dot 「正在被控制」 in the menu bar (its menu has 「立即断开」), and the
+  helper watches the local keyboard: **Esc pressed three times within 1.5 s** on the Mac closes all
+  screen sessions. Injected events carry `eventSourceUserData = 0x4C454F` and are ignored by this
+  watcher, so an Esc sent from the phone never disconnects.
+- Permission: Accessibility for LeoBot (injection and the Esc watcher). Settings shows a
+  「辅助功能权限 · 去系统设置」 row while 「允许手机操控」 is on and the permission is missing.
+- When the channel closes or the session ends the helper releases any held mouse button and exits.
+
+### Keys iPadOS keeps for itself
+
+Known: ⌘Tab, ⌘Space, ⌘H, ⌘⇧3/4/5 and Globe shortcuts are taken by iPadOS before `GCKeyboard`
+sees them; the iOS toolbar sends them as `key` events instead (the iOS side owns the full list).
+
+### Measured (dev, 2026-10-17)
+
+Safe target only (test windows opened for the test, events posted to that process with the
+dev-only `LEO_INPUT_TEST_PID` → `--target-pid`; never the user's apps):
+
+- 500 mixed Chinese / English characters in 5 text events → 500 / 500 arrived in order, 0 lost.
+- `Enter`, `Shift+←`, `Backspace`, `Cmd+A`, `Cmd+S`, `Cmd+W`, `Escape` arrived with the right modifiers
+  (TextEdit saved and closed the test file).
+- Mouse events could not be verified this way: AppKit / Chrome ignore mouse events posted to a
+  process; real delivery needs the global HID path, which moves the user's cursor — not run.
+- Esc×3 needs the physical keyboard (injected Escs are deliberately ignored) — not run.
+
 ## Mac settings
 
 设置 → 我的设备 → 连接手机 → 屏幕: 「允许手机查看屏幕」 (default off), 「只走 Tailscale」 (default off),
@@ -266,6 +335,9 @@ Security › Screen Recording. Stored in `~/.leoagent/link/screen.json`
 - `node --import tsx --test packages/desktop/src/host/leo/link/screen/ice.test.ts
   packages/desktop/src/host/leo/link/screen/session.test.ts` (ICE tiers / ranking / tailnet-only /
   TURN creds; R1 state machine: open, ice, stats, delete, one viewer, ownership, control).
+- `node --import tsx --test packages/desktop/src/main/leo/screenInputCore.test.ts` (R2 event validation).
+- R2 end-to-end (dev): start the dev app with `LEO_INPUT_TEST_PID=<pid of a test window you opened>`,
+  turn on 「允许手机操控」, then `node scripts/leo-screen-test/client.mjs --grant … --control --input events.json`.
 - R1 end-to-end (dev): `node scripts/leo-screen-test/client.mjs --grant <direct grant json>
   [--latency] [--seconds 10]` against the dev direct port.
 - Manual: direct port with curl (`-H "Authorization: Bearer …" -H "X-Leo-Device-Id: …"`), second

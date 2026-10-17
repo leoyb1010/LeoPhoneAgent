@@ -138,6 +138,8 @@ const RECEIVER_SETUP = `(async () => {
   if (${flag("--control") || flag("--input")}) {
     window.input = pc.createDataChannel("leo-input", { ordered: true });
     window.inputOpen = new Promise((resolve) => { window.input.onopen = () => resolve(true); window.input.onclose = () => resolve(false); });
+    window.inputMessages = [];
+    window.input.onmessage = (e) => window.inputMessages.push(e.data);
   }
   const video = document.createElement("video");
   video.muted = true; video.playsInline = true; video.autoplay = true;
@@ -287,6 +289,9 @@ async function main() {
         }
         await sleep(500);
         console.log(`sent ${events.filter((item) => !item.sleep_ms).length} input events`);
+        console.log(
+          `mac → phone on input channel: ${JSON.stringify(await receiver.evaluate("window.inputMessages"))}`,
+        );
       }
     }
     const before = await receiver.evaluate(RECEIVER_STATS);
