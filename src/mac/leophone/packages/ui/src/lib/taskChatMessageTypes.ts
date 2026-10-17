@@ -35,6 +35,8 @@ export interface TaskChatToolCall {
   snapshotRefs?: ZCodeTaskSnapshotToolFieldRef[];
   /** tool call 首次进入当前消息流的本地时间，仅用于识别长时间运行中的工具调用。 */
   startedAt?: number;
+  /** [leo][wp-31] 工具结束时间(v4 row.endedAt),只用于工具卡右侧的耗时。 */
+  endedAt?: number;
 }
 
 export type TaskChatMessagePart = ZCodeAssistantMessagePart;

@@ -124,6 +124,7 @@ export function toolCallRowToLegacyNode(row: ToolCallRow): TaskChatToolCallTreeN
         streamingRawInputLength: inputPreview.streamingRawInputLength,
       },
       startedAt: typeof row.startedAt === "number" ? row.startedAt : undefined,
+      ...(typeof row.endedAt === "number" ? { endedAt: row.endedAt } : {}),
     },
     // subagent 不内嵌 child rows；v4 工具行没有子树，嵌套工具在旧形态里也
     // 由独立 row（subagent/toolCall）表达。
