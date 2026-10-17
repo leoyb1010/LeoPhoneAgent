@@ -149,12 +149,14 @@ final class UIUnificationTests: XCTestCase {
 
     // MARK: F8 检查器三页
 
-    func testInspectorHasThreeFixedTabsAndMigratesOldSelections() {
-        XCTAssertEqual(ChatInspectorTabPolicy.tabs, ["run", "usage", "memory"])
+    func testInspectorHasFixedTabsAndMigratesOldSelections() {
+        // [WP-43] files is back as the "文件/工具详情" column's second tab.
+        XCTAssertEqual(ChatInspectorTabPolicy.tabs, ["run", "files", "usage", "memory"])
         XCTAssertEqual(ChatInspectorTabPolicy.resolve("memory"), "memory")
         XCTAssertEqual(ChatInspectorTabPolicy.resolve("session"), "usage")
-        XCTAssertEqual(ChatInspectorTabPolicy.resolve("artifacts"), "run")
-        XCTAssertEqual(ChatInspectorTabPolicy.resolve("files"), "run")
+        XCTAssertEqual(ChatInspectorTabPolicy.resolve("artifacts"), "files")
+        XCTAssertEqual(ChatInspectorTabPolicy.resolve("files"), "files")
+        XCTAssertEqual(ChatInspectorTabPolicy.resolve("bogus"), "run")
         XCTAssertEqual(ChatInspectorTabPolicy.resolve(nil), "run")
     }
 }

@@ -54,6 +54,29 @@ extension Notification.Name {
 struct ChatWindowTarget {
     let sessionId: String?
     let inspectorVisible: Binding<Bool>
+    /// [WP-43] Shows the third column in a mode, or hides it when it already
+    /// shows that mode (⌥⌘I = 文件/工具详情, ⇧⌘M = Mac 画面).
+    var toggleContext: (ChatContextColumnPolicy.Mode) -> Void = { _ in }
+}
+
+/// [WP-43] The composer of the chat opened last, for the menu bar's 发送 and
+/// the palette's 切换模型. The send button's own ⌘↩ wins inside a focused chat;
+/// this is the route from the menu and the palette.
+@MainActor
+enum ChatComposerActions {
+    struct Entry {
+        let token: UUID
+        let send: () -> Void
+        let pickModel: () -> Void
+    }
+
+    private(set) static var current: Entry?
+
+    static func register(_ entry: Entry) { current = entry }
+
+    static func unregister(_ token: UUID) {
+        if current?.token == token { current = nil }
+    }
 }
 
 extension FocusedValues {
@@ -71,6 +94,7 @@ struct LeoCommands: Commands {
                 Label("新任务", systemImage: "square.and.pencil")
             }
             .keyboardShortcut("n", modifiers: .command)
+            .labelStyle(.titleAndIcon)
         }
         CommandGroup(replacing: .appSettings) {
             Button {
@@ -101,19 +125,40 @@ struct LeoCommands: Commands {
         }
         CommandMenu("对话") {
             Button {
+                ChatComposerActions.current?.send()
+            } label: {
+                Label("发送", systemImage: "arrow.up.circle")
+            }
+            .keyboardShortcut(.return, modifiers: .command)
+            .labelStyle(.titleAndIcon)
+            Button {
                 ChatCommandTarget.stopRun(sessionId: chatWindow?.sessionId)
             } label: {
                 Label("停止当前任务", systemImage: "stop.circle")
             }
             .keyboardShortcut(".", modifiers: .command)
+            .labelStyle(.titleAndIcon)
+            // [WP-43] ⇧⌘. as well: some keyboards / layouts eat ⌘. as "cancel".
+            Button("停止当前任务(⇧⌘.)") {
+                ChatCommandTarget.stopRun(sessionId: chatWindow?.sessionId)
+            }
+            .keyboardShortcut(".", modifiers: [.command, .shift])
+            Divider()
             Button {
-                withAnimation(LeoMotion.standardEase(reduceMotion: UIAccessibility.isReduceMotionEnabled)) {
-                    chatWindow?.inspectorVisible.wrappedValue.toggle()
-                }
+                chatWindow?.toggleContext(.macScreen)
             } label: {
-                Label("显示或隐藏检查器", systemImage: "sidebar.right")
+                Label("Mac 画面", systemImage: "display")
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+            .labelStyle(.titleAndIcon)
+            .disabled(chatWindow == nil || !MacFleetFeature.isEnabled())
+            Button {
+                chatWindow?.toggleContext(.details)
+            } label: {
+                Label("文件/工具详情", systemImage: "sidebar.right")
             }
             .keyboardShortcut("i", modifiers: [.command, .option])
+            .labelStyle(.titleAndIcon)
             .disabled(chatWindow == nil)
         }
         SidebarCommands()

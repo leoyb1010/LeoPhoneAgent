@@ -337,6 +337,8 @@ struct AIChatView: View {
     /// True while unsent share-extension content is in the input bar.
     @State private var hasInjectedShareContent = false
     @State private var showModelPicker = false
+    /// [WP-43] This chat's slot in ChatComposerActions.
+    @State private var composerActionsToken = UUID()
     @State private var showThinkingLevelSheet = false
     @State private var showSessionSkills = false
     @State private var showSessionMCPs = false
@@ -1743,7 +1745,10 @@ struct AIChatView: View {
             onOpenTerminal: { showTerminal = true },
             onOpenBrowser: { showBrowserSheet = true },
             onBrowseFiles: { showFileBrowser = true },
-            onArtifacts: { showArtifactTray = true },
+            onArtifacts: {
+                // [WP-43] iPad: the files tab of the third column instead of a sheet.
+                if let inspectorRoute { inspectorRoute.open(.files) } else { showArtifactTray = true }
+            },
             onExportMarkdown: { vm.exportSession(format: .markdown) },
             onExportPDF: { vm.exportSession(format: .pdf) },
             onShareLongImage: {
@@ -3338,6 +3343,17 @@ struct AIChatView: View {
         .disabled(mode == .send && !canSend)
         .hoverEffect(.lift)
         .keyboardShortcut(mode == .stop ? nil : KeyboardShortcut(.return, modifiers: .command))
+        // [WP-43] The menu bar's 发送 (⌘↩) and the palette's 切换模型 reach this chat.
+        .onAppear {
+            ChatComposerActions.register(.init(token: composerActionsToken, send: {
+                switch sendButtonMode {
+                case .send: if canSend { performSend() }
+                case .enqueue: performEnqueue()
+                case .stop: break
+                }
+            }, pickModel: { showModelPicker = true }))
+        }
+        .onDisappear { ChatComposerActions.unregister(composerActionsToken) }
         .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: mode)
         .accessibilityLabel(mode == .stop ? Text("停止当前任务") : Text("Send task"))
         .accessibilityHint(mode == .send ? Text("Long press to choose task continuity")
@@ -4886,7 +4902,7 @@ struct AIChatView: View {
     /// [T-readable-width] About 45 CJK characters a line on iPad; the list's
     /// scroll indicator stays at the window edge (only the content is capped).
     private var maxContentWidth: CGFloat? {
-        hSizeClass == .regular ? 800 : nil
+        hSizeClass == .regular ? LeoWorkspaceLayoutPolicy.contentMaxWidth : nil
     }
 
 }

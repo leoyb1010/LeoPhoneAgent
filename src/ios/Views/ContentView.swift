@@ -382,6 +382,11 @@ struct ContentView: View {
     @State private var didInitialLoad = false
     /// Controls sidebar visibility on iPad (automatic handles iPhone collapse).
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+    /// [WP-43] Window width: sidebar resident at ≥ 800 pt (drawer below), the
+    /// chat's third column opens by itself at ≥ 1100 pt.
+    @State private var windowWidth: CGFloat = 0
+    /// [WP-43] ⌘K palette → this window's third column.
+    @State private var contextRequest: ChatContextRequest?
 
     /// Launch screen preference: 0=Auto, 1=Last Session, 2=New Chat.
     @AppStorage("launchScreen") private var launchScreen: Int = 0
@@ -596,7 +601,9 @@ struct ContentView: View {
                 migrateNavigationState(toWide: newWide)
                 isWideLayout = newWide
             }
+            .onChange(of: geo.size.width) { _, width in updateWindowWidth(width) }
             .onAppear {
+                updateWindowWidth(geo.size.width)
                 isWideLayout = wide
                 if !homeDraftRestored {
                     homeDraftRestored = true
@@ -887,12 +894,8 @@ struct ContentView: View {
                 },
                 openSession: { sid in jumpToSession(sid) },
                 runQuickTask: { tid in Task { await QuickTaskWidgetRunner.run(taskId: tid) } },
-                openSurface: { target in
-                    // The page itself, once the palette has finished closing.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                        DeepLinkCoordinator.shared.pendingSettingsTarget = target
-                    }
-                },
+                commands: CommandPaletteCatalog.commands(paletteContext),
+                runCommand: { command in runPaletteCommand(command) },
                 close: { showCommandPalette = false }
             )
             // [T-home-sheet-detents] A jump list, not an editor: half-height
@@ -1420,6 +1423,18 @@ struct ContentView: View {
 
     // MARK: - Split Layout (iPad / wide window)
 
+    /// [WP-43] Sidebar resident ≥ 800 pt, a drawer below; only when the width
+    /// crosses the line, so a sidebar the user hid or showed stays that way.
+    private func updateWindowWidth(_ width: CGFloat) {
+        let old = windowWidth
+        windowWidth = width
+        guard let resident = LeoWorkspaceLayoutPolicy.crossing(
+            from: old, to: width, rule: LeoWorkspaceLayoutPolicy.sidebarResident) else { return }
+        let target: NavigationSplitViewVisibility = resident ? .all : .detailOnly
+        guard columnVisibility != target else { return }
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.28)) { columnVisibility = target }
+    }
+
     private var splitLayout: some View {
         // [T-ios-gh29-font-scale-split-column] App-base font scale for the iPad
         // split view. `appFontScale()` is environment-based (`.dynamicTypeSize`),
@@ -1510,7 +1525,8 @@ struct ContentView: View {
             let effectiveId: String? = isDraft ? nil : id
             // [T-ipad-inspector] The inspector column lives on this small
             // container, not on AIChatView's own (deep) modifier chain.
-            ChatDetailContainer(sessionId: isDraft ? newSessionRealId : id) {
+            ChatDetailContainer(sessionId: isDraft ? newSessionRealId : id,
+                                windowWidth: windowWidth, contextRequest: contextRequest) {
                 AIChatView(sessionId: effectiveId, draftId: isDraft ? id : nil, initialGroupId: Self.extractGroupId(from: id), initialEntryKey: Self.extractEntryKey(from: id))
                     .onAppear {
                         draftLog.info("🔑DRAFT detailView APPEAR id=\(id) effectiveId=\(effectiveId ?? "nil") isDraft=\(isDraft)")
@@ -2315,7 +2331,10 @@ struct ContentView: View {
 
         }
         .listStyle(.plain)
-        .navigationSplitViewColumnWidth(min: 340, ideal: 380, max: 500)
+        // [WP-43] OpenClaw's sidebar: ideal 300, max 320 (was 340/380/500).
+        .navigationSplitViewColumnWidth(min: LeoWorkspaceLayoutPolicy.sidebarWidth.min,
+                                        ideal: LeoWorkspaceLayoutPolicy.sidebarWidth.ideal,
+                                        max: LeoWorkspaceLayoutPolicy.sidebarWidth.max)
         .opacity(didInitialLoad ? 1 : 0)
         // [T-session-filter-trap] 同 stackList:筛空 ≠ 没有会话。起手建议在右侧工作台,侧栏只留一句话。
         .overlay {
@@ -3971,6 +3990,51 @@ struct ContentView: View {
                 )
             )
         relayCatchUp.clearMissedApprovals()
+    }
+
+    // MARK: - [WP-43] ⌘K palette commands
+
+    /// The chat on screen in this window, by its real id when a draft has one.
+    private var onScreenChatId: String? {
+        guard let id = onScreenSessionId else { return nil }
+        return Self.isNewSessionId(id) ? newSessionRealId : id
+    }
+
+    private var paletteContext: CommandPaletteCatalog.Context {
+        CommandPaletteCatalog.Context(
+            hasChat: onScreenSessionId != nil,
+            isProcessing: onScreenChatId.flatMap { ViewModelCache.shared.get(for: $0) }?.isProcessing ?? false,
+            hasApproval: SensitiveToolGate.shared.pending != nil,
+            macFleetEnabled: macFleetEnabled,
+            splitLayout: isWideLayout)
+    }
+
+    private func runPaletteCommand(_ command: PaletteCommand) {
+        // Anything that presents something waits for the palette to finish closing.
+        func afterClose(_ work: @escaping () -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
+        }
+        func surface(_ target: SettingsDeepLinkTarget) {
+            afterClose { DeepLinkCoordinator.shared.pendingSettingsTarget = target }
+        }
+        switch command {
+        case .newTask: afterClose { handleNewChatRequest() }
+        case .search:
+            if isWideLayout { columnVisibility = .all }
+            afterClose { focusSearch() }
+        case .settings: afterClose { activeToolSheet = .settings }
+        case .switchModel: afterClose { ChatComposerActions.current?.pickModel() }
+        case .stopRun: ChatCommandTarget.stopRun(sessionId: onScreenChatId)
+        case .approve: SensitiveToolGate.shared.resolve(.allowOnce)
+        case .deny: SensitiveToolGate.shared.resolve(.deny)
+        case .contextDetails, .macScreen:
+            contextRequest = ChatContextRequest(mode: command == .macScreen ? .macScreen : .details,
+                                                nonce: (contextRequest?.nonce ?? 0) + 1)
+        case .automations: surface(.automations)
+        case .macConsole: surface(.macConsole)
+        case .timeline: surface(.timeline)
+        case .scheduledTasks: surface(.scheduledTasks)
+        }
     }
 
     private func focusSearch() {

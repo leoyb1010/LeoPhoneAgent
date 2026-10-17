@@ -148,14 +148,45 @@ enum ThinkingDisplayPolicy {
 // MARK: - F8 对话检查器
 
 enum ChatInspectorTabPolicy {
-    /// The three fixed tabs, in order: tool timeline, usage, memory hits.
-    static let tabs = ["run", "usage", "memory"]
+    /// [WP-43] Fixed tabs, in order: tool timeline, files (the session's
+    /// artifacts, back from the chat's "…" menu now that the column is the
+    /// iPad's "文件/工具详情"), usage, memory hits.
+    static let tabs = ["run", "files", "usage", "memory"]
 
-    /// Stored selections from the four-tab inspector (session / artifacts /
-    /// files) map onto the new set instead of landing on a dead value.
+    /// Stored selections from older inspectors (session / artifacts) map onto
+    /// the current set instead of landing on a dead value.
     static func resolve(_ stored: String?) -> String {
         guard let stored else { return "run" }
         if tabs.contains(stored) { return stored }
-        return stored == "session" ? "usage" : "run"
+        switch stored {
+        case "session": return "usage"
+        case "artifacts": return "files"
+        default: return "run"
+        }
+    }
+}
+
+/// [WP-43] What the iPad's third column shows: the chat's files and tool
+/// details, or the Mac's screen (WP-50). Per window, like the column itself.
+enum ChatContextColumnPolicy {
+    enum Mode: String, CaseIterable {
+        case details, macScreen
+        var title: String {
+            switch self {
+            case .details: "文件/工具详情"
+            case .macScreen: "Mac 画面"
+            }
+        }
+    }
+
+    static func resolve(_ stored: String?) -> Mode {
+        stored.flatMap(Mode.init(rawValue:)) ?? .details
+    }
+
+    /// Mac 画面 is offered only with Mac 舰队 on (same gate as the Mac console);
+    /// a stored macScreen falls back to details when it is off.
+    static func effective(_ stored: String?, macFleetEnabled: Bool) -> Mode {
+        let mode = resolve(stored)
+        return mode == .macScreen && !macFleetEnabled ? .details : mode
     }
 }
