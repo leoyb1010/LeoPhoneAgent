@@ -140,17 +140,20 @@ struct MacScreenCard: View {
         }
         .padding(10)
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
-        .macScreenLive(poller)
+        // The full-screen view runs its own (video first); the card waits underneath.
+        .macScreenLive(poller, active: !fullscreen)
         .fullScreenCover(isPresented: $fullscreen) {
             MacScreenFullscreen(poller: poller, hostName: hostName)
         }
     }
 }
 
-/// 全屏查看:捏合缩放(1–6×)、放大后拖动、双击复位。
+/// 全屏查看。[WP-51] 先试视频(WebRTC),不行回退截图;截图可捏合缩放(1–6×)、放大后拖动、双击复位。
+/// [WP-52] 视频里可开「操控 Mac」。
 struct MacScreenFullscreen: View {
     @ObservedObject var poller: MacScreenPoller
     let hostName: String?
+    @StateObject private var live = MacScreenLiveModel()
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var scale: CGFloat = 1
@@ -167,6 +170,29 @@ struct MacScreenFullscreen: View {
     var body: some View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
+            MacScreenLiveView(model: live, poller: poller) { zoomableSnapshot }
+                .ignoresSafeArea()
+            HStack {
+                MacScreenCaption(poller: poller, hostName: hostName)
+                    .foregroundStyle(.white)
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.body.weight(.semibold))
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .circle)
+                .keyboardShortcut(.cancelAction)
+                .accessibilityLabel(Text("关闭"))
+            }
+            .padding(.horizontal, 14).padding(.vertical, 6)
+            .glassEffect(.regular, in: .capsule)
+            .padding(.horizontal, 12)
+        }
+        .onAppear { live.client = poller.client }
+        .statusBarHidden()
+    }
+
+    private var zoomableSnapshot: some View {
             MacScreenSurface(poller: poller)
                 .scaleEffect(scale)
                 .offset(offset)
@@ -190,25 +216,6 @@ struct MacScreenFullscreen: View {
                         withAnimation(reduceMotion ? nil : .smooth(duration: 0.28)) { scale = 2.5; baseScale = 2.5 }
                     }
                 }
-                .ignoresSafeArea()
-            HStack {
-                MacScreenCaption(poller: poller, hostName: hostName)
-                    .foregroundStyle(.white)
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark").font(.body.weight(.semibold))
-                        .frame(width: 36, height: 36)
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .circle)
-                .keyboardShortcut(.cancelAction)
-                .accessibilityLabel(Text("关闭"))
-            }
-            .padding(.horizontal, 14).padding(.vertical, 6)
-            .glassEffect(.regular, in: .capsule)
-            .padding(.horizontal, 12)
-        }
-        .macScreenLive(poller)
-        .statusBarHidden()
     }
 }
 
@@ -219,11 +226,13 @@ struct MacScreenColumn: View {
     @ObservedObject private var hosts = GatewayHostStore.shared
     @State private var hostName: String?
     @State private var fullscreen = false
+    @StateObject private var live = MacScreenLiveModel()
 
     private func bind() {
         let target = MacScreenHosts.client(hostId: hostId.isEmpty ? nil : hostId)
         hostName = target?.host.name
         poller.client = target?.client
+        live.client = target?.client
     }
 
     var body: some View {
@@ -243,20 +252,20 @@ struct MacScreenColumn: View {
                             .labelsHidden()
                             .pickerStyle(.menu)
                         }
+                        Button { fullscreen = true } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
+                            .accessibilityLabel(Text("全屏查看"))
                     }
-                    Button { fullscreen = true } label: {
+                    // [WP-51] Video first (and R2 control with the pointer / keyboard); snapshots as fallback.
+                    MacScreenLiveView(model: live, poller: poller, active: !fullscreen) {
                         MacScreenSurface(poller: poller)
-                            .background(Color.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityHint(Text("全屏查看"))
-                    Text("前台约每 1.5 秒刷新一帧;离开这一栏或切到后台就停。")
+                    .background(Color.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    Text("视频优先;连不上时改为约每 1.5 秒一帧截图。离开这一栏或切到后台就停。")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
                 .padding(12)
-                .macScreenLive(poller)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
