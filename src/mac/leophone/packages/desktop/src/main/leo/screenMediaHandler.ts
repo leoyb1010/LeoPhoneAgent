@@ -30,6 +30,8 @@ export interface PeerSessionState {
   id: string;
   state: string;
   control: boolean;
+  /** 被看的屏幕(Electron display id = CGDirectDisplayID);R2 注入坐标按它换算。 */
+  displayId: string;
   createdAt: number;
 }
 
@@ -44,10 +46,11 @@ let inputSink: ((sessionId: string, data: string) => void) | null = null;
 let ipcInstalled = false;
 
 const publicSessions = (): PeerSessionState[] =>
-  [...sessions.values()].map(({ id, state, control, createdAt }) => ({
+  [...sessions.values()].map(({ id, state, control, displayId, createdAt }) => ({
     id,
     state,
     control,
+    displayId,
     createdAt,
   }));
 
@@ -60,6 +63,20 @@ const notify = () => {
 export function onScreenPeerSessions(listener: (sessions: PeerSessionState[]) => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+/** [WP-52] 经输入通道回消息给手机(如辅助功能未授权)。 */
+export function sendScreenPeerControlMessage(sessionId: string, data: string): void {
+  if (peerWindow && !peerWindow.isDestroyed())
+    peerWindow.webContents.send("leo:screen-peer:control-out", { sessionId, data });
+}
+
+/** [WP-52] 本机 Esc×3 / 菜单栏「立即断开」:关掉所有看屏会话。 */
+export async function closeAllScreenPeers(logger: Logger): Promise<void> {
+  for (const id of sessions.keys()) {
+    await command(logger, { op: "close", sessionId: id }).catch(() => undefined);
+    forget(id);
+  }
 }
 
 /** [WP-52] DataChannel 收到的输入事件交给谁(leo-input helper)。 */
@@ -238,15 +255,13 @@ export async function handlePeerRequest(
   try {
     if (request.op === "open") {
       // 同时只一路:Host 已按设备裁决过,这里把旧的都关掉。
-      for (const id of sessions.keys()) {
-        await command(logger, { op: "close", sessionId: id }).catch(() => undefined);
-        forget(id);
-      }
+      await closeAllScreenPeers(logger);
       nextDisplayId = request.displayId ?? null;
       const entry = {
         id: sessionId,
         state: "new",
         control: false,
+        displayId: nextDisplayId ?? String(screen.getPrimaryDisplay().id),
         createdAt: Date.now(),
         timer: setTimeout(() => {
           logger.info(`[leo-screen] session ${sessionId} not connected in time`);

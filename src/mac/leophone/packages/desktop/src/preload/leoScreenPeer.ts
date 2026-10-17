@@ -28,6 +28,7 @@ interface Peer {
   stream: MediaStream;
   control: boolean;
   disconnectTimer: number | null;
+  channel: RTCDataChannel | null;
 }
 
 const peers = new Map<string, Peer>();
@@ -92,6 +93,7 @@ function watchConnection(sessionId: string, peer: Peer): void {
       channel.close();
       return;
     }
+    peer.channel = channel;
     channel.addEventListener("open", () => event(sessionId, { type: "control", open: true }));
     channel.addEventListener("close", () => event(sessionId, { type: "control", open: false }));
     channel.addEventListener("message", ({ data }) => {
@@ -121,7 +123,13 @@ async function open(command: OpenCommand): Promise<{ answer: string }> {
     bundlePolicy: "max-bundle",
     rtcpMuxPolicy: "require",
   });
-  const peer: Peer = { pc, stream, control: command.control, disconnectTimer: null };
+  const peer: Peer = {
+    pc,
+    stream,
+    control: command.control,
+    disconnectTimer: null,
+    channel: null,
+  };
   peers.set(command.sessionId, peer);
   watchConnection(command.sessionId, peer);
   try {
@@ -223,6 +231,15 @@ async function run(command: Command): Promise<unknown> {
       return stats(command.sessionId);
   }
 }
+
+// [WP-52] 主进程回给手机的输入通道消息(辅助功能授权状态等)。
+ipcRenderer.on(
+  "leo:screen-peer:control-out",
+  (_event, message: { sessionId: string; data: string }) => {
+    const channel = peers.get(message.sessionId)?.channel;
+    if (channel?.readyState === "open") channel.send(message.data);
+  },
+);
 
 ipcRenderer.on("leo:screen-peer:cmd", (_event, message: { id: number; command: Command }) => {
   void run(message.command).then(

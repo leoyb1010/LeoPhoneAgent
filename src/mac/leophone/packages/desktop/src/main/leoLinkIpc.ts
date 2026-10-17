@@ -7,6 +7,11 @@ import {
   SCREEN_PRIVACY_URL,
   screenPermissionStatus,
 } from "./leo/screenCapture.js";
+import {
+  accessibilityGranted,
+  openAccessibilitySettings,
+  startScreenInput,
+} from "./leo/screenInput.js";
 
 /**
  * [leo-link] 「连接手机」面板的通道:界面 → 主进程 → 本机 Leo 接口(带 Bearer)。
@@ -101,10 +106,19 @@ async function screenShareState(patch?: ScreenPatch) {
     control: host.ok ? host.data["control"] === true : false,
     hostError: host.ok ? null : host.error,
     permission: screenPermissionStatus(),
+    // [WP-52] 操控要给 LeoBot「辅助功能」授权(注入与 Esc×3 监听都要)。
+    accessibility: accessibilityGranted(),
   };
 }
 
 export function registerLeoLinkIpc(): void {
+  // [WP-52] 视频会话打开输入通道时拉起 leo-input、亮菜单栏红点。
+  startScreenInput(console);
+  ipcMain.handle("leo:screen:open-accessibility", async (event) => {
+    if (!isTrustedLeoSender(event)) return false;
+    await openAccessibilitySettings();
+    return true;
+  });
   ipcMain.handle("leo:screen:status", (event) =>
     isTrustedLeoSender(event) ? screenShareState() : { error: "forbidden" },
   );

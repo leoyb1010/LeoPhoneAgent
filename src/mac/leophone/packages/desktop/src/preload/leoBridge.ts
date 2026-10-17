@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld("leoLink", {
   setScreenOptions: (patch: { enabled?: boolean; tailnet_only?: boolean; control?: boolean }) =>
     ipcRenderer.invoke("leo:screen:set", patch),
   openScreenSettings: () => ipcRenderer.invoke("leo:screen:open-settings"),
+  openAccessibilitySettings: () => ipcRenderer.invoke("leo:screen:open-accessibility"),
 });
 
 /** [leo] 菜单栏与 ⌥Space 快速派发的设置(macOS;主进程持有,见 docs/specs/leo-quick-entry.md)。 */
