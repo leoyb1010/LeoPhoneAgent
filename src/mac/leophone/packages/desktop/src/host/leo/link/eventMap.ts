@@ -61,7 +61,8 @@ export class ZCodeEventMapper {
         break;
       case "task_error":
         this.tools.clear();
-        out.push({ event: "run.failed", error: event.error || "任务出错" });
+        // [fix-remote] 带上失败类别：外部 agent 未登录（acp_auth）时手机直接给「去登录」。
+        out.push({ event: "run.failed", error: event.error || "任务出错", ...(event.code ? { code: event.code } : {}) });
         break;
       default:
         break;

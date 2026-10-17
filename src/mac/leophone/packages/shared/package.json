@@ -31,7 +31,8 @@
     "./request-security": "./src/request-security-edition/index.ts",
     "./acp": "./src/acp.ts",
     "./acp-detect": "./src/acp-detect.ts",
-    "./system-proxy": "./src/system-proxy.ts"
+    "./system-proxy": "./src/system-proxy.ts",
+    "./acp-login": "./src/acp-login.ts"
   },
   "scripts": {
     "lint": "oxlint",

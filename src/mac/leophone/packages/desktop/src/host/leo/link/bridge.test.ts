@@ -108,6 +108,7 @@ async function withBridge(
     acpAgents?: LinkBridgeDeps["acpAgents"];
     acpAgentVersion?: LinkBridgeDeps["acpAgentVersion"];
     zcodeModelSelection?: LinkBridgeDeps["zcodeModelSelection"];
+    agentLogin?: LinkBridgeDeps["agentLogin"];
   } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(path.join(os.tmpdir(), "leo-link-")));
@@ -133,6 +134,7 @@ async function withBridge(
     ...(options.acpAgents ? { acpAgents: options.acpAgents } : {}),
     ...(options.acpAgentVersion ? { acpAgentVersion: options.acpAgentVersion } : {}),
     ...(options.zcodeModelSelection ? { zcodeModelSelection: options.zcodeModelSelection } : {}),
+    ...(options.agentLogin ? { agentLogin: options.agentLogin } : {}),
   });
   try {
     await run({ bridge, zcode, dir, pushed });
@@ -1480,4 +1482,87 @@ test("[fix-remote] ready-checkpoint recovery re-creates the LeoBot draft on the 
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("[fix-remote] O: phone logs a Mac agent in: status, start, paste key, poll; writes need an identified device", async () => {
+  const { AcpLoginFlows, acpAuthState } = await import("@zcode/shared/acp-login");
+  const home = await mkdtemp(path.join(os.tmpdir(), "leo-agent-login-"));
+  const env = { HOME: home, PATH: "/usr/bin" };
+  const flows = new AcpLoginFlows({ env });
+  try {
+    await withBridge(
+      async ({ bridge }) => {
+        const caps = (await bridge.handle(req("GET", "/v1/capabilities"))).body as {
+          features: Record<string, unknown>;
+          harnesses: Record<string, unknown>[];
+        };
+        assert.equal(caps.features["agent_login"], true);
+        assert.deepEqual(caps.harnesses.find((h) => h["key"] === "gemini")?.["auth"], { logged_in: false, login_kind: "api_key" });
+
+        const status = await bridge.handle(req("GET", "/agents/gemini/auth"));
+        assert.equal((status.body as { logged_in: boolean }).logged_in, false);
+
+        // 认不出的调用方不能改 Mac 上的凭据。
+        assert.equal((await bridge.handle(req("POST", "/agents/gemini/login", {}, unknown))).status, 403);
+
+        const started = await bridge.handle(req("POST", "/agents/gemini/login", {}, iphone, "login-1"));
+        assert.equal(started.status, 202);
+        const flow = started.body as { flow_id: string; needs_code: boolean; url: string };
+        assert.equal(flow.needs_code, true);
+        assert.match(flow.url, /aistudio/);
+        const pasted = await bridge.handle(
+          req("POST", `/agents/gemini/login/${flow.flow_id}/code`, { code: "AIzaKEY" }, iphone, "login-2"),
+        );
+        assert.equal(pasted.status, 202);
+        const polled = (await bridge.handle(req("GET", `/agents/gemini/login/${flow.flow_id}`))).body as { status: string };
+        assert.equal(polled.status, "succeeded");
+        assert.equal(((await bridge.handle(req("GET", "/agents/gemini/auth"))).body as { logged_in: boolean }).logged_in, true);
+        assert.equal((await bridge.handle(req("GET", "/agents/nope/auth"))).status, 404);
+      },
+      {
+        acpAgents: () => [{ id: "gemini", name: "Gemini", harnessKey: "gemini", available: true }],
+        agentLogin: { state: (id) => acpAuthState(id, env), flows },
+      },
+    );
+  } finally {
+    flows.dispose();
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("[fix-remote] O: login codes never reach the operation receipts on disk", async () => {
+  const { AcpLoginFlows, acpAuthState } = await import("@zcode/shared/acp-login");
+  const home = await mkdtemp(path.join(os.tmpdir(), "leo-agent-login2-"));
+  const env = { HOME: home, PATH: "/usr/bin" };
+  const flows = new AcpLoginFlows({ env });
+  try {
+    await withBridge(
+      async ({ bridge, dir }) => {
+        const flow = (await bridge.handle(req("POST", "/agents/opencode/login", {}, iphone, "op-1"))).body as { flow_id: string };
+        await bridge.handle(req("POST", `/agents/opencode/login/${flow.flow_id}/code`, { code: "SECRETKEY123" }, iphone, "op-2"));
+        const operations = path.join(dir, "journals", "operations");
+        const files = await readdir(operations).catch(() => [] as string[]);
+        for (const file of files) assert.doesNotMatch(await readFile(path.join(operations, file), "utf8"), /SECRETKEY123/);
+      },
+      {
+        acpAgents: () => [{ id: "opencode", name: "opencode", harnessKey: "opencode", available: true }],
+        agentLogin: { state: (id) => acpAuthState(id, env), flows },
+      },
+    );
+  } finally {
+    flows.dispose();
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("[fix-remote] O: run.failed carries the failure code so the phone can offer 去登录", async () => {
+  await withBridge(async ({ bridge, zcode, dir }) => {
+    const id = await createSession(bridge, dir, { prompt: "hi" });
+    zcode.fire(id, { type: "task_run_started", startedAt: 1 });
+    zcode.fire(id, { type: "task_error", error: "Grok 在这台 Mac 上未登录或读不到登录态：…", code: "acp_auth" });
+    const events = await collect(bridge, id, 0, (seen) => seen.some((e) => e["event"] === "run.failed"));
+    const failed = events.find((e) => e["event"] === "run.failed");
+    assert.equal(failed?.["code"], "acp_auth");
+    assert.match(String(failed?.["error"]), /未登录/);
+  });
 });

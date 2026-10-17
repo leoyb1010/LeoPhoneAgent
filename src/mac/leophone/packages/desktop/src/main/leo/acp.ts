@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { app, ipcMain } from "electron";
+import { app, ipcMain, shell } from "electron";
 import { ACP_COMMANDS_FILE, isAcpAgentId, parseAcpCommandsStore, pickAcpAgentCommands } from "@zcode/shared/acp";
 import {
   CLAUDE_AGENT_ACP_PACKAGE,
@@ -13,6 +13,16 @@ import {
 } from "@zcode/shared/acp-detect";
 import { listAcpAgents } from "@zcode/services/acp-agent";
 import { readSystemProxy, setSystemProxyEnabled, systemProxyEnabled } from "@zcode/shared/system-proxy";
+import { AcpLoginFlows, acpAuthState, nodePtyLoginSpawner, type NodePtyLike } from "@zcode/shared/acp-login";
+
+/** [fix-remote] 设置页的网页登录（与手机同一套流程，网址在本机浏览器打开）。 */
+let localLoginFlows: Promise<AcpLoginFlows> | undefined;
+function loginFlows(): Promise<AcpLoginFlows> {
+  localLoginFlows ??= import("node-pty")
+    .then((pty) => new AcpLoginFlows({ spawnLogin: nodePtyLoginSpawner(pty as unknown as NodePtyLike) }))
+    .catch(() => new AcpLoginFlows());
+  return localLoginFlows;
+}
 
 import { isTrustedLeoSender } from "../leoLinkIpc.js";
 
@@ -74,6 +84,32 @@ export function registerAcpIpc(): void {
     const proxy = readSystemProxy();
     return { enabled: systemProxyEnabled(), proxy: proxy.https ?? proxy.http ?? proxy.socks ?? null };
   });
+  ipcMain.handle(
+    "leo:acp:login-flow",
+    async (event, action: unknown, agentId: unknown, flowId: unknown, code: unknown) => {
+      if (!isTrustedLeoSender(event) || !isAcpAgentId(agentId)) return null;
+      const flows = await loginFlows();
+      switch (action) {
+        case "auth":
+          return acpAuthState(agentId);
+        case "start":
+          return flows.start(agentId);
+        case "get":
+          return typeof flowId === "string" ? (flows.get(flowId) ?? null) : null;
+        case "code":
+          return typeof flowId === "string" && typeof code === "string" ? ((await flows.submit(flowId, code)) ?? null) : null;
+        case "cancel":
+          return typeof flowId === "string" ? (flows.cancel(flowId) ?? null) : null;
+        case "open": {
+          const url = typeof flowId === "string" ? flows.get(flowId)?.url : undefined;
+          if (url?.startsWith("https://")) await shell.openExternal(url);
+          return Boolean(url);
+        }
+        default:
+          return null;
+      }
+    },
+  );
   ipcMain.handle("leo:acp:login", async (event, agentId: unknown) => {
     if (!isTrustedLeoSender(event) || !isAcpAgentId(agentId) || process.platform !== "darwin") {
       return { ok: false };

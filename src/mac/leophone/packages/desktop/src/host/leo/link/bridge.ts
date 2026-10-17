@@ -14,6 +14,7 @@ import { OperationReceipts } from "./operationReceipts.js";
 import { LeoagentForwarder } from "./leoagentForward.js";
 import { acpModelSelection, type AcpAgentId } from "@zcode/shared/acp";
 import { LEOBOT_NO_MODEL_MESSAGE } from "../leobotModelSelection.js";
+import type { AcpAuthState, AcpLoginFlows } from "@zcode/shared/acp-login";
 import {
   deviceNotRecognized,
   error,
@@ -86,12 +87,20 @@ export type LinkBridgeDeps = {
    * 没有这个依赖时不传模型(旧行为,仅测试)。
    */
   zcodeModelSelection?: () => Promise<ModelSelection | null>;
+  /** [fix-remote] 外部 agent 的远程登录（手机上点网页完成）；没有就是 404。 */
+  agentLogin?: { state: (id: AcpAgentId) => AcpAuthState; flows: AcpLoginFlows };
+  /** [fix-remote] 手机 SSH 兜底的目标（tailnet 名 + 用户名），capabilities 里广播。 */
+  sshTarget?: () => Promise<{ host: string; user: string; fqdn?: string } | null>;
   /**
    * [WP-23] 旧的 leoagent(Python)harness 转发,默认关:ACP 接管手机开 Claude / Codex 会话后不再转发。
    * 打开方式:~/.leoagent/link.json 的 {"harness": {"legacy": true}} 或 LEO_HARNESS_LEGACY=1(harness.py 下个版本删)。
    */
   legacyHarness?: () => boolean;
 };
+
+function authSummary(state: AcpAuthState): { logged_in: boolean | null; method?: string; login_kind: string } {
+  return { logged_in: state.logged_in, login_kind: state.login_kind, ...(state.method ? { method: state.method } : {}) };
+}
 
 /** [E5] 手机侧会话 id(可选):只当不透明标签,随审批 / 终态推送带回手机。 */
 function phoneSessionIdOf(body: Record<string, unknown>): string | undefined {
@@ -265,7 +274,8 @@ export class LinkBridge {
       return this.receipts.status({ ...req, requestId: operation[1] });
     if (!isLinkPath(url.pathname)) return error(404, "这个接口不对手机开放");
     // [WP-51] 看屏信令不进操作回执:回执会把 SDP(含 ICE 口令、DTLS 指纹)落盘,重放旧答案也没有意义。
-    if (method !== "POST" || !req.requestId || url.pathname.startsWith("/screen/"))
+    // [fix-remote] 登录流程也不进回执：回填的授权码 / API key 不能落盘，重放旧的登录结果也没意义。
+    if (method !== "POST" || !req.requestId || url.pathname.startsWith("/screen/") || url.pathname.startsWith("/agents/"))
       return this.route(method, url, req);
     if (!/^[a-zA-Z0-9_.:-]{1,200}$/.test(req.requestId)) return error(400, "操作编号格式不正确");
     return this.receipts.run(
@@ -393,6 +403,7 @@ export class LinkBridge {
         body: req.body,
       });
     }
+    if (pathname.startsWith("/agents/")) return this.agentLogin(method, pathname, req);
     if (pathname === "/harness/sessions") {
       if (method === "GET") return this.list();
       if (method === "POST") return this.create(req);
@@ -499,6 +510,57 @@ export class LinkBridge {
     }
   }
 
+  /**
+   * [fix-remote] 手机上登录 Mac 上的外部 agent。读状态任何已配对通道都行；开始 / 回填 / 取消会改 Mac 上的凭据，
+   * 只接受认得出的设备（与全自动同级）。
+   */
+  private agentLogin(method: string, pathname: string, req: LinkRequest): LinkResponse {
+    const login = this.deps.agentLogin;
+    if (!login) return error(404, "这台 Mac 不支持远程登录外部 agent");
+    const match = /^\/agents\/([^/]+)\/(auth|login)(?:\/([^/]+)(?:\/(code|cancel))?)?$/.exec(pathname);
+    const key = decodeURIComponent(match?.[1] ?? "");
+    const agent = (this.deps.acpAgents?.() ?? []).find((candidate) => candidate.harnessKey === key || candidate.id === key);
+    if (!match || !agent) return error(404, `这台 Mac 上没有「${key}」`);
+    if (match[2] === "auth") {
+      if (method !== "GET") return error(405, "Method not allowed");
+      return { status: 200, body: login.state(agent.id) };
+    }
+    const flowId = match[3];
+    if (method === "GET" && flowId && !match[4]) {
+      const view = login.flows.get(flowId);
+      return view && view.agent === agent.id ? { status: 200, body: view } : error(404, "没有这个登录流程");
+    }
+    if (!mayUseFullAuto(req.caller)) {
+      return deviceNotRecognized("认不出是哪台设备，不能在这台 Mac 上登录外部 agent；按步骤在 Mac 上处理后再试");
+    }
+    if (method === "POST" && !flowId) {
+      if (!agent.available) return error(409, `这台 Mac 上的「${agent.name}」用不了：${agent.unavailableReason ?? "启动不了"}`);
+      const provider = record(req.body)["provider"];
+      return {
+        status: 202,
+        body: login.flows.start(agent.id, typeof provider === "string" && /^[a-z0-9_-]{1,40}$/.test(provider) ? { provider } : {}),
+      };
+    }
+    const view = flowId ? login.flows.get(flowId) : undefined;
+    if (!view || view.agent !== agent.id) return error(404, "没有这个登录流程");
+    if ((method === "POST" && match[4] === "cancel") || (method === "DELETE" && !match[4])) {
+      return { status: 200, body: login.flows.cancel(flowId!) };
+    }
+    if (method === "POST" && match[4] === "code") {
+      const code = record(req.body)["code"];
+      if (typeof code !== "string" || !code.trim() || code.length > 4096) return error(400, "code is required");
+      // 同步回填（API key 立即写盘，授权码写进伪终端）；结果按轮询看。
+      void login.flows.submit(flowId!, code);
+      return { status: 202, body: { ...view, status: view.kind === "api_key" ? view.status : "verifying" } };
+    }
+    return error(405, "Method not allowed");
+  }
+
+  private async sshTargetField(): Promise<{ ssh?: { host: string; user: string; fqdn?: string } }> {
+    const target = await this.deps.sshTarget?.().catch(() => null);
+    return target ? { ssh: target } : {};
+  }
+
   private async capabilities(): Promise<LinkResponse> {
     // [fix-remote] 列出全部外部 agent(含不可用的,带原因),手机据此灰显并说明;可用与否以这里为准。
     const acp = await Promise.all(
@@ -517,6 +579,7 @@ export class LinkBridge {
           ...(version ? { version } : {}),
           ...(agent.available ? {} : { unavailable_reason: agent.unavailableReason ?? "这台 Mac 上启动不了" }),
           ...(agent.loginCommand ? { login_command: agent.loginCommand } : {}),
+          ...(this.deps.agentLogin && agent.available ? { auth: authSummary(this.deps.agentLogin.state(agent.id)) } : {}),
         };
       }),
     );
@@ -542,6 +605,7 @@ export class LinkBridge {
         app_version: this.deps.appVersion,
         device: this.deps.device,
         ssh_host_keys: await (this.deps.sshHostKeys ?? readSSHHostKeys)(),
+        ...(await this.sshTargetField()),
         features: {
           harness_sessions: true,
           resumable_events: true,
@@ -556,6 +620,8 @@ export class LinkBridge {
           // [WP-50/51] 看屏:截图 / WebRTC 视频(各自还受 Mac 上的开关约束,见 docs/specs/leo-screen.md)。
           screen_snapshot: Boolean(this.deps.screen),
           screen_session: Boolean(this.deps.screenSession),
+          // [fix-remote] 手机上登录 Mac 上的外部 agent（/agents/<key>/login）。
+          agent_login: Boolean(this.deps.agentLogin),
         },
         harnesses: [
           {

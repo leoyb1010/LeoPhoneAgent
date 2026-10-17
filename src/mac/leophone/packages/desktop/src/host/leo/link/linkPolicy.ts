@@ -22,7 +22,9 @@ export function isLinkPath(pathname: string): boolean {
     pathname === "/screen/snapshot" ||
     // [WP-51] R1 视频信令:/screen/session、/screen/session/<id>、/screen/session/<id>/ice。
     /^\/screen\/session(\/[^/]+(\/ice)?)?$/.test(pathname) ||
-    /^\/harness\/sessions\/[^/]+\/(events|send|approval|stop|archive)$/.test(pathname)
+    /^\/harness\/sessions\/[^/]+\/(events|send|approval|stop|archive)$/.test(pathname) ||
+    // [fix-remote] 外部 agent 的远程登录：/agents/<key>/auth、/agents/<key>/login[/<flow>[/code|/cancel]]。
+    /^\/agents\/[^/]+\/(auth|login(\/[^/]+(\/(code|cancel))?)?)$/.test(pathname)
   );
 }
 

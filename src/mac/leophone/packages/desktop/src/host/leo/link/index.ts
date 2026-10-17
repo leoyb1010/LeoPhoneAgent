@@ -11,6 +11,7 @@ import { createSyncReplica, createTreasuryHandler } from "../sync/index.js";
 import type { TreasuryStore } from "../treasuryStore.js";
 import { leoPath } from "../leoPaths.js";
 import { LinkBridge } from "./bridge.js";
+import { createAgentLogin, readSshTarget } from "./sshTarget.js";
 import { resolveLeoBotModelSelection } from "../leobotModelSelection.js";
 import { DirectGrants } from "./directGrants.js";
 import { startDirectServer } from "./directServer.js";
@@ -79,9 +80,8 @@ function readRelayJson(): { url: string; key: string; phoneUrls: string[] } | nu
   const url = typeof config?.["url"] === "string" ? config["url"].trim() : "";
   const key = typeof config?.["key"] === "string" ? config["key"].trim() : "";
   // [fix-remote] 给手机的其他公网入口(同一个中继);Mac 自己仍只连 url。
-  const phoneUrls = Array.isArray(config?.["phone_urls"])
-    ? (config["phone_urls"] as unknown[]).filter((item): item is string => typeof item === "string" && item.trim() !== "")
-    : [];
+  const raw: unknown[] = Array.isArray(config?.["phone_urls"]) ? config["phone_urls"] : [];
+  const phoneUrls = raw.filter((item): item is string => typeof item === "string" && item.trim() !== "");
   return url && key ? { url, key, phoneUrls } : null;
 }
 
@@ -366,6 +366,7 @@ export async function startLeoLink(deps: {
     // 损坏的授权表不能按空表启动，否则会复活已撤销设备。
     await grants.restore();
   }
+  const agentLogin = await createAgentLogin(); // [fix-remote] 手机上登录 Mac 上的外部 agent
   const bridge = new LinkBridge({
     device,
     directGrants: grants,
@@ -379,6 +380,8 @@ export async function startLeoLink(deps: {
     screen: createScreenSnapshotService({ capture: captureViaMain, enabled: screenSharingEnabled }),
     // [WP-21] 手机开 Claude / Codex / Gemini / opencode 会话走 ACP(LeoBot 运行时托管)。
     acpAgents: () => listAcpAgents({ claudeAgentAcpEntry: hostClaudeAgentAcpEntry() }),
+    agentLogin,
+    sshTarget: readSshTarget,
     // [fix-remote] capabilities 里每个外部 agent 带上 CLI 版本（带超时、按文件缓存）。
     acpAgentVersion: (cliPath) => readCliVersion(cliPath),
     // [fix-remote] 手机开 LeoBot 任务显式选非 acp 模型；没有就 409 提示去配置。
@@ -450,6 +453,7 @@ export async function startLeoLink(deps: {
       directRunning = null;
       await directServer?.stop();
       replica?.close();
+      agentLogin.flows.dispose();
       await bridge.close();
     },
   };

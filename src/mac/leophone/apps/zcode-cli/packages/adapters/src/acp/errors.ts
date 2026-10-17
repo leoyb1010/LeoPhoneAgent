@@ -14,12 +14,15 @@ export class AcpAgentError extends Error {
   readonly detail?: string;
   /** 登录、安装这类问题重试也没用：不让运行时自动重试。 */
   readonly retryable = false;
+  /** [fix-remote] 机器可读的失败类别（经 task_error.code → run.failed.code 到手机，未登录时手机给「去登录」）。 */
+  readonly code: string;
 
   constructor(agentId: AcpAgentId, kind: AcpFailureKind, message: string, options: { detail?: string; cause?: unknown } = {}) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = "AcpAgentError";
     this.agentId = agentId;
     this.kind = kind;
+    this.code = `acp_${kind}`;
     if (options.detail) this.detail = options.detail;
   }
 }

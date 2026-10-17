@@ -1,0 +1,11 @@
+To sign in, open this URL in your browser:
+
+  https://accounts.x.ai/oauth2/device?user_code=FARH-KCGZ
+
+Confirm this code in your browser:
+
+  FARH-KCGZ
+
+[90mOnly continue with a code you requested. Don't share it with anyone.[0m
+
+Waiting for authorization...

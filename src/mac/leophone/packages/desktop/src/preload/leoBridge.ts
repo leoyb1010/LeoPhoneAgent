@@ -60,6 +60,9 @@ if (process.platform === "darwin") {
     login: (agentId: string) => ipcRenderer.invoke("leo:acp:login", agentId),
     /** Claude Code 长期令牌（claude setup-token）：写入 / 空串移除；不提供读取。 */
     setClaudeToken: (token: string) => ipcRenderer.invoke("leo:acp:claude-token", token),
+    /** [fix-remote] 网页登录：auth / start / get / code / cancel / open（网址在本机浏览器打开）。 */
+    loginFlow: (action: string, agentId: string, flowId?: string, code?: string) =>
+      ipcRenderer.invoke("leo:acp:login-flow", action, agentId, flowId, code),
     /** 「外部 agent 使用系统代理」：不传参只读，传 boolean 写入。 */
     proxy: (enabled?: boolean) => ipcRenderer.invoke("leo:acp:proxy", enabled),
     /** agent 自带的斜杠命令（外部 agent 会话里输入 / 时列出）。 */

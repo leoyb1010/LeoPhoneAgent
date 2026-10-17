@@ -30,6 +30,16 @@
 - 空回合：外部 agent 一轮没有任何正文 / 思考 / 工具 / 计划、usage 为 0 就结束（stopReason 不是 cancelled / refusal）时按失败报，
   `run.failed` 带 stopReason 与 stderr 尾部。gemini 在 env 没有 `GEMINI_API_KEY`/`GOOGLE_API_KEY` 时读 `~/.gemini/.env` 的
   `GEMINI_*`/`GOOGLE_*` 补进子进程（已有不覆盖，不写日志）。codex / opencode 自己读各自的登录文件，不注入。
+- 握手：开会话报 auth_required 时按本机登录状态 `authenticate`（grok → `grok.com`；gemini → 有 key 用 `gemini-api-key`，
+  否则 `~/.gemini/settings.json` 的 `security.auth.selectedType`）再重试；initialize 30s / authenticate 20s / newSession 60s
+  各自超时，报出卡在哪一步。
+- codex：`@agentclientprotocol/codex-acp` 随包 stage 到 `glm/acp/node_modules`（不带 `@openai/codex` 原生包），随包 Node 运行，
+  `CODEX_PATH` 取最新装的本机 codex；npx 只兜底，npm 缓存放临时目录。
+- 远程登录：`GET /agents/<key>/auth`、`POST /agents/<key>/login`、`GET /agents/<key>/login/<flow>`、
+  `POST /agents/<key>/login/<flow>/code`、`POST …/cancel`（或 `DELETE /agents/<key>/login/<flow>`）。写操作只接受认得出的设备，
+  不进操作回执。grok / codex 走 `login --device-auth`（网址 + 设备码），claude 走 `setup-token`（授权码回填，令牌只写
+  `<数据根>/acp/claude-oauth-token`），gemini / opencode 粘贴 API key。`run.failed` 带 `code`（`acp_auth` 等）。
+- capabilities 广播 `ssh: {host, user, fqdn}`（`tailscale status --self` 的 MagicDNS 名 + 当前用户），手机 SSH 兜底优先用它。
 
 ## 验收
 

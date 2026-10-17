@@ -29,6 +29,108 @@ interface AcpBridge {
   login(agentId: string): Promise<{ ok: boolean }>;
   setClaudeToken?(token: string): Promise<{ ok: boolean; error?: string }>;
   proxy?(enabled?: boolean): Promise<{ enabled: boolean; proxy: string | null }>;
+  loginFlow?(action: string, agentId: string, flowId?: string, code?: string): Promise<unknown>;
+}
+
+interface LoginFlowView {
+  flow_id: string;
+  status: "starting" | "waiting_for_user" | "verifying" | "succeeded" | "failed" | "cancelled";
+  url?: string;
+  user_code?: string;
+  needs_code: boolean;
+  code_kind?: "auth_code" | "api_key";
+  message?: string;
+}
+
+/**
+ * [fix-remote] 网页登录（与手机同一套流程）：设备码 / 授权页在本机浏览器打开，Claude 把网页给的授权码贴回来，
+ * Gemini / opencode 直接贴 API key。凭据只写本机各 CLI 自己的位置，界面不回显。
+ */
+function WebLoginControl({ api, agentId, onDone }: { api: AcpBridge; agentId: string; onDone: () => void }) {
+  const [flow, setFlow] = useState<LoginFlowView | null>(null);
+  const [code, setCode] = useState("");
+  const active = flow && !["succeeded", "failed", "cancelled"].includes(flow.status);
+  useEffect(() => {
+    if (!flow || !active || !api.loginFlow) return;
+    const timer = window.setInterval(() => {
+      void api.loginFlow!("get", agentId, flow.flow_id).then((next) => {
+        const view = next as LoginFlowView | null;
+        if (!view) return;
+        setFlow(view);
+        if (view.status === "succeeded") onDone();
+      });
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [api, agentId, flow, active, onDone]);
+  if (!api.loginFlow) return null;
+  const start = async () => {
+    const view = (await api.loginFlow!("start", agentId)) as LoginFlowView | null;
+    setFlow(view);
+    setCode("");
+  };
+  if (!flow || !active) {
+    return (
+      <div className="flex items-center gap-2">
+        <Button type="button" size="sm" variant="ghost" onClick={() => void start()}>
+          网页登录
+        </Button>
+        {flow?.status === "succeeded" ? <span className="text-ui-sm text-success">已登录</span> : null}
+        {flow?.status === "failed" ? <span className="text-ui-sm text-destructive">{flow.message ?? "登录失败"}</span> : null}
+      </div>
+    );
+  }
+  return (
+    <div className="flex w-full flex-col gap-1.5">
+      {flow.url ? (
+        <div className="flex items-center gap-2">
+          <Button type="button" size="sm" onClick={() => void api.loginFlow!("open", agentId, flow.flow_id)}>
+            {flow.code_kind === "api_key" ? "打开获取 API key 的页面" : "在浏览器打开授权页"}
+          </Button>
+          {flow.user_code ? (
+            <span className="font-mono text-ui-base text-foreground" data-testid="leo-login-user-code">
+              {flow.user_code}
+            </span>
+          ) : null}
+        </div>
+      ) : (
+        <span className="text-ui-sm text-foreground-subtle">正在准备登录…</span>
+      )}
+      {flow.needs_code ? (
+        <div className="flex items-center gap-2">
+          <Input
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={flow.code_kind === "api_key" ? "粘贴 API key" : "粘贴网页给出的授权码"}
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            aria-label="登录授权码"
+          />
+          <Button
+            type="button"
+            size="sm"
+            disabled={!code.trim() || flow.status === "verifying"}
+            onClick={() =>
+              void api.loginFlow!("code", agentId, flow.flow_id, code).then((next) => {
+                setCode("");
+                if (next) setFlow(next as LoginFlowView);
+                if ((next as LoginFlowView | null)?.status === "succeeded") onDone();
+              })
+            }
+          >
+            提交
+          </Button>
+        </div>
+      ) : (
+        <span className="text-ui-sm text-foreground-subtle">在网页上确认上面的代码，完成后这里会自动更新。</span>
+      )}
+      <div>
+        <Button type="button" size="sm" variant="ghost" onClick={() => void api.loginFlow!("cancel", agentId, flow.flow_id).then(() => setFlow(null))}>
+          取消
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -207,6 +309,11 @@ export function LeoExternalAgentsSection() {
                     ? (agent.cliPath ?? "可用")
                     : (agent.unavailableReason ?? "这台 Mac 上不可用")}
                 </div>
+                {agent.available ? (
+                  <div className="mt-1.5">
+                    <WebLoginControl api={api} agentId={agent.id} onDone={() => void refresh()} />
+                  </div>
+                ) : null}
                 {agent.id === "claude-code" && agent.available ? (
                   <div className="mt-1.5">
                     <ClaudeTokenControl api={api} configured={agent.longLivedToken === true} onSaved={() => void refresh()} />
