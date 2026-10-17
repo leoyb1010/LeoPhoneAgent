@@ -509,6 +509,14 @@ function assertPackagedCuaSharp(context) {
 }
 
 function assertPackagedCuaKoffi(context) {
+  // [leo] computer-use plugin 不随包分发（WP-11），未 stage 时跳过 koffi 校验。
+  if (
+    !existsSync(
+      join(resolvePackagedResourcesDir(context), "glm", "packages", "zcode-cua-plugin", ".zcode-plugin", "plugin.json"),
+    )
+  ) {
+    return;
+  }
   const problems = verifyStagedKoffi({
     resourcesDir: resolvePackagedResourcesDir(context),
     targetPlatform,

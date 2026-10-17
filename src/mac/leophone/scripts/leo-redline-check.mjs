@@ -180,14 +180,43 @@ function scanArtifacts(hits) {
       if (ARTIFACT_EXCLUDED.some((pattern) => pattern.test(relPath))) continue;
       const stats = statSync(absolute);
       if (stats.size === 0) continue;
-      const isAsar = relPath.endsWith(".asar");
-      if (!isAsar && stats.size > 64 * 1024 * 1024) continue;
-      // asar 是「头 + 原样拼接的文件」，JS 正文以明文存放，按 latin1 读取即可匹配 ASCII 域名。
+      if (relPath.endsWith(".asar")) {
+        scanned += scanAsar(relPath, readFileSync(absolute), hits);
+        continue;
+      }
+      if (stats.size > 64 * 1024 * 1024) continue;
       const text = readFileSync(absolute).toString("latin1");
-      scanText(relPath, text, hits, { lineNumbers: !isAsar && stats.size < MAX_TEXT_BYTES });
+      scanText(relPath, text, hits, { lineNumbers: stats.size < MAX_TEXT_BYTES });
       scanned += 1;
     }
   }
+  return scanned;
+}
+
+/**
+ * asar = 4 字节 pickle 头 + JSON 文件索引 + 原样拼接的文件体。逐个条目扫描，
+ * 让包内路径（如 node_modules/第三方包）与磁盘产物走同一套 ARTIFACT_EXCLUDED 规则。
+ */
+function scanAsar(relPath, buffer, hits) {
+  const headerPickleSize = buffer.readUInt32LE(4);
+  const headerJsonSize = buffer.readUInt32LE(12);
+  const header = JSON.parse(buffer.toString("utf8", 16, 16 + headerJsonSize));
+  const dataStart = 8 + headerPickleSize;
+  let scanned = 0;
+  const visit = (node, innerPath) => {
+    if (node.files) {
+      for (const [name, child] of Object.entries(node.files)) visit(child, `${innerPath}/${name}`);
+      return;
+    }
+    if (node.unpacked || node.link || typeof node.size !== "number" || node.size === 0) return;
+    const entryPath = `${relPath}${innerPath}`;
+    if (ARTIFACT_EXCLUDED.some((pattern) => pattern.test(entryPath))) return;
+    const start = dataStart + Number(node.offset);
+    const text = buffer.toString("latin1", start, start + node.size);
+    scanText(entryPath, text, hits, { lineNumbers: node.size < MAX_TEXT_BYTES });
+    scanned += 1;
+  };
+  visit(header, "");
   return scanned;
 }
 
