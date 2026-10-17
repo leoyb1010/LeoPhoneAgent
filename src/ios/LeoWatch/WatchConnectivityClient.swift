@@ -260,6 +260,18 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
 
     /// Cheap nudge as recording starts: the phone app is awake by the time
     /// the audio arrives, which saves a second or two on the answer.
+    /// [WP-50 R0] One ≤400 px frame of the Mac's screen, fetched by the iPhone.
+    func requestScreenThumb(etag: String?) async -> MacScreenWatchRelay.Decoded {
+        guard let session, session.isReachable else { return .failed("iPhone 不在身边") }
+        return await withCheckedContinuation { continuation in
+            session.sendMessage(MacScreenWatchRelay.request(etag: etag), replyHandler: { reply in
+                continuation.resume(returning: MacScreenWatchRelay.decode(reply))
+            }, errorHandler: { error in
+                continuation.resume(returning: .failed(error.localizedDescription))
+            })
+        }
+    }
+
     func wakePhone() {
         guard let session, session.isReachable else { return }
         session.sendMessage(["kind": "wake"], replyHandler: nil, errorHandler: { _ in })

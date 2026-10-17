@@ -12,8 +12,8 @@ import AVFoundation
 import SwiftUI
 import WatchKit
 
-/// [WP-44] Page order: Ask → Mac status → History → recording remote.
-enum WatchPage: Hashable { case ask, mac, history, recording }
+/// [WP-44] Page order: Ask → Mac status → Mac screen (WP-50) → History → recording remote.
+enum WatchPage: Hashable { case ask, mac, glance, history, recording }
 
 struct WatchRootView: View {
     @EnvironmentObject private var client: WatchConnectivityClient
@@ -30,6 +30,7 @@ struct WatchRootView: View {
         TabView(selection: $page) {
             AskPage().tag(WatchPage.ask)
             MacStatusPage().tag(WatchPage.mac)
+            WatchGlancePage(active: page == .glance).tag(WatchPage.glance)
             HistoryPage().tag(WatchPage.history)
             // [V-watch] 遥控 iPhone 录音(只发指令,不传音频)。
             WatchRecordingRemoteView().tag(WatchPage.recording)
@@ -40,6 +41,7 @@ struct WatchRootView: View {
             guard url.scheme == "leobot", url.host == "watch" else { return }
             switch url.path {
             case "/mac": page = .mac
+            case "/screen": page = .glance
             default:
                 page = .ask
                 UserDefaults.standard.set(true, forKey: AskLeoIntent.pendingKey)
@@ -277,6 +279,63 @@ private struct MacStatusPage: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("\(label) \(value)"))
+    }
+}
+
+// MARK: - [WP-50 R0] Mac screen glance
+
+/// The Mac's screen as a ≤400 px thumbnail the iPhone fetches and forwards. Polls
+/// every 3 s only while this page is the one showing and the app is active.
+private struct WatchGlancePage: View {
+    let active: Bool
+    @EnvironmentObject private var client: WatchConnectivityClient
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var image: UIImage?
+    @State private var etag: String?
+    @State private var message: String?
+    @State private var updatedAt: Date?
+
+    private var polling: Bool { active && scenePhase == .active }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .accessibilityLabel(Text("Mac 屏幕画面"))
+            } else if message == nil {
+                ProgressView()
+            }
+            if let message {
+                Text(message).font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            } else if let updatedAt {
+                Text(updatedAt, style: .relative).font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle("Mac 画面")
+        .task(id: polling) {
+            guard polling else { return }
+            while !Task.isCancelled {
+                switch await client.requestScreenThumb(etag: etag) {
+                case .image(let data, let tag):
+                    if let decoded = UIImage(data: data) {
+                        image = decoded
+                        etag = tag
+                        message = nil
+                        updatedAt = Date()
+                    }
+                case .unchanged:
+                    message = nil
+                    updatedAt = Date()
+                case .failed(let reason):
+                    message = reason
+                }
+                try? await Task.sleep(for: .seconds(MacScreenWatchRelay.watchInterval))
+            }
+        }
     }
 }
 

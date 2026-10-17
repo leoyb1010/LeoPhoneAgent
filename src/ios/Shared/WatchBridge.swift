@@ -661,6 +661,12 @@ extension WatchBridge: WCSessionDelegate {
                 let delivered = await WatchContinueOnPhoneHandler.handle(sessionId: sessionId)
                 replyHandler(["ok": delivered])
             }
+        case MacScreenWatchRelay.kind:
+            // [WP-50 R0] 手表的「Mac 画面」页:iPhone 代取 ≤400 px 的小图。
+            let etag = message[MacScreenWatchRelay.etagKey] as? String
+            Task { @MainActor in
+                replyHandler(await MacScreenWatchProvider.thumbnail(etag: etag))
+            }
         case WatchPayloadKey.kindApprovalReply:
             let choice = (message[WatchPayloadKey.choice] as? String) ?? ""
             replyHandler(["ok": !requestId.isEmpty && !choice.isEmpty])
