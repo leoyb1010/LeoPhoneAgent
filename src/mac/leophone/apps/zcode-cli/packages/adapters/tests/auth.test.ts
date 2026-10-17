@@ -43,7 +43,8 @@ describe("shared ZCode credentials", () => {
       });
 
       const raw = JSON.parse(await readFile(store.filePath, "utf-8")) as Record<string, string>;
-      expect(store.filePath).toBe(join(dir, ".zcode", "v2", "credentials.json"));
+      // [leo] 共享凭据只在 ~/.leophoneagent/v2/credentials.json，不读写官方 ~/.zcode。
+      expect(store.filePath).toBe(join(dir, ".leophoneagent", "v2", "credentials.json"));
       expect(raw[SHARED_ZCODE_CREDENTIAL_KEYS.zaiAccessToken]?.startsWith("enc:v1:")).toBe(true);
       expect(await store.load(SHARED_ZCODE_CREDENTIAL_KEYS.activeProvider)).toBe("zai");
       expect(await store.load(SHARED_ZCODE_CREDENTIAL_KEYS.zaiAccessToken)).toBe(
@@ -63,7 +64,7 @@ describe("shared ZCode credentials", () => {
 
   it("reads legacy plaintext credential values", async () => {
     const dir = await mkdtemp(join(tmpdir(), "zcode-auth-"));
-    const credentialsDir = join(dir, ".zcode", "v2");
+    const credentialsDir = join(dir, ".leophoneagent", "v2"); // [leo] 数据根 ~/.leophoneagent
     const credentialsPath = join(credentialsDir, "credentials.json");
 
     try {
@@ -294,107 +295,28 @@ async function runConcurrentCredentialWorkers(
 }
 
 // CLI 浏览器登录的轮询客户端按 providerId 泛化（zai/bigmodel），ready 数据统一为 accessToken。
+// [leo] LeoBot 不再支持 Z.ai / BigModel 平台账号登录与 Coding Plan 项目令牌换取：
+// 上游这些用例针对官方 OAuth / biz 接口的成功路径，Leo 改为断言在发出任何请求之前就失败。
 describe("CLI OAuth client", () => {
-  it("initializes and polls the backend device flow", async () => {
-    const httpClient = new FakeHttpClient([
-      jsonResponse({
-        code: 0,
-        msg: "",
-        data: {
-          flow_id: "flow-1",
-          poll_token: "poll-token",
-          authorize_url: "https://chat.z.ai/oauth/authorize?state=state",
-          expires_at: 1735000000,
-          poll_interval_sec: 2,
-        },
-      }),
-      jsonResponse({
-        code: 0,
-        msg: "",
-        data: {
-          status: "ready",
-          token: "jwt-token",
-          user: {
-            user_id: "u_1",
-            email: "alice@example.com",
-            name: "Alice",
-          },
-          zai: {
-            access_token: "zai-access-token",
-          },
-        },
-      }),
-    ]);
-    const client = createCliOAuthClient({
-      baseUrl: "https://zcode.example/api/v1/",
-      httpClient,
-      providerId: "zai",
-    });
+  it.each(["zai", "bigmodel"] as const)("refuses to create a %s CLI OAuth client", (providerId) => {
+    const httpClient = new FakeHttpClient([jsonResponse({ code: 0, msg: "", data: {} })]);
 
-    const init = await client.init({ pollToken: "poll-token" });
-    const poll = await client.poll({
-      flowId: init.flow_id,
-      pollToken: "poll-token",
-    });
-
-    expect(httpClient.requests[0]).toMatchObject({
-      method: "POST",
-      url: "https://zcode.example/api/v1/oauth/cli/init",
-      headers: {
-        Authorization: "Bearer poll-token",
-        "Content-Type": "application/json",
-      },
-    });
-    expect(new TextDecoder().decode(httpClient.requests[0]?.body)).toBe('{"provider":"zai"}');
-    expect(httpClient.requests[1]).toMatchObject({
-      method: "GET",
-      url: "https://zcode.example/api/v1/oauth/cli/poll/flow-1",
-      headers: {
-        Authorization: "Bearer poll-token",
-      },
-    });
-    expect(poll).toMatchObject({
-      status: "ready",
-      token: "jwt-token",
-      providerId: "zai",
-      accessToken: "zai-access-token",
-    });
-  });
-
-  it("surfaces backend business errors", async () => {
-    const client = createCliOAuthClient({
-      httpClient: new FakeHttpClient([
-        jsonResponse({
-          code: 3004,
-          msg: "invalid_flow",
-          data: {},
-        }),
-      ]),
-      providerId: "zai",
-    });
-
-    await expect(client.init({ pollToken: "poll-token" })).rejects.toMatchObject({
-      businessCode: 3004,
-      message: "invalid_flow",
-      name: "CliOAuthError",
-    } satisfies Partial<CliOAuthError>);
+    expect(() => createCliOAuthClient({ httpClient, providerId })).toThrow(CliOAuthError);
+    expect(() => createCliOAuthClient({ httpClient, providerId })).toThrow(
+      /account login is disabled in LeoBot/,
+    );
+    expect(httpClient.requests).toHaveLength(0);
   });
 });
 
 describe("Coding Plan API key resolver", () => {
   it.each(["bigmodel", "zai"] as const)(
-    "creates %s keys with Coding Plan usageScene",
+    "fails %s project token resolution without any network request",
     async (family) => {
       const httpClient = new FakeHttpClient([
-        ...(family === "zai"
-          ? [jsonResponse({ code: 200, data: { access_token: "biz-token" } })]
-          : []),
+        jsonResponse({ code: 200, data: { access_token: "biz-token" } }),
         customerInfoResponse(),
-        jsonResponse({ code: 200, data: [] }),
-        jsonResponse({
-          code: 200,
-          data: { apiKey: "key", name: "zcode-api-key" },
-        }),
+        jsonResponse({ code: 200, data: [{ apiKey: "key", name: "zcode-api-key" }] }),
         jsonResponse({
           code: 200,
           data: {
@@ -405,262 +327,29 @@ describe("Coding Plan API key resolver", () => {
           },
         }),
       ]);
-      await expect(
-        createCodingPlanApiKeyResolver({ httpClient }).resolve({
-          accessToken: "login-token",
-          family,
-        }),
-      ).resolves.toBe("project-token");
-      expect(httpClient.requests.some((request) => request.url.includes("/copy/"))).toBe(false);
-      const issuance = httpClient.requests.at(-1)!;
-      expect(issuance.url).toMatch(/\/api_keys\/key\/access_tokens$/);
-      expect(issuance.method).toBe("POST");
-      expect(JSON.parse(new TextDecoder().decode(issuance.body))).toMatchObject({
-        clientType: "zcode",
-      });
-      const create = httpClient.requests.find(
-        (request) => request.method === "POST" && request.url.endsWith("/api_keys"),
+      const resolver = createCodingPlanApiKeyResolver({ httpClient });
+
+      await expect(resolver.resolve({ accessToken: "login-token", family })).rejects.toThrow(
+        /^project_token_/,
       );
-      expect(create).toBeDefined();
-      expect(JSON.parse(new TextDecoder().decode(create!.body))).toEqual({
-        name: "zcode-api-key",
-        usageScene: 1,
-      });
+      await expect(
+        resolver.resolveMaterial({ accessToken: "login-token", family }),
+      ).rejects.toThrow(/^project_token_/);
+      expect(httpClient.requests).toHaveLength(0);
     },
   );
-
-  it("keeps the CLI default project even when it is a team project", async () => {
-    const httpClient = new FakeHttpClient([
-      jsonResponse({
-        code: 200,
-        data: {
-          organizations: [
-            {
-              organizationId: "org",
-              organizationName: "默认机构",
-              projects: [
-                { projectId: "personal", projectType: 1 },
-                { projectId: "team", projectName: "默认项目", projectType: 2 },
-              ],
-            },
-          ],
-        },
-      }),
-      jsonResponse({ code: 200, data: [{ apiKey: "key", name: "zcode-api-key" }] }),
-      jsonResponse({
-        code: 200,
-        data: {
-          accessToken: "project-token",
-          tokenType: "Bearer",
-          expiresIn: 600,
-          expiresAt: Date.now() / 1000 + 600,
-        },
-      }),
-    ]);
-    await expect(
-      createCodingPlanApiKeyResolver({ httpClient }).resolve({
-        accessToken: "login",
-        family: "bigmodel",
-      }),
-    ).resolves.toBe("project-token");
-    expect(httpClient.requests[1]?.url).toContain("/projects/team/api_keys");
-    expect(httpClient.requests.at(-1)?.headers).toMatchObject({ authorization: "Bearer login" });
-  });
-
-  it("exchanges a ZAI OAuth access token for a short-lived project token", async () => {
-    const httpClient = new FakeHttpClient([
-      jsonResponse({
-        code: 0,
-        data: {
-          access_token: "zai-biz-token",
-        },
-      }),
-      customerInfoResponse(),
-      jsonResponse({
-        code: 200,
-        data: [],
-      }),
-      jsonResponse({
-        code: 200,
-        data: {
-          apiKey: "zai-api-key",
-          name: "zcode-api-key",
-        },
-      }),
-      jsonResponse({
-        code: 200,
-        data: {
-          accessToken: "project-token",
-          tokenType: "Bearer",
-          expiresIn: 600,
-          expiresAt: Math.floor(Date.now() / 1000) + 600,
-        },
-      }),
-    ]);
-    const resolver = createCodingPlanApiKeyResolver({ httpClient });
-
-    await expect(
-      resolver.resolve({
-        accessToken: "zai-oauth-token",
-        family: "zai",
-      }),
-    ).resolves.toBe("project-token");
-    expect(httpClient.requests[0]?.url).toBe("https://api.z.ai/api/auth/z/login");
-    expect(httpClient.requests[1]?.headers).toMatchObject({
-      authorization: "Bearer zai-biz-token",
-    });
-  });
-
-  it("resolves a BigModel OAuth access token through project access token issuance", async () => {
-    const httpClient = new FakeHttpClient([
-      customerInfoResponse(),
-      jsonResponse({
-        code: 200,
-        data: [
-          {
-            apiKey: "bigmodel-api-key",
-            name: "zcode-api-key",
-          },
-        ],
-      }),
-      jsonResponse({
-        code: 200,
-        data: {
-          accessToken: "project-token",
-          tokenType: "Bearer",
-          expiresIn: 600,
-          expiresAt: Math.floor(Date.now() / 1000) + 600,
-        },
-      }),
-    ]);
-    const resolver = createCodingPlanApiKeyResolver({ httpClient });
-
-    await expect(
-      resolver.resolve({
-        accessToken: "bigmodel-oauth-token",
-        family: "bigmodel",
-      }),
-    ).resolves.toBe("project-token");
-    expect(httpClient.requests[0]?.url).toBe(
-      "https://bigmodel.cn/api/biz/customer/getCustomerInfo",
-    );
-    expect(httpClient.requests[0]?.headers).toMatchObject({
-      authorization: "bigmodel-oauth-token",
-    });
-  });
-
-  it("uses bigmodel.cn for BigModel API key resolution when ZCODE_ENV=test", async () => {
-    vi.stubEnv("ZCODE_ENV", "test");
-    const httpClient = new FakeHttpClient([
-      customerInfoResponse(),
-      jsonResponse({
-        code: 200,
-        data: [
-          {
-            apiKey: "bigmodel-api-key",
-            name: "zcode-api-key",
-          },
-        ],
-      }),
-      jsonResponse({
-        code: 200,
-        data: {
-          accessToken: "project-token",
-          tokenType: "Bearer",
-          expiresIn: 600,
-          expiresAt: Math.floor(Date.now() / 1000) + 600,
-        },
-      }),
-    ]);
-    const resolver = createCodingPlanApiKeyResolver({ httpClient });
-
-    await resolver.resolve({
-      accessToken: "bigmodel-oauth-token",
-      family: "bigmodel",
-    });
-
-    expect(httpClient.requests[0]?.url).toBe(
-      "https://bigmodel.cn/api/biz/customer/getCustomerInfo",
-    );
-  });
 });
 
 describe("BigModel OAuth client", () => {
-  it("builds localhost authorize URLs and exchanges auth codes", async () => {
-    const httpClient = new FakeHttpClient([
-      jsonResponse({
-        data: {
-          accessToken: "bigmodel-access-token",
-          refreshToken: "bigmodel-refresh-token",
-        },
+  it("refuses to create a BigModel OAuth client", () => {
+    const httpClient = new FakeHttpClient([]);
+
+    expect(() => createBigmodelOAuthClient({ appSecret: "test-secret", httpClient })).toThrow(
+      expect.objectContaining({
+        name: "BigmodelOAuthError",
+        message: "BigModel account login is disabled in LeoBot.",
       }),
-    ]);
-    const client = createBigmodelOAuthClient({
-      appSecret: "test-secret",
-      httpClient,
-    });
-
-    const authorizeUrl = client.buildAuthorizeUrl({
-      redirectUri: "http://127.0.0.1:1234/oauth/callback/bigmodel",
-      state: "state-1",
-    });
-    const tokenSet = await client.exchangeCode({ code: "auth-code" });
-
-    expect(authorizeUrl).toContain("https://bigmodel.cn/login?");
-    expect(authorizeUrl).toContain("appId=zcode");
-    expect(authorizeUrl).toContain("state=state-1");
-    expect(tokenSet).toEqual({
-      accessToken: "bigmodel-access-token",
-      refreshToken: "bigmodel-refresh-token",
-    });
-    expect(new TextDecoder().decode(httpClient.requests[0]?.body)).toContain(
-      '"authCode":"auth-code"',
     );
-  });
-
-  it("uses bigmodel.cn for authorize URL when ZCODE_ENV=test", () => {
-    vi.stubEnv("ZCODE_ENV", "test");
-    const httpClient = new FakeHttpClient([]);
-    const client = createBigmodelOAuthClient({
-      appSecret: "test-secret",
-      httpClient,
-    });
-
-    const authorizeUrl = client.buildAuthorizeUrl({
-      redirectUri: "http://127.0.0.1:1234/oauth/callback/bigmodel",
-      state: "state-1",
-    });
-
-    expect(authorizeUrl).toContain("https://bigmodel.cn/login?");
-  });
-
-  it("uses bigmodel.cn for token exchange when ZCODE_ENV=test", async () => {
-    vi.stubEnv("ZCODE_ENV", "test");
-    const httpClient = new FakeHttpClient([
-      jsonResponse({
-        data: {
-          accessToken: "bigmodel-access-token",
-        },
-      }),
-    ]);
-    const client = createBigmodelOAuthClient({
-      appSecret: "test-secret",
-      httpClient,
-    });
-
-    await client.exchangeCode({ code: "auth-code" });
-
-    expect(httpClient.requests[0]?.url).toBe("https://bigmodel.cn/api/auth/tokenByAuthCode");
-  });
-
-  it("requires an explicit app secret before exchanging auth codes", async () => {
-    const httpClient = new FakeHttpClient([]);
-    const client = createBigmodelOAuthClient({ httpClient });
-
-    await expect(client.exchangeCode({ code: "auth-code" })).rejects.toMatchObject({
-      message: "BigModel OAuth appSecret is required.",
-      name: "BigmodelOAuthError",
-    });
     expect(httpClient.requests).toHaveLength(0);
   });
 });

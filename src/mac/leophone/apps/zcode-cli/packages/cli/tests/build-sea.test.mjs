@@ -246,13 +246,15 @@ test("prepares every SEA target in the desktop bundled-tools layout", () => {
       const plan = resolveSeaRuntimeToolPreparationPlan({ root: "/repo", target });
       return [target, plan.platformKey, plan.enabled];
     }),
+    // [leo] LeoBot 只发 macOS arm64，原生搜索工具只对 darwin-arm64 启用
+    // （scripts/native-search-tools-config.mjs ENABLED_NATIVE_SEARCH_PLATFORM_KEYS）。
     [
       ["darwin-arm64", "darwin-arm64", true],
-      ["darwin-x64", "darwin-x64", true],
-      ["linux-arm64", "linux-arm64", true],
-      ["linux-x64", "linux-x64", true],
-      ["win-arm64", "win32-arm64", true],
-      ["win-x64", "win32-x64", true],
+      ["darwin-x64", "darwin-x64", false],
+      ["linux-arm64", "linux-arm64", false],
+      ["linux-x64", "linux-x64", false],
+      ["win-arm64", "win32-arm64", false],
+      ["win-x64", "win32-x64", false],
     ],
   );
 });
@@ -354,45 +356,27 @@ for (const fixture of [
     target: "darwin-arm64",
   },
   {
-    expectedTools: [
-      ["bfs", "4.1.1", "bfs"],
-      ["ripgrep", "14.1.1", "rg"],
-      ["ugrep", "7.8.4", "ugrep"],
-    ],
+    expectedTools: [], // [leo] 非 darwin-arm64 目标不内嵌原生搜索工具
     platformKey: "darwin-x64",
     target: "darwin-x64",
   },
   {
-    expectedTools: [
-      ["bfs", "4.1.1", "bfs"],
-      ["ripgrep", "14.1.1", "rg"],
-      ["ugrep", "7.8.4", "ugrep"],
-    ],
+    expectedTools: [], // [leo] 非 darwin-arm64 目标不内嵌原生搜索工具
     platformKey: "linux-arm64",
     target: "linux-arm64",
   },
   {
-    expectedTools: [
-      ["bfs", "4.1.1", "bfs"],
-      ["ripgrep", "14.1.1", "rg"],
-      ["ugrep", "7.8.4", "ugrep"],
-    ],
+    expectedTools: [], // [leo] 非 darwin-arm64 目标不内嵌原生搜索工具
     platformKey: "linux-x64",
     target: "linux-x64",
   },
   {
-    expectedTools: [
-      ["ripgrep", "14.1.1", "rg.exe"],
-      ["ugrep", "7.8.4", "ugrep.exe"],
-    ],
+    expectedTools: [], // [leo] 非 darwin-arm64 目标不内嵌原生搜索工具
     platformKey: "win32-arm64",
     target: "win-arm64",
   },
   {
-    expectedTools: [
-      ["ripgrep", "14.1.1", "rg.exe"],
-      ["ugrep", "7.8.4", "ugrep.exe"],
-    ],
+    expectedTools: [], // [leo] 非 darwin-arm64 目标不内嵌原生搜索工具
     platformKey: "win32-x64",
     target: "win-x64",
   },
@@ -849,6 +833,7 @@ test("allows skill-only official plugins when SEA runtime assets are required", 
     await writeTestFile(root, "packages/browser-use-plugin/docs/workflow.md", "");
     await writeTestFile(root, "packages/browser-use-plugin/scripts/browser-client.mjs", "");
     await writeDocumentPluginFixtures(root);
+    await writeVisualizePluginFixtures(root);
     await writeTestFile(root, "packages/ios-simulator-plugin/.zcode-plugin/plugin.json", "{}");
     await writeTestFile(root, "packages/ios-simulator-plugin/dist/mcp/server.js", "");
     await writeTestFile(
@@ -956,6 +941,7 @@ test("requires SEA runtime assets for runtime-backed official plugins", async ()
   try {
     await writeTestFile(root, "packages/android-emulator-plugin/.zcode-plugin/plugin.json", "{}");
     // 宿主要先齐备，这条测试隔离的是 android-emulator 缺 runtime 这一种情况。
+    await writeVisualizePluginFixtures(root);
     await writeTestFile(root, "packages/node-repl-host/.zcode-plugin/plugin.json", "{}");
     await writeTestFile(root, "packages/node-repl-host/dist/mcp/server.js", "");
     await writeTestFile(root, "packages/browser-use-plugin/.zcode-plugin/plugin.json", "{}");
@@ -1007,6 +993,7 @@ test("requires the Browser Use client alongside the SEA MCP runtime", async () =
     await writeTestFile(root, "packages/node-repl-host/.zcode-plugin/plugin.json", "{}");
     await writeTestFile(root, "packages/node-repl-host/dist/mcp/server.js", "");
     await writeDocumentPluginFixtures(root);
+    await writeVisualizePluginFixtures(root);
     await writeTestFile(root, "packages/ios-simulator-plugin/dist/mcp/server.js", "");
 
     await assert.rejects(
@@ -1290,6 +1277,18 @@ test("can be dynamically imported when argv[1] is missing", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), "zcode-windows-x64.exe");
 });
+
+// visualize 是排在清单首位的内容型官方插件：manifest 与 requiredSeedPaths 缺任一项都会先于
+// 被测断言报错，所以采集类用例都要按 officialSeaPlugins 登记补齐它的 fixture。
+async function writeVisualizePluginFixtures(root) {
+  const visualize = officialSeaPlugins.find((plugin) => plugin.name === "visualize");
+  assert.ok(visualize);
+  const pluginRoot = visualize.rootPath.split(/[\\/]/u).join("/");
+  await writeTestFile(root, `${pluginRoot}/.zcode-plugin/plugin.json`, "{}");
+  for (const relativePath of visualize.requiredSeedPaths ?? []) {
+    await writeTestFile(root, `${pluginRoot}/${relativePath}`, "");
+  }
+}
 
 async function writeDocumentPluginFixtures(root) {
   for (const [name, skill] of [

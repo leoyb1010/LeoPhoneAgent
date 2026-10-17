@@ -47,9 +47,10 @@ describe("FileWorkspaceHookTrustStore", () => {
   it("只使用 user config storage.dir，不接受 project/env storage 覆盖", async () => {
     const home = await root();
     const custom = join(home, "trusted-user-storage");
-    await mkdir(join(home, ".zcode", "cli"), { recursive: true });
+    // [leo] 用户配置在 ~/.leophoneagent/cli/config.json（原 ~/.zcode）。
+    await mkdir(join(home, ".leophoneagent", "cli"), { recursive: true });
     await writeFile(
-      join(home, ".zcode", "cli", "config.json"),
+      join(home, ".leophoneagent", "cli", "config.json"),
       JSON.stringify({ storage: { dir: custom } }),
       "utf8",
     );

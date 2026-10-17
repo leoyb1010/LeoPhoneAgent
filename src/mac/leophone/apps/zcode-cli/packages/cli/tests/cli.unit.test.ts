@@ -221,7 +221,8 @@ test("prepares beta CLI runtime env with beta storage root", () => {
     ["/usr/bin/node", "/workspace/bin/zcode.js"],
   );
 
-  assert.equal(env.ZCODE_STORAGE_DIR, join(homedir(), ".zcode-beta"));
+  // [leo] beta 数据根是 ~/.leophoneagent-beta，不与官方 ZCode beta 的 ~/.zcode-beta 共用（src/env.ts）。
+  assert.equal(env.ZCODE_STORAGE_DIR, join(homedir(), ".leophoneagent-beta"));
 });
 
 test("preserves explicit storage root when beta mode is enabled", () => {
@@ -601,10 +602,13 @@ test("borrows one process provider registry for a headless prompt and disposes i
     userConfigPath: "/tmp/zcode-legacy-cli.json",
     startProcessProviderRegistryRuntime: async (_env, options) => {
       runtimeStarts += 1;
-      assert.deepEqual(options, {
-        standalone: {
-          legacyCliUserConfigFilePath: "/tmp/zcode-legacy-cli.json",
-        },
+      // Runtime 同时接收 CLI 的 ZCode Built-in 刷新回执（createCliProviderRefreshReporter）。
+      const { onBuiltinRefreshError, onBuiltinRefreshResult, ...standalone } =
+        options?.standalone ?? {};
+      assert.equal(typeof onBuiltinRefreshError, "function");
+      assert.equal(typeof onBuiltinRefreshResult, "function");
+      assert.deepEqual(standalone, {
+        legacyCliUserConfigFilePath: "/tmp/zcode-legacy-cli.json",
       });
       return {
         accountSource: {} as never,
@@ -6272,10 +6276,13 @@ test("reuses one process provider registry across TUI app replacements", async (
     userConfigPath: "/tmp/zcode-legacy-tui.json",
     startProcessProviderRegistryRuntime: async (_env, options) => {
       runtimeStarts += 1;
-      assert.deepEqual(options, {
-        standalone: {
-          legacyCliUserConfigFilePath: "/tmp/zcode-legacy-tui.json",
-        },
+      // Runtime 同时接收 CLI 的 ZCode Built-in 刷新回执（createCliProviderRefreshReporter）。
+      const { onBuiltinRefreshError, onBuiltinRefreshResult, ...standalone } =
+        options?.standalone ?? {};
+      assert.equal(typeof onBuiltinRefreshError, "function");
+      assert.equal(typeof onBuiltinRefreshResult, "function");
+      assert.deepEqual(standalone, {
+        legacyCliUserConfigFilePath: "/tmp/zcode-legacy-tui.json",
       });
       return {
         accountSource: {} as never,
@@ -6327,12 +6334,15 @@ test("reuses one process provider registry across TUI app replacements", async (
       } as never;
     },
     runTui: async (options) => {
-      await options.submitPrompt("/new", {
+      const promptOptions = {
         requestPermission: async () => ({
-          decision: "deny",
+          decision: "deny" as const,
           resolvedAt: new Date(),
         }),
-      });
+      };
+      // App 惰性创建：先提交一次普通 prompt 建出首个 App，/new 才是真正的 App 替换。
+      await options.submitPrompt("first turn", promptOptions);
+      await options.submitPrompt("/new", promptOptions);
       return 0;
     },
   });

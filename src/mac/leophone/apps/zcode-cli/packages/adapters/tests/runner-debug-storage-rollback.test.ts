@@ -9,6 +9,7 @@ describe("runner debug storage rollback", () => {
     );
 
     expect(source).not.toContain("zcode-storage-root");
-    expect(source).toContain('join(homedir(), ".zcode", "cli"');
+    // [leo] 调试/rollout 目录在 ~/.leophoneagent/cli（原 ~/.zcode/cli）。
+    expect(source).toContain('join(homedir(), ".leophoneagent", "cli"');
   });
 });

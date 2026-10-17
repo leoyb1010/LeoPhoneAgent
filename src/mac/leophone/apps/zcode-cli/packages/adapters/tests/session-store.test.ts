@@ -379,7 +379,10 @@ describe("SQLite session store", () => {
   });
 
   it("defaults the session database under the db directory", () => {
-    expect(getDefaultSessionDbPath()).toBe(join(homedir(), ".zcode", "cli", "db", "db.sqlite"));
+    // [leo] 会话库在 ~/.leophoneagent/cli/db（原 ~/.zcode）。
+    expect(getDefaultSessionDbPath()).toBe(
+      join(homedir(), ".leophoneagent", "cli", "db", "db.sqlite"),
+    );
   });
 
   it("keeps the existing in-memory session store path working", () => {

@@ -149,7 +149,8 @@ describe("ZCode official marketplace partitions", () => {
     ).toThrow("Official marketplace manifest must be named zcode-plugins-official");
   });
 
-  it("refreshes the registered official source and returns the merged plugin count", async () => {
+  // [leo] 官方市场只用随包内置分片，updateMarketplace 跳过官方 id、不联网刷新。
+  it("does not refresh the official marketplace source over the network", async () => {
     const storageRoot = await makeStorageRoot();
     writeBundledOfficialMarketplacePartitionSync({
       manifest: {
@@ -159,7 +160,9 @@ describe("ZCode official marketplace partitions", () => {
       storageRoot,
     });
 
+    let serverRequests = 0;
     const server = createServer((_request, response) => {
+      serverRequests += 1;
       response.writeHead(200, { "content-type": "application/json" });
       response.end(
         JSON.stringify({
@@ -189,14 +192,12 @@ describe("ZCode official marketplace partitions", () => {
         }),
       );
 
-      const [updated] = await updateMarketplace({
+      const updated = await updateMarketplace({
         marketplace: "zcode-plugins-official",
         storageRoot,
       });
-      expect(updated).toMatchObject({
-        id: "zcode-plugins-official",
-        pluginCount: 2,
-      });
+      expect(updated).toEqual([]);
+      expect(serverRequests).toBe(0);
 
       const merged = JSON.parse(
         await readFile(
@@ -204,7 +205,7 @@ describe("ZCode official marketplace partitions", () => {
           "utf8",
         ),
       ) as { plugins: Array<{ name: string }> };
-      expect(merged.plugins.map((plugin) => plugin.name)).toEqual(["remote", "bundled"]);
+      expect(merged.plugins.map((plugin) => plugin.name)).toEqual(["bundled"]);
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

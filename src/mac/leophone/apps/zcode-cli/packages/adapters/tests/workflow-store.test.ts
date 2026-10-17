@@ -12,9 +12,10 @@ import {
 
 describe("Node workflow store", () => {
   it("defaults to the CLI workflows directory", () => {
-    expect(getDefaultWorkflowRoot()).toContain(join(".zcode", "cli", "workflows"));
+    // [leo] 用户级数据根 ~/.leophoneagent（原 ~/.zcode）。
+    expect(getDefaultWorkflowRoot()).toContain(join(".leophoneagent", "cli", "workflows"));
     expect(getDefaultWorkflowDefinitionsRoot()).toContain(
-      join(".zcode", "cli", "workflows", "definitions"),
+      join(".leophoneagent", "cli", "workflows", "definitions"),
     );
   });
 
