@@ -1840,6 +1840,22 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         return "image/jpeg"
     }
 
+    /// [schedule] 待办 / 日程 / 行程录入规范：先分析出准确的日期时间和提前量，再写入系统日历或提醒事项。
+    static let schedulingPromptFragment = """
+
+
+    ## Recording todos, schedules and reminders
+    When the user asks to record a todo, appointment, meeting, trip or "提醒我…", analyse it before writing anything:
+    1. Run `date '+%Y-%m-%d %H:%M %A'` first to get the exact local date and weekday; never rely on the approximate clock above.
+    2. Resolve every relative expression to an absolute local date and time: 今天/明天/后天/大后天, 周X/下周X, X号, 早上/上午/中午/下午/晚上, Chinese numerals (三点半 = 3:30, 下午三点 = 15:00, 晚上八点 = 20:00). Anything said for tomorrow or later must be written on that day, never today. If the time has already passed today and no day was given, use the next occurrence and say so.
+    3. Choose the target:
+       - Something happening at a time (meeting, appointment, trip, call) → `apple-calendar create --title <title> --start <YYYY-MM-DDTHH:MM> --end <end> --alarm <minutes>`; end = start + 1h unless a duration or end is given.
+       - A task with a deadline or "remind me to …" → `apple-reminders create --title <title> --due <YYYY-MM-DDTHH:MM> --alarm <minutes>`; a date with no time → `--due <YYYY-MM-DD>` (all-day).
+    4. Advance reminder: use the lead time the user gave (提前一小时 = 60). Otherwise 30 minutes; for trips, flights and trains 120 minutes. Put the original wording and any details (location, train number, seat) in --notes; keep the title short.
+    5. Ask one short question only when the day or time is genuinely missing or ambiguous; do not guess a time.
+    6. After the tool succeeds, reply in one line with what was written: 日期（星期X） 时间、标题、写入日历还是提醒事项、提前多久提醒. If a tool reports a date it cannot parse, fix the format and retry instead of creating an undated item.
+    """
+
     // MARK: - Private
 
     /// Approximate current time string, rounded to the hour for cache stability.
@@ -1854,7 +1870,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         let hourStart = Calendar.current.dateInterval(of: .hour, for: now)?.start ?? now
         if hourStart != _cachedTimeDate {
             let fmt = DateFormatter()
-            fmt.dateFormat = "yyyy-MM-dd HH:00"
+            fmt.dateFormat = "yyyy-MM-dd HH:00 EEEE"
+            fmt.locale = Locale(identifier: "en_US_POSIX")
             fmt.timeZone = .current
             _cachedTimeString = fmt.string(from: hourStart)
             _cachedTimeDate = hourStart
@@ -1892,6 +1909,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         stable += subAgentPromptFragment
         stable += askUserPromptFragment   // [T-ask-user]
         stable += toolTogglesPromptFragment
+        stable += Self.schedulingPromptFragment
 
         var volatileTail = "Current time (approximate): \(approximateTimeString) (\(TimeZone.current.identifier)). "
             + "Device languages: \((UserDefaults.standard.object(forKey: "AppleLanguages") as? [String] ?? Locale.preferredLanguages).joined(separator: ", "))."

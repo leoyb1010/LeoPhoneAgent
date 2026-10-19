@@ -203,7 +203,13 @@ NSArray<NSString *> *noff_positional_args(int argc, char **argv) {
 NSDate *_Nullable noff_parse_date(NSString *str) {
     if (!str || str.length == 0) return nil;
 
-    // Relative: -7d, -2h, -30m
+    // Relative: -7d, -2h, -30m（过去）；+1d, +2h, +30m（未来，录日程用）
+    if ([str hasPrefix:@"+"] && str.length >= 3) {
+        unichar unit = [str characterAtIndex:str.length - 1];
+        NSInteger num = [[str substringWithRange:NSMakeRange(1, str.length - 2)] integerValue];
+        NSTimeInterval interval = unit == 'd' ? num * 86400 : unit == 'h' ? num * 3600 : unit == 'm' ? num * 60 : 0;
+        if (num > 0 && interval > 0) return [NSDate dateWithTimeIntervalSinceNow:interval];
+    }
     if ([str hasPrefix:@"-"] && str.length >= 2) {
         unichar unit = [str characterAtIndex:str.length - 1];
         NSString *numStr = [str substringWithRange:NSMakeRange(1, str.length - 2)];

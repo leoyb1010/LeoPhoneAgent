@@ -245,30 +245,13 @@ enum ActionRouter {
         if let on = flashlightOn(lower) {
             return Decision(path: .native, kind: .toggleFlashlight, hour: nil, minute: nil, tomorrow: false, label: on ? "on" : "off")
         }
-        if let travel = parseTravel(raw, lower: lower) { return travel }
-        if isTodo(lower) {
-            let time = parseTime(raw, lower: lower)
-            let title = todoTitle(raw)
-            return Decision(
-                path: title.isEmpty ? .clarify : .native,
-                kind: .createTodo,
-                hour: time?.0,
-                minute: time?.1,
-                tomorrow: isTomorrow(lower),
-                dayOffset: dayOffset(lower),
-                label: title,
-                notes: "原始指令：\(raw)",
-                missingFields: title.isEmpty ? ["要提醒的事情"] : []
-            )
+        // 待办 / 日程 / 行程必须先分析日期、时间、提前量再写入：规则匹配认不全「明天下午三点半」这类说法，
+        // 认不出时间就会建一条没日期的提醒（看起来像记在今天）。一律交给模型按日程录入规范处理。
+        if isTodo(lower) || isCalendar(lower) || parseTravel(raw, lower: lower) != nil {
+            return Decision(path: .agent, kind: nil, hour: nil, minute: nil, tomorrow: false, label: "")
         }
         if isAlarm(raw, lower: lower), let time = parseTime(raw, lower: lower) {
             return Decision(path: .native, kind: .setAlarm, hour: time.0, minute: time.1, tomorrow: isTomorrow(lower), dayOffset: dayOffset(lower), label: alarmLabel(raw))
-        }
-        if isCalendar(lower) {
-            guard let time = parseTime(raw, lower: lower) else {
-                return Decision(path: .clarify, kind: .createCalendar, hour: nil, minute: nil, tomorrow: isTomorrow(lower), dayOffset: dayOffset(lower), label: calendarTitle(raw), notes: "原始指令：\(raw)", missingFields: ["开始时间"])
-            }
-            return Decision(path: .native, kind: .createCalendar, hour: time.0, minute: time.1, tomorrow: isTomorrow(lower), dayOffset: dayOffset(lower), label: calendarTitle(raw), location: extractLocation(raw), notes: "原始指令：\(raw)")
         }
         return Decision(path: .agent, kind: nil, hour: nil, minute: nil, tomorrow: false, label: "")
     }

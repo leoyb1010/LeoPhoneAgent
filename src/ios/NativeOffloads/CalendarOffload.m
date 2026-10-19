@@ -57,11 +57,12 @@ static NSString *const HELP_TEXT =
      "  --calendar <name>    Calendar to add to\n"
      "  --location <loc>     Event location\n"
      "  --notes <text>       Event notes\n"
-     "  --alarm <minutes>    Alarm minutes before event\n"
+     "  --alarm <minutes>    Alarm minutes before event (default 30, 0 = no alarm)\n"
      "\n"
      "REMIND OPTIONS:\n"
      "  --title <title>      Reminder title (required)\n"
-     "  --due <datetime>     Due date\n"
+     "  --due <datetime>     Due date (local ISO like 2026-10-20T15:30, or +1d/+2h)\n"
+     "  --alarm <minutes>    Remind this many minutes before --due (default 30, 0 = only at due time)\n"
      "  --list <name>        Reminder list name\n"
      "  --priority <0-9>     Priority level\n"
      "  --notes <text>       Reminder notes\n"
@@ -574,10 +575,12 @@ static int cmd_create(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL 
     NSString *notes = noff_find_arg(argc, argv, "--notes");
     if (notes) event.notes = notes;
 
+    // [schedule] 录日程要提前提醒：没给 --alarm 时默认提前 30 分钟（EventKit 不会套用系统的默认提醒）；
+    // --alarm 0 = 不提醒。
     NSString *alarmStr = noff_find_arg(argc, argv, "--alarm");
-    if (alarmStr) {
-        EKAlarm *alarm = [EKAlarm alarmWithRelativeOffset:-[alarmStr doubleValue] * 60];
-        [event addAlarm:alarm];
+    double alarmMinutes = alarmStr ? [alarmStr doubleValue] : 30;
+    if (alarmMinutes > 0) {
+        [event addAlarm:[EKAlarm alarmWithRelativeOffset:-alarmMinutes * 60]];
     }
 
     // Find calendar by name if specified
@@ -857,14 +860,26 @@ int calendar_cmd_remind(int argc, char **argv, int stdout_fd, int stderr_fd, BOO
     EKReminder *reminder = [EKReminder reminderWithEventStore:eventStore()];
     reminder.title = title;
 
+    // [schedule] --due 解析不了必须报错：以前会悄悄建一条没有日期的提醒，看起来就像记在了今天。
     NSString *dueStr = noff_find_arg(argc, argv, "--due");
     if (dueStr) {
         NSDate *due = noff_parse_date(dueStr);
-        if (due) {
-            reminder.dueDateComponents = [[NSCalendar currentCalendar]
-                components:(NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay |
-                            NSCalendarUnitHour | NSCalendarUnitMinute)
-                fromDate:due];
+        if (!due) {
+            NSDictionary *err = noff_json_error(TOOL_NAME, @"remind", NOFF_ERR_INVALID_ARGS,
+                [NSString stringWithFormat:@"Cannot parse --due '%@'. Use local ISO time like 2026-10-20T15:30, or +1d / +2h. Nothing was created.", dueStr]);
+            noff_emit_json(stdout_fd, err, compact, quiet);
+            return NOFF_EXIT_INVALID_ARGS;
+        }
+        BOOL dateOnly = dueStr.length == 10;  // yyyy-MM-dd：全天待办，不带时刻
+        NSCalendarUnit units = NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay;
+        if (!dateOnly) units |= NSCalendarUnitHour | NSCalendarUnitMinute;
+        reminder.dueDateComponents = [[NSCalendar currentCalendar] components:units fromDate:due];
+        if (!dateOnly) {
+            // 到点提醒 + 提前提醒（--alarm 分钟，默认 30；0 = 只在到点提醒）。
+            NSString *alarmStr = noff_find_arg(argc, argv, "--alarm");
+            double before = alarmStr ? [alarmStr doubleValue] : 30;
+            [reminder addAlarm:[EKAlarm alarmWithAbsoluteDate:due]];
+            if (before > 0) [reminder addAlarm:[EKAlarm alarmWithAbsoluteDate:[due dateByAddingTimeInterval:-before * 60]]];
         }
     }
 
@@ -975,6 +990,12 @@ int calendar_cmd_update_reminder(int argc, char **argv, int stdout_fd, BOOL comp
     if (title) reminder.title = title;
 
     NSString *dueStr = noff_find_arg(argc, argv, "--due");
+    if (dueStr && !noff_parse_date(dueStr)) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"update-reminder", NOFF_ERR_INVALID_ARGS,
+            [NSString stringWithFormat:@"Cannot parse --due '%@'. Use local ISO time like 2026-10-20T15:30. Nothing was changed.", dueStr]);
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
     if (dueStr) {
         NSDate *due = noff_parse_date(dueStr);
         if (due) {

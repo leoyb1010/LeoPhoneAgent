@@ -56,10 +56,8 @@ final class AgentChatCorrectnessTests: XCTestCase {
         XCTAssertEqual(alarm.minute, 0)
         XCTAssertTrue(alarm.tomorrow)
 
-        let cal = ActionRouter.decide(text: "把明早 9:00 开会加到日历", imageCount: 0)
-        XCTAssertEqual(cal.kind, .createCalendar)
-        XCTAssertEqual(cal.hour, 9)
-        XCTAssertTrue(cal.tomorrow)
+        // 日程 / 待办交给模型分析时间后再写入，不走规则直写。
+        XCTAssertEqual(ActionRouter.decide(text: "把明早 9:00 开会加到日历", imageCount: 0).path, .agent)
 
         XCTAssertEqual(ActionRouter.decide(text: "帮我看看这张图", imageCount: 1).path, .agent)
         XCTAssertEqual(ActionRouter.decide(text: "设个闹钟", imageCount: 0).path, .agent)
@@ -69,24 +67,17 @@ final class AgentChatCorrectnessTests: XCTestCase {
         XCTAssertEqual(torch.label, "on")
         let torchOff = ActionRouter.decide(text: "turn off flashlight", imageCount: 0)
         XCTAssertEqual(torchOff.label, "off")
-        let todo = ActionRouter.decide(text: "记个待办 买牛奶", imageCount: 0)
-        XCTAssertEqual(todo.kind, .createTodo)
-        XCTAssertEqual(todo.label, "买牛奶")
+        XCTAssertEqual(ActionRouter.decide(text: "记个待办 买牛奶", imageCount: 0).path, .agent)
         XCTAssertEqual(ActionRouter.decide(text: "手电筒坏了怎么办", imageCount: 0).path, .agent)
 
-        let natural = ActionRouter.decide(text: "提醒我后天下午3点去医院复诊", imageCount: 0)
-        XCTAssertEqual(natural.kind, .createTodo)
-        XCTAssertEqual(natural.path, .native)
-        XCTAssertEqual(natural.hour, 15)
-        XCTAssertEqual(natural.effectiveDayOffset, 2)
-        XCTAssertEqual(natural.label, "去医院复诊")
+        XCTAssertEqual(ActionRouter.decide(text: "提醒我后天下午3点去医院复诊", imageCount: 0).path, .agent)
+        XCTAssertEqual(ActionRouter.decide(text: "提醒我明天下午三点半开会", imageCount: 0).path, .agent)
+        // 带「提醒我」的闹钟也先交给模型，不再被当成没日期的待办直写。
+        XCTAssertEqual(ActionRouter.decide(text: "明天7点闹钟提醒我起床", imageCount: 0).path, .agent)
 
         let enPhoto = ActionRouter.decide(text: "Save this photo to the album", imageCount: 1)
         XCTAssertEqual(enPhoto.path, .native)
-        let enCal = ActionRouter.decide(text: "add to calendar tomorrow 10:00 standup", imageCount: 0)
-        XCTAssertEqual(enCal.kind, .createCalendar)
-        XCTAssertEqual(enCal.hour, 10)
-        XCTAssertTrue(enCal.tomorrow)
+        XCTAssertEqual(ActionRouter.decide(text: "add to calendar tomorrow 10:00 standup", imageCount: 0).path, .agent)
         let dawn = ActionRouter.decide(text: "明早 6:30 闹钟", imageCount: 0)
         XCTAssertEqual(dawn.kind, .setAlarm)
         XCTAssertEqual(dawn.hour, 6)
@@ -150,40 +141,14 @@ final class AgentChatCorrectnessTests: XCTestCase {
         ))
     }
 
-    func testTravelIntentClarifiesMissingFieldsAndNeverGuesses() {
-        let partial = ActionRouter.decide(
-            text: "帮我记录明天下午19:00要去北京的高铁，车次是，座位是",
-            imageCount: 0
-        )
-        XCTAssertEqual(partial.path, .clarify)
-        XCTAssertEqual(partial.kind, .createTravel)
-        XCTAssertEqual(partial.location, "北京")
-        XCTAssertEqual(partial.missingFields, ["车次", "座位"])
-
-        let complete = ActionRouter.decide(
-            text: "记录明天下午19:00去北京的高铁 G1234，座位12A",
-            imageCount: 0
-        )
-        XCTAssertEqual(complete.path, .native)
-        XCTAssertEqual(complete.kind, .createTravel)
-        XCTAssertEqual(complete.hour, 19)
-        XCTAssertTrue(complete.notes.contains("G1234"))
-        XCTAssertTrue(complete.notes.contains("12A"))
-
-        let optionalDetails = ActionRouter.decide(
-            text: "帮我记下明天早上8点去机场的行程",
-            imageCount: 0
-        )
-        XCTAssertEqual(optionalDetails.path, .native)
-        XCTAssertEqual(optionalDetails.kind, .createTravel)
-        XCTAssertEqual(optionalDetails.location, "机场")
-        XCTAssertTrue(optionalDetails.missingFields.isEmpty)
-    }
-
-    func testCalendarWithoutTimeClarifiesInsteadOfGuessing() {
-        let result = ActionRouter.decide(text: "把明天产品评审加到日历", imageCount: 0)
-        XCTAssertEqual(result.path, .clarify)
-        XCTAssertEqual(result.kind, .createCalendar)
-        XCTAssertEqual(result.missingFields, ["开始时间"])
+    func testSchedulingIntentsGoToAgentForAnalysis() {
+        for text in ["帮我记录明天下午19:00要去北京的高铁，车次是，座位是",
+                     "记录明天下午19:00去北京的高铁 G1234，座位12A",
+                     "帮我记下明天早上8点去机场的行程",
+                     "把明天产品评审加到日历"] {
+            XCTAssertEqual(ActionRouter.decide(text: text, imageCount: 0).path, .agent, text)
+        }
+        // 解析函数仍保留给收据/行程文案使用。
+        XCTAssertEqual(ActionRouter.parseTravel("记录明天下午19:00去北京的高铁 G1234，座位12A")?.hour, 19)
     }
 }

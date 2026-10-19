@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.75.2",
+            date: "2026-10-19",
+            title: "待办和日程先分析再录入",
+            highlights: [
+                "记待办、日程、行程不再走快捷规则直接建：先查准当前日期和星期，把「明天下午三点半」「下周三」这类说法换算成确切时间，再写入对应的那一天。",
+                "有具体时间的安排写进系统日历，带截止时间的事写进提醒事项，都会按你说的提前量提醒；没说就默认提前 30 分钟，车票航班提前 2 小时。",
+                "时间没说清会先问一句，不再猜；写完用一行回报：几月几号星期几、几点、标题、提前多久提醒。",
+                "日期解析不了会直接报错重试，不再悄悄建一条没日期、看起来像记在今天的提醒。"
+            ]
+        ),
+        LeoRelease(
             version: "1.75.1",
             date: "2026-10-17",
             title: "远程 Mac 上的 CLI 全部打通",
