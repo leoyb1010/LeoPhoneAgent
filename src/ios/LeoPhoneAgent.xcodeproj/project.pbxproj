@@ -179,6 +179,7 @@
 		7A49962E84F115865D41B933 /* AudioSessionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE154CF628D8699BD99CF9CB /* AudioSessionCoordinator.swift */; };
 		891443CAA4679D09A6D32AE4 /* RealTimeCutVADLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = C42120806C66A2C804F89620 /* RealTimeCutVADLibrary */; };
 		E5CTD0003 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = E5CTD0002 /* Citadel */; };
+		E5STM0003 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = E5STM0002 /* SwiftTerm */; };
 		8B886DA8A270E8FB58A9A1FA /* SpeechPlayerControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A302B074A0BE0AFED8EC7E9 /* SpeechPlayerControl.swift */; };
 		A1B2C3D4E5F60718293A4B5C /* SystemVoiceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5D /* SystemVoiceCatalog.swift */; };
 		AA0838A02F3B941A00049557 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0838A12F3B941A00049557 /* AboutView.swift */; };
@@ -192,6 +193,8 @@
 		AA26CCB92F31070A00AECF2D /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = AA26CCB82F31070A00AECF2D /* libsqlite3.tbd */; };
 		AA26CCBA2F31080100AECF2D /* ISHKernel.m in Sources */ = {isa = PBXBuildFile; fileRef = AA26CCBB2F31080100AECF2D /* ISHKernel.m */; };
 		AA26CCBC2F31080100AECF2D /* ISHTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA26CCBD2F31080100AECF2D /* ISHTerminalView.swift */; };
+		E5SSHV0001 /* SSHTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SSHV0002 /* SSHTerminalView.swift */; };
+		LF977F04E42B /* SSHTerminalSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB80E49EC08 /* SSHTerminalSession.swift */; };
 		AA26CCBC2F324FE400AECF2D /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA26CCBB2F324FE400AECF2D /* FileBrowserView.swift */; };
 		AA26CCBE2F31080100AECF2D /* RootfsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA26CCBF2F31080100AECF2D /* RootfsManager.swift */; };
 		LF384783631F /* KernelBootManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB234C51AEE /* KernelBootManager.swift */; };
@@ -586,6 +589,7 @@
 		E5CST0001 /* CorrectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CST0002 /* CorrectionStore.swift */; };
 		E5RHS0001 /* RemoteHostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RHS0002 /* RemoteHostStore.swift */; };
 		E5RSE0001 /* RemoteSSHExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RSE0002 /* RemoteSSHExecutor.swift */; };
+		LF27D13A5587 /* RemoteSSHPortForward.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7D035920AD /* RemoteSSHPortForward.swift */; };
 		E5WPL0001 /* WorkerPool.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WPL0002 /* WorkerPool.swift */; };
 		E5MRC0001 /* MemoryRecall.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MRC0002 /* MemoryRecall.swift */; };
 		E5RHV0001 /* RemoteHostSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RHV0002 /* RemoteHostSettingsView.swift */; };
@@ -682,8 +686,10 @@
 		E5AUT0001 /* AutomationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUT0002 /* AutomationEngine.swift */; };
 		E5SET0001 /* SettingsHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SET0002 /* SettingsHomeView.swift */; };
 		E5STG9001 /* SensitiveToolGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5STG9002 /* SensitiveToolGate.swift */; };
+		LF1484384683 /* RemoteSSHSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF4F39D6258 /* RemoteSSHSupport.swift */; };
 		E5FA00001 /* FullAuto.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FA00002 /* FullAuto.swift */; };
 		E5STG9003 /* SensitiveToolGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5STG9002 /* SensitiveToolGate.swift */; };
+		LF6AF521256F /* RemoteSSHSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF4F39D6258 /* RemoteSSHSupport.swift */; };
 		E5QNI9001 /* QuickNoteIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QNI9002 /* QuickNoteIntent.swift */; };
 		E5DSC9001 /* DocumentScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DSC9002 /* DocumentScannerView.swift */; };
 		E5ATI9001 /* AttachmentImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ATI9002 /* AttachmentImporter.swift */; };
@@ -1267,6 +1273,8 @@
 		AA26CCBB2F31080100AECF2D /* ISHKernel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ISHKernel.m; sourceTree = "<group>"; };
 		AA26CCBB2F324FE400AECF2D /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
 		AA26CCBD2F31080100AECF2D /* ISHTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISHTerminalView.swift; sourceTree = "<group>"; };
+		E5SSHV0002 /* SSHTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHTerminalView.swift; sourceTree = "<group>"; };
+		LFB80E49EC08 /* SSHTerminalSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHTerminalSession.swift; sourceTree = "<group>"; };
 		AA26CCBF2F31080100AECF2D /* RootfsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootfsManager.swift; sourceTree = "<group>"; };
 		LFB234C51AEE /* KernelBootManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KernelBootManager.swift; sourceTree = "<group>"; };
 		AA26CCC02F31080100AECF2D /* ISHKernel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ISHKernel.h; sourceTree = "<group>"; };
@@ -1393,6 +1401,7 @@
 		E5CST0002 /* CorrectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrectionStore.swift; sourceTree = "<group>"; };
 		E5RHS0002 /* RemoteHostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteHostStore.swift; sourceTree = "<group>"; };
 		E5RSE0002 /* RemoteSSHExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteSSHExecutor.swift; sourceTree = "<group>"; };
+		LF7D035920AD /* RemoteSSHPortForward.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteSSHPortForward.swift; sourceTree = "<group>"; };
 		E5WPL0002 /* WorkerPool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkerPool.swift; sourceTree = "<group>"; };
 		E5MRC0002 /* MemoryRecall.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryRecall.swift; sourceTree = "<group>"; };
 		E5RHV0002 /* RemoteHostSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteHostSettingsView.swift; sourceTree = "<group>"; };
@@ -1721,6 +1730,7 @@
 		E5AUT0002 /* AutomationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationEngine.swift; sourceTree = "<group>"; };
 		E5SET0002 /* SettingsHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/SettingsHomeView.swift"; sourceTree = SOURCE_ROOT; };
 		E5STG9002 /* SensitiveToolGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Session/SensitiveToolGate.swift"; sourceTree = SOURCE_ROOT; };
+		LFF4F39D6258 /* RemoteSSHSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Session/RemoteSSHSupport.swift; sourceTree = SOURCE_ROOT; };
 		E5FA00002 /* FullAuto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Session/FullAuto.swift"; sourceTree = SOURCE_ROOT; };
 		E5QNI9002 /* QuickNoteIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Intents/QuickNoteIntent.swift"; sourceTree = SOURCE_ROOT; };
 		E5DSC9002 /* DocumentScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/DocumentScannerView.swift"; sourceTree = SOURCE_ROOT; };
@@ -2037,6 +2047,7 @@
 				E5S000005 /* CloudKit.framework in Frameworks */,
 				891443CAA4679D09A6D32AE4 /* RealTimeCutVADLibrary in Frameworks */,
 				E5CTD0003 /* Citadel in Frameworks */,
+				E5STM0003 /* SwiftTerm in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2514,6 +2525,7 @@
 				F1V00010 /* Chat */,
 				F1V00012 /* Providers */,
 				F1V00013 /* Rootfs */,
+				E5SSHV0003 /* Terminal */,
 				F1V00011 /* Settings */,
 				F1V00016 /* Skills */,
 				F1VMCPG0 /* MCP */,
@@ -2775,6 +2787,7 @@
 				E5D603F /* NoteContextIntent.swift */,
 				E5SET0002 /* SettingsHomeView.swift */,
 				E5STG9002 /* SensitiveToolGate.swift */,
+				LFF4F39D6258 /* RemoteSSHSupport.swift */,
 				E5FA00002 /* FullAuto.swift */,
 				E5QNI9002 /* QuickNoteIntent.swift */,
 				E5C15609F /* ShortcutRecipes.swift */,
@@ -3048,6 +3061,7 @@
 				E5F2R3006F /* MemoryWriteUndo.swift */,
 				E5RHS0002 /* RemoteHostStore.swift */,
 				E5RSE0002 /* RemoteSSHExecutor.swift */,
+				LF7D035920AD /* RemoteSSHPortForward.swift */,
 				E5WPL0002 /* WorkerPool.swift */,
 				E5MRC0002 /* MemoryRecall.swift */,
 				E5C15602F /* MemoryDailyLog.swift */,
@@ -3286,6 +3300,15 @@
 			path = Rootfs;
 			sourceTree = "<group>";
 		};
+		E5SSHV0003 /* Terminal */ = {
+			isa = PBXGroup;
+			children = (
+				E5SSHV0002 /* SSHTerminalView.swift */,
+				LFB80E49EC08 /* SSHTerminalSession.swift */,
+			);
+			path = Terminal;
+			sourceTree = "<group>";
+		};
 		F1V00014 /* Alarms */ = {
 			isa = PBXGroup;
 			children = (
@@ -3503,6 +3526,7 @@
 				E5RTC5103 /* WebRTC */,
 				C42120806C66A2C804F89620 /* RealTimeCutVADLibrary */,
 				E5CTD0002 /* Citadel */,
+				E5STM0002 /* SwiftTerm */,
 			);
 			productName = LeoPhoneAgent;
 			productReference = E51000010 /* LeoPhoneAgent.app */;
@@ -3643,6 +3667,7 @@
 				E5RTC5102 /* XCRemoteSwiftPackageReference "WebRTC" */,
 				B318C2F47DB3F301A17E49BE /* XCRemoteSwiftPackageReference "RealTimeCutVADLibrary" */,
 				E5CTD0001 /* XCRemoteSwiftPackageReference "Citadel" */,
+				E5STM0001 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
 			productRefGroup = E51000032 /* Products */;
 			projectDirPath = "";
@@ -3836,6 +3861,7 @@
 				LF597E22B569 /* GatewayError.swift in Sources */,
 				E5DVC0002 /* DirectDeviceRoute.swift in Sources */,
 				E5STG9003 /* SensitiveToolGate.swift in Sources */,
+				LF6AF521256F /* RemoteSSHSupport.swift in Sources */,
 				E5CUR0023 /* PromptCacheKey.swift in Sources */,
 				E5UPT01T /* ThinkingRule.swift in Sources */,
 				LF3C6E67E5DD /* ThinkingRuleEdits.swift in Sources */,
@@ -4123,6 +4149,8 @@
 				E5VC00004 /* VoiceCorrectionDebugRPC.swift in Sources */,
 				AA0838D02F3B941A00049557 /* CurrentRoot.m in Sources */,
 				AA26CCBC2F31080100AECF2D /* ISHTerminalView.swift in Sources */,
+				E5SSHV0001 /* SSHTerminalView.swift in Sources */,
+				LF977F04E42B /* SSHTerminalSession.swift in Sources */,
 				AA26CCBC2F324FE400AECF2D /* FileBrowserView.swift in Sources */,
 				AA26CCBE2F31080100AECF2D /* RootfsManager.swift in Sources */,
 				LF384783631F /* KernelBootManager.swift in Sources */,
@@ -4257,6 +4285,7 @@
 				E5D603A /* NoteContextIntent.swift in Sources */,
 				E5SET0001 /* SettingsHomeView.swift in Sources */,
 				E5STG9001 /* SensitiveToolGate.swift in Sources */,
+				LF1484384683 /* RemoteSSHSupport.swift in Sources */,
 				E5FA00001 /* FullAuto.swift in Sources */,
 				E5QNI9001 /* QuickNoteIntent.swift in Sources */,
 				E5DSC9001 /* DocumentScannerView.swift in Sources */,
@@ -4322,6 +4351,7 @@
 				E5CST0001 /* CorrectionStore.swift in Sources */,
 				E5RHS0001 /* RemoteHostStore.swift in Sources */,
 				E5RSE0001 /* RemoteSSHExecutor.swift in Sources */,
+				LF27D13A5587 /* RemoteSSHPortForward.swift in Sources */,
 				E5WPL0001 /* WorkerPool.swift in Sources */,
 				E5MRC0001 /* MemoryRecall.swift in Sources */,
 				E5RHV0001 /* RemoteHostSettingsView.swift in Sources */,
@@ -5522,6 +5552,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		E5STM0001 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
+			requirement = {
+				kind = exactVersion;
+				version = 1.10.1;
+			};
+		};
 		E5CTD0001 /* XCRemoteSwiftPackageReference "Citadel" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/orlandos-nl/Citadel.git";
@@ -5573,6 +5611,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		E5STM0002 /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E5STM0001 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
+		};
 		E5CTD0002 /* Citadel */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = E5CTD0001 /* XCRemoteSwiftPackageReference "Citadel" */;

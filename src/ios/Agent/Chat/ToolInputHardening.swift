@@ -93,7 +93,8 @@ enum ToolArgNumbers {
     static let shellTimeoutRange: ClosedRange<Double> = 1...3600
     static let shellDelayRange: ClosedRange<Double> = 0...600
     static let remoteShellTimeoutRange: ClosedRange<Int> = 5...600
-    static let remoteAgentTimeoutRange: ClosedRange<Int> = 5...3600
+    /// 与 RemoteSSHExecutor.maxTimeout、工具声明一致：以前这里 3600、执行器 600、声明写 600，三处各说各话。
+    static let remoteAgentTimeoutRange: ClosedRange<Int> = 5...1800
     static let fileReadOffsetRange: ClosedRange<Int> = 1...100_000_000
     static let fileReadLinesRange: ClosedRange<Int> = 0...100_000_000
     static let fileReadMaxLengthRange: ClosedRange<Int> = 1...10_000_000

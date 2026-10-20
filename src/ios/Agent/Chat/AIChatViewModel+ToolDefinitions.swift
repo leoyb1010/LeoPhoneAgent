@@ -390,7 +390,7 @@ extension AIChatViewModel {
             let hostList = remoteHosts.map { "'\($0.name)'" }.joined(separator: ", ")
             tools.append(AgentToolDefinition(
                 name: "remote_shell",
-                description: "Run a shell command on a remote computer over SSH. Use for heavy work the on-device sandbox is too slow for: big repos, compiles, long scripts, tools only installed there. Configured hosts: \(hostList). Non-interactive; output capped at 20000 chars; PATH may be minimal (use absolute paths or 'zsh -lc'). The remote process is NOT killed on timeout.",
+                description: "Run a shell command on a remote computer over SSH. Use for heavy work the on-device sandbox is too slow for: big repos, compiles, long scripts, tools only installed there. Configured hosts: \(hostList). Non-interactive; long output keeps the first 4000 and last 16000 chars; PATH may be minimal (use absolute paths or 'zsh -lc'). The remote process is NOT killed on timeout.",
                 parameters: [
                     "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user. Use the same language as the user."),
                     "host": AgentToolParam(type: .string, description: "Name of the configured host to run on, e.g. \(hostList)."),
@@ -409,7 +409,7 @@ extension AIChatViewModel {
                     "host": AgentToolParam(type: .string, description: "Name of the configured host, e.g. \(hostList)."),
                     "prompt": AgentToolParam(type: .string, description: "The task for the remote Claude Code, fully self-contained."),
                     "workdir": AgentToolParam(type: .string, description: "Absolute directory on the remote machine to run in (default: the user's home)."),
-                    "timeout": AgentToolParam(type: .integer, description: "Seconds to wait (default 300, max 600)."),
+                    "timeout": AgentToolParam(type: .integer, description: "Seconds to wait (default 300, max 1800)."),
                 ],
                 required: ["tool_title", "host", "prompt"],
                 propertyOrdering: ["tool_title", "host", "prompt", "workdir", "timeout"]
