@@ -591,9 +591,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     }
     /// Caret position (character offset) published by the input text view.
     /// Used by the `@` mention detector to locate the active token.
-    @Published var inputCaret: Int = 0 {
+    /// 不 @Published：没有视图直接读它，每次光标移动都发 objectWillChange 会让聊天页整页重算。
+    /// 输入一个字时 textViewDidChange 和 textViewDidChangeSelection 会各报一次同样的值，相同就跳过。
+    var inputCaret: Int = 0 {
         didSet {
-            updateMentionMenuState()
+            if inputCaret != oldValue { updateMentionMenuState() }
             // If the caret arrived at the desired location, clear the pending
             // request so subsequent edits aren't forced back.
             if let p = pendingCaret, p == inputCaret {
@@ -788,6 +790,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// error instead of injecting again — so it can never loop. Reset at the
     /// start of each agent loop (a fresh user turn).
     var didInjectEmptyToolReminderThisRun = false
+    /// [OpenMinis Android 1.15] 工具调用写进思考时的一次性提醒重试（每轮任务最多一次）。
+    var didRetryMisplacedToolCallThisRun = false
     /// Incremented when a model fallback occurs so the UI can animate the model name change.
     @Published var fallbackTrigger: Int = 0
     /// Signal to trigger scroll-to-bottom in views (not @Published to avoid full view diff).
@@ -1846,38 +1850,16 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     ## Recording todos, schedules and reminders
     When the user asks to record a todo, appointment, meeting, trip or "提醒我…", analyse it before writing anything:
-    1. Run `date '+%Y-%m-%d %H:%M %A'` first to get the exact local date and weekday; never rely on the approximate clock above.
-    2. Resolve every relative expression to an absolute local date and time: 今天/明天/后天/大后天, 周X/下周X, X号, 早上/上午/中午/下午/晚上, Chinese numerals (三点半 = 3:30, 下午三点 = 15:00, 晚上八点 = 20:00). Anything said for tomorrow or later must be written on that day, never today. If the time has already passed today and no day was given, use the next occurrence and say so.
-    3. Choose the target:
+    1. Take today's date, weekday and time from "Current local time" at the end of this prompt (exact to the minute). Resolve every relative expression to an absolute local date and time: 今天/明天/后天/大后天, 周X/下周X, X号, 早上/上午/中午/下午/晚上, Chinese numerals (三点半 = 3:30, 下午三点 = 15:00, 晚上八点 = 20:00). Anything said for tomorrow or later must be written on that day, never today. If the time has already passed today and no day was given, use the next occurrence and say so.
+    2. Choose the target:
        - Something happening at a time (meeting, appointment, trip, call) → `apple-calendar create --title <title> --start <YYYY-MM-DDTHH:MM> --end <end> --alarm <minutes>`; end = start + 1h unless a duration or end is given.
        - A task with a deadline or "remind me to …" → `apple-reminders create --title <title> --due <YYYY-MM-DDTHH:MM> --alarm <minutes>`; a date with no time → `--due <YYYY-MM-DD>` (all-day).
-    4. Advance reminder: use the lead time the user gave (提前一小时 = 60). Otherwise 30 minutes; for trips, flights and trains 120 minutes. Put the original wording and any details (location, train number, seat) in --notes; keep the title short.
-    5. Ask one short question only when the day or time is genuinely missing or ambiguous; do not guess a time.
-    6. After the tool succeeds, reply in one line with what was written: 日期（星期X） 时间、标题、写入日历还是提醒事项、提前多久提醒. If a tool reports a date it cannot parse, fix the format and retry instead of creating an undated item.
+    3. Advance reminder: use the lead time the user gave (提前一小时 = 60). Otherwise 30 minutes; for trips, flights and trains 120 minutes. Put the original wording and any details (location, train number, seat) in --notes; keep the title short.
+    4. Ask one short question only when the day or time is genuinely missing or ambiguous; do not guess a time.
+    5. After the tool succeeds, reply in one line with what was written: 日期（星期X） 时间、标题、写入日历还是提醒事项、提前多久提醒. If a tool reports a date it cannot parse, fix the format and retry instead of creating an undated item.
     """
 
     // MARK: - Private
-
-    /// Approximate current time string, rounded to the hour for cache stability.
-    private var _cachedTimeString: String = ""
-    private var _cachedTimeDate: Date = .distantPast
-    private var approximateTimeString: String {
-        // [T-cache-prefix-stability] Floor to the wall-clock hour instead of
-        // caching "now + 3600s" per instance: the old scheme let two live
-        // ViewModels disagree on the hour string for up to an hour, so their
-        // system prompts could never share a server-side cache prefix.
-        let now = Date()
-        let hourStart = Calendar.current.dateInterval(of: .hour, for: now)?.start ?? now
-        if hourStart != _cachedTimeDate {
-            let fmt = DateFormatter()
-            fmt.dateFormat = "yyyy-MM-dd HH:00 EEEE"
-            fmt.locale = Locale(identifier: "en_US_POSIX")
-            fmt.timeZone = .current
-            _cachedTimeString = fmt.string(from: hourStart)
-            _cachedTimeDate = hourStart
-        }
-        return _cachedTimeString
-    }
 
     /// [T-cache-prefix-stability] Single source of truth for the per-request
     /// system prompt. Layout:
@@ -1911,7 +1893,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         stable += toolTogglesPromptFragment
         stable += Self.schedulingPromptFragment
 
-        var volatileTail = "Current time (approximate): \(approximateTimeString) (\(TimeZone.current.identifier)). "
+        // 时间在 volatile tail（缓存边界之后），精确到分钟不影响前缀缓存；日程录入靠它算「明天/周五」。
+        var volatileTail = "Current local time: \(AgentChatCorrectness.promptClock(Date(), timeZone: .current)) (\(TimeZone.current.identifier)). "
             + "Device languages: \((UserDefaults.standard.object(forKey: "AppleLanguages") as? [String] ?? Locale.preferredLanguages).joined(separator: ", "))."
         // [T-memory-toggle-gates-injection-and-tools-ios] Memory injection
         // (GLOBAL.md + recent daily logs) is gated by the per-session
@@ -2858,10 +2841,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
             let imageCount = pendingAttachments.filter { $0.kind == .image }.count
             let route = ActionRouter.decide(text: text, imageCount: imageCount)
-            if route.path == .clarify {
-                await self.finishNativeRoute(route, result: .init(text: route.spoken(), outcome: .waitingForUser))
-                return
-            }
             if route.path == .native,
                let nativeResult = await self.executeNativeRoute(route, imageURL: firstImageHost) {
                 await self.finishNativeRoute(route, result: nativeResult)
@@ -4741,6 +4720,30 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// stay orphaned in the UI, never reaching a terminal state). A completed
     /// tool block in the tail (rare) is left alone so its result still shows.
     @MainActor
+    /// 工具调用误写进思考时，重试请求末尾追加的提醒（只在这一次请求里，不入库）。
+    static let misplacedToolCallReminder = "<system-reminder>Your previous response put a tool call inside the thinking/reasoning text, so nothing was executed. Call tools only through the tool-calling interface (not as text), or answer the user directly. Do not write tool calls in your reasoning.</system-reminder>"
+
+    /// 这一轮的思考文字：OpenAI 兼容端点给的 reasoning_content，否则取本轮新出现的思考块。
+    func turnReasoningText(_ result: StreamResult, msgIdx: Int, committedBlockCount: Int) -> String {
+        if let rc = result.reasoningContent, !rc.isEmpty { return rc }
+        guard msgIdx < messages.count else { return "" }
+        return messages[msgIdx].blocks.dropFirst(committedBlockCount)
+            .filter { $0.kind == .thinking }
+            .map { $0.content.count >= $0.thinkingContentBuffer.count ? $0.content : $0.thinkingContentBuffer }
+            .joined(separator: "\n")
+    }
+
+    /// 有效历史，末尾（应为 user / 工具结果）追加一段文字。只用于单次重试请求。
+    func historyAppendingReminder(_ reminder: String) -> [AgentMessage] {
+        var history = effectiveAgentHistory()
+        guard let last = history.indices.last, history[last].role == .user else { return history }
+        let m = history[last]
+        history[last] = AgentMessage(role: m.role, parts: m.parts + [.text(reminder)],
+                                     isInterrupted: m.isInterrupted, reasoningContent: m.reasoningContent,
+                                     reasoningEcho: m.reasoningEcho, dbMessageId: m.dbMessageId)
+        return history
+    }
+
     static func clearUncommittedStreamTail(_ message: ChatMessage, committedBlockCount: Int) {
         let lowerBound = max(0, min(committedBlockCount, message.blocks.count))
         guard lowerBound < message.blocks.count else { return }
@@ -4785,6 +4788,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
         // [T-ios-empty-after-toolresult-reminder] Fresh turn → allow one reminder retry.
         didInjectEmptyToolReminderThisRun = false
+        didRetryMisplacedToolCallThisRun = false
 
         // Resolve provider from ProviderConfigStore
         guard let entry = resolveCurrentEntry() else {
@@ -5313,12 +5317,40 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // to try the next model in the group.
             let streamResult: StreamResult
             do {
-                let result = try await processStreamEvents(
+                var result = try await processStreamEvents(
                     stream: stream,
                     msgIdx: msgIdx,
                     provider: provider,
                     runMsgId: runMsgId
                 )
+                // [OpenMinis Android 1.15] DeepSeek 等把工具调用写进了思考：没有正文、没有真正的工具调用，
+                // 任务会就此停住。去掉这轮的残留，带一句提醒重试一次（每轮任务只一次，不会循环）。
+                if !didRetryMisplacedToolCallThisRun,
+                   AgentChatCorrectness.reasoningContainsMisplacedToolCall(
+                       text: result.assistantText, toolCallCount: result.toolEntries.count,
+                       reasoning: turnReasoningText(result, msgIdx: msgIdx, committedBlockCount: committedBlockCount),
+                       toolNames: tools.map(\.name)) {
+                    didRetryMisplacedToolCallThisRun = true
+                    logger.warning("🔁STREAM tool call written inside thinking — retrying once with a reminder")
+                    await MainActor.run {
+                        guard msgIdx < messages.count else { return }
+                        Self.clearUncommittedStreamTail(messages[msgIdx], committedBlockCount: committedBlockCount)
+                    }
+                    let nudgeStream = try await streamWithAutoRetry(
+                        provider: provider,
+                        messages: applyRequestImageBudget(historyAppendingReminder(Self.misplacedToolCallReminder)),
+                        systemPrompt: userSystemPrompt,
+                        tools: tools,
+                        maxTokens: dynamicMaxTokens(provider: provider, model: activeModel, lastContextTokens: turnUsage.latestContextTokens),
+                        chatMessage: messages[msgIdx]
+                    )
+                    result = try await processStreamEvents(
+                        stream: nudgeStream,
+                        msgIdx: msgIdx,
+                        provider: provider,
+                        runMsgId: runMsgId
+                    )
+                }
                 // Detect empty responses — the stream completed without producing any
                 // content blocks or a stop reason.  This happens when the Anthropic API
                 // returns an SSE `event: error` (e.g. overloaded_error) inside an HTTP 200
@@ -5720,8 +5752,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     logger.warning("Agent loop ended with stop_reason=refusal — model declined the request")
                     messages[msgIdx].error = AppLocalized("The model declined to respond to this request. Try rephrasing, or switch to a different model.")
                     canResume = true
-                } else if stopReason == .endTurn && assistantText.isEmpty
-                            && (streamResult.reasoningContent ?? "").isEmpty {
+                } else if stopReason == .endTurn && assistantText.isEmpty {
+                    // 只有思考、没有正文也算空回复（以前这种情况无声结束，用户只看到一段思考）：
+                    // 给出提示并提供「继续」。[OpenMinis Android 1.15]
                     // Empty endTurn that survived all upstream retries — typically
                     // OpenAI gpt-5.5 on long contexts returning `finish_reason=stop`
                     // with no text/tool/reasoning. Surface it instead of silently

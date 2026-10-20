@@ -1621,7 +1621,8 @@ struct PastableTextFieldRepresentable: UIViewRepresentable {
             // `tv.text = ""` leaves the UITextView with a known-empty
             // buffer, so any late IME callback that fires later just
             // writes "" back into the binding, not stale text.
-            parent.text = textView.text
+            // 值相同不写：每次写 binding 都会让 vm.inputText 发一次 objectWillChange，整页重算。
+            if parent.text != textView.text { parent.text = textView.text }
             textView.invalidateIntrinsicContentSize()
             if let label = textView.viewWithTag(999) as? UILabel {
                 label.isHidden = !textView.text.isEmpty
@@ -1687,7 +1688,8 @@ struct PastableTextFieldRepresentable: UIViewRepresentable {
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {
-            parent.hasSelection = textView.selectedRange.length > 0
+            let hasSelection = textView.selectedRange.length > 0
+            if parent.hasSelection != hasSelection { parent.hasSelection = hasSelection }
             parent.onCaretChange?(textView.selectedRange.location)
         }
     }

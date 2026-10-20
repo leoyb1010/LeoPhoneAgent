@@ -64,6 +64,9 @@ enum SendFlightPolicy {
     static let maxArmAge: TimeInterval = 1.2
     /// 等 cell 布局的最多帧数，超出就淡入。
     static let maxLayoutWaits = 3
+    /// cell 出现后还在动(键盘收起、列表跟着滚)时最多再等这么多帧(约 0.5s，盖住键盘动画)，
+    /// 位置连续两帧不变才起飞;等满了就按当前位置飞。以前一出现就飞，落点是键盘收起前的旧位置。
+    static let maxSettleWaits = 30
 
     enum Decision: Equatable {
         case fly(to: CGRect)
@@ -79,14 +82,37 @@ enum SendFlightPolicy {
     /// - source: 快照在窗口里的位置(nil = 没截到)。
     /// - cellFrame: 新气泡 cell 在窗口里的位置(nil = 还没有 cell)。
     /// - waits: 已经等了几帧。
-    static func decide(source: CGRect?, cellFrame: CGRect?, window: CGRect,
+    /// - previousCellFrame: 上一帧看到的 cell 位置(nil = 第一次看到)。
+    /// - bubbleText: 气泡里文字的排版尺寸(nil = 不知道，按整行落点)。
+    static func decide(source: CGRect?, cellFrame: CGRect?, previousCellFrame: CGRect? = nil,
+                       bubbleText: CGSize? = nil, window: CGRect,
                        reduceMotion: Bool, waits: Int) -> Decision {
         if reduceMotion { return .fadeIn }
         guard let source, source.width >= 1, source.height >= 1, window.intersects(source) else { return .fadeIn }
         guard let cell = cellFrame, cell.width >= 1, cell.height >= 1, window.intersects(cell) else {
             return waits < maxLayoutWaits ? .wait : .fadeIn
         }
-        return .fly(to: landingRect(source: source, cell: cell))
+        let settled = previousCellFrame.map { abs($0.minY - cell.minY) < 0.5 && abs($0.height - cell.height) < 0.5 } ?? false
+        if !settled && waits < maxSettleWaits { return .wait }
+        return .fly(to: landingRect(source: source, cell: cell, bubbleText: bubbleText))
+    }
+
+    /// 用户气泡的版式(与消息列表估算用户气泡高度的公式一致):cell 左右各留 16、左侧 Spacer 60，
+    /// 气泡左右内边距合计 28、上下合计 20，贴 cell 右下(上方可能是附件块)。
+    static func bubbleTextWidth(cellWidth: CGFloat) -> CGFloat { max(cellWidth - 32 - 60 - 28, 80) }
+
+    static func bubbleFrame(cell: CGRect, text: CGSize) -> CGRect {
+        let width = min(ceil(text.width) + 28, max(cell.width - 32 - 60, 1))
+        let height = min(ceil(text.height) + 20, cell.height)
+        return CGRect(x: cell.maxX - 16 - width, y: cell.maxY - height, width: width, height: height)
+    }
+
+    /// 知道气泡尺寸时:快照等比缩小到放得进气泡，左上对齐气泡(文字从那里开始)，不变形。
+    static func landingRect(source: CGRect, cell: CGRect, bubbleText: CGSize?) -> CGRect {
+        guard let bubbleText else { return landingRect(source: source, cell: cell) }
+        let bubble = bubbleFrame(cell: cell, text: bubbleText)
+        let scale = min(1, bubble.width / source.width, bubble.height / source.height)
+        return CGRect(x: bubble.minX, y: bubble.minY, width: source.width * scale, height: source.height * scale)
     }
 
     /// 用户气泡贴在 cell 的右上角:快照落在 cell 的右上角，宽高不超过 cell 本身。

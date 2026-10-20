@@ -36,7 +36,7 @@ final class RenderHotPathTests: XCTestCase {
         let unchanged = try XCTUnwrap(md.range(of: "let markdownUnchanged = markdown == context.coordinator.lastMarkdown"))
         let widthProbe = try XCTUnwrap(md.range(of: "let _curW = textView.textContainer.size.width"))
         XCTAssertLessThan(unchanged.lowerBound, widthProbe.lowerBound)
-        XCTAssertTrue(md.contains("guard !markdownUnchanged || fontChanged || tailNeedsFinalRender else {"))
+        XCTAssertTrue(md.contains("guard !markdownUnchanged || fontChanged || tailNeedsFinalRender || reuseNeedsFinalRender else {"))
         XCTAssertTrue(md.contains("if AppLogger.isVerboseEnabled, renderSource.contains(\"![\")"))
         XCTAssertFalse(md.contains("let prepared = prepareMarkdownForRender(_splitForUpdate.prefix)"), "cachedContent skips prep")
     }

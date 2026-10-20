@@ -947,7 +947,18 @@ extension CollectionViewMessageListV3 {
         /// True while an animated setContentOffset is in flight. KVO grow events must not
         /// directly mutate contentOffset during this window — UIKit animation interpolation
         /// can produce a corrupted final offset. Instead, defer via scheduleCoalescedScroll().
-        private var isAnimatingScrollToBottom = false
+        ///
+        /// 直接写 contentOffset 会打断动画且不回调 scrollViewDidEndScrollingAnimation，旗标会一直卡在
+        /// true，此后所有内容增长都只走 80ms 延迟滚动。所以：直接写 offset 的地方先复位；另外按开始时间
+        /// 算，超过 0.6s（远长于系统滚动动画）自动视为结束兜底。
+        private var isAnimatingScrollToBottom: Bool {
+            get {
+                guard let t = scrollToBottomAnimationStartedAt else { return false }
+                return CACurrentMediaTime() - t < 0.6
+            }
+            set { scrollToBottomAnimationStartedAt = newValue ? CACurrentMediaTime() : nil }
+        }
+        private var scrollToBottomAnimationStartedAt: CFTimeInterval?
 
         // === O(1) Lookup Indices ===
         private var messageIndex: [UUID: Int] = [:]
@@ -1175,7 +1186,10 @@ extension CollectionViewMessageListV3 {
                 // contentSize KVO fires before the layout truly stabilizes.
                 if self.clampAfterSessionLoad {
                     let maxOff = max(0, newH - cv.bounds.height + cv.adjustedContentInset.bottom)
-                    if maxOff > 0 { cv.contentOffset.y = maxOff }
+                    if maxOff > 0 {
+                        self.isAnimatingScrollToBottom = false  // 直接写 offset 已打断动画
+                        cv.contentOffset.y = maxOff
+                    }
                     if Date() >= self.clampDeadline {
                         self.clampAfterSessionLoad = false
                     }
@@ -3005,6 +3019,7 @@ extension CollectionViewMessageListV3 {
                     // forceRelax bypasses the monotonic guard.
                     applySubViewportCompensation(caller: "snapshot-shrink", forceRelax: true)
                 } else if scrollMode == .autoScrolling && maxOff > 0 {
+                    isAnimatingScrollToBottom = false
                     cv.contentOffset.y = maxOff
                     // Deferred pin-to-bottom: UIHostingConfiguration self-sizing may
                     // complete asynchronously after layoutIfNeeded(), updating contentSize
@@ -3908,6 +3923,7 @@ extension CollectionViewMessageListV3 {
                 // the bottom. Re-sync once the animation settles.
                 DispatchQueue.main.async { [weak self] in self?.syncScrollFlags() }
             } else {
+                isAnimatingScrollToBottom = false
                 cv.contentOffset = target
                 syncScrollFlags()
             }

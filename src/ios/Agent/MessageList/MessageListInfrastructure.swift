@@ -608,6 +608,8 @@ class SelfSizingCell: UICollectionViewCell {
         lastComputedHeight = nil
         lastComputedWidth = nil
         lastMeasureMediaTime = nil
+        // 发送飞入会把 contentView 暂时设成透明；飞行中被复用的话要复位，否则这格一直看不见。
+        contentView.alpha = 1
         // Note: do NOT set contentConfiguration = nil here.
         // Clearing the hosting configuration tears down the SwiftUI view graph,
         // but UIKit may later call isHiddenForReuse=false which tries to restore

@@ -626,10 +626,20 @@ extension AIChatViewModel {
                         lastTextDeltaFlushedLength = len
                         let snapshot = result.assistantText
                         // Parse markdown off main thread — cmark + math extraction + regex transforms
-                        let prepared = prepareMarkdownForRender(MarkdownRenderCap.head(snapshot))
+                        let head = MarkdownRenderCap.head(snapshot)
+                        let prepared = prepareMarkdownForRender(head)
                         let parsed = MarkdownContent(prepared)
+                        // 表格最后一行还没写完时，渲染层只解析它前面的部分：这份解析也在这里（后台）做掉，
+                        // 免得每次 flush 都在主线程跑 cmark（见 StreamingTablePrefixParse）。
+                        let tableSplit = splitStreamingTableTail(head)
+                        let tablePrefixParsed = tableSplit.plainSuffix.isEmpty
+                            ? nil : MarkdownContent(prepareMarkdownForRender(tableSplit.prefix))
                         await MainActor.run {
                             guard msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count else { return }
+                            if let tablePrefixParsed {
+                                StreamingTablePrefixParse.store(blockId: messages[msgIdx].blocks[blockIdx].id,
+                                                                prefix: tableSplit.prefix, content: tablePrefixParsed)
+                            }
                             self.setStreamingTextBlockContent(
                                 msgIdx: msgIdx,
                                 blockIdx: blockIdx,
@@ -952,8 +962,9 @@ extension AIChatViewModel {
                               let thinkIdx = currentThinkingBlockIdx,
                               thinkIdx < self.messages[msgIdx].blocks.count else { return }
                         self.messages[msgIdx].blocks[thinkIdx].syncThinkingBuffer(thinkingSoFar)
+                        // 不再 publishUnlessTransitioning()：思考块视图直接订阅 block，vm 整体发
+                        // objectWillChange 会让整个聊天页（输入栏、列表外壳）跟着重算。
                         self.messages[msgIdx].blocks[thinkIdx].flushThinkingBuffer()
-                        self.publishUnlessTransitioning()
                         if self.isNearBottom { self.scrollToBottomSignal.send() }
                     }
                 }

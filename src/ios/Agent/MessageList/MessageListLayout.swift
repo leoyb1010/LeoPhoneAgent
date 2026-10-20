@@ -14,7 +14,7 @@ import os
 /// invalidated (e.g., the streaming cell changes height).
 final class MessageListLayout: UICollectionViewLayout {
     /// Default estimated height for cells that haven't been measured yet.
-    var estimatedItemHeight: CGFloat = 200
+    var estimatedItemHeight: CGFloat = 200 { didSet { markDirty(from: 0) } }
 
     /// Per-item estimated heights based on content analysis (text length, role, etc.).
     /// These are cheaper than full UIHostingConfiguration rendering but much more
@@ -31,12 +31,14 @@ final class MessageListLayout: UICollectionViewLayout {
     func setEstimatedHeight(_ height: CGFloat, at index: Int) {
         // Don't overwrite if we already have a real measured height.
         guard heightCache[index] == nil else { return }
+        if estimatedHeights[index] != height { markDirty(from: index) }
         estimatedHeights[index] = height
     }
 
     func setPrecalcHeight(_ height: CGFloat, at index: Int) {
         // Don't overwrite if we already have a real measured height.
         guard heightCache[index] == nil else { return }
+        if precalcHeights[index] != height { markDirty(from: index) }
         precalcHeights[index] = height
     }
 
@@ -92,8 +94,11 @@ final class MessageListLayout: UICollectionViewLayout {
         }
         set {
             os_unfair_lock_lock(&_streamingLock)
+            let changed = _streamingCellRanges != newValue
             _streamingCellRanges = newValue
             os_unfair_lock_unlock(&_streamingLock)
+            // 影响 prepare 里 footer 贴合的判断：变了就整体重排一次。
+            if changed { markDirty(from: 0) }
         }
     }
 
@@ -118,7 +123,7 @@ final class MessageListLayout: UICollectionViewLayout {
     var isAutoScrollPinning: Bool = false
 
     /// Vertical spacing between cells.
-    var itemSpacing: CGFloat = 0
+    var itemSpacing: CGFloat = 0 { didSet { if itemSpacing != oldValue { markDirty(from: 0) } } }
 
     /// Cached heights keyed by item index. Persists across invalidation cycles.
     private var heightCache: [Int: CGFloat] = [:]
@@ -183,11 +188,27 @@ final class MessageListLayout: UICollectionViewLayout {
             return
         }
 
-        itemAttributes.removeAll(keepingCapacity: true)
-        itemAttributes.reserveCapacity(itemCount)
-
-        var y: CGFloat = 0
-        for i in 0..<itemCount {
+        // 增量重排：只有局部高度变化（自尺寸修正、单个 cell 失效）时，从变化的前一项起重算，
+        // 前面没变的 attributes 原样保留。条目数或宽度变了、或来源不明，一律全量。
+        let dirty = dirtyFrom
+        dirtyFrom = Int.max
+        let start: Int
+        if dirty != Int.max, dirty > 0, dirty < itemCount,
+           itemAttributes.count == itemCount, abs(width - preparedWidth) < 0.5 {
+            start = dirty - 1
+        } else {
+            start = 0
+        }
+        var y: CGFloat
+        if start > 0 {
+            y = itemAttributes[start].frame.minY
+            itemAttributes.removeSubrange(start...)
+        } else {
+            y = 0
+            itemAttributes.removeAll(keepingCapacity: true)
+            itemAttributes.reserveCapacity(itemCount)
+        }
+        for i in start..<itemCount {
             let ip = IndexPath(item: i, section: 0)
             let attrs = UICollectionViewLayoutAttributes(forCellWith: ip)
             let h: CGFloat
@@ -231,6 +252,7 @@ final class MessageListLayout: UICollectionViewLayout {
         }
         totalHeight = y
         lastItemCount = itemCount
+        preparedWidth = width
         // [ScrollStall] prepare() runs on every invalidateLayout; on long
         // sessions iterating the full itemCount can show up as scroll hitches.
         let elapsed = (CACurrentMediaTime() - t0) * 1000
@@ -243,7 +265,7 @@ final class MessageListLayout: UICollectionViewLayout {
             note: String(format: "%.1fms", elapsed))
         #endif
         if elapsed >= 5 {
-            AppLogger(category: "ScrollStall").debug("[prepare] #\(Self.prepareCallCount) \(String(format: "%.1f", elapsed))ms items=\(itemCount) totalH=\(String(format: "%.0f", totalHeight)) cacheHits=\(self.heightCache.count) precalc=\(self.precalcHeights.count) est=\(self.estimatedHeights.count)")
+            AppLogger(category: "ScrollStall").debug("[prepare] #\(Self.prepareCallCount) \(String(format: "%.1f", elapsed))ms items=\(itemCount) from=\(start) totalH=\(String(format: "%.0f", totalHeight)) cacheHits=\(self.heightCache.count) precalc=\(self.precalcHeights.count) est=\(self.estimatedHeights.count)")
         }
     }
     /// Counter for prepare() calls — useful to see invalidate frequency
@@ -251,6 +273,28 @@ final class MessageListLayout: UICollectionViewLayout {
     /// MessageListLayout instances on session switches; we just want a
     /// monotonic id in logs to count fires per second.
     private static var prepareCallCount: Int = 0
+
+    /// 下一次 prepare 需要从哪一项开始重排（Int.max = 没有记录到变化）。只降不升，prepare 后复位。
+    private var dirtyFrom: Int = 0
+    private var preparedWidth: CGFloat = 0
+
+    /// 任何会改变第 index 项（及其后各项）位置/高度的写入都要调用。
+    private func markDirty(from index: Int) {
+        let i = max(0, index)
+        if i < dirtyFrom { dirtyFrom = i }
+    }
+
+    override func invalidateLayout(with context: UICollectionViewLayoutInvalidationContext) {
+        if context.invalidateEverything || context.invalidateDataSourceCounts {
+            markDirty(from: 0)
+        } else if let items = context.invalidatedItemIndexPaths, let first = items.map(\.item).min() {
+            markDirty(from: first)
+        } else {
+            // 只有 offset/contentSize 调整、或来源不明：全量最稳。
+            markDirty(from: 0)
+        }
+        super.invalidateLayout(with: context)
+    }
 
     override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
         // Return cells in the visible rect plus half-a-screen above and below.
@@ -329,6 +373,7 @@ final class MessageListLayout: UICollectionViewLayout {
         for (idx, h) in deferredHeights {
             let old = heightCache[idx] ?? precalcHeights[idx] ?? estimatedHeights[idx] ?? estimatedItemHeight
             if heightCache[idx] == nil {
+                markDirty(from: idx)
                 heightCache[idx] = h
                 let delta = h - old
                 let frame = idx < itemAttributes.count ? itemAttributes[idx].frame : .zero
@@ -458,6 +503,7 @@ final class MessageListLayout: UICollectionViewLayout {
 
         // Cache the new height. prepare() will use this to compute correct totalHeight.
         heightCache[index] = newHeight
+        markDirty(from: index)
 
         // [SettleJitter] Evidence log (H2): a correction passing through DURING
         // deceleration gets NO contentOffsetAdjustment (the !isDecelerating
@@ -667,6 +713,7 @@ final class MessageListLayout: UICollectionViewLayout {
             self.precalcHeights.removeAll()
             self.estimatedHeights.removeAll()
             self.geometryReaderConfirmed.removeAll()
+            self.markDirty(from: 0)
             self.lastSettledWidth = cv.bounds.width
             self.invalidateLayout()
         }
@@ -699,12 +746,14 @@ final class MessageListLayout: UICollectionViewLayout {
         heightCache = newCache
         precalcHeights = newPrecalc
         estimatedHeights = newEstimated
+        markDirty(from: 0)
         geometryReaderConfirmed = newConfirmed
     }
 
     /// Invalidate the cached height for a specific item index, forcing re-measurement.
     /// Use this for the actively streaming message whose height is changing.
     func invalidateHeight(at index: Int) {
+        markDirty(from: index)
         heightCache.removeValue(forKey: index)
         geometryReaderConfirmed.remove(index)
         // [T-ios-scroll-decel-height-drift] Belt-and-suspenders: also drop the
@@ -722,6 +771,7 @@ final class MessageListLayout: UICollectionViewLayout {
     /// from what `preferredLayoutAttributesFitting` returned, bypassing
     /// the unreliable self-sizing cycle.
     func setCachedHeight(_ height: CGFloat, at index: Int) {
+        if heightCache[index] != height { markDirty(from: index) }
         heightCache[index] = height
         geometryReaderConfirmed.insert(index)
     }
@@ -746,6 +796,7 @@ final class MessageListLayout: UICollectionViewLayout {
     /// snapshot. Called by the Coordinator while building estimates so a later
     /// `invalidationContext` can record the measured height under this key.
     func setContentKey(_ key: String, at index: Int) {
+        if contentKeyByIndex[index] != key { markDirty(from: index) }
         contentKeyByIndex[index] = key
     }
 
@@ -759,6 +810,7 @@ final class MessageListLayout: UICollectionViewLayout {
     /// apply, same lifecycle as contentKeyByIndex.
     private var footerHugByIndex: [Int: Bool] = [:]
     func setFooterHug(_ hug: Bool, at index: Int) {
+        if footerHugByIndex[index] != hug { markDirty(from: index) }
         footerHugByIndex[index] = hug
     }
 
@@ -821,6 +873,7 @@ final class MessageListLayout: UICollectionViewLayout {
         measuredHeightByContentKey.removeAll()
         contentKeyByIndex.removeAll()
         footerHugByIndex.removeAll()
+        markDirty(from: 0)
     }
 
     // MARK: - Diagnostics

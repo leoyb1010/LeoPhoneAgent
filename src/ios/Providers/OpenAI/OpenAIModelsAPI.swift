@@ -195,8 +195,12 @@ enum OpenAIModelsAPI {
         let chatPrefixes = ["gpt-", "o1", "o3", "o4-", "codex-", "chatgpt-"]
         let excludeSuffixes = ["-instruct", "-realtime", "-audio", "-transcribe", "-tts", "-embedding"]
 
+        // 端点自己报的上下文 / 输出上限（中转站、vLLM 等），合并 models.dev 之后再盖上去：端点说了算。
+        var endpointLimits: [String: (context: Int?, output: Int?)] = [:]
         let models = modelsArray.compactMap { item -> LLMModel? in
             guard let id = item["id"] as? String else { return nil }
+            let limits = (context: OpenAIModelLimits.contextWindow(in: item), output: OpenAIModelLimits.maxOutputTokens(in: item))
+            if limits.context != nil || limits.output != nil { endpointLimits[id] = limits }
 
             if filterOpenAIOnly {
                 let isChatModel = chatPrefixes.contains { id.hasPrefix($0) }
@@ -264,7 +268,13 @@ enum OpenAIModelsAPI {
             return LLMModel(id: id, displayName: displayName, provider: "OpenAI", modalityOverride: modality)
         }
 
-        let enriched = ModelsDevAPI.enrichModels(models)
+        let enriched = ModelsDevAPI.enrichModels(models).map { model -> LLMModel in
+            guard let limits = endpointLimits[model.id] else { return model }
+            var model = model
+            if let context = limits.context { model.contextWindow = context }
+            if let output = limits.output { model.maxOutputTokens = output }
+            return model
+        }
         logger.info("Fetched \(modelsArray.count) total models, \(enriched.count) returned (filterOpenAIOnly: \(filterOpenAIOnly))")
         if let first = modelsArray.first,
            let debugData = try? JSONSerialization.data(withJSONObject: first, options: [.prettyPrinted, .sortedKeys]),

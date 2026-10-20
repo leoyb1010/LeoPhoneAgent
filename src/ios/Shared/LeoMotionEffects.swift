@@ -95,6 +95,7 @@ struct LeoSkeletonBar: View {
     var height: CGFloat = 10
     var cornerRadius: CGFloat?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var phase: CGFloat = -1
 
     private var shape: RoundedRectangle {
@@ -105,7 +106,7 @@ struct LeoSkeletonBar: View {
         shape
             .fill(LeoTheme.ColorToken.tertiaryText.opacity(0.22))
             .overlay {
-                if !reduceMotion {
+                if !reduceMotion, !reduceTransparency {
                     GeometryReader { geo in
                         LinearGradient(colors: [.clear, .white.opacity(0.22), .clear],
                                        startPoint: .leading, endPoint: .trailing)
@@ -192,25 +193,35 @@ private struct LeoZoomTransitionModifier<ID: Hashable>: ViewModifier {
 private struct LeoShineModifier: ViewModifier {
     let trigger: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var phase: CGFloat = -1
+    /// 只在扫光那 0.7s 里挂 GeometryReader + 渐变：每个工具胶囊都常驻一份太贵。
+    @State private var sweeping = false
 
     func body(content: Content) -> some View {
-        content.overlay(
-            GeometryReader { geo in
-                LinearGradient(
-                    colors: [.clear, .white.opacity(0.35), .clear],
-                    startPoint: .leading, endPoint: .trailing
-                )
-                .frame(width: geo.size.width * 0.6)
-                .offset(x: phase * geo.size.width * 1.6 - geo.size.width * 0.3)
-                .allowsHitTesting(false)
+        content.overlay {
+            if sweeping {
+                GeometryReader { geo in
+                    LinearGradient(
+                        colors: [.clear, .white.opacity(0.35), .clear],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                    .frame(width: geo.size.width * 0.6)
+                    .offset(x: phase * geo.size.width * 1.6 - geo.size.width * 0.3)
+                    .allowsHitTesting(false)
+                }
+                .clipped()
             }
-            .clipped()
-        )
+        }
         .onChange(of: trigger) { _, _ in
-            guard !reduceMotion else { return }
+            guard !reduceMotion, !reduceTransparency else { return }
             phase = -1
-            withAnimation(.easeInOut(duration: 0.7)) { phase = 1 }
+            sweeping = true
+            withAnimation(.easeInOut(duration: 0.7)) {
+                phase = 1
+            } completion: {
+                sweeping = false
+            }
         }
     }
 }
@@ -273,12 +284,14 @@ extension View {
 private struct LeoThinkingShimmerModifier: ViewModifier {
     let active: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var phase: CGFloat = -1
 
     func body(content: Content) -> some View {
         content
             .overlay {
-                if active, LeoMotionPolicy.fallback(reduceMotion: reduceMotion) == .full {
+                // 降低透明度时也不扫光（半透明高光正是要去掉的东西）。
+                if active, !reduceTransparency, LeoMotionPolicy.fallback(reduceMotion: reduceMotion) == .full {
                     GeometryReader { geo in
                         LinearGradient(colors: [.clear, .white.opacity(0.75), .clear],
                                        startPoint: .leading, endPoint: .trailing)

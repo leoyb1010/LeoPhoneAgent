@@ -196,14 +196,43 @@ final class TextFadeAnimator {
         words.removeAll(keepingCapacity: true)
     }
 
+    // MARK: - Diff support
+
+    /// 淡入中的词在 storage 里是半透明色，updateUIView 的「前缀不变→只追加」比较会因此失败，
+    /// 每次 flush 都退化成整段重新赋值。比较前先把这些词恢复成原色，比较/追加完再调用
+    /// `reapplyInFlightAlpha()` 写回当前透明度（同一个 runloop 内，不会画出全不透明的一帧）。
+    func restoreOriginalColorsForDiff() {
+        guard let storage, !words.isEmpty else { return }
+        let len = storage.length
+        storage.beginEditing()
+        for w in words where NSMaxRange(w.range) <= len {
+            storage.addAttribute(.foregroundColor, value: w.originalColor, range: w.range)
+        }
+        storage.endEditing()
+    }
+
+    func reapplyInFlightAlpha() {
+        guard let storage, !words.isEmpty else { return }
+        let now = CACurrentMediaTime()
+        let len = storage.length
+        storage.beginEditing()
+        for w in words where NSMaxRange(w.range) <= len {
+            let t = max(0, min(1, (now - w.startTime) / w.duration))
+            storage.addAttribute(.foregroundColor,
+                                 value: w.originalColor.withAlphaComponent(CGFloat(Self.easeOutCubic(t))),
+                                 range: w.range)
+        }
+        storage.endEditing()
+    }
+
     // MARK: - Frame loop
 
     private func startDisplayLinkIfNeeded() {
         guard displayLink == nil, !words.isEmpty else { return }
         let link = CADisplayLink(target: self, selector: #selector(tick))
-        // Allow the system to pick within 30–120Hz, preferring 60. The fade is
-        // smooth at 30 and we don't need to force 120Hz battery cost.
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 60)
+        // 降频到 30Hz：每帧都要改 textStorage（iOS 的 NSLayoutManager 没有 temporary attributes），
+        // 0.45s 的淡入 30Hz 已经够平滑，60/120Hz 只是多一倍 processEditing。
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: 60, preferred: 30)
         link.add(to: .main, forMode: .common)
         displayLink = link
     }

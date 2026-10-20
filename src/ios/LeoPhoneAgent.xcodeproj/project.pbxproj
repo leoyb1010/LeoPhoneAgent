@@ -12,7 +12,9 @@
 		F1R3MODT /* MCPOAuthDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1R3MODF /* MCPOAuthDiscovery.swift */; };
 		F1R3PBSA /* ProviderBalanceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1R3PBSF /* ProviderBalanceStore.swift */; };
 		F1R3PRTA /* ProviderResponseTimeout.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1R3PRTF /* ProviderResponseTimeout.swift */; };
+		LFC920918721 /* OpenAIModelLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF8D99336D74 /* OpenAIModelLimits.swift */; };
 		F1R3PRTT /* ProviderResponseTimeout.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1R3PRTF /* ProviderResponseTimeout.swift */; };
+		LFEBC80D3602 /* OpenAIModelLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF8D99336D74 /* OpenAIModelLimits.swift */; };
 		F1R3PBLA /* ProviderBalance.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1R3PBLF /* ProviderBalance.swift */; };
 		F1R3PBLT /* ProviderBalance.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1R3PBLF /* ProviderBalance.swift */; };
 		F1R3MSSA /* ModelSearchScorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1R3MSSF /* ModelSearchScorer.swift */; };
@@ -238,7 +240,6 @@
 		E5UIF01A /* LeoComposerChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF01F /* LeoComposerChrome.swift */; };
 		E5UIF02A /* LeoEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF02F /* LeoEmptyState.swift */; };
 		E5UIF03A /* LeoInlineError.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF03F /* LeoInlineError.swift */; };
-		E5UIF04A /* LeoShimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF04F /* LeoShimmer.swift */; };
 		E5UIF05A /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
 		E5UIF06A /* HomeContextStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF06F /* HomeContextStrip.swift */; };
 		LFB413556CC1 /* HomeMacScreenCover.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF8ED340523B /* HomeMacScreenCover.swift */; };
@@ -1157,6 +1158,7 @@
 		F1R3MODF /* MCPOAuthDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Session/MCPOAuthDiscovery.swift"; sourceTree = SOURCE_ROOT; };
 		F1R3PBSF /* ProviderBalanceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ProviderBalanceStore.swift"; sourceTree = SOURCE_ROOT; };
 		F1R3PRTF /* ProviderResponseTimeout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ProviderResponseTimeout.swift"; sourceTree = SOURCE_ROOT; };
+		LF8D99336D74 /* OpenAIModelLimits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/OpenAIModelLimits.swift; sourceTree = SOURCE_ROOT; };
 		F1R3PBLF /* ProviderBalance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ProviderBalance.swift"; sourceTree = SOURCE_ROOT; };
 		F1R3MSSF /* ModelSearchScorer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ModelSearchScorer.swift"; sourceTree = SOURCE_ROOT; };
 		F1R3LIPF /* LocalIntelligencePolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/LocalIntelligence/LocalIntelligencePolicies.swift"; sourceTree = SOURCE_ROOT; };
@@ -1313,7 +1315,6 @@
 		E5UIF01F /* LeoComposerChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoComposerChrome.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF02F /* LeoEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoEmptyState.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF03F /* LeoInlineError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoInlineError.swift"; sourceTree = SOURCE_ROOT; };
-		E5UIF04F /* LeoShimmer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoShimmer.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF05F /* LeoUIPolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoUIPolicies.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF06F /* HomeContextStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Home/HomeContextStrip.swift"; sourceTree = SOURCE_ROOT; };
 		LF8ED340523B /* HomeMacScreenCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Home/HomeMacScreenCover.swift; sourceTree = SOURCE_ROOT; };
@@ -2516,7 +2517,6 @@
 				E5UIF01F /* LeoComposerChrome.swift */,
 				E5UIF02F /* LeoEmptyState.swift */,
 				E5UIF03F /* LeoInlineError.swift */,
-				E5UIF04F /* LeoShimmer.swift */,
 				E5UIF05F /* LeoUIPolicies.swift */,
 				E5UIF06F /* HomeContextStrip.swift */,
 				LF8ED340523B /* HomeMacScreenCover.swift */,
@@ -2832,6 +2832,7 @@
 				E5MDL0002 /* ModelSwitcher.swift */,
 				F1R3PBSF /* ProviderBalanceStore.swift */,
 				F1R3PRTF /* ProviderResponseTimeout.swift */,
+				LF8D99336D74 /* OpenAIModelLimits.swift */,
 				F1R3PBLF /* ProviderBalance.swift */,
 				F1R3MSSF /* ModelSearchScorer.swift */,
 				E5COL0010 /* CollectionOpener.swift */,
@@ -3807,6 +3808,7 @@
 			files = (
 				F1R3MODT /* MCPOAuthDiscovery.swift in Sources */,
 				F1R3PRTT /* ProviderResponseTimeout.swift in Sources */,
+				LFEBC80D3602 /* OpenAIModelLimits.swift in Sources */,
 				F1R3PBLT /* ProviderBalance.swift in Sources */,
 				F1R3MSST /* ModelSearchScorer.swift in Sources */,
 				F1R3LIPT /* LocalIntelligencePolicies.swift in Sources */,
@@ -4038,6 +4040,7 @@
 				F1R3MODA /* MCPOAuthDiscovery.swift in Sources */,
 				F1R3PBSA /* ProviderBalanceStore.swift in Sources */,
 				F1R3PRTA /* ProviderResponseTimeout.swift in Sources */,
+				LFC920918721 /* OpenAIModelLimits.swift in Sources */,
 				F1R3PBLA /* ProviderBalance.swift in Sources */,
 				F1R3MSSA /* ModelSearchScorer.swift in Sources */,
 				F1R3LIPA /* LocalIntelligencePolicies.swift in Sources */,
@@ -4105,7 +4108,6 @@
 				E5UIF01A /* LeoComposerChrome.swift in Sources */,
 				E5UIF02A /* LeoEmptyState.swift in Sources */,
 				E5UIF03A /* LeoInlineError.swift in Sources */,
-				E5UIF04A /* LeoShimmer.swift in Sources */,
 				E5UIF05A /* LeoUIPolicies.swift in Sources */,
 				E5UIF06A /* HomeContextStrip.swift in Sources */,
 				LFB413556CC1 /* HomeMacScreenCover.swift in Sources */,
