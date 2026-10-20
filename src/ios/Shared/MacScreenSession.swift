@@ -153,6 +153,12 @@ enum ScreenSessionWire {
         default: return error.guidance
         }
     }
+
+    /// 视频失败的提示行:要人处理的错误不会自动再试,明确告诉用户处理好后点「重试」。
+    static func failureNotice(for error: MacScreenError) -> String {
+        let text = guidance(for: error)
+        return ScreenViewModePolicy.isPermanent(error.code) ? text + AppLocalized("，处理好后点「重试」") : text
+    }
 }
 
 /// 候选地址的路径等级(和 Mac 端一致):tailnet(100.64.0.0/10、fd7a:115c:a1e0::/48)→ LAN → 其他 host → srflx → relay。
@@ -218,10 +224,15 @@ enum ScreenViewModePolicy {
     /// 视频失败后这么久内不再自动试(用户可以手动点「试视频」)。
     static let retryCooldown: TimeInterval = 60
 
+    /// - Parameter lastFailureCode: 上次视频失败的错误码。是 `isPermanent` 的就一直停在截图,
+    ///   冷却过了也不自动再试,等用户处理好点「重试」(`retryVideo` 会清掉失败记录)。
     static func mode(screenSessionSupported: Bool, lastVideoFailure: Date?, userForcedSnapshot: Bool,
-                     now: Date) -> Mode {
+                     now: Date, lastFailureCode: String? = nil) -> Mode {
         guard screenSessionSupported, !userForcedSnapshot else { return .snapshot }
-        if let failed = lastVideoFailure, now.timeIntervalSince(failed) < retryCooldown { return .snapshot }
+        if let failed = lastVideoFailure {
+            if let code = lastFailureCode, isPermanent(code) { return .snapshot }
+            if now.timeIntervalSince(failed) < retryCooldown { return .snapshot }
+        }
         return .video
     }
 
