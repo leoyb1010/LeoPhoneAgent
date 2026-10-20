@@ -602,7 +602,8 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
         // [T-presence-quiet] 正在用 App:横幅会从灵动岛 / 屏幕顶上压住正在看的内容(用户 2026-09-26 反馈)。
         // 只有别的任务在等你批准才弹(不响)—— 不批它就一直卡着;完成、快捷指令结果这类只进通知中心。
         let category = notification.request.content.categoryIdentifier
-        if category == HarnessApprovalNotifier.categoryId || category == SensitiveToolGate.notifyCategoryId
+        if category == HarnessApprovalNotifier.categoryId || category == HarnessApprovalNotifier.highRiskCategoryId
+            || category == SensitiveToolGate.notifyCategoryId
             || info[AskUserNotification.toolUseKey] != nil {
             completionHandler([.banner, .list])
         } else {
@@ -625,6 +626,7 @@ enum LeoNotificationCategories {
     static var all: [UNNotificationCategory] {
         [
             HarnessApprovalNotifier.category,
+            HarnessApprovalNotifier.highRiskCategory,
             SensitiveToolGate.notificationCategory,
             UNNotificationCategory(identifier: backgroundTaskId, actions: [NotificationQuickReply.action],
                                    intentIdentifiers: []),
