@@ -6428,18 +6428,42 @@ struct TerminalLinkConfirmation: ViewModifier {
 
 /// [T-mac-composer] 「交给哪台 Mac」选择框。单独订阅 GatewayHostStore（路由状态一直在刷新），
 /// 免得 AIChatView 整页跟着重算。
+/// [up-home] 与首页一致（HarnessCatalog.menuEntries）：Mac 报的 agent 全部列出，用不了的灰显带原因，
+/// 没登录的点了打开登录页；只有 selectable 的才派任务；一个能用的都没有时给一行提示。
 private struct MacSwitchDialogModifier: ViewModifier {
     @Binding var isPresented: Bool
     let isHandoff: Bool
     let onPick: (GatewayHost, (String, String)) -> Void
     @ObservedObject private var gatewayStore = GatewayHostStore.shared
+    @State private var loginTarget: LoginTarget?
+
+    private struct LoginTarget: Identifiable {
+        let host: GatewayHost
+        let kind: HarnessKind
+        var id: String { "\(host.id)#\(kind.key)" }
+    }
+
+    private func entries(_ host: GatewayHost) -> [HarnessCatalog.MenuEntry] {
+        HarnessCatalog.menuEntries(known: host.harnesses, runsLeoPhoneAgent: host.runsLeoPhoneAgent,
+                                   isAndroidBody: host.isAndroidBody)
+    }
+
+    private var nothingSelectable: Bool {
+        !gatewayStore.activeHosts.contains { host in entries(host).contains(where: \.selectable) }
+    }
 
     func body(content: Content) -> some View {
         content.confirmationDialog(isHandoff ? "发到哪台 Mac 接着做" : "交给哪台 Mac 继续",
                                    isPresented: $isPresented, titleVisibility: .visible) {
             ForEach(gatewayStore.activeHosts) { host in
-                ForEach(ComposerMacTarget.clis(for: host), id: \.0) { cli in
-                    Button("\(host.name) · \(cli.1)") { onPick(host, cli) }
+                ForEach(entries(host)) { entry in
+                    let title = entry.note.map { "\(host.name) · \(entry.name)（\($0)）" } ?? "\(host.name) · \(entry.name)"
+                    if entry.needsLogin {
+                        Button(title) { loginTarget = LoginTarget(host: host, kind: entry.kind) }
+                    } else {
+                        Button(title) { onPick(host, (entry.key, entry.name)) }
+                            .disabled(!entry.selectable)
+                    }
                 }
             }
             // [#32] No Mac yet: one tap to where one gets connected.
@@ -6451,6 +6475,16 @@ private struct MacSwitchDialogModifier: ViewModifier {
         } message: {
             if gatewayStore.activeHosts.isEmpty {
                 Text("还没有连接 Mac。到 设置 → 我的设备 → 远程机器 里添加。")
+            } else if nothingSelectable {
+                Text("Mac 上暂时没有能用的 agent")
+            }
+        }
+        .sheet(item: $loginTarget) { target in
+            if let client = gatewayStore.client(for: target.host) {
+                AgentLoginSheet(client: client, kind: target.kind) { ok in
+                    guard ok else { return }
+                    Task { _ = try? await client.harnessKinds() }   // 刷新登录状态，菜单随之更新
+                }
             }
         }
     }
