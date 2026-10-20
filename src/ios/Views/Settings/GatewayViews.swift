@@ -49,6 +49,8 @@ struct GatewaySettingsView: View {
     @State private var pendingDeleteHost: GatewayHost?
     /// [up-macsession] 远程机器页直达外部 agent 登录(Claude Code / Codex / Gemini…在 Mac 上没登录时)。
     @State private var agentLogin: GatewayAgentLoginTarget?
+    /// 远程机器行上的「终端」打不开时的原因（没地址 / 没固定主机公钥 / 没钥匙）。
+    @State private var terminalProblem: String?
     /// [F-mac-fleet-advanced] Mac 舰队默认关闭;开关只管入口显隐,不动已连接的机器。
     @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
 
@@ -145,8 +147,20 @@ struct GatewaySettingsView: View {
                             .buttonStyle(.plain)
                             // [T-link-problem] 失败时:是谁的问题 + 一个主按钮,技术细节折叠。
                             // 放在行按钮外面:嵌在 Button 里会和整行的点击(进入编辑)抢手势。
-                            GatewayAgentLoginMenu(host: host) { kind in
-                                agentLogin = GatewayAgentLoginTarget(host: host, kind: kind)
+                            HStack(spacing: 14) {
+                                GatewayAgentLoginMenu(host: host) { kind in
+                                    agentLogin = GatewayAgentLoginTarget(host: host, kind: kind)
+                                }
+                                if !host.isAndroidBody {
+                                    Button {
+                                        terminalProblem = SSHTerminalLauncher.open(mac: host)
+                                    } label: {
+                                        Label("终端", systemImage: "apple.terminal")
+                                            .font(.caption.weight(.medium))
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .accessibilityIdentifier("gateway.terminal")
+                                }
                             }
                             .padding(.leading, 20)
                             if let problem {
@@ -246,6 +260,9 @@ struct GatewaySettingsView: View {
                 }
             }
         }
+        .alert("打不开终端", isPresented: Binding(get: { terminalProblem != nil }, set: { if !$0 { terminalProblem = nil } })) {
+            Button("好", role: .cancel) {}
+        } message: { Text(terminalProblem ?? "") }
         .task { await refresh() }
         // [T-link-problem] 从 Tailscale / 系统设置回来:还有问题在显示就重新检测一遍,不用再下拉刷新。
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in

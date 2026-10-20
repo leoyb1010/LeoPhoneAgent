@@ -254,12 +254,13 @@ enum SSHTerminalLauncher {
         guard let target = mac.resolvedSSHTarget else { return AppLocalized("不知道这台 Mac 的 SSH 地址：在 设置 → 远程机器 里填。") }
         guard let key = mac.sshHostKey else { return AppLocalized("还没固定这台 Mac 的 SSH 主机公钥：先经直连或中继连上一次。") }
         guard RemoteHostStore.hasAnyKey else { return AppLocalized("这台 iPhone 还没有 SSH 钥匙：到 设置 → 远程主机 生成或导入。") }
-        // ponytail: 端口跟 MacSSHFallback 一样先用 22；Mac 广播端口后改成同一个来源。
+        // 端口与 SSH 兜底同一来源：目标里带的（设置填的 / Mac 广播的）优先，否则 22。
         let address = target.address
+        let port = MacSSHTarget.port(target: target, configured: nil)
         open(host: RemoteHost(
-            id: "leo-ssh-terminal-" + mac.id, name: mac.name, host: address, port: 22, username: target.user,
+            id: "leo-ssh-terminal-" + mac.id, name: mac.name, host: address, port: port, username: target.user,
             deviceId: mac.device?.deviceId, trustedHostKey: key,
-            trustedHostKeyEndpoint: RemoteSSHTrust.endpoint(host: address, port: 22)))
+            trustedHostKeyEndpoint: RemoteSSHTrust.endpoint(host: address, port: port)))
         return nil
     }
 }

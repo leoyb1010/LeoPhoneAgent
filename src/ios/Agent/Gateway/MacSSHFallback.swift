@@ -14,7 +14,8 @@ enum MacSSHFallback {
         guard SSHFallbackCLI.supports(cliKey) else { return (nil, "SSH 兜底只能跑 Claude Code / Codex / Gemini / opencode / Grok") }
         guard let target = host.resolvedSSHTarget else { return (nil, "不知道这台 Mac 的 SSH 地址：在 设置 → 远程机器 里填") }
         guard let key = host.sshHostKey else { return (nil, "还没固定这台 Mac 的 SSH 主机公钥：先经直连或中继连上一次") }
-        guard RemoteHostStore.devicePrivateKey() != nil else { return (nil, "这台 iPhone 还没有 SSH 钥匙：到 设置 → 远程主机 生成") }
+        // 导入的私钥也算：只导入、没生成设备钥匙的用户同样能走兜底。
+        guard RemoteHostStore.hasAnyKey else { return (nil, "这台 iPhone 还没有 SSH 钥匙：到 设置 → 远程主机 生成或导入") }
         let address = target.address
         // 端口不能写死 22:目标里有就用,否则用「远程主机」里关联到这台 Mac 的那条配置的端口。
         let deviceId = host.device?.deviceId
