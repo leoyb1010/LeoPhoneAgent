@@ -110,9 +110,10 @@ final class PushRegistrar {
                 Task { @MainActor in
                     for await data in activity.pushTokenUpdates {
                         let state = activity.content.state
-                        self.registerActivityUpdateToken(LiveActivityTokenRegistration.hex(data),
-                                                         sessions: state.sessions,
-                                                         privacyMode: state.privacyMode)
+                        let token = LiveActivityTokenRegistration.hex(data)
+                        // 失败重试在里面退避,别挡住下一次 token 更新。
+                        Task { await self.registerActivityUpdateToken(token, sessions: state.sessions,
+                                                                      privacyMode: state.privacyMode) }
                     }
                 }
             }
@@ -120,34 +121,55 @@ final class PushRegistrar {
         #endif
     }
 
-    /// [WP-41] 一张 Live Activity 的 update token 连同卡上的会话登记到中继。
-    func registerActivityUpdateToken(_ token: String, sessions: [LiveSessionSnapshot], privacyMode: Bool) {
+    /// [WP-41] 一张 Live Activity 的 update token 连同卡上的会话登记到中继。中继回 2xx 才返回 true。
+    @discardableResult
+    func registerActivityUpdateToken(_ token: String, sessions: [LiveSessionSnapshot], privacyMode: Bool) async -> Bool {
         guard let payload = LiveActivityTokenRegistration.payload(
             token: token, sessions: sessions, privacyMode: privacyMode,
-            bundleId: Bundle.main.bundleIdentifier ?? "", environment: Self.apsEnvironment) else { return }
-        Task { await self.send(payload) }
+            bundleId: Bundle.main.bundleIdentifier ?? "", environment: Self.apsEnvironment) else { return false }
+        return await sendWithRetry(payload, key: "activity_update:\(token)")
     }
 
     /// 把 token 送到中继。中继与全部 Mac 共用同一把钥匙,所以任取一台
     /// 已配置的主机的 client 即可;拿不到就跳过(没配 Mac 时本就不需要)。
     private func register(kind: String, token: String) async {
-        await send([
+        await sendWithRetry([
             "kind": kind,
             "token": token,
             "bundle_id": Bundle.main.bundleIdentifier ?? "",
             // development 证书发的 token 只能用沙盒网关推,中继据此选网关
             "environment": Self.apsEnvironment,
-        ])
+        ], key: kind)
     }
 
-    private func send(_ payload: [String: Any]) async {
+    /// 登记失败的最多试几次(5 s → 10 s → 20 s → 40 s);之后由下次回前台的 reregisterIfPossible
+    /// 或下一次卡片状态推送再登记。
+    static let maxRegisterAttempts = 5
+    /// ponytail: 每个 Live Activity token 留一个计数,进程内只增不清;卡片数很少,不值得回收。
+    private var registerGenerations: [String: Int] = [:]
+
+    /// 发一次登记,中继没回 2xx 就按退避再试。同一个 key 来了新的登记,旧的这轮就不再重发。
+    @discardableResult
+    private func sendWithRetry(_ payload: [String: Any], key: String) async -> Bool {
+        let generation = (registerGenerations[key] ?? 0) &+ 1
+        registerGenerations[key] = generation
+        for attempt in 1...Self.maxRegisterAttempts {
+            if await send(payload) { return true }
+            guard attempt < Self.maxRegisterAttempts else { break }
+            try? await Task.sleep(for: .seconds(RetryBackoff.delay(failures: attempt, base: 5, cap: 60)))
+            guard registerGenerations[key] == generation else { return false }
+        }
+        return false
+    }
+
+    private func send(_ payload: [String: Any]) async -> Bool {
         // 必须挑"配了中继"的主机:第一台若是直连 Mac(relayEventsURL 为
         // nil),token 会静默注册失败,整条 APNs 链路无声失效。
         // 其他三处调用点都已这么写,这里之前漏了。
         guard let client = GatewayHostStore.shared.activeHosts
             .compactMap({ GatewayHostStore.shared.client(for: $0) })
-            .first(where: { $0.relayEventsURL != nil }) else { return }
-        await client.registerPushToken(payload)
+            .first(where: { $0.relayEventsURL != nil }) else { return false }
+        return await client.registerPushToken(payload)
     }
 
     /// 从 entitlement 读 aps-environment —— 用错网关 APNs 直接 400,
@@ -176,19 +198,22 @@ final class PushRegistrar {
 
 extension LeoAgentClient {
     /// 向中继登记推送 token。中继根地址从 harness 地址推导(与事件端点同法)。
-    func registerPushToken(_ payload: [String: Any]) async {
+    /// 中继回 2xx 才算登记上(之前不看状态码:401/5xx 也当成功,卡片从此收不到远程更新)。
+    func registerPushToken(_ payload: [String: Any]) async -> Bool {
         // 按 relay 根拼,不做字符串替换 —— 与 syncTreasuryChanges 同法:
         // 部署路径本身含 /events 时替换会把地址拼碎。
         guard let eventsURL = relayEventsURL,
               let range = eventsURL.absoluteString.range(of: "/relay/api/"),
               let base = URL(string: String(eventsURL.absoluteString[..<range.upperBound]) + "device")
-        else { return }
+        else { return false }
         var req = URLRequest(url: base)
         req.httpMethod = "POST"
         req.setValue("Bearer \(apiKeyForRelay)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
         req.timeoutInterval = 20
-        _ = try? await session.data(for: req)
+        guard let (_, response) = try? await session.data(for: req),
+              let status = (response as? HTTPURLResponse)?.statusCode else { return false }
+        return (200..<300).contains(status)
     }
 }

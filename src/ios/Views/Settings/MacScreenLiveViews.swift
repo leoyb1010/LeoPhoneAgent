@@ -31,6 +31,8 @@ final class MacScreenLiveModel: ObservableObject {
 
     let pip = ScreenPiPController()
     private var stateSub: AnyCancellable?
+    /// 有页面正要视频(可见、没退到后台)。画中画结束时据此决定要不要拆。
+    private var viewWants = false
 
     var client: LeoAgentClient? {
         didSet {
@@ -46,14 +48,32 @@ final class MacScreenLiveModel: ObservableObject {
 
     init() {
         pip.onActiveChange = { [weak self] active in
-            Task { @MainActor in self?.pipActive = active }
+            Task { @MainActor in
+                guard let self else { return }
+                self.pipActive = active
+                // 画中画关了而页面已不在 / 在后台:之前为画中画留着的视频这时才拆(否则 Mac 端会话一直开着)。
+                if !active, !self.viewWants { self.stopVideo() }
+            }
         }
+    }
+
+    /// 页面(全屏 / iPad 右栏)没了:视频连同画中画一起关,向 Mac 发 DELETE,不留空转的会话。
+    isolated deinit {
+        if pip.isActive { pip.controller?.stopPictureInPicture() }
+        peer?.stop()
     }
 
     var mode: ScreenViewModePolicy.Mode {
         ScreenViewModePolicy.mode(screenSessionSupported: peer != nil && !videoUnsupported,
                                   lastVideoFailure: lastVideoFailure,
-                                  userForcedSnapshot: forcedSnapshot, now: Date())
+                                  userForcedSnapshot: forcedSnapshot, now: Date(),
+                                  lastFailureCode: lastVideoError?.code)
+    }
+
+    /// 上次失败是要人处理的(权限、开关、另一台在看…):不会自动再试,按钮写「重试」。
+    var needsUserRetry: Bool {
+        guard let code = lastVideoError?.code, !forcedSnapshot else { return false }
+        return ScreenViewModePolicy.isPermanent(code)
     }
 
     func startVideoIfNeeded() {
@@ -61,8 +81,14 @@ final class MacScreenLiveModel: ObservableObject {
         peer.start(control: controlOn)
     }
 
+    /// 页面要不要视频(MacScreenLiveView.sync 调)。
+    func setViewWants(_ want: Bool) {
+        viewWants = want
+        if want { startVideoIfNeeded() } else { stopVideo() }
+    }
+
     func stopVideo() {
-        guard !pipActive else { return }   // 画中画里接着看
+        guard !pip.isEngaged else { return }   // 画中画里接着看
         peer?.stop()
     }
 
@@ -105,8 +131,10 @@ struct MacScreenLiveView<Snapshot: View>: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var visible = false
 
+    /// 只有真正退到后台才拆:`.inactive` 是下拉通知中心 / 切 App 的过渡,这时拆了自动画中画就起不来。
+    /// 后台里画中画开着时由 model.stopVideo 留住。
     private var wantsVideo: Bool {
-        visible && active && model.mode == .video && (scenePhase == .active || model.pipActive)
+        visible && active && model.mode == .video && scenePhase != .background
     }
 
     var body: some View {
@@ -118,7 +146,7 @@ struct MacScreenLiveView<Snapshot: View>: View {
                     .macScreenLive(poller, active: active)
                     .overlay(alignment: .top) {
                         if let error = model.lastVideoError, !model.forcedSnapshot {
-                            Label(ScreenSessionWire.guidance(for: error), systemImage: "video.slash")
+                            Label(ScreenSessionWire.failureNotice(for: error), systemImage: "video.slash")
                                 .font(.caption)
                                 .padding(.horizontal, 10).padding(.vertical, 6)
                                 .glassEffect(.regular, in: .capsule)
@@ -128,7 +156,8 @@ struct MacScreenLiveView<Snapshot: View>: View {
                     .overlay(alignment: .topTrailing) {
                         if model.peer != nil, model.mode == .snapshot {
                             Button { model.retryVideo() } label: {
-                                Label("试视频", systemImage: "video").font(.caption.weight(.semibold))
+                                Label(model.needsUserRetry ? AppLocalized("重试") : AppLocalized("试视频"), systemImage: "video")
+                                    .font(.caption.weight(.semibold))
                                     .padding(.horizontal, 10).padding(.vertical, 6)
                             }
                             .buttonStyle(.plain)
@@ -146,7 +175,7 @@ struct MacScreenLiveView<Snapshot: View>: View {
     }
 
     private func sync() {
-        if wantsVideo { model.startVideoIfNeeded() } else { model.stopVideo() }
+        model.setViewWants(wantsVideo)
     }
 }
 
@@ -275,11 +304,10 @@ private struct ScreenVideoSurface: UIViewRepresentable {
         func attach(track: RTCVideoTrack?, to view: ScreenVideoContainer) {
             guard track !== self.track else { return }
             self.track?.remove(view.videoView)
-            self.track?.remove(parent.pip.renderer)
             self.track = track
             track?.add(view.videoView)
-            track?.add(parent.pip.renderer)
-            if track != nil { parent.pip.attach() }
+            // 画中画渲染器由 ScreenPiPController 只在画中画时挂到轨道上(平时每帧白转 CMSampleBuffer)。
+            parent.pip.setTrack(track)
         }
 
         nonisolated func videoView(_ videoView: RTCVideoRenderer, didChangeVideoSize size: CGSize) {
