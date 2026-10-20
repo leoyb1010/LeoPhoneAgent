@@ -1007,6 +1007,16 @@ struct GatewayItemView: View {
         case .tool(let name, let isRunning, let isError, let duration):
             GatewayToolRow(item: item, name: name, isRunning: isRunning, isError: isError, duration: duration)
 
+        case .notice where item.prominent:
+            Label {
+                Text(item.text).font(.system(size: 13)).foregroundStyle(.primary)
+            } icon: {
+                Image(systemName: "info.circle.fill").foregroundStyle(.orange)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+
         case .notice:
             Text(item.text)
                 .font(.system(size: 12))

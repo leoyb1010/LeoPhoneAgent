@@ -104,6 +104,7 @@ test("history: turns become user.message / deltas / tool events / run.completed;
 
 function fakeTasks() {
   const calls: [string, Record<string, unknown>][] = [];
+  const listeners = new Map<string, (event: unknown) => void>();
   let next = 0;
   const service = {
     async createTask(params: Record<string, unknown>) {
@@ -120,11 +121,15 @@ function fakeTasks() {
     async listTaskList() {
       return { items: [], total: 0, hasMore: false };
     },
-    onDynamicTaskEvent() {
-      return () => ({ dispose() {} });
+    onDynamicTaskEvent(params: { taskId: string }) {
+      return (listener: (event: unknown) => void) => {
+        listeners.set(params.taskId, listener);
+        return { dispose: () => listeners.delete(params.taskId) };
+      };
     },
   };
-  return { service: service as unknown as IZCodeTaskService, calls };
+  const fire = (taskId: string, event: Record<string, unknown>) => listeners.get(taskId)?.({ taskId, traceId: "t", ...event });
+  return { service: service as unknown as IZCodeTaskService, calls, fire };
 }
 
 const iphone = { kind: "iphone" as const, deviceId: "dev-iphone" };
@@ -251,6 +256,66 @@ test("takeover is remembered across a Mac restart (session index)", async () => 
     assert.equal((again.body as Record<string, unknown>)["title"], "Claude 自己起的标题");
     await after.close();
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("takeover: when ACP could not session/load (CLI started a new session) the stream says so and the summary carries resume_failed", async () => {
+  const { root, projects } = await fixture();
+  const acpSessionsPath = path.join(root, "acp-sessions.json");
+  const tasks = fakeTasks();
+  const bridge = new LinkBridge({
+    taskService: tasks.service,
+    logger: { info() {}, warn() {} },
+    push: () => undefined,
+    appVersion: "test",
+    journalDir: path.join(root, "journals"),
+    leoagent: { url: "http://127.0.0.1:2", key: () => null },
+    sshHostKeys: async () => [],
+    acpAgents: () => [{ id: "claude-code", name: "Claude Code", harnessKey: "claude", available: true }],
+    claudeProjectsDir: projects,
+    acpSessionsPath,
+  });
+  const takeOver = async (id: string) => {
+    const created = await bridge.handle(req("POST", "/harness/sessions", { resume_external: { agent: "claude", session_id: id } }));
+    return (created.body as { session_id: string }).session_id;
+  };
+  const summary = async (id: string) =>
+    ((await bridge.handle(req("GET", "/harness/sessions"))).body as { sessions: Record<string, unknown>[] }).sessions.find((s) => s["session_id"] === id);
+  const notes = async (id: string, wait: (events: HarnessEvent[]) => boolean) => {
+    const events: HarnessEvent[] = [];
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1500);
+    await bridge.stream(req("GET", `/harness/sessions/${id}/events?after=0`), (data) => {
+      const frame = JSON.parse(data) as HarnessEvent;
+      if (frame["type"] !== "resume") events.push(frame);
+      if (wait(events)) controller.abort();
+    }, controller.signal);
+    clearTimeout(timer);
+    return events.filter((e) => e["kind"] === "resume_failed");
+  };
+  try {
+    // 接上了:CLI 写回的还是终端那个 id → 不提示
+    const ok = await takeOver(B);
+    tasks.fire(ok, { type: "tool_call", toolId: "x", toolName: "Read", kind: "Read", title: "Read", input: {} });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.deepEqual(await notes(ok, (events) => events.some((e) => e.event === "tool.started" && e["tool_use_id"] === "x")), []);
+    assert.equal((await summary(ok))?.["resume_failed"], undefined);
+
+    // load 失败:CLI 新开了会话、把映射改成别的 id → 事件流一条提示、摘要带 resume_failed;只提示一次
+    const lost = await takeOver(A);
+    const state = JSON.parse(await readFile(acpSessionsPath, "utf8")) as Record<string, unknown>;
+    state[lost] = { agentId: "claude-code", acpSessionId: "99999999-9999-4999-8999-999999999999" };
+    await writeFile(acpSessionsPath, JSON.stringify(state));
+    tasks.fire(lost, { type: "tool_call", toolId: "y", toolName: "Read", kind: "Read", title: "Read", input: {} });
+    tasks.fire(lost, { type: "tool_call", toolId: "z", toolName: "Read", kind: "Read", title: "Read", input: {} });
+    const failed = await notes(lost, (events) => events.some((e) => e["kind"] === "resume_failed"));
+    assert.equal(failed.length, 1);
+    assert.equal(failed[0]?.event, "session.note");
+    assert.match(String(failed[0]?.["text"]), /没能接上终端里的那个会话/);
+    assert.equal((await summary(lost))?.["resume_failed"], true);
+  } finally {
+    await bridge.close();
     await rm(root, { recursive: true, force: true });
   }
 });

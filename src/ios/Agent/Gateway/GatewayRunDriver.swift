@@ -33,6 +33,8 @@ struct GatewayTranscriptItem: Identifiable, Sendable {
     var toolUseId: String? = nil
     var detail: String? = nil
     var output: String? = nil
+    /// 说明行要醒目(例如没接上终端里的会话):带图标和底色,不是灰色小字。
+    var prominent = false
 }
 
 @MainActor

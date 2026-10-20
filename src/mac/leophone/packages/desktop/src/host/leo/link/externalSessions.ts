@@ -285,3 +285,19 @@ export async function seedAcpResume(statePath: string, taskId: string, acpSessio
   await fsp.writeFile(temp, JSON.stringify(state, null, 2));
   await fsp.rename(temp, statePath);
 }
+
+/**
+ * [takeover] CLI 拉起 agent 后把实际的 ACP 会话 id 写回映射:还是终端那个 id = load 上了;
+ * 变成别的 = load 失败、新开了会话。映射读不到 / 没这一条按「接上了」算,不误报。
+ */
+export async function acpResumeHeld(statePath: string, taskId: string, externalId: string): Promise<boolean> {
+  const text = await fsp.readFile(statePath, "utf8").catch(() => "");
+  let state: Record<string, unknown> = {};
+  try {
+    state = record(JSON.parse(text || "{}"));
+  } catch {
+    return true;
+  }
+  const current = record(state[taskId])["acpSessionId"];
+  return typeof current !== "string" || current === externalId;
+}

@@ -89,6 +89,11 @@ enum MacExternalSessionsWire {
             reused: obj["reused"] as? Bool ?? false)
     }
 
+    /// Mac 的 session.note 里要醒目显示的那类(目前只有「没接上终端里的会话」)。
+    static func isProminentNote(_ payload: [String: String]) -> Bool {
+        payload["kind"] == "resume_failed"
+    }
+
     static func date(_ raw: Any?) -> Date? {
         guard let raw = raw as? String else { return nil }
         let fractional = ISO8601DateFormatter()

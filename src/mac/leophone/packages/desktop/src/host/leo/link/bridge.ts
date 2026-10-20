@@ -17,6 +17,7 @@ import { LEOBOT_NO_MODEL_MESSAGE } from "../leobotModelSelection.js";
 import type { AcpAuthState, AcpLoginFlows } from "@zcode/shared/acp-login";
 import { ChangesError, fileDiff, revertChanges, workspaceChanges } from "./changes.js";
 import {
+  acpResumeHeld,
   defaultAcpSessionsPath,
   defaultClaudeProjectsDir,
   findClaudeSession,
@@ -216,6 +217,8 @@ export class LinkBridge {
       if (typeof entry["harness_name"] === "string") session.harnessName = entry["harness_name"];
       if (typeof entry["phone_session_id"] === "string") session.phoneSessionId = entry["phone_session_id"];
       if (typeof entry["external_session_id"] === "string") session.externalSessionId = entry["external_session_id"];
+      session.resumeFailed = entry["resume_failed"] === true;
+      if (session.externalSessionId && !session.resumeFailed) this.armResumeCheck(session);
       if (typeof entry["created_at"] === "number") session.createdAt = entry["created_at"];
       // 最后活动时间从创建时间起算,open() 再按日志最后一条事件往后推。以前这里取的是「现在」:
       // 每次 Mac 重启,手机上的旧任务都像刚动过,一直占着首页「进行中」。
@@ -1002,6 +1005,15 @@ export class LinkBridge {
     if (takeover.running) {
       session.emit({ event: "session.note", text: "Mac 终端里这个会话还开着，两边同时发消息会打架：最好先在终端里退出 claude。" });
     }
+    // 回放完才装:回放里的正文 / 工具事件不算 agent 的产出。
+    this.armResumeCheck(session);
+  }
+
+  private armResumeCheck(session: LinkSession): void {
+    const externalId = session.externalSessionId;
+    if (!externalId) return;
+    const statePath = this.deps.acpSessionsPath ?? defaultAcpSessionsPath();
+    session.resumeCheck = () => acpResumeHeld(statePath, session.sessionId, externalId);
   }
 
   private async send(

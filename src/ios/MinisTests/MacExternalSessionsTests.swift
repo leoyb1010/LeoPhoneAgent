@@ -59,4 +59,10 @@ final class MacExternalSessionsTests: XCTestCase {
         XCTAssertFalse(reused.terminalRunning)
         XCTAssertNil(W.parseTakeover(["error": ["message": "x"]], fallback: session), "没有 session_id 不算接上")
     }
+
+    func testResumeFailedNoteIsProminent() {
+        // Mac 发 {"event":"session.note","kind":"resume_failed","text":…};事件解析把字段摊平成字符串字典
+        XCTAssertTrue(W.isProminentNote(["event": "session.note", "kind": "resume_failed", "text": "没能接上终端里的那个会话"]))
+        XCTAssertFalse(W.isProminentNote(["event": "session.note", "text": "手机暂时答不了的提问已跳过"]), "普通说明照旧灰色小字")
+    }
 }

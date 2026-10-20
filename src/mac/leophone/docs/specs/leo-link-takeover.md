@@ -16,6 +16,9 @@
 - 历史由桌面端直接读 JSONL 尾部（≤2MB、≤600 条）翻成 v0.4 事件写进该任务的日志：
   `session.created → session.note → (user.message → message.delta / reasoning.available / tool.started / tool.completed → run.completed)*`。
   手机按 seq 收到，和普通任务一样续传。子 agent（sidechain）不回放。
+- load 失败时 CLI 会新开一个 ACP 会话（上下文丢失）。接管来的任务在回放之后第一次有产出（正文 / 思考 / 工具 / 完成）时，
+  桌面端核对一次映射：CLI 写回的 ACP 会话 id 不再是终端那个 → 事件流发 `{"event":"session.note","kind":"resume_failed","text":…}`，
+  会话摘要（与任务表）带 `"resume_failed":true`。普通任务不核对。
 - 同一个 Claude 会话只接管一次：任务表记 `external_session_id`（重启后仍认得），再接管回同一个任务（`reused:true`）；并发两次只建一个。
 
 ## 接口
