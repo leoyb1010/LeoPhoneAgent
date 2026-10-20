@@ -30,7 +30,7 @@ import {
 import { normalizePowerShellReadlineRedraw } from "@/terminal/terminalDataTransform.js";
 import { getHttpLinksForTerminalBufferLine } from "@/terminal/terminalLinks.js";
 import { mergeTerminalTheme } from "@/terminal/terminalTheme.js";
-import { ensureTerminalEnhancements } from "@/terminal/terminalEnhancements.js";
+import { attachTerminalWebgl, ensureTerminalEnhancements } from "@/terminal/terminalEnhancements.js";
 import { TerminalSearchBar } from "@/terminal/TerminalSearchBar.js";
 import {
   sidePaneTerminalSessionRegistry,
@@ -347,6 +347,8 @@ export function TerminalSession({
         fitAddonRef.current = existingEntry.fitAddon;
         terminalIdRef.current = existingEntry.terminalId || undefined;
         el.appendChild(existingEntry.hostEl);
+        // detach 时释放过 WebGL（见 sidePaneTerminalSessionRegistry.detachDom），挂回来再加载。
+        attachTerminalWebgl(existingEntry.term);
         const reuseThemeObserver = new MutationObserver(() => {
           // 从 entry.profileTheme 读：重挂后组件局部 ref 已重置为 undefined，
           // profile theme 只存在于 registry entry，必须从 entry 取（否则丢用户配置的终端颜色）。

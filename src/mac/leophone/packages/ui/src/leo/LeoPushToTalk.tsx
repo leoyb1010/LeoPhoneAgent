@@ -73,8 +73,9 @@ export function LeoPushToTalk() {
     });
   }, [bridge]);
 
-  // [WP-60 预热] 窗口打开 / 回到前台、焦点进到能听写的输入框时,让主进程备好模型,
+  // [WP-60 预热] 焦点进到能听写的输入框时(含回到前台时焦点本来就在输入框里),让主进程备好模型,
   // 按下快捷键时不用再等加载(之前首字 ~1.2s+,其间说的话会丢)。一分钟内最多提醒一次:主进程只是给空闲计时续期。
+  // 不再在窗口一打开就预热:启动时就把语音模型拉进内存,很多次根本用不上听写。
   useEffect(() => {
     if (!bridge || !settings?.dictationEnabled) return;
     let lastPrewarm = 0;
@@ -83,14 +84,16 @@ export function LeoPushToTalk() {
       lastPrewarm = Date.now();
       void bridge.prewarm().catch(() => undefined);
     };
+    // 只认「焦点真的在输入框里」:findDictationTarget 找不到焦点时会退回页面上任意可见的编辑器。
     const onFocusIn = () => {
-      if (findDictationTarget()) prewarm();
+      const target = findDictationTarget();
+      if (target && target === document.activeElement) prewarm();
     };
-    prewarm();
-    window.addEventListener("focus", prewarm);
+    onFocusIn();
+    window.addEventListener("focus", onFocusIn);
     document.addEventListener("focusin", onFocusIn);
     return () => {
-      window.removeEventListener("focus", prewarm);
+      window.removeEventListener("focus", onFocusIn);
       document.removeEventListener("focusin", onFocusIn);
     };
   }, [bridge, settings]);

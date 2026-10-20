@@ -93,3 +93,19 @@ export function parseInputEvent(data: string): InputEvent | null {
       return null;
   }
 }
+
+/** 本机断开操控（Esc×3 / 菜单栏 / 悬浮条）后的冷却：这段时间里手机重连也拿不回操控，看屏照常。 */
+export const CONTROL_COOLDOWN_MS = 10_000;
+
+export function createControlCooldown(ms = CONTROL_COOLDOWN_MS, now: () => number = Date.now) {
+  let until = 0;
+  return {
+    start(): void {
+      until = now() + ms;
+    },
+    /** 还要冷却多少毫秒；0 = 可以操控。 */
+    remaining(): number {
+      return Math.max(0, until - now());
+    },
+  };
+}

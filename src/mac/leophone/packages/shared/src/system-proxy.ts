@@ -13,7 +13,9 @@ export interface SystemProxy {
   socks?: string;
 }
 
-export const LEO_NO_PROXY = "localhost,127.0.0.1,::1,.local,100.64.0.0/10,.ts.net,.leoyuan.top";
+// 100.64.0.0/10 是 Tailscale 的 CGNAT 段；只有 Go / curl / Python 认 CIDR，Node / Bun 这类只做后缀匹配的工具认不出，
+// 它们靠 MagicDNS 名（.ts.net / *.ts.net 两种写法都给）绕开代理。中继域名不再写死，见 leoNoProxy()。
+export const LEO_NO_PROXY = "localhost,127.0.0.1,::1,.local,*.local,100.64.0.0/10,.ts.net,*.ts.net";
 /** 注入过的标记：设置关掉后，从已注入的环境再拉起子进程时能认出并撤掉。 */
 export const LEO_PROXY_MARKER = "LEO_SYSTEM_PROXY_INJECTED";
 
@@ -63,6 +65,32 @@ export function readSystemProxy(now = Date.now()): SystemProxy {
   return proxy;
 }
 
+/** 中继配置 `~/.leoagent/relay.json` 里的 url / phone_urls 的主机名（与 host/leo/link 读同一份文件）。 */
+export function relayNoProxyHosts(env: NodeJS.ProcessEnv = process.env): string[] {
+  const home = env.LEOAGENT_HOME?.trim() || join(env.HOME?.trim() || homedir(), ".leoagent");
+  try {
+    const config = JSON.parse(readFileSync(join(home, "relay.json"), "utf8")) as { url?: unknown; phone_urls?: unknown };
+    const urls = [config.url, ...(Array.isArray(config.phone_urls) ? config.phone_urls : [])];
+    const hosts = new Set<string>();
+    for (const url of urls) {
+      if (typeof url !== "string" || !url.trim()) continue;
+      try {
+        hosts.add(new URL(url.trim()).hostname);
+      } catch {
+        // 写坏的地址跳过
+      }
+    }
+    return [...hosts];
+  } catch {
+    return [];
+  }
+}
+
+/** 注入用的 NO_PROXY：固定的本机 / 局域网 / Tailscale 段 + 当前中继主机。 */
+export function leoNoProxy(env: NodeJS.ProcessEnv = process.env): string {
+  return [LEO_NO_PROXY, ...relayNoProxyHosts(env)].join(",");
+}
+
 function dataRoot(env: NodeJS.ProcessEnv): string {
   return env.ZCODE_HOME?.trim() || join(env.HOME?.trim() || homedir(), ".leophoneagent");
 }
@@ -94,6 +122,12 @@ export function setSystemProxyEnabled(enabled: boolean, env: NodeJS.ProcessEnv =
   writeFileSync(file, JSON.stringify({ ...current, systemProxy: enabled }, null, 2), { mode: 0o600 });
 }
 
+/** 撤掉上次注入的那份；NO_PROXY 只在是我们写的（以 LEO_NO_PROXY 开头）时才撤，用户自己的保留。 */
+function stripInjected(out: Record<string, string | undefined>): void {
+  for (const key of [...PROXY_KEYS, LEO_PROXY_MARKER]) delete out[key];
+  for (const key of NO_PROXY_KEYS) if (out[key]?.startsWith(LEO_NO_PROXY)) delete out[key];
+}
+
 /**
  * 给子进程的 env：用户已经设了 HTTP(S)_PROXY / ALL_PROXY 就原样返回；否则按系统代理补上
  * HTTP_PROXY / HTTPS_PROXY / ALL_PROXY（大小写两份）与 NO_PROXY。开关关掉时撤掉之前注入的那份。
@@ -106,12 +140,13 @@ export function withSystemProxy(
   const injected = out[LEO_PROXY_MARKER] === "1";
   const enabled = options.enabled ?? systemProxyEnabled(env as NodeJS.ProcessEnv);
   if (!enabled) {
-    if (injected) {
-      for (const key of [...PROXY_KEYS, ...NO_PROXY_KEYS, LEO_PROXY_MARKER]) delete out[key];
-    }
+    if (injected) stripInjected(out);
     return out;
   }
-  if (injected || PROXY_KEYS.some((key) => out[key]?.trim())) return out;
+  // 带注入标记说明代理是我们上次补的：先撤掉旧值再按当前系统代理重补，Clash 退出 / 换端口后下次拉起子进程就跟上
+  // （以前有标记就原样返回，换代理得重启 LeoBot）。
+  if (injected) stripInjected(out);
+  else if (PROXY_KEYS.some((key) => out[key]?.trim())) return out;
   const proxy = options.proxy ?? readSystemProxy();
   const web = proxy.https ?? proxy.http;
   const all = proxy.socks ?? web;
@@ -121,7 +156,7 @@ export function withSystemProxy(
     out.HTTP_PROXY = out.http_proxy = proxy.http ?? web;
   }
   if (all) out.ALL_PROXY = out.all_proxy = all;
-  if (!NO_PROXY_KEYS.some((key) => out[key]?.trim())) out.NO_PROXY = out.no_proxy = LEO_NO_PROXY;
+  if (!NO_PROXY_KEYS.some((key) => out[key]?.trim())) out.NO_PROXY = out.no_proxy = leoNoProxy(env as NodeJS.ProcessEnv);
   out[LEO_PROXY_MARKER] = "1";
   return out;
 }

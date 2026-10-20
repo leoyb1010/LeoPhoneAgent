@@ -4,13 +4,13 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import type { Terminal as XTerm } from "@xterm/xterm";
 
 import { logger } from "@/logger.js";
+import { createWebglPool } from "@/terminal/terminalWebglPool.js";
 
 /**
  * [leo] 终端增强(WP-24):xterm 5.5 官方 addon —— 搜索、WebGL 渲染、Unicode 11 字宽。
  *
  * 每个 xterm 实例只挂一次(侧栏终端的实例会跨组件复用,所以用 WeakMap 记);addon 随 term.dispose() 一起释放。
- * WebGL 失败或上下文丢失(外接显示器驱动、同时开太多终端超过 Chromium 的上下文上限)时 dispose 掉,
- * xterm 自动回到默认的 DOM 渲染;本次运行之后新开的终端也不再尝试。`localStorage["leo.terminal.webgl"]="off"` 可整体关掉。
+ * WebGL 的回收、上限与 contextLoss 重试见 terminalWebglPool.ts。`localStorage["leo.terminal.webgl"]="off"` 可整体关掉。
  */
 
 interface TerminalEnhancements {
@@ -18,7 +18,8 @@ interface TerminalEnhancements {
 }
 
 const enhanced = new WeakMap<XTerm, TerminalEnhancements>();
-let webglUnavailable = false;
+/** 同时活跃的 WebGL 终端上限（Chromium 全进程约 16 个上下文，给浏览器面板等留余量）。 */
+const MAX_ACTIVE_WEBGL_TERMINALS = 8;
 
 function webglDisabledByUser(): boolean {
   try {
@@ -28,21 +29,22 @@ function webglDisabledByUser(): boolean {
   }
 }
 
-function tryWebgl(term: XTerm): void {
-  if (webglUnavailable || webglDisabledByUser()) return;
-  try {
-    const webgl = new WebglAddon();
-    webgl.onContextLoss(() => {
-      // 上下文丢了就别再救:dispose 后 xterm 回到 DOM 渲染,内容与滚动位置不受影响。
-      webglUnavailable = true;
-      logger.warn("[Terminal] WebGL context lost, falling back to DOM renderer");
-      webgl.dispose();
-    });
-    term.loadAddon(webgl);
-  } catch (error) {
-    webglUnavailable = true;
-    logger.warn("[Terminal] WebGL renderer unavailable, using DOM renderer", error);
-  }
+const webglPool = createWebglPool<XTerm>({
+  limit: MAX_ACTIVE_WEBGL_TERMINALS,
+  create: () => new WebglAddon(),
+  load: (term, addon) => term.loadAddon(addon as WebglAddon),
+  disabled: webglDisabledByUser,
+  warn: (message, error) => logger.warn(message, error),
+});
+
+/** 终端重新挂回界面时调用：之前释放过（或丢过上下文）的 WebGL 再加载一次。 */
+export function attachTerminalWebgl(term: XTerm): void {
+  webglPool.attach(term);
+}
+
+/** 终端离开界面（detach、不 dispose）时调用：释放 WebGL 上下文。 */
+export function releaseTerminalWebgl(term: XTerm): void {
+  webglPool.release(term);
 }
 
 /** 必须在 term.open() 之后调用(WebGL 要拿到 DOM 里的 canvas)。重复调用返回同一份。 */
@@ -58,7 +60,7 @@ export function ensureTerminalEnhancements(term: XTerm): TerminalEnhancements {
   }
   const search = new SearchAddon();
   term.loadAddon(search);
-  tryWebgl(term);
+  webglPool.attach(term);
   const result = { search };
   enhanced.set(term, result);
   return result;

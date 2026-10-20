@@ -15,9 +15,14 @@ function setup(
 ) {
   let clock = 1_000_000;
   const calls: CaptureOptions[] = [];
+  const sleeps: number[] = [];
   const handle = createScreenSnapshotService({
     enabled: () => opts.enabled ?? true,
     now: () => clock,
+    sleep: async (ms) => {
+      sleeps.push(ms);
+      clock += ms;
+    },
     capture: async (options) => {
       calls.push(options);
       return (
@@ -37,6 +42,7 @@ function setup(
   return {
     handle,
     calls,
+    sleeps,
     advance: (ms: number) => {
       clock += ms;
     },
@@ -169,4 +175,18 @@ test("switch off, wrong caller kind and missing permission are refused with stab
   }).handle(req());
   assert.equal(denied.status, 428);
   assert.equal((denied.body as { error: { code: string } }).error.code, "screen_permission");
+});
+
+test("direct: captures for one device are spaced at least 250ms apart (queued, not rejected)", async () => {
+  const { handle, calls, sleeps, advance } = setup();
+  assert.equal((await handle(req())).status, 200);
+  assert.equal((await handle(req())).status, 200);
+  assert.deepEqual(sleeps, [250]);
+  advance(1_000);
+  assert.equal((await handle(req())).status, 200);
+  assert.deepEqual(sleeps, [250]);
+  // 另一台设备不受影响
+  assert.equal((await handle(req("", { caller: { kind: "iphone", deviceId: "dev-2" } }))).status, 200);
+  assert.deepEqual(sleeps, [250]);
+  assert.equal(calls.length, 4);
 });

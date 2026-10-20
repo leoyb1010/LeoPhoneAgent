@@ -205,10 +205,13 @@ export interface QuickSummaryView {
   workspaces: string[];
 }
 
-/** 有任务在跑或在等你时 3 秒刷一次,其余 15 秒;读不到 Host 时 10 秒后再试。 */
+/**
+ * 有任务在跑或在等你时 8 秒刷一次,其余 15 秒;读不到 Host 时 10 秒后再试。
+ * 以前 3 秒一次 listTaskList,长任务跑着时 Host 一直被轮询;菜单栏数字晚几秒无所谓,打开菜单时会现读。
+ */
 export function nextSummaryPollDelay(summary: QuickSummaryView | null): number {
   if (!summary) return 10_000;
-  return summary.running.length > 0 || summary.waiting.length > 0 ? 3_000 : 15_000;
+  return summary.running.length > 0 || summary.waiting.length > 0 ? 8_000 : 15_000;
 }
 
 /** 菜单栏图标旁的数字:只在有任务在跑时显示运行数。 */

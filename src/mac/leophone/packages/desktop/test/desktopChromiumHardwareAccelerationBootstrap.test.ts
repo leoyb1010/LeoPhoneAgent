@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyEarlyChromiumHardwareAccelerationBootstrap,
   extractBootstrapChromiumHardwareAccelerationEnabled,
+  resolveChromiumHardwareAccelerationSettingsFile,
 } from "../src/main/desktopChromiumHardwareAccelerationBootstrap.js";
 
 describe("desktopChromiumHardwareAccelerationBootstrap", () => {
@@ -43,5 +44,11 @@ describe("desktopChromiumHardwareAccelerationBootstrap", () => {
       ),
     ).toBe(false);
     expect(disableHardwareAcceleration).toHaveBeenCalledTimes(1);
+  });
+
+  it("读 LeoBot 自己的设置文件，不读官方 ZCode 的 ~/.zcode", () => {
+    expect(resolveChromiumHardwareAccelerationSettingsFile("/Users/x")).toBe(
+      "/Users/x/.leophoneagent/v2/setting.json",
+    );
   });
 });

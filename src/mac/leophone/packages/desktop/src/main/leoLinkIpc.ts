@@ -9,6 +9,7 @@ import {
 } from "./leo/screenCapture.js";
 import {
   accessibilityGranted,
+  inputHelperAvailable,
   openAccessibilitySettings,
   startScreenInput,
 } from "./leo/screenInput.js";
@@ -110,6 +111,12 @@ function screenPatch(value: unknown): ScreenPatch | null {
 }
 
 async function screenShareState(patch?: ScreenPatch) {
+  // 注入助手缺失时打开操控也没用：不让打开（关掉照常可以）。
+  const inputHelper = inputHelperAvailable();
+  if (patch?.control === true && !inputHelper) {
+    delete patch.control;
+    if (Object.keys(patch).length === 0) patch = undefined;
+  }
   const host = (await ownHostListening())
     ? await callLeo(
         "/api/leo/link/screen",
@@ -126,6 +133,7 @@ async function screenShareState(patch?: ScreenPatch) {
     permission: screenPermissionStatus(),
     // [WP-52] 操控要给 LeoBot「辅助功能」授权(注入与 Esc×3 监听都要)。
     accessibility: accessibilityGranted(),
+    inputHelper,
   };
 }
 

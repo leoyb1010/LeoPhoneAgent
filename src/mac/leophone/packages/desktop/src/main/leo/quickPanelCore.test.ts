@@ -97,8 +97,8 @@ test("tray title and poll cadence follow running / waiting work", () => {
   assert.equal(trayTitle(busy), "2");
   assert.equal(trayTitle(quiet), "");
   assert.equal(trayTitle(null), "");
-  assert.equal(nextSummaryPollDelay(busy), 3_000);
-  assert.equal(nextSummaryPollDelay({ ...quiet, waiting: [row("w", "waiting")] }), 3_000);
+  assert.equal(nextSummaryPollDelay(busy), 8_000);
+  assert.equal(nextSummaryPollDelay({ ...quiet, waiting: [row("w", "waiting")] }), 8_000);
   assert.equal(nextSummaryPollDelay(quiet), 15_000);
   assert.equal(nextSummaryPollDelay(null), 10_000);
 });

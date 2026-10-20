@@ -258,8 +258,11 @@ let injector = Injector()
 
 // --- 本机 Esc×3 断开 ---
 var escapes: [Date] = []
+var tap: CFMachPort?
 let tapCallback: CGEventTapCallBack = { _, type, event, _ in
+    // 系统嫌回调慢或用户输入时会停用 tap;以前直接放行不再启用,Esc×3 断开从此永久失效(HUD 还在)。重新启用。
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
         return Unmanaged.passUnretained(event)
     }
     if type == .keyDown,
@@ -277,7 +280,6 @@ let tapCallback: CGEventTapCallBack = { _, type, event, _ in
     return Unmanaged.passUnretained(event)
 }
 
-var tap: CFMachPort?
 func installEscapeTap() {
     guard tap == nil else { return }
     // 主动型(非 listenOnly)的 tap 只要「辅助功能」授权;事件原样放行,不改不吞。
