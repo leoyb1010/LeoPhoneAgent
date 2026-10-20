@@ -104,39 +104,6 @@ final class SessionListExtras: ObservableObject {
     }
 }
 
-#if DEBUG
-// TEMPORARY: SessionRow height probe to confirm List cell-height estimation
-// jitter. Logs each distinct measured row height once (deduped) so we know
-// the true height distribution before pinning a fixed .frame. Remove after.
-private struct RowHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-private let rowHeightLog = AppLogger(category: "RowHeight")
-
-// Availability-gated scroll-phase probe (onScrollPhaseChange is iOS 18+).
-private struct ScrollPhaseProbe: ViewModifier {
-    func body(content: Content) -> some View {
-        content.onScrollPhaseChange { old, new in
-            rowHeightLog.info("[SCROLL] \(old) -> \(new)")
-        }
-    }
-}
-
-private let rowHeightSeenLock = NSLock()
-nonisolated(unsafe) private var rowHeightSeen = Set<Int>()
-private func probeRowHeight(_ h: CGFloat, _ tag: String) {
-    // Ignore the pre-layout zero/garbage pass — only real measured heights.
-    guard h > 1, h.isFinite else { return }
-    let key = Int((h * 2).rounded())  // 0.5pt buckets
-    rowHeightSeenLock.lock()
-    let isNew = rowHeightSeen.insert(key).inserted
-    rowHeightSeenLock.unlock()
-    if isNew {
-        rowHeightLog.info("[ROWH] \(tag) height=\(String(format: "%.1f", h))pt")
-    }
-}
-#endif
 
 enum LeoSessionListDensity: Int, CaseIterable {
     case compact
@@ -2291,13 +2258,6 @@ struct ContentView: View {
 
         }
         .listStyle(.plain)
-        #if DEBUG
-        // TEMPORARY scroll-phase markers to bracket the jitter window in the
-        // log. Pair with the [ROWH] probe: a [ROWH] line appearing during
-        // `decelerating`/`idle` = a self-size correction mid/post-scroll =
-        // the visible jump. Remove with the probe. (iOS 18+ only.)
-        .modifier(ScrollPhaseProbe())
-        #endif
         .opacity(didInitialLoad ? 1 : 0)
         // [T-session-filter-trap] 只有"库里真的没有会话"才铺满屏的空状态。
         // 筛选筛空时铺这层会把上面刚恢复的 chips 整个盖住,等于没修。
@@ -5965,17 +5925,6 @@ private struct SessionRow: View, Equatable {
         // [T-ipad-pointer] Trackpad/mouse feedback on iPad and Catalyst.
         // No-op on touch-only devices.
         .hoverEffect(.highlight)
-        #if DEBUG
-        // TEMPORARY height probe — confirms List self-sizing jitter source.
-        // PreferenceKey fires on every real layout (incl. the self-size
-        // correction), unlike onAppear which fires once pre-layout.
-        .background(GeometryReader { g in
-            Color.clear.preference(key: RowHeightKey.self, value: g.size.height)
-        })
-        .onPreferenceChange(RowHeightKey.self) { h in
-            probeRowHeight(h, matchSnippet == nil ? "plain" : "snippet")
-        }
-        #endif
     }
 
     private func badgeCircle(icon: String, color: Color, iconSize: CGFloat = 9, size: CGFloat = 16) -> some View {
