@@ -4,9 +4,6 @@
 //   - 每个 ACP 工具调用 → 一次 AcpToolCall（运行时执行：权限档、审批卡、工具卡与持久化都复用）；
 //   - 运行时把工具结果送回来时 → 继续消费 agent 的后续更新，直到 stopReason。
 // 会话上下文由 agent 自己维护，所以只把最新一条用户输入发过去；历史与工具清单忽略。
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
 import type { ContentBlock, PlanEntry } from "@agentclientprotocol/sdk";
 import {
   createModelId,
@@ -21,27 +18,9 @@ import {
   type ModelRequest,
   type ModelResult,
 } from "@zcode/contracts";
-import {
-  ACP_COMMANDS_FILE,
-  ACP_PROVIDER_ID,
-  ACP_TOOL_NAME,
-  acpAgentInfo,
-  parseAcpCommandsStore,
-  recordAcpAgentCommands,
-  type AcpAgentCommand,
-  type AcpAgentId,
-} from "@zcode/shared/acp";
-import { detectAcpAgent, resolveAcpLaunch, type AcpEnvironment } from "./catalog.js";
-import {
-  acpUnavailableError,
-  appendStderrTail,
-  describeAcpFailure,
-  emptyTurnError,
-  redactAgentOutput,
-  type AcpAgentError,
-} from "./errors.js";
-import { spawnAcpAgent, type AcpAgentConnection } from "./process.js";
-import { AcpSessionHost } from "./session.js";
+import { ACP_PROVIDER_ID, ACP_TOOL_NAME, acpAgentInfo, type AcpAgentId } from "@zcode/shared/acp";
+import type { AcpSessionManager } from "./manager.js";
+import type { AcpSessionHost } from "./session.js";
 
 const ACP_PROPERTIES: ModelProperties = {
   requiresMfjsToolSchema: false,
@@ -64,152 +43,6 @@ const ACP_OPTION_SPECS: ModelOptionSpecs = {
   reasoningLevel: { values: ["default"], map: "{}" },
   maxOutputTokens: { max: 128_000, map: "{}" },
 };
-
-/** 每个 LeoBot 会话一个 agent 进程；会话 id 落盘，重启后用 session/load 接上。 */
-export class AcpSessionManager {
-  readonly #entries = new Map<
-    string,
-    { host: AcpSessionHost; connection: Promise<AcpAgentConnection> }
-  >();
-  readonly #environment: AcpEnvironment;
-  readonly #statePath: string;
-  readonly #commandsPath: string;
-  readonly #connect: typeof spawnAcpAgent;
-  readonly #logger: { warn(message: string, context?: Record<string, unknown>): void } | undefined;
-  /** [fix-remote] 每个 LeoBot 会话最近的 agent stderr（失败时附在错误里）；进程重启时清空。 */
-  readonly #stderrTails = new Map<string, string[]>();
-
-  constructor(
-    options: {
-      environment?: AcpEnvironment;
-      statePath?: string;
-      commandsPath?: string;
-      connect?: typeof spawnAcpAgent;
-      logger?: { warn(message: string, context?: Record<string, unknown>): void };
-    } = {},
-  ) {
-    this.#environment = options.environment ?? {};
-    const root = process.env.ZCODE_HOME?.trim() || join(homedir(), ".leophoneagent");
-    this.#statePath = options.statePath ?? join(root, "cli", "acp-sessions.json");
-    this.#commandsPath = options.commandsPath ?? join(dirname(this.#statePath), ACP_COMMANDS_FILE);
-    this.#connect = options.connect ?? spawnAcpAgent;
-    this.#logger = options.logger;
-  }
-
-  /** 取（必要时启动）某个 LeoBot 会话对应的 agent。 */
-  async ensure(
-    leoSessionId: string,
-    agentId: AcpAgentId,
-    cwd: string,
-  ): Promise<{ host: AcpSessionHost; connection: AcpAgentConnection }> {
-    let entry = this.#entries.get(leoSessionId);
-    if (entry && entry.host.agentId !== agentId) {
-      this.dispose(leoSessionId);
-      entry = undefined;
-    }
-    if (!entry) {
-      const host = new AcpSessionHost(agentId, {
-        onCommands: (commands) => this.#writeCommands(agentId, cwd, commands),
-      });
-      const launch = resolveAcpLaunch(agentId, this.#environment);
-      const tail: string[] = [];
-      this.#stderrTails.set(leoSessionId, tail);
-      const connection = launch
-        ? this.#connect(launch, {
-            host,
-            cwd,
-            resumeSessionId: this.#readState()[leoSessionId]?.acpSessionId,
-            onStderr: (chunk) => {
-              appendStderrTail(tail, chunk);
-              // stderr 可能带出令牌（长期令牌经 env 传给了 claude）：脱敏后再进日志。
-              this.#logger?.warn("ACP agent stderr", { agentId, chunk: redactAgentOutput(chunk.slice(0, 2000)) });
-            },
-            onExit: (code, signal) => {
-              // 进程没了：丢掉这条死连接（下一轮重新拉起），进行中的回合以错误结束。
-              if (this.#entries.get(leoSessionId)?.host === host) this.#entries.delete(leoSessionId);
-              host.failTurn(new Error(`ACP agent 已退出（code=${code ?? "null"} signal=${signal ?? "null"}）`));
-            },
-          })
-        : Promise.reject(
-            acpUnavailableError(agentId, detectAcpAgent(agentId, this.#environment).unavailableReason),
-          );
-      entry = { host, connection };
-      this.#entries.set(leoSessionId, entry);
-      connection.then(
-        (connected) => this.#writeState(leoSessionId, agentId, connected.sessionId),
-        () => {
-          if (this.#entries.get(leoSessionId)?.host === host) this.#entries.delete(leoSessionId);
-        },
-      );
-    }
-    return { host: entry.host, connection: await entry.connection };
-  }
-
-  /** [fix-remote] 空回合（没有任何产出就结束）按失败报。 */
-  describeEmptyTurn(leoSessionId: string, agentId: AcpAgentId, stopReason: string): AcpAgentError {
-    return emptyTurnError({ agentId, stopReason, stderrTail: this.#stderrTails.get(leoSessionId) ?? [] });
-  }
-
-  /** [fix-remote] 把失败包成「哪个 agent、什么原因、怎么修 + stderr 尾部」的错误。 */
-  describeFailure(leoSessionId: string, agentId: AcpAgentId, error: unknown): AcpAgentError {
-    return describeAcpFailure({ agentId, error, stderrTail: this.#stderrTails.get(leoSessionId) ?? [] });
-  }
-
-  host(leoSessionId: string): AcpSessionHost | undefined {
-    return this.#entries.get(leoSessionId)?.host;
-  }
-
-  dispose(leoSessionId: string): void {
-    const entry = this.#entries.get(leoSessionId);
-    if (!entry) return;
-    this.#entries.delete(leoSessionId);
-    this.#stderrTails.delete(leoSessionId);
-    void entry.host.cancel();
-    entry.connection.then((connected) => connected.dispose(), () => undefined);
-  }
-
-  disposeAll(): void {
-    for (const id of [...this.#entries.keys()]) this.dispose(id);
-  }
-
-  #writeCommands(agentId: AcpAgentId, cwd: string, commands: readonly AcpAgentCommand[]): void {
-    try {
-      let current: unknown;
-      try {
-        current = JSON.parse(readFileSync(this.#commandsPath, "utf8"));
-      } catch {
-        current = undefined;
-      }
-      const next = recordAcpAgentCommands(parseAcpCommandsStore(current), agentId, cwd, commands);
-      mkdirSync(dirname(this.#commandsPath), { recursive: true });
-      writeFileSync(this.#commandsPath, JSON.stringify(next, null, 2));
-    } catch (error) {
-      this.#logger?.warn("ACP 斜杠命令写入失败", { error: String(error) });
-    }
-  }
-
-  #readState(): Record<string, { agentId: string; acpSessionId: string }> {
-    try {
-      return JSON.parse(readFileSync(this.#statePath, "utf8")) as Record<
-        string,
-        { agentId: string; acpSessionId: string }
-      >;
-    } catch {
-      return {};
-    }
-  }
-
-  #writeState(leoSessionId: string, agentId: AcpAgentId, acpSessionId: string): void {
-    try {
-      const state = this.#readState();
-      state[leoSessionId] = { agentId, acpSessionId };
-      mkdirSync(dirname(this.#statePath), { recursive: true });
-      writeFileSync(this.#statePath, JSON.stringify(state, null, 2));
-    } catch (error) {
-      this.#logger?.warn("ACP 会话映射写入失败", { error: String(error) });
-    }
-  }
-}
 
 export interface AcpModelOptions {
   agentId: AcpAgentId;

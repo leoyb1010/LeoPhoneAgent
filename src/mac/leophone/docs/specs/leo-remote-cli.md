@@ -40,6 +40,12 @@
   不进操作回执。grok / codex 走 `login --device-auth`（网址 + 设备码），claude 走 `setup-token`（授权码回填，令牌只写
   `<数据根>/acp/claude-oauth-token`），gemini / opencode 粘贴 API key。`run.failed` 带 `code`（`acp_auth` 等）。
 - capabilities 广播 `ssh: {host, user, fqdn}`（`tailscale status --self` 的 MagicDNS 名 + 当前用户），手机 SSH 兜底优先用它。
+- ACP 回合时序（`adapters/src/acp/session.ts`，状态所有者是 `AcpSessionHost`）：每次 `startTurn` 轮次序号加一、清掉队列里上一轮
+  遗留的事件和上一轮的工具表；`session/prompt` 的回调只认自己那一轮，取消后迟到的 stop / 错误直接丢弃，`turnActive` 只由当前轮结束清。
+  单个 diff 超过 256KB 只给摘要。
+- ACP 进程生命周期（`adapters/src/acp/manager.ts`）：非 Windows 上 agent 自成进程组，收进程按组 SIGTERM、5 秒后补 SIGKILL；
+  CLI 进程 `exit` 时同步收掉全部 agent；闲置 30 分钟（没在跑、没有挂着的授权）的会话回收进程，仅限支持 `session/load` 的 agent，
+  下次发消息自动拉起并续上，不支持的只记一次日志。agent stderr 一秒合并一条 debug，失败时带脱敏尾部写 warn。
 
 ## 验收
 
@@ -47,3 +53,4 @@
 - 没配个人供应商的 Mac：手机开 LeoBot 任务得到 409 + 上述提示，不会变成 Claude Code 任务。
 - Claude Code 未登录：手机看到「Claude Code 在这台 Mac 上未登录或读不到登录态：在这台 Mac 的终端运行 claude 并 /login…」。
 - `node scripts/leo-acp-smoke.mjs <agent>`：直接起 agent、握手、开会话、发「只回复OK」，退出码 0/1/2 = 正常/失败/没装。
+- `node --import ./scripts/test-isolation/home.mjs --import tsx --test apps/zcode-cli/packages/adapters/test/leo/acp-turns.test.ts`：取消后迟到 stop、闲置回收、进程组 SIGKILL。

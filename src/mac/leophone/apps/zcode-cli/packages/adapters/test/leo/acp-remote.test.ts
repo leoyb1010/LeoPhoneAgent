@@ -22,7 +22,8 @@ import {
   type AcpLaunchSpec,
 } from "../../src/acp/catalog.js";
 import { describeAcpFailure, redactAgentOutput } from "../../src/acp/errors.js";
-import { AcpModel, AcpSessionManager } from "../../src/acp/model.js";
+import { AcpModel } from "../../src/acp/model.js";
+import { AcpSessionManager } from "../../src/acp/manager.js";
 import { connectAcpStream, orderAuthMethods, type ConnectAcpAgentOptions } from "../../src/acp/process.js";
 import { geminiAuthPreference } from "@zcode/shared/acp-detect";
 

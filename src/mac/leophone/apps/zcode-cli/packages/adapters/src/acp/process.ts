@@ -33,7 +33,11 @@ export interface ConnectAcpAgentOptions {
   authPreference?: readonly string[];
   /** 各握手阶段的超时（毫秒），测试可调小。 */
   stageTimeouts?: Partial<Record<AcpStage, number>>;
+  /** 收进程时 SIGTERM 之后等多久补 SIGKILL（毫秒），测试可调小。 */
+  killGraceMs?: number;
 }
+
+const KILL_GRACE_MS = 5_000;
 
 export type AcpStage = "initialize" | "authenticate" | "newSession";
 
@@ -144,10 +148,14 @@ export async function spawnAcpAgent(
   launch: AcpLaunchSpec,
   options: ConnectAcpAgentOptions,
 ): Promise<AcpAgentConnection> {
+  // [fix] agent 会再起子进程（claude-code-acp → claude、npx → node…），只杀直接子进程会留下孤儿：
+  // 非 Windows 上让它自成进程组，收的时候按组杀。Windows 没有进程组信号，仍只杀直接子进程。
+  const groupKill = process.platform !== "win32";
   const child: ChildProcess = spawn(launch.command, launch.args, {
     cwd: options.cwd,
     env: launch.env,
     stdio: ["pipe", "pipe", "pipe"],
+    detached: groupKill,
   });
   child.stderr?.setEncoding("utf8");
   child.stderr?.on("data", (chunk: string) => options.onStderr?.(chunk));
@@ -163,8 +171,22 @@ export async function spawnAcpAgent(
     Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>,
     Readable.toWeb(child.stdout!) as ReadableStream<Uint8Array>,
   );
+  const signal = (name: NodeJS.Signals) => {
+    try {
+      if (groupKill && child.pid) process.kill(-child.pid, name);
+      else child.kill(name);
+    } catch {
+      // ESRCH：进程（组）已经没了。
+    }
+  };
+  let disposed = false;
   const dispose = () => {
-    if (child.exitCode === null && !child.killed) child.kill("SIGTERM");
+    if (disposed) return;
+    disposed = true;
+    signal("SIGTERM");
+    // SIGTERM 不理的，宽限期后补 SIGKILL（按组：直接子进程先退了、孙进程还在的也一并收掉）。
+    const timer = setTimeout(() => signal("SIGKILL"), options.killGraceMs ?? KILL_GRACE_MS);
+    timer.unref();
   };
   try {
     return await Promise.race([
