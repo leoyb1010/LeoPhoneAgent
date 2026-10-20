@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   ACP_COMMANDS_FILE,
+  ACP_SESSIONS_FILE,
   parseAcpCommandsStore,
   recordAcpAgentCommands,
   type AcpAgentCommand,
@@ -69,7 +70,7 @@ export class AcpSessionManager {
   ) {
     this.#environment = options.environment ?? {};
     const root = process.env.ZCODE_HOME?.trim() || join(homedir(), ".leophoneagent");
-    this.#statePath = options.statePath ?? join(root, "cli", "acp-sessions.json");
+    this.#statePath = options.statePath ?? join(root, "cli", ACP_SESSIONS_FILE);
     this.#commandsPath = options.commandsPath ?? join(dirname(this.#statePath), ACP_COMMANDS_FILE);
     this.#connect = options.connect ?? spawnAcpAgent;
     this.#logger = options.logger;

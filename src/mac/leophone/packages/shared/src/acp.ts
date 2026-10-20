@@ -96,6 +96,11 @@ export interface AcpCommandsStore {
 }
 
 export const ACP_COMMANDS_FILE = "acp-commands.json";
+/**
+ * <数据根>/cli/acp-sessions.json：LeoBot 会话 id → 外部 agent 的 ACP 会话 id（{agentId, acpSessionId}）。
+ * CLI 拉起 agent 时按它 session/load；桌面端接管终端里的 Claude 会话时预置一条（leo/link/externalSessions.ts）。
+ */
+export const ACP_SESSIONS_FILE = "acp-sessions.json";
 const ACP_COMMANDS_CWD_LIMIT = 20;
 
 export function emptyAcpCommandsStore(): AcpCommandsStore {

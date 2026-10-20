@@ -39,7 +39,7 @@ run.completed / failed / cancelled ──► 本轮标记复位
   路径越界 / 绝对 / `.git` 内 400，检查点不存在 404，非 git 409。
 - `POST /harness/sessions/:id/revert` `{"checkpoint":"1","paths":[]}` → `{"reverted":["a.txt","new.txt"],"checkpoint":"1"}`；
   只带 `paths` → 恢复到 HEAD → `{"reverted":["a.txt"]}`；两者都没有 400。
-- 第二波（未做）：`GET /harness/external-sessions`、创建时 `resume_external`（接管终端里的 Claude 会话），分流点在 `create()`。
+- 接管终端里的 Claude 会话（`GET /harness/external-sessions`、创建时 `resume_external`）见 `leo-link-takeover.md`。
 
 ## 验收
 

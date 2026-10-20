@@ -21,6 +21,8 @@ export function isLinkPath(pathname: string): boolean {
     pathname === "/v1/grok/token" ||
     pathname === "/harness/full-auto" ||
     pathname === "/harness/sessions" ||
+    // [takeover] Mac 终端里的 Claude Code 会话(接管见 docs/specs/leo-link-takeover.md)。
+    pathname === "/harness/external-sessions" ||
     pathname === "/screen/snapshot" ||
     // [WP-51] R1 视频信令:/screen/session、/screen/session/<id>、/screen/session/<id>/ice。
     /^\/screen\/session(\/[^/]+(\/ice)?)?$/.test(pathname) ||

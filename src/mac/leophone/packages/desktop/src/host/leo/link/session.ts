@@ -82,6 +82,8 @@ export class LinkSession {
   lastCaller: Caller | null = null;
   /** [E5] 手机侧会话 id(手机建任务 / 发消息时可选带来):随审批与终态推送带回,通知点开直达那个会话。 */
   phoneSessionId: string | null = null;
+  /** [takeover] 接管的 Mac 终端 Claude 会话 id:同一个会话再接管时返回这个任务,不再开一个。 */
+  externalSessionId: string | null = null;
   /** Mac 重启后从任务表里认回来的:下一次发消息前先让内核恢复这条会话。 */
   needsResume = false;
   readonly pendingApprovals = new Map<string, Pending>();
@@ -494,7 +496,7 @@ export class LinkSession {
   harnessName = "LeoBot";
 
   indexEntry(): Record<string, unknown> {
-    return { task_id: this.sessionId, cwd: this.cwd, title: this.title, mode: this.mode, created_at: this.createdAt, phone_session_id: this.phoneSessionId ?? undefined, harness: this.harness, harness_name: this.harnessName };
+    return { task_id: this.sessionId, cwd: this.cwd, title: this.title, mode: this.mode, created_at: this.createdAt, phone_session_id: this.phoneSessionId ?? undefined, harness: this.harness, harness_name: this.harnessName, external_session_id: this.externalSessionId ?? undefined };
   }
 
   /**
