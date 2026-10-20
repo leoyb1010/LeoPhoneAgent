@@ -49,6 +49,10 @@ struct AgentLoginSheet: View {
     @State private var showSafari = false
     @State private var copied = false
     @State private var submitting = false
+    /// 轮询断了要用户点「重试」时为 true;加一次 attempt 重跑 run()。
+    @State private var pollGaveUp = false
+    @State private var attempt = 0
+    @State private var cancelSent = false
 
     var body: some View {
         NavigationStack {
@@ -57,7 +61,7 @@ struct AgentLoginSheet: View {
                     statusRow
                     if let url = flow?.url {
                         Button {
-                            showSafari = true
+                            openAuthPage()
                         } label: {
                             Label(flow?.codeKind == "api_key" ? "打开获取 API key 的页面" : "打开授权页",
                                   systemImage: "safari")
@@ -94,8 +98,17 @@ struct AgentLoginSheet: View {
                         Text("只发给这台 Mac，由它写进 \(kind.displayName) 自己的登录位置；手机上不保存。")
                     }
                 }
-                if let errorText {
-                    Section { Text(errorText).foregroundStyle(.red).font(.footnote) }
+                if let message = errorText {
+                    Section {
+                        Text(message).foregroundStyle(.red).font(.footnote)
+                        if pollGaveUp {
+                            Button("重试") {
+                                errorText = nil
+                                pollGaveUp = false
+                                attempt += 1
+                            }
+                        }
+                    }
                 }
             }
             .navigationTitle(Text("登录 \(kind.displayName)"))
@@ -105,8 +118,10 @@ struct AgentLoginSheet: View {
                     Button(flow?.isFinished == true ? "完成" : "取消") { close() }
                 }
             }
-            .task { await run() }
+            .task(id: attempt) { await run() }
         }
+        // [up-home] 下滑关掉也要让 Mac 停下登录流程(以前只有点「取消」才停,伪终端里的 CLI 一直挂着)。
+        .onDisappear { cancelIfUnfinished() }
     }
 
     @ViewBuilder private var statusRow: some View {
@@ -114,7 +129,8 @@ struct AgentLoginSheet: View {
         case nil, .starting?:
             HStack { ProgressView(); Text("正在让 Mac 准备登录…").foregroundStyle(.secondary) }
         case .waitingForUser?:
-            Label(flow?.needsCode == true ? "完成网页上的步骤，再把结果粘贴到下面" : "在授权页确认下面的代码",
+            Label(flow?.needsCode == true ? "完成网页上的步骤，再把结果粘贴到下面"
+                  : copied ? "代码已复制，在授权页粘贴并确认" : "在授权页确认下面的代码",
                   systemImage: "hand.point.right")
         case .verifying?:
             HStack { ProgressView(); Text("Mac 正在验证…").foregroundStyle(.secondary) }
@@ -135,26 +151,60 @@ struct AgentLoginSheet: View {
         }
     }
 
+    /// [up-home] 轮询中途网络抖一下就整个放弃(手机切网、中继换入口都会有一两次失败):
+    /// 连续失败 3 次才停,并给「重试」——重试接着轮询同一个流程,不重新开始登录。
     private func run() async {
+        var failures = 0
+        var current: AgentLoginFlow
         do {
-            var current = try await client.startAgentLogin(key: kind.key)
-            flow = current
-            // 有网址就直接打开（设备码流程用户只需在页面上确认）。
-            if current.url != nil, !current.needsCode || current.codeKind == "auth_code" { showSafari = true }
-            while !current.isFinished, !Task.isCancelled {
-                try await Task.sleep(for: .seconds(2))
-                current = try await client.agentLoginStatus(key: kind.key, flowId: current.flowId)
-                if current.url != nil, flow?.url == nil { showSafari = true }
+            if let existing = flow, !existing.isFinished {
+                current = existing
+            } else {
+                current = try await client.startAgentLogin(key: kind.key)
                 flow = current
-            }
-            if current.status == .succeeded {
-                LeoHaptics.notification(.success)
-                showSafari = false
-                onFinished(true)
+                // 有网址就直接打开（设备码流程用户只需在页面上确认）。
+                if current.url != nil, !current.needsCode || current.codeKind == "auth_code" { openAuthPage() }
             }
         } catch {
-            if !LeoLinkProblem.isCancellation(error) { errorText = error.localizedDescription }
+            if !LeoLinkProblem.isCancellation(error) { fail(error) }
+            return
         }
+        while !current.isFinished, !Task.isCancelled {
+            do {
+                try await Task.sleep(for: .seconds(2))
+                let next = try await client.agentLoginStatus(key: kind.key, flowId: current.flowId)
+                failures = 0
+                errorText = nil
+                if next.url != nil, flow?.url == nil { openAuthPage(next) }
+                current = next
+                flow = current
+            } catch {
+                if LeoLinkProblem.isCancellation(error) || Task.isCancelled { return }
+                failures += 1
+                guard failures >= 3 else { continue }
+                fail(error)
+                return
+            }
+        }
+        if current.status == .succeeded {
+            LeoHaptics.notification(.success)
+            showSafari = false
+            onFinished(true)
+        }
+    }
+
+    private func fail(_ error: Error) {
+        errorText = error.localizedDescription
+        pollGaveUp = true
+    }
+
+    /// [up-home] 设备码流程:打开授权页前先把代码放进剪贴板,到页面上直接粘贴。
+    private func openAuthPage(_ source: AgentLoginFlow? = nil) {
+        if let userCode = (source ?? flow)?.userCode {
+            UIPasteboard.general.string = userCode
+            copied = true
+        }
+        showSafari = true
     }
 
     private func submit() {
@@ -174,11 +224,16 @@ struct AgentLoginSheet: View {
     }
 
     private func close() {
-        if let flow, !flow.isFinished {
-            let key = kind.key
-            Task { await client.cancelAgentLogin(key: key, flowId: flow.flowId) }
-        }
+        cancelIfUnfinished()
         onFinished(flow?.status == .succeeded)
         dismiss()
+    }
+
+    private func cancelIfUnfinished() {
+        guard let flow, !flow.isFinished, !cancelSent else { return }
+        cancelSent = true
+        let key = kind.key
+        let client = client
+        Task { await client.cancelAgentLogin(key: key, flowId: flow.flowId) }
     }
 }

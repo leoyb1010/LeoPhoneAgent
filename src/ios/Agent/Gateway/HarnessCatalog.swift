@@ -86,13 +86,37 @@ enum HarnessCatalog {
 
     /// 对话框「指挥 Mac」的菜单：有这台 Mac 上次报的列表就只列能用的（全部原样，不过滤 key）；
     /// 还没联系过时退回旧的默认几项，免得菜单是空的。
+    /// 新菜单请用 `menuEntries`（与启动器一致：全部列出、不可用的带原因）。
     static func menuOptions(known: [HarnessKind]?, runsLeoPhoneAgent: Bool, isAndroidBody: Bool) -> [(String, String)] {
-        if isAndroidBody { return [("minis", "LeoBot")] }
-        if let known, !known.isEmpty {
-            return known.filter(\.available).map { ($0.key, $0.displayName) }
+        menuEntries(known: known, runsLeoPhoneAgent: runsLeoPhoneAgent, isAndroidBody: isAndroidBody)
+            .filter(\.kind.available).map { ($0.key, $0.name) }
+    }
+
+    /// [up-home] 「指挥 Mac」菜单的一项。与 Mac 控制台启动器一致：Mac 报的全部列出，
+    /// 用不了的灰显带原因，没登录的点了去登录。
+    struct MenuEntry: Identifiable, Equatable {
+        let kind: HarnessKind
+        var key: String { kind.key }
+        var name: String { kind.displayName }
+        var id: String { kind.key }
+        /// Mac 明确说没登录、且能在手机上登录：点它打开登录页而不是派任务。
+        var needsLogin: Bool { kind.canLogin && kind.loggedIn == false }
+        /// 能直接派任务。
+        var selectable: Bool { kind.available && !needsLogin }
+        /// 灰显项的一行说明（不可用的原因 / 需要登录）。
+        var note: String? {
+            if !kind.available { return kind.statusLine }
+            if needsLogin { return AppLocalized("未登录，点一下去登录") }
+            return nil
         }
+    }
+
+    static func menuEntries(known: [HarnessKind]?, runsLeoPhoneAgent: Bool, isAndroidBody: Bool) -> [MenuEntry] {
+        if isAndroidBody { return [MenuEntry(kind: HarnessKind(key: "minis", name: "LeoBot"))] }
+        if let known, !known.isEmpty { return known.map { MenuEntry(kind: $0) } }
         let clis = [("claude", "Claude Code"), ("codex", "Codex"), ("grok", "Grok")]
-        return runsLeoPhoneAgent ? [("zcode", "LeoBot")] + clis : clis
+        return (runsLeoPhoneAgent ? [("zcode", "LeoBot")] + clis : clis)
+            .map { MenuEntry(kind: HarnessKind(key: $0.0, name: $0.1)) }
     }
 }
 

@@ -1837,6 +1837,7 @@ struct ContentView: View {
         // 1.16.0 把它们挂在了 emptyState 的修饰链上——只要用户有历史会话,
         // emptyState 不进视图树,.task 不跑、cover 不弹,整个功能是死的。
         .task {
+            restoreHomeTarget()
             if MacFleetFeature.isEnabled() { MacLiveSessionsStore.shared.start() }
             // [T-treasury-sync] 启动即交换藏宝阁增量变更。原来只挂在
             // 收藏页 onAppear 上——用户不进收藏页,Mac 端就永远是空的
@@ -1846,6 +1847,21 @@ struct ContentView: View {
                    .first(where: { $0.relayEventsURL != nil }) {
                 await client.syncTreasuryChanges()
             }
+        }
+        // [up-home] 第一次配好 Mac:舰队跟着打开(没设过开关时),首页马上出现进行中 / Mac 目标。
+        .onChange(of: gatewayStore.hosts.count) { _, _ in
+            if MacFleetFeature.isEnabled() { MacLiveSessionsStore.shared.start() }
+        }
+        .sheet(item: $homeAgentLogin) { target in
+            if let client = gatewayStore.client(for: target.host) {
+                AgentLoginSheet(client: client, kind: target.kind) { ok in
+                    guard ok else { return }
+                    Task { _ = try? await client.harnessKinds() }   // 刷新登录状态,菜单随之更新
+                }
+            }
+        }
+        .fullScreenCover(item: $homeMacScreen) { target in
+            HomeMacScreenCover(target: target)
         }
         .fullScreenCover(item: $macAttachTarget) { row in
             NavigationStack {
@@ -1881,7 +1897,7 @@ struct ContentView: View {
                         driver: HarnessSessionDriver(
                             client: client,
                             harness: HarnessKind(key: target.cliKey, name: target.cliName),
-                            cwd: "~"),
+                            cwd: target.cwd),
                         firstPrompt: target.firstPrompt,
                         thinking: target.thinking,
                         onSessionCreated: {
@@ -1961,8 +1977,17 @@ struct ContentView: View {
     /// 以前要走 设置 → Mac 控制台 → 等扫描 CLI → 点进会话,四步。
     /// 这是每天要看好几次的东西,不该埋那么深。没有在跑的就整节不出现。
     /// 1.46.1:标题点一下折叠;每行左滑(或长按)——在跑的「停止」,跑完的「清理」。
+    /// [up-home] 有已配对的 Mac 时,没有任务也显示这一节的标题行(看屏 / 登录入口从这里进)。
     private var macLiveSectionVisible: Bool {
-        macFleetEnabled && homeCardsEnabled && !isSelecting && !macLive.rows.isEmpty
+        macFleetEnabled && homeCardsEnabled && !isSelecting
+            && (!macLive.rows.isEmpty || !MacScreenHosts.candidates.isEmpty)
+    }
+
+    /// 能在手机上登录的外部 agent(各台 Mac 上次报的)。
+    private var homeLoginChoices: [HomeAgentLoginTarget] {
+        gatewayStore.activeHosts.filter { !$0.isAndroidBody }.flatMap { host in
+            (host.harnesses ?? []).filter(\.canLogin).map { HomeAgentLoginTarget(host: host, kind: $0) }
+        }
     }
 
     @ViewBuilder
@@ -1982,39 +2007,89 @@ struct ContentView: View {
 
     private var macLiveHeader: some View {
         let waiting = macLive.rows.filter(\.isWaiting).count
-        return Button {
-            withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { macLiveCollapsed.toggle() }
-            LeoHaptics.selection()
-        } label: {
-            HStack(spacing: 7) {
-                Image(systemName: "desktopcomputer")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color(UIColor.secondaryLabel))
-                Text("进行中")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color(UIColor.secondaryLabel))
-                Text("\(macLive.rows.count)")
-                    .font(.caption2.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                // 折起来也要看得见有事等你拍板
-                if macLiveCollapsed, waiting > 0 {
-                    Text("\(waiting) 个等你审批")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.orange)
+        let empty = macLive.rows.isEmpty
+        return HStack(spacing: 10) {
+            Button {
+                guard !empty else { return }
+                withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { macLiveCollapsed.toggle() }
+                LeoHaptics.selection()
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color(UIColor.secondaryLabel))
+                    Text("进行中")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color(UIColor.secondaryLabel))
+                    Text("\(macLive.rows.count)")
+                        .font(.caption2.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                    // 折起来也要看得见有事等你拍板
+                    if macLiveCollapsed, waiting > 0 {
+                        Text("\(waiting) 个等你审批")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.orange)
+                    }
+                    Spacer(minLength: 8)
+                    if !empty {
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(macLiveCollapsed ? 0 : 90))
+                            .animation(LeoMotion.spring(reduceMotion: reduceMotion), value: macLiveCollapsed)
+                    }
                 }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.tertiary)
-                    .rotationEffect(.degrees(macLiveCollapsed ? 0 : 90))
-                    .animation(LeoMotion.spring(reduceMotion: reduceMotion), value: macLiveCollapsed)
+                .frame(minHeight: 30)
+                .contentShape(Rectangle())
             }
-            .frame(minHeight: 30)
-            .contentShape(Rectangle())
-            .textCase(nil)
+            .buttonStyle(.plain)
+            .accessibilityValue(empty ? Text("") : macLiveCollapsed ? Text("已折叠") : Text("已展开"))
+            macLiveShortcuts
         }
-        .buttonStyle(.plain)
-        .accessibilityValue(macLiveCollapsed ? Text("已折叠") : Text("已展开"))
+        .textCase(nil)
+    }
+
+    /// [up-home] 「看屏」与外部 agent「登录」:以前要先开一个 Mac 任务、或进 设置 → Mac 控制台 才找得到。
+    @ViewBuilder
+    private var macLiveShortcuts: some View {
+        let screens = MacScreenHosts.candidates
+        let logins = homeLoginChoices
+        if screens.count == 1 {
+            Button { openHomeMacScreen(screens[0]) } label: {
+                Label("看屏", systemImage: "display").font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.borderless)
+        } else if screens.count > 1 {
+            Menu {
+                ForEach(screens) { host in
+                    Button(host.name) { openHomeMacScreen(host) }
+                }
+            } label: {
+                Label("看屏", systemImage: "display").font(.caption.weight(.semibold))
+            }
+        }
+        if !logins.isEmpty {
+            Menu {
+                ForEach(logins) { target in
+                    Button {
+                        homeAgentLogin = target
+                    } label: {
+                        Label(target.kind.loggedIn == false ? AppLocalized("登录 \(target.kind.displayName)")
+                              : AppLocalized("重新登录 \(target.kind.displayName)"),
+                              systemImage: target.kind.loggedIn == false ? "person.badge.key" : "arrow.clockwise")
+                        if gatewayStore.activeHosts.filter({ !$0.isAndroidBody }).count > 1 { Text(target.host.name) }
+                    }
+                }
+            } label: {
+                Label("登录", systemImage: "person.badge.key").font(.caption.weight(.semibold))
+            }
+        }
+    }
+
+    private func openHomeMacScreen(_ host: GatewayHost) {
+        guard let client = gatewayStore.client(for: host) else { return }
+        homeMacScreen = HomeMacScreenTarget(host: host, client: client)
+        LeoHaptics.selection()
     }
 
     private func macLiveRow(_ row: MacLiveSessionsStore.Row) -> some View {
@@ -3142,6 +3217,10 @@ struct ContentView: View {
     /// 这次快捷动作是不是从首页发起的(决定新对话要不要带推入动画)。
     @State private var quickActionStartedAtHome = false
     @State private var homeExecutionTarget: HomeExecutionTarget = .iphone
+    /// [up-home] 首页「指挥 Mac」里点了没登录的 agent:直接开登录页。
+    @State private var homeAgentLogin: HomeAgentLoginTarget?
+    /// [up-home] 首页「进行中」的「看屏」。
+    @State private var homeMacScreen: HomeMacScreenTarget?
     @FocusState private var homePromptFocused: Bool
     // [T-home-simplify-1.41] "/" 面板、亮度选项、Mac 控制台入口(从标题栏收进来)。
     @State private var showHomeActions = false
@@ -3156,7 +3235,29 @@ struct ContentView: View {
 
     private enum HomeExecutionTarget: Equatable {
         case iphone
-        case mac(hostId: String, cliKey: String, cliName: String)
+        case mac(HomeMacDispatchTarget)
+    }
+
+    struct HomeAgentLoginTarget: Identifiable {
+        let host: GatewayHost
+        let kind: HarnessKind
+        var id: String { host.id + kind.key }
+    }
+
+    /// [up-home] 执行目标落盘:冷启动恢复上次的机器 + CLI + 目录。
+    private func setHomeTarget(_ target: HomeExecutionTarget) {
+        homeExecutionTarget = target
+        if case .mac(let mac) = target { HomeMacDispatchTarget.save(mac) } else { HomeMacDispatchTarget.save(nil) }
+    }
+
+    /// 冷启动恢复;记住的机器已经没了就回落「此 iPhone」。
+    private func restoreHomeTarget() {
+        let hostIds = gatewayStore.activeHosts.filter { macFleetEnabled || $0.isAndroidBody }.map(\.id)
+        if let saved = HomeMacDispatchTarget.restore(HomeMacDispatchTarget.load(), availableHostIds: hostIds) {
+            homeExecutionTarget = .mac(saved)
+        } else {
+            setHomeTarget(.iphone)
+        }
     }
 
     /// [T-home-sensory-feedback] Equatable projection of the last native
@@ -3180,13 +3281,14 @@ struct ContentView: View {
         let cliName: String
         let firstPrompt: String
         let thinking: String?
+        var cwd: String = "~"
         var id: String { host.id + cliKey }
     }
 
-    private func openMacChat(_ host: GatewayHost, _ key: String, _ name: String, prompt: String = "") {
+    private func openMacChat(_ host: GatewayHost, _ key: String, _ name: String, prompt: String = "", cwd: String? = nil) {
         macChatTarget = MacChatTarget(
             host: host, cliKey: key, cliName: name, firstPrompt: prompt,
-            thinking: lastCarriedThinking())
+            thinking: lastCarriedThinking(), cwd: cwd ?? "~")
     }
 
     private func lastCarriedThinking() -> String? {
@@ -3387,6 +3489,43 @@ struct ContentView: View {
     @ViewBuilder
     private var homeCapsuleMenuContent: some View {
         Section("在哪里执行") { homeTargetMenuItems }
+        if case .mac(let target) = homeExecutionTarget,
+           gatewayStore.activeHosts.first(where: { $0.id == target.hostId })?.isAndroidBody != true {
+            Section { homeDirectoryMenu(target) }
+        }
+    }
+
+    /// [up-home] 派 Mac 任务的目录:主目录 + 这台机器最近会话用过的目录(去重 6 个)。以前写死 ~。
+    private func homeDirectoryMenu(_ target: HomeMacDispatchTarget) -> some View {
+        let recents = HomeMacDispatchTarget.recentDirectories(
+            macLive.rows.filter { $0.hostId == target.hostId }.sorted { $0.session.seq > $1.session.seq }.map(\.session.cwd)
+                + [target.cwd].compactMap { $0 })
+        return Menu {
+            Button {
+                var next = target; next.cwd = nil
+                setHomeTarget(.mac(next))
+                LeoHaptics.selection()
+            } label: {
+                Label("主目录（~）", systemImage: target.cwd == nil ? "checkmark" : "house")
+            }
+            if !recents.isEmpty {
+                Section("最近目录") {
+                    ForEach(recents, id: \.self) { dir in
+                        Button {
+                            var next = target; next.cwd = dir
+                            setHomeTarget(.mac(next))
+                            LeoHaptics.selection()
+                        } label: {
+                            Label(HomeMacDispatchTarget.shortName(dir), systemImage: target.cwd == dir ? "checkmark" : "folder")
+                            Text(dir)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label(target.cwd.map { AppLocalized("目录：\(HomeMacDispatchTarget.shortName($0))") } ?? AppLocalized("目录：主目录"),
+                  systemImage: "folder")
+        }
     }
 
     private var homeHasAvailableModel: Bool {
@@ -3543,10 +3682,11 @@ struct ContentView: View {
         switch homeExecutionTarget {
         case .iphone:
             return isIPad ? AppLocalized("此 iPad") : AppLocalized("此 iPhone")
-        case .mac(let hostId, _, let cliName):
-            let host = gatewayStore.activeHosts.first(where: { $0.id == hostId })
+        case .mac(let target):
+            let host = gatewayStore.activeHosts.first(where: { $0.id == target.hostId })
             let hostName = host?.name ?? (host?.isAndroidBody == true ? "Android" : "Mac")
-            return "\(hostName) · \(cliName)"
+            let dir = target.cwd.map { " · " + HomeMacDispatchTarget.shortName($0) } ?? ""
+            return "\(hostName) · \(target.cliName)\(dir)"
         }
     }
 
@@ -3554,8 +3694,8 @@ struct ContentView: View {
         switch homeExecutionTarget {
         case .iphone:
             return isIPad ? "ipad" : "iphone"
-        case .mac(let hostId, _, _):
-            if gatewayStore.activeHosts.first(where: { $0.id == hostId })?.isAndroidBody == true {
+        case .mac(let target):
+            if gatewayStore.activeHosts.first(where: { $0.id == target.hostId })?.isAndroidBody == true {
                 return "flipphone"
             }
             return "desktopcomputer"
@@ -3566,7 +3706,7 @@ struct ContentView: View {
     @ViewBuilder
     private var homeTargetMenuItems: some View {
             Button {
-                homeExecutionTarget = .iphone
+                setHomeTarget(.iphone)
                 homeRoutingError = nil
                 LeoHaptics.selection()
             } label: {
@@ -3578,20 +3718,45 @@ struct ContentView: View {
             if !remoteTargets.isEmpty {
                 Section("远程机器") {
                     ForEach(remoteTargets) { host in
-                        Menu(host.name) {
-                            ForEach(ComposerMacTarget.clis(for: host), id: \.0) { cli in
-                                Button(cli.1) {
-                                    selectHomeMac(host, key: cli.0, name: cli.1)
-                                }
-                            }
-                        }
+                        Menu(host.name) { homeAgentMenu(host) }
                     }
                 }
             }
     }
 
+    /// [up-home] 和 Mac 控制台的启动器一致:Mac 报的全部列出,用不了的灰显带原因,没登录的点了去登录。
+    @ViewBuilder
+    private func homeAgentMenu(_ host: GatewayHost) -> some View {
+        let entries = HarnessCatalog.menuEntries(known: host.harnesses, runsLeoPhoneAgent: host.runsLeoPhoneAgent,
+                                                 isAndroidBody: host.isAndroidBody)
+        if !entries.contains(where: \.selectable) {
+            Text("这台机器上暂时没有能用的 agent")
+        }
+        ForEach(entries) { entry in
+            if entry.needsLogin {
+                Button {
+                    homeAgentLogin = HomeAgentLoginTarget(host: host, kind: entry.kind)
+                } label: {
+                    Label(entry.name, systemImage: "person.badge.key")
+                    if let note = entry.note { Text(note) }
+                }
+            } else {
+                Button {
+                    selectHomeMac(host, key: entry.key, name: entry.name)
+                } label: {
+                    Label(entry.name, systemImage: entry.kind.symbol)
+                    if let note = entry.note { Text(note) }
+                }
+                .disabled(!entry.selectable)
+            }
+        }
+    }
+
     private func selectHomeMac(_ host: GatewayHost, key: String, name: String) {
-        homeExecutionTarget = .mac(hostId: host.id, cliKey: key, cliName: name)
+        // 同一台机器换 CLI 时保留选过的目录。
+        var cwd: String?
+        if case .mac(let old) = homeExecutionTarget, old.hostId == host.id { cwd = old.cwd }
+        setHomeTarget(.mac(HomeMacDispatchTarget(hostId: host.id, cliKey: key, cliName: name, cwd: cwd)))
         homeRoutingError = nil
         LeoHaptics.selection()
     }
@@ -3628,8 +3793,8 @@ struct ContentView: View {
             homeDraft.text = ""
             LeoHaptics.impact(.medium)
             startHomeChatAction(.sendPrompt(prompt))
-        case .mac(let hostId, let cliKey, let cliName):
-            guard let host = gatewayStore.activeHosts.first(where: { $0.id == hostId }) else {
+        case .mac(let target):
+            guard let host = gatewayStore.activeHosts.first(where: { $0.id == target.hostId }) else {
                 homeRoutingError = AppLocalized("这台机器已不可用，请重新选择执行目标")
                 LeoHaptics.notification(.error)
                 return
@@ -3644,7 +3809,7 @@ struct ContentView: View {
             // 任务留在那里可重试(HarnessSessionDriver 失败后保持 pending 并保留首条)。
             // The home draft clears once the Mac has the session (onSessionCreated).
             LeoHaptics.impact(.medium)
-            openMacChat(host, cliKey, cliName, prompt: prompt)
+            openMacChat(host, target.cliKey, target.cliName, prompt: prompt, cwd: target.cwd)
         }
     }
 
@@ -3997,17 +4162,25 @@ struct ContentView: View {
         openMacSession(hostId: target["hostId"], machine: target["machine"] ?? "", sessionId: sid)
     }
 
-    /// The live row when the store has it, else a stub the console fills in on attach.
+    /// The live row when the store has it, else the Mac's own summary, else a stub the console fills in on attach.
     private func openMacSession(hostId: String?, machine: String, sessionId sid: String, seq: Int = 0,
                                 approvalId: String? = nil, command: String? = nil) {
         guard let host = GatewayHostStore.shared.hostMatching(hostId: hostId ?? "", machine: machine) else { return }
-        macAttachTarget = macLive.rows.first(where: { $0.hostId == host.id && $0.session.id == sid })
-            ?? MacLiveSessionsStore.Row(
+        relayCatchUp.clearMissedApprovals()
+        if let row = macLive.rows.first(where: { $0.hostId == host.id && $0.session.id == sid }) {
+            macAttachTarget = row
+            return
+        }
+        // [up-home] 冷启动点通知时内存里没有这一行:以前写死 harness "claude",Codex / LeoBot 的任务
+        // 就按 Claude 的方式接上去。先问 Mac 要真实的摘要(最多等 3 秒),取不到才用默认。
+        Task { @MainActor in
+            let summary = await Self.fetchMacSummary(host: host, sessionId: sid)
+            macAttachTarget = MacLiveSessionsStore.Row(
                 hostId: host.id,
                 hostName: host.name,
-                session: HarnessSessionSummary(
+                session: summary ?? HarnessSessionSummary(
                     id: sid,
-                    harness: "claude",
+                    harness: host.runsLeoPhoneAgent ? "zcode" : "claude",
                     name: "远程会话",
                     cwd: "~",
                     status: "running",
@@ -4017,7 +4190,18 @@ struct ContentView: View {
                     pendingApprovalCommand: command
                 )
             )
-        relayCatchUp.clearMissedApprovals()
+        }
+    }
+
+    private static func fetchMacSummary(host: GatewayHost, sessionId: String) async -> HarnessSessionSummary? {
+        guard let client = GatewayHostStore.shared.client(for: host) else { return nil }
+        return await withTaskGroup(of: HarnessSessionSummary?.self) { group in
+            group.addTask { try? await client.harnessSessions().first { $0.id == sessionId && !$0.harness.isEmpty } }
+            group.addTask { try? await Task.sleep(for: .seconds(3)); return nil }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
     }
 
     // MARK: - [WP-43] ⌘K palette commands

@@ -238,6 +238,7 @@
 		E5UIF04A /* LeoShimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF04F /* LeoShimmer.swift */; };
 		E5UIF05A /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
 		E5UIF06A /* HomeContextStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF06F /* HomeContextStrip.swift */; };
+		LFB413556CC1 /* HomeMacScreenCover.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF8ED340523B /* HomeMacScreenCover.swift */; };
 		E5UIF05T /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
 		E5JV00001 /* Jev.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JV00002 /* Jev.swift */; };
 		E5CUR0021 /* PromptCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0022 /* PromptCacheKey.swift */; };
@@ -1304,6 +1305,7 @@
 		E5UIF04F /* LeoShimmer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoShimmer.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF05F /* LeoUIPolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoUIPolicies.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF06F /* HomeContextStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Home/HomeContextStrip.swift"; sourceTree = SOURCE_ROOT; };
+		LF8ED340523B /* HomeMacScreenCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Home/HomeMacScreenCover.swift; sourceTree = SOURCE_ROOT; };
 		E5JV00002 /* Jev.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Jev/Jev.swift"; sourceTree = SOURCE_ROOT; };
 		E5CUR0022 /* PromptCacheKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/OpenAI/PromptCacheKey.swift"; sourceTree = SOURCE_ROOT; };
 		E5UPT01R /* ThinkingRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingRule.swift"; sourceTree = SOURCE_ROOT; };
@@ -2501,6 +2503,7 @@
 				E5UIF04F /* LeoShimmer.swift */,
 				E5UIF05F /* LeoUIPolicies.swift */,
 				E5UIF06F /* HomeContextStrip.swift */,
+				LF8ED340523B /* HomeMacScreenCover.swift */,
 				E5JV00002 /* Jev.swift */,
 				E5CUR0022 /* PromptCacheKey.swift */,
 				E5UPT07R /* RequestBodySizeGuard.swift */,
@@ -4071,6 +4074,7 @@
 				E5UIF04A /* LeoShimmer.swift in Sources */,
 				E5UIF05A /* LeoUIPolicies.swift in Sources */,
 				E5UIF06A /* HomeContextStrip.swift in Sources */,
+				LFB413556CC1 /* HomeMacScreenCover.swift in Sources */,
 				E5JV00001 /* Jev.swift in Sources */,
 				E5CUR0021 /* PromptCacheKey.swift in Sources */,
 				E5UPT01A /* ThinkingRule.swift in Sources */,

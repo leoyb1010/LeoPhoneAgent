@@ -12,8 +12,10 @@
 //  - 审批被任何端解决(手机/手表/桌面)→ 撤回对应通知,不留死卡。
 //
 //  [T-approval-vocab] 按钮和 App 里一致:允许一次 / 本次会话允许 / 拒绝 /
-//  拒绝并停止。「允许」类按钮必须先解锁手机(.authenticationRequired),
-//  「拒绝」免解锁;手表上从不给「始终允许」,高风险命令也不给双指互点。
+//  拒绝并停止。手表上从不给「始终允许」,高风险命令也不给双指互点。
+//  [up-home] 锁屏上直接点「允许」,不再先解锁(以方便为先,风险只提示不加步骤)。
+//  只有 CommandRisk 判为高危的命令用 highRiskCategory,「允许」类仍要解锁;
+//  中继推送里没有命令原文、拿不到风险等级,一律用普通类别(免解锁)。
 //
 
 import Foundation
@@ -27,21 +29,36 @@ enum HarnessApprovalNotifier {
     static let denyAction = "HARNESS_DENY"
     static let denyAndStopAction = "HARNESS_DENY_STOP"
 
+    /// 高危命令的审批:按钮相同,「允许」类要先解锁。
+    static let highRiskCategoryId = "HARNESS_APPROVAL_HIGH"
+
     /// 与 BACKGROUND_TASK 一起注册(setNotificationCategories 是整体替换,
     /// 谁单独 set 谁就把别人的按钮抹掉——两处调用都必须用这份并集)。
-    static var category: UNNotificationCategory {
+    static var category: UNNotificationCategory { makeCategory(categoryId, allowOptions: []) }
+    static var highRiskCategory: UNNotificationCategory {
+        makeCategory(highRiskCategoryId, allowOptions: [.authenticationRequired])
+    }
+
+    private static func makeCategory(_ id: String, allowOptions: UNNotificationActionOptions) -> UNNotificationCategory {
         UNNotificationCategory(
-            identifier: categoryId,
+            identifier: id,
             actions: [
-                UNNotificationAction(identifier: approveAction, title: AppLocalized("允许一次"),
-                                     options: [.authenticationRequired]),
+                UNNotificationAction(identifier: approveAction, title: AppLocalized("允许一次"), options: allowOptions),
                 UNNotificationAction(identifier: approveSessionAction, title: AppLocalized("本次会话允许"),
-                                     options: [.authenticationRequired]),
+                                     options: allowOptions),
                 UNNotificationAction(identifier: denyAction, title: AppLocalized("拒绝"), options: [.destructive]),
                 UNNotificationAction(identifier: denyAndStopAction, title: AppLocalized("拒绝并停止任务"),
                                      options: [.destructive]),
             ],
             intentIdentifiers: [])
+    }
+
+    /// 高危类别要在 LeoNotificationCategories.all 里登记过才用:没登记的类别发出去一个按钮都没有,
+    /// 比免解锁更糟。没登记就退回普通类别。
+    private static func categoryIdentifier(for approval: GatewayApprovalRequest) async -> String {
+        guard let command = approval.command, CommandRisk.assess(command) == .high else { return categoryId }
+        let registered = await UNUserNotificationCenter.current().notificationCategories()
+        return registered.contains(where: { $0.identifier == highRiskCategoryId }) ? highRiskCategoryId : categoryId
     }
 
     /// app 非前台时为一条审批请求发通知。前台不发(app 内卡片已在最前)。
@@ -53,7 +70,6 @@ enum HarnessApprovalNotifier {
         content.title = "🖥 \(hostName ?? "Mac") 等你审批"
         content.body = lockScreenBody(for: approval)
         content.sound = .default
-        content.categoryIdentifier = categoryId
         // 时效性:锁屏置顶 + AirPods「Siri 播报通知」可念出来
         content.interruptionLevel = .timeSensitive
         content.userInfo = [
@@ -62,11 +78,12 @@ enum HarnessApprovalNotifier {
             "harnessSessionId": sessionId,
             "approvalId": approval.approvalId,
         ]
-        let request = UNNotificationRequest(
-            identifier: notificationId(sessionId: sessionId, approvalId: approval.approvalId),
-            content: content,
-            trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        let identifier = notificationId(sessionId: sessionId, approvalId: approval.approvalId)
+        Task {
+            content.categoryIdentifier = await categoryIdentifier(for: approval)
+            try? await UNUserNotificationCenter.current().add(
+                UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
+        }
     }
 
     /// With Task Status Privacy on, the lock screen shows only which tool is
