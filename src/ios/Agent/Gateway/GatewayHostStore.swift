@@ -52,7 +52,7 @@ struct GatewayHost: Codable, Identifiable, Hashable {
     var sshTargetOverride: MacSSHTarget? = nil
     var sshHostKey: String? = nil
 
-    /// SSH 兜底实际用的目标：广播的 → 设置的 → 内置默认（按中继里的机器名）。
+    /// SSH 兜底实际用的目标：设置里填的 → Mac 广播的 → 内置默认（按中继里的机器名）。
     var resolvedSSHTarget: MacSSHTarget? {
         MacSSHTarget.resolve(advertised: sshTarget, override: sshTargetOverride,
                              machine: harnessURL.flatMap { url in url.range(of: "/m/", options: .backwards).map { String(url[$0.upperBound...]) } }
