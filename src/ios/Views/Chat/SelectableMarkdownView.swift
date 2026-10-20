@@ -357,6 +357,31 @@ extension SelectableMarkdownView {
     }
 }
 
+// MARK: - Streaming table-tail prefix parse
+
+/// [T-stream-table-tail] 流式表格的最后一行还没写完时，渲染只解析它前面的部分（见
+/// `splitStreamingTableTail`）。这份前缀解析由 SSE 在后台线程做好放在这里，按块 id + 前缀原文
+/// 精确命中；命不中（字号变了、别的路径）才回到主线程现解析，结果完全一样。
+@MainActor
+enum StreamingTablePrefixParse {
+    private static var entries: [UUID: (prefix: String, content: MarkdownContent)] = [:]
+
+    static func store(blockId: UUID, prefix: String, content: MarkdownContent) {
+        // 同时在流式的块很少；超过上限说明有残留，整体清掉即可。
+        if entries.count >= 8, entries[blockId] == nil { entries.removeAll() }
+        entries[blockId] = (prefix, content)
+    }
+
+    static func content(blockId: UUID?, prefix: String) -> MarkdownContent? {
+        guard let blockId, let entry = entries[blockId], entry.prefix == prefix else { return nil }
+        return entry.content
+    }
+
+    static func clear(blockId: UUID) {
+        entries.removeValue(forKey: blockId)
+    }
+}
+
 // MARK: - MarkdownNSRenderer
 
 /// Converts `[BlockNode]` → `NSMutableAttributedString` for display in a UITextView.
@@ -379,6 +404,67 @@ fileprivate final class MarkdownNSRenderer {
 
     func updateFontSize(_ size: CGFloat) {
         theme = SelectableMarkdownTheme(baseFontSize: size)
+        dropStableBlockMemo()
+    }
+
+    // MARK: Streaming stable-block reuse
+
+    /// 流式时复用已渲染好的顶层块：每次 flush 只重渲染「从第一个变化的块起」（通常只有最后一个、还没闭合的块），
+    /// 前面没变的块直接用上次的 RenderedBlock。块的渲染只取决于节点本身 + 进入时的计数器
+    /// （代码块/表格/图片序号），所以只复用「从头开始全都没变」的那一段，并把计数器按记录补上，
+    /// 输出与整篇重渲染逐字节一致。附件对象本来就按内容缓存，复用的是同一批对象。
+    private struct StableBlockMemo {
+        let node: BlockNode
+        let rendered: RenderedBlock
+        let codeBlocks: Int
+        let tables: Int
+        let images: Int
+    }
+    private var stableBlockMemo: [StableBlockMemo] = []
+    /// memo 属于哪个块：同一条消息的多个文本块共用一个 renderer，换块就作废。
+    private var stableBlockMemoOwner: String?
+    /// 上一次 render 是否用了复用（流式结束时据此做一次全量校正）。
+    private(set) var lastRenderReusedBlocks = false
+
+    func dropStableBlockMemo() {
+        stableBlockMemo.removeAll()
+        stableBlockMemoOwner = nil
+    }
+
+    private func renderTopLevelReusingStableBlocks(_ blocks: [BlockNode]) -> NSAttributedString {
+        let owner = "\(messageId?.uuidString ?? "-"):\(blockId?.uuidString ?? "-"):\(theme.baseFontSize)"
+        if owner != stableBlockMemoOwner {
+            stableBlockMemo.removeAll()
+            stableBlockMemoOwner = owner
+        }
+        var rendered: [RenderedBlock] = []
+        rendered.reserveCapacity(blocks.count)
+        var memo: [StableBlockMemo] = []
+        memo.reserveCapacity(blocks.count)
+        var prefixStable = true
+        var reused = 0
+        for (i, node) in blocks.enumerated() {
+            // 最后一个块（可能还没写完）永远重渲染。
+            if prefixStable, i < blocks.count - 1, i < stableBlockMemo.count, stableBlockMemo[i].node == node {
+                let m = stableBlockMemo[i]
+                codeBlockIndex += m.codeBlocks
+                tableIndex += m.tables
+                inlineImageCount += m.images
+                rendered.append(m.rendered)
+                memo.append(m)
+                reused += 1
+                continue
+            }
+            prefixStable = false
+            let c0 = codeBlockIndex, t0 = tableIndex, i0 = inlineImageCount
+            let r = renderBlock(node, listDepth: 0, quoteDepth: 0)
+            rendered.append(r)
+            memo.append(StableBlockMemo(node: node, rendered: r, codeBlocks: codeBlockIndex - c0,
+                                        tables: tableIndex - t0, images: inlineImageCount - i0))
+        }
+        stableBlockMemo = memo
+        lastRenderReusedBlocks = reused > 0
+        return mergeRenderedBlocks(rendered, tightSpacing: false).attributed
     }
     private var bodyLineSpacing: CGFloat { theme.baseFontSize * 0.25 }
     /// minisChat list item: .em(0.25) top margin
@@ -474,14 +560,22 @@ fileprivate final class MarkdownNSRenderer {
         }
     }
 
-    func render(blocks: [BlockNode]) -> NSAttributedString {
+    /// - Parameter reusingStableBlocks: 流式时传 true，复用前面没变的块（见 StableBlockMemo）。
+    func render(blocks: [BlockNode], reusingStableBlocks: Bool = false) -> NSAttributedString {
         codeBlockIndex = 0
         tableIndex = 0
         inlineImageCount = 0
         let t0 = CFAbsoluteTimeGetCurrent()
         let tableCountBefore = tableAttachmentCache.count
 
-        let result = renderBlockSequence(blocks, listDepth: 0, quoteDepth: 0, tightSpacing: false).attributed
+        let result: NSAttributedString
+        if reusingStableBlocks {
+            result = renderTopLevelReusingStableBlocks(blocks)
+        } else {
+            dropStableBlockMemo()
+            lastRenderReusedBlocks = false
+            result = renderBlockSequence(blocks, listDepth: 0, quoteDepth: 0, tightSpacing: false).attributed
+        }
         markStreamingTailFence()
         let elapsed = (CFAbsoluteTimeGetCurrent() - t0) * 1000
 
@@ -6538,11 +6632,30 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         // re-measures instead of returning the stale cached value. Without this,
         // the precalcHeight-based initial measurement (from applySnapshot) gets
         // locked in, even though the actual TextKit layout produced a different height.
-        if let cell = findCell() as? SelfSizingCell {
+        let hostCell = findCell()
+        if let cell = hostCell as? SelfSizingCell {
             cell.clearCachedHeight()
         }
 
-        cvOpt?.collectionViewLayout.invalidateLayout()
+        // 只失效这一项（MessageListLayout 据此只重排它和它后面的项），不再整表失效。
+        // 兜底：下一轮如果 cell 高度没跟着变（系统没按单项失效重新量），退回原来的整体失效。
+        if let cv = cvOpt, let cell = hostCell, let ip = cv.indexPath(for: cell) {
+            let ctx = UICollectionViewLayoutInvalidationContext()
+            ctx.invalidateItems(at: [ip])
+            let heightBefore = cell.bounds.height
+            cv.collectionViewLayout.invalidateLayout(with: ctx)
+            let logger = cellSizeLogger
+            DispatchQueue.main.async { [weak cv, weak cell] in
+                guard let cv, let cell, cell.superview != nil, cv.indexPath(for: cell) == ip else { return }
+                cv.layoutIfNeeded()
+                if abs(cell.bounds.height - heightBefore) < 0.5 {
+                    logger.info("[invalidateCell] item-only invalidation left cell at \(String(format: "%.1f", heightBefore)) — falling back to full invalidateLayout")
+                    cv.collectionViewLayout.invalidateLayout()
+                }
+            }
+        } else {
+            cvOpt?.collectionViewLayout.invalidateLayout()
+        }
     }
 
     // MARK: Blockquote Bars
@@ -6862,7 +6975,9 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // [T-stream-table-tail] A reply can finish without new text (the last
         // flush already carried it); the plain tail still has to become a table row.
         let tailNeedsFinalRender = context.coordinator.lastHadPlainSuffix && !isStreaming
-        guard !markdownUnchanged || fontChanged || tailNeedsFinalRender else {
+        // 流式时复用过稳定块：结束后整篇重渲染一次做校正（与存储一致就不重新赋值）。
+        let reuseNeedsFinalRender = !isStreaming && context.coordinator.renderedWithStableBlockReuse
+        guard !markdownUnchanged || fontChanged || tailNeedsFinalRender || reuseNeedsFinalRender else {
             let shouldRecover = textView.window != nil
                 && textView.needsAttachmentRecovery
                 && !textView.hasScheduledRecoveryForCurrentContent
@@ -6929,6 +7044,10 @@ struct SelectableMarkdownView: UIViewRepresentable {
         }
         let oldMarkdown = context.coordinator.lastMarkdown
         context.coordinator.lastMarkdown = markdown
+        if reuseNeedsFinalRender {
+            context.coordinator.renderedWithStableBlockReuse = false
+            context.coordinator.lastRenderedContentHash = nil
+        }
 
         if fontChanged {
             context.coordinator.renderer.updateFontSize(currentFontSize)
@@ -6987,6 +7106,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
             // that prevents a 6-table cell from costing seconds inside
             // `attachmentBounds` on every typesetter pass.
             renderer.mathAttachmentCache.removeAll()
+            renderer.dropStableBlockMemo()
             textView.clearAllAttachmentViews()
         }
 
@@ -7020,7 +7140,9 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // from the full markdown) no longer matches what we'll render —
         // force a fresh MarkdownContent parse and skip cachedContent.
         // [T-r3-S7] With a usable cachedContent, the prep regex pass is skipped.
-        let content = (_hasPlainSuffix ? nil : cachedContent)
+        // 表格尾行拆出来时，前缀的解析优先用 SSE 在后台做好的那份（按前缀原文核对），
+        // 不再每次 flush 在主线程跑 cmark。
+        let content = (_hasPlainSuffix ? StreamingTablePrefixParse.content(blockId: blockId, prefix: _splitForUpdate.prefix) : cachedContent)
             ?? MarkdownContent(prepareMarkdownForRender(_splitForUpdate.prefix))
         let prepElapsed = (CFAbsoluteTimeGetCurrent() - prepStart) * 1000
         // Image diagnostics — verbose only, and the regex runs only when the
@@ -7099,7 +7221,8 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // suffix above, the prebuilt cache covers the wrong content —
         // bypass it and re-render so the appended suffix lives in the
         // current view's storage (the prebuilt was for the full markdown).
-        if let prebuilt = cachedAttributedString, !fontChanged, !prebuiltHasTable, !_hasPlainSuffix {
+        if let prebuilt = cachedAttributedString, !fontChanged, !prebuiltHasTable, !_hasPlainSuffix,
+           !(reuseNeedsFinalRender && markdownUnchanged) {
             attributed = prebuilt
             usedCache = true
         } else {
@@ -7109,8 +7232,9 @@ struct SelectableMarkdownView: UIViewRepresentable {
             // cmark 不给这个标志，见 CodeSyntaxFence.swift）
             renderer.streamingTailFenceOpen = isStreaming && MarkdownFenceTracker.endsInsideOpenFence(_splitForUpdate.prefix)
             let renderedBody = autoreleasepool {
-                renderer.render(blocks: content.blocks)
+                renderer.render(blocks: content.blocks, reusingStableBlocks: isStreaming)
             }
+            if renderer.lastRenderReusedBlocks { context.coordinator.renderedWithStableBlockReuse = true }
             if _hasPlainSuffix {
                 let mut = NSMutableAttributedString(attributedString: renderedBody)
                 let suffixAttrs: [NSAttributedString.Key: Any] = [
@@ -7180,6 +7304,8 @@ struct SelectableMarkdownView: UIViewRepresentable {
             }
         }
 
+        // 淡入中的半透明颜色不算「前缀变了」（见 TextFadeAnimator.restoreOriginalColorsForDiff）。
+        context.coordinator.fadeAnimator.restoreOriginalColorsForDiff()
         var fastPathTaken = false
         var newAttachInTail = 0
         if let oldStorage = textView.textStorage as? NSTextStorage,
@@ -7207,9 +7333,19 @@ struct SelectableMarkdownView: UIViewRepresentable {
                 fastPathTaken = true
             }
         }
-        if !fastPathTaken {
+        // 校正渲染（文本没变）：和当前存储一致就不重新赋值，免得附件视图重建、布局重算。
+        var correctionMatched = false
+        if !fastPathTaken, reuseNeedsFinalRender, markdownUnchanged,
+           let oldStorage = textView.textStorage as? NSTextStorage {
+            correctionMatched = Self.prefixesEqualIgnoringFontSubstitution(attributed, oldStorage)
+            if !correctionMatched {
+                AppLogger(category: "MarkdownRenderer").warning("[StableReuse] final full render differs from streamed storage — reassigning len=\(attributed.length) old=\(oldStorage.length)")
+            }
+        }
+        if !fastPathTaken && !correctionMatched {
             textView.attributedText = attributed
         }
+        context.coordinator.fadeAnimator.reapplyInFlightAlpha()
 
         // [WordFade] Now that storage holds the final text (via either path),
         // fade the revealed range in word-by-word. Decoupled from fastPathTaken
@@ -7654,11 +7790,11 @@ struct SelectableMarkdownView: UIViewRepresentable {
                     : splitStreamingTableTail(renderSourceSTF)
                 // [T-r3-S7] Reuse the cached parse when it still describes
                 // what is rendered (no streaming table tail split off).
-                let blocks = (split.plainSuffix.isEmpty ? cachedContent?.blocks : nil)
+                let blocks = (split.plainSuffix.isEmpty ? cachedContent : StreamingTablePrefixParse.content(blockId: blockId, prefix: split.prefix))?.blocks
                     ?? MarkdownContent(prepareMarkdownForRender(split.prefix)).blocks
                 coord.renderer.messageId = messageId
                 coord.renderer.blockId = blockId
-                let rendered = autoreleasepool { coord.renderer.render(blocks: blocks) }
+                let rendered = autoreleasepool { coord.renderer.render(blocks: blocks, reusingStableBlocks: isStreaming) }
                 if split.plainSuffix.isEmpty {
                     pending = Self.appendingRenderCapOverflow(renderCapSTF, to: rendered)
                 } else {
@@ -8036,6 +8172,8 @@ struct SelectableMarkdownView: UIViewRepresentable {
         var lastRenderedContentHash: Int? = nil
         /// The last render drew a streaming table tail as plain text.
         var lastHadPlainSuffix = false
+        /// 流式渲染复用过稳定块，结束时要做一次全量校正。
+        var renderedWithStableBlockReuse = false
         /// The final flush arrives with `isStreaming` already false; its words
         /// still fade like the rest of the live reply.
         var lastRenderWasStreaming = false

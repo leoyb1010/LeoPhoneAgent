@@ -175,7 +175,8 @@ struct AIChatView: View {
     private var inputTextBinding: Binding<String> {
         Binding(
             get: { cached.vm.inputText },
-            set: { cached.vm.inputText = $0 }
+            // 值相同不写（@Published 赋同值也会触发整页重算）。
+            set: { if cached.vm.inputText != $0 { cached.vm.inputText = $0 } }
         )
     }
 
@@ -209,14 +210,13 @@ struct AIChatView: View {
     // body's generic-type depth past iOS 26's runtime metadata budget
     // and triggered an EXC_BAD_ACCESS stack-overflow during
     // `__swift_instantiateConcreteTypeFromMangledNameV2`.
-    @StateObject private var speechManager = SpeechRecognitionManager.shared
-    @ObservedObject private var mentionIndex = FileMentionIndex.shared
+    // 不订阅：录音中的波形/转写在 ComposerRecordingSwitch 里自己订阅；这里只在事件里读状态。
+    private let speechManager = SpeechRecognitionManager.shared
+    // 扫描时 entries 不停变：订阅只放在 @ 弹层（FileMentionIndexObserver）里。
+    private let mentionIndex = FileMentionIndex.shared
     @ObservedObject private var configStore = ProviderConfigStore.shared
-    @ObservedObject private var quickTaskStore = QuickTaskStore.shared
-    /// [T-ask-user] While the model waits for an answer, the composer doesn't say "Working…".
-    @ObservedObject private var askUserCenter = AskUserCenter.shared
-    // [T-mac-composer] 对话框直达 Mac:Quick Tasks 旁的"指挥 Mac"按钮。
-    @ObservedObject private var gatewayStore = GatewayHostStore.shared
+    // 只在快捷动作回调里读，不需要订阅。
+    private let quickTaskStore = QuickTaskStore.shared
     // 钉选变化后长按菜单要跟着变
     @ObservedObject private var pinStore = ModelPinStore.shared
     @State private var macChatTarget: ComposerMacTarget?
@@ -360,7 +360,6 @@ struct AIChatView: View {
     @State private var screenshotPreview: ChatScreenshotPreview?
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var attachmentGridHeight: CGFloat = 0
-    @State private var transcriptHeight: CGFloat = 0
     /// Tracks how much of recognizedText has already been appended to inputText.
     @State private var lastRecognizedLength: Int = 0
     /// Intent-based auto-scroll: stays true until the user actively scrolls up
@@ -3436,45 +3435,6 @@ struct AIChatView: View {
                 )
             )
         }
-        if speechManager.state == .recording {
-            // Transcript area grows with content up to a cap (~5 lines),
-            // then scrolls internally. ScrollView is greedy in its scroll
-            // axis, so we measure the Text's intrinsic height via a
-            // GeometryReader preference and clamp the ScrollView frame to
-            // min(measured, cap).
-            let transcriptMaxHeight: CGFloat = 100
-            let waveform = VStack(spacing: 6) {
-                LiveAudioWaveformView(meter: speechManager.levelMeter)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 8)
-                if !speechManager.recognizedText.isEmpty {
-                    ScrollViewReader { proxy in
-                        ScrollView(.vertical, showsIndicators: true) {
-                            Text(speechManager.recognizedText)
-                                .font(.subheadline)
-                                .foregroundStyle(ChatColors.secondaryText)
-                                .multilineTextAlignment(.center)
-                                .frame(maxWidth: .infinity)
-                                .background(GeometryReader { geo in
-                                    Color.clear.preference(key: TranscriptHeightKey.self, value: geo.size.height)
-                                })
-                                .id("transcriptTail")
-                        }
-                        .frame(height: min(max(transcriptHeight, 22), transcriptMaxHeight))
-                        .onPreferenceChange(TranscriptHeightKey.self) { transcriptHeight = $0 }
-                        .onReceive(speechManager.$recognizedText) { _ in
-                            withAnimation(.linear(duration: 0.1)) {
-                                proxy.scrollTo("transcriptTail", anchor: .bottom)
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, topPadding)
-            .padding(.bottom, 10)
-            return AnyView(waveform)
-        }
         let field = PastableTextView(
             text: inputTextBinding,
             isFocused: $inputFocused,
@@ -3514,7 +3474,9 @@ struct AIChatView: View {
         .padding(.horizontal, 16)
         .padding(.top, topPadding)
         .padding(.bottom, 10)
-        return AnyView(field)
+        // 听写状态/转写文字由这个小视图自己订阅：每个识别片段只重算它，不再让整个聊天页重算。
+        return AnyView(ComposerRecordingSwitch(speechManager: speechManager, topPadding: topPadding,
+                                               field: AnyView(field)))
     }
 
     /// 回复结束后本机模型给出的追问建议(最多 3 条)。点一下填进输入框,不自动发送;
@@ -3639,30 +3601,18 @@ struct AIChatView: View {
             consumeMacResults()
         }
         .onDisappear { SessionHandoff.stop(sessionId: vm.sessionId) }
-        .confirmationDialog(macHandoffPrompt == nil ? "交给哪台 Mac 继续" : "发到哪台 Mac 接着做",
-                            isPresented: $showMacSwitchDialog, titleVisibility: .visible) {
-            ForEach(gatewayStore.activeHosts) { host in
-                ForEach(ComposerMacTarget.clis(for: host), id: \.0) { cli in
-                    Button("\(host.name) · \(cli.1)") {
-                        // [E5] 带上这个对话的 id:Mac 任务完成的通知点开回到这里。
-                        macChatTarget = ComposerMacTarget(host: host, cliKey: cli.0, cliName: cli.1,
-                                                          firstPrompt: macHandoffPrompt ?? "",
-                                                          phoneSessionId: vm.sessionId)
-                        macHandoffPrompt = nil
-                    }
-                }
+        // GatewayHostStore 的路由状态变化很频繁：订阅挪到这个小 modifier 里，不再让整个聊天页跟着重算。
+        .modifier(MacSwitchDialogModifier(
+            isPresented: $showMacSwitchDialog,
+            isHandoff: macHandoffPrompt != nil,
+            onPick: { host, cli in
+                // [E5] 带上这个对话的 id:Mac 任务完成的通知点开回到这里。
+                macChatTarget = ComposerMacTarget(host: host, cliKey: cli.0, cliName: cli.1,
+                                                  firstPrompt: macHandoffPrompt ?? "",
+                                                  phoneSessionId: vm.sessionId)
+                macHandoffPrompt = nil
             }
-            // [#32] No Mac yet: one tap to where one gets connected.
-            if gatewayStore.activeHosts.isEmpty {
-                Button(AppLocalized("Connect a Mac")) {
-                    DeepLinkCoordinator.shared.pendingSettingsTarget = .macConsole
-                }
-            }
-        } message: {
-            if gatewayStore.activeHosts.isEmpty {
-                Text("还没有连接 Mac。到 设置 → 我的设备 → 远程机器 里添加。")
-            }
-        }
+        ))
         return AnyView(host)
     }
 
@@ -3925,17 +3875,8 @@ struct AIChatView: View {
                 // [T-motion-effects] The chat's own "working" heartbeat: three
                 // breathing dots by the composer while a reply is in flight.
                 // Lives in the SwiftUI composer area, not the UIKit list.
-                if vm.isProcessing, !voiceInputActive, !isShortHeight,
-                   askUserCenter.waitingToolUseId(sessionId: vm.sessionId) == nil {
-                    HStack(spacing: 6) {
-                        LeoTypingIndicator()
-                        Text("Working…")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 14)
-                    .transition(.opacity)
+                if vm.isProcessing, !voiceInputActive, !isShortHeight {
+                    ComposerWorkingIndicator(sessionId: vm.sessionId)
                 }
                 if !voiceInputActive, vm.editingMessageIndex == nil, !isShortHeight {
                     followUpSuggestionStrip
@@ -4340,7 +4281,7 @@ struct AIChatView: View {
                 }
             } else if vm.showMentionMenu {
                 popupOverlayContainer(onDismiss: { vm.dismissMentionMenu() }) {
-                    mentionMenu
+                    FileMentionIndexObserver { AnyView(mentionMenu) }
                 }
             }
         }
@@ -6483,4 +6424,119 @@ struct TerminalLinkConfirmation: ViewModifier {
             }
         }
     }
+}
+
+/// [T-mac-composer] 「交给哪台 Mac」选择框。单独订阅 GatewayHostStore（路由状态一直在刷新），
+/// 免得 AIChatView 整页跟着重算。
+private struct MacSwitchDialogModifier: ViewModifier {
+    @Binding var isPresented: Bool
+    let isHandoff: Bool
+    let onPick: (GatewayHost, (String, String)) -> Void
+    @ObservedObject private var gatewayStore = GatewayHostStore.shared
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(isHandoff ? "发到哪台 Mac 接着做" : "交给哪台 Mac 继续",
+                                   isPresented: $isPresented, titleVisibility: .visible) {
+            ForEach(gatewayStore.activeHosts) { host in
+                ForEach(ComposerMacTarget.clis(for: host), id: \.0) { cli in
+                    Button("\(host.name) · \(cli.1)") { onPick(host, cli) }
+                }
+            }
+            // [#32] No Mac yet: one tap to where one gets connected.
+            if gatewayStore.activeHosts.isEmpty {
+                Button(AppLocalized("Connect a Mac")) {
+                    DeepLinkCoordinator.shared.pendingSettingsTarget = .macConsole
+                }
+            }
+        } message: {
+            if gatewayStore.activeHosts.isEmpty {
+                Text("还没有连接 Mac。到 设置 → 我的设备 → 远程机器 里添加。")
+            }
+        }
+    }
+}
+
+/// 输入框 / 听写波形二选一。单独订阅 SpeechRecognitionManager（转写文字每个片段都会变），
+/// AIChatView 本身不再订阅它。
+private struct ComposerRecordingSwitch: View {
+    @ObservedObject var speechManager: SpeechRecognitionManager
+    let topPadding: CGFloat
+    let field: AnyView
+    @State private var transcriptHeight: CGFloat = 0
+
+    var body: some View {
+        if speechManager.state == .recording {
+            recordingPanel
+        } else {
+            field
+        }
+    }
+
+    private var recordingPanel: some View {
+        // Transcript area grows with content up to a cap (~5 lines),
+        // then scrolls internally. ScrollView is greedy in its scroll
+        // axis, so we measure the Text's intrinsic height via a
+        // GeometryReader preference and clamp the ScrollView frame to
+        // min(measured, cap).
+        let transcriptMaxHeight: CGFloat = 100
+        return VStack(spacing: 6) {
+            LiveAudioWaveformView(meter: speechManager.levelMeter)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+            if !speechManager.recognizedText.isEmpty {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: true) {
+                        Text(speechManager.recognizedText)
+                            .font(.subheadline)
+                            .foregroundStyle(ChatColors.secondaryText)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .background(GeometryReader { geo in
+                                Color.clear.preference(key: TranscriptHeightKey.self, value: geo.size.height)
+                            })
+                            .id("transcriptTail")
+                    }
+                    .frame(height: min(max(transcriptHeight, 22), transcriptMaxHeight))
+                    .onPreferenceChange(TranscriptHeightKey.self) { transcriptHeight = $0 }
+                    .onReceive(speechManager.$recognizedText) { _ in
+                        withAnimation(.linear(duration: 0.1)) {
+                            proxy.scrollTo("transcriptTail", anchor: .bottom)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, topPadding)
+        .padding(.bottom, 10)
+    }
+}
+
+/// [T-ask-user] While the model waits for an answer, the composer doesn't say "Working…".
+/// 单独订阅 AskUserCenter：回答卡片里每敲一个字 drafts 都会变，不能让整个聊天页跟着重算。
+private struct ComposerWorkingIndicator: View {
+    let sessionId: String?
+    @ObservedObject private var askUserCenter = AskUserCenter.shared
+
+    var body: some View {
+        if askUserCenter.waitingToolUseId(sessionId: sessionId) == nil {
+            HStack(spacing: 6) {
+                LeoTypingIndicator()
+                Text("Working…")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .transition(.opacity)
+        }
+    }
+}
+
+/// `@` 弹层随文件索引扫描进度刷新；只有弹层开着时才订阅 FileMentionIndex。
+private struct FileMentionIndexObserver: View {
+    @ObservedObject private var index = FileMentionIndex.shared
+    let content: () -> AnyView
+
+    var body: some View { content() }
 }

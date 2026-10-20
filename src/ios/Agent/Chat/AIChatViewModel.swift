@@ -591,9 +591,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     }
     /// Caret position (character offset) published by the input text view.
     /// Used by the `@` mention detector to locate the active token.
-    @Published var inputCaret: Int = 0 {
+    /// 不 @Published：没有视图直接读它，每次光标移动都发 objectWillChange 会让聊天页整页重算。
+    /// 输入一个字时 textViewDidChange 和 textViewDidChangeSelection 会各报一次同样的值，相同就跳过。
+    var inputCaret: Int = 0 {
         didSet {
-            updateMentionMenuState()
+            if inputCaret != oldValue { updateMentionMenuState() }
             // If the caret arrived at the desired location, clear the pending
             // request so subsequent edits aren't forced back.
             if let p = pendingCaret, p == inputCaret {
