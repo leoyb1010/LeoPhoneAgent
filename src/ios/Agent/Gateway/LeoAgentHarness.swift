@@ -1313,7 +1313,10 @@ final class HarnessSessionDriver: ObservableObject {
             // Mac 端给人看的说明(例如"手机暂时答不了的提问已跳过"):只显示文字,不带事件名。
             if name == "session.note" {
                 let text = payload["text"] ?? ""
-                if !text.isEmpty { note(text) }
+                // [takeover] 没接上终端里的那个会话(已新开对话):显示成醒目的一行说明,而不是灰色小字。
+                if !text.isEmpty, MacExternalSessionsWire.isProminentNote(payload) {
+                    append(GatewayTranscriptItem(kind: .notice, text: text, prominent: true))
+                } else if !text.isEmpty { note(text) }
                 return
             }
             // Engine chatter (retries, init banners) shows up here. Surfacing

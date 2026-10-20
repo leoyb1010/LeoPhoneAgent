@@ -17,6 +17,17 @@ import { LEOBOT_NO_MODEL_MESSAGE } from "../leobotModelSelection.js";
 import type { AcpAuthState, AcpLoginFlows } from "@zcode/shared/acp-login";
 import { ChangesError, fileDiff, revertChanges, workspaceChanges } from "./changes.js";
 import {
+  acpResumeHeld,
+  defaultAcpSessionsPath,
+  defaultClaudeProjectsDir,
+  findClaudeSession,
+  listClaudeSessions,
+  readClaudeHistory,
+  seedAcpResume,
+  SESSION_UUID,
+  type ExternalSession,
+} from "./externalSessions.js";
+import {
   deviceNotRecognized,
   error,
   expandHome,
@@ -99,6 +110,10 @@ export type LinkBridgeDeps = {
    * 打开方式:~/.leoagent/link.json 的 {"harness": {"legacy": true}} 或 LEO_HARNESS_LEGACY=1(harness.py 下个版本删)。
    */
   legacyHarness?: () => boolean;
+  /** [takeover] Claude Code 的会话目录(默认 ~/.claude/projects);测试注入临时目录。 */
+  claudeProjectsDir?: string;
+  /** [takeover] CLI 的 ACP 会话映射文件(默认 $ZCODE_HOME/cli/acp-sessions.json)。 */
+  acpSessionsPath?: string;
 };
 
 function authSummary(state: AcpAuthState): { logged_in: boolean | null; method?: string; login_kind: string } {
@@ -132,6 +147,8 @@ export async function readSSHHostKeys(dir = "/etc/ssh"): Promise<string[]> {
 
 const VERSION = "0.4.0";
 const ZCODE = "zcode";
+/** [takeover] 接管终端会话用的 ACP agent。 */
+const CLAUDE_ACP = "claude-code";
 /** 重启后认回的任务数上限;更老的手机上也早就翻不到了。 */
 const INDEX_LIMIT = 50;
 
@@ -149,6 +166,8 @@ export class LinkBridge {
    * 中继 0.1 不附调用方,所有请求都是 unknown —— 那时不能收紧,否则连你的 iPhone 也批不了命令。
    */
   strictCallers = false;
+  /** [takeover] 正在接管的终端会话:同一个会话同时来两次只开一个任务。 */
+  private readonly takingOver = new Map<string, Promise<LinkResponse>>();
   /** 最近一次列出的桌面任务;接管时按它找工作区。 */
   private desktopTasks = new Map<string, DesktopTask>();
 
@@ -197,6 +216,9 @@ export class LinkBridge {
       if (typeof entry["harness"] === "string") session.harness = entry["harness"];
       if (typeof entry["harness_name"] === "string") session.harnessName = entry["harness_name"];
       if (typeof entry["phone_session_id"] === "string") session.phoneSessionId = entry["phone_session_id"];
+      if (typeof entry["external_session_id"] === "string") session.externalSessionId = entry["external_session_id"];
+      session.resumeFailed = entry["resume_failed"] === true;
+      if (session.externalSessionId && !session.resumeFailed) this.armResumeCheck(session);
       if (typeof entry["created_at"] === "number") session.createdAt = entry["created_at"];
       // 最后活动时间从创建时间起算,open() 再按日志最后一条事件往后推。以前这里取的是「现在」:
       // 每次 Mac 重启,手机上的旧任务都像刚动过,一直占着首页「进行中」。
@@ -416,8 +438,12 @@ export class LinkBridge {
     if (pathname.startsWith("/agents/")) return this.agentLogin(method, pathname, req);
     if (pathname === "/harness/sessions") {
       if (method === "GET") return this.list();
-      if (method === "POST") return this.create(req);
+      if (method === "POST") return this.createOnce(req);
       return error(405, "Method not allowed");
+    }
+    if (pathname === "/harness/external-sessions") {
+      if (method !== "GET") return error(405, "Method not allowed");
+      return this.externalSessions();
     }
     const panel = /^\/harness\/sessions\/([^/]+)\/(mode|changes|diff|revert)$/.exec(pathname);
     if (panel) return this.sessionPanel(method, panel[2]!, decodeURIComponent(panel[1]!), url, req);
@@ -702,6 +728,8 @@ export class LinkBridge {
           screen_session: Boolean(this.deps.screenSession),
           // [fix-remote] 手机上登录 Mac 上的外部 agent（/agents/<key>/login）。
           agent_login: Boolean(this.deps.agentLogin),
+          // [takeover] 接管 Mac 终端里的 Claude Code 会话(/harness/external-sessions)。
+          external_sessions: true,
         },
         harnesses: [
           {
@@ -754,9 +782,15 @@ export class LinkBridge {
     checkpoint?: Record<string, unknown>,
   ): Promise<LinkResponse> {
     const body = record(req.body);
-    const harness = String(body["harness"] ?? ZCODE) || ZCODE;
+    // [takeover] 接管终端里的 Claude 会话:还是一个 claude(ACP)任务,cwd 用会话自己的,第一轮 session/load 续上。
+    let takeover: ExternalSession | undefined;
+    if (body["resume_external"] != null) {
+      const resolved = await this.resolveTakeover(record(body["resume_external"]));
+      if (!("file" in resolved)) return resolved;
+      takeover = resolved;
+    }
+    const harness = takeover ? CLAUDE_ACP : String(body["harness"] ?? ZCODE) || ZCODE;
     // 显式的 mode 优先于 full_auto 的映射(开 → yolo,关 → build)。
-    // ponytail: resume_external(接管终端里的 Claude 会话)第二波做,届时在这里分流,不影响现有字段。
     const requestedMode = body["mode"] == null ? undefined : linkMode(body["mode"]);
     if (body["mode"] != null && !requestedMode) return error(400, `mode 只能是 ${LINK_MODES.join(" / ")}`);
     const mode: ZCodeTaskMode = requestedMode ?? (body["full_auto"] === true ? "yolo" : "build");
@@ -796,7 +830,7 @@ export class LinkBridge {
     const cwd =
       typeof checkpoint?.["cwd"] === "string"
         ? checkpoint["cwd"]
-        : this.resolveCwd(String(body["cwd"] ?? "").trim());
+        : (takeover?.cwd ?? this.resolveCwd(String(body["cwd"] ?? "").trim()));
     const prompt = typeof body["prompt"] === "string" ? body["prompt"].trim() : "";
     const { taskService } = this.deps;
     let taskId = typeof checkpoint?.["taskId"] === "string" ? checkpoint["taskId"] : "";
@@ -841,18 +875,25 @@ export class LinkBridge {
         session.harnessName = acpAgent.name;
       }
       session.lastCaller = req.caller;
+      if (takeover) {
+        session.externalSessionId = takeover.id;
+        session.title = takeover.title || path.basename(cwd);
+      }
       this.sessions.set(taskId, session);
       try {
+        // 映射必须在第一轮之前写好:否则 CLI 给这个任务开的是一个空白的新 Claude 会话。
+        if (takeover) await seedAcpResume(this.deps.acpSessionsPath ?? defaultAcpSessionsPath(), taskId, takeover.id);
         await session.open();
       } catch (cause) {
         this.sessions.delete(taskId);
         await session.close().catch(() => undefined);
         return error(
           502,
-          `Mac 上打开任务日志失败：${cause instanceof Error ? cause.message : String(cause)}`,
+          `Mac 上打开任务${takeover ? "（接管终端会话）" : "日志"}失败：${cause instanceof Error ? cause.message : String(cause)}`,
         );
       }
       session.emit({ event: "session.created", harness: session.harness, cwd, full_auto: fullAuto, mode });
+      if (takeover) await this.replayExternal(session, takeover);
     }
     if (phoneSessionId) session.phoneSessionId = phoneSessionId;
     // taskId 回执与会话索引都在首发之前落盘，崩溃后不得再次创建另一条任务。
@@ -877,8 +918,102 @@ export class LinkBridge {
     await this.saveIndex();
     return {
       status: 202,
-      body: { session_id: taskId, harness: session.harness, status: session.status, full_auto: fullAuto, mode: session.mode },
+      body: {
+        session_id: taskId,
+        harness: session.harness,
+        status: session.status,
+        full_auto: fullAuto,
+        mode: session.mode,
+        ...(takeover ? { ...this.takeoverFields(session), ...(takeover.running ? { warning: "terminal_running" } : {}) } : {}),
+      },
     };
+  }
+
+  // -- [takeover] 接管 Mac 终端里的 Claude Code 会话(docs/specs/leo-link-takeover.md) ----------------
+
+  /** 最近的终端 Claude 会话;已被接管的带上对应的 LeoBot 任务 id。 */
+  private async externalSessions(): Promise<LinkResponse> {
+    const listed = await listClaudeSessions(this.deps.claudeProjectsDir ?? defaultClaudeProjectsDir());
+    const taken = new Map([...this.sessions.values()].filter((s) => s.externalSessionId).map((s) => [s.externalSessionId!, s.sessionId]));
+    return {
+      status: 200,
+      body: {
+        sessions: listed.map(({ file: _file, ...session }) => ({
+          ...session,
+          ...(taken.has(session.id) ? { leobot_session_id: taken.get(session.id) } : {}),
+        })),
+      },
+    };
+  }
+
+  /** 同一个外部会话同时来两次创建(手机连点、重试)只开一个任务。 */
+  private createOnce(req: LinkRequest): Promise<LinkResponse> {
+    const external = record(record(req.body)["resume_external"])["session_id"];
+    if (typeof external !== "string") return this.create(req);
+    const inFlight = this.takingOver.get(external);
+    if (inFlight) return inFlight;
+    const run = this.create(req).finally(() => this.takingOver.delete(external));
+    this.takingOver.set(external, run);
+    return run;
+  }
+
+  /** 校验并找到要接管的会话;已接管过的直接回那个任务(202,reused)。 */
+  private async resolveTakeover(spec: Record<string, unknown>): Promise<ExternalSession | LinkResponse> {
+    if (spec["agent"] !== "claude") return error(501, "目前只能接管 Claude Code 的会话");
+    const id = spec["session_id"];
+    if (typeof id !== "string" || !SESSION_UUID.test(id)) return error(400, "session_id 必须是 Claude Code 的会话 id（uuid）");
+    const existing = [...this.sessions.values()].find((session) => session.externalSessionId === id);
+    if (existing) {
+      return {
+        status: 202,
+        body: {
+          session_id: existing.sessionId,
+          harness: existing.harness,
+          status: existing.status,
+          full_auto: existing.isFullAuto,
+          mode: existing.mode,
+          reused: true,
+          ...this.takeoverFields(existing),
+        },
+      };
+    }
+    if (!this.availableAcpAgents().some((agent) => agent.id === CLAUDE_ACP)) {
+      const known = (this.deps.acpAgents?.() ?? []).find((agent) => agent.id === CLAUDE_ACP);
+      return error(409, `这台 Mac 上的 Claude Code 用不了：${known?.unavailableReason ?? "没装或启动不了"}`);
+    }
+    const found = await findClaudeSession(this.deps.claudeProjectsDir ?? defaultClaudeProjectsDir(), id);
+    return found ?? error(404, "这台 Mac 上没有这个 Claude Code 会话（只能接管 ~/.claude/projects 里终端开的会话）");
+  }
+
+  private takeoverFields(session: LinkSession): Record<string, unknown> {
+    return { name: session.harnessName, cwd: session.cwd, title: session.title, seq: session.seq, external_session_id: session.externalSessionId };
+  }
+
+  /** 把终端里的最近一段对话写进事件日志:手机按 seq 收到历史,和这里开的会话一样回放。 */
+  private async replayExternal(session: LinkSession, takeover: ExternalSession): Promise<void> {
+    const history = await readClaudeHistory(takeover.file).catch((cause: unknown) => {
+      this.deps.logger.warn("[leo/link] reading Claude history failed", { error: String(cause) });
+      return { events: [], truncated: false };
+    });
+    session.emit({
+      event: "session.note",
+      text: history.truncated
+        ? "接上了 Mac 终端里的 Claude Code 会话。更早的对话留在 Mac 上，这里是最近的一段；接着发消息就在原会话上继续。"
+        : "接上了 Mac 终端里的 Claude Code 会话，下面是之前的对话；接着发消息就在原会话上继续。",
+    });
+    for (const event of history.events) session.emit(event);
+    if (takeover.running) {
+      session.emit({ event: "session.note", text: "Mac 终端里这个会话还开着，两边同时发消息会打架：最好先在终端里退出 claude。" });
+    }
+    // 回放完才装:回放里的正文 / 工具事件不算 agent 的产出。
+    this.armResumeCheck(session);
+  }
+
+  private armResumeCheck(session: LinkSession): void {
+    const externalId = session.externalSessionId;
+    if (!externalId) return;
+    const statePath = this.deps.acpSessionsPath ?? defaultAcpSessionsPath();
+    session.resumeCheck = () => acpResumeHeld(statePath, session.sessionId, externalId);
   }
 
   private async send(

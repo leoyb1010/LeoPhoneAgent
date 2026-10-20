@@ -57,6 +57,7 @@ export class ZCodeEventMapper {
           tool: name,
           tool_use_id: event.toolId,
           preview: toolPreview(event.input, event.title),
+          ...toolInputField(event.input),
         });
         break;
       }
@@ -72,6 +73,7 @@ export class ZCodeEventMapper {
           tool_use_id: event.toolId,
           duration: Math.max(0, (this.now() - started.startedAt) / 1000),
           error: event.status !== "completed",
+          ...toolOutputField(toolOutputText(event.content, event.error)),
         });
         break;
       }
@@ -165,6 +167,62 @@ export function toolTarget(input: unknown): string {
 
 function toolPreview(input: unknown, title: string | undefined): string {
   return (toolTarget(input) || text(title)).slice(0, 200);
+}
+
+/** 工具输入的 JSON 上限:超出时发截断后的 JSON 文本并标 input_truncated(手机展开工具行时看)。 */
+export const TOOL_INPUT_LIMIT = 16 * 1024;
+/** 工具输出上限:超出时保留头 4KB + 尾 28KB(报错和结论多在尾部)。 */
+export const TOOL_OUTPUT_LIMIT = 32 * 1024;
+const TOOL_OUTPUT_HEAD = 4 * 1024;
+
+export function toolInputField(input: unknown): { input?: unknown; input_truncated?: true } {
+  if (input === undefined || input === null) return {};
+  let json: string;
+  try {
+    json = JSON.stringify(input) ?? "";
+  } catch {
+    return {};
+  }
+  if (!json || json === "{}") return {};
+  if (json.length <= TOOL_INPUT_LIMIT) return { input };
+  return { input: json.slice(0, TOOL_INPUT_LIMIT), input_truncated: true };
+}
+
+export function toolOutputField(output: string): { output?: string; output_truncated?: true } {
+  if (!output) return {};
+  if (output.length <= TOOL_OUTPUT_LIMIT) return { output };
+  const tail = TOOL_OUTPUT_LIMIT - TOOL_OUTPUT_HEAD;
+  const omitted = output.length - TOOL_OUTPUT_LIMIT;
+  return {
+    output: `${output.slice(0, TOOL_OUTPUT_HEAD)}\n…（中间省略 ${omitted} 字）…\n${output.slice(-tail)}`,
+    output_truncated: true,
+  };
+}
+
+/** 工具结果转成给人看的文本:字符串原样;agent_activity 取 content;内容块取 text;其余 JSON。 */
+export function toolOutputText(content: unknown, error?: string): string {
+  const parts: string[] = [];
+  const add = (value: unknown): void => {
+    if (typeof value === "string") {
+      if (value.trim()) parts.push(value);
+    } else if (Array.isArray(value)) {
+      for (const item of value) add(record(item)["text"] ?? item);
+    } else if (value && typeof value === "object") {
+      const obj = record(value);
+      if (typeof obj["content"] === "string" || Array.isArray(obj["content"])) add(obj["content"]);
+      else if (typeof obj["text"] === "string") add(obj["text"]);
+      else {
+        try {
+          parts.push(JSON.stringify(value));
+        } catch {
+          // 循环引用之类:不发输出
+        }
+      }
+    }
+  };
+  add(content);
+  if (error?.trim() && !parts.includes(error)) parts.push(error);
+  return parts.join("\n");
 }
 
 /** 审批卡上显示的内容:工具名 + 它要执行的命令或要动的文件。 */

@@ -39,6 +39,8 @@ const RUN_END = new Set(["run.completed", "run.failed", "run.cancelled"]);
 /** 手机端 reconcile 视为结束的状态;订阅流在这些状态下读完就关。 */
 const TERMINAL = new Set(["cancelled", "failed", "completed", "orphaned"]);
 const STOP_FALLBACK_MS = 5_000;
+/** [takeover] 这些事件说明 agent 已连上、开始产出(见 checkResume)。 */
+const RESUME_CHECK_EVENTS = new Set(["message.delta", "reasoning.available", "tool.started", "run.completed"]);
 /** 跑完一轮后这么久没动静,就不再算「进行中」(见 reportedStatus)。 */
 const IDLE_STALE_S = 30 * 60;
 const SUBSCRIBER_QUEUE_LIMIT = 512;
@@ -82,6 +84,15 @@ export class LinkSession {
   lastCaller: Caller | null = null;
   /** [E5] 手机侧会话 id(手机建任务 / 发消息时可选带来):随审批与终态推送带回,通知点开直达那个会话。 */
   phoneSessionId: string | null = null;
+  /** [takeover] 接管的 Mac 终端 Claude 会话 id:同一个会话再接管时返回这个任务,不再开一个。 */
+  externalSessionId: string | null = null;
+  /**
+   * [takeover] 接管来的会话:回放完历史后由桥接装上,下一次有产出(正文 / 思考 / 工具)时核对一次
+   * ACP 是否真的 session/load 上了终端那个会话。load 失败时 CLI 会悄悄新开一个,上下文就丢了。
+   */
+  resumeCheck: (() => Promise<boolean>) | null = null;
+  /** 没能接上终端那个会话(已新开对话);摘要里带 resume_failed。 */
+  resumeFailed = false;
   /** Mac 重启后从任务表里认回来的:下一次发消息前先让内核恢复这条会话。 */
   needsResume = false;
   readonly pendingApprovals = new Map<string, Pending>();
@@ -400,6 +411,7 @@ export class LinkSession {
       this.runAnnounced = false;
       this.turnCheckpointed = false;
     }
+    if (this.resumeCheck && RESUME_CHECK_EVENTS.has(name)) this.checkResume(this.resumeCheck);
     if (name === "user.message") {
       const text = String(enriched["text"] ?? "").replace(/\s+/g, " ").trim();
       if (!this.title) this.title = text.slice(0, 80);
@@ -421,6 +433,24 @@ export class LinkSession {
       sub.queue.push(enriched);
       sub.wake?.();
     }
+  }
+
+  /** 有产出说明 agent 已连上,这时 CLI 已写好映射:对不上就是 load 失败。只核对一次;读不到映射不报。 */
+  private checkResume(check: () => Promise<boolean>): void {
+    this.resumeCheck = null;
+    void check().then(
+      (held) => {
+        if (held) return;
+        this.resumeFailed = true;
+        this.deps.onModeChanged?.(); // 写回任务表(重启后摘要照样带 resume_failed)
+        this.emit({
+          event: "session.note",
+          kind: "resume_failed",
+          text: "没能接上终端里的那个会话，已新开一个对话：Claude 看不到之前的上下文。Mac 上的 Claude Code 版本可能太旧，更新后可重新接管。",
+        });
+      },
+      (cause: unknown) => this.deps.logger.warn("[leo/link] resume check failed", { error: String(cause) }),
+    );
   }
 
   journalHealth(): JournalHealth {
@@ -494,7 +524,7 @@ export class LinkSession {
   harnessName = "LeoBot";
 
   indexEntry(): Record<string, unknown> {
-    return { task_id: this.sessionId, cwd: this.cwd, title: this.title, mode: this.mode, created_at: this.createdAt, phone_session_id: this.phoneSessionId ?? undefined, harness: this.harness, harness_name: this.harnessName };
+    return { task_id: this.sessionId, cwd: this.cwd, title: this.title, mode: this.mode, created_at: this.createdAt, phone_session_id: this.phoneSessionId ?? undefined, harness: this.harness, harness_name: this.harnessName, external_session_id: this.externalSessionId ?? undefined, resume_failed: this.resumeFailed || undefined };
   }
 
   /**
@@ -522,6 +552,7 @@ export class LinkSession {
       updated_at: this.updatedAt,
       seq: this.seq,
       journal: this.journal.health(),
+      ...(this.resumeFailed ? { resume_failed: true } : {}),
       waiting_for_approval: this.pendingApprovals.size > 0,
       pending_approvals: [...this.pendingApprovals.entries()].map(([id, pending]) => ({
         approval_id: id,

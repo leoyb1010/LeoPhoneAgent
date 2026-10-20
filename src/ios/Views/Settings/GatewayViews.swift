@@ -160,6 +160,8 @@ struct GatewaySettingsView: View {
                                     }
                                     .buttonStyle(.borderless)
                                     .accessibilityIdentifier("gateway.terminal")
+                                    // [takeover] 这台 Mac 终端里的 Claude Code 会话,接到手机上继续。
+                                    MacTerminalSessionsButton(hostIds: [host.id])
                                 }
                             }
                             .padding(.leading, 20)
@@ -1004,6 +1006,16 @@ struct GatewayItemView: View {
 
         case .tool(let name, let isRunning, let isError, let duration):
             GatewayToolRow(item: item, name: name, isRunning: isRunning, isError: isError, duration: duration)
+
+        case .notice where item.prominent:
+            Label {
+                Text(item.text).font(.system(size: 13)).foregroundStyle(.primary)
+            } icon: {
+                Image(systemName: "info.circle.fill").foregroundStyle(.orange)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
 
         case .notice:
             Text(item.text)

@@ -2021,6 +2021,8 @@ struct ContentView: View {
     private var macLiveShortcuts: some View {
         let screens = MacScreenHosts.candidates
         let logins = homeLoginChoices
+        // [takeover] Mac 终端里开着的 Claude Code 会话:点开列表,一点接着干(旧 Mac 不支持时不出现)。
+        MacTerminalSessionsButton()
         if screens.count == 1 {
             Button { openHomeMacScreen(screens[0]) } label: {
                 Label("看屏", systemImage: "display").font(.caption.weight(.semibold))
