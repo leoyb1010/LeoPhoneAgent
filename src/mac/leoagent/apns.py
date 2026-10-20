@@ -202,11 +202,13 @@ class APNsPusher:
                 out.setdefault(sid, []).append(token)
         return out
 
-    def _forget(self, kind: str, token: str) -> None:
+    def _forget(self, kind: str, token: str) -> bool:
         data = self._load_devices()
         if data.get(kind, {}).pop(token, None) is not None:
             self._save_devices(data)
             print(f"[apns] dropped stale {kind} token …{token[-8:]}", flush=True)
+            return True
+        return False
 
     # -- 发送 ---------------------------------------------------------------
 

@@ -458,6 +458,22 @@
 - **可删除条件**:不删(游标过期是正常情形)。
 - **位置**:`GW/RelayEventCatchUp.swift:544`;`PY/relay.py:1570`。
 
+## J. 中继端到端加密(e2e v1,见 `src/mac/leophone/docs/specs/leo-link-e2e.md`)
+
+### J1 Mac 不支持 / 解不开 → 退回明文
+- **引入**:2026-10 第二波(Mac 1.11.x 之后、iOS 同批)。
+- **没有它**:旧 Mac 不认 `/e2e`(404)、`/e2e/events`(空流);Mac 换了钥匙时新 Mac 回 `400 e2e_rejected`。不回退的话这些手机经中继全断。
+- **如何检测**:`RelayE2E.classify` / `reply`(404 非信封、`e2e_rejected`、信封解不开);流 200 但没有第 0 帧。回退后 10 分钟不再试,连接详情标「中继:未加密」。
+- **可删除条件**:不删(降级是「方便为先」的取舍;钥匙轮换后也靠它过渡到重新固定)。
+- **位置**:`GW/LeoAgentRelayE2E.swift`、`Shared/RelayE2E.swift`;`LINK/relayE2E.ts`。
+
+### J2 旧中继不给 `/e2e` 排队 → 明文排队
+- **引入**:同 J1;本次起 relay.py 的 `_queueable` 认 `POST /e2e`(版本号未变,仍是 0.2.1)。
+- **没有它**:Mac 离线时带 `X-Leo-Queue` 的加密发送在旧中继拿到 502,「离线也能发」失效。
+- **如何检测**:原请求带 `X-Leo-Queue: 1` 且加密请求回 502 非信封 → 同 request_id 明文重发(不关闭加密)。
+- **可删除条件**:所有中继都部署了带 `/e2e` 排队的 relay.py。
+- **位置**:`Shared/RelayE2E.swift`(`classify` 的 `queued && 502`);`PY/relay.py` `_queueable`。
+
 ---
 
 ## K. 本次新增的依赖:`LeoLinkProblem` 的状态码与文案契约

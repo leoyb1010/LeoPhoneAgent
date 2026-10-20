@@ -278,6 +278,8 @@ struct RelayPairPayload: Equatable, Sendable {
     let machine: String
     let join: String?
     let exp: Double?
+    /// [e2e] Mac 的中继加密公钥(base64url)。扫码拿到的最可信;老 Mac 的码里没有。
+    var e2e: String? = nil
 
     var harnessURL: String {
         RelayMachinesClient.harnessURL(for: machine, apiRoot: apiRoot)
@@ -292,6 +294,7 @@ struct RelayPairPayload: Equatable, Sendable {
             obj["join"] = join
             if let exp { obj["exp"] = exp }
         }
+        if let e2e { obj["e2e"] = e2e }
         guard let data = try? JSONSerialization.data(withJSONObject: obj),
               let json = String(data: data, encoding: .utf8) else {
             return Self.prefix + "{\"apiRoot\":\"\",\"machine\":\"\"}"
@@ -323,11 +326,13 @@ struct RelayPairPayload: Equatable, Sendable {
         guard apiRoot.lowercased().hasPrefix("https://") else { return nil }
         let join = (obj["join"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let exp = obj["exp"] as? Double ?? (obj["exp"] as? Int).map(Double.init)
+        let e2e = obj["e2e"] as? String
         return RelayPairPayload(
             apiRoot: apiRoot,
             machine: machine,
             join: join?.isEmpty == false ? join : nil,
-            exp: exp
+            exp: exp,
+            e2e: RelayE2E.validKey(e2e) == nil ? nil : e2e
         )
     }
 }

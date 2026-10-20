@@ -219,8 +219,8 @@ private struct MacScreenVideoPane: View {
     @ViewBuilder private var notices: some View {
         if peer.controlRefused {
             notice(ScreenControlGuidance.notGranted, symbol: "hand.raised")
-        } else if let guidance = peer.inputStatus?.guidance {
-            notice(guidance, symbol: "exclamationmark.triangle")
+        } else if let status = peer.inputStatus, let guidance = status.guidance {
+            notice(guidance, symbol: status.isCooldown ? "clock" : "exclamationmark.triangle")
         } else if let stats = peer.stats, !stats.summary.isEmpty {
             Text(stats.summary).font(.caption2.monospacedDigit()).foregroundStyle(.white.opacity(0.8))
         }

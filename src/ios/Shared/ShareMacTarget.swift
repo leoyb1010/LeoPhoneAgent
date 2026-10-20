@@ -29,6 +29,8 @@ struct ShareMacTarget: Codable, Equatable {
     var directDeviceId: String?
     var directExpiresAt: TimeInterval?
     var updatedAt: Date
+    /// [e2e] Mac 的中继加密公钥(公钥,不是秘密);有它时中继那条先发加密信封,Mac 不认再发明文。
+    var relayE2EKey: String? = nil
 
     static let appGroup = "group.com.leoyuan.leophoneagent"
     static let defaultsKey = "leo.share.macTarget.v1"
@@ -101,10 +103,26 @@ struct ShareMacTarget: Codable, Equatable {
         if let req = make(base: relayBase, token: secrets.relayKey,
                           timeout: Self.totalBudget - (out.isEmpty ? 0 : Self.directTimeout),
                           extra: ["X-Leo-Queue": "1"]) {
+            if let sealed = Self.sealed(req, path: path, requestId: requestId, macKey: relayE2EKey) { out.append(sealed) }
             out.append(req)
         }
         return out
     }
+
+    /// 中继那条的加密版:同一个请求编号,封进 `<relayBase>/e2e`。
+    static func sealed(_ plain: URLRequest, path: String, requestId: String, macKey: String?) -> URLRequest? {
+        guard let key = RelayE2E.validKey(macKey), let url = plain.url?.absoluteString, url.hasSuffix(path),
+              let target = URL(string: String(url.dropLast(path.count)) + "/e2e"),
+              let inner = RelayE2E.inner(method: "POST", path: path, body: plain.httpBody, requestId: requestId),
+              let envelope = try? RelayE2E.seal(inner: inner, macKey: key),
+              let body = try? JSONSerialization.data(withJSONObject: envelope.body) else { return nil }
+        var req = plain
+        req.url = target
+        req.httpBody = body
+        return req
+    }
+
+    static func isSealed(_ request: URLRequest) -> Bool { request.url?.lastPathComponent == "e2e" }
 }
 
 /// 钥匙串里放 ShareMacTarget 的两把钥匙,访问组 = App Group(主 App 与分享扩展共用)。

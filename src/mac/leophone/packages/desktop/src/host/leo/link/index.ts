@@ -38,6 +38,7 @@ import {
   type PairingSupport,
 } from "./pairing.js";
 import type { HarnessEvent } from "./journal.js";
+import { loadRelayE2E, relayE2EPublicKey } from "./relayE2E.js";
 import {
   keychainMachineKeyStore,
   RelayLink,
@@ -102,10 +103,6 @@ export function resolveRelayConfig(): RelayConfig | null {
   if (!wsUrl.endsWith("/relay/agent")) wsUrl = `${wsUrl}/relay/agent`;
   wsUrl = wsUrl.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
   return { wsUrl, name: machineName(), registerKey: key };
-}
-
-function relayPhoneUrls(): string[] {
-  return readRelayJson()?.phoneUrls ?? [];
 }
 
 /** 转给 leoagent 用的本机钥匙:切换后是它独享的一把,切换前沿用 `~/.leoagent/key`。 */
@@ -271,6 +268,7 @@ export async function createLeoPairingCode(): Promise<PairingCode> {
     relayUrl: raw.url,
     machine: machineName(),
     keys: machineKey ? [machineKey, raw.key] : [raw.key],
+    e2e: relayE2EPublicKey(), // [e2e] 扫码是手机拿到 Mac 加密公钥最可信的一条路
   });
 }
 
@@ -343,7 +341,7 @@ export async function startLeoLink(deps: {
       ],
       aliases: [relay?.name ?? machineName()],
       endpoints: [
-        ...(relay ? relayPhoneEndpoints(relay.name, relay.wsUrl, relayPhoneUrls()) : []),
+        ...(relay ? relayPhoneEndpoints(relay.name, relay.wsUrl, readRelayJson()?.phoneUrls) : []),
         ...(direct ? [{ id: "direct", kind: "direct", baseURL: direct.baseURL }] : []),
       ],
     });
@@ -389,6 +387,7 @@ export async function startLeoLink(deps: {
       ? { zcodeModelSelection: () => resolveLeoBotModelSelection(deps.modelSelectionService!) }
       : {}),
     // [WP-23] 旧 leoagent harness 转发默认关(link.json {"harness":{"legacy":true}} 或 LEO_HARNESS_LEGACY=1 打开)。
+    e2e: await loadRelayE2E(leoPath("link", "relay-e2e-key.json"), deps.logger), // [e2e] 经中继端到端加密
     legacyHarness: () =>
       process.env.LEO_HARNESS_LEGACY === "1" ||
       (readJson(leoPath("link.json"))?.["harness"] as { legacy?: unknown } | undefined)?.legacy === true,

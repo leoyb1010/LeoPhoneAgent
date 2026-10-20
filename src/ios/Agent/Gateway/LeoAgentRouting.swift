@@ -51,6 +51,8 @@ extension LeoAgentClient {
                       let device = json["device"] as? [String: Any], device["deviceId"] as? String == route.device.deviceId
                 else { await directFailed(); return nil }
                 directProbeUntil = Date().addingTimeInterval(120)
+                // [e2e] 直连是 TLS 到 Mac 本机、并核对过设备 id:这里拿到的中继加密公钥可以固定(老手机不用重扫码)。
+                await pinRelayE2E(from: json, source: .direct)
             } catch { await directFailed(); return nil }
         }
         return request
@@ -161,7 +163,7 @@ extension LeoAgentClient {
         let start = Date()
         do {
             // [fix-remote] 中继有多个入口：按更快的发，入口坏了换同组另一个（RelayRootRouter）。
-            let result = try await RelayRootRouter.shared.perform(original) { try await session.data(for: $0) }
+            let result = try await relayData(for: original)
             await reportRoute(direct: false, start: start)
             return result
         } catch let error as URLError {
@@ -173,7 +175,8 @@ extension LeoAgentClient {
         }
     }
 
-    func routedBytes(for original: URLRequest) async throws -> (URLSession.AsyncBytes, URLResponse) {
+    /// 流:直连优先,中继兜底(有固定公钥就走 /e2e/events)。按行给出,调用方只认 `data:` 行。
+    func routedLines(for original: URLRequest) async throws -> (AsyncThrowingStream<String, Error>, URLResponse) {
         if var direct = await directRequest(for: original) {
             direct.timeoutInterval = 8
             do {
@@ -181,15 +184,34 @@ extension LeoAgentClient {
                 if let response = result.1 as? HTTPURLResponse, [502, 503, 504].contains(response.statusCode) {
                     result.0.task.cancel()
                     await directFailed()
-                } else { return result }
+                } else { return (Self.lines(result.0), result.1) }
             } catch {
                 if Task.isCancelled { throw CancellationError() }
                 await directFailed()
             }
         }
         if directOnly { throw URLError(.cannotConnectToHost) }
-        return try await RelayRootRouter.shared.perform(original, discard: { $0.task.cancel() }) {
-            try await session.bytes(for: $0)
+        if let sealed = relaySealed(original, stream: true) {
+            let (bytes, response) = try await RelayRootRouter.shared.perform(sealed.request, discard: { $0.task.cancel() }) {
+                try await session.bytes(for: $0)
+            }
+            // 非 200 是中继自己的回答(钥匙不对、Mac 离线),里面没有业务内容。
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return (Self.lines(bytes), response) }
+            return (e2eLines(bytes, keys: sealed.keys, fallback: original), response)
+        }
+        let (bytes, response) = try await relayPlainBytes(original)
+        return (Self.lines(bytes), response)
+    }
+
+    nonisolated static func lines(_ bytes: URLSession.AsyncBytes) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    for try await line in bytes.lines { continuation.yield(line) }
+                    continuation.finish()
+                } catch { continuation.finish(throwing: error) }
+            }
+            continuation.onTermination = { _ in task.cancel(); bytes.task.cancel() }
         }
     }
 }

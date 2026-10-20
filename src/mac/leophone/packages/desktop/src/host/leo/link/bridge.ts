@@ -42,6 +42,7 @@ import { resumeEnvelope } from "./resumeEnvelope.js";
 import { APPROVAL_CHOICES, LinkSession, type ApprovalChoice, type Caller } from "./session.js";
 import type { ScreenRequest } from "./screen/snapshot.js";
 import type { ScreenSessionRequest } from "./screen/session.js";
+import type { RelayE2E } from "./relayE2E.js";
 
 export type LinkRequest = {
   method: string;
@@ -114,6 +115,8 @@ export type LinkBridgeDeps = {
   claudeProjectsDir?: string;
   /** [takeover] CLI 的 ACP 会话映射文件(默认 $ZCODE_HOME/cli/acp-sessions.json)。 */
   acpSessionsPath?: string;
+  /** [e2e] 经中继的端到端加密(docs/specs/leo-link-e2e.md);没有就不认 /e2e,手机退回明文。 */
+  e2e?: RelayE2E;
 };
 
 function authSummary(state: AcpAuthState): { logged_in: boolean | null; method?: string; login_kind: string } {
@@ -288,6 +291,9 @@ export class LinkBridge {
     const url = new URL(req.path, "http://link.invalid");
     if (this.deps.directGrants?.isRevoked(req.caller)) return error(403, "设备授权已撤销");
     const method = req.method.toUpperCase();
+    // [e2e] 中继只看到密文信封;解开后按内层请求重新走一遍本函数(白名单、回执都照旧),调用方仍是中继鉴过权的那个。
+    if (url.pathname === "/e2e" && method === "POST" && this.deps.e2e)
+      return this.deps.e2e.handle(req.body, (inner) => this.handle({ ...inner, caller: req.caller, ...(req.transport ? { transport: req.transport } : {}) }));
     if (url.pathname === "/direct-grants" && method === "POST") {
       if (req.transport === "direct" || !req.caller.deviceId || req.caller.kind === "unknown")
         return error(403, "请先通过中继或本机配对授权");
@@ -363,6 +369,12 @@ export class LinkBridge {
       if (!signal.aborted && !this.deps.directGrants?.isRevoked(req.caller)) write(data);
     };
     const url = new URL(req.path, "http://link.invalid");
+    if (url.pathname === "/e2e/events" && this.deps.e2e)
+      return this.deps.e2e.stream(
+        url.searchParams,
+        (inner, sealed) => this.stream({ ...inner, caller: req.caller, ...(req.transport ? { transport: req.transport } : {}) }, sealed, signal),
+        emit,
+      );
     const match = /^\/harness\/sessions\/([^/]+)\/events$/.exec(url.pathname);
     if (!match) return;
     const sessionId = decodeURIComponent(match[1]!);
@@ -710,6 +722,8 @@ export class LinkBridge {
         server: "leophoneagent",
         app_version: this.deps.appVersion,
         device: this.deps.device,
+        // [e2e] 手机只在直连或扫码时固定它;经中继拿到的只作首次信任(见 spec)。
+        ...(this.deps.e2e ? { relay_e2e: { v: 1, public_key: this.deps.e2e.publicKeyText } } : {}),
         ssh_host_keys: await (this.deps.sshHostKeys ?? readSSHHostKeys)(),
         ...(await this.sshTargetField()),
         features: {
@@ -730,6 +744,7 @@ export class LinkBridge {
           agent_login: Boolean(this.deps.agentLogin),
           // [takeover] 接管 Mac 终端里的 Claude Code 会话(/harness/external-sessions)。
           external_sessions: true,
+          relay_e2e: Boolean(this.deps.e2e),
         },
         harnesses: [
           {

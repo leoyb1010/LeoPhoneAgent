@@ -130,6 +130,16 @@ final class PushRegistrar {
         return await sendWithRetry(payload, key: "activity_update:\(token)")
     }
 
+    /// token 轮换后注销旧的,中继别再往死 token 推(推到 APNs 回 410 为止白费一路)。
+    /// 只试一次:旧中继没有这个接口(404/405),失败了也只是回到以前的行为。
+    func unregisterActivityUpdateToken(_ token: String) async {
+        guard let client = GatewayHostStore.shared.activeHosts
+            .compactMap({ GatewayHostStore.shared.client(for: $0) })
+            .first(where: { $0.relayEventsURL != nil }) else { return }
+        registerGenerations["activity_update:\(token)", default: 0] &+= 1   // 还在重试的旧登记别再发
+        _ = await client.unregisterActivityToken(token)
+    }
+
     /// 把 token 送到中继。中继与全部 Mac 共用同一把钥匙,所以任取一台
     /// 已配置的主机的 client 即可;拿不到就跳过(没配 Mac 时本就不需要)。
     private func register(kind: String, token: String) async {
@@ -197,6 +207,23 @@ final class PushRegistrar {
 }
 
 extension LeoAgentClient {
+    /// `DELETE /relay/api/device/activity-token`(本次的 relay.py 才有);返回中继是否回了 2xx。
+    func unregisterActivityToken(_ token: String) async -> Bool {
+        guard let eventsURL = relayEventsURL,
+              let range = eventsURL.absoluteString.range(of: "/relay/api/"),
+              let url = URL(string: String(eventsURL.absoluteString[..<range.upperBound]) + "device/activity-token")
+        else { return false }
+        var req = URLRequest(url: url)
+        req.httpMethod = "DELETE"
+        req.setValue("Bearer \(apiKeyForRelay)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["token": token])
+        req.timeoutInterval = 20
+        guard let (_, response) = try? await session.data(for: req),
+              let status = (response as? HTTPURLResponse)?.statusCode else { return false }
+        return (200..<300).contains(status)
+    }
+
     /// 向中继登记推送 token。中继根地址从 harness 地址推导(与事件端点同法)。
     /// 中继回 2xx 才算登记上(之前不看状态码:401/5xx 也当成功,卡片从此收不到远程更新)。
     func registerPushToken(_ payload: [String: Any]) async -> Bool {

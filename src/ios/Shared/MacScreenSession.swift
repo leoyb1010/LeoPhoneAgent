@@ -331,11 +331,16 @@ struct ScreenInputStatus: Equatable {
         return ScreenInputStatus(ok: ok, reason: obj["reason"] as? String)
     }
 
+    /// 冷却中:提示用时钟图标,不当成错误。
+    var isCooldown: Bool { !ok && reason == "cooldown" }
+
     var guidance: String? {
         guard !ok else { return nil }
         switch reason {
         case "accessibility": return "到 Mac 上给 LeoBot 打开辅助功能权限(系统设置 → 隐私与安全性 → 辅助功能)"
         case "helper_missing": return "Mac 端的输入组件不完整，重新安装 Mac 端后再试"
+        // Mac 本机刚断开操控后有 10 秒冷却(防手机立刻抢回):是正常等待,不是错误;冷却完 Mac 会自己再发 ok。
+        case "cooldown": return "Mac 上刚断开了操控，10 秒后可再试"
         default: return "Mac 暂时收不了操控"
         }
     }

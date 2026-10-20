@@ -150,6 +150,11 @@ final class WP51WP52ScreenSessionTests: XCTestCase {
         XCTAssertEqual(status, ScreenInputStatus(ok: false, reason: "accessibility"))
         XCTAssertTrue(status?.guidance?.contains("辅助功能") == true)
         XCTAssertNil(ScreenInputStatus.parse(#"{"t":"status","ok":true}"#)?.guidance)
+        // Mac 本机断开后的 10 秒冷却:说清楚等一下就行,不按错误显示。
+        let cooldown = ScreenInputStatus.parse(#"{"t":"status","ok":false,"reason":"cooldown"}"#)
+        XCTAssertEqual(cooldown?.guidance, "Mac 上刚断开了操控，10 秒后可再试")
+        XCTAssertTrue(cooldown?.isCooldown == true)
+        XCTAssertFalse(status?.isCooldown == true)
         XCTAssertNil(ScreenInputStatus.parse(#"{"t":"move"}"#))
         XCTAssertTrue(ScreenControlGuidance.notGranted.contains("允许手机操控"))
     }
