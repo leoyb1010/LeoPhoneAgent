@@ -10,6 +10,7 @@ import {
   type ZCodeTaskMode,
 } from "@zcode/shared";
 
+import { createCheckpoint } from "./changes.js";
 import { describePermission, ZCodeEventMapper } from "./eventMap.js";
 import { HarnessJournal, type HarnessEvent, type JournalHealth } from "./journal.js";
 
@@ -86,7 +87,9 @@ export class LinkSession {
   readonly pendingApprovals = new Map<string, Pending>();
   private readonly grants = new Set<string>();
   private readonly subscribers = new Set<Subscriber>();
-  private readonly mapper = new ZCodeEventMapper();
+  private readonly mapper = new ZCodeEventMapper(Date.now, (events) => {
+    for (const event of events) this.emit(event);
+  });
   private readonly journal: HarnessJournal;
   private subscription: { dispose(): void } | null = null;
   private subscriptionEpoch = 0;
@@ -98,6 +101,9 @@ export class LinkSession {
   private readonly pushSeqs = new Set<number>();
   /** 这一轮是否已发过 run.started;一轮结束时复位。 */
   private runAnnounced = false;
+  /** 这一轮是否已建过改动检查点;一轮结束时复位。检查点创建在这里串行,轮次编号不撞。 */
+  private turnCheckpointed = false;
+  private checkpointing: Promise<void> = Promise.resolve();
 
   constructor(
     args: { taskId: string; cwd: string; mode?: ZCodeTaskMode },
@@ -126,10 +132,10 @@ export class LinkSession {
     return this.mode === "yolo";
   }
 
-  /** 读回日志(重启后接着编号),再订阅这条任务的流。 */
+  /** 读回日志尾部(重启后接着编号),再订阅这条任务的流。完整索引在第一次读写时才建。 */
   async open(): Promise<void> {
     const epoch = this.subscriptionEpoch;
-    await this.journal.initialize();
+    await this.journal.peekTail();
     if (epoch !== this.subscriptionEpoch) return;
     this.seq = Math.max(this.seq, this.journal.health().latest_seq);
     // 最后活动时间以日志里最后一条事件为准(认回来的任务在 restore 里先置成创建时间)。
@@ -151,6 +157,8 @@ export class LinkSession {
   }
 
   async close(): Promise<void> {
+    // 合并窗口里攒着的正文先落盘,再关日志。
+    for (const event of this.mapper.flushPending()) this.emit(event);
     this.subscriptionEpoch += 1;
     this.subscription?.dispose();
     this.subscription = null;
@@ -165,6 +173,8 @@ export class LinkSession {
   // -- 手机发来的动作 -------------------------------------------------------
 
   async send(text: string, caller: Caller, operationId?: string): Promise<void> {
+    // 正在跑时再发是插话(steer),不是新的一轮。
+    const newTurn = this.status !== "running" && this.status !== "waiting_for_approval";
     this.lastCaller = caller;
     this.phoneTurn = true;
     if (operationId) {
@@ -181,6 +191,11 @@ export class LinkSession {
         this.recordedOperations.add(operationId);
       }
     } else this.emit({ event: "user.message", text });
+    // 检查点必须在这一轮交给内核之前拍好,否则 agent 的第一笔改动可能已经进了「改动之前」。
+    if (newTurn) {
+      this.turnCheckpointed = false;
+      await this.checkpointTurn(text);
+    }
     this.status = "running";
     try {
       if (this.needsResume) {
@@ -205,6 +220,7 @@ export class LinkSession {
     if (this.mode === mode) return;
     await this.deps.taskService.setMode({ taskId: this.sessionId, mode });
     this.mode = mode;
+    this.emit({ event: "mode", type: "mode", mode });
     if (this.isFullAuto) {
       // 刚切到全自动:已经挂着的审批一并放行,别让它卡在手机上。
       for (const [approvalId, pending] of [...this.pendingApprovals]) {
@@ -239,6 +255,19 @@ export class LinkSession {
     this.stopTimer.unref();
   }
 
+  /** 每轮一个检查点(非 git 目录什么都不做);失败只记日志,不挡这一轮。 */
+  private checkpointTurn(label: string): Promise<void> {
+    if (this.turnCheckpointed) return this.checkpointing;
+    this.turnCheckpointed = true;
+    this.checkpointing = this.checkpointing
+      .then(() => createCheckpoint(this.cwd, this.sessionId, label))
+      .then(
+        () => undefined,
+        (cause: unknown) => this.deps.logger.warn("[leo/link] checkpoint failed", { error: String(cause) }),
+      );
+    return this.checkpointing;
+  }
+
   // -- ZCode 流 -------------------------------------------------------------
 
   private onZCode(event: ZCodeStreamEvent): void {
@@ -247,6 +276,8 @@ export class LinkSession {
         if (this.mode !== event.currentModeId) {
           this.mode = event.currentModeId;
           this.deps.onModeChanged?.();
+          // 事件流告诉手机模式变了(含 Mac 桌面上切的);`event` 与 `type` 同值,两种解析都认得。
+          this.emit({ event: "mode", type: "mode", mode: event.currentModeId });
         }
         return;
       case "task_run_started":
@@ -255,10 +286,12 @@ export class LinkSession {
         if (!this.runAnnounced) {
           this.runAnnounced = true;
           this.emit({ event: "run.started" });
+          // Mac 桌面上发起的一轮:只能在开跑时补拍(尽力而为,手机发起的已在 send 里拍好)。
+          void this.checkpointTurn("Mac 上发起的一轮");
         }
         return;
       case "permission_request":
-        for (const flushed of this.mapper.flushThought()) this.emit(flushed);
+        for (const flushed of this.mapper.flushPending()) this.emit(flushed);
         this.onPermissionRequest(event);
         return;
       case "permission_response":
@@ -268,7 +301,7 @@ export class LinkSession {
         }
         return;
       case "elicitation_request":
-        for (const flushed of this.mapper.flushThought()) this.emit(flushed);
+        for (const flushed of this.mapper.flushPending()) this.emit(flushed);
         // Mac 上自己发起的轮次,提问留给 Mac 上的人答。
         if (!this.phoneTurn) return;
         // 手机端还不会答提问和计划审批;挂着会把任务卡死,先自动取消并说一声。
@@ -334,6 +367,10 @@ export class LinkSession {
   // -- 编号、落盘、扇出 -----------------------------------------------------
 
   emit(event: HarnessEvent): void {
+    // 正文增量在 mapper 里按 50ms 合并;会话自己发的事件(用户消息、终态兜底、提示、模式)之前先把它发出去,顺序不乱。
+    if (event.event !== "message.delta" && event.event !== "reasoning.available") {
+      for (const flushed of this.mapper.flushPending()) this.emit(flushed);
+    }
     if (RUN_END.has(event.event) && this.pendingApprovals.size) {
       // 这一轮结束了,还挂着的审批随之作废:发回执让手机收卡,不然重放日志时卡片又冒出来。
       const stale = [...this.pendingApprovals];
@@ -361,6 +398,7 @@ export class LinkSession {
     if (RUN_END.has(name)) {
       this.phoneTurn = false;
       this.runAnnounced = false;
+      this.turnCheckpointed = false;
     }
     if (name === "user.message") {
       const text = String(enriched["text"] ?? "").replace(/\s+/g, " ").trim();
@@ -477,6 +515,7 @@ export class LinkSession {
       cwd: this.cwd,
       status: this.reportedStatus(),
       title: this.title,
+      mode: this.mode,
       full_auto: this.isFullAuto,
       last_event: this.lastEvent,
       created_at: this.createdAt,

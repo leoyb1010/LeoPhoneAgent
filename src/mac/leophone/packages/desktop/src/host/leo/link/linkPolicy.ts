@@ -1,5 +1,7 @@
 import os from "node:os";
 
+import type { ZCodeTaskMode } from "@zcode/shared";
+
 import type { LinkResponse } from "./bridge.js";
 import type { Caller } from "./session.js";
 
@@ -22,7 +24,8 @@ export function isLinkPath(pathname: string): boolean {
     pathname === "/screen/snapshot" ||
     // [WP-51] R1 视频信令:/screen/session、/screen/session/<id>、/screen/session/<id>/ice。
     /^\/screen\/session(\/[^/]+(\/ice)?)?$/.test(pathname) ||
-    /^\/harness\/sessions\/[^/]+\/(events|send|approval|stop|archive)$/.test(pathname) ||
+    // 权限模式 / 改动面板(changes、diff、revert)见 docs/specs/leo-link-changes.md。
+    /^\/harness\/sessions\/[^/]+\/(events|send|approval|stop|archive|mode|changes|diff|revert)$/.test(pathname) ||
     // [fix-remote] 外部 agent 的远程登录：/agents/<key>/auth、/agents/<key>/login[/<flow>[/code|/cancel]]。
     /^\/agents\/[^/]+\/(auth|login(\/[^/]+(\/(code|cancel))?)?)$/.test(pathname)
   );
@@ -63,4 +66,12 @@ export function deviceNotRecognized(message: string): LinkResponse {
 /** 认得出是哪台设备(iPhone、安卓、鸿蒙、主钥匙)就能开或切全自动;中继 0.1 认不出是谁,不行。 */
 export function mayUseFullAuto(caller: Caller): boolean {
   return caller.kind !== "unknown";
+}
+
+/** 手机能切的四种权限模式(iOS:先计划 / 自主 / 逐项确认 / 全自动)。 */
+export const LINK_MODES = ["plan", "guarded", "build", "yolo"] as const satisfies readonly ZCodeTaskMode[];
+export type LinkMode = (typeof LINK_MODES)[number];
+
+export function linkMode(value: unknown): LinkMode | undefined {
+  return LINK_MODES.find((mode) => mode === value);
 }

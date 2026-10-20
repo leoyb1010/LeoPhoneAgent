@@ -1,6 +1,9 @@
-import fs, { promises as fsp } from 'node:fs';
+import { promises as fsp } from 'node:fs';
 import path from 'node:path';
-import { setImmediate as yieldImmediate } from 'node:timers/promises';
+
+import { eventFromLine, journalLines, JOURNAL_ROLL_BYTES, MAX_RECORD_BYTES, readTailEvent, rollJournal } from './journalFile.js';
+
+export { JOURNAL_ROLL_BYTES } from './journalFile.js';
 
 /** v0.4 事件:至少有 event 字段,其余照原样透传。 */
 export type HarnessEvent = { event: string } & Record<string, unknown>;
@@ -39,61 +42,10 @@ export type JournalPage = {
 
 type PendingRecord = { event: HarnessEvent; line: Buffer; critical: boolean };
 type Checkpoint = { seq: number; offset: number };
-const MAX_RECORD_BYTES = 4 * 1024 * 1024;
 const MAX_CHECKPOINTS = 8192;
 const MAX_GAPS = 256;
-
-/** Bounded line decoding: an oversized or incomplete row is never parsed as an event. */
-async function* journalLines(logPath: string, start: number, end: number, signal?: AbortSignal): AsyncGenerator<{
-  line: Buffer | null; start: number; end: number; bytesRead: number;
-}> {
-  if (signal?.aborted) throw signal.reason ?? new Error('Aborted');
-  if (end <= start) return;
-  const stream = fs.createReadStream(logPath, { start, end: end - 1, highWaterMark: 64 * 1024, signal });
-  let remainder = Buffer.alloc(0);
-  let offset = start;
-  let oversized = false;
-  let discarded = 0;
-  let bytesRead = 0;
-  let rows = 0;
-  try {
-    for await (const chunk of stream) {
-      const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      bytesRead += data.length;
-      remainder = Buffer.concat([remainder, data]);
-      for (;;) {
-        const newline = remainder.indexOf(10);
-        if (newline < 0) break;
-        const length = discarded + newline + 1;
-        yield { line: oversized || newline > MAX_RECORD_BYTES ? null : remainder.subarray(0, newline), start: offset, end: offset + length, bytesRead };
-        offset += length;
-        remainder = remainder.subarray(newline + 1);
-        oversized = false;
-        discarded = 0;
-        if (++rows % 128 === 0) await yieldImmediate();
-      }
-      if (remainder.length > MAX_RECORD_BYTES) {
-        discarded += remainder.length;
-        remainder = Buffer.alloc(0);
-        oversized = true;
-      }
-    }
-    if (remainder.length || discarded) {
-      yield { line: oversized ? null : remainder, start: offset, end, bytesRead };
-    }
-  } finally { stream.destroy(); }
-}
-
-function eventFromLine(line: Buffer | null): HarnessEvent | null | undefined {
-  if (!line) return null;
-  const text = line.toString('utf8').trim();
-  if (!text) return undefined;
-  try {
-    const event = JSON.parse(text) as HarnessEvent;
-    return event && typeof event === 'object' && typeof event.seq === 'number'
-      && Number.isSafeInteger(event.seq) && event.seq > 0 ? event : null;
-  } catch { return null; }
-}
+/** 认回任务时只读日志尾部这么多字节,拿最后一条事件的 seq 与时间。 */
+const TAIL_PEEK_BYTES = 64 * 1024;
 
 /** One ordered asynchronous writer and a sparse seek index per NDJSON journal. */
 export class HarnessJournal {
@@ -190,18 +142,46 @@ export class HarnessJournal {
     if (Number.isFinite(at) && at > this.lastTimestamp) this.lastTimestamp = at;
   }
 
+  /**
+   * 只读尾部:最后一条完整事件的 seq 与时间。Mac 重启认回几十个任务时不逐个整份扫描日志
+   * ([fix] 以前 open 就整份读一遍、50 个任务串行);完整索引留到第一次读写(initialize)时再建。
+   * 尾部里找不到一条完整事件(超长记录)就退回完整索引。
+   */
+  async peekTail(): Promise<void> {
+    if (this.initialized) return this.initialized;
+    const tail = await readTailEvent(this.logPath, TAIL_PEEK_BYTES);
+    if (tail === 'empty') return;
+    if (tail === 'none') return this.initialize();
+    const found = tail;
+    // 暂记为已落盘(它确实在盘上);initialize 建完整索引时从头重算。
+    this.persistedSeq = Math.max(this.persistedSeq, Number(found.seq));
+    this.latestSeq = Math.max(this.latestSeq, Number(found.seq));
+    const at = Number(found['timestamp']);
+    if (Number.isFinite(at) && at > this.lastTimestamp) this.lastTimestamp = at;
+  }
+
   async initialize(): Promise<void> {
     if (!this.initialized) {
       this.initialized = (async () => {
         let size: number;
         try { size = (await fsp.stat(this.logPath)).size; }
         catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error; }
+        // [fix] 日志按会话设上限滚动:长任务的日志不再无限长(重放、建索引都要整份读)。
+        if (size > JOURNAL_ROLL_BYTES) size = await rollJournal(this.logPath, size);
+        // peekTail 暂记的已落盘位置作废,从头重算。
+        this.persistedSeq = 0;
+        let first = true;
         for await (const row of journalLines(this.logPath, 0, size)) {
           const event = eventFromLine(row.line);
           if (event === null) {
             this.uncertainAfter ??= this.persistedSeq;
             this.lastError = 'corrupt_record';
-          } else if (event?.seq) this.index(event, row.start);
+          } else if (event?.seq) {
+            // 文件第一条之前的是滚动时有意丢弃的(滚动后的下次启动也一样),不算缺号。
+            if (first) this.persistedSeq = Math.max(0, Number(event.seq) - 1);
+            first = false;
+            this.index(event, row.start);
+          }
           this.committedOffset = row.end;
         }
         if (size > 0) {

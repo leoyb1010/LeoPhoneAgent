@@ -15,11 +15,14 @@ import { LeoagentForwarder } from "./leoagentForward.js";
 import { acpModelSelection, type AcpAgentId } from "@zcode/shared/acp";
 import { LEOBOT_NO_MODEL_MESSAGE } from "../leobotModelSelection.js";
 import type { AcpAuthState, AcpLoginFlows } from "@zcode/shared/acp-login";
+import { ChangesError, fileDiff, revertChanges, workspaceChanges } from "./changes.js";
 import {
   deviceNotRecognized,
   error,
   expandHome,
   isLinkPath,
+  LINK_MODES,
+  linkMode,
   mayUseFullAuto,
   record,
   validSessionId,
@@ -183,11 +186,13 @@ export class LinkBridge {
     } catch {
       return;
     }
+    // [fix] 以前逐个串行 open(每个都整份扫日志):任务一多 Mac 重启后手机要等很久。现在只读日志尾部、并发认回。
+    const pending: LinkSession[] = [];
     for (const entry of Array.isArray(entries) ? entries.slice(0, INDEX_LIMIT) : []) {
       const taskId = typeof entry["task_id"] === "string" ? entry["task_id"] : "";
       const cwd = typeof entry["cwd"] === "string" ? entry["cwd"] : "";
-      if (!taskId || !cwd || this.sessions.has(taskId)) continue;
-      const session = this.newSession(taskId, cwd, entry["mode"] === "yolo" ? "yolo" : "build");
+      if (!taskId || !cwd || this.sessions.has(taskId) || pending.some((s) => s.sessionId === taskId)) continue;
+      const session = this.newSession(taskId, cwd, linkMode(entry["mode"]) ?? "build");
       session.title = typeof entry["title"] === "string" ? entry["title"] : "";
       if (typeof entry["harness"] === "string") session.harness = entry["harness"];
       if (typeof entry["harness_name"] === "string") session.harnessName = entry["harness_name"];
@@ -197,13 +202,18 @@ export class LinkBridge {
       // 每次 Mac 重启,手机上的旧任务都像刚动过,一直占着首页「进行中」。
       session.updatedAt = session.createdAt;
       session.needsResume = true;
-      try {
-        await session.open();
-        this.sessions.set(taskId, session);
-      } catch (cause) {
-        this.deps.logger.warn("[leo/link] restore failed", { taskId, error: String(cause) });
-      }
+      pending.push(session);
     }
+    await Promise.all(
+      pending.map(async (session) => {
+        try {
+          await session.open();
+          this.sessions.set(session.sessionId, session);
+        } catch (cause) {
+          this.deps.logger.warn("[leo/link] restore failed", { taskId: session.sessionId, error: String(cause) });
+        }
+      }),
+    );
   }
 
   private indexPath(): string {
@@ -409,6 +419,8 @@ export class LinkBridge {
       if (method === "POST") return this.create(req);
       return error(405, "Method not allowed");
     }
+    const panel = /^\/harness\/sessions\/([^/]+)\/(mode|changes|diff|revert)$/.exec(pathname);
+    if (panel) return this.sessionPanel(method, panel[2]!, decodeURIComponent(panel[1]!), url, req);
     const match = /^\/harness\/sessions\/([^/]+)\/(send|approval|stop|archive)$/.exec(pathname);
     if (!match || method !== "POST") return error(405, "Method not allowed");
     const sessionId = decodeURIComponent(match[1]!);
@@ -430,6 +442,74 @@ export class LinkBridge {
         await session.stop();
         return { status: 200, body: { ok: true, status: session.status } };
     }
+  }
+
+  /** 权限模式与改动面板(docs/specs/leo-link-changes.md):只对这台 Mac 上的 LeoBot 任务,不转发旧 leoagent。 */
+  private async sessionPanel(
+    method: string,
+    action: string,
+    sessionId: string,
+    url: URL,
+    req: LinkRequest,
+  ): Promise<LinkResponse> {
+    const wanted = action === "changes" || action === "diff" ? "GET" : "POST";
+    if (method !== wanted) return error(405, "Method not allowed");
+    if (!validSessionId(sessionId)) return error(400, "会话 id 不合法");
+    const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
+    if (!session) return error(404, "这台 Mac 上没有这个任务");
+    const body = record(req.body);
+    try {
+      switch (action) {
+        case "mode":
+          return await this.setMode(session, body, req.caller);
+        case "changes":
+          return { status: 200, body: await workspaceChanges(session.cwd, session.sessionId) };
+        case "diff":
+          return {
+            status: 200,
+            body: await fileDiff(
+              session.cwd,
+              session.sessionId,
+              url.searchParams.get("path"),
+              url.searchParams.get("checkpoint") || undefined,
+            ),
+          };
+        default:
+          return await this.revert(session, body, req.caller);
+      }
+    } catch (cause) {
+      if (cause instanceof ChangesError) return error(cause.status, cause.message);
+      this.deps.logger.warn("[leo/link] session panel failed", { action, error: String(cause) });
+      return error(502, `Mac 上处理失败：${cause instanceof Error ? cause.message : String(cause)}`);
+    }
+  }
+
+  private async setMode(session: LinkSession, body: Record<string, unknown>, caller: Caller): Promise<LinkResponse> {
+    const mode = linkMode(body["mode"]);
+    if (!mode) return error(400, `mode 只能是 ${LINK_MODES.join(" / ")}`);
+    if (mode === "yolo" && !mayUseFullAuto(caller))
+      return deviceNotRecognized("认不出是哪台设备发来的，不能开全自动；按步骤在 Mac 上处理后再试");
+    await session.setMode(mode);
+    void this.saveIndex().catch(() => undefined);
+    return { status: 200, body: { mode: session.mode } };
+  }
+
+  /** 回滚会删改文件:任务在跑时不动(agent 正在写);认不出身份的调用方(中继 0.2 下)不能回滚。 */
+  private async revert(session: LinkSession, body: Record<string, unknown>, caller: Caller): Promise<LinkResponse> {
+    if (this.strictCallers && caller.kind === "unknown")
+      return deviceNotRecognized("认不出是哪台设备，不能回滚这台 Mac 上的文件；按步骤在 Mac 上处理后再试");
+    if (session.status === "running" || session.status === "waiting_for_approval")
+      return error(409, "任务还在跑：先停止，再回滚");
+    const checkpoint = body["checkpoint"];
+    const paths = body["paths"];
+    if (checkpoint !== undefined && checkpoint !== null && typeof checkpoint !== "string")
+      return error(400, "checkpoint 必须是字符串");
+    if (paths !== undefined && paths !== null && !Array.isArray(paths)) return error(400, "paths 必须是数组");
+    const result = await revertChanges(session.cwd, session.sessionId, {
+      ...(typeof checkpoint === "string" ? { checkpoint } : {}),
+      ...(Array.isArray(paths) ? { paths } : {}),
+    });
+    return { status: 200, body: result };
   }
 
   /** Mac 最近打开的项目里的任务(手机自己开的已经在 sessions 里,不重复列)。读不到就当没有。 */
@@ -675,7 +755,12 @@ export class LinkBridge {
   ): Promise<LinkResponse> {
     const body = record(req.body);
     const harness = String(body["harness"] ?? ZCODE) || ZCODE;
-    const fullAuto = body["full_auto"] === true;
+    // 显式的 mode 优先于 full_auto 的映射(开 → yolo,关 → build)。
+    // ponytail: resume_external(接管终端里的 Claude 会话)第二波做,届时在这里分流,不影响现有字段。
+    const requestedMode = body["mode"] == null ? undefined : linkMode(body["mode"]);
+    if (body["mode"] != null && !requestedMode) return error(400, `mode 只能是 ${LINK_MODES.join(" / ")}`);
+    const mode: ZCodeTaskMode = requestedMode ?? (body["full_auto"] === true ? "yolo" : "build");
+    const fullAuto = mode === "yolo";
     if (fullAuto && !mayUseFullAuto(req.caller))
       return deviceNotRecognized("认不出是哪台设备发来的，不能开全自动；按步骤在 Mac 上处理后再试");
     // [WP-21] claude / codex / gemini / opencode 走 ACP:仍是一个 LeoBot 任务,模型选择是对应的外部 agent。
@@ -717,13 +802,13 @@ export class LinkBridge {
     let taskId = typeof checkpoint?.["taskId"] === "string" ? checkpoint["taskId"] : "";
     if (taskId && checkpoint?.["stage"] === "ready") {
       // ready 在任何 send admission 之前落盘。CLI 重启会丢弃空 draft，可复用仍存在的 draft 或安全重建。
-      const restored = await taskService.createTask({ workspacePath: cwd, draftSessionId: taskId, v4Create: true, mode: fullAuto ? "yolo" : "build", ...(modelSelection ? { modelSelection } : {}), operationId: this.receipts.operationId(req, "create") });
+      const restored = await taskService.createTask({ workspacePath: cwd, draftSessionId: taskId, v4Create: true, mode, ...(modelSelection ? { modelSelection } : {}), operationId: this.receipts.operationId(req, "create") });
       if (restored.taskId !== taskId) {
         await this.sessions.get(taskId)?.close();
         this.sessions.delete(taskId);
         taskId = restored.taskId;
       }
-      await taskService.setMode({ taskId, mode: fullAuto ? "yolo" : "build" });
+      await taskService.setMode({ taskId, mode });
     }
     if (!taskId) {
       if (req.requestId) await this.receipts.checkpoint(req, { stage: "creating", cwd });
@@ -733,13 +818,13 @@ export class LinkBridge {
           await taskService.createTask({
             workspacePath: cwd,
             v4Create: true,
-            mode: fullAuto ? "yolo" : "build",
+            mode,
             ...(modelSelection ? { modelSelection } : {}),
             ...(req.requestId ? { operationId: this.receipts.operationId(req, "create") } : {}),
           })
         ).taskId;
         if (req.requestId) await this.receipts.checkpoint(req, { stage: "ready", cwd, taskId });
-        await taskService.setMode({ taskId, mode: fullAuto ? "yolo" : "build" });
+        await taskService.setMode({ taskId, mode });
       } catch (cause) {
         if (req.requestId) throw cause;
         return error(
@@ -750,7 +835,7 @@ export class LinkBridge {
     }
     let session = this.sessions.get(taskId);
     if (!session) {
-      session = this.newSession(taskId, cwd, fullAuto ? "yolo" : "build");
+      session = this.newSession(taskId, cwd, mode);
       if (acpAgent) {
         session.harness = acpAgent.harnessKey;
         session.harnessName = acpAgent.name;
@@ -767,7 +852,7 @@ export class LinkBridge {
           `Mac 上打开任务日志失败：${cause instanceof Error ? cause.message : String(cause)}`,
         );
       }
-      session.emit({ event: "session.created", harness: session.harness, cwd, full_auto: fullAuto });
+      session.emit({ event: "session.created", harness: session.harness, cwd, full_auto: fullAuto, mode });
     }
     if (phoneSessionId) session.phoneSessionId = phoneSessionId;
     // taskId 回执与会话索引都在首发之前落盘，崩溃后不得再次创建另一条任务。
@@ -792,7 +877,7 @@ export class LinkBridge {
     await this.saveIndex();
     return {
       status: 202,
-      body: { session_id: taskId, harness: session.harness, status: session.status, full_auto: fullAuto },
+      body: { session_id: taskId, harness: session.harness, status: session.status, full_auto: fullAuto, mode: session.mode },
     };
   }
 
