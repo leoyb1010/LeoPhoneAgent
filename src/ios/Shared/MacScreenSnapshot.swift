@@ -166,8 +166,7 @@ enum MacScreenPollPolicy {
             case "screen_permission":
                 return permissionRetry
             default:
-                let n = max(0, consecutiveFailures - 1)
-                return min(maxBackoff, foregroundInterval * pow(2, Double(n)))
+                return RetryBackoff.delay(failures: consecutiveFailures, base: foregroundInterval, cap: maxBackoff)
             }
         }
     }
@@ -177,6 +176,22 @@ enum MacScreenPollPolicy {
         guard error.code == "frame_too_large", current > 320 else { return nil }
         return max(320, current * 3 / 4)
     }
+}
+
+/// 指数退避:连续第 n 次失败后等 base·2^(n-1),封顶 cap。看屏轮询、手表看屏、推送登记共用。
+enum RetryBackoff {
+    static func delay(failures: Int, base: TimeInterval, cap: TimeInterval) -> TimeInterval {
+        min(cap, base * pow(2, Double(min(max(0, failures - 1), 30))))
+    }
+}
+
+/// 一次「尝试」的代号:开始时领一个,停 / 重来时作废。异步回来先对代号,对不上说明这次已经过期,
+/// 不能再动共享状态(否则 stop 后立刻 start,旧那次退出时会把新那次的 task / peer 清掉)。
+struct MacScreenAttempt {
+    private(set) var current = 0
+    mutating func begin() -> Int { current &+= 1; return current }
+    mutating func invalidate() { current &+= 1 }
+    func isCurrent(_ id: Int) -> Bool { id == current }
 }
 
 /// [WP-50 R0] 手表 ↔ iPhone 的小图转发(手表不直接连 Mac)。
@@ -189,6 +204,8 @@ enum MacScreenWatchRelay {
     static let hostKey = "host"
     /// 手表页面可见时的轮询间隔(省电:比手机慢)。
     static let watchInterval: TimeInterval = 3
+    /// 手表连续取图失败时最长隔多久再试。
+    static let watchMaxBackoff: TimeInterval = 30
 
     static func request(etag: String?) -> [String: Any] {
         var message: [String: Any] = ["kind": kind]

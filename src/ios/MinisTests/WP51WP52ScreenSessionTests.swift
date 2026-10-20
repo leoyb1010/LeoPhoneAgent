@@ -56,6 +56,21 @@ final class WP51WP52ScreenSessionTests: XCTestCase {
         XCTAssertTrue(W.guidance(for: MacScreenError(status: 428, code: "screen_permission")).contains("屏幕录制"))
     }
 
+    func testPermanentVideoFailuresWaitForTheUser() {
+        let now = Date()
+        let old = now.addingTimeInterval(-600)
+        for code in ["screen_disabled", "screen_scope_required", "screen_permission", "session_limit", "no_tailnet_path"] {
+            XCTAssertEqual(ScreenViewModePolicy.mode(screenSessionSupported: true, lastVideoFailure: old, userForcedSnapshot: false,
+                                                     now: now, lastFailureCode: code), .snapshot, "\(code) never auto-retries")
+            XCTAssertTrue(W.failureNotice(for: MacScreenError(status: 403, code: code)).contains("重试"))
+        }
+        XCTAssertEqual(ScreenViewModePolicy.mode(screenSessionSupported: true, lastVideoFailure: old, userForcedSnapshot: false,
+                                                 now: now, lastFailureCode: "ice_failed"), .video, "transient: retry after cooldown")
+        XCTAssertEqual(ScreenViewModePolicy.mode(screenSessionSupported: true, lastVideoFailure: nil, userForcedSnapshot: false,
+                                                 now: now, lastFailureCode: "session_limit"), .video, "retry clears the failure")
+        XCTAssertFalse(W.failureNotice(for: MacScreenError(status: 0, code: "ice_failed")).contains("重试"))
+    }
+
     // MARK: WP-52 input
 
     private func decode(_ event: ScreenInputEvent) throws -> [String: Any] {
