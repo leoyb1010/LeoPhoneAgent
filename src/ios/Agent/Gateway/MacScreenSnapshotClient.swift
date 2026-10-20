@@ -71,6 +71,7 @@ final class MacScreenPoller: ObservableObject {
         didSet { if client !== oldValue { reset(); if viewers > 0 { start() } } }
     }
     private var task: Task<Void, Never>?
+    private var attempt = MacScreenAttempt()
     private var maxEdge = MacScreenSnapshotWire.defaultMaxEdge
 
     init(client: LeoAgentClient? = nil) {
@@ -80,6 +81,7 @@ final class MacScreenPoller: ObservableObject {
     func start() {
         guard task == nil, let client else { return }
         isPolling = true
+        let id = attempt.begin()
         task = Task { [weak self] in
             var failures = 0
             while !Task.isCancelled {
@@ -87,7 +89,7 @@ final class MacScreenPoller: ObservableObject {
                 let started = Date()
                 let result = await client.screenSnapshot(maxEdge: self.maxEdge, etag: self.frame?.etag)
                 if Task.isCancelled { break }
-                await self.apply(result)
+                await self.apply(result, attempt: id)
                 if case .failure(let error) = result {
                     failures += 1
                     if let smaller = MacScreenPollPolicy.reducedEdge(after: error, current: self.maxEdge) {
@@ -98,12 +100,15 @@ final class MacScreenPoller: ObservableObject {
                 let wait = max(delay, MacScreenPollPolicy.minimumInterval) - Date().timeIntervalSince(started)
                 if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
             }
-            self?.task = nil
-            self?.isPolling = false
+            // 只有还是这一次启动才收尾:stop() 后马上 start(),旧任务退出时不能把新任务的 task / isPolling 清掉。
+            guard let self, self.attempt.isCurrent(id) else { return }
+            self.task = nil
+            self.isPolling = false
         }
     }
 
     func stop() {
+        attempt.invalidate()
         task?.cancel()
         task = nil
         isPolling = false
@@ -138,13 +143,15 @@ final class MacScreenPoller: ObservableObject {
         maxEdge = MacScreenSnapshotWire.defaultMaxEdge
     }
 
-    private func apply(_ result: MacScreenSnapshotWire.Result) async {
+    private func apply(_ result: MacScreenSnapshotWire.Result, attempt id: Int) async {
         switch result {
         case .frame(let next):
             // Decode off the main thread: a 1280 px JPEG decoded lazily on first draw hitches scrolling.
             let decoded = await Task.detached(priority: .userInitiated) {
                 UIImage(data: next.jpeg)?.preparingForDisplay()
             }.value
+            // 解码期间换了 Mac / 停了:这帧是旧那次的,丢掉。
+            guard attempt.isCurrent(id) else { return }
             guard let decoded else {
                 error = MacScreenError(status: 200, code: "malformed", message: "画面解码失败")
                 return
@@ -166,15 +173,25 @@ final class MacScreenPoller: ObservableObject {
 /// [WP-50 R0] 手表的「Mac 画面」页:iPhone 代取一张 ≤400 px 的小图,经 WatchConnectivity 回过去。
 @MainActor
 enum MacScreenWatchProvider {
+    /// 上次合适的尺寸。画面太大降一档后记住,之后每 3 s 只取一次,不再每次先取大图再取小图。
+    /// ponytail: 只降不升(进程内有效),Mac 画面变简单后也停在小档;要升档再加按字节数回调。
+    private static var edge = MacScreenSnapshotWire.watchMaxEdge
+    private static var quality = MacScreenSnapshotWire.watchQuality
+    private static let smallEdge = 320
+    private static let smallQuality = 0.35
+
     static func thumbnail(etag: String?) async -> [String: Any] {
         guard let target = MacScreenHosts.client(hostId: nil) else {
             return [MacScreenWatchRelay.errorKey: "iPhone 上还没有连好的 Mac"]
         }
-        var result = await target.client.screenSnapshot(maxEdge: MacScreenSnapshotWire.watchMaxEdge,
-                                                        quality: MacScreenSnapshotWire.watchQuality, etag: etag)
+        var result = await target.client.screenSnapshot(maxEdge: edge, quality: quality, etag: etag)
         if case .frame(let frame) = result, frame.jpeg.count > MacScreenSnapshotWire.watchMaxBytes {
-            // Over the WatchConnectivity message size: one smaller, rougher try.
-            result = await target.client.screenSnapshot(maxEdge: 320, quality: 0.35)
+            if edge > smallEdge {
+                // Over the WatchConnectivity message size: drop to the small size once and keep it.
+                edge = smallEdge
+                quality = smallQuality
+                result = await target.client.screenSnapshot(maxEdge: edge, quality: quality)
+            }
             if case .frame(let small) = result, small.jpeg.count > MacScreenSnapshotWire.watchMaxBytes {
                 result = .failure(MacScreenError(status: 200, code: "frame_too_large"))
             }

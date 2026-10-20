@@ -20,7 +20,32 @@ final class AgentLiveActivityManager {
     var taskStartTime: Date? { startTime }
 
     /// [T-siri-fleet] Mac 任务桥用:聊天任务的 activity 在跑时它不插队。
-    var hasLiveActivity: Bool { currentActivity != nil }
+    /// 也算中继远程拉起、还在屏上的卡:App 被叫醒 / 回前台时 currentActivity 是 nil,
+    /// 只看它会让桥再起一张本地卡,锁屏上就成了两张。
+    var hasLiveActivity: Bool { currentActivity != nil || !relayActivities.isEmpty }
+
+    /// 这个会话是不是已经有卡在屏上(本地起的或中继远程拉起的)。桥按会话判断要不要另起卡时用这个,
+    /// 比 `hasLiveActivity` 准:中继的卡上没有这个会话时仍可以起。
+    func hasActivity(forSessionId sessionId: String) -> Bool {
+        guard Self.isActivityKitAvailable, !sessionId.isEmpty else { return false }
+        if let local = currentActivity as? Activity<AgentActivityAttributes>,
+           local.content.state.sessions.contains(where: { $0.sessionId == sessionId }) {
+            return true
+        }
+        return relayActivities.contains { activity in
+            activity.content.state.sessions.contains { $0.sessionId == sessionId }
+        }
+    }
+
+    /// 中继 push-to-start 拉起、还没结束的卡(不归 currentActivity 管)。
+    private var relayActivities: [Activity<AgentActivityAttributes>] {
+        guard Self.isActivityKitAvailable else { return [] }
+        let localId = (currentActivity as? Activity<AgentActivityAttributes>)?.id
+        return Activity<AgentActivityAttributes>.activities.filter {
+            $0.attributes.origin == AgentActivityAttributes.relayOrigin
+                && $0.activityState == .active && $0.id != localId
+        }
+    }
     private var carouselIndex: Int = 0
     private var updateCount: Int = 0
     /// Toggled on every Live Activity refresh to alternate the Dynamic Island
@@ -40,6 +65,8 @@ final class AgentLiveActivityManager {
     private var pushTokenTask: Task<Void, Never>?
     private var currentPushToken: String?
     private var registeredTokenSessions: Set<String> = []
+    /// 正在登记(含退避重试)的会话集合,同样的状态推送不重复发起。
+    private var registeringTokenSessions: Set<String>?
 
     private var requestPushType: PushType? { remotePush ? .token : nil }
 
@@ -944,13 +971,17 @@ final class AgentLiveActivityManager {
         pushTokenTask?.cancel()
         currentPushToken = nil
         registeredTokenSessions = []
+        registeringTokenSessions = nil
         guard remotePush else { return }
         pushTokenTask = Task { [weak self] in
             for await data in activity.pushTokenUpdates {
                 let token = LiveActivityTokenRegistration.hex(data)
                 guard let self else { return }
+                // ponytail: token 轮换后旧 token 没向中继注销 —— 中继 /relay/api/device 只有登记没有注销接口
+                // (撤销整台设备才清)。中继会继续往旧 token 推到 APNs 回 410 为止;有注销接口后在这里调。
                 self.currentPushToken = token
                 self.registeredTokenSessions = []
+                self.registeringTokenSessions = nil
                 if let state = self.lastPushedState as? AgentActivityAttributes.ContentState {
                     self.registerPushTokenIfSessionsChanged(state)
                 }
@@ -962,10 +993,18 @@ final class AgentLiveActivityManager {
     private func registerPushTokenIfSessionsChanged(_ state: AgentActivityAttributes.ContentState) {
         guard remotePush, let token = currentPushToken else { return }
         let key = LiveActivityTokenRegistration.sessionKey(state.sessions)
-        guard !key.isEmpty, key != registeredTokenSessions else { return }
-        registeredTokenSessions = key
-        PushRegistrar.shared.registerActivityUpdateToken(token, sessions: state.sessions,
-                                                         privacyMode: state.privacyMode)
+        guard !key.isEmpty, key != registeredTokenSessions, key != registeringTokenSessions else { return }
+        registeringTokenSessions = key
+        let sessions = state.sessions, privacyMode = state.privacyMode
+        Task { [weak self] in
+            let ok = await PushRegistrar.shared.registerActivityUpdateToken(token, sessions: sessions,
+                                                                            privacyMode: privacyMode)
+            // 中继回 2xx 才记为已登记;失败(PushRegistrar 内已退避重试过)留空,下一次状态推送再登记。
+            // 期间 token 换了 / 会话又变了:结果作废,由新的那次负责。
+            guard let self, self.currentPushToken == token, self.registeringTokenSessions == key else { return }
+            self.registeringTokenSessions = nil
+            if ok { self.registeredTokenSessions = key }
+        }
     }
 
     @available(iOS 16.2, *)

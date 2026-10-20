@@ -318,9 +318,12 @@ private struct WatchGlancePage: View {
         .navigationTitle("Mac 画面")
         .task(id: polling) {
             guard polling else { return }
+            // 连续失败按 3 → 6 → 12 → 24 → 30 s 退避:手机 / Mac 不在时别每 3 s 叫醒一次 iPhone 白耗电。
+            var failures = 0
             while !Task.isCancelled {
                 switch await client.requestScreenThumb(etag: etag) {
                 case .image(let data, let tag):
+                    failures = 0
                     if let decoded = UIImage(data: data) {
                         image = decoded
                         etag = tag
@@ -328,12 +331,16 @@ private struct WatchGlancePage: View {
                         updatedAt = Date()
                     }
                 case .unchanged:
+                    failures = 0
                     message = nil
                     updatedAt = Date()
                 case .failed(let reason):
+                    failures += 1
                     message = reason
                 }
-                try? await Task.sleep(for: .seconds(MacScreenWatchRelay.watchInterval))
+                try? await Task.sleep(for: .seconds(RetryBackoff.delay(failures: failures,
+                                                                       base: MacScreenWatchRelay.watchInterval,
+                                                                       cap: MacScreenWatchRelay.watchMaxBackoff)))
             }
         }
     }

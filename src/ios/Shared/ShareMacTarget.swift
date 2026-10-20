@@ -13,7 +13,10 @@
 //
 
 import Foundation
+import os
 import Security
+
+private let shareTargetLog = Logger(subsystem: "com.leoyuan.leophoneagent", category: "ShareMacTarget")
 
 struct ShareMacTarget: Codable, Equatable {
     var sessionId: String
@@ -54,6 +57,13 @@ struct ShareMacTarget: Codable, Equatable {
     func save(to defaults: UserDefaults? = UserDefaults(suiteName: ShareMacTarget.appGroup)) {
         guard let data = try? JSONEncoder().encode(self) else { return }
         defaults?.set(data, forKey: Self.defaultsKey)
+    }
+
+    /// 解绑 / 删除 Mac 时调:清掉「发到哪」和 App Group 钥匙串里的中继主钥匙、直连凭证,
+    /// 分享扩展就不会再拿旧钥匙往已经不要的 Mac 发。
+    static func clear(defaults: UserDefaults? = UserDefaults(suiteName: ShareMacTarget.appGroup)) {
+        defaults?.removeObject(forKey: defaultsKey)
+        ShareMacTargetSecrets.clear()
     }
 
     // MARK: Requests
@@ -101,9 +111,19 @@ struct ShareMacTarget: Codable, Equatable {
 enum ShareMacTargetSecrets {
     private static let service = "com.leoyuan.leophoneagent.share-mac-target"
 
-    static func save(_ secrets: ShareMacTarget.Secrets) {
-        set(secrets.relayKey, account: "relay")
-        if let token = secrets.directToken { set(token, account: "direct") } else { delete(account: "direct") }
+    /// 钥匙串写失败返回 false(并记日志)。之前不看 SecItemAdd 的结果:写不进去时分享扩展
+    /// 读到的是上一把旧钥匙,发到中继被 401,却查不出原因。
+    @discardableResult
+    static func save(_ secrets: ShareMacTarget.Secrets) -> Bool {
+        let relayOK = set(secrets.relayKey, account: "relay")
+        if let token = secrets.directToken { return set(token, account: "direct") && relayOK }
+        delete(account: "direct")
+        return relayOK
+    }
+
+    static func clear() {
+        delete(account: "relay")
+        delete(account: "direct")
     }
 
     static func load() -> ShareMacTarget.Secrets? {
@@ -118,13 +138,21 @@ enum ShareMacTargetSecrets {
          kSecAttrAccessGroup as String: ShareMacTarget.appGroup]
     }
 
-    private static func set(_ value: String, account: String) {
+    private static func set(_ value: String, account: String) -> Bool {
         let query = base(account: account)
         let attrs: [String: Any] = [kSecValueData as String: Data(value.utf8),
                                     kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
-        if SecItemUpdate(query as CFDictionary, attrs as CFDictionary) == errSecItemNotFound {
-            SecItemAdd(query.merging(attrs) { $1 } as CFDictionary, nil)
+        var status = SecItemUpdate(query as CFDictionary, attrs as CFDictionary)
+        if status == errSecItemNotFound {
+            status = SecItemAdd(query.merging(attrs) { $1 } as CFDictionary, nil)
         }
+        guard status == errSecSuccess else {
+            shareTargetLog.error("keychain write \(account, privacy: .public) failed: \(status)")
+            // 写不进新值时别留着旧值误导分享扩展。
+            delete(account: account)
+            return false
+        }
+        return true
     }
 
     private static func get(account: String) -> String? {
