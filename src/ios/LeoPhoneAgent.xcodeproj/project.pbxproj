@@ -237,7 +237,6 @@
 		E5UIF01A /* LeoComposerChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF01F /* LeoComposerChrome.swift */; };
 		E5UIF02A /* LeoEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF02F /* LeoEmptyState.swift */; };
 		E5UIF03A /* LeoInlineError.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF03F /* LeoInlineError.swift */; };
-		E5UIF04A /* LeoShimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF04F /* LeoShimmer.swift */; };
 		E5UIF05A /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
 		E5UIF06A /* HomeContextStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF06F /* HomeContextStrip.swift */; };
 		E5UIF05T /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
@@ -1304,7 +1303,6 @@
 		E5UIF01F /* LeoComposerChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoComposerChrome.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF02F /* LeoEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoEmptyState.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF03F /* LeoInlineError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoInlineError.swift"; sourceTree = SOURCE_ROOT; };
-		E5UIF04F /* LeoShimmer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoShimmer.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF05F /* LeoUIPolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoUIPolicies.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF06F /* HomeContextStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Home/HomeContextStrip.swift"; sourceTree = SOURCE_ROOT; };
 		E5JV00002 /* Jev.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Jev/Jev.swift"; sourceTree = SOURCE_ROOT; };
@@ -2501,7 +2499,6 @@
 				E5UIF01F /* LeoComposerChrome.swift */,
 				E5UIF02F /* LeoEmptyState.swift */,
 				E5UIF03F /* LeoInlineError.swift */,
-				E5UIF04F /* LeoShimmer.swift */,
 				E5UIF05F /* LeoUIPolicies.swift */,
 				E5UIF06F /* HomeContextStrip.swift */,
 				E5JV00002 /* Jev.swift */,
@@ -4074,7 +4071,6 @@
 				E5UIF01A /* LeoComposerChrome.swift in Sources */,
 				E5UIF02A /* LeoEmptyState.swift in Sources */,
 				E5UIF03A /* LeoInlineError.swift in Sources */,
-				E5UIF04A /* LeoShimmer.swift in Sources */,
 				E5UIF05A /* LeoUIPolicies.swift in Sources */,
 				E5UIF06A /* HomeContextStrip.swift in Sources */,
 				E5JV00001 /* Jev.swift in Sources */,
