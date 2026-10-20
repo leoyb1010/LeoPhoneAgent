@@ -57,10 +57,12 @@ struct SettingsHomeView: View {
     let onFeedback: () -> Void
 
     @State private var query = ""
-    @AppStorage("settings.group.device") private var openDevice = true
-    @AppStorage("settings.group.agent") private var openAgent = true
-    @AppStorage("settings.group.general") private var openGeneral = false
-    @AppStorage("settings.group.data") private var openData = false
+    @AppStorage("settings.group.common") private var openCommon = true
+    // [up-home] 「更多」里的分组默认收起(换了键:旧键里存着「展开」)。
+    @AppStorage("settings.group.device.v2") private var openDevice = false
+    @AppStorage("settings.group.agent.v2") private var openAgent = false
+    @AppStorage("settings.group.general.v2") private var openGeneral = false
+    @AppStorage("settings.group.data.v2") private var openData = false
     /// 只为在开关变化时重画(groups 是静态的,直接读 UserDefaults)。
     @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -79,11 +81,21 @@ struct SettingsHomeView: View {
     /// 单列首页和 iPad 双栏的侧栏共用这一份。
     static var groups: [SettingsGroup] {
         [
-            SettingsGroup(id: "device", title: "我的设备", entries: [
+            // [up-home] 常用的四样留在首屏;其余收进下面的「更多」,搜索仍能搜到全部。
+            SettingsGroup(id: "common", title: "常用", entries: [
                 SettingsEntry("远程机器", keywords: "mac android 舰队 中继 relay 密钥 macbook cortex studio fold ipad",
                               icon: "desktopcomputer", color: .teal,
                               hint: "连接哪几台 Mac、中继地址与密钥") { GatewaySettingsView() },
             ] + macConsoleEntries + [
+                SettingsEntry("AI 服务商", keywords: "provider api key oauth 模型 llm 模型供应商",
+                              icon: "key.circle.fill", color: .indigo) { ProviderInstancesView() },
+                SettingsEntry("权限", keywords: "permission 审批 offload 全自动 自动批准 不再询问 yolo",
+                              icon: "hand.raised.fill", color: .red,
+                              hint: "全自动开关；Agent 动用某项能力前，是直接放行还是先问你") { OffloadPermissionSettingsView() },
+                SettingsEntry("外观", keywords: "appearance 深色 浅色 主题 语言 字体 字号 图标 启动 回车 复制 language font icon mac 进行中",
+                              icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
+            ]),
+            SettingsGroup(id: "device", title: "我的设备", entries: [
                 SettingsEntry("Siri 指挥中心", keywords: "siri 语音 快捷指令 shortcuts 审批 action button 自动化",
                               icon: "mic.fill", color: .purple) { SiriCommandCenterView() },
                 SettingsEntry("Apple Watch", keywords: "手表 watch 蜂窝 直连 独立 模型 cellular",
@@ -96,8 +108,6 @@ struct SettingsHomeView: View {
                               hint: "旧通道，只在中继不可用时使用") { RemoteHostSettingsView() },
             ]),
             SettingsGroup(id: "agent", title: "Agent", entries: [
-                SettingsEntry("AI 服务商", keywords: "provider api key oauth 模型 llm 模型供应商",
-                              icon: "key.circle.fill", color: .indigo) { ProviderInstancesView() },
                 SettingsEntry("模型分组", keywords: "model group 回退 负载",
                               icon: "gearshape.circle.fill", color: .indigo) { ModelGroupsView() },
                 // 1.57 的实时出字、自动改字、热词、语音度量都在这一页;以前只能从 AI 服务商里翻到。
@@ -145,14 +155,9 @@ struct SettingsHomeView: View {
                               icon: "chevron.left.forwardslash.chevron.right", color: .gray) { EnvironmentVariablesView() },
             ]),
             SettingsGroup(id: "general", title: "外观与通用", entries: [
-                SettingsEntry("外观", keywords: "appearance 深色 浅色 主题 语言 字体 字号 图标 启动 回车 复制 language font icon mac 进行中",
-                              icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
                 // 以前只能从 权限 → 后台 进去,搜「后台」「通知」「灵动岛」都搜不到。
                 SettingsEntry("后台与通知", keywords: "background 后台 保活 keep alive 通知 notification 实时活动 灵动岛 live activity 定位 位置追踪 朗读 语音 音色 隐私模式",
                               icon: "bell.badge.fill", color: .orange) { EnhancedBackgroundSettingsView() },
-                SettingsEntry("权限", keywords: "permission 审批 offload 全自动 自动批准 不再询问 yolo",
-                              icon: "hand.raised.fill", color: .red,
-                              hint: "Agent 动用某项能力前，是直接放行还是先问你") { OffloadPermissionSettingsView() },
                 SettingsEntry("生物识别保护", keywords: "face id touch id 解锁 保护 spotlight 聚焦 搜索",
                               icon: "faceid", color: .red) { FaceIDProtectionSettingsView() },
             ]),
@@ -204,11 +209,13 @@ struct SettingsHomeView: View {
                 if searching {
                     searchResults
                 } else {
-                    groupCard(groups[0], isOpen: $openDevice, index: 0)
-                    groupCard(groups[1], isOpen: $openAgent, index: 1)
+                    groupCard(groups[0], isOpen: $openCommon, index: 0)
+                    moreHeader
+                    groupCard(groups[1], isOpen: $openDevice, index: 1)
+                    groupCard(groups[2], isOpen: $openAgent, index: 2)
                     orchestrationCard
-                    groupCard(groups[2], isOpen: $openGeneral, index: 2)
-                    groupCard(groups[3], isOpen: $openData, index: 3)
+                    groupCard(groups[3], isOpen: $openGeneral, index: 3)
+                    groupCard(groups[4], isOpen: $openData, index: 4)
                     feedbackCard
                 }
             }
@@ -335,6 +342,16 @@ struct SettingsHomeView: View {
         .leoStaggerEntrance(index: index + 1)
     }
 
+    private var moreHeader: some View {
+        Text("更多")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
+            .padding(.top, 8)
+            .accessibilityAddTraits(.isHeader)
+    }
+
     private var orchestrationCard: some View {
         Toggle(isOn: $orchestrationEnabled) {
             HStack(spacing: 12) {
@@ -378,6 +395,7 @@ struct SettingsHomeView: View {
 
     static func groupSymbol(_ id: String) -> String {
         switch id {
+        case "common": return "star.fill"
         case "device": return "macbook.and.iphone"
         case "agent": return "sparkles"
         case "general": return "paintbrush"
@@ -388,6 +406,7 @@ struct SettingsHomeView: View {
 
     static func groupTint(_ id: String) -> Color {
         switch id {
+        case "common": return .orange
         case "device": return .teal
         case "agent": return .indigo
         case "general": return .blue

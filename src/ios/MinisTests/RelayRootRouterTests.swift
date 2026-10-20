@@ -76,9 +76,25 @@ final class RelayRootRouterTests: XCTestCase {
         }
         XCTAssertEqual(attempts, ["relay-host.example.ts.net"])
 
-        // 10 分钟后偏好过期（测速都失败时退回配置顺序）。
+        // [up-home] 10 分钟后偏好过期：仍先走上次走通的 Funnel，不回到刚超时的主入口；
+        // 测速都不通也不改。
         clock = clock.addingTimeInterval(RelayRootRouter.cacheLifetime + 1)
-        XCTAssertEqual(r.candidates(for: request.url!).first?.host, "relay.example.com")
+        XCTAssertEqual(r.candidates(for: request.url!).first?.host, "relay-host.example.ts.net")
+        let key = r.group(for: cloudflare)!.key
+        await r.refresh(groupKey: key, roots: [cloudflare, funnel])
+        XCTAssertEqual(r.candidates(for: request.url!).first?.host, "relay-host.example.ts.net")
+    }
+
+    func testStalePreferenceSwitchesOnlyWhenTheProbeSaysSo() async throws {
+        var clock = Date(timeIntervalSince1970: 2_000_000)
+        let r = RelayRootRouter(configured: [cloudflare, funnel], defaults: nil, now: { clock },
+                                probe: { root in root.contains("relay.example.com") ? 0.1 : 0.9 })
+        let key = r.group(for: cloudflare)!.key
+        r.recordFailure(URL(string: cloudflare + "/m/Mac/x")!)   // 偏好 = Funnel
+        clock = clock.addingTimeInterval(RelayRootRouter.cacheLifetime + 1)
+        XCTAssertEqual(r.preferredRoot(groupKey: key, roots: [cloudflare, funnel]), funnel)
+        await r.refresh(groupKey: key, roots: [cloudflare, funnel])
+        XCTAssertEqual(r.preferredRoot(groupKey: key, roots: [cloudflare, funnel]), cloudflare, "主入口恢复且更快：测速后换回")
     }
 
     func testGatewayErrorsFailOverButMutationsWithoutOperationIdDoNot() async throws {

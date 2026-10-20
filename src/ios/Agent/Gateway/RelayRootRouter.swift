@@ -4,7 +4,7 @@ import Foundation
 ///
 /// 手机不在 tailnet 时只能走中继，而两个入口速度差三倍：
 /// - 请求按「最近成功、更快」的入口发；连接错误 / 超时 / 5xx 时换同组的另一个入口重发一次；
-/// - 偏好缓存 10 分钟（持久化），过期后在后台测一次各入口的 `/relay/health`，取最快的；
+/// - 偏好缓存 10 分钟（持久化），过期后仍先用它，同时在后台测一次各入口的 `/relay/health`，取最快的；
 /// - 只在「同一组」里互换：配置里的主 / 备入口是一组，某台 Mac 的设备描述符里列出的中继入口是一组，
 ///   别的中继的地址绝不会被当成替身。
 ///
@@ -85,7 +85,7 @@ final class RelayRootRouter: @unchecked Sendable {
         root + String(url.dropFirst(matched.count))
     }
 
-    /// 某组的首选入口；没有偏好或偏好已过期时也先给出可用值（组里第一个），后台再测速。
+    /// 某组的首选入口；没有偏好时给组里第一个；偏好过期时仍给它，同时后台测速。
     func preferredRoot(groupKey: String, roots: [String]) -> String {
         lock.lock()
         let entry = preferred[groupKey]
@@ -93,8 +93,9 @@ final class RelayRootRouter: @unchecked Sendable {
         let start = stale && roots.count > 1 && probing.insert(groupKey).inserted
         lock.unlock()
         if start { Task.detached { [weak self] in await self?.refresh(groupKey: groupKey, roots: roots) } }
-        // 过期的偏好不再沿用：先按配置顺序（主入口），后台测速结果回来再换。
-        if let entry, !stale, roots.contains(where: { $0.lowercased() == entry.root.lowercased() }) { return entry.root }
+        // [up-home] 过期的偏好照样先用：它是最近一次真走通的入口；回到主入口的话，主入口坏着时
+        // 每 10 分钟就要先撞一次超时再回落。后台测速结果回来再换。
+        if let entry, roots.contains(where: { $0.lowercased() == entry.root.lowercased() }) { return entry.root }
         return roots[0]
     }
 
@@ -142,9 +143,16 @@ final class RelayRootRouter: @unchecked Sendable {
         let fastest = results.compactMap { root, latency in latency.map { (root, $0) } }
             .min { lhs, rhs in lhs.1 < rhs.1 || (lhs.1 == rhs.1 && roots.firstIndex(of: lhs.0)! < roots.firstIndex(of: rhs.0)!) }
         finishProbe(groupKey)
-        // 都不通也记一笔（按配置顺序），10 分钟内不再反复测。测速期间真实请求刚记下的结论（回落 / 成功）更新，不覆盖。
+        // 都不通也记一笔，10 分钟内不再反复测；[up-home] 记的是原来的偏好（没有才按配置顺序），
+        // 测不通不等于原来那条坏了，别退回可能已失效的主入口。测速期间真实请求刚记下的结论（回落 / 成功）更新，不覆盖。
         if fresherThan(startedAt, key: groupKey) { return }
-        setPreferred(groupKey, root: fastest?.0 ?? roots[0], onlyIfDifferent: false)
+        setPreferred(groupKey, root: fastest?.0 ?? currentPreferred(groupKey, roots: roots) ?? roots[0], onlyIfDifferent: false)
+    }
+
+    private func currentPreferred(_ key: String, roots: [String]) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        guard let root = preferred[key]?.root, roots.contains(where: { $0.lowercased() == root.lowercased() }) else { return nil }
+        return root
     }
 
     private func fresherThan(_ date: Date, key: String) -> Bool {
