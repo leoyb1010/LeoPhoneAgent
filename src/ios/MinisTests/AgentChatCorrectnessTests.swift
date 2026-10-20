@@ -103,16 +103,16 @@ final class AgentChatCorrectnessTests: XCTestCase {
     func testNativeReceiptNamesPathVerificationAndUndo() {
         let route = ActionRouter.Decision(
             path: .native,
-            kind: .createCalendar,
-            hour: 19,
+            kind: .setAlarm,
+            hour: 7,
             minute: 0,
             tomorrow: true,
-            label: "高铁"
+            label: "起床"
         )
         let receipt = route.receipt()
-        XCTAssertTrue(receipt.contains("路径：系统日历"))
+        XCTAssertTrue(receipt.contains("路径：系统闹钟"))
         XCTAssertTrue(receipt.contains("系统已确认完成"))
-        XCTAssertTrue(receipt.contains("可在系统日历"))
+        XCTAssertTrue(receipt.contains("可在系统时钟中关闭"))
     }
 
     func testResizableWorkspaceLayoutPolicy() {
@@ -148,7 +148,15 @@ final class AgentChatCorrectnessTests: XCTestCase {
                      "把明天产品评审加到日历"] {
             XCTAssertEqual(ActionRouter.decide(text: text, imageCount: 0).path, .agent, text)
         }
-        // 解析函数仍保留给收据/行程文案使用。
-        XCTAssertEqual(ActionRouter.parseTravel("记录明天下午19:00去北京的高铁 G1234，座位12A")?.hour, 19)
+        XCTAssertTrue(ActionRouter.isTravel("记录明天下午19:00去北京的高铁 g1234，座位12a"))
+        XCTAssertFalse(ActionRouter.isTravel("高铁真快"), "只有交通工具、没有记录意图不算")
+    }
+
+    func testPromptClockIsLocalToTheMinuteWithWeekday() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        let shanghai = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        calendar.timeZone = shanghai
+        let date = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 20, hour: 14, minute: 5)))
+        XCTAssertEqual(AgentChatCorrectness.promptClock(date, timeZone: shanghai), "2026-10-20 14:05 Tuesday")
     }
 }

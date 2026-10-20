@@ -75,6 +75,38 @@ enum AgentChatCorrectness {
     }
 
     /// Last assistant row, even when a queued user message sits after it.
+    /// 系统提示里的本地时间：精确到分钟 + 英文星期（如 "2026-10-20 14:05 Tuesday"）。
+    static func promptClock(_ now: Date, timeZone: TimeZone) -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd HH:mm EEEE"
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = timeZone
+        return fmt.string(from: now)
+    }
+
+    /// [OpenMinis Android 1.15] DeepSeek 等模型偶尔把工具调用写进思考内容里：这一轮没有正文、没有真正的
+    /// 工具调用，只有一段「看起来像工具调用」的思考，任务就此停住。认出来就提醒一次再试。
+    /// 只认明确的调用标记（各家的工具调用标签，或带 arguments/parameters 的已知工具名 JSON），
+    /// 普通的「我需要调用 shell_execute」这种思考不算。
+    static func reasoningContainsMisplacedToolCall(text: String, toolCallCount: Int,
+                                                   reasoning: String, toolNames: [String]) -> Bool {
+        guard toolCallCount == 0,
+              text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !reasoning.isEmpty else { return false }
+        let lower = reasoning.lowercased()
+        let markers = ["<tool_call", "</tool_call>", "<function_call", "<function_calls", "<invoke ", "<invoke>",
+                       "tool▁call", "tool_calls_begin", "<|tool_call", "｜dsml｜", "<tool_use"]
+        if markers.contains(where: lower.contains) { return true }
+        for name in toolNames where !name.isEmpty {
+            let pattern = "\"name\"\\s*:\\s*\"" + NSRegularExpression.escapedPattern(for: name.lowercased())
+                + "\"[\\s\\S]{0,40}\"(arguments|parameters|input)\"\\s*:"
+            if lower.range(of: pattern, options: .regularExpression) != nil {
+                return true
+            }
+        }
+        return false
+    }
+
     static func lastAssistantIndex(isAssistant: [Bool]) -> Int? {
         isAssistant.lastIndex(of: true)
     }
@@ -140,7 +172,8 @@ enum ActionRouter {
     }
     enum Path { case native, clarify, agent }
     enum Kind {
-        case savePhoto, setAlarm, createCalendar, createTravel, toggleFlashlight, createTodo
+        // 待办 / 日程 / 行程自 1.75.2 起一律交给模型按日程规范录入，不再有本地直写的 kind。
+        case savePhoto, setAlarm, toggleFlashlight
         case readClipboard, writeClipboard, deviceInfo
     }
 
@@ -152,9 +185,6 @@ enum ActionRouter {
         var tomorrow: Bool
         var dayOffset = 0
         var label: String
-        var location = ""
-        var notes = ""
-        var missingFields: [String] = []
 
         var effectiveDayOffset: Int { min(366, max(0, dayOffset > 0 ? dayOffset : (tomorrow ? 1 : 0))) }
 
@@ -162,10 +192,7 @@ enum ActionRouter {
             switch kind {
             case .savePhoto: return "系统相册"
             case .setAlarm: return "系统闹钟"
-            case .createCalendar: return "系统日历"
-            case .createTravel: return "出行记录"
             case .toggleFlashlight: return "手电筒"
-            case .createTodo: return "待办"
             case .readClipboard, .writeClipboard: return "剪贴板"
             case .deviceInfo: return "设备信息"
             case nil: return ""
@@ -179,19 +206,7 @@ enum ActionRouter {
                 let hh = String(format: "%02d", hour ?? 0)
                 let mm = String(format: "%02d", minute ?? 0)
                 return "已用系统闹钟设定 \(hh):\(mm)，未打开界面。"
-            case .createCalendar:
-                return path == .clarify
-                    ? "我已识别为日程，还需要：\(missingFields.joined(separator: "、"))。补充后我会写入系统日历。"
-                    : "已用系统日历创建日程，未打开界面。"
-            case .createTravel:
-                return path == .clarify
-                    ? "我已识别为出行记录，还需要：\(missingFields.joined(separator: "、"))。补充后我会同时写入日历和提醒事项。"
-                    : "已把出行信息写入系统日历和提醒事项，并设置提前提醒。"
             case .toggleFlashlight: return label == "off" ? "已关掉手电筒。" : "已打开手电筒。"
-            case .createTodo:
-                return path == .clarify
-                    ? "我已识别为提醒，还需要：\(missingFields.joined(separator: "、"))。"
-                    : "已记下待办：\(label)。"
             case .readClipboard: return "已读取剪贴板。"
             case .writeClipboard: return "已写入剪贴板。"
             case .deviceInfo: return "已读取这台设备的信息。"
@@ -204,9 +219,7 @@ enum ActionRouter {
             switch kind {
             case .savePhoto: undo = "可在系统相册中删除"
             case .setAlarm: undo = "可在系统时钟中关闭"
-            case .createCalendar, .createTravel: undo = "可在系统日历或提醒事项中删除"
             case .toggleFlashlight: undo = "可用相反指令恢复"
-            case .createTodo: undo = "可在系统提醒事项中删除"
             case .writeClipboard: undo = "可再次写入或清空剪贴板"
             case .readClipboard, .deviceInfo: undo = "只读操作，无需撤销"
             case nil: undo = "无需撤销"
@@ -247,7 +260,7 @@ enum ActionRouter {
         }
         // 待办 / 日程 / 行程必须先分析日期、时间、提前量再写入：规则匹配认不全「明天下午三点半」这类说法，
         // 认不出时间就会建一条没日期的提醒（看起来像记在今天）。一律交给模型按日程录入规范处理。
-        if isTodo(lower) || isCalendar(lower) || parseTravel(raw, lower: lower) != nil {
+        if isTodo(lower) || isCalendar(lower) || isTravel(lower) {
             return Decision(path: .agent, kind: nil, hour: nil, minute: nil, tomorrow: false, label: "")
         }
         if isAlarm(raw, lower: lower), let time = parseTime(raw, lower: lower) {
@@ -256,36 +269,10 @@ enum ActionRouter {
         return Decision(path: .agent, kind: nil, hour: nil, minute: nil, tomorrow: false, label: "")
     }
 
-    static func parseTravel(_ raw: String, lower: String? = nil) -> Decision? {
-        let low = lower ?? raw.lowercased()
-        guard let vehicle = ["高铁", "动车", "火车", "航班", "飞机", "客车", "大巴", "轮船", "行程", "train", "flight", "bus", "trip"].first(where: low.contains),
-              ["记录", "记下", "记一下", "提醒", "行程", "日历", "别忘", "record", "remind", "schedule"].contains(where: low.contains) else { return nil }
-
-        let time = parseTime(raw, lower: low)
-        let destination = firstCapture(in: raw, pattern: #"(?:去|到)\s*([\p{L}]{2,16}?)(?:的)?(?:高铁|动车|火车|航班|飞机|客车|大巴|轮船|行程|[，,。\s])"#) ?? ""
-        let train = (firstCapture(in: raw, pattern: #"\b([A-Z]{1,3}\s*\d{1,5})\b"#, options: [.caseInsensitive]) ?? "")
-            .replacingOccurrences(of: " ", with: "").uppercased()
-        let seat = firstCapture(in: raw, pattern: #"座位(?:是|号|[：:])?\s*([0-9]{1,2}[A-Fa-f]|[0-9]{1,2}车(?:厢)?[0-9]{1,3}[A-Fa-f]?号?)"#) ?? ""
-        var missing: [String] = []
-        if time == nil { missing.append("开车时间") }
-        if destination.isEmpty && train.isEmpty { missing.append("目的地或车次/航班号") }
-        if train.isEmpty, raw.range(of: #"(?:车次|航班)(?:是|号|[：:])?\s*(?:[，,。]|$)"#, options: .regularExpression) != nil { missing.append("车次") }
-        if seat.isEmpty, raw.range(of: #"座位(?:是|号|[：:])?\s*(?:[，,。]|$)"#, options: .regularExpression) != nil { missing.append("座位") }
-        let details = [train.isEmpty ? nil : "车次：\(train)", seat.isEmpty ? nil : "座位：\(seat)"]
-            .compactMap { $0 }
-            .joined(separator: "\n") + "\n原始指令：\(raw)\n未提供的信息保持为空，不做推断。"
-        return Decision(
-            path: missing.isEmpty ? .native : .clarify,
-            kind: .createTravel,
-            hour: time?.0,
-            minute: time?.1,
-            tomorrow: isTomorrow(low),
-            dayOffset: dayOffset(low),
-            label: [destination, vehicle, train].filter { !$0.isEmpty }.joined(separator: " "),
-            location: destination,
-            notes: details,
-            missingFields: missing
-        )
+    /// 「记一下明天去北京的高铁」这类行程：交通工具 + 记录/提醒的意图。
+    static func isTravel(_ lower: String) -> Bool {
+        ["高铁", "动车", "火车", "航班", "飞机", "客车", "大巴", "轮船", "行程", "train", "flight", "bus", "trip"].contains(where: lower.contains)
+            && ["记录", "记下", "记一下", "提醒", "行程", "日历", "别忘", "record", "remind", "schedule"].contains(where: lower.contains)
     }
 
     private static func firstCapture(
@@ -466,38 +453,5 @@ enum ActionRouter {
             .replacingOccurrences(of: #"\d{1,2}\s*点\s*\d{0,2}\s*分?"#, with: "", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: " ，,。.:："))
         return stripped.isEmpty ? "闹钟" : stripped
-    }
-
-    private static func calendarTitle(_ raw: String) -> String {
-        let stripped = raw
-            .replacingOccurrences(of: #"加到日历|写入日历|添加到日历|加进日历|记到日历|安排日程|add to calendar|create calendar event|创建日程"#, with: "", options: [.regularExpression, .caseInsensitive])
-            .replacingOccurrences(of: #"今天|今晚|今早|明早|明天|后天|tomorrow|tmrw|day after tomorrow"#, with: "", options: [.regularExpression, .caseInsensitive])
-            .replacingOccurrences(of: #"\d{1,3}\s*天后|\d{1,2}月\d{1,2}[日号]?|(?:下)?(?:周|星期)[一二三四五六日天]"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"上午|中午|下午|晚上|早上|凌晨"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"\d{1,2}[:：]\d{2}"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"\d{1,2}\s*点\s*\d{0,2}\s*分?"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: CharacterSet(charactersIn: " ，,。.:："))
-        return stripped.isEmpty ? "日程" : stripped
-    }
-
-    private static func todoTitle(_ raw: String) -> String {
-        let stripped = raw
-            .replacingOccurrences(
-                of: #"记个待办|记一条待办|添加待办|写个待办|提醒我|记得提醒|到时候提醒|别忘了|别忘记|帮我记一下|帮我记下|add a todo|add todo|remind me to|remember to"#,
-                with: "",
-                options: [.regularExpression, .caseInsensitive]
-            )
-            .replacingOccurrences(of: #"今天|今晚|今早|明早|明天|后天|tomorrow|tmrw|day after tomorrow"#, with: "", options: [.regularExpression, .caseInsensitive])
-            .replacingOccurrences(of: #"\d{1,3}\s*天后|\d{1,2}月\d{1,2}[日号]?|(?:下)?(?:周|星期)[一二三四五六日天]"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"上午|中午|下午|晚上|早上|凌晨"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"\d{1,2}[:：]\d{2}"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"\d{1,2}\s*点\s*\d{0,2}\s*分?"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"^(?:要|的|在|于)\s*"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: CharacterSet(charactersIn: " ，,。.:："))
-        return stripped
-    }
-
-    private static func extractLocation(_ raw: String) -> String {
-        firstCapture(in: raw, pattern: #"(?:在|去|到)\s*([\p{L}0-9·_-]{2,24}?)(?:开会|复诊|办事|见面|[，,。\s])"#) ?? ""
     }
 }

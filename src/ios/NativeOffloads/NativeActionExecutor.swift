@@ -1,4 +1,3 @@
-import EventKit
 import Foundation
 import Photos
 import UIKit
@@ -11,15 +10,10 @@ enum NativeActionExecutor {
             route.minute.flatMap { nativeDate(hour: hour, minute: $0, dayOffset: route.effectiveDayOffset) }
         }
         let requests: [(command: String, action: String, arguments: [String])]
-        let schedule = ["--title", route.label, "--start", plannedDate?.ISO8601Format() ?? "none",
-                        "--notes", route.notes, "--location", route.location]
+        let schedule = ["--title", route.label, "--start", plannedDate?.ISO8601Format() ?? "none"]
         switch route.kind {
         case .savePhoto: requests = [("apple-photos", "import", [imageURL?.path ?? ""])]
         case .setAlarm: requests = [("apple-alarm", "set", schedule)]
-        case .createCalendar: requests = [("apple-calendar", "create", schedule)]
-        case .createTravel:
-            requests = [("apple-calendar", "create", schedule), ("apple-reminders", "create", schedule)]
-        case .createTodo: requests = [("apple-reminders", "create", schedule)]
         case .toggleFlashlight: requests = [("apple-device", "torch", ["--set", route.label])]
         case .readClipboard: requests = [("apple-clipboard", "get", [])]
         case .writeClipboard: requests = [("apple-clipboard", "set", [route.label])]
@@ -53,21 +47,6 @@ enum NativeActionExecutor {
                 return route.executionFailure(nextStep: "请检查系统时钟或闹钟权限后重试")
             }
             return route.executionSuccess()
-        case .createCalendar:
-            guard let plannedDate else { return nil }
-            guard await createNativeEvent(start: plannedDate, title: route.label, notes: route.notes, location: route.location) else {
-                return route.executionFailure(nextStep: "请授权日历访问后重试")
-            }
-            return route.executionSuccess()
-        case .createTravel:
-            guard let plannedDate else { return nil }
-            guard await createNativeEvent(start: plannedDate, title: route.label, notes: route.notes, location: route.location) else {
-                return route.executionFailure(nextStep: "日程未能创建，请检查日历权限后重试。")
-            }
-            guard await saveReminder(route.label, dueDate: plannedDate, notes: route.notes) else {
-                return .init(text: "日程已创建，但提醒事项尚未确认。请先检查系统日历和提醒事项，避免重复创建。", outcome: .unknown)
-            }
-            return route.executionSuccess()
         case .toggleFlashlight:
             do {
                 _ = try await DeviceActions.shared.setTorch(enabled: route.label != "off")
@@ -79,10 +58,6 @@ enum NativeActionExecutor {
             } catch {
                 return route.executionFailure(nextStep: "系统未能设置手电筒，请刷新状态后重试。")
             }
-        case .createTodo:
-            return await saveReminder(route.label.isEmpty ? "待办" : route.label, dueDate: plannedDate, notes: route.notes)
-                ? route.executionSuccess()
-                : route.executionFailure(nextStep: "请授权提醒事项后重试")
         case .readClipboard:
             let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return route.executionSuccess(summary: text.isEmpty ? "剪贴板是空的。" : "剪贴板内容：\n\(String(text.prefix(4_000)))")
@@ -140,58 +115,5 @@ enum NativeActionExecutor {
         comps.hour = hour
         comps.minute = minute
         return Calendar.current.date(from: comps)
-    }
-
-    private static func createNativeEvent(
-        start: Date,
-        title: String,
-        notes: String = "",
-        location: String = ""
-    ) async -> Bool {
-        let store = EKEventStore()
-        let granted = (try? await store.requestFullAccessToEvents()) ?? false
-        guard granted, !Task.isCancelled else { return false }
-        let ev = EKEvent(eventStore: store)
-        ev.title = title.isEmpty ? "日程" : title
-        ev.startDate = start
-        ev.endDate = start.addingTimeInterval(3600)
-        ev.notes = notes.isEmpty ? nil : notes
-        ev.location = location.isEmpty ? nil : location
-        ev.addAlarm(EKAlarm(relativeOffset: -30 * 60))
-        ev.calendar = store.defaultCalendarForNewEvents
-        do {
-            try store.save(ev, span: .thisEvent)
-            guard let identifier = ev.eventIdentifier,
-                  let saved = store.event(withIdentifier: identifier) else { return false }
-            return saved.title == ev.title && abs(saved.startDate.timeIntervalSince(start)) < 1
-        } catch {
-            return false
-        }
-    }
-
-    private static func saveReminder(_ title: String, dueDate: Date? = nil, notes: String = "") async -> Bool {
-        let store = EKEventStore()
-        let granted = (try? await store.requestFullAccessToReminders()) ?? false
-        guard granted, !Task.isCancelled else { return false }
-        let reminder = EKReminder(eventStore: store)
-        reminder.title = title
-        reminder.notes = notes.isEmpty ? nil : notes
-        if let dueDate {
-            reminder.dueDateComponents = Calendar.current.dateComponents(
-                [.year, .month, .day, .hour, .minute],
-                from: dueDate
-            )
-            reminder.addAlarm(EKAlarm(absoluteDate: dueDate.addingTimeInterval(-30 * 60)))
-        }
-        reminder.calendar = store.defaultCalendarForNewReminders()
-        do {
-            try store.save(reminder, commit: true)
-            guard let saved = store.calendarItem(withIdentifier: reminder.calendarItemIdentifier) as? EKReminder else {
-                return false
-            }
-            return saved.title == reminder.title && saved.dueDateComponents == reminder.dueDateComponents
-        } catch {
-            return false
-        }
     }
 }

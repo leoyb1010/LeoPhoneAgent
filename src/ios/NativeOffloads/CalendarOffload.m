@@ -91,7 +91,8 @@ static NSString *const HELP_TEXT =
      "UPDATE-REMINDER OPTIONS:\n"
      "  --id <reminder_id>   Reminder ID (required)\n"
      "  --title <title>      New title\n"
-     "  --due <datetime>     New due date\n"
+     "  --due <datetime>     New due date (date only = all-day; with time = due + early alarm)\n"
+     "  --alarm <minutes>    With --due: remind this many minutes before (default 30)\n"
      "  --list <name>        Move to a different list\n"
      "  --priority <0-9>     New priority\n"
      "  --notes <text>       New notes\n"
@@ -838,6 +839,24 @@ static int cmd_delete(int argc, char **argv, int stdout_fd, BOOL compact, BOOL q
     return NOFF_EXIT_SUCCESS;
 }
 
+// [schedule] 创建与修改提醒共用：只有日期 → 全天待办；有时刻 → 到点提醒 + 提前提醒
+// （--alarm 分钟，默认 30；0 = 只在到点提醒）。提前提醒的时间已经过去就不加（过去的闹钟会立刻响）。
+// 改时间时先清掉旧闹钟，否则它们还挂在原来的时间上。
+static void apply_reminder_due(EKReminder *reminder, NSString *dueStr, NSDate *due, NSString *alarmStr) {
+    BOOL dateOnly = dueStr.length == 10;  // yyyy-MM-dd：全天待办，不带时刻
+    NSCalendarUnit units = NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay;
+    if (!dateOnly) units |= NSCalendarUnitHour | NSCalendarUnitMinute;
+    reminder.dueDateComponents = [[NSCalendar currentCalendar] components:units fromDate:due];
+    for (EKAlarm *alarm in [reminder.alarms copy]) [reminder removeAlarm:alarm];
+    if (dateOnly) return;
+    double before = alarmStr ? [alarmStr doubleValue] : 30;
+    [reminder addAlarm:[EKAlarm alarmWithAbsoluteDate:due]];
+    NSDate *early = [due dateByAddingTimeInterval:-before * 60];
+    if (before > 0 && [early timeIntervalSinceNow] > 0) {
+        [reminder addAlarm:[EKAlarm alarmWithAbsoluteDate:early]];
+    }
+}
+
 int calendar_cmd_remind(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL compact, BOOL quiet) {
     NSString *authErr = nil;
     if (!requestRemindersAccess(&authErr)) {
@@ -870,17 +889,7 @@ int calendar_cmd_remind(int argc, char **argv, int stdout_fd, int stderr_fd, BOO
             noff_emit_json(stdout_fd, err, compact, quiet);
             return NOFF_EXIT_INVALID_ARGS;
         }
-        BOOL dateOnly = dueStr.length == 10;  // yyyy-MM-dd：全天待办，不带时刻
-        NSCalendarUnit units = NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay;
-        if (!dateOnly) units |= NSCalendarUnitHour | NSCalendarUnitMinute;
-        reminder.dueDateComponents = [[NSCalendar currentCalendar] components:units fromDate:due];
-        if (!dateOnly) {
-            // 到点提醒 + 提前提醒（--alarm 分钟，默认 30；0 = 只在到点提醒）。
-            NSString *alarmStr = noff_find_arg(argc, argv, "--alarm");
-            double before = alarmStr ? [alarmStr doubleValue] : 30;
-            [reminder addAlarm:[EKAlarm alarmWithAbsoluteDate:due]];
-            if (before > 0) [reminder addAlarm:[EKAlarm alarmWithAbsoluteDate:[due dateByAddingTimeInterval:-before * 60]]];
-        }
+        apply_reminder_due(reminder, dueStr, due, noff_find_arg(argc, argv, "--alarm"));
     }
 
     NSString *notes = noff_find_arg(argc, argv, "--notes");
@@ -997,13 +1006,9 @@ int calendar_cmd_update_reminder(int argc, char **argv, int stdout_fd, BOOL comp
         return NOFF_EXIT_INVALID_ARGS;
     }
     if (dueStr) {
+        // 与创建一致：只有日期 → 全天；有时刻 → 到点 + 提前提醒（--alarm）。
         NSDate *due = noff_parse_date(dueStr);
-        if (due) {
-            reminder.dueDateComponents = [[NSCalendar currentCalendar]
-                components:(NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay |
-                            NSCalendarUnitHour | NSCalendarUnitMinute)
-                fromDate:due];
-        }
+        if (due) apply_reminder_due(reminder, dueStr, due, noff_find_arg(argc, argv, "--alarm"));
     }
 
     NSString *notes = noff_find_arg(argc, argv, "--notes");
