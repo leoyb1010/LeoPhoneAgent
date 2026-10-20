@@ -160,6 +160,8 @@ struct GatewaySettingsView: View {
                                     }
                                     .buttonStyle(.borderless)
                                     .accessibilityIdentifier("gateway.terminal")
+                                    // [takeover] 这台 Mac 终端里的 Claude Code 会话,接到手机上继续。
+                                    MacTerminalSessionsButton(hostIds: [host.id])
                                 }
                             }
                             .padding(.leading, 20)
