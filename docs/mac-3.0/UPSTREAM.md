@@ -274,3 +274,13 @@ Peekaboo(`leo/bin`)/ leo-speech / 菜单栏模板图标三类 extraResources;`le
 
 **复查**:摘完后对本分支相对改动 grep `z.ai / bigmodel / chatglm / zhipu / zcode.ai / codegeex / .zcode` 0 新增;
 `node scripts/leo-redline-check.mjs` 0 命中。
+
+## Electron 44 / claude-agent-sdk 0.3.304 补丁(2026-10-20,wt/deps,同步上游时复查,改动处标 `[leo]`)
+| 文件 | 内容 |
+|---|---|
+| `packages/desktop/package.json`、`pnpm-lock.yaml` | Electron 41.10.7 → 44.5.1;node-abi 4.28.0 → 4.38.0(否则 @electron/rebuild 认不出 44 的 ABI) |
+| `packages/desktop/src/main/pluginSandbox/host.ts` | 44 删了 `clipboard.writeImage`:改 `clipboard.write([new ClipboardItem({"image/png": Blob})])` |
+| `packages/desktop/scripts/gen-ui-fixture/presentation-checks.ts` | 夹具里的 readImage / readText / writeText 改异步剪贴板 |
+| `packages/desktop/src/main/desktopMainIpcPlatform.ts` | 43 起打开框默认「下载」且不记上次目录:选目录 / 选文件记住上次所在目录 |
+| `packages/desktop/scripts/dev.mjs` | 42 起不再 postinstall 下载二进制:`require("electron")` 按需下载并取路径 |
+| 根 `package.json` `pnpm.overrides` | `@agentclientprotocol/claude-agent-acp>@anthropic-ai/claude-agent-sdk: 0.3.304`;acp 升到 0.94+ 时去掉 |
