@@ -8,11 +8,12 @@
 //  kernel cold and without emulator latency — the same design call
 //  NativeMCPClient made for HTTP MCP.
 //
-//  MVP scope (deliberate):
-//    • password or device Ed25519 authentication (Keychain-held)
+//  Scope:
+//    • password, or the default key (imported ed25519/rsa, else the device
+//      Ed25519 key) — all Keychain-held
 //    • explicit host-key pinning, bound to the configured address and port
-//    • one command per connection; a per-call timeout closes the client,
-//      which is also the cancellation story for now
+//    • one command per connection; timeout / Stop close the client
+//    • openClient() is shared with the interactive terminal and port forwarding
 //
 
 import Foundation
@@ -29,174 +30,225 @@ actor RemoteSSHExecutor {
     struct ExecResult {
         let output: String
         let succeeded: Bool
+        /// 命令的退出码（拿到 `[leo-exit:N]` 尾巴时才有）。
+        var exitCode: String? = nil
+        /// 连接 / 认证阶段就失败了：命令一定没跑，换网关重试是安全的。
+        var connectFailed = false
     }
 
-    private static let maxOutputChars = 20000
+    /// 和 ToolArgNumbers.remoteAgentTimeoutRange 一致（claude -p 跑一整个任务常常超过 10 分钟）。
+    static let maxTimeout: TimeInterval = 1800
 
     /// Runs one command on `host`. Never throws credentials or the resolved
     /// command into the error text.
-    func run(host: RemoteHost, command: String, timeout: TimeInterval, isKeyRetry: Bool = false) async -> ExecResult {
-        // 在读取凭据/建立认证之前要求显式可信 pin，旧配置安全迁移为未受信。
-        guard let keyLine = RemoteSSHTrust.pinnedKey(host: host.host, port: host.port,
-                key: host.trustedHostKey, trustedEndpoint: host.trustedHostKeyEndpoint),
-              let hostKey = try? NIOSSHPublicKey(openSSHPublicKey: keyLine) else {
-            return ExecResult(output: "SSH host key is not trusted for this address and port. In Settings → Remote Hosts, paste the server public host key obtained from its trusted console before connecting.", succeeded: false)
-        }
-        guard RemoteSSHTrust.directPublicKey(keyLine) != nil else {
-            return ExecResult(output: "Direct SSH currently requires a verified ssh-ed25519 server host key: the bundled SSH library cannot select another pinned host-key algorithm. From the server's trusted console, read /etc/ssh/ssh_host_ed25519_key.pub and verify that key in Settings → Remote Hosts. The existing pin has not been changed; gateway OpenSSH still supports it.", succeeded: false)
-        }
-        // [T-ssh-key-auth] Password when stored, else the device Ed25519 key —
-        // key-only hosts (the recommended setup) no longer require a password.
-        let auth: SSHAuthenticationMethod
-        var usedPassword = false
-        if let password = RemoteHostStore.password(hostId: host.id), !password.isEmpty {
-            usedPassword = true
-            auth = .passwordBased(username: host.username, password: password)
-        } else if let key = RemoteHostStore.devicePrivateKey() {
-            auth = .ed25519(username: host.username, privateKey: key)
-        } else {
-            return ExecResult(
-                output: "No credential for host '\(host.name)': store a password, or generate the device key in Settings → Remote Hosts and add its public key to the host's ~/.ssh/authorized_keys.",
-                succeeded: false)
-        }
-        let clampedTimeout = min(max(timeout, 5), 600)
-
+    func run(host: RemoteHost, command: String, timeout: TimeInterval) async -> ExecResult {
+        let clampedTimeout = min(max(timeout, 5), Self.maxTimeout)
+        let client: SSHClient
         do {
-            let client = try await SSHClient.connect(
-                host: host.host,
-                port: host.port,
-                authenticationMethod: auth,
-                hostKeyValidator: .trustedKeys([hostKey]),
-                reconnect: .never
-            )
-            defer { Task { try? await client.close() } }
-
+            client = try await Self.openClient(host: host)
+        } catch {
+            return ExecResult(output: Self.describe(error, host: host), succeeded: false, connectFailed: true)
+        }
+        defer { Task { try? await client.close() } }
+        do {
             // [T-remote-exit-wrapper] Citadel throws on a non-zero exit and
             // keeps stderr on a separate stream — a failing command would lose
             // BOTH its output and its stderr. Force exit 0 and merge streams
             // in shell, carry the real status as a trailer we parse off.
             let wrapped = "{ \(command)\n} 2>&1; printf '\\n[leo-exit:%d]' \"$?\""
-            let buffer = try await withThrowingTaskGroup(of: ByteBuffer.self) { group in
-                group.addTask {
-                    try await client.executeCommand(wrapped)
+            // 边收边解码边裁：按字符边界解码（汉字不被切坏），只留头 4000 + 尾 16000，不把全部输出攒进内存。
+            let clipped = try await Self.withTimeout(clampedTimeout, client: client) {
+                var decoder = SSHUTF8Decoder()
+                var clip = SSHOutputClip()
+                for try await chunk in try await client.executeCommandStream(wrapped) {
+                    switch chunk {
+                    case .stdout(let buffer), .stderr(let buffer):
+                        clip.append(decoder.decode(buffer.readableBytesView))
+                    }
                 }
-                group.addTask {
-                    try await Task.sleep(nanoseconds: UInt64(clampedTimeout * 1_000_000_000))
-                    throw RemoteSSHError.timeout
-                }
-                guard let first = try await group.next() else { throw RemoteSSHError.timeout }
-                group.cancelAll()
-                return first
+                clip.append(decoder.flush())
+                return clip.text
             }
-
-            var text = String(buffer: buffer)
-            var exitOK = true
-            if let range = text.range(of: "[leo-exit:", options: .backwards),
-               let close = text[range.upperBound...].firstIndex(of: "]") {
-                let code = text[range.upperBound..<close]
-                exitOK = (code == "0")
-                text = String(text[..<range.lowerBound])
-                    .trimmingCharacters(in: .newlines)
-                if !exitOK { text += "\n[exit code \(code)]" }
-            }
-            if text.count > Self.maxOutputChars {
-                text = String(text.prefix(Self.maxOutputChars)) + "\n… output truncated at \(Self.maxOutputChars) chars"
-            }
+            var (text, code) = RemoteSSHText.splitExitTrailer(clipped)
+            let exitOK = code == nil || code == "0"
+            if let code, !exitOK { text += "\n[exit code \(code)]" }
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 text = "(command produced no output)"
             }
-            return ExecResult(output: text, succeeded: exitOK)
+            return ExecResult(output: text, succeeded: exitOK, exitCode: code)
         } catch RemoteSSHError.timeout {
             return ExecResult(
-                output: "Remote command timed out after \(Int(clampedTimeout))s on '\(host.name)'. The connection is being torn down; the remote process may still be running.",
+                output: "Remote command timed out after \(Int(clampedTimeout))s on '\(host.name)'. The connection was closed; the remote process may still be running.",
                 succeeded: false)
         } catch {
-            // [T-ssh-auth-fallback] A stale stored password must not permanently
-            // shadow working key auth: retry once with the device key — only when
-            // the server refused the password. Any other error (a dropped network,
-            // Stop, the command failing) used to delete the password and run the
-            // command a second time.
-            if case SSHClientError.allAuthenticationOptionsFailed = error,
-               usedPassword, RemoteHostStore.devicePrivateKey() != nil, !isKeyRetry {
-                logger.info("password auth failed for \(host.name) — retrying with device key")
-                RemoteHostStore.deletePassword(hostId: host.id)
-                return await run(host: host, command: command, timeout: timeout, isKeyRetry: true)
-            }
             // Deliberately generic: no host password, no expanded command.
             logger.error("remote exec failed host=\(host.name): \(error.localizedDescription)")
-            var message = "SSH to '\(host.name)' (\(host.username)@\(host.host):\(host.port)) failed: \(error.localizedDescription)"
-            if host.host.hasPrefix("100.") {
-                message += "\nThis looks like a Tailscale address — make sure the Tailscale app on THIS device is connected (it shows offline peers as unreachable)."
-            }
-            return ExecResult(output: message, succeeded: false)
+            return ExecResult(output: Self.describe(error, host: host), succeeded: false)
         }
     }
 
     /// [fix-remote] 流式执行一条命令（SSH 兜底跑 CLI 的一轮回复）：按行回调 stdout，stderr 留最后几行做失败说明。
-    /// 只用设备 Ed25519 钥匙 + 显式固定的主机公钥；凭据与命令都不进错误文字。
+    /// 只认显式固定的主机公钥；凭据与命令都不进错误文字。
     func stream(host: RemoteHost, command: String, timeout: TimeInterval,
                 onLine: @escaping @Sendable (String) async -> Void) async -> ExecResult {
-        guard let keyLine = RemoteSSHTrust.pinnedKey(host: host.host, port: host.port,
-                key: host.trustedHostKey, trustedEndpoint: host.trustedHostKeyEndpoint),
-              RemoteSSHTrust.directPublicKey(keyLine) != nil,
-              let hostKey = try? NIOSSHPublicKey(openSSHPublicKey: keyLine) else {
-            return ExecResult(output: "这台 Mac 的 SSH 主机公钥还没固定（需要先经直连或中继连上一次，读到它的 ssh-ed25519 公钥）。", succeeded: false)
-        }
-        guard let key = RemoteHostStore.devicePrivateKey() else {
-            return ExecResult(output: "这台 iPhone 还没有 SSH 钥匙：到 设置 → 远程主机 生成，并把公钥加进 Mac 的 ~/.ssh/authorized_keys。", succeeded: false)
-        }
-        let clamped = min(max(timeout, 10), 1800)
+        let clamped = min(max(timeout, 10), Self.maxTimeout)
+        let client: SSHClient
         do {
-            let client = try await SSHClient.connect(
-                host: host.host, port: host.port,
-                authenticationMethod: .ed25519(username: host.username, privateKey: key),
-                hostKeyValidator: .trustedKeys([hostKey]), reconnect: .never)
-            defer { Task { try? await client.close() } }
+            client = try await Self.openClient(host: host)
+        } catch {
+            logger.error("ssh fallback connect failed host=\(host.name): \(error.localizedDescription)")
+            return ExecResult(output: Self.describe(error, host: host), succeeded: false, connectFailed: true)
+        }
+        defer { Task { try? await client.close() } }
+        do {
             let wrapped = "{ \(command)\n}; printf '\\n[leo-exit:%d]\\n' \"$?\""
-            let (exitCode, stderrTail) = try await withThrowingTaskGroup(of: (String?, [String]).self) { group in
-                group.addTask {
-                    var pending = ""
-                    var exitCode: String?
-                    var stderrTail: [String] = []
-                    for try await chunk in try await client.executeCommandStream(wrapped) {
-                        switch chunk {
-                        case .stdout(let buffer):
-                            pending += String(buffer: buffer)
-                            while let newline = pending.firstIndex(of: "\n") {
-                                let line = String(pending[..<newline])
-                                pending = String(pending[pending.index(after: newline)...])
-                                if line.hasPrefix("[leo-exit:"), line.hasSuffix("]") {
-                                    exitCode = String(line.dropFirst(10).dropLast())
-                                } else {
-                                    await onLine(line)
-                                }
-                            }
-                        case .stderr(let buffer):
-                            for line in String(buffer: buffer).split(separator: "\n") where !line.isEmpty {
-                                stderrTail.append(String(line.prefix(300)))
-                            }
-                            if stderrTail.count > 6 { stderrTail.removeFirst(stderrTail.count - 6) }
-                        }
+            let (exitCode, stderrTail) = try await Self.withTimeout(clamped, client: client) { () -> (String?, [String]) in
+                // 按字节缓冲到换行再整行解码：一个汉字被分包切开时不会变成 �。
+                var stdout = SSHLineBuffer()
+                var stderr = SSHLineBuffer()
+                var exitCode: String?
+                var stderrTail: [String] = []
+                func handle(_ line: String) async {
+                    if line.hasPrefix("[leo-exit:"), line.hasSuffix("]") {
+                        exitCode = String(line.dropFirst(10).dropLast())
+                    } else {
+                        await onLine(line)
                     }
-                    if !pending.isEmpty { await onLine(pending) }
-                    return (exitCode, stderrTail)
                 }
-                group.addTask {
-                    try await Task.sleep(nanoseconds: UInt64(clamped * 1_000_000_000))
-                    throw RemoteSSHError.timeout
+                for try await chunk in try await client.executeCommandStream(wrapped) {
+                    switch chunk {
+                    case .stdout(let buffer):
+                        for line in stdout.append(buffer.readableBytesView) { await handle(line) }
+                    case .stderr(let buffer):
+                        for line in stderr.append(buffer.readableBytesView) where !line.isEmpty {
+                            stderrTail.append(String(line.prefix(300)))
+                        }
+                        if stderrTail.count > 6 { stderrTail.removeFirst(stderrTail.count - 6) }
+                    }
                 }
-                guard let first = try await group.next() else { throw RemoteSSHError.timeout }
-                group.cancelAll()
-                return first
+                if let rest = stdout.flush() { await handle(rest) }
+                if let rest = stderr.flush(), !rest.isEmpty { stderrTail.append(String(rest.prefix(300))) }
+                return (exitCode, stderrTail)
             }
             let ok = exitCode == "0"
-            return ExecResult(output: ok ? "" : (stderrTail.joined(separator: "\n").isEmpty ? "退出码 \(exitCode ?? "?")" : stderrTail.joined(separator: "\n")), succeeded: ok)
+            return ExecResult(output: ok ? "" : (stderrTail.joined(separator: "\n").isEmpty ? "退出码 \(exitCode ?? "?")" : stderrTail.joined(separator: "\n")),
+                              succeeded: ok, exitCode: exitCode)
         } catch RemoteSSHError.timeout {
             return ExecResult(output: "SSH 上的命令 \(Int(clamped)) 秒没跑完，已断开。", succeeded: false)
         } catch {
             logger.error("ssh fallback failed host=\(host.name): \(error.localizedDescription)")
-            return ExecResult(output: "SSH 连不上 \(host.username)@\(host.host)：\(error.localizedDescription)", succeeded: false)
+            return ExecResult(output: Self.describe(error, host: host), succeeded: false)
         }
+    }
+
+    // MARK: - 连接（执行器、交互终端、端口转发共用）
+
+    /// 校验固定的主机公钥 → 选凭据 → 连上。密码被服务器拒绝时只标记失效（不删），有钥匙就用钥匙再试一次。
+    nonisolated static func openClient(host: RemoteHost, connectTimeout: TimeInterval = 15) async throws -> SSHClient {
+        // 在读取凭据/建立认证之前要求显式可信 pin，旧配置安全迁移为未受信。
+        guard let keyLine = RemoteSSHTrust.pinnedKey(host: host.host, port: host.port,
+                key: host.trustedHostKey, trustedEndpoint: host.trustedHostKeyEndpoint),
+              let hostKey = try? NIOSSHPublicKey(openSSHPublicKey: keyLine) else {
+            throw RemoteSSHError.untrustedHostKey
+        }
+        guard RemoteSSHTrust.directPublicKey(keyLine) != nil else { throw RemoteSSHError.directNeedsEd25519 }
+
+        func connect(_ auth: SSHAuthenticationMethod) async throws -> SSHClient {
+            try await SSHClient.connect(
+                host: host.host, port: host.port, authenticationMethod: auth,
+                hostKeyValidator: .trustedKeys([hostKey]), reconnect: .never,
+                connectTimeout: .milliseconds(Int64(connectTimeout * 1000)))
+        }
+        let key = RemoteHostStore.keyAuthentication(username: host.username)
+        // [T-ssh-key-auth] 有已存密码就先用（被拒过且有钥匙时跳过），否则用钥匙。
+        if let password = RemoteHostStore.password(hostId: host.id), !password.isEmpty,
+           !(RemoteHostStore.isPasswordRejected(hostId: host.id) && key != nil) {
+            do {
+                let client = try await connect(.passwordBased(username: host.username, password: password))
+                RemoteHostStore.setPasswordRejected(false, hostId: host.id)
+                return client
+            } catch SSHClientError.allAuthenticationOptionsFailed {
+                // [T-ssh-auth-fallback] 只有服务器明确拒绝密码才走这里；网络断、Stop 等别的错误不碰密码。
+                // 以前直接删掉已存密码 —— 服务器临时改策略时用户的密码就丢了。现在只标记、在设置里提示。
+                RemoteHostStore.setPasswordRejected(true, hostId: host.id)
+                guard let key else { throw RemoteSSHError.passwordRejected }
+                logger.info("password auth failed for \(host.name) — retrying with key")
+                return try await connect(key)
+            }
+        }
+        guard let key else { throw RemoteSSHError.noCredential }
+        return try await connect(key)
+    }
+
+    /// 超时先关连接再等任务组：executeCommandStream 不响应任务取消，不关的话任务组要等命令自己跑完才会退出，
+    /// 「超时」就形同虚设。外层任务被取消（用户点停止）时同样关连接。
+    nonisolated static func withTimeout<T: Sendable>(_ seconds: TimeInterval, client: SSHClient,
+                                                     _ body: @escaping @Sendable () async throws -> T) async throws -> T {
+        let timedOut = TimeoutFlag()
+        do {
+            return try await withTaskCancellationHandler {
+                try await withThrowingTaskGroup(of: T.self) { group in
+                    group.addTask { try await body() }
+                    group.addTask {
+                        try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                        timedOut.set()
+                        try? await client.close()
+                        throw RemoteSSHError.timeout
+                    }
+                    guard let first = try await group.next() else { throw RemoteSSHError.timeout }
+                    group.cancelAll()
+                    return first
+                }
+            } onCancel: {
+                Task { try? await client.close() }
+            }
+        } catch {
+            // 关连接后命令流可能先以「通道关闭」报错，抢在计时任务前面；按超时算。
+            if timedOut.value { throw RemoteSSHError.timeout }
+            throw error
+        }
+    }
+
+    /// 给人看的错误说明（不含密码与命令）。
+    nonisolated static func describe(_ error: Error, host: RemoteHost) -> String {
+        var message: String
+        switch error {
+        case RemoteSSHError.untrustedHostKey:
+            message = "SSH host key is not trusted for this address and port. In Settings → Remote Hosts, verify the server public host key (or tap 重新读取指纹) before connecting."
+        case RemoteSSHError.directNeedsEd25519:
+            message = "Direct SSH currently requires a verified ssh-ed25519 server host key: the bundled SSH library cannot select another pinned host-key algorithm. From the server's trusted console, read /etc/ssh/ssh_host_ed25519_key.pub and verify that key in Settings → Remote Hosts. The existing pin has not been changed; gateway OpenSSH still supports it."
+        case RemoteSSHError.noCredential:
+            message = "No credential for host '\(host.name)': store a password, or generate/import a key in Settings → Remote Hosts and add its public key to the host's ~/.ssh/authorized_keys."
+        case RemoteSSHError.passwordRejected:
+            message = "SSH 密码被 \(host.username)@\(host.host) 拒绝（已存的密码保留，只标记为失效）。到 设置 → 远程主机 重新填密码，或改用钥匙登录。"
+        case is InvalidHostKey:
+            message = "SSH 主机指纹变了：\(host.host):\(host.port) 出示的主机公钥和已固定的不一致（可能重装了系统、换了机器，或网络被劫持），已拒绝连接。确认是你自己的机器后，到 设置 → 远程主机 → \(host.name) 点「重新读取指纹」核对并更新。"
+        case SSHClientError.allAuthenticationOptionsFailed:
+            message = "SSH 认证被 \(host.username)@\(host.host) 拒绝：确认这台 iPhone 的公钥已加进对方的 ~/.ssh/authorized_keys，或在设置里填密码。"
+            if RemoteHostStore.isPasswordRejected(hostId: host.id) { message += "（已存的密码也被拒绝过。）" }
+        default:
+            message = "SSH to '\(host.name)' (\(host.username)@\(host.host):\(host.port)) failed: \(error.localizedDescription)"
+        }
+        if host.host.hasPrefix("100."), !(error is InvalidHostKey) {
+            message += "\nThis looks like a Tailscale address — make sure the Tailscale app on THIS device is connected (it shows offline peers as unreachable)."
+        }
+        return message
+    }
+
+    /// 「重新读取指纹」：连上去只看服务器出示的主机公钥，立刻断开（不发送任何凭据）。由用户确认后才固定。
+    nonisolated static func fetchHostKey(host: String, port: Int, username: String) async throws -> String {
+        let capture = HostKeyCapture()
+        do {
+            let client = try await SSHClient.connect(
+                host: host, port: port, authenticationMethod: .passwordBased(username: username, password: ""),
+                hostKeyValidator: .custom(capture), reconnect: .never, connectTimeout: .seconds(10))
+            try? await client.close()
+        } catch {
+            guard capture.key == nil else { return capture.key! }
+            throw error
+        }
+        guard let key = capture.key else { throw RemoteSSHError.untrustedHostKey }
+        return key
     }
 
     /// [T-remote-gateway] Cindy-style relay, automated: try the target
@@ -228,18 +280,19 @@ actor RemoteSSHExecutor {
                 return ExecResult(output: "Invalid SSH target address, port or verified public key.", succeeded: false)
             }
             let result = await run(host: gateway, command: relayed, timeout: timeout)
+            let output = RemoteSSHText.stripRelayMarker(result.output)
             if result.succeeded {
                 return ExecResult(
-                    output: "[via \(gateway.name) — target not directly reachable from this device]\n" + result.output,
+                    output: "[via \(gateway.name) — target not directly reachable from this device]\n" + output,
                     succeeded: true)
             }
-            // Only ssh-level failure (exit 255: no route/no key) may try the
-            // next gateway. Any OTHER failure means the command ALREADY RAN on
-            // the target — retrying elsewhere would execute side effects twice.
-            if !result.output.contains("[exit code 255]") {
-                return ExecResult(output: "[via \(gateway.name)] " + result.output, succeeded: false)
+            // 只有连接/认证阶段的失败才换下一个网关：连不上这个网关本身，或网关上的 ssh 没连上目标
+            // （255 且目标从没打出开始标记）。命令自己 exit 255 时标记已经打出 —— 命令已经在目标上跑过，
+            // 换网关重跑会把副作用执行两遍。
+            if !result.connectFailed && !RemoteSSHText.relayMayRetry(output: result.output, exitCode: result.exitCode) {
+                return ExecResult(output: "[via \(gateway.name)] " + output, succeeded: false, exitCode: result.exitCode)
             }
-            lastRelayFailure = "[via \(gateway.name)] " + result.output
+            lastRelayFailure = "[via \(gateway.name)] " + output
         }
         if let lastRelayFailure {
             return ExecResult(output: lastRelayFailure, succeeded: false)
@@ -313,6 +366,31 @@ actor RemoteSSHExecutor {
 
 enum RemoteSSHError: Error {
     case timeout
+    case untrustedHostKey
+    case directNeedsEd25519
+    case noCredential
+    case passwordRejected
+    case hostKeyCaptured
+}
+
+/// 超时标记（计时任务和外层 catch 之间共享）。
+private final class TimeoutFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+    var value: Bool { lock.lock(); defer { lock.unlock() }; return flag }
+    func set() { lock.lock(); flag = true; lock.unlock() }
+}
+
+/// 只记下服务器出示的主机公钥然后拒绝握手，不会走到认证（不发送任何凭据）。
+private final class HostKeyCapture: NIOSSHClientServerAuthenticationDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var captured: String?
+    var key: String? { lock.lock(); defer { lock.unlock() }; return captured }
+
+    func validateHostKey(hostKey: NIOSSHPublicKey, validationCompletePromise: EventLoopPromise<Void>) {
+        lock.lock(); captured = String(openSSHPublicKey: hostKey); lock.unlock()
+        validationCompletePromise.fail(RemoteSSHError.hostKeyCaptured)
+    }
 }
 
 /// Shell-single-quote escaping shared by the remote tools.

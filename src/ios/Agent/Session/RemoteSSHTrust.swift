@@ -44,6 +44,8 @@ enum RemoteSSHTrust {
               !host.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }),
               let key = normalizedPublicKey(publicKey) else { return nil }
         let knownHost = "leo-pinned-target \(key)"
+        // 目标上先打开始标记再跑命令：网关据此区分「ssh 没连上（255）」和「命令自己 exit 255」。
+        let remote = "printf '%s\\n' \(singleQuoted(RemoteSSHText.relayStartedMarker)); \(command)"
         return "( leo_known_hosts=$(mktemp /tmp/leo-known-hosts.XXXXXX) || exit 255; "
             + "trap 'rm -f \"$leo_known_hosts\"' EXIT HUP INT TERM; "
             + "chmod 600 \"$leo_known_hosts\" || exit 255; "
@@ -51,6 +53,6 @@ enum RemoteSSHTrust {
             + "ssh -F /dev/null -o BatchMode=yes -o StrictHostKeyChecking=yes -o CheckHostIP=no "
             + "-o HostKeyAlias=leo-pinned-target -o UserKnownHostsFile=\"$leo_known_hosts\" "
             + "-o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=8 -p \(port) "
-            + "-l \(singleQuoted(username)) -- \(singleQuoted(host)) \(singleQuoted(command)) )"
+            + "-l \(singleQuoted(username)) -- \(singleQuoted(host)) \(singleQuoted(remote)) )"
     }
 }

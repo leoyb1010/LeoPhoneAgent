@@ -41,7 +41,8 @@ final class RemoteSSHTrustTests: XCTestCase {
         XCTAssertTrue(command.contains("GlobalKnownHostsFile=/dev/null"))
         XCTAssertTrue(command.contains("leo-pinned-target " + key))
         XCTAssertTrue(command.contains("-l 'leo' -- 'example.com'"))
-        XCTAssertTrue(command.contains("'printf '\\''%s'\\'' ok'"))
+        // 目标上先打开始标记、再跑原命令（整段单引号包住，原命令里的引号照样转义）。
+        XCTAssertTrue(command.contains("'printf '\\''%s\\n'\\'' '\\''[leo-relay-started]'\\''; printf '\\''%s'\\'' ok'"))
         XCTAssertNil(RemoteSSHTrust.relayCommand(host: "-oProxyCommand=bad", port: 22, username: "leo", publicKey: key, command: "pwd"))
         XCTAssertNil(RemoteSSHTrust.relayCommand(host: "host\nother", port: 22, username: "leo", publicKey: key, command: "pwd"))
     }

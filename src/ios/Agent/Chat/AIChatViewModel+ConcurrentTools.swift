@@ -948,15 +948,10 @@ extension AIChatViewModel {
                     let workdir = (args["workdir"] as? String) ?? ""
                     timeout = TimeInterval(ToolArgNumbers.clampedInt(args["timeout"], to: ToolArgNumbers.remoteAgentTimeoutRange) ?? 300)
                     // Login shell so PATH picks up homebrew/npm installs of
-                    // `claude`. No cd for the default: quoting '~' would
-                    // suppress tilde expansion and fail every run — the login
-                    // shell already starts in $HOME.
-                    let inner: String
-                    if workdir.isEmpty || workdir == "~" {
-                        inner = "claude -p \(RemoteShellQuoting.singleQuoted(prompt)) --output-format text 2>&1"
-                    } else {
-                        inner = "cd \(RemoteShellQuoting.singleQuoted(workdir)) && claude -p \(RemoteShellQuoting.singleQuoted(prompt)) --output-format text 2>&1"
-                    }
+                    // `claude`. `~/x` 整个单引号包住会让 ~ 不展开（cd 到字面的 "~/x" 失败），
+                    // cdCommand 把 ~ 换成 "$HOME"；空或 ~ 不 cd（登录 shell 本来就在 $HOME）。
+                    let claude = "claude -p \(RemoteShellQuoting.singleQuoted(prompt)) --output-format text 2>&1"
+                    let inner = RemoteSSHText.cdCommand(workdir: workdir).map { "\($0) && \(claude)" } ?? claude
                     command = "zsh -lc " + RemoteShellQuoting.singleQuoted(inner)
                 }
                 if command.isEmpty || (tu.name == "remote_agent" && (args["prompt"] as? String)?.isEmpty != false) {
