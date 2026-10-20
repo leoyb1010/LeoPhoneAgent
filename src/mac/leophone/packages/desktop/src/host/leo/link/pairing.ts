@@ -61,8 +61,15 @@ export function relayPhoneEndpoints(
   }));
 }
 
-export function encodePairPayload(code: { apiRoot: string; machine: string; join: string; exp: number }): string {
-  return PAIR_PREFIX_V2 + JSON.stringify({ apiRoot: code.apiRoot, machine: code.machine, join: code.join, exp: code.exp });
+/** [e2e] `e2e` 是这台 Mac 的中继加密公钥(base64url):扫码是手机拿到它最可信的一条路;旧手机不认这个字段,照常配对。 */
+export function encodePairPayload(code: { apiRoot: string; machine: string; join: string; exp: number; e2e?: string }): string {
+  return PAIR_PREFIX_V2 + JSON.stringify({
+    apiRoot: code.apiRoot,
+    machine: code.machine,
+    join: code.join,
+    exp: code.exp,
+    ...(code.e2e ? { e2e: code.e2e } : {}),
+  });
 }
 
 export function relayRequest(
@@ -147,6 +154,7 @@ export async function createPairingCode(args: {
   machine: string;
   keys: readonly string[];
   request?: typeof relayRequest;
+  e2e?: string;
 }): Promise<PairingCode> {
   const base = relayHttpBase(args.relayUrl);
   const send = args.request ?? relayRequest;
@@ -167,7 +175,7 @@ export async function createPairingCode(args: {
     if (!token || !Number.isFinite(exp) || exp <= 0) throw new Error("中继返回的配对码不完整");
     const machine = typeof res.body["machine"] === "string" && res.body["machine"] ? res.body["machine"] : args.machine;
     const apiRoot = `${base}/relay/api`;
-    return { payload: encodePairPayload({ apiRoot, machine, join: token, exp }), machine, exp, apiRoot };
+    return { payload: encodePairPayload({ apiRoot, machine, join: token, exp, ...(args.e2e ? { e2e: args.e2e } : {}) }), machine, exp, apiRoot };
   }
   throw new Error(rejected ? "中继不认这台 Mac 的钥匙，签发不了配对码" : "这台 Mac 还没有中继钥匙");
 }

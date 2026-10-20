@@ -51,6 +51,9 @@ struct GatewayHost: Codable, Identifiable, Hashable {
     var sshTarget: MacSSHTarget? = nil
     var sshTargetOverride: MacSSHTarget? = nil
     var sshHostKey: String? = nil
+    /// [e2e] 这台 Mac 的中继加密公钥(base64url,公钥不是秘密)与它的来源(扫码 / 直连 / 经中继首次信任)。
+    var relayE2EKey: String? = nil
+    var relayE2EKeySource: RelayE2E.KeySource? = nil
 
     /// SSH 兜底实际用的目标：设置里填的 → Mac 广播的 → 内置默认（按中继里的机器名）。
     var resolvedSSHTarget: MacSSHTarget? {
@@ -81,6 +84,8 @@ final class GatewayHostStore: ObservableObject {
 
     @Published private(set) var hosts: [GatewayHost]
     @Published private(set) var routeStatuses: [String: GatewayRouteStatus] = [:]
+    /// [e2e] 每台主机最近一次经中继的请求有没有端到端加密(连接详情里标「中继：端到端加密 / 未加密」)。
+    @Published private(set) var relayE2E: [String: Bool] = [:]
     /// [T-link-problem] 每台主机当前的连接问题,以及哪些主机的自动重连 / 轮询已暂停(等用户点主按钮)。
     @Published private(set) var linkBook = LeoLinkProblemBook()
     /// Built clients live here, not in a view body: `client(for:)` does a
@@ -140,8 +145,9 @@ final class GatewayHostStore: ObservableObject {
         set { UserDefaults.standard.set(Array(newValue), forKey: Self.deletedKey) }
     }
 
+    /// `e2eKey`:扫码配对码里带的 Mac 中继加密公钥(最可信的来源)。
     func upsertDiscovered(_ machines: [RelayDiscoveredMachine], key: String,
-                          apiRoot: String, explicit: Bool = false) {
+                          apiRoot: String, explicit: Bool = false, e2eKey: String? = nil) {
         var changed = false
         for machine in machines {
             guard let name = RelayMachinesClient.sanitizeMachine(machine.name) else { continue }
@@ -188,6 +194,12 @@ final class GatewayHostStore: ObservableObject {
                     clients.removeValue(forKey: id)
                     changed = true
                 }
+                if let e2eKey, RelayE2E.validKey(e2eKey) != nil, hosts[index].relayE2EKey != e2eKey {
+                    hosts[index].relayE2EKey = e2eKey
+                    hosts[index].relayE2EKeySource = .qr
+                    clients.removeValue(forKey: id)
+                    changed = true
+                }
                 if let platform = machine.platform, hosts[index].platform != platform {
                     hosts[index].platform = platform
                     changed = true
@@ -208,7 +220,9 @@ final class GatewayHostStore: ObservableObject {
                     server: machine.server,
                     device: machine.device,
                     relayServices: GatewayRelayServices(apiRoot: apiRoot),
-                    outboxIdentity: HarnessOutboxIdentity.newOwner()
+                    outboxIdentity: HarnessOutboxIdentity.newOwner(),
+                    relayE2EKey: RelayE2E.validKey(e2eKey) == nil ? nil : e2eKey,
+                    relayE2EKeySource: RelayE2E.validKey(e2eKey) == nil ? nil : .qr
                 ))
                 changed = true
             }
@@ -235,6 +249,8 @@ final class GatewayHostStore: ObservableObject {
                 saved.harnesses = host.harnesses ?? previous.harnesses
                 saved.sshTarget = host.sshTarget ?? previous.sshTarget
                 saved.sshHostKey = host.sshHostKey ?? previous.sshHostKey
+                saved.relayE2EKey = host.relayE2EKey ?? previous.relayE2EKey
+                saved.relayE2EKeySource = host.relayE2EKeySource ?? previous.relayE2EKeySource
             }
             // 设置里填的 SSH 兜底目标跟着编辑走；没填就保留原来的。
             saved.sshTargetOverride = host.sshTargetOverride ?? previous.sshTargetOverride
@@ -257,8 +273,14 @@ final class GatewayHostStore: ObservableObject {
     func delete(id: String) {
         deletedIds.insert(id)
         if let deviceId = hosts.first(where: { $0.id == id })?.device?.deviceId { deletedIds.insert(deviceId) }
+        // 分享扩展「发给 Mac 当前任务」指着这台:一并清掉目标和 App Group 里的钥匙,别再拿旧钥匙往删掉的 Mac 发。
+        if let host = hosts.first(where: { $0.id == id }), let target = ShareMacTarget.load(),
+           target.relayBase == host.harnessURL || (target.directDeviceId != nil && target.directDeviceId == host.device?.deviceId) {
+            ShareMacTarget.clear()
+        }
         hosts.removeAll { $0.id == id }
         clients.removeValue(forKey: id)
+        relayE2E.removeValue(forKey: id)
         recordLinkProblem(nil, for: id)
         Self.deleteKey(hostId: id)
         Self.deleteKey(hostId: id + ".direct")
@@ -329,6 +351,23 @@ final class GatewayHostStore: ObservableObject {
         guard host != hosts[index] else { return }
         hosts[index] = host
         persist()
+    }
+
+    /// [e2e] 固定 Mac 的中继加密公钥。返回这台主机现在用的是不是这把(换上了或本来就是)。
+    func pinRelayE2EKey(id: String, key: String, source: RelayE2E.KeySource) -> Bool {
+        guard let index = hosts.firstIndex(where: { $0.id == id }) else { return false }
+        let host = hosts[index]
+        if host.relayE2EKey == key { return true }
+        guard RelayE2E.shouldPin(current: host.relayE2EKey, currentSource: host.relayE2EKeySource, new: key, source: source)
+        else { return false }
+        hosts[index].relayE2EKey = key
+        hosts[index].relayE2EKeySource = source
+        persist()
+        return true
+    }
+
+    func recordRelayE2E(id: String, encrypted: Bool) {
+        if relayE2E[id] != encrypted { relayE2E[id] = encrypted }
     }
 
     func setSSHTargetOverride(_ target: MacSSHTarget?, for id: String) {
@@ -430,7 +469,7 @@ final class GatewayHostStore: ObservableObject {
         }
         let built = LeoAgentClient(baseURL: base, apiKey: key, harnessBaseURL: harnessBase,
                                    hostId: host.id, hostName: host.name, supportsDirectDiscovery: host.runsLeoPhoneAgent, expectedDeviceId: host.device?.deviceId, directOnly: host.directOnly == true, relayServices: services,
-                                   outboxIdentity: outboxIdentity)
+                                   outboxIdentity: outboxIdentity, relayE2EKey: host.relayE2EKey)
         clients[host.id] = built
         // [fix-remote] 建好 client 就在后台问一次 capabilities：可开的 agent 列表、SSH 兜底目标与 sshd 公钥都记下来，
         // 之后直连与中继都不通时 SSH 兜底才有固定好的主机身份可用。

@@ -977,8 +977,11 @@ final class AgentLiveActivityManager {
             for await data in activity.pushTokenUpdates {
                 let token = LiveActivityTokenRegistration.hex(data)
                 guard let self else { return }
-                // ponytail: token 轮换后旧 token 没向中继注销 —— 中继 /relay/api/device 只有登记没有注销接口
-                // (撤销整台设备才清)。中继会继续往旧 token 推到 APNs 回 410 为止;有注销接口后在这里调。
+                // 同一张卡的 token 轮换:旧的向中继注销(DELETE /relay/api/device/activity-token),
+                // 中继不再往死 token 推。旧中继没有这个接口,注销失败就是以前的行为。
+                if let old = self.currentPushToken, old != token {
+                    Task { await PushRegistrar.shared.unregisterActivityUpdateToken(old) }
+                }
                 self.currentPushToken = token
                 self.registeredTokenSessions = []
                 self.registeringTokenSessions = nil

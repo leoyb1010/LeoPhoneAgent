@@ -282,3 +282,9 @@ test("revokePairingCode propagates network errors without trying unrelated crede
   );
   assert.equal(calls, 1);
 });
+
+test("[e2e] pair payload carries the relay e2e public key only when there is one", () => {
+  const base = { apiRoot: "https://relay.example/relay/api", machine: "mac", join: "j", exp: 1 };
+  assert.equal(JSON.parse(encodePairPayload({ ...base, e2e: "pub" }).slice(PAIR_PREFIX_V2.length)).e2e, "pub");
+  assert.ok(!("e2e" in JSON.parse(encodePairPayload(base).slice(PAIR_PREFIX_V2.length))));
+});

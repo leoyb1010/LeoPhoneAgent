@@ -191,7 +191,7 @@ extension LeoAgentClient {
                                   service: .harness)
             req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
             req.timeoutInterval = 3600
-            let (bytes, response) = try await routedBytes(for: req)
+            let (lines, response) = try await routedLines(for: req)
             viaDirect = response.url?.host != req.url?.host
             guard let http = response as? HTTPURLResponse else {
                 throw GatewayError.malformedResponse("not an HTTP response")
@@ -200,12 +200,12 @@ extension LeoAgentClient {
                 if http.statusCode == 401 || http.statusCode == 403 { throw GatewayError.unauthorized }
                 if http.statusCode == 410 {
                     var raw = ""
-                    for try await line in bytes.lines { raw += line }
+                    for try await line in lines { raw += line }
                     throw GatewayError.resumeGap(minAfter: T6RelayLogic.minAfter(from: raw) ?? 0)
                 }
                 throw GatewayError.http(status: http.statusCode, message: nil)
             }
-            for try await line in bytes.lines {
+            for try await line in lines {
                 if Task.isCancelled { break }
                 guard line.hasPrefix("data:") else { continue }
                 let raw = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
@@ -1415,7 +1415,8 @@ extension HarnessSessionDriver {
             ShareMacTargetSecrets.save(.init(relayKey: relayKey, directToken: direct?.token))
             ShareMacTarget(sessionId: sessionId, title: title, hostName: hostName, relayBase: relayBase,
                            directBase: direct?.base, directDeviceId: direct?.deviceId,
-                           directExpiresAt: direct?.expiresAt, updatedAt: Date()).save()
+                           directExpiresAt: direct?.expiresAt, updatedAt: Date(),
+                           relayE2EKey: await client.relayE2EKeyForShare()).save()
         }
     }
 }

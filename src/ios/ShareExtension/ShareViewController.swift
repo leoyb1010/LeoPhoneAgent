@@ -127,6 +127,10 @@ class ShareViewController: UIViewController {
             do {
                 let (data, response) = try await URLSession.shared.data(for: req)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                // [e2e] Mac 不认加密信封(旧版)或旧中继不排它:下一条是同编号的明文,Mac 按编号去重。
+                if ShareMacTarget.isSealed(req), case .fallback = RelayE2E.classify(status: status, data: data, queued: true) {
+                    continue
+                }
                 if (200..<300).contains(status) {
                     let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
                     return (obj?["queued"] as? Bool) == true
@@ -138,6 +142,8 @@ class ShareViewController: UIViewController {
                 lastError = "Mac 返回 \(status)"
             } catch {
                 lastError = error.localizedDescription
+                // 加密那条连中继都没连上:不再拿明文去试(可能只是慢,明文会让中继看到内容)。
+                if ShareMacTarget.isSealed(req) { break }
             }
         }
         return ("没发出去", lastError)

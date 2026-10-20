@@ -130,7 +130,7 @@ struct GatewaySettingsView: View {
                                 editor.beginEdit(host)
                             } label: {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    GatewayHostRow(host: host, isReachable: reachable[host.id],
+                                    GatewayHostRow(host: host, isReachable: reachable[host.id], relayE2E: store.relayE2E[host.id],
                                                    route: store.routeStatuses[host.id] ?? store.routeSelectors[host.id].flatMap {
                                                        $0.current.map { GatewayRouteStatus(direct: $0 == .direct, latencyMilliseconds: nil, failedAt: nil) }
                                                    },
@@ -401,7 +401,7 @@ enum GatewayPairing {
                         let joined = try await RelayMachinesClient.join(apiRoot: pair.apiRoot, token: join)
                         store.upsertDiscovered([
                             RelayDiscoveredMachine(name: pair.machine, online: false, platform: nil, server: nil, version: nil)
-                        ], key: joined.key, apiRoot: pair.apiRoot, explicit: true)
+                        ], key: joined.key, apiRoot: pair.apiRoot, explicit: true, e2eKey: pair.e2e)
                         onResult("已加入 \(pair.machine)", true)
                     } catch {
                         // 以前不论什么原因都说「短码已过期或无效」:没网、Tailscale 没开时这句话是错的。
@@ -419,7 +419,7 @@ enum GatewayPairing {
                 }
                 store.upsertDiscovered([
                     RelayDiscoveredMachine(name: pair.machine, online: false, platform: nil, server: nil, version: nil)
-                ], key: credential.key, apiRoot: credential.apiRoot, explicit: true)
+                ], key: credential.key, apiRoot: credential.apiRoot, explicit: true, e2eKey: pair.e2e)
                 onResult("已加入 \(pair.machine)", true)
             }
         }
@@ -555,6 +555,8 @@ extension QuickFleetSetupSheet {
 private struct GatewayHostRow: View {
     let host: GatewayHost
     let isReachable: Bool?
+    /// [e2e] 最近一次经中继的请求有没有端到端加密;nil = 还没走过中继。
+    var relayE2E: Bool? = nil
     var route: GatewayRouteStatus? = nil
     /// [fix-remote] 当前走的路（直连 / 中继 / SSH）与延迟。
     var path: MacRouteSelector? = nil
@@ -574,6 +576,12 @@ private struct GatewayHostRow: View {
                         Text(!route.available ? "连接不可用" : (path?.current?.label ?? (route.direct ? "直连" : "中继")))
                         if let ms = path?.latencyMilliseconds ?? route.latencyMilliseconds { Text("\(ms) ms") }
                     }.font(.caption).foregroundStyle(.secondary)
+                }
+                if let relayE2E {
+                    Label(relayE2E ? AppLocalized("中继：端到端加密") : AppLocalized("中继：未加密"),
+                          systemImage: relayE2E ? "lock.fill" : "lock.open")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
                 if let device = host.device {
                     Text(device.capabilities.joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)

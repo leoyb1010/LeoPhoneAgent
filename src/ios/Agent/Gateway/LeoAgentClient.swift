@@ -174,6 +174,10 @@ actor LeoAgentClient {
     nonisolated let hostName: String?
     /// 不保存凭据或 URL 明文；主机/设备/端点改变后不会混用旧会话意图。
     nonisolated let harnessOutboxScope: String
+    /// [e2e] 固定下来的 Mac 中继加密公钥(base64url);nil = 经中继只能走明文。见 LeoAgentRouting 的 relayData。
+    var relayE2EKey: String?
+    /// [e2e] Mac 不支持或解不开时,这之前经中继先走明文,不每个请求都白试一次。
+    var relayE2EOffUntil = Date.distantPast
 
     /// Coalesce Treasury sync requests without dropping a request that arrives
     /// while the current cursor pass is suspended on network I/O. Actor
@@ -191,7 +195,9 @@ actor LeoAgentClient {
     nonisolated var apiKeyForRelay: String { apiKey }
 
     init(baseURL: URL, apiKey: String, harnessBaseURL: URL? = nil,
-         hostId: String? = nil, hostName: String? = nil, supportsDirectDiscovery: Bool = false, expectedDeviceId: String? = nil, directOnly: Bool = false, relayServices: GatewayRelayServices? = nil, outboxIdentity: String? = nil) {
+         hostId: String? = nil, hostName: String? = nil, supportsDirectDiscovery: Bool = false, expectedDeviceId: String? = nil, directOnly: Bool = false, relayServices: GatewayRelayServices? = nil, outboxIdentity: String? = nil,
+         relayE2EKey: String? = nil) {
+        self.relayE2EKey = RelayE2E.validKey(relayE2EKey) == nil ? nil : relayE2EKey
         self.relayServices = relayServices ?? harnessBaseURL.flatMap {
             RelayMachinesClient.apiRoot(fromHarnessURL: $0.absoluteString).flatMap { GatewayRelayServices(apiRoot: $0) }
         }

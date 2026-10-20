@@ -497,6 +497,7 @@
 		LF43FE8FE20C /* CommandPaletteCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF837AD530A8 /* CommandPaletteCatalog.swift */; };
 		LF64333B68E8 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
 		LF2ED9FD3235 /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
+		LFDB11B821C5 /* RelayE2E.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFAB597632E7 /* RelayE2E.swift */; };
 		LFCB4BB98193 /* WatchMacStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7295E2414A /* WatchMacStatus.swift */; };
 		LF1456E02725 /* MacScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF538A58CD86 /* MacScreenSnapshot.swift */; };
 		LFD51A292015 /* LeoMotionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2025E8D5E2 /* LeoMotionPolicy.swift */; };
@@ -513,6 +514,7 @@
 		LFAB889B1927 /* CommandPaletteCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF837AD530A8 /* CommandPaletteCatalog.swift */; };
 		LF714387EFE1 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
 		LFD1F84A10FA /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
+		LF2A0244639F /* RelayE2E.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFAB597632E7 /* RelayE2E.swift */; };
 		LF186F089B19 /* WatchMacStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7295E2414A /* WatchMacStatus.swift */; };
 		LF2D06A8CD8F /* MacScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF538A58CD86 /* MacScreenSnapshot.swift */; };
 		LFB522B634C4 /* LeoMotionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2025E8D5E2 /* LeoMotionPolicy.swift */; };
@@ -736,6 +738,7 @@
 		E5SIR0003 /* HarnessApprovalNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SIR0004 /* HarnessApprovalNotifier.swift */; };
 		E5SIR0001 /* MacFleetIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SIR0002 /* MacFleetIntents.swift */; };
 		E5GWC0001 /* LeoAgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWC0002 /* LeoAgentClient.swift */; };
+		LF197354F626 /* LeoAgentRelayE2E.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB9909A6C72 /* LeoAgentRelayE2E.swift */; };
 		E5SPC51B1 /* ScreenPeerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SPC51R /* ScreenPeerClient.swift */; };
 		E5MSC50B1 /* MacScreenSnapshotClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MSC50R /* MacScreenSnapshotClient.swift */; };
 		E5GWH1001 /* LeoAgentHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH1002 /* LeoAgentHarness.swift */; };
@@ -1051,6 +1054,7 @@
 		LF1BA5E58E39 /* MacScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF538A58CD86 /* MacScreenSnapshot.swift */; };
 		E5WW00025 /* LeoWatchWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E5WW00001 /* LeoWatchWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E5WWSH001 /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
+		LFAABF61A81D /* RelayE2E.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFAB597632E7 /* RelayE2E.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1575,6 +1579,7 @@
 		LF837AD530A8 /* CommandPaletteCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPaletteCatalog.swift; sourceTree = "<group>"; };
 		LFB3AA038DDA /* ChatCompletionsWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCompletionsWire.swift; sourceTree = "<group>"; };
 		LFE35BAC8FC5 /* ShareMacTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareMacTarget.swift; sourceTree = "<group>"; };
+		LFAB597632E7 /* RelayE2E.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayE2E.swift; sourceTree = "<group>"; };
 		LF7295E2414A /* WatchMacStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMacStatus.swift; sourceTree = "<group>"; };
 		LF538A58CD86 /* MacScreenSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacScreenSnapshot.swift; sourceTree = "<group>"; };
 		LF2025E8D5E2 /* LeoMotionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoMotionPolicy.swift; sourceTree = "<group>"; };
@@ -1778,6 +1783,7 @@
 		E5SIR0004 /* HarnessApprovalNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/HarnessApprovalNotifier.swift"; sourceTree = SOURCE_ROOT; };
 		E5SIR0002 /* MacFleetIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Intents/MacFleetIntents.swift"; sourceTree = SOURCE_ROOT; };
 		E5GWC0002 /* LeoAgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentClient.swift; sourceTree = SOURCE_ROOT; };
+		LFB9909A6C72 /* LeoAgentRelayE2E.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentRelayE2E.swift; sourceTree = SOURCE_ROOT; };
 		E5SPC51R /* ScreenPeerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/ScreenPeerClient.swift; sourceTree = SOURCE_ROOT; };
 		E5MSC50R /* MacScreenSnapshotClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/MacScreenSnapshotClient.swift; sourceTree = SOURCE_ROOT; };
 		E5GWH1002 /* LeoAgentHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentHarness.swift; sourceTree = SOURCE_ROOT; };
@@ -2611,6 +2617,7 @@
 				LF837AD530A8 /* CommandPaletteCatalog.swift */,
 				LFB3AA038DDA /* ChatCompletionsWire.swift */,
 				LFE35BAC8FC5 /* ShareMacTarget.swift */,
+				LFAB597632E7 /* RelayE2E.swift */,
 				LF7295E2414A /* WatchMacStatus.swift */,
 				LF538A58CD86 /* MacScreenSnapshot.swift */,
 				LF2025E8D5E2 /* LeoMotionPolicy.swift */,
@@ -2853,6 +2860,7 @@
 				E5SIR0004 /* HarnessApprovalNotifier.swift */,
 				E5SIR0002 /* MacFleetIntents.swift */,
 				E5GWC0002 /* LeoAgentClient.swift */,
+				LFB9909A6C72 /* LeoAgentRelayE2E.swift */,
 				E5SPC51R /* ScreenPeerClient.swift */,
 				E5MSC50R /* MacScreenSnapshotClient.swift */,
 				E5GWH1002 /* LeoAgentHarness.swift */,
@@ -3973,6 +3981,7 @@
 				LFAB889B1927 /* CommandPaletteCatalog.swift in Sources */,
 				LF714387EFE1 /* ChatCompletionsWire.swift in Sources */,
 				LFD1F84A10FA /* ShareMacTarget.swift in Sources */,
+				LF2A0244639F /* RelayE2E.swift in Sources */,
 				LF186F089B19 /* WatchMacStatus.swift in Sources */,
 				LF2D06A8CD8F /* MacScreenSnapshot.swift in Sources */,
 				LFB522B634C4 /* LeoMotionPolicy.swift in Sources */,
@@ -4135,6 +4144,7 @@
 				LF43FE8FE20C /* CommandPaletteCatalog.swift in Sources */,
 				LF64333B68E8 /* ChatCompletionsWire.swift in Sources */,
 				LF2ED9FD3235 /* ShareMacTarget.swift in Sources */,
+				LFDB11B821C5 /* RelayE2E.swift in Sources */,
 				LFCB4BB98193 /* WatchMacStatus.swift in Sources */,
 				LF1456E02725 /* MacScreenSnapshot.swift in Sources */,
 				LFD51A292015 /* LeoMotionPolicy.swift in Sources */,
@@ -4342,6 +4352,7 @@
 				E5SIR0003 /* HarnessApprovalNotifier.swift in Sources */,
 				E5SIR0001 /* MacFleetIntents.swift in Sources */,
 				E5GWC0001 /* LeoAgentClient.swift in Sources */,
+				LF197354F626 /* LeoAgentRelayE2E.swift in Sources */,
 				E5SPC51B1 /* ScreenPeerClient.swift in Sources */,
 				E5MSC50B1 /* MacScreenSnapshotClient.swift in Sources */,
 				E5GWH1001 /* LeoAgentHarness.swift in Sources */,
@@ -4765,6 +4776,7 @@
 			files = (
 				E5E000001 /* ShareViewController.swift in Sources */,
 				E5WWSH001 /* ShareMacTarget.swift in Sources */,
+				LFAABF61A81D /* RelayE2E.swift in Sources */,
 				E5E000003 /* ShareViewModel.swift in Sources */,
 				E5COL0003 /* CollectionStore.swift in Sources */,
 				E5E000004 /* PendingShare.swift in Sources */,

@@ -1697,6 +1697,39 @@ class Relay:
             self._save_state()
         return web.json_response({"ok": True, "apns": self.apns.status()})
 
+    async def unregister_activity_token(self, request: web.Request) -> web.Response:
+        """iOS Live Activity 的 update token 轮换后注销旧的:body {"token": hex}。
+
+        幂等:不认识的 token 也回 ok(removed=false)。登记在别的设备名下的 token 不许动,
+        回 404,和不存在一样,不告诉调用方它属于谁。
+        """
+        caller = self._caller(request)
+        if caller is None or not caller.is_client:
+            return self._unauthorized()
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            return web.json_response({"error": {"message": "invalid json"}}, status=400)
+        token = str((body or {}).get("token") or "").strip().lower() if isinstance(body, dict) else ""
+        if len(token) < 32 or len(token) > 512:
+            return web.json_response({"error": {"message": "bad token"}}, status=400)
+        owner = next((device_id for device_id, device in self.devices.items()
+                      if token in ((device.get("push_tokens") or {}).get("activity_update") or [])), None)
+        if owner is not None and owner != caller.device_id:
+            return web.json_response({"error": {"message": "unknown token"}}, status=404)
+        forget = getattr(self.apns, "_forget", None)
+        removed = bool(forget("activity_update", token)) if callable(forget) else False
+        self.live_planner.forget(token)
+        if owner is not None:
+            tokens = self.devices[owner].setdefault("push_tokens", {})
+            tokens["activity_update"] = [t for t in tokens.get("activity_update", []) if t != token]
+            push = self.devices[owner].get("push") or {}
+            if push.get("kind") == "activity_update" and push.get("token") == token:
+                self.devices[owner].pop("push", None)
+            self._save_state()
+            removed = True
+        return web.json_response({"ok": True, "removed": removed})
+
     async def push_status(self, request: web.Request) -> web.Response:
         """诊断:推送为什么没生效,一眼看得出来。"""
         if not self._authorized(request):
@@ -1764,7 +1797,8 @@ class Relay:
         if method != "POST":
             return False
         path = tail.split("?", 1)[0].rstrip("/")
-        if path == "/harness/sessions":
+        # /e2e 是手机端到端加密的信封(里面是哪条请求中继看不见);手机只在原请求可排队时才带 X-Leo-Queue。
+        if path in ("/harness/sessions", "/e2e"):
             return True
         parts = path.split("/")
         return len(parts) == 5 and parts[1] == "harness" and parts[2] == "sessions" and parts[4] == "send"
@@ -2070,6 +2104,7 @@ class Relay:
         app.router.add_get("/relay/api/machines", self.list_machines)
         app.router.add_get("/relay/api/events", self.list_events)
         app.router.add_post("/relay/api/device", self.register_device)
+        app.router.add_delete("/relay/api/device/activity-token", self.unregister_activity_token)
         app.router.add_post("/relay/api/join-tokens", self.create_join_token)
         app.router.add_delete("/relay/api/join-tokens/{token}", self.delete_join_token)
         app.router.add_post("/relay/api/join", self.join)
