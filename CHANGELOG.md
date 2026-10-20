@@ -1,5 +1,18 @@
 # LeoPhoneAgent 更新记录
 
+## Mac 1.12.0 · iOS 1.76.0 (176) · 十月体检全量落地 - 2026-10-20
+
+- 依据：`~/Desktop/文档/LeoBot/LeoBot_十月体检_20261020.html`（上下游、开源对标、iOS SSH / 主路径 / 流畅度 / 看屏、Mac 链路与渲染的静态审计）。
+- iOS 主路径：Mac 舰队配对即开；首页记住机器 / agent / 目录并给最近目录；锁屏直接批准（CommandRisk 高危仍要解锁，新类别 HARNESS_APPROVAL_HIGH）；`sessions/<id>` 深链落到 Mac 任务；灵动岛离开控制台继续由 MacLiveSessionsStore 驱动；agent 菜单统一 `HarnessCatalog.menuEntries`；设置首页「常用 + 更多」；外部 agent 登录轮询容错、下滑取消、设备码先复制；中继入口过期不回失效主入口。
+- iOS Mac 会话页：Markdown 正文、工具行展开（Mac 发完整 input/output）、跟随到底、33ms 增量合并、审批两行两列、重试 / 继续；四种权限模式（`POST /harness/sessions/:id/mode`）；改动面板（changes / diff / revert + 每轮检查点 `refs/leobot/checkpoints/*`）；接管终端里的 Claude Code 会话（`/harness/external-sessions` + `resume_external`，load 失败给 `resume_failed` 提示）。
+- iOS SSH：UTF-8 按字节解码、头尾截断、`~` 展开、exit 255 判定、超时先关连接、指纹变化可一键重读、导入私钥；兜底跑完不回 pending、可停、排队不并发、继承全自动与 `--resume`；SwiftTerm 1.10.1 交互终端（Citadel PTY、默认 tmux 续接、附件栏、全屏输入、自动重连）与 direct-tcpip 端口转发；swift-nio-ssh 0.3.7。
+- iOS 看屏 / Live Activity：轮询与 WebRTC 尝试代号防串、协商中途停止关 peer、`.inactive` 不拆流、画中画结束收尾、永久错误不自动重试、推送登记看状态码、中继卡去重、token 轮换注销、手表退避、ShareMacTarget 清理。
+- iOS 流畅度：AIChatView 订阅下放子视图、输入去重、钉底标志超时、流式复用稳定块与单项布局失效、表格前缀后台解析、淡入 30Hz、发送飞入逐帧取落点、工具图后台降采样、扫光仅动画期间存在。
+- iOS 杂项：日程用分钟级时间、不再先跑 date；提前提醒过期跳过、update-reminder 对齐；MCP OAuth 平铺文件（上游 OpenMinis #381）；思考里写工具调用自动重试、/v1/models context_length；删除死代码与临时探针。
+- 中继端到端加密：Mac X25519 静态钥匙（二维码 / 直连 / 中继 TOFU 固定，中继来源不可覆盖）、手机每请求临时钥匙、HKDF + ChaCha20-Poly1305；`POST …/e2e`、`GET …/e2e/events`；凭据类请求不降级明文。relay.py 新增 `DELETE /relay/api/device/activity-token`（需部署 mini 上的中继才生效）。
+- Mac：ACP 轮次序号（停止后不错位）、进程组回收 + SIGKILL + 闲置回收、工具表与 diff 上限、stderr 合并；增量 50ms 合并、日志尾部索引与滚动；系统代理每次重读、ProxyAgent 前拦官方域名；中继唤醒 / 换网立即重连（relayNet.ts）；CLI 探测异步化；看屏码率上限与冷却、多屏一致、tap 恢复；终端 WebGL 池；斜杠命令 / 菜单栏轮询减负；语音与浮窗延迟预热；硬件加速设置改读 ~/.leophoneagent，红线闸门查 ~/.zcode。
+- 依赖：Electron 41.10.7 → 44.5.1（剪贴板异步、对话框记住目录、二进制按需下载）；claude-agent-sdk 0.3.304（overrides）；摘取 ZCode 3.16.1 的 fs 编码、空回复收尾、附件续聊、TaskStop 文案修复（tool-search 未摘，见 UPSTREAM.md）。
+
 ## Mac 1.11.1 · iOS 1.75.1 (174) · 手机远程用 Mac 上的 CLI - 2026-10-17
 
 - 根因：1.11.0 关掉 leoagent 旧转发后 grok 无路可走；LeoBot 任务在没配模型的 Mac 上默认落到 ACP Claude Code；LeoBot 由 launchd 启动时 PATH 短、没有代理变量，CLI 找不到或连不上外网；Claude 钥匙串登录过期；Gemini 被用户钩子 / MCP 卡住；iOS 端 harness 白名单不显示 opencode。
