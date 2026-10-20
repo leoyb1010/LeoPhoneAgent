@@ -63,6 +63,7 @@ import { materializeWorkflowArtifactFile } from "./workflowArtifactFile.js";
 import { registerDesktopSaveFileIpcHandler } from "./desktopSaveFile.js";
 import { registerDesktopPrintToPdfIpcHandler } from "./desktopPrintToPdf.js";
 import { registerCuaPipActiveSessionIpc } from "./desktopCuaPipIpc.js";
+import { dirname } from "node:path";
 
 export function registerPlatformIpcHandlers(options: {
   fetchHelpConfig?: () => Promise<unknown>;
@@ -120,33 +121,45 @@ export function registerPlatformIpcHandlers(options: {
   /** Browser tab 关闭、挂起、恢复与跨重启 shell IPC。 */
   browserViewResidencyHandlers?: BrowserViewResidencyIpcHandlers;
 }) {
+  // [leo] Electron 43 起不传 defaultPath 时打开框固定落在「下载」，系统也不再记住上次目录；
+  // 自己记住上次选中项所在目录（进程内），保持升级前「回到上次位置」的体验。
+  let lastOpenDialogDir: string | undefined;
+  const rememberOpenDialogDir = (selectedPath: string | undefined) => {
+    if (selectedPath) lastOpenDialogDir = dirname(selectedPath);
+  };
   ipcMain.handle(PlatformChannels.SelectDirectory, async () => {
     const result = await dialog.showOpenDialog({
+      defaultPath: lastOpenDialogDir,
       properties: ["openDirectory", "createDirectory"],
     });
     if (result.canceled || result.filePaths.length === 0) {
       return null;
     }
+    rememberOpenDialogDir(result.filePaths[0]);
     return result.filePaths[0];
   });
 
   ipcMain.handle(PlatformChannels.SelectFile, async () => {
     const result = await dialog.showOpenDialog({
+      defaultPath: lastOpenDialogDir,
       properties: ["openFile"],
     });
     if (result.canceled || result.filePaths.length === 0) {
       return null;
     }
+    rememberOpenDialogDir(result.filePaths[0]);
     return result.filePaths[0];
   });
 
   ipcMain.handle(PlatformChannels.SelectFiles, async () => {
     const result = await dialog.showOpenDialog({
+      defaultPath: lastOpenDialogDir,
       properties: ["openFile", "multiSelections"],
     });
     if (result.canceled || result.filePaths.length === 0) {
       return [];
     }
+    rememberOpenDialogDir(result.filePaths[0]);
     return result.filePaths;
   });
 

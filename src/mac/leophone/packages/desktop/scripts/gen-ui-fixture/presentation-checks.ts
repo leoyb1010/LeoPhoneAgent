@@ -1,8 +1,16 @@
-import { BrowserWindow, clipboard, type WebContents } from "electron";
+import { BrowserWindow, clipboard, nativeImage, type WebContents } from "electron";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { writeFile } from "node:fs/promises";
 import type { PluginSandboxHandle } from "@zcode/shared/mcp-apps";
+
+// [leo] Electron 44 剪贴板改为异步 ClipboardItem，readImage 已删除。
+async function readClipboardImage() {
+  const item = (await clipboard.read()).find((entry) => entry.types.includes("image/png"));
+  if (!item) return nativeImage.createEmpty();
+  const blob = await item.getType("image/png");
+  return nativeImage.createFromBuffer(Buffer.from(await blob.arrayBuffer()));
+}
 
 export async function checkCopyButton(win: BrowserWindow, preview = false) {
   const selector = `${preview ? '[role="dialog"] ' : ""}[data-testid="gen-ui-actions"] button`;
@@ -27,7 +35,7 @@ export async function checkCopyButton(win: BrowserWindow, preview = false) {
       };
       requestAnimationFrame(tick);
     })`);
-    assert.equal(clipboard.readImage().isEmpty(), false);
+    assert.equal((await readClipboardImage()).isEmpty(), false);
     assert.deepEqual(await buttonState(), initial);
   }
 }
@@ -39,12 +47,12 @@ export async function checkCapture(
   root: string,
 ) {
   await win.webContents.executeJavaScript("window.copy()");
-  assert.equal(clipboard.readImage().isEmpty(), false);
+  assert.equal((await readClipboardImage()).isEmpty(), false);
   const fullImage = await guest.capturePage();
   const viewport = await win.webContents.executeJavaScript(
     "document.querySelector('webview').getBoundingClientRect().toJSON()",
   );
-  const copiedSize = clipboard.readImage().getSize();
+  const copiedSize = (await readClipboardImage()).getSize();
   assert.equal(
     copiedSize.width,
     Math.floor(((viewport.width - 5) * fullImage.getSize().width) / viewport.width) -
@@ -90,7 +98,7 @@ export async function checkStaleCapture(win: BrowserWindow, guest: WebContents) 
     await captureGate.promise;
     return image;
   };
-  clipboard.writeText("capture-stale-sentinel");
+  await clipboard.writeText("capture-stale-sentinel");
   await win.webContents.executeJavaScript(
     "window.copyResult=window.copy().then(()=>'',error=>String(error)); 'pending'",
   );
@@ -98,7 +106,7 @@ export async function checkStaleCapture(win: BrowserWindow, guest: WebContents) 
   await win.webContents.executeJavaScript("window.stop()");
   captureGate.resolve();
   assert.match(await win.webContents.executeJavaScript("window.copyResult"), /no longer available/);
-  assert.equal(clipboard.readText(), "capture-stale-sentinel");
+  assert.equal(await clipboard.readText(), "capture-stale-sentinel");
 }
 
 export async function checkInlineLayout(

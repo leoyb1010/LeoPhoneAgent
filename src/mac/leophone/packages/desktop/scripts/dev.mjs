@@ -17,23 +17,10 @@ const buildReadyMarkers = [
 const waitLogIntervalMs = 3_000;
 const require = createRequire(import.meta.url);
 
+// [leo] Electron 42 起不再在 postinstall 下载二进制，dist 可能不存在；
+// require("electron") 会在缺失时按需下载并返回本平台可执行文件路径，跨平台也不依赖 PATH。
 function resolveLocalElectronBinary() {
-  const electronPackageJsonPath = require.resolve("electron/package.json");
-  const electronPackageRoot = resolve(electronPackageJsonPath, "..");
-
-  // Windows 下这里之前直接 spawn("electron")，完全依赖 PATH 里恰好能找到本地 bin。
-  // 在 pnpm + PowerShell 场景里，子进程经常只拿到 node 可执行而拿不到 electron 命令，
-  // 导致 dev 脚本卡在 ENOENT，只能手动拆成三个终端绕过。
-  // 这里显式解析当前项目安装的 Electron 二进制，避免跨 shell / 跨平台时 PATH 语义不一致。
-  if (process.platform === "win32") {
-    return resolve(electronPackageRoot, "dist", "electron.exe");
-  }
-
-  if (process.platform === "darwin") {
-    return resolve(electronPackageRoot, "dist", "Electron.app", "Contents", "MacOS", "Electron");
-  }
-
-  return resolve(electronPackageRoot, "dist", "electron");
+  return require("electron");
 }
 
 function probeHttpUrl(url) {
