@@ -47,6 +47,8 @@ struct GatewaySettingsView: View {
     /// [T-gateway-delete-confirm] 左滑删除待确认的机器。存机器本身,不存行号:
     /// 确认框弹着时列表可能因为刷新变动。删除会连同本机保存的访问密钥一起删掉。
     @State private var pendingDeleteHost: GatewayHost?
+    /// [up-macsession] 远程机器页直达外部 agent 登录(Claude Code / Codex / Gemini…在 Mac 上没登录时)。
+    @State private var agentLogin: GatewayAgentLoginTarget?
     /// [F-mac-fleet-advanced] Mac 舰队默认关闭;开关只管入口显隐,不动已连接的机器。
     @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
 
@@ -143,6 +145,10 @@ struct GatewaySettingsView: View {
                             .buttonStyle(.plain)
                             // [T-link-problem] 失败时:是谁的问题 + 一个主按钮,技术细节折叠。
                             // 放在行按钮外面:嵌在 Button 里会和整行的点击(进入编辑)抢手势。
+                            GatewayAgentLoginMenu(host: host) { kind in
+                                agentLogin = GatewayAgentLoginTarget(host: host, kind: kind)
+                            }
+                            .padding(.leading, 20)
                             if let problem {
                                 LeoLinkProblemView(
                                     problem: problem,
@@ -231,6 +237,13 @@ struct GatewaySettingsView: View {
                 // 只能通过「保存 / 取消」离开:下滑手势静默丢弃输入
                 // 和"自动消失"在用户眼里是同一种背叛。
                 .interactiveDismissDisabled()
+            }
+        }
+        .sheet(item: $agentLogin) { target in
+            if let client = store.client(for: target.host) {
+                AgentLoginSheet(client: client, kind: target.kind) { ok in
+                    if ok { Task { _ = try? await client.harnessKinds() } }   // 刷新登录状态
+                }
             }
         }
         .task { await refresh() }
@@ -599,6 +612,7 @@ final class GatewayHostDraft: ObservableObject, Identifiable {
     /// [fix-remote] SSH 兜底目标（tailnet 名 / 用户）；空 = 用 Mac 广播的或内置默认。
     @Published var sshHost: String
     @Published var sshUser: String
+    @Published var sshPort: String
     /// 当前实际会用的目标（给占位提示看）。
     let sshPlaceholder: MacSSHTarget?
     let isNew: Bool
@@ -615,6 +629,7 @@ final class GatewayHostDraft: ObservableObject, Identifiable {
         accessKey = ""
         sshHost = ""
         sshUser = ""
+        sshPort = ""
         sshPlaceholder = nil
         isNew = true
         isEnabled = true
@@ -629,6 +644,7 @@ final class GatewayHostDraft: ObservableObject, Identifiable {
         accessKey = GatewayHostStore.accessKey(hostId: host.id) ?? ""
         sshHost = host.sshTargetOverride?.host ?? ""
         sshUser = host.sshTargetOverride?.user ?? ""
+        sshPort = host.sshTargetOverride?.port.map(String.init) ?? ""
         sshPlaceholder = host.resolvedSSHTarget
         isNew = false
         isEnabled = host.isEnabled
@@ -649,7 +665,8 @@ final class GatewayHostDraft: ObservableObject, Identifiable {
         let sshHostValue = sshHost.trimmingCharacters(in: .whitespaces)
         let sshUserValue = sshUser.trimmingCharacters(in: .whitespaces)
         if MacSSHTarget.valid(host: sshHostValue), MacSSHTarget.valid(user: sshUserValue) {
-            host.sshTargetOverride = MacSSHTarget(host: sshHostValue, user: sshUserValue)
+            let port = Int(sshPort.trimmingCharacters(in: .whitespaces)).flatMap(MacSSHTarget.validPort)
+            host.sshTargetOverride = MacSSHTarget(host: sshHostValue, user: sshUserValue, port: port)
         }
         return host
     }
@@ -745,10 +762,12 @@ private struct GatewayHostEditor: View {
                     TextField(draft.sshPlaceholder?.user ?? "用户名", text: $draft.sshUser)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                    TextField(draft.sshPlaceholder?.port.map { "端口 \($0)" } ?? "端口（默认 22）", text: $draft.sshPort)
+                        .keyboardType(.numberPad)
                 } header: {
                     Text("SSH 兜底（可选）")
                 } footer: {
-                    Text("直连和中继都连不上时，经 Tailscale 直接 SSH 到这台 Mac 跑命令行（没有审批与工具卡）。留空就用 Mac 自己报的地址或内置默认。")
+                    Text("直连和中继都连不上时，经 Tailscale 直接 SSH 到这台 Mac 跑命令行（没有审批与工具卡）。填了就优先用这里的；留空就用 Mac 自己报的地址或内置默认。端口留空按 Mac 报的或 22。")
                 }
 
                 Section {
@@ -945,13 +964,17 @@ struct GatewayConsoleView: View {
 
 struct GatewayItemView: View {
     let item: GatewayTranscriptItem
+    /// 最后一条正文还在流式写入:Markdown 渲染器对未闭合的表格尾巴特殊处理。
+    var isStreaming = false
 
     var body: some View {
         switch item.kind {
         case .assistantText:
-            Text(item.text)
-                .font(.system(size: 16))
-                .textSelection(.enabled)
+            // 和聊天页同一个 Markdown 渲染器:代码块、表格、链接、选择复制都一致。
+            // messageId 让流式更新复用同一个渲染器(只增量重排),不是每帧整段重新解析。
+            SelectableMarkdownView(markdown: item.text, isStreaming: isStreaming, messageId: item.id)
+                .fixedSize(horizontal: false, vertical: true)
+                .modifier(MinisOpenURLHandler())
                 .frame(maxWidth: .infinity, alignment: .leading)
 
         case .reasoning:
@@ -963,29 +986,7 @@ struct GatewayItemView: View {
                 .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
 
         case .tool(let name, let isRunning, let isError, let duration):
-            HStack(spacing: 8) {
-                Image(systemName: isRunning ? "gearshape.2" : (isError ? "exclamationmark.triangle" : "checkmark.circle"))
-                    .font(.system(size: 13))
-                    .foregroundStyle(isError ? .red : (isRunning ? .orange : .green))
-                    .leoPulse(active: isRunning)
-                Text(name).font(.system(size: 13, weight: .medium, design: .monospaced))
-                if !item.text.isEmpty {
-                    Text(item.text)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                Spacer()
-                if let duration {
-                    Text(String(format: "%.2fs", duration))
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 10)
-            .background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
+            GatewayToolRow(item: item, name: name, isRunning: isRunning, isError: isError, duration: duration)
 
         case .notice:
             Text(item.text)
@@ -1000,6 +1001,98 @@ struct GatewayItemView: View {
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+}
+
+/// 工具行:收起时一行(名字 + 命令摘要 + 用时),点开看完整命令和输出。
+private struct GatewayToolRow: View {
+    let item: GatewayTranscriptItem
+    let name: String
+    let isRunning: Bool
+    let isError: Bool
+    let duration: Double?
+    @State private var expanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 完整命令:Mac / CLI 给了完整输入就用它,否则就是摘要本身(收起时只显示一行,展开后全显示)。
+    private var command: String { item.detail ?? item.text }
+    private var canExpand: Bool { !command.isEmpty || !(item.output ?? "").isEmpty }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                guard canExpand else { return }
+                withAnimation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: LeoMotion.standard)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: isRunning ? "gearshape.2" : (isError ? "exclamationmark.triangle" : "checkmark.circle"))
+                        .font(.system(size: 13))
+                        .foregroundStyle(isError ? .red : (isRunning ? .orange : .green))
+                        .leoPulse(active: isRunning)
+                    Text(name).font(.system(size: 13, weight: .medium, design: .monospaced))
+                    if !item.text.isEmpty, !expanded {
+                        Text(item.text)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer(minLength: 4)
+                    if let duration {
+                        Text(String(format: "%.2fs", duration))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                    }
+                    if canExpand {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(expanded ? 90 : 0))
+                    }
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(canExpand ? Text(expanded ? "收起" : "展开完整命令和输出") : Text(""))
+
+            if expanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    if !command.isEmpty { block(title: "命令", text: command) }
+                    if let output = item.output, !output.isEmpty {
+                        block(title: "输出", text: output, tint: isError ? .red : nil)
+                    } else if !isRunning {
+                        Text("Mac 没有回传这一步的输出。")
+                            .font(.system(size: 11)).foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+                .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func block(title: LocalizedStringKey, text: String, tint: Color? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            // 长输出限高,自己滚;横向不折行时也能看全。
+            ScrollView([.vertical, .horizontal]) {
+                Text(text)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(tint ?? .primary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: true, vertical: true)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 240)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6))
         }
     }
 }
@@ -1045,19 +1138,29 @@ struct GatewayApprovalCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6))
             }
-            HStack(spacing: 8) {
-                ForEach(approval.choices, id: \.self) { choice in
-                    Button {
-                        LeoHaptics.impact(choice == "deny" ? .medium : .light)
-                        onChoose(choice)
-                    } label: {
-                        Text(label(for: choice))
-                            .font(.system(size: 13, weight: .medium))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 9)
+            // 两行两列:四个按钮挤一行时「本次会话允许」会被截成「本次会…」。单数个时最后一个占满一行。
+            let rows = stride(from: 0, to: approval.choices.count, by: 2).map {
+                Array(approval.choices[$0..<min($0 + 2, approval.choices.count)])
+            }
+            VStack(spacing: 8) {
+                ForEach(rows, id: \.self) { row in
+                    HStack(spacing: 8) {
+                        ForEach(row, id: \.self) { choice in
+                            Button {
+                                LeoHaptics.impact(choice == "deny" ? .medium : .light)
+                                onChoose(choice)
+                            } label: {
+                                Text(label(for: choice))
+                                    .font(.system(size: 14, weight: .medium))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                    .frame(maxWidth: .infinity, minHeight: 24)
+                                    .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(choice == "deny" ? .red : .accentColor)
+                        }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(choice == "deny" ? .red : .accentColor)
                 }
             }
         }
@@ -1385,6 +1488,8 @@ struct HarnessConsoleView: View {
     @State private var started = false
     @State private var pairMessage: String?
     @State private var showAgentLogin = false
+    @State private var showChanges = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// [WP-50 R0] 「Mac 画面」卡片:工具栏开关,记住上次的选择;只在卡片显示时轮询。
     @AppStorage("leo.macScreen.cardVisible") private var showScreen = false
     @StateObject private var screen = MacScreenPoller()
@@ -1394,39 +1499,15 @@ struct HarnessConsoleView: View {
             if showScreen {
                 MacScreenCard(poller: screen, hostName: driver.macScreenClient.hostName)
                     .padding(.horizontal, 12).padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
-                        ForEach(driver.items) { item in
-                            GatewayItemView(item: item).id(item.id)
-                        }
-                        // "idle" means the CLI finished a turn and is waiting
-                        // for the operator — a typing indicator there would
-                        // promise progress that is not happening.
-                        if driver.isRunning && driver.pendingApproval == nil
-                            && driver.status != "idle" {
-                            HStack(spacing: 8) {
-                                LeoTypingIndicator()
-                                Text(driver.statusLabel)
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .padding(16)
-                }
-                .onChange(of: driver.items.count) { _ in
-                    guard let last = driver.items.last else { return }
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                }
-            }
+            HarnessTranscript(driver: driver)
 
             if let approval = driver.pendingApproval {
                 GatewayApprovalCard(approval: approval) { choice in
                     driver.respond(to: approval, choice: choice)
                 }
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
 
             Text(driver.journalStatus.label)
@@ -1498,7 +1579,13 @@ struct HarnessConsoleView: View {
                     .padding(.horizontal, 14).padding(.vertical, 4)
             }
 
-            HStack(spacing: 10) {
+            HarnessQuickActions(driver: driver, inputIsEmpty: input.isEmpty)
+
+            HStack(alignment: .bottom, spacing: 8) {
+                if driver.showsModePicker {
+                    HarnessModeMenu(driver: driver)
+                        .transition(.opacity)
+                }
                 TextField("继续下指令…", text: $input, axis: .vertical)
                     .lineLimit(1...4)
                     .textFieldStyle(.plain)
@@ -1509,19 +1596,32 @@ struct HarnessConsoleView: View {
                     // the starting window used to eat the text silently.
                     if driver.steer(input) { input = "" }
                 } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 28))
+                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 30))
                 }
                 .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel(Text("发送"))
             }
-            .padding(.horizontal, 14).padding(.vertical, 10)
+            .padding(.horizontal, 12).padding(.vertical, 10)
             .background(.bar)
+            .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: driver.showsModePicker)
         }
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: driver.pendingApproval?.approvalId)
         .navigationTitle(Text(driver.harness.name))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                if driver.showsChanges {
+                    Button { showChanges = true } label: {
+                        HarnessChangesBadge(count: driver.changes?.files.count ?? 0)
+                    }
+                    .accessibilityLabel(Text("改动"))
+                    .accessibilityValue(Text("\(driver.changes?.files.count ?? 0) 个文件"))
+                    .accessibilityIdentifier("harness.changes")
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    withAnimation(.smooth(duration: 0.28)) { showScreen.toggle() }
+                    withAnimation(LeoMotion.smooth(reduceMotion: reduceMotion)) { showScreen.toggle() }
                 } label: {
                     Image(systemName: showScreen ? "display.trianglebadge.exclamationmark" : "display")
                         .symbolVariant(showScreen ? .fill : .none)
@@ -1534,8 +1634,14 @@ struct HarnessConsoleView: View {
                     Button { driver.stop() } label: {
                         Image(systemName: "stop.circle.fill").foregroundStyle(.red)
                     }
+                    .accessibilityLabel(Text("停止"))
                 }
             }
+        }
+        .sheet(isPresented: $showChanges) {
+            HarnessChangesSheet(driver: driver)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .onAppear {
             screen.client = driver.macScreenClient
@@ -1558,12 +1664,271 @@ struct HarnessConsoleView: View {
         .onChange(of: driver.status) { newStatus in
             if newStatus == "pending", input.isEmpty, !firstPrompt.isEmpty { input = firstPrompt }
             if newStatus != "starting", newStatus != "pending", driver.sessionId != nil { onSessionCreated?() }
+            // SSH 兜底跑完一轮也算送到了(没有 Mac 会话号)。
+            if newStatus == "idle", driver.viaSSH { onSessionCreated?() }
         }
         // A follow-up that didn't reach the Mac comes back to the input, not lost.
         .onChange(of: driver.unsentText) { _, text in
             guard let text else { return }
             if input.isEmpty { input = text }
             driver.unsentText = nil
+        }
+    }
+}
+
+/// 会话流:流式时跟随到底;用户手动上滑就停止跟随(右下角出现「回到底部」),滑回底部自动恢复。
+private struct HarnessTranscript: View {
+    @ObservedObject var driver: HarnessSessionDriver
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var following = true
+    @State private var userScrolling = false
+    @State private var hasUnseen = false
+    private static let bottomId = "harness.bottom"
+
+    /// 内容变了的指纹:条数变化,或最后一条变长(流式正文、工具输出)都算。
+    private var contentKey: Int {
+        var hasher = Hasher()
+        hasher.combine(driver.items.count)
+        hasher.combine(driver.items.last?.text.count ?? 0)
+        hasher.combine(driver.items.last?.output?.count ?? 0)
+        hasher.combine(driver.status)
+        hasher.combine(driver.pendingApproval?.approvalId)
+        return hasher.finalize()
+    }
+
+    /// 还在写的那一条正文(Markdown 渲染器对未闭合的表格尾巴特殊处理)。
+    private var streamingId: UUID? {
+        guard driver.isRunning, driver.status == "running", let last = driver.items.last,
+              case .assistantText = last.kind else { return nil }
+        return last.id
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(driver.items) { item in
+                        GatewayItemView(item: item, isStreaming: item.id == streamingId).id(item.id)
+                    }
+                    // "idle" means the CLI finished a turn and is waiting
+                    // for the operator — a typing indicator there would
+                    // promise progress that is not happening.
+                    if driver.isRunning && driver.pendingApproval == nil
+                        && driver.status != "idle" {
+                        HStack(spacing: 8) {
+                            LeoTypingIndicator()
+                            Text(driver.statusLabel)
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Color.clear.frame(height: 1).id(Self.bottomId)
+                }
+                .padding(16)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            // 只有手指拖动 / 惯性滚动才改跟随状态:内容自己变长时离底部远了不算「用户上滑」。
+            .onScrollPhaseChange { _, phase, context in
+                userScrolling = phase == .interacting || phase == .decelerating
+                if phase == .idle { setFollowing(Self.atBottom(context.geometry)) }
+            }
+            .onScrollGeometryChange(for: Bool.self, of: Self.atBottom) { _, atBottom in
+                if atBottom { setFollowing(true) } else if userScrolling { setFollowing(false) }
+            }
+            .onChange(of: contentKey) { _, _ in
+                guard following else { hasUnseen = true; return }
+                // 不加动画:流式每 33ms 变长一次,动画叠在一起会抖。
+                proxy.scrollTo(Self.bottomId, anchor: .bottom)
+            }
+            .onAppear { proxy.scrollTo(Self.bottomId, anchor: .bottom) }
+            .overlay(alignment: .bottomTrailing) {
+                if !following {
+                    Button {
+                        setFollowing(true)
+                        withAnimation(LeoMotion.smooth(reduceMotion: reduceMotion)) {
+                            proxy.scrollTo(Self.bottomId, anchor: .bottom)
+                        }
+                        LeoHaptics.selection()
+                    } label: {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 38, height: 38)
+                            .background(.regularMaterial, in: Circle())
+                            .overlay(alignment: .topTrailing) {
+                                if hasUnseen {
+                                    Circle().fill(Color.accentColor).frame(width: 9, height: 9)
+                                        .offset(x: -2, y: 2)
+                                }
+                            }
+                            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(14)
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.8).combined(with: .opacity))
+                    .accessibilityLabel(Text("回到底部"))
+                }
+            }
+            .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: following)
+        }
+    }
+
+    private func setFollowing(_ value: Bool) {
+        guard following != value else { return }
+        following = value
+        if value { hasUnseen = false }
+    }
+
+    private static func atBottom(_ geo: ScrollGeometry) -> Bool {
+        geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 48
+    }
+}
+
+/// 一轮结束后的快捷按钮:重试上一条 / 继续;先计划模式交出计划后多一个「按计划执行」。
+private struct HarnessQuickActions: View {
+    @ObservedObject var driver: HarnessSessionDriver
+    let inputIsEmpty: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var visible: Bool {
+        inputIsEmpty && driver.status == "idle" && driver.pendingApproval == nil && driver.lastUserText != nil
+    }
+
+    var body: some View {
+        Group {
+            if visible {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        if driver.offersExecutePlan {
+                            chip("按计划执行", symbol: "play.fill", prominent: true) { driver.executePlan() }
+                        }
+                        if let last = driver.lastUserText {
+                            chip("重试上一条", symbol: "arrow.clockwise", prominent: driver.lastTurnFailed) {
+                                driver.steer(last)
+                            }
+                        }
+                        chip("继续", symbol: "arrow.right", prominent: false) { driver.steer("继续") }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                }
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: visible)
+    }
+
+    private func chip(_ title: LocalizedStringKey, symbol: String, prominent: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            LeoHaptics.impact(.light)
+            action()
+        } label: {
+            Label(title, systemImage: symbol)
+                .font(.footnote.weight(.medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .foregroundStyle(prominent ? Color.white : Color.primary)
+                .background(prominent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.secondary.opacity(0.14)),
+                            in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// 输入框旁的权限模式胶囊。旧版 Mac(切换回 404)不显示,退回全自动开关。
+private struct HarnessModeMenu: View {
+    @ObservedObject var driver: HarnessSessionDriver
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Menu {
+            ForEach(HarnessMode.allCases, id: \.self) { mode in
+                Button {
+                    LeoHaptics.selection()
+                    Task { await driver.setMode(mode) }
+                } label: {
+                    Text(mode.title)
+                    Text(mode.subtitle)
+                    Image(systemName: driver.mode == mode ? "checkmark" : mode.symbol)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: driver.mode.symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .contentTransition(.symbolEffect(.replace))
+                Text(driver.mode.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .contentTransition(.opacity)
+            }
+            .foregroundStyle(driver.mode.tint)
+            .padding(.horizontal, 10)
+            .frame(height: 34)
+            .background(driver.mode.tint.opacity(0.13), in: Capsule())
+            .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: driver.mode)
+        }
+        .accessibilityLabel(Text("权限模式"))
+        .accessibilityValue(Text(driver.mode.title))
+        .accessibilityIdentifier("harness.mode")
+    }
+}
+
+private struct HarnessChangesBadge: View {
+    let count: Int
+
+    var body: some View {
+        Image(systemName: "plusminus.circle")
+            .overlay(alignment: .topTrailing) {
+                if count > 0 {
+                    Text(count > 99 ? "99+" : "\(count)")
+                        .font(.system(size: 10, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(Color.accentColor, in: Capsule())
+                        .offset(x: 9, y: -7)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .animation(.snappy, value: count)
+    }
+}
+
+extension HarnessMode {
+    /// 界面文案(跨端约定的显示名)。
+    var title: String {
+        switch self {
+        case .plan: AppLocalized("先计划")
+        case .guarded: AppLocalized("自主")
+        case .build: AppLocalized("逐项确认")
+        case .yolo: AppLocalized("全自动")
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .plan: AppLocalized("只读分析，先交计划给你看")
+        case .guarded: AppLocalized("常规操作自己做，危险的再问")
+        case .build: AppLocalized("每一步改动都先问你")
+        case .yolo: AppLocalized("全部放行，不再询问")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .plan: "list.bullet.clipboard"
+        case .guarded: "shield.lefthalf.filled"
+        case .build: "hand.raised"
+        case .yolo: "bolt.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .plan: .blue
+        case .guarded: .accentColor
+        case .build: .secondary
+        case .yolo: LeoTheme.ColorToken.attention
         }
     }
 }
@@ -1577,6 +1942,13 @@ struct ComposerMacTarget: Identifiable {
     ]
 
     /// 这台机器能开的任务类型:Android 机身只有它自己的 Agent;升级到 LeoPhoneAgent 1.2 的 Mac 把它自己的 Agent 排第一。
+    /// [up-macsession] 与首页「指挥 Mac」一致的菜单项:全部列出,不可用灰显带原因,没登录的点了去登录。
+    static func entries(for host: GatewayHost) -> [HarnessCatalog.MenuEntry] {
+        HarnessCatalog.menuEntries(known: host.harnesses, runsLeoPhoneAgent: host.runsLeoPhoneAgent,
+                                   isAndroidBody: host.isAndroidBody)
+    }
+
+    /// 只要能直接派任务的(确认框这类放不下灰显项的地方用)。
     static func clis(for host: GatewayHost) -> [(String, String)] {
         // [fix-remote] 以 Mac 上次报的列表为准（opencode / gemini / grok 都在），还没问过才用旧默认。
         HarnessCatalog.menuOptions(known: host.harnesses, runsLeoPhoneAgent: host.runsLeoPhoneAgent,
@@ -1590,6 +1962,67 @@ struct ComposerMacTarget: Identifiable {
     /// [E5] 派出它的手机对话;完成推送带回,点通知回到那个对话。
     var phoneSessionId: String? = nil
     var id: String { host.id + cliKey }
+}
+
+/// [up-macsession] 「指挥 Mac」菜单内容:规则同首页(HarnessCatalog.menuEntries)。放进任意 `Menu { }` 里用。
+struct ComposerMacAgentMenuItems: View {
+    let host: GatewayHost
+    let onPick: (HarnessCatalog.MenuEntry) -> Void
+    let onLogin: (HarnessKind) -> Void
+
+    var body: some View {
+        let entries = ComposerMacTarget.entries(for: host)
+        if !entries.contains(where: \.selectable) {
+            Text("这台机器上暂时没有能用的 agent")
+        }
+        ForEach(entries) { entry in
+            if entry.needsLogin {
+                Button { onLogin(entry.kind) } label: {
+                    Label(entry.name, systemImage: "person.badge.key")
+                    if let note = entry.note { Text(note) }
+                }
+            } else {
+                Button { onPick(entry) } label: {
+                    Label(entry.name, systemImage: entry.kind.symbol)
+                    if let note = entry.note { Text(note) }
+                }
+                .disabled(!entry.selectable)
+            }
+        }
+    }
+}
+
+struct GatewayAgentLoginTarget: Identifiable {
+    let host: GatewayHost
+    let kind: HarnessKind
+    var id: String { host.id + "/" + kind.key }
+}
+
+/// 远程机器行下的「外部 agent 登录」:列出这台 Mac 上能在手机登录的 agent,没登录的标出来。
+private struct GatewayAgentLoginMenu: View {
+    let host: GatewayHost
+    let onLogin: (HarnessKind) -> Void
+
+    var body: some View {
+        let kinds = (host.harnesses ?? []).filter(\.canLogin)
+        if !kinds.isEmpty {
+            Menu {
+                ForEach(kinds) { kind in
+                    Button { onLogin(kind) } label: {
+                        Label(kind.displayName, systemImage: kind.loggedIn == false ? "person.badge.key" : kind.symbol)
+                        Text(kind.loggedIn == false ? "未登录" : (kind.loggedIn == true ? "已登录，可重新登录" : "登录状态未知"))
+                    }
+                }
+            } label: {
+                let missing = kinds.filter { $0.loggedIn == false }.count
+                Label(missing > 0 ? AppLocalized("\(missing) 个 agent 未登录") : AppLocalized("外部 agent 登录"),
+                      systemImage: "person.badge.key")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(missing > 0 ? LeoTheme.ColorToken.attention : Color.accentColor)
+            }
+            .accessibilityIdentifier("gateway.agentLogin")
+        }
+    }
 }
 
 /// 全屏 Mac 对话:复用控制台的 HarnessConsoleView,套一层导航 + 关闭按钮。

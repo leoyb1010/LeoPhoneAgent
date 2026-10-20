@@ -31,8 +31,10 @@ import CryptoKit
 enum GatewayEvent: Sendable {
     case messageDelta(String)
     case reasoning(String)
-    case toolStarted(tool: String, preview: String?)
-    case toolCompleted(tool: String, duration: Double?, isError: Bool)
+    /// `toolUseId` 把开始和结束配成一对(同名工具并行时按名字配会配错);`input` / `output` 是展开工具行时看的
+    /// 完整命令与输出 —— Mac 发了才有,没发时展开只看得到 `preview`。
+    case toolStarted(tool: String, preview: String?, toolUseId: String? = nil, input: String? = nil)
+    case toolCompleted(tool: String, duration: Double?, isError: Bool, toolUseId: String? = nil, output: String? = nil)
     case approvalRequest(GatewayApprovalRequest)
     /// `auto` 非 nil:[A1] Mac 在全自动下自己应答了这次审批(没有先发 approval.request),内容是工具 / 命令摘要。
     case approvalResponded(choice: String?, approvalId: String?, auto: String? = nil)
@@ -463,15 +465,19 @@ actor LeoAgentClient {
 extension GatewayEvent {
     /// Map one decoded SSE payload onto the typed event set.
     static func parse(_ obj: [String: Any]) -> GatewayEvent {
-        let name = obj["event"] as? String ?? ""
+        // 跨端约定:权限模式变化发 `{"type":"mode","mode":…}`(没有 event 字段),归到 unknown("mode") 由驱动处理。
+        let name = obj["event"] as? String ?? (obj["type"] as? String == "mode" ? "mode" : "")
         switch name {
         case "message.delta":
             return .messageDelta(obj["delta"] as? String ?? "")
         case "reasoning.available":
             return .reasoning(obj["text"] as? String ?? "")
         case "tool.started":
+            let input = obj["input"].map { SSHFallbackCLI.describe(input: $0) }.flatMap { $0.isEmpty ? nil : $0 }
             return .toolStarted(tool: obj["tool"] as? String ?? "tool",
-                                preview: obj["preview"] as? String)
+                                preview: obj["preview"] as? String,
+                                toolUseId: obj["tool_use_id"] as? String,
+                                input: input)
         case "tool.completed":
             return .toolCompleted(tool: obj["tool"] as? String ?? "tool",
                                   duration: obj["duration"] as? Double,
@@ -479,7 +485,9 @@ extension GatewayEvent {
                                   // that name may carry a message instead; a
                                   // non-empty string is still a failure.
                                   isError: (obj["error"] as? Bool)
-                                      ?? !((obj["error"] as? String)?.isEmpty ?? true))
+                                      ?? !((obj["error"] as? String)?.isEmpty ?? true),
+                                  toolUseId: obj["tool_use_id"] as? String,
+                                  output: ((obj["output"] as? String) ?? (obj["result"] as? String)).map(SSHFallbackCLI.clip))
         case "approval.request":
             var extras: [String: String] = [:]
             let modelled: Set<String> = ["event", "run_id", "timestamp", "choices", "command",
@@ -526,5 +534,63 @@ extension LeoAgentClient {
             inputTokens: dict["input_tokens"] as? Int ?? 0,
             outputTokens: dict["output_tokens"] as? Int ?? 0,
             totalTokens: dict["total_tokens"] as? Int ?? 0)
+    }
+}
+
+// MARK: - 权限模式 / 改动面板(Leo Link 新路由;旧版 Mac 回 404,调用方据此隐藏入口、退回全自动开关)
+
+extension LeoAgentClient {
+    /// 切换这个会话的权限模式;返回 Mac 实际生效的模式。
+    func setHarnessMode(sessionId: String, mode: HarnessMode) async throws -> HarnessMode {
+        let obj = try await postJSON("/harness/sessions/\(sessionId)/mode", body: ["mode": mode.rawValue], service: .harness)
+        return HarnessMode.parse(obj["mode"]) ?? mode
+    }
+
+    /// 工作区相对 HEAD 的改动 + 每轮开始时的检查点。
+    func harnessChanges(sessionId: String) async throws -> HarnessChanges {
+        HarnessChanges.parse(try await getJSON("/harness/sessions/\(sessionId)/changes", service: .harness))
+    }
+
+    /// 单文件统一 diff;不带 checkpoint 相对 HEAD(含未跟踪文件),带了相对那个检查点。
+    func harnessDiff(sessionId: String, path: String, checkpoint: String? = nil) async throws -> HarnessFileDiff {
+        // 路径里可能有空格、&、+、中文:自己编码后用 percentEncodedQueryItems 原样放进去,
+        // 不走 request() 的 query 拼接(那里按未编码处理,& 会把参数劈开)。
+        var req = try request("/harness/sessions/\(sessionId)/diff", service: .harness)
+        var query = [URLQueryItem(name: "path", value: Self.queryValue(path))]
+        if let checkpoint { query.append(URLQueryItem(name: "checkpoint", value: Self.queryValue(checkpoint))) }
+        guard let url = req.url, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { throw GatewayError.badURL }
+        parts.percentEncodedQueryItems = query
+        guard let full = parts.url else { throw GatewayError.badURL }
+        req.url = full
+        return HarnessFileDiff.parse(try Self.json(try await send(req)), path: path)
+    }
+
+    /// 回滚:带 checkpoint 恢复到那一轮开始前(paths 为空 = 全部);只带 paths 恢复到 HEAD。返回实际动过的文件。
+    @discardableResult
+    func revertHarness(sessionId: String, checkpoint: String?, paths: [String] = []) async throws -> [String] {
+        var body: [String: Any] = [:]
+        if let checkpoint { body["checkpoint"] = checkpoint }
+        if !paths.isEmpty { body["paths"] = paths }
+        let obj = try await postJSON("/harness/sessions/\(sessionId)/revert", body: body, service: .harness)
+        return obj["reverted"] as? [String] ?? []
+    }
+
+    nonisolated static func queryValue(_ raw: String) -> String {
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~/")
+        return raw.addingPercentEncoding(withAllowedCharacters: allowed) ?? raw
+    }
+
+    /// 新路由失败时给人看的话:404 = 这台 Mac 的 LeoBot 还没有这个功能。
+    nonisolated static func describeHarnessFeatureError(_ error: Error) -> String {
+        if case GatewayError.http(404, _) = error {
+            return AppLocalized("这台 Mac 上的 LeoBot 版本较旧，还没有这个功能；把 Mac 端更新到最新版再试。")
+        }
+        if case GatewayError.http(_, let message?) = error, !message.isEmpty { return message }
+        return error.localizedDescription
+    }
+
+    nonisolated static func isNotFound(_ error: Error) -> Bool {
+        if case GatewayError.http(404, _) = error { return true }
+        return false
     }
 }
