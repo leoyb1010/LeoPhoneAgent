@@ -227,6 +227,8 @@ export interface ModelRequestCompletedStatusEvent extends ModelNetworkStatusBase
 
 export interface ModelRequestFailedStatusEvent extends ModelNetworkStatusBase {
   type: "model_request_failed";
+  /** Provider 已报告的失败请求用量；不为失败响应伪造成功完成事件。 */
+  usage?: ModelUsage;
   durationMs?: number;
   reason: ModelFailureReason;
   retryable: boolean;
