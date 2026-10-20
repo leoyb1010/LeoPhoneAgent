@@ -29,6 +29,10 @@ struct GatewayTranscriptItem: Identifiable, Sendable {
     let id = UUID()
     var kind: Kind
     var text: String
+    /// 工具行:配对用的工具调用 id,和点开后看的完整命令(detail)/ 输出(output)。Mac 发了才有。
+    var toolUseId: String? = nil
+    var detail: String? = nil
+    var output: String? = nil
 }
 
 @MainActor
@@ -306,12 +310,12 @@ final class GatewayRunDriver: ObservableObject {
             guard !text.isEmpty else { return }
             items.append(GatewayTranscriptItem(kind: .reasoning, text: text))
 
-        case .toolStarted(let tool, let preview):
+        case .toolStarted(let tool, let preview, _, let input):
             items.append(GatewayTranscriptItem(
                 kind: .tool(name: tool, isRunning: true, isError: false, duration: nil),
-                text: preview ?? ""))
+                text: preview ?? "", detail: input))
 
-        case .toolCompleted(let tool, let duration, let isError):
+        case .toolCompleted(let tool, let duration, let isError, _, _):
             // Close the most recent open row for this tool rather than
             // appending a second one — a tool call is one line, not two.
             if let index = items.lastIndex(where: {

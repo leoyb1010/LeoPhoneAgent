@@ -31,6 +31,8 @@ struct HarnessSessionSummary: Sendable, Identifiable, Hashable {
     var windowLabel: String? = nil
     /// 任务标题(LeoPhoneAgent 任务有;同一个项目里的几个任务靠它区分)。
     var title: String? = nil
+    /// 权限模式;旧版 Mac 不报(nil),会话页据此隐藏模式胶囊。
+    var mode: HarnessMode? = nil
 
     /// 列表里显示的名字:有标题用标题,没有就用会话类型名。
     var displayTitle: String {
@@ -91,7 +93,8 @@ extension LeoAgentClient {
                     let parts = [app, title].filter { !$0.isEmpty }
                     return parts.isEmpty ? nil : parts.joined(separator: " · ")
                 }(),
-                title: (row["title"] as? String).flatMap { $0.isEmpty ? nil : $0 })
+                title: (row["title"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                mode: HarnessMode.parse(row["mode"]))
         }
     }
 
@@ -99,11 +102,14 @@ extension LeoAgentClient {
 
     /// `fullAuto`:让 Mac 用全自动(免审批)跑这个任务。[A2] 对所有 CLI 生效(Claude Code / Codex /
     /// Grok / LeoPhoneAgent);Mac 只接受认得出的 iPhone 发来的,不接受时返回 403 和原因与修复步骤。
+    /// `mode`:新版 Mac 按它定权限模式(优先于 full_auto);旧版 Mac 不认这个字段,照 full_auto 走。
     func createHarnessSession(harness: String, cwd: String, prompt: String?, thinking: String? = nil,
-                              fullAuto: Bool = false, phoneSessionId: String? = nil) async throws -> String {
-        let payload = HarnessFullAuto.createPayload(harness: harness, cwd: cwd, prompt: prompt,
+                              fullAuto: Bool = false, mode: HarnessMode? = nil,
+                              phoneSessionId: String? = nil) async throws -> String {
+        var payload = HarnessFullAuto.createPayload(harness: harness, cwd: cwd, prompt: prompt,
                                                     thinking: thinking, fullAuto: fullAuto,
                                                     phoneSessionId: phoneSessionId)
+        if let mode { payload["mode"] = mode.rawValue }
         let sentAt = CACurrentMediaTime()
         let obj = try await postJSON("/harness/sessions", body: payload, service: .harness)
         guard let id = obj["session_id"] as? String else {
@@ -300,19 +306,205 @@ final class HarnessSessionDriver: ObservableObject {
         self.harness = harness
         self.cwd = cwd
         self.phoneSessionId = phoneSessionId
+        mode = HarnessMode.fallback(fullAutoOn: FullAutoGate.isOn)
+        modeSupport = Self.cachedSupport(Self.modeSupportKey, hostId: client.hostId)
+        changesSupport = Self.cachedSupport(Self.changesSupportKey, hostId: client.hostId)
     }
 
-    /// [T-composer-send-dead] 会话建立期间(经中继 1~3 秒)用户就开始发送。
-    /// 排队而不是拒绝:sessionId 一到就依序发出。点击永远有响应。
-    private var queuedSteers: [String] = []
+    /// [T-composer-send-dead] 会话建立期间(经中继 1~3 秒)用户就开始发送;SSH 兜底一轮在跑时也一样。
+    /// 排队而不是拒绝:sessionId 一到就依序发出,兜底这一轮跑完再跑下一条。点击永远有响应,也不会并发两轮。
+    private var turns = PendingTurns()
+
+    /// 最近一条发给 Mac 的话(「重试上一条」用)。
+    @Published private(set) var lastUserText: String?
+
+    // MARK: 权限模式 / 改动面板(Leo Link 新路由)
+
+    /// 当前权限模式。没选过时沿用全自动开关(开 → 全自动,关 → 自主)。
+    @Published private(set) var mode: HarnessMode
+    /// 这台 Mac 支不支持模式切换:nil = 还不知道(先显示胶囊,建好会话后问一次),false = 旧版 Mac(隐藏,退回全自动开关)。
+    @Published private(set) var modeSupport: Bool?
+    /// 工作区改动;nil = 还没拿到。
+    @Published private(set) var changes: HarnessChanges?
+    /// 这台 Mac 有没有改动面板的路由:false = 旧版 Mac(隐藏「改动」按钮)。
+    @Published private(set) var changesSupport: Bool?
+
+    var showsModePicker: Bool { modeSupport != false }
+    var showsChanges: Bool { changesSupport == true && sessionId != nil }
+
+    /// 先计划模式下这一轮交出了计划:给「按计划执行」。
+    var offersExecutePlan: Bool {
+        mode == .plan && modeSupport == true && sessionId != nil && status == "idle" && !lastTurnFailed
+    }
+
+    private static let modeSupportKey = "leo.harness.modeSupport"
+    private static let changesSupportKey = "leo.harness.changesSupport"
+
+    /// 按主机记住新路由支不支持(下次打开控制台不用先闪一下再藏起来)。
+    private static func cachedSupport(_ key: String, hostId: String?) -> Bool? {
+        guard let hostId else { return nil }
+        return (UserDefaults.standard.dictionary(forKey: key) as? [String: Bool])?[hostId]
+    }
+
+    private func recordSupport(_ key: String, _ value: Bool) {
+        if key == Self.modeSupportKey { modeSupport = value } else { changesSupport = value }
+        guard let hostId = client.hostId else { return }
+        var all = (UserDefaults.standard.dictionary(forKey: key) as? [String: Bool]) ?? [:]
+        guard all[hostId] != value else { return }
+        all[hostId] = value
+        UserDefaults.standard.set(all, forKey: key)
+    }
+
+    /// 切换权限模式。还没建会话时只记下,建会话时带上。返回是否生效。
+    @discardableResult
+    func setMode(_ newMode: HarnessMode) async -> Bool {
+        guard newMode != mode else { return true }
+        guard let sessionId else { mode = newMode; return true }
+        let previous = mode
+        mode = newMode
+        do {
+            mode = try await client.setHarnessMode(sessionId: sessionId, mode: newMode)
+            recordSupport(Self.modeSupportKey, true)
+            return true
+        } catch {
+            mode = previous
+            if LeoAgentClient.isNotFound(error) {
+                recordSupport(Self.modeSupportKey, false)
+                note(AppLocalized("这台 Mac 上的 LeoBot 还不支持切换权限模式，已回到全自动开关；更新 Mac 端后再试。"))
+            } else if case GatewayError.http(403, let message) = error, newMode == .yolo {
+                fullAutoRefused = true
+                note(HarnessFullAuto.refusedNote(serverMessage: message))
+            } else {
+                note(AppLocalized("切换模式没成功：") + LeoAgentClient.describeHarnessFeatureError(error))
+            }
+            return false
+        }
+    }
+
+    /// 先计划 → 按计划执行:切到自主(全自动开着就全自动),再发「执行」。
+    func executePlan() {
+        Task {
+            let target = HarnessMode.afterPlan(fullAutoOn: FullAutoGate.isOn && !fullAutoRefused)
+            if await setMode(target) { steer("执行") }
+        }
+    }
+
+    /// 拉一次改动列表;404 = 旧版 Mac,藏起入口。其它失败保留上次的结果。
+    func refreshChanges() async {
+        guard let sessionId, changesSupport != false else { return }
+        do {
+            changes = try await client.harnessChanges(sessionId: sessionId)
+            recordSupport(Self.changesSupportKey, true)
+        } catch where LeoAgentClient.isNotFound(error) {
+            recordSupport(Self.changesSupportKey, false)
+            changes = nil
+        } catch {}
+    }
+
+    func fileDiff(path: String, checkpoint: String? = nil) async throws -> HarnessFileDiff {
+        guard let sessionId else { throw GatewayError.notConfigured }
+        return try await client.harnessDiff(sessionId: sessionId, path: path, checkpoint: checkpoint)
+    }
+
+    /// 回滚(会删改文件,界面先确认一次)。成功后刷新改动并在时间线记一笔。
+    func revert(checkpoint: HarnessCheckpoint?, paths: [String] = []) async throws {
+        guard let sessionId else { throw GatewayError.notConfigured }
+        let reverted = try await client.revertHarness(sessionId: sessionId, checkpoint: checkpoint?.id, paths: paths)
+        if let checkpoint {
+            note(AppLocalized("已回到第 \(checkpoint.turn) 轮之前（\(reverted.count) 个文件）。"))
+        } else {
+            note(AppLocalized("已撤销 \(paths.joined(separator: "、")) 的改动。"))
+        }
+        await refreshChanges()
+    }
+
+    /// 会话建好 / 接上之后问一次:模式支不支持(摘要里有没有 mode)、改动有多少。
+    private func probeSessionFeatures(_ id: String) {
+        Task { [weak self] in
+            guard let self else { return }
+            if let summary = try? await self.client.harnessSessions().first(where: { $0.id == id }) {
+                self.recordSupport(Self.modeSupportKey, summary.mode != nil)
+                if let mode = summary.mode { self.mode = mode }
+            }
+            await self.refreshChanges()
+        }
+    }
+
+    // MARK: 正文增量合并
+
+    private var deltaBuffer = TextDeltaBuffer()
+    private var deltaFlushTask: Task<Void, Never>?
+
+    /// 攒 ~33ms(两帧)再写进 items:每个 token 都发一次 objectWillChange 会让整页每秒重排几十次。
+    private func bufferDelta(_ delta: String) {
+        guard deltaBuffer.append(delta) else { return }
+        deltaFlushTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(33))
+            guard !Task.isCancelled else { return }
+            self?.flushDeltas()
+        }
+    }
+
+    private func flushDeltas() {
+        deltaFlushTask?.cancel()
+        deltaFlushTask = nil
+        guard let text = deltaBuffer.take() else { return }
+        if let index = items.indices.last, case .assistantText = items[index].kind {
+            items[index].text += text
+        } else {
+            items.append(GatewayTranscriptItem(kind: .assistantText, text: text))
+        }
+    }
+
+    /// 任何非正文的一行进来前,先把攒着的正文写进去,先后顺序不乱。
+    private func append(_ item: GatewayTranscriptItem) {
+        flushDeltas()
+        items.append(item)
+    }
+
+    /// 工具结束:按 tool_use_id 配对(同名工具并行时按名字会配错),没有 id 再按名字找最近一条还在跑的。
+    private func finishTool(id: String?, name: String?, isError: Bool, duration: Double?, output: String?) {
+        flushDeltas()
+        let byId = id.flatMap { id in items.lastIndex { $0.toolUseId == id } }
+        let index = byId ?? items.lastIndex {
+            if case .tool(let n, let running, _, _) = $0.kind { return running && (name == nil || n == name) }
+            return false
+        }
+        guard let index, case .tool(let toolName, _, _, _) = items[index].kind else { return }
+        items[index].kind = .tool(name: toolName, isRunning: false, isError: isError, duration: duration)
+        if let output, !output.isEmpty { items[index].output = output }
+    }
+
+    /// 停下 / 断开时还在转圈的工具行收住,不再假装在跑。
+    private func settleRunningTools() {
+        for index in items.indices {
+            if case .tool(let name, true, let isError, let duration) = items[index].kind {
+                items[index].kind = .tool(name: name, isRunning: false, isError: isError, duration: duration)
+            }
+        }
+    }
+
+    // MARK: SSH 兜底
+
+    /// 兜底这一轮跑在自己的任务里:离开页面只取消跟随事件流的 streamTask,不掐断它。
+    private var sshTask: Task<Void, Never>?
+    /// claude / codex 上一轮报的会话号:下一轮 `--resume` / `exec resume` 接着这个上下文。
+    private var sshResumeId: String?
+    private var sshNoticeShown = false
+    /// 这个控制台跑过 SSH 兜底(首页据此在兜底跑完一轮后也清掉草稿)。
+    @Published private(set) var viaSSH = false
 
     func start(prompt: String, thinking: String? = nil) {
         guard sessionId == nil, !isRunning else { return }
         problem = nil
         firstPrompt = prompt
+        lastUserText = prompt
+        turns.begin()
         isRunning = true
         status = "starting"
         let fullAuto = wantsFullAuto
+        // 旧版 Mac 不认 mode,照 full_auto 走;新版 mode 优先。
+        let createMode: HarnessMode? = modeSupport == false ? nil : mode
         streamTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -320,16 +512,19 @@ final class HarnessSessionDriver: ObservableObject {
                 do {
                     id = try await self.client.createHarnessSession(
                         harness: self.harness.key, cwd: self.cwd, prompt: prompt,
-                        thinking: thinking, fullAuto: fullAuto, phoneSessionId: self.phoneSessionId)
+                        thinking: thinking, fullAuto: fullAuto, mode: createMode, phoneSessionId: self.phoneSessionId)
                 } catch GatewayError.http(let status, let message)
-                            where HarnessFullAuto.isRefusal(status: status, harnessKey: self.harness.key, requestedFullAuto: fullAuto) {
+                            where HarnessFullAuto.isRefusal(status: status, harnessKey: self.harness.key,
+                                                            requestedFullAuto: fullAuto || createMode == .yolo) {
                     // Mac 还不接受这台手机开全自动(中继没认出 iPhone):照常开,逐项审批,并写明怎么修。
                     await MainActor.run {
                         self.fullAutoRefused = true
+                        if self.mode == .yolo { self.mode = .guarded }
                         self.note(HarnessFullAuto.refusedNote(serverMessage: message, status: status))
                     }
                     id = try await self.client.createHarnessSession(
                         harness: self.harness.key, cwd: self.cwd, prompt: prompt, thinking: thinking,
+                        mode: createMode == .yolo ? .guarded : createMode,
                         phoneSessionId: self.phoneSessionId)
                 }
                 // 建任务的路上你关掉了全自动:建好后立刻让 Mac 把它切回先问我。
@@ -340,23 +535,30 @@ final class HarnessSessionDriver: ObservableObject {
                     self.sessionId = id
                     self.restoreOutbox()
                     self.status = "running"
-                    self.flushQueuedSteers()
+                    self.flushQueuedSteers(self.turns.drain())
                     HarnessLiveActivityBridge.shared.register(driver: self, hostName: self.client.hostName)
+                    self.probeSessionFeatures(id)
                 }
                 await self.follow(sessionId: id)
             } catch {
+                // 用户点了停止(stopLocalTurn 已收好状态)或离开页面(detach 已置 pending):不算失败。
+                if Task.isCancelled { return }
                 // [fix-remote] 直连与中继都连不上：能走 SSH 兜底就在 Mac 上直接跑这一轮。
-                if MacSSHFallback.isRouteFailure(error), await self.runViaSSH(prompt: prompt) { return }
+                if MacSSHFallback.isRouteFailure(error), self.startSSHTurn(prompt: prompt) { return }
                 await MainActor.run {
                     self.fail(error.localizedDescription)
                     self.status = "pending"   // recoverable: nothing was created
                     self.report(error)
+                    // 建会话期间排队的几条没机会发了:退还给输入框,不静默丢掉。
+                    let lost = self.turns.cancel()
+                    if !lost.isEmpty { self.unsentText = lost.joined(separator: "\n\n") }
                 }
             }
         }
     }
 
     private func appendSSHText(_ text: String) {
+        flushDeltas()
         if let index = items.indices.last, case .assistantText = items[index].kind {
             items[index].text += (items[index].text.isEmpty ? "" : "\n") + text
         } else {
@@ -364,35 +566,72 @@ final class HarnessSessionDriver: ObservableObject {
         }
     }
 
-    /// [fix-remote] SSH 兜底跑一轮。返回 false = 这台 Mac 走不了 SSH（原错误照常显示）。
-    private func runViaSSH(prompt: String) async -> Bool {
+    private func applySSH(_ event: SSHFallbackEvent) {
+        switch event {
+        case .text(let text):
+            appendSSHText(text)
+        case .toolStarted(let id, let name, let input):
+            let preview = input.split(separator: "\n", maxSplits: 1).first.map { String($0.prefix(200)) } ?? ""
+            append(GatewayTranscriptItem(kind: .tool(name: name, isRunning: true, isError: false, duration: nil),
+                                         text: preview, toolUseId: id, detail: input.isEmpty ? nil : input))
+        case .toolFinished(let id, let output, let isError):
+            finishTool(id: id, name: nil, isError: isError, duration: nil, output: output)
+        case .session(let id):
+            sshResumeId = id
+        }
+    }
+
+    /// [fix-remote] 开一轮 SSH 兜底。返回 false = 这台 Mac 走不了 SSH（原错误照常显示）。
+    private func startSSHTurn(prompt: String) -> Bool {
         let (remote, reason) = MacSSHFallback.readiness(hostId: client.hostId, cliKey: harness.key)
         guard let remote, let hostId = client.hostId else {
             if let reason { note("SSH 兜底不可用：\(reason)") }
             return false
         }
-        note(MacSSHFallback.notice)
-        status = "running"
-        let failure = await MacSSHFallback.run(remote: remote, hostId: hostId, cliKey: harness.key, prompt: prompt, cwd: cwd) { [weak self] text in
-            await self?.appendSSHText(text)
+        if !sshNoticeShown {
+            sshNoticeShown = true
+            note(MacSSHFallback.notice)
         }
+        viaSSH = true
+        isRunning = true
+        status = "running"
+        // 模式胶囊可用时按所选模式,否则按全自动开关。
+        let fullAuto = modeSupport == true ? mode == .yolo : wantsFullAuto
+        let resumeId = sshResumeId
+        // 强引用 self:离开页面后这一轮照常跑完(驱动随它一起活到跑完)。
+        sshTask = Task {
+            await self.runSSHTurn(remote: remote, hostId: hostId, prompt: prompt, fullAuto: fullAuto, resumeId: resumeId)
+        }
+        return true
+    }
+
+    private func runSSHTurn(remote: RemoteHost, hostId: String, prompt: String, fullAuto: Bool, resumeId: String?) async {
+        let failure = await MacSSHFallback.run(remote: remote, hostId: hostId, cliKey: harness.key, prompt: prompt, cwd: cwd,
+                                               fullAuto: fullAuto, resumeId: resumeId) { [weak self] event in
+            await self?.applySSH(event)
+        }
+        flushDeltas()
+        sshTask = nil
+        // 这一轮已经在 Mac 上跑过:清掉首条指令,状态回 idle。以前设回 pending,回到页面 resumeIfNeeded
+        // 会把首条指令再跑一遍。下一条消息照常先试直连 / 中继，不通再走 SSH。
+        firstPrompt = nil
+        // 用户点了停止:stopLocalTurn 已收好状态。
+        if Task.isCancelled { return }
+        settleRunningTools()
         if let failure {
-            items.append(GatewayTranscriptItem(kind: .failure, text: "SSH 兜底失败：\(failure)"))
+            append(GatewayTranscriptItem(kind: .failure, text: "SSH 兜底失败：\(failure)"))
             lastTurnFailed = true
         } else {
             lastTurnFailed = false
         }
-        // 没有 Mac 上的任务（sessionId 仍为空）：下一条消息照常先试直连 / 中继，不通再走 SSH。
-        status = "pending"
         isRunning = false
-        return true
+        status = "idle"
+        // 这一轮跑着时排队的消息:按顺序跑下一条。
+        if let next = turns.turnEnded() { start(prompt: next) }
     }
 
-    private func flushQueuedSteers() {
-        guard let sessionId else { return }
-        let queued = queuedSteers
-        queuedSteers = []
-        guard !queued.isEmpty else { return }
+    private func flushQueuedSteers(_ queued: [String]) {
+        guard let sessionId, !queued.isEmpty else { return }
         Task {
             for text in queued {
                 await self.sendSteer(sessionId: sessionId, text: text)
@@ -416,7 +655,9 @@ final class HarnessSessionDriver: ObservableObject {
 
     /// 发一条后续消息,顺带告诉 Mac 全自动开关的当前状态(所有 CLI 都带)。
     private func sendSteer(sessionId: String, text: String) async {
-        let fullAuto = HarnessFullAuto.steerValue(harnessKey: harness.key, gateOn: FullAutoGate.isOn, refused: fullAutoRefused)
+        // 支持模式切换的 Mac 由模式决定审批;再带 full_auto 会把用户选的模式顶掉。
+        let fullAuto = modeSupport == true ? nil
+            : HarnessFullAuto.steerValue(harnessKey: harness.key, gateOn: FullAutoGate.isOn, refused: fullAutoRefused)
         let entry: HarnessOutbox.Entry
         do {
             // 必须在网络调用前落盘；中继重启、手机杀进程或丢 ACK 都不丢原文。
@@ -499,7 +740,7 @@ final class HarnessSessionDriver: ObservableObject {
     private func steerFailed(_ text: String, _ reason: String, problem found: LeoLinkProblem? = nil) {
         lastError = reason
         if let found { adopt(found) }
-        items.append(GatewayTranscriptItem(kind: .failure, text: AppLocalized("没送到 Mac：\(reason)")))
+        append(GatewayTranscriptItem(kind: .failure, text: AppLocalized("没送到 Mac：\(reason)")))
         if status == "running" { status = "idle" }
         unsentText = text
     }
@@ -677,19 +918,20 @@ final class HarnessSessionDriver: ObservableObject {
     @discardableResult
     func steer(_ text: String) -> Bool {
         guard !text.isEmpty else { return false }
+        lastUserText = text
         guard let sessionId else {
-            items.append(GatewayTranscriptItem(kind: .notice, text: "→ " + text))
-            if status == "starting" {
-                queuedSteers.append(text)
-            } else {
-                // pending/idle:上次创建失败或从未创建——用这条文字当首条
+            append(GatewayTranscriptItem(kind: .notice, text: "→ " + text))
+            if turns.submit(text) {
+                // pending/idle:上次创建失败、从未创建或上一轮走的 SSH 兜底——用这条文字当首条
                 // 消息重建。isRunning 已置位时 start() 会拒,先复位。
                 isRunning = false
                 start(prompt: text)
+            } else if sshTask != nil {
+                note(AppLocalized("已排队：这一轮跑完就发。"))
             }
             return true
         }
-        items.append(GatewayTranscriptItem(kind: .notice, text: "→ " + text))
+        append(GatewayTranscriptItem(kind: .notice, text: "→ " + text))
         lastError = nil
         problem = nil
         if status == "idle" { status = "running" }
@@ -707,14 +949,32 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     func stop() {
-        guard sessionId != nil else { return }
+        guard sessionId != nil else { stopLocalTurn(); return }
         Task { await self.stopAndWait() }
+    }
+
+    /// 还没有 Mac 会话(SSH 兜底在跑,或建会话还在路上):停止就是取消本机这一轮。
+    /// 以前没有 sessionId 时停止按钮什么都不做,兜底只能等它自己跑完。
+    private func stopLocalTurn() {
+        guard isRunning || sshTask != nil else { return }
+        sshTask?.cancel()
+        sshTask = nil
+        streamTask?.cancel()
+        streamTask = nil
+        flushDeltas()
+        settleRunningTools()
+        let lost = turns.cancel()
+        if !lost.isEmpty { unsentText = lost.joined(separator: "\n\n") }
+        firstPrompt = nil
+        isRunning = false
+        status = "idle"
+        note(AppLocalized("已停止。"))
     }
 
     /// The same stop, awaited: for a caller whose process may be suspended as
     /// soon as it returns (the Live Activity's stop button).
     func stopAndWait() async {
-        guard let sessionId else { return }
+        guard let sessionId else { stopLocalTurn(); return }
         do { try await client.stopHarness(sessionId: sessionId) }
         catch {
             lastError = error.localizedDescription
@@ -756,12 +1016,14 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     func detach() {
+        flushDeltas()
         streamTask?.cancel()
         streamTask = nil
         relayQueueWatch?.cancel()
         relayQueueWatch = nil
         HarnessLiveActivityBridge.shared.unregister(driver: self)
-        guard isRunning else { return }
+        // SSH 兜底这一轮不随离开页面掐断:它在 sshTask 里跑完,状态保持 running,回来接着看。
+        guard isRunning, sshTask == nil else { return }
         isRunning = false
         // Leaving before the session id came back would otherwise strand this
         // driver at detached/nil forever, with no Start button on this screen
@@ -810,6 +1072,7 @@ final class HarnessSessionDriver: ObservableObject {
         isRunning = true
         status = ["idle", "available", "completed"].contains(knownStatus ?? "") ? "idle" : "running"
         HarnessLiveActivityBridge.shared.register(driver: self, hostName: client.hostName)
+        probeSessionFeatures(existingSessionId)
         streamTask = Task { [weak self] in
             await self?.follow(sessionId: existingSessionId)
         }
@@ -939,27 +1202,23 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     private func apply(_ event: GatewayEvent) {
+        if case .messageDelta(let delta) = event {
+            bufferDelta(delta)
+            return
+        }
+        flushDeltas()
         switch event {
-        case .messageDelta(let delta):
-            if let index = items.indices.last, case .assistantText = items[index].kind {
-                items[index].text += delta
-            } else {
-                items.append(GatewayTranscriptItem(kind: .assistantText, text: delta))
-            }
+        case .messageDelta:
+            break
         case .reasoning(let text):
             guard !text.isEmpty else { return }
             items.append(GatewayTranscriptItem(kind: .reasoning, text: text))
-        case .toolStarted(let tool, let preview):
+        case .toolStarted(let tool, let preview, let toolUseId, let input):
             items.append(GatewayTranscriptItem(
                 kind: .tool(name: tool, isRunning: true, isError: false, duration: nil),
-                text: preview ?? ""))
-        case .toolCompleted(let tool, let duration, let isError):
-            if let index = items.lastIndex(where: {
-                if case .tool(let name, let running, _, _) = $0.kind { return name == tool && running }
-                return false
-            }) {
-                items[index].kind = .tool(name: tool, isRunning: false, isError: isError, duration: duration)
-            }
+                text: preview ?? "", toolUseId: toolUseId, detail: input))
+        case .toolCompleted(let tool, let duration, let isError, let toolUseId, let output):
+            finishTool(id: toolUseId, name: tool, isError: isError, duration: duration, output: output)
         case .approvalRequest(let approval):
             guard !pendingApprovals.contains(where: { $0.approvalId == approval.approvalId }) else { return }
             pendingApprovals.append(approval)
@@ -1009,6 +1268,8 @@ final class HarnessSessionDriver: ObservableObject {
             status = "idle"
             lastTurnFailed = false
             clearApprovals()
+            settleRunningTools()
+            Task { await self.refreshChanges() }
         case .runFailed(let message):
             // A failed TURN, not a dead session — surface it and stay
             // steerable; a dead process ends via stream close + reconcile.
@@ -1020,11 +1281,15 @@ final class HarnessSessionDriver: ObservableObject {
             status = "idle"
             lastTurnFailed = true
             clearApprovals()
+            settleRunningTools()
+            Task { await self.refreshChanges() }
         case .runCancelled:
             // The turn stopped; keep following — a follow-up may come next.
             status = "idle"
             clearApprovals()
+            settleRunningTools()
             note(AppLocalized("Session stopped."))
+            Task { await self.refreshChanges() }
         case .unknown(let name, let payload):
             if name == "user.message" {
                 // The durable log now carries the user half of the
@@ -1037,6 +1302,14 @@ final class HarnessSessionDriver: ObservableObject {
                 return
             }
             if name == "session.created" { return }   // metadata, already shown by the launcher
+            // 权限模式变了(手机、Mac 桌面或 agent 自己切的):胶囊跟着变。
+            if name == "mode" {
+                if let mode = HarnessMode(rawValue: payload["mode"] ?? "") {
+                    self.mode = mode
+                    recordSupport(Self.modeSupportKey, true)
+                }
+                return
+            }
             // Mac 端给人看的说明(例如"手机暂时答不了的提问已跳过"):只显示文字,不带事件名。
             if name == "session.note" {
                 let text = payload["text"] ?? ""
@@ -1075,7 +1348,7 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     private func note(_ text: String) {
-        items.append(GatewayTranscriptItem(kind: .notice, text: text))
+        append(GatewayTranscriptItem(kind: .notice, text: text))
     }
 
     // MARK: [T-link-problem] 连接问题
@@ -1107,7 +1380,7 @@ final class HarnessSessionDriver: ObservableObject {
 
     private func fail(_ message: String) {
         lastError = message
-        items.append(GatewayTranscriptItem(kind: .failure, text: message))
+        append(GatewayTranscriptItem(kind: .failure, text: message))
         status = "failed"
         isRunning = false
         pendingApprovals = []

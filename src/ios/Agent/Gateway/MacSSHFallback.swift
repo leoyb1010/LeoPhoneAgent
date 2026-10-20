@@ -1,9 +1,9 @@
 import Foundation
 
 /// [fix-remote] 直连与中继都连不上时的 SSH 兜底：经 tailnet 直接 SSH 到 Mac，在登录 shell 里无界面跑所选 CLI，
-/// 把输出当成一轮回复流式显示。没有审批、工具卡与续传（每轮是一次独立的命令）。
+/// 把输出当成一轮回复流式显示。没有审批；claude / codex 的工具调用显示成工具行，下一轮用 CLI 报的会话号续上上下文。
 enum MacSSHFallback {
-    static let notice = "当前为 SSH 兜底：直连和中继都连不上，经 Tailscale 直接在 Mac 上跑这一轮。审批与工具卡不可用，每条消息单独执行。"
+    static let notice = "当前为 SSH 兜底：直连和中继都连不上，经 Tailscale 直接在 Mac 上跑。没有审批；消息按顺序一轮一轮执行，Claude Code / Codex 会接着上一轮的上下文。"
 
     /// 这台 Mac 现在能不能走 SSH 兜底（有目标、有固定的主机公钥、有这台 iPhone 的钥匙、CLI 支持）。
     @MainActor
@@ -16,20 +16,26 @@ enum MacSSHFallback {
         guard let key = host.sshHostKey else { return (nil, "还没固定这台 Mac 的 SSH 主机公钥：先经直连或中继连上一次") }
         guard RemoteHostStore.devicePrivateKey() != nil else { return (nil, "这台 iPhone 还没有 SSH 钥匙：到 设置 → 远程主机 生成") }
         let address = target.address
+        // 端口不能写死 22:目标里有就用,否则用「远程主机」里关联到这台 Mac 的那条配置的端口。
+        let deviceId = host.device?.deviceId
+        let configured = deviceId.flatMap { id in RemoteHostStore.shared.hosts.first { $0.deviceId == id }?.port }
+        let port = MacSSHTarget.port(target: target, configured: configured)
         let remote = RemoteHost(
-            id: "leo-ssh-fallback-" + host.id, name: host.name, host: address, port: 22, username: target.user,
-            deviceId: host.device?.deviceId, trustedHostKey: key,
-            trustedHostKeyEndpoint: RemoteSSHTrust.endpoint(host: address, port: 22))
+            id: "leo-ssh-fallback-" + host.id, name: host.name, host: address, port: port, username: target.user,
+            deviceId: deviceId, trustedHostKey: key,
+            trustedHostKeyEndpoint: RemoteSSHTrust.endpoint(host: address, port: port))
         return (remote, nil)
     }
 
-    /// 跑一轮；每行可显示的文字回调给界面。返回失败说明（nil = 成功）。
+    /// 跑一轮；每行解析出的正文 / 工具 / 会话号回调给界面。返回失败说明（nil = 成功）。
     static func run(remote: RemoteHost, hostId: String, cliKey: String, prompt: String, cwd: String,
-                    onText: @escaping @Sendable (String) async -> Void) async -> String? {
-        guard let command = SSHFallbackCLI.command(key: cliKey, prompt: prompt, cwd: cwd) else { return "不支持这个 CLI" }
+                    fullAuto: Bool, resumeId: String?,
+                    onEvent: @escaping @Sendable (SSHFallbackEvent) async -> Void) async -> String? {
+        guard let command = SSHFallbackCLI.command(key: cliKey, prompt: prompt, cwd: cwd,
+                                                   fullAuto: fullAuto, resumeId: resumeId) else { return "不支持这个 CLI" }
         let started = Date()
         let result = await RemoteSSHExecutor.shared.stream(host: remote, command: command, timeout: 1800) { line in
-            if let text = SSHFallbackCLI.text(key: cliKey, line: line) { await onText(text) }
+            for event in SSHFallbackCLI.events(key: cliKey, line: line) { await onEvent(event) }
         }
         await GatewayHostStore.shared.recordPath(
             id: hostId, route: .ssh, success: result.succeeded,

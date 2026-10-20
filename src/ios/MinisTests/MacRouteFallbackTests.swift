@@ -51,7 +51,16 @@ final class MacRouteFallbackTests: XCTestCase {
         XCTAssertNil(MacSSHTarget.parse(["host": "bad host;rm", "user": "leo"]))
         XCTAssertNil(MacSSHTarget.parse(["host": "ok", "user": "-oProxyCommand"]))
         let override = MacSSHTarget(host: "custom", user: "me")
-        XCTAssertEqual(MacSSHTarget.resolve(advertised: advertised, override: override, machine: "LeodeMac-mini-2"), advertised)
+        // 设置里用户填的优先（界面写的就是「留空才用 Mac 报的」）；没填端口沿用广播的端口。
+        XCTAssertEqual(MacSSHTarget.resolve(advertised: advertised, override: override, machine: "LeodeMac-mini-2"), override)
+        let advertisedPort = MacSSHTarget.parse(["host": "leomac-studio", "user": "leoyuan", "port": 2222])
+        XCTAssertEqual(advertisedPort?.port, 2222)
+        XCTAssertNil(MacSSHTarget.parse(["host": "h", "user": "u", "port": 70000])?.port)
+        XCTAssertEqual(MacSSHTarget.resolve(advertised: advertisedPort, override: override, machine: nil)?.port, 2222)
+        XCTAssertEqual(MacSSHTarget.resolve(advertised: advertisedPort, override: override, machine: nil)?.host, "custom")
+        XCTAssertEqual(MacSSHTarget.port(target: override, configured: 2200), 2200)
+        XCTAssertEqual(MacSSHTarget.port(target: override, configured: nil), 22)
+        XCTAssertEqual(MacSSHTarget.port(target: advertisedPort!, configured: 2200), 2222)
         XCTAssertEqual(MacSSHTarget.resolve(advertised: nil, override: override, machine: "LeodeMac-mini-2"), override)
         XCTAssertEqual(MacSSHTarget.resolve(advertised: nil, override: nil, machine: "LeodeMac-mini-2"),
                        MacSSHTarget(host: "mac-mini-cortex", user: "leo"))
@@ -105,6 +114,37 @@ final class MacRouteFallbackTests: XCTestCase {
         XCTAssertEqual(SSHFallbackCLI.text(key: "codex", line: #"{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":"done"}}"#), "done")
         XCTAssertNil(SSHFallbackCLI.text(key: "codex", line: #"{"type":"turn.started"}"#))
         XCTAssertEqual(SSHFallbackCLI.text(key: "gemini", line: "\u{1B}[32mhello\u{1B}[0m"), "hello")
+    }
+
+    func testFullAutoAndResumeFlags() throws {
+        let plain = try XCTUnwrap(SSHFallbackCLI.command(key: "claude", prompt: "x", cwd: "~"))
+        XCTAssertFalse(plain.contains("--dangerously-skip-permissions"))
+        XCTAssertFalse(plain.contains("--resume"))
+        let auto = try XCTUnwrap(SSHFallbackCLI.command(key: "claude", prompt: "x", cwd: "~", fullAuto: true,
+                                                         resumeId: "0d6f6a2e-1111-4c1b-9d2e-3f4a5b6c7d8e"))
+        XCTAssertTrue(auto.contains("--dangerously-skip-permissions"))
+        let script = try XCTUnwrap(Self.unquoteSingle(String(auto.dropFirst("/bin/zsh -lc ".count))))
+        XCTAssertTrue(script.contains("--resume '0d6f6a2e-1111-4c1b-9d2e-3f4a5b6c7d8e'"))
+        // 会话号不像会话号就不拼进命令行。
+        let evil = try XCTUnwrap(SSHFallbackCLI.command(key: "claude", prompt: "x", cwd: "~", resumeId: "a; rm -rf ~"))
+        XCTAssertFalse(evil.contains("--resume"))
+        let codex = try XCTUnwrap(Self.unquoteSingle(String(try XCTUnwrap(
+            SSHFallbackCLI.command(key: "codex", prompt: "go", cwd: "~", fullAuto: true, resumeId: "th_1")).dropFirst("/bin/zsh -lc ".count))))
+        XCTAssertTrue(codex.contains("codex exec --json --skip-git-repo-check --full-auto resume 'th_1' 'go'"))
+        XCTAssertTrue(try XCTUnwrap(SSHFallbackCLI.command(key: "gemini", prompt: "x", cwd: "~", fullAuto: true)).contains("--yolo"))
+    }
+
+    func testStreamEventsCarryToolsAndSessionIds() {
+        XCTAssertEqual(SSHFallbackCLI.events(key: "claude", line: #"{"type":"system","subtype":"init","session_id":"s-1"}"#), [.session("s-1")])
+        XCTAssertEqual(SSHFallbackCLI.events(key: "claude", line: #"{"type":"assistant","message":{"content":[{"type":"text","text":"看看"},{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls -la","description":"list"}}]}}"#),
+                       [.text("看看"), .toolStarted(id: "t1", name: "Bash", input: "ls -la")])
+        XCTAssertEqual(SSHFallbackCLI.events(key: "claude", line: #"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":[{"type":"text","text":"a\nb"}],"is_error":true}]}}"#),
+                       [.toolFinished(id: "t1", output: "a\nb", isError: true)])
+        XCTAssertEqual(SSHFallbackCLI.events(key: "codex", line: #"{"type":"thread.started","thread_id":"th_9"}"#), [.session("th_9")])
+        XCTAssertEqual(SSHFallbackCLI.events(key: "codex", line: #"{"type":"item.started","item":{"id":"i2","type":"command_execution","command":"pwd"}}"#),
+                       [.toolStarted(id: "i2", name: "shell", input: "pwd")])
+        XCTAssertEqual(SSHFallbackCLI.events(key: "codex", line: #"{"type":"item.completed","item":{"id":"i2","type":"command_execution","aggregated_output":"/x","exit_code":1}}"#),
+                       [.toolFinished(id: "i2", output: "/x", isError: true)])
     }
 
     func testFakeIPDetectionAndRules() {
