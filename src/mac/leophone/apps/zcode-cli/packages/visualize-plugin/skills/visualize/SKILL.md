@@ -24,7 +24,7 @@ Read this file in full before authoring. Reread truncated ranges in smaller call
 - For each new or updated visualization, choose a concise ASCII lowercase-hyphenated title and write `<title>.html` in an explicitly writable, durable, task-owned location. Prefer the thread-scoped visualization directory when it appears in the writable roots or is explicitly supplied by the host. Do not write inline fragments into the project; if no visualization directory is supplied, inline rendering is unavailable.
 - Never add `sandbox:` links to inline visualization HTML unless the user specifically requests a download.
 - Do not choose system temp as a separate fallback. Write access alone does not guarantee that the conversation can read the file.
-- Use the absolute path on the executor that creates the file. Never assume `~/.zcode` is writable beyond the session directory explicitly supplied by the host.
+- Use the absolute path on the executor that creates the file. Never assume `~/.leophoneagent` is writable beyond the session directory explicitly supplied by the host.
 - Build the visual in the conversation. Use the open project when the user asks for a site, app page, component, or change to existing project files.
 
 ### Fragment
