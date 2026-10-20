@@ -104,4 +104,25 @@ final class WP50MacScreenSnapshotTests: XCTestCase {
         XCTAssertTrue(views.contains("scenePhase == .active"), "poll only in the foreground")
         XCTAssertTrue(views.contains("onTapGesture(count: 2)"), "double tap resets zoom")
     }
+
+    func testRetryBackoffDoublesAndCaps() {
+        XCTAssertEqual(RetryBackoff.delay(failures: 0, base: 3, cap: 30), 3)
+        XCTAssertEqual(RetryBackoff.delay(failures: 1, base: 3, cap: 30), 3)
+        XCTAssertEqual(RetryBackoff.delay(failures: 2, base: 3, cap: 30), 6)
+        XCTAssertEqual(RetryBackoff.delay(failures: 4, base: 3, cap: 30), 24)
+        XCTAssertEqual(RetryBackoff.delay(failures: 5, base: 3, cap: 30), 30)
+        XCTAssertEqual(RetryBackoff.delay(failures: 10_000, base: 5, cap: 60), 60, "huge counts must not overflow")
+    }
+
+    func testAttemptTokenRejectsStaleWork() {
+        var attempt = MacScreenAttempt()
+        let first = attempt.begin()
+        XCTAssertTrue(attempt.isCurrent(first))
+        attempt.invalidate()                       // stop()
+        let second = attempt.begin()               // start() right after
+        XCTAssertFalse(attempt.isCurrent(first), "the old run must not clear the new run's state")
+        XCTAssertTrue(attempt.isCurrent(second))
+        attempt.invalidate()
+        XCTAssertFalse(attempt.isCurrent(second))
+    }
 }

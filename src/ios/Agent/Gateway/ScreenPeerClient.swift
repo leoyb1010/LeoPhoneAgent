@@ -18,6 +18,8 @@ import Foundation
 import UIKit
 import WebRTC
 
+private let screenLog = AppLogger(category: "ScreenPeer")
+
 extension LeoAgentClient {
     private func screenSessionRequest(_ path: String, method: String = "GET", body: Data? = nil)
         async -> (status: Int, data: Data, error: MacScreenError?) {
@@ -105,8 +107,10 @@ final class ScreenPeerClient: ObservableObject {
     private var trickleTask: Task<Void, Never>?
     private var statsTask: Task<Void, Never>?
     private var timeoutTask: Task<Void, Never>?
-    private var bridge: PeerBridge?
+    /// PeerBridge 用它认出自己是不是当前这条连接的(旧连接迟到的回调直接丢)。
+    fileprivate private(set) var bridge: PeerBridge?
     private var wantsControl = false
+    private var attempt = MacScreenAttempt()
 
     init(client: LeoAgentClient) {
         self.client = client
@@ -121,7 +125,8 @@ final class ScreenPeerClient: ObservableObject {
         controlReady = false
         inputStatus = nil
         state = .connecting
-        Task { await connect() }
+        let id = attempt.begin()
+        Task { await connect(id) }
     }
 
     func stop() {
@@ -146,10 +151,24 @@ final class ScreenPeerClient: ObservableObject {
 
     // MARK: Connect
 
-    private func connect() async {
-        guard case .success(let preflight) = await client.screenPreflight() else {
-            return fail(await preflightError())
+    /// 这一次连接已经过期(stop / fail / 重新 start 过):关掉它自己建的本地 peer,别再碰共享状态。
+    private func isStale(_ id: Int, closing peer: RTCPeerConnection?) -> Bool {
+        guard !attempt.isCurrent(id) else { return false }
+        peer?.close()
+        return true
+    }
+
+    private func connect(_ id: Int) async {
+        // 预检失败直接用这次的错误,不为取错误再请求一次。
+        let preflight: ScreenSessionPreflight
+        switch await client.screenPreflight() {
+        case .success(let value): preflight = value
+        case .failure(let error):
+            if isStale(id, closing: nil) { return }
+            return fail(error)
         }
+        // 预检期间被 stop 了:不能再建 peer(否则 stop 之后又冒出一条连接)。
+        if isStale(id, closing: nil) { return }
         let config = RTCConfiguration()
         config.iceServers = preflight.iceServers.map {
             RTCIceServer(urlStrings: $0.urls, username: $0.username, credential: $0.credential)
@@ -173,7 +192,12 @@ final class ScreenPeerClient: ObservableObject {
             let rest = codecs.filter { $0.name.uppercased() != "H264" }
             // ObjC `setCodecPreferences:error:` collides with the deprecated overload, so Swift keeps
             // an `error: ()` label on the throwing import.
-            try? transceiver.setCodecPreferences(h264 + rest, error: ())
+            do {
+                try transceiver.setCodecPreferences(h264 + rest, error: ())
+            } catch {
+                // 不致命(按默认顺序协商),但 H.264 没排到第一时画质/功耗会差,记下来好查。
+                screenLog.warning("setCodecPreferences failed: \(error.localizedDescription)")
+            }
             if let track = transceiver.receiver.track as? RTCVideoTrack { videoTrack = track }
         }
         if wantsControl {
@@ -190,24 +214,30 @@ final class ScreenPeerClient: ObservableObject {
                     else { continuation.resume(throwing: error ?? URLError(.unknown)) }
                 }
             }
+            if isStale(id, closing: peer) { return }
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 peer.setLocalDescription(offer) { error in
                     if let error { continuation.resume(throwing: error) } else { continuation.resume() }
                 }
             }
         } catch {
+            if isStale(id, closing: peer) { return }
             return fail(MacScreenError(status: 0, code: "negotiation_failed", message: error.localizedDescription))
         }
-        guard state == .connecting else { return }
+        if isStale(id, closing: peer) { return }
         let opened: ScreenSessionOpened
-        switch await client.openScreenSession(ScreenSessionWire.openBody(offer: offer.sdp, control: wantsControl)) {
+        let openResult = await client.openScreenSession(ScreenSessionWire.openBody(offer: offer.sdp, control: wantsControl))
+        if isStale(id, closing: peer) {
+            // Mac 已经开了会话,这边却不要了:关掉,免得占着「只有一个观看者」的名额。
+            if case .success(let late) = openResult {
+                let client = self.client
+                Task { await client.closeScreenSession(sessionId: late.sessionId) }
+            }
+            return
+        }
+        switch openResult {
         case .success(let value): opened = value
         case .failure(let error): return fail(error)
-        }
-        guard state == .connecting, self.peer === peer else {
-            let client = self.client
-            Task { await client.closeScreenSession(sessionId: opened.sessionId) }
-            return
         }
         sessionId = opened.sessionId
         controlRefused = wantsControl && !opened.control
@@ -219,19 +249,17 @@ final class ScreenPeerClient: ObservableObject {
                 }
             }
         } catch {
+            if isStale(id, closing: peer) { return }
             return fail(MacScreenError(status: 0, code: "negotiation_failed", message: error.localizedDescription))
         }
+        // 走到这里前 stop() 过:它已经按 sessionId 发了 DELETE,这里只关本地 peer。
+        if isStale(id, closing: peer) { return }
         flushCandidates()
         timeoutTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(ScreenViewModePolicy.connectTimeout))
             guard let self, !Task.isCancelled, self.state == .connecting else { return }
             self.fail(MacScreenError(status: 0, code: "connect_timeout"))
         }
-    }
-
-    private func preflightError() async -> MacScreenError {
-        if case .failure(let error) = await client.screenPreflight() { return error }
-        return MacScreenError(status: 0, code: "malformed")
     }
 
     private func fail(_ error: MacScreenError) {
@@ -245,6 +273,7 @@ final class ScreenPeerClient: ObservableObject {
     }
 
     private func teardown() {
+        attempt.invalidate()
         timeoutTask?.cancel(); timeoutTask = nil
         trickleTask?.cancel(); trickleTask = nil
         statsTask?.cancel(); statsTask = nil
@@ -267,8 +296,10 @@ final class ScreenPeerClient: ObservableObject {
         guard trickleTask == nil else { return }
         trickleTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(150))
-            self?.trickleTask = nil
-            self?.flushCandidates()
+            // teardown 取消了这次合并:不能把新一轮的 trickleTask 清掉,也不把旧候选发出去。
+            guard !Task.isCancelled, let self else { return }
+            self.trickleTask = nil
+            self.flushCandidates()
         }
     }
 
@@ -331,7 +362,8 @@ private final class PeerBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChan
 
     private func onMain(_ work: @escaping @MainActor (ScreenPeerClient) -> Void) {
         Task { @MainActor [weak self] in
-            if let owner = self?.owner { work(owner) }
+            guard let self, let owner = self.owner, owner.bridge === self else { return }
+            work(owner)
         }
     }
 
@@ -418,6 +450,14 @@ final class ScreenPiPController: NSObject, AVPictureInPictureSampleBufferPlaybac
     let renderer = ScreenPiPRenderer()
     private(set) var controller: AVPictureInPictureController?
     var onActiveChange: ((Bool) -> Void)?
+    /// 画中画正在起或已经起来(willStart 就置上,比 didStart 早):退到后台的那一下据此别拆视频。
+    private(set) var isEngaged = false
+    /// 当前视频轨道。PiP 渲染器每帧都要转一次 CMSampleBuffer,只在画中画时挂上去,平时不白耗 CPU。
+    private weak var track: RTCVideoTrack?
+    private var feeding = false
+    /// 开画中画前的音频会话设置,结束时还原(不然别的 App 的音频行为一直被改成 playback)。
+    private var savedAudio: (category: AVAudioSession.Category, mode: AVAudioSession.Mode,
+                             options: AVAudioSession.CategoryOptions)?
 
     static var isSupported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
 
@@ -432,19 +472,57 @@ final class ScreenPiPController: NSObject, AVPictureInPictureSampleBufferPlaybac
         controller = pip
     }
 
+    /// 视频轨道换了(连上 / 断开)。画中画开着就把渲染器挪到新轨道上。
+    func setTrack(_ newTrack: RTCVideoTrack?) {
+        guard newTrack !== track else { return }
+        if feeding { track?.remove(renderer) }
+        track = newTrack
+        if feeding { newTrack?.add(renderer) }
+        if newTrack != nil { attach() }
+    }
+
+    private func setFeeding(_ on: Bool) {
+        guard on != feeding else { return }
+        feeding = on
+        if on { track?.add(renderer) } else {
+            track?.remove(renderer)
+            let layer = renderer.displayLayer
+            DispatchQueue.main.async { layer.sampleBufferRenderer.flush() }
+        }
+    }
+
     func toggle() {
         guard let controller else { return }
         if controller.isPictureInPictureActive { controller.stopPictureInPicture() }
         else {
-            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+            let session = AVAudioSession.sharedInstance()
+            if savedAudio == nil { savedAudio = (session.category, session.mode, session.categoryOptions) }
+            try? session.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
             controller.startPictureInPicture()
         }
     }
 
     var isActive: Bool { controller?.isPictureInPictureActive ?? false }
 
+    private func ended() {
+        isEngaged = false
+        setFeeding(false)
+        if let saved = savedAudio {
+            savedAudio = nil
+            try? AVAudioSession.sharedInstance().setCategory(saved.category, mode: saved.mode, options: saved.options)
+        }
+        onActiveChange?(false)
+    }
+
+    func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        isEngaged = true
+        setFeeding(true)
+        onActiveChange?(true)
+    }
     func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) { onActiveChange?(true) }
-    func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) { onActiveChange?(false) }
+    func pictureInPictureController(_ controller: AVPictureInPictureController,
+                                    failedToStartPictureInPictureWithError error: Error) { ended() }
+    func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) { ended() }
 
     func pictureInPictureController(_ controller: AVPictureInPictureController, setPlaying playing: Bool) {}
     func pictureInPictureControllerTimeRangeForPlayback(_ controller: AVPictureInPictureController) -> CMTimeRange {
