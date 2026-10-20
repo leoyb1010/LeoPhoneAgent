@@ -10,16 +10,16 @@ import type {
   Agent,
   Client,
   ContentBlock,
-  PermissionOption,
   PlanEntry,
   RequestPermissionRequest,
   RequestPermissionResponse,
   SessionNotification,
   StopReason,
-  ToolCallContent,
-  ToolCallLocation,
 } from "@agentclientprotocol/sdk";
 import type { AcpAgentCommand, AcpAgentId, AcpToolCallInput, AcpToolCallOutput } from "@zcode/shared/acp";
+import { contentText, isTerminal, pickOption, summarizeTool, toToolInput, type ToolState } from "./tool-state.js";
+
+export { ACP_DIFF_LIMIT_BYTES, capDiff, contentText } from "./tool-state.js";
 
 export type AcpHostEvent =
   | { kind: "text"; text: string }
@@ -35,24 +35,7 @@ export type AcpHostEvent =
     }
   | { kind: "error"; error: unknown };
 
-interface ToolState {
-  id: string;
-  title: string;
-  kind: string;
-  status: string;
-  content: ToolCallContent[];
-  locations: ToolCallLocation[];
-  rawInput: unknown;
-  rawOutput: unknown;
-  announced: boolean;
-  permission?: {
-    options: PermissionOption[];
-    resolve: (response: RequestPermissionResponse) => void;
-    /** 以哪个 LeoBot 工具调用 id 交给了运行时（同一 ACP 调用在竞态下可能再交一次）。 */
-    announcedAs?: string;
-  };
-  waiters: Array<() => void>;
-}
+
 
 export interface AcpConnectionLike {
   agent: Pick<Agent, "prompt" | "cancel">;
@@ -66,6 +49,13 @@ export class AcpSessionHost {
   #waiter: ((event: AcpHostEvent) => void) | undefined;
   #connection: AcpConnectionLike | undefined;
   #turnActive = false;
+  /**
+   * 轮次序号：每次 startTurn 加一。prompt 的回调只认自己那一轮——
+   * 取消后旧一轮的 stop / 错误常常晚于下一轮的 startTurn 才到，不按序号丢掉就会把新一轮当场结束。
+   */
+  #turnSeq = 0;
+  /** 最近一次活动（开轮、agent 更新、授权请求）的时间；管理器据此回收闲置进程。 */
+  #lastActivityAt = Date.now();
   /** 本轮 agent 有没有产出（正文 / 思考 / 工具 / 计划）。 */
   #turnOutput = false;
   #announceSeq = 0;
@@ -85,6 +75,16 @@ export class AcpSessionHost {
     return this.#turnActive;
   }
 
+  get lastActivityAt(): number {
+    return this.#lastActivityAt;
+  }
+
+  /** 还有 agent 等着答复的授权（闲置回收时不能把它掐掉）。 */
+  get hasPendingPermission(): boolean {
+    for (const tool of this.#tools.values()) if (tool.permission) return true;
+    return false;
+  }
+
   get availableCommands(): readonly AcpAgentCommand[] {
     return this.#availableCommands;
   }
@@ -102,18 +102,25 @@ export class AcpSessionHost {
   /** [fix-remote] agent 进程在回合中途没了：以错误结束这一轮（否则运行时一直等下一条事件）。 */
   failTurn(error: unknown): void {
     if (!this.#turnActive) return;
-    this.#turnActive = false;
+    this.#endTurn();
     this.#push({ kind: "error", error });
   }
 
   startTurn(prompt: ContentBlock[]): void {
     const connection = this.#requireConnection();
+    const turn = ++this.#turnSeq;
+    // [fix] 停止后错位：上一轮遗留在队列里的事件（典型是取消后的 stop）不属于这一轮，清掉；
+    // 上一轮的工具也一并清掉（仍挂着的授权按取消回复），工具表不跨轮增长。
+    this.#queue.length = 0;
+    this.#dropTools();
     this.#turnActive = true;
     this.#turnOutput = false;
+    this.#lastActivityAt = Date.now();
     void Promise.resolve(connection.agent.prompt({ sessionId: connection.sessionId, prompt }))
       .then(
         (response) => {
-          this.#turnActive = false;
+          if (turn !== this.#turnSeq) return;
+          this.#endTurn();
           this.#flushPendingAnnouncements();
           this.#push({
             kind: "stop",
@@ -129,8 +136,25 @@ export class AcpSessionHost {
               : {}),
           });
         },
-        (error: unknown) => this.failTurn(error),
+        (error: unknown) => {
+          if (turn === this.#turnSeq) this.failTurn(error);
+        },
       );
+  }
+
+  /** 只由当前轮的结束调用：清 turnActive，并叫醒还在等终态的工具（本轮结束即视为结束）。 */
+  #endTurn(): void {
+    this.#turnActive = false;
+    for (const tool of this.#tools.values()) this.#wake(tool);
+  }
+
+  #dropTools(): void {
+    for (const tool of this.#tools.values()) {
+      tool.permission?.resolve({ outcome: { outcome: "cancelled" } });
+      tool.permission = undefined;
+      this.#wake(tool);
+    }
+    this.#tools.clear();
   }
 
   async cancel(): Promise<void> {
@@ -248,6 +272,7 @@ export class AcpSessionHost {
   }
 
   #onSessionUpdate(params: SessionNotification): void {
+    this.#lastActivityAt = Date.now();
     const update = params.update;
     switch (update.sessionUpdate) {
       case "agent_message_chunk": {
@@ -305,6 +330,7 @@ export class AcpSessionHost {
 
   #onRequestPermission(params: RequestPermissionRequest): Promise<RequestPermissionResponse> {
     const update = params.toolCall;
+    this.#lastActivityAt = Date.now();
     const tool = this.#ensureTool(update.toolCallId);
     if (update.title) tool.title = update.title;
     if (update.kind) tool.kind = update.kind;
@@ -368,125 +394,25 @@ export class AcpSessionHost {
     for (const waiter of waiters) waiter();
   }
 
+  /**
+   * 等这步收尾。本轮结束而这步一直没收尾（agent 省略了最后一次 update）时由 #endTurn 叫醒。
+   * [fix] 以前靠 250ms 轮询判断轮结束，abort 时轮询不清、一直跑；改成事件叫醒，abort 时摘掉等待者。
+   */
   #waitForTerminal(tool: ToolState, signal?: AbortSignal): Promise<void> {
     if (isTerminal(tool.status) || !this.#turnActive) return Promise.resolve();
     return new Promise((resolve, reject) => {
-      const onAbort = () => reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
-      if (signal?.aborted) return onAbort();
-      signal?.addEventListener("abort", onAbort, { once: true });
-      tool.waiters.push(() => {
+      const waiter = () => {
         signal?.removeEventListener("abort", onAbort);
         resolve();
-      });
-      // 本轮结束而这步一直没收尾（agent 省略了最后一次 update）：轮结束即视为结束。
-      const poll = setInterval(() => {
-        if (!this.#turnActive) {
-          clearInterval(poll);
-          this.#wake(tool);
-        }
-      }, 250);
-      tool.waiters.push(() => clearInterval(poll));
+      };
+      const onAbort = () => {
+        const index = tool.waiters.indexOf(waiter);
+        if (index >= 0) tool.waiters.splice(index, 1);
+        reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+      };
+      if (signal?.aborted) return onAbort();
+      signal?.addEventListener("abort", onAbort, { once: true });
+      tool.waiters.push(waiter);
     });
   }
-}
-
-function isTerminal(status: string): boolean {
-  return status === "completed" || status === "failed";
-}
-
-function pickOption(
-  options: readonly PermissionOption[],
-  kind: PermissionOption["kind"],
-): PermissionOption | undefined {
-  return options.find((option) => option.kind === kind);
-}
-
-export function contentText(content: ContentBlock): string {
-  switch (content.type) {
-    case "text":
-      return content.text;
-    case "resource_link":
-      return content.uri;
-    case "resource":
-      return "text" in content.resource ? content.resource.text : "";
-    default:
-      return "";
-  }
-}
-
-function firstLocationPath(tool: ToolState): string | undefined {
-  return tool.locations[0]?.path;
-}
-
-function rawString(raw: unknown, ...keys: string[]): string | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  for (const key of keys) {
-    const value = (raw as Record<string, unknown>)[key];
-    if (typeof value === "string" && value.trim()) return value;
-    if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
-      return (value as string[]).join(" ");
-    }
-  }
-  return undefined;
-}
-
-function toToolInput(
-  agentId: AcpAgentId,
-  tool: ToolState,
-  needsApproval: boolean,
-  leoToolCallId: string,
-): AcpToolCallInput {
-  const diffContent = tool.content.find((item) => item.type === "diff");
-  const command = tool.kind === "execute" ? rawString(tool.rawInput, "command", "cmd") : undefined;
-  const path =
-    firstLocationPath(tool) ??
-    (diffContent && diffContent.type === "diff" ? diffContent.path : undefined) ??
-    rawString(tool.rawInput, "file_path", "path", "abs_path");
-  return {
-    agentId,
-    acpToolCallId: tool.id,
-    leoToolCallId,
-    title: tool.title,
-    kind: tool.kind,
-    needsApproval,
-    ...(command ? { command } : {}),
-    ...(path ? { path } : {}),
-    ...(diffContent && diffContent.type === "diff"
-      ? {
-          diff: {
-            path: diffContent.path,
-            oldText: diffContent.oldText ?? null,
-            newText: diffContent.newText,
-          },
-        }
-      : {}),
-  };
-}
-
-function summarizeTool(tool: ToolState): AcpToolCallOutput {
-  const texts: string[] = [];
-  const diffs: NonNullable<AcpToolCallOutput["diffs"]> = [];
-  for (const item of tool.content) {
-    if (item.type === "content") {
-      const text = contentText(item.content);
-      if (text) texts.push(text);
-    } else if (item.type === "diff") {
-      diffs.push({ path: item.path, oldText: item.oldText ?? null, newText: item.newText });
-    } else if (item.type === "terminal") {
-      texts.push(`[terminal ${item.terminalId}]`);
-    }
-  }
-  if (texts.length === 0 && typeof tool.rawOutput === "string") texts.push(tool.rawOutput);
-  if (texts.length === 0 && tool.rawOutput && typeof tool.rawOutput === "object") {
-    const output = rawString(tool.rawOutput, "output", "stdout", "result", "content");
-    if (output) texts.push(output);
-  }
-  const status = tool.status === "failed" ? "failed" : tool.status === "completed" ? "completed" : "cancelled";
-  return {
-    status,
-    title: tool.title,
-    kind: tool.kind,
-    text: texts.join("\n").slice(0, 64 * 1024),
-    ...(diffs.length > 0 ? { diffs } : {}),
-  };
 }

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { HarnessJournal } from './journal.js';
+import { HarnessJournal, JOURNAL_ROLL_BYTES } from './journal.js';
 
 // 移植自 leocodebox harness-journal.test.ts 中只依赖日志本身的用例。
 
@@ -81,5 +81,50 @@ test('duplicate records are not replayed twice and cannot yield a complete durab
     assert.equal(journal.health().state, 'degraded');
     assert.deepEqual((await journal.readPage()).events.map((event) => event.seq), [1, 2]);
     await journal.close();
+  });
+});
+
+test('peekTail reads only the tail for the last seq and time; the full index is built on first read', async () => {
+  await temporary(async (directory) => {
+    const logPath = path.join(directory, 'events.ndjson');
+    const lines = Array.from({ length: 5_000 }, (_, index) => JSON.stringify({ event: 'message.delta', seq: index + 1, timestamp: 100 + index, delta: 'x'.repeat(200) }));
+    await writeFile(logPath, lines.join('\n') + '\n');
+    const journal = new HarnessJournal(logPath);
+    await journal.peekTail();
+    assert.equal(journal.health().latest_seq, 5_000);
+    assert.equal(journal.health().durable_seq, 5_000);
+    assert.equal(journal.lastEventAt(), 5_099);
+    const page = await journal.readPage(4_990, { limit: 5 });
+    assert.deepEqual(page.events.map((event) => event.seq), [4_991, 4_992, 4_993, 4_994, 4_995]);
+    assert.equal(journal.health().state, 'durable');
+    assert.equal(journal.health().durable_seq, 5_000);
+    journal.enqueue({ event: 'run.completed', seq: 5_001 }, true);
+    assert.equal((await journal.flush()).durable_seq, 5_001);
+    await journal.close();
+  });
+});
+
+test('a journal over the cap rolls to its recent part without reporting the dropped head as missing', async () => {
+  await temporary(async (directory) => {
+    const logPath = path.join(directory, 'events.ndjson');
+    const count = Math.ceil(JOURNAL_ROLL_BYTES / 1024) + 2_000;
+    const lines = Array.from({ length: count }, (_, index) => JSON.stringify({ event: 'message.delta', seq: index + 1, delta: 'x'.repeat(990) }));
+    await writeFile(logPath, lines.join('\n') + '\n');
+    const journal = new HarnessJournal(logPath);
+    await journal.initialize();
+    assert.ok((await stat(logPath)).size < JOURNAL_ROLL_BYTES / 2 + 4096);
+    const health = journal.health();
+    assert.equal(health.state, 'durable');
+    assert.deepEqual(health.missing_ranges, []);
+    assert.equal(health.latest_seq, count);
+    const first = (await journal.readPage(0, { limit: 1 })).events[0];
+    assert.ok(Number(first?.seq) > 1);
+    await journal.close();
+    // 滚动之后的下次启动也不把开头算成缺号。
+    const reopened = new HarnessJournal(logPath);
+    await reopened.initialize();
+    assert.deepEqual(reopened.health().missing_ranges, []);
+    assert.equal(reopened.health().durable_seq, count);
+    await reopened.close();
   });
 });

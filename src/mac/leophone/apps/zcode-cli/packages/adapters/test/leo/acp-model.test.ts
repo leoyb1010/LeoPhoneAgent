@@ -20,7 +20,8 @@ import {
   pickAcpAgentCommands,
   type AcpToolCallInput,
 } from "@zcode/shared/acp";
-import { AcpModel, AcpSessionManager } from "../../src/acp/model.js";
+import { AcpModel } from "../../src/acp/model.js";
+import { AcpSessionManager } from "../../src/acp/manager.js";
 import { connectAcpStream, type ConnectAcpAgentOptions } from "../../src/acp/process.js";
 
 type Script = (conn: AgentSideConnection, params: PromptRequest) => Promise<void>;

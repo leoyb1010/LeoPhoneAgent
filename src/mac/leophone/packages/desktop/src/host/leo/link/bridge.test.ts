@@ -1566,3 +1566,96 @@ test("[fix-remote] O: run.failed carries the failure code so the phone can offer
     assert.match(String(failed?.["error"]), /未登录/);
   });
 });
+
+test("mode / changes / diff / revert routes: modes, per-turn checkpoints in a git workspace, revert", async () => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const git = (cwd: string, ...args: string[]) => promisify(execFile)("git", args, { cwd });
+  await withBridge(async ({ bridge, zcode, dir }) => {
+    const repo = path.join(dir, "repo");
+    await git(dir, "init", "-q", repo);
+    await git(repo, "config", "user.email", "t@example.com");
+    await git(repo, "config", "user.name", "t");
+    await writeFile(path.join(repo, "a.txt"), "1\n");
+    await git(repo, "add", "-A");
+    await git(repo, "commit", "-q", "-m", "init");
+
+    // 创建时带 mode:优先于 full_auto;摘要带 mode
+    const id = await createSession(bridge, repo, { prompt: "改 a", mode: "guarded", full_auto: false });
+    assert.equal(zcode.named("createTask")[0]?.["mode"], "guarded");
+    const listed = (await bridge.handle(req("GET", "/harness/sessions"))).body as { sessions: Record<string, unknown>[] };
+    assert.equal(listed.sessions.find((s) => s["session_id"] === id)?.["mode"], "guarded");
+    assert.equal((await bridge.handle(req("POST", "/harness/sessions", { cwd: repo, mode: "nope" }))).status, 400);
+    assert.equal((await bridge.handle(req("POST", "/harness/sessions", { cwd: repo, mode: "yolo" }, unknown))).status, 403);
+
+    // 切模式:非法 400、认不出的设备不能开全自动 403、其余 200,事件流里有 mode
+    assert.equal((await bridge.handle(req("POST", `/harness/sessions/${id}/mode`, { mode: "auto" }))).status, 400);
+    assert.equal((await bridge.handle(req("POST", `/harness/sessions/${id}/mode`, { mode: "yolo" }, unknown))).status, 403);
+    assert.equal((await bridge.handle(req("GET", `/harness/sessions/${id}/mode`))).status, 405);
+    const planned = await bridge.handle(req("POST", `/harness/sessions/${id}/mode`, { mode: "plan" }));
+    assert.deepEqual(planned, { status: 200, body: { mode: "plan" } });
+    assert.deepEqual(zcode.named("setMode").at(-1), { taskId: id, mode: "plan" });
+    zcode.fire(id, { type: "mode_update", currentModeId: "build" }); // Mac 桌面上切的
+    const modes = await collect(bridge, id, 0, (seen) => seen.filter((e) => e.event === "mode").length >= 2);
+    assert.deepEqual(
+      modes.filter((e) => e.event === "mode").map((e) => [e["type"], e["mode"]]),
+      [
+        ["mode", "plan"],
+        ["mode", "build"],
+      ],
+    );
+
+    // 这一轮开始前已拍了检查点 1;agent 改了文件
+    await writeFile(path.join(repo, "a.txt"), "1\n2\n");
+    await writeFile(path.join(repo, "new.txt"), "n\n");
+    const changes = await bridge.handle(req("GET", `/harness/sessions/${id}/changes`));
+    assert.equal(changes.status, 200);
+    const body = changes.body as Record<string, unknown> & { files: Record<string, unknown>[]; checkpoints: Record<string, unknown>[] };
+    assert.equal(body["is_repo"], true);
+    assert.equal(body["cwd"], repo);
+    assert.deepEqual(
+      body.files.map((f) => [f["path"], f["status"], f["additions"], f["deletions"]]),
+      [
+        ["a.txt", "M", 1, 0],
+        ["new.txt", "?", 1, 0],
+      ],
+    );
+    assert.deepEqual(
+      body.checkpoints.map((c) => [c["id"], c["turn"], c["label"]]),
+      [["1", 1, "改 a"]],
+    );
+    const diff = await bridge.handle(req("GET", `/harness/sessions/${id}/diff?path=a.txt&checkpoint=1`));
+    assert.equal(diff.status, 200);
+    assert.match(String((diff.body as Record<string, unknown>)["diff"]), /^\+2$/m);
+    assert.equal((await bridge.handle(req("GET", `/harness/sessions/${id}/diff?path=../x`))).status, 400);
+    assert.equal((await bridge.handle(req("GET", `/harness/sessions/${id}/diff?path=a.txt&checkpoint=7`))).status, 404);
+
+    // 还在跑不让回滚;跑完后回到第 1 轮开始之前
+    assert.equal((await bridge.handle(req("POST", `/harness/sessions/${id}/revert`, { checkpoint: "1" }))).status, 409);
+    zcode.fire(id, { type: "task_complete", stopReason: "success" });
+    const reverted = await bridge.handle(req("POST", `/harness/sessions/${id}/revert`, { checkpoint: "1", paths: [] }));
+    assert.deepEqual(reverted, { status: 200, body: { reverted: ["a.txt", "new.txt"], checkpoint: "1" } });
+    assert.equal(await readFile(path.join(repo, "a.txt"), "utf8"), "1\n");
+
+    // 第二轮:又拍一个检查点
+    await bridge.handle(req("POST", `/harness/sessions/${id}/send`, { text: "再来" }));
+    const again = (await bridge.handle(req("GET", `/harness/sessions/${id}/changes`))).body as { checkpoints: Record<string, unknown>[] };
+    assert.deepEqual(again.checkpoints.map((c) => c["turn"]), [1, 2]);
+    // 插话(还在跑)不是新的一轮
+    await bridge.handle(req("POST", `/harness/sessions/${id}/send`, { text: "顺便" }));
+    const steer = (await bridge.handle(req("GET", `/harness/sessions/${id}/changes`))).body as { checkpoints: unknown[] };
+    assert.equal(steer.checkpoints.length, 2);
+
+    // 非 git 工作区
+    const plain = await createSession(bridge, dir);
+    assert.deepEqual((await bridge.handle(req("GET", `/harness/sessions/${plain}/changes`))).body, {
+      is_repo: false,
+      cwd: dir,
+      branch: null,
+      files: [],
+      checkpoints: [],
+    });
+    assert.equal((await bridge.handle(req("POST", `/harness/sessions/${plain}/revert`, { paths: ["a.txt"] }))).status, 409);
+    assert.equal((await bridge.handle(req("GET", "/harness/sessions/missing/changes"))).status, 404);
+  });
+});

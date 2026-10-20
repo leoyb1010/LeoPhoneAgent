@@ -8,26 +8,46 @@ import type { HarnessEvent } from "./journal.js";
  * 手机端(iOS `GatewayEvent.parse`、Android `MinisHarnessRouter`)只认 v0.4 的词汇,
  * 所以这里是唯一的翻译点。审批、提问、审批回执带副作用,由会话自己处理,不经过这里。
  */
+/** 正文增量合并窗口:窗口内的 token 合成一条 message.delta(一行日志、一帧)。 */
+export const DELTA_MERGE_MS = 50;
+
 export class ZCodeEventMapper {
   private thought = "";
+  /** 还没发出去的正文增量;定时器到点或下一条别的事件到来时整段发。 */
+  private text = "";
+  private textTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly tools = new Map<string, { name: string; startedAt: number }>();
 
-  constructor(private readonly now: () => number = Date.now) {}
+  /**
+   * onDeferred:合并窗口到点时把攒着的正文交回会话编号发出。
+   * [fix] 以前每个 token 一条 message.delta,一条日志一帧,长回答在手机和日志里都是成千上万行。
+   * 合并只改帧的粒度,不改语义:手机按 seq 续传、按顺序拼接 delta,和以前一样。
+   */
+  constructor(
+    private readonly now: () => number = Date.now,
+    private readonly onDeferred?: (events: HarnessEvent[]) => void,
+    private readonly mergeMs = DELTA_MERGE_MS,
+  ) {}
 
   map(event: ZCodeStreamEvent): HarnessEvent[] {
     if (event.type === "agent_thought_chunk") {
-      if (isMainAgent(event.parentToolUseId)) this.thought += event.content;
-      return [];
+      if (!isMainAgent(event.parentToolUseId)) return [];
+      const out = this.takeText();
+      this.thought += event.content;
+      return out;
     }
-    // 思考整段发一次:iOS 每条 reasoning 都单独成行,逐 token 发会刷出几百行。
-    const out = this.flushThought();
+    if (event.type === "agent_message_chunk") {
+      // 思考整段发一次:iOS 每条 reasoning 都单独成行,逐 token 发会刷出几百行。
+      const out = this.flushThought();
+      // 子 agent 的正文和上下文压缩这类合成横条不进手机对话。
+      if (isMainAgent(event.parentToolUseId) && !event.zcodeTimeline && event.content) {
+        this.text += event.content;
+        this.scheduleText();
+      }
+      return out;
+    }
+    const out = this.flushPending();
     switch (event.type) {
-      case "agent_message_chunk":
-        // 子 agent 的正文和上下文压缩这类合成横条不进手机对话。
-        if (isMainAgent(event.parentToolUseId) && !event.zcodeTimeline && event.content) {
-          out.push({ event: "message.delta", delta: event.content });
-        }
-        break;
       case "tool_call": {
         if (!isMainAgent(event.parentToolUseId)) break;
         const name = event.toolName || event.kind || "tool";
@@ -70,11 +90,34 @@ export class ZCodeEventMapper {
     return out;
   }
 
-  /** 审批、提问之前也要先把攒着的思考发出去,顺序才对。 */
-  flushThought(): HarnessEvent[] {
+  /** 审批、提问以及会话自己发的任何事件之前,先把攒着的正文 / 思考发出去,顺序才对(两者同一时刻至多一个非空)。 */
+  flushPending(): HarnessEvent[] {
+    return [...this.takeText(), ...this.flushThought()];
+  }
+
+  private flushThought(): HarnessEvent[] {
     const text = this.thought.trim();
     this.thought = "";
     return text ? [{ event: "reasoning.available", text }] : [];
+  }
+
+  private takeText(): HarnessEvent[] {
+    if (this.textTimer) clearTimeout(this.textTimer);
+    this.textTimer = null;
+    const delta = this.text;
+    this.text = "";
+    return delta ? [{ event: "message.delta", delta }] : [];
+  }
+
+  private scheduleText(): void {
+    // 没有回调(只做翻译)就不攒,立刻由下一次 flushPending 取走。
+    if (!this.onDeferred || this.textTimer) return;
+    this.textTimer = setTimeout(() => {
+      this.textTimer = null;
+      const events = this.takeText();
+      if (events.length) this.onDeferred?.(events);
+    }, this.mergeMs);
+    this.textTimer.unref?.();
   }
 }
 

@@ -12,11 +12,22 @@ import type { RuntimeModelFactory } from "../provider-registry-model-runtime.js"
 let sharedManager: AcpSessionManager | undefined;
 
 export function getAcpSessionManager(logger?: Logger): AcpSessionManager {
-  sharedManager ??= new AcpSessionManager({
-    ...(logger
-      ? { logger: { warn: (message, context) => logger.warn(message, { module: "acp", ...context }) } }
-      : {}),
-  });
+  if (!sharedManager) {
+    sharedManager = new AcpSessionManager({
+      ...(logger
+        ? {
+            logger: {
+              warn: (message, context) => logger.warn(message, { module: "acp", ...context }),
+              info: (message, context) => logger.info(message, { module: "acp", ...context }),
+              debug: (message, context) => logger.debug(message, { module: "acp", ...context }),
+            },
+          }
+        : {}),
+    });
+    // [fix] 以前 disposeAcpSessions 没人调用：CLI 退出（含协议层 cleanup 后的 process.exit、崩溃）时
+    // agent 子进程（及其进程组）留成孤儿。exit 钩子是同步的，disposeAll 同步发 SIGTERM。
+    process.once("exit", disposeAcpSessions);
+  }
   return sharedManager;
 }
 
