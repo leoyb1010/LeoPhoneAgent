@@ -47,6 +47,8 @@ struct GatewaySettingsView: View {
     /// [T-gateway-delete-confirm] 左滑删除待确认的机器。存机器本身,不存行号:
     /// 确认框弹着时列表可能因为刷新变动。删除会连同本机保存的访问密钥一起删掉。
     @State private var pendingDeleteHost: GatewayHost?
+    /// [up-macsession] 远程机器页直达外部 agent 登录(Claude Code / Codex / Gemini…在 Mac 上没登录时)。
+    @State private var agentLogin: GatewayAgentLoginTarget?
     /// [F-mac-fleet-advanced] Mac 舰队默认关闭;开关只管入口显隐,不动已连接的机器。
     @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
 
@@ -143,6 +145,10 @@ struct GatewaySettingsView: View {
                             .buttonStyle(.plain)
                             // [T-link-problem] 失败时:是谁的问题 + 一个主按钮,技术细节折叠。
                             // 放在行按钮外面:嵌在 Button 里会和整行的点击(进入编辑)抢手势。
+                            GatewayAgentLoginMenu(host: host) { kind in
+                                agentLogin = GatewayAgentLoginTarget(host: host, kind: kind)
+                            }
+                            .padding(.leading, 20)
                             if let problem {
                                 LeoLinkProblemView(
                                     problem: problem,
@@ -231,6 +237,13 @@ struct GatewaySettingsView: View {
                 // 只能通过「保存 / 取消」离开:下滑手势静默丢弃输入
                 // 和"自动消失"在用户眼里是同一种背叛。
                 .interactiveDismissDisabled()
+            }
+        }
+        .sheet(item: $agentLogin) { target in
+            if let client = store.client(for: target.host) {
+                AgentLoginSheet(client: client, kind: target.kind) { ok in
+                    if ok { Task { _ = try? await client.harnessKinds() } }   // 刷新登录状态
+                }
             }
         }
         .task { await refresh() }
@@ -1929,6 +1942,13 @@ struct ComposerMacTarget: Identifiable {
     ]
 
     /// 这台机器能开的任务类型:Android 机身只有它自己的 Agent;升级到 LeoPhoneAgent 1.2 的 Mac 把它自己的 Agent 排第一。
+    /// [up-macsession] 与首页「指挥 Mac」一致的菜单项:全部列出,不可用灰显带原因,没登录的点了去登录。
+    static func entries(for host: GatewayHost) -> [HarnessCatalog.MenuEntry] {
+        HarnessCatalog.menuEntries(known: host.harnesses, runsLeoPhoneAgent: host.runsLeoPhoneAgent,
+                                   isAndroidBody: host.isAndroidBody)
+    }
+
+    /// 只要能直接派任务的(确认框这类放不下灰显项的地方用)。
     static func clis(for host: GatewayHost) -> [(String, String)] {
         // [fix-remote] 以 Mac 上次报的列表为准（opencode / gemini / grok 都在），还没问过才用旧默认。
         HarnessCatalog.menuOptions(known: host.harnesses, runsLeoPhoneAgent: host.runsLeoPhoneAgent,
@@ -1942,6 +1962,67 @@ struct ComposerMacTarget: Identifiable {
     /// [E5] 派出它的手机对话;完成推送带回,点通知回到那个对话。
     var phoneSessionId: String? = nil
     var id: String { host.id + cliKey }
+}
+
+/// [up-macsession] 「指挥 Mac」菜单内容:规则同首页(HarnessCatalog.menuEntries)。放进任意 `Menu { }` 里用。
+struct ComposerMacAgentMenuItems: View {
+    let host: GatewayHost
+    let onPick: (HarnessCatalog.MenuEntry) -> Void
+    let onLogin: (HarnessKind) -> Void
+
+    var body: some View {
+        let entries = ComposerMacTarget.entries(for: host)
+        if !entries.contains(where: \.selectable) {
+            Text("这台机器上暂时没有能用的 agent")
+        }
+        ForEach(entries) { entry in
+            if entry.needsLogin {
+                Button { onLogin(entry.kind) } label: {
+                    Label(entry.name, systemImage: "person.badge.key")
+                    if let note = entry.note { Text(note) }
+                }
+            } else {
+                Button { onPick(entry) } label: {
+                    Label(entry.name, systemImage: entry.kind.symbol)
+                    if let note = entry.note { Text(note) }
+                }
+                .disabled(!entry.selectable)
+            }
+        }
+    }
+}
+
+struct GatewayAgentLoginTarget: Identifiable {
+    let host: GatewayHost
+    let kind: HarnessKind
+    var id: String { host.id + "/" + kind.key }
+}
+
+/// 远程机器行下的「外部 agent 登录」:列出这台 Mac 上能在手机登录的 agent,没登录的标出来。
+private struct GatewayAgentLoginMenu: View {
+    let host: GatewayHost
+    let onLogin: (HarnessKind) -> Void
+
+    var body: some View {
+        let kinds = (host.harnesses ?? []).filter(\.canLogin)
+        if !kinds.isEmpty {
+            Menu {
+                ForEach(kinds) { kind in
+                    Button { onLogin(kind) } label: {
+                        Label(kind.displayName, systemImage: kind.loggedIn == false ? "person.badge.key" : kind.symbol)
+                        Text(kind.loggedIn == false ? "未登录" : (kind.loggedIn == true ? "已登录，可重新登录" : "登录状态未知"))
+                    }
+                }
+            } label: {
+                let missing = kinds.filter { $0.loggedIn == false }.count
+                Label(missing > 0 ? AppLocalized("\(missing) 个 agent 未登录") : AppLocalized("外部 agent 登录"),
+                      systemImage: "person.badge.key")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(missing > 0 ? LeoTheme.ColorToken.attention : Color.accentColor)
+            }
+            .accessibilityIdentifier("gateway.agentLogin")
+        }
+    }
 }
 
 /// 全屏 Mac 对话:复用控制台的 HarnessConsoleView,套一层导航 + 关闭按钮。

@@ -142,12 +142,21 @@ struct HarnessChangesSheet: View {
                 try await driver.revert(checkpoint: checkpoint)
                 LeoHaptics.notification(.success)
             } catch {
-                errorText = LeoAgentClient.describeHarnessFeatureError(error)
+                errorText = revertErrorText(error)
                 LeoHaptics.notification(.error)
             }
             working = false
         }
     }
+}
+
+/// 回滚失败的说明:任务在跑时 Mac 回 409,认不出这台 iPhone 回 403。
+private func revertErrorText(_ error: Error) -> String {
+    if case GatewayError.http(409, _) = error { return AppLocalized("Mac 上这一轮还在跑，等这一轮结束再撤销。") }
+    if case GatewayError.http(403, let message) = error {
+        return (message?.isEmpty == false ? message! + "\n" : "") + AppLocalized("这台 Mac 没认出这台 iPhone，暂时不能回滚。")
+    }
+    return LeoAgentClient.describeHarnessFeatureError(error)
 }
 
 // MARK: - Rows
@@ -272,6 +281,7 @@ struct HarnessDiffView: View {
     @State private var showAll = false
     @State private var confirmRevert = false
     @State private var reverting = false
+    @State private var revertError: String?
 
     /// 超过这么多行先折起来(几千行的 diff 一次铺开会卡,也没人一口气看完)。
     private static let foldLimit = 600
@@ -316,6 +326,11 @@ struct HarnessDiffView: View {
             Text(file.status == "?" || file.status == "A"
                  ? "这是新文件，撤销会把它删掉。"
                  : "文件会恢复成最近一次提交（HEAD）的样子。")
+        }
+        .alert(Text("没撤销成功"), isPresented: Binding(get: { revertError != nil }, set: { if !$0 { revertError = nil } })) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(revertError ?? "")
         }
         .task { await load() }
     }
@@ -386,7 +401,7 @@ struct HarnessDiffView: View {
                 LeoHaptics.notification(.success)
                 dismiss()
             } catch {
-                errorText = LeoAgentClient.describeHarnessFeatureError(error)
+                revertError = revertErrorText(error)
                 LeoHaptics.notification(.error)
             }
             reverting = false
