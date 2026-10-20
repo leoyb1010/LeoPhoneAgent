@@ -186,10 +186,25 @@ enum RelayE2E {
         return key
     }
 
-    /// 要不要换成这把新钥匙:经中继拿到的只能填空或替换同样来自中继的;扫码 / 直连可以替换任何来源。
+    /// 要不要换成这把新钥匙:经中继拿到的只能填空(首次信任);一旦固定,只有扫码 / 直连能替换。
+    /// 中继要是能替换,主动攻击者只要先逼手机降级、再递一把自己的钥匙就把首次信任作废了;
+    /// Mac 换钥匙很少见,直连一次或重扫一次就恢复。
     static func shouldPin(current: String?, currentSource: KeySource?, new: String, source: KeySource) -> Bool {
         guard validKey(new) != nil, new != current else { return false }
-        guard current != nil else { return true }
-        return source != .relay || currentSource == .relay || currentSource == nil
+        return current == nil || source != .relay
+    }
+
+    /// 携带凭据的请求(外部 agent 登录的 API key / 授权码、Grok token、看屏会话的 SDP):
+    /// 这台 Mac 加密成功过一次后,这类请求不再退回明文中继。
+    static func carriesCredentials(method: String, path: String) -> Bool {
+        let route = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
+        if route == "/v1/grok/token" { return true }
+        guard method.uppercased() == "POST" else { return false }
+        return (route.hasPrefix("/agents/") && route.contains("/login")) || route.hasPrefix("/screen/session")
+    }
+
+    /// 这条请求能不能退回明文中继:加密成功过的 Mac,带凭据的不能;其余照旧可以(方便为先)。
+    static func mayFallBackToPlaintext(verified: Bool, method: String, path: String) -> Bool {
+        !(verified && carriesCredentials(method: method, path: path))
     }
 }

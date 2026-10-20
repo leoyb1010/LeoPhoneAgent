@@ -57,6 +57,7 @@ extension LeoAgentClient {
             switch RelayE2E.reply(status: (response as? HTTPURLResponse)?.statusCode ?? 0, data: data,
                                   keys: sealed.keys, queued: queued) {
             case .opened(let status, let body):
+                relayE2EVerified = true
                 await noteRelayE2E(true)
                 let headers = ["Content-Type": "application/json"]
                 guard let url = original.url,
@@ -68,6 +69,11 @@ extension LeoAgentClient {
             case .fallback(let disable):
                 if disable { relayE2EOffUntil = Date().addingTimeInterval(600) }
             }
+        }
+        if let relative = machineRelative(original),
+           !RelayE2E.mayFallBackToPlaintext(verified: relayE2EVerified, method: original.httpMethod ?? "GET", path: relative) {
+            // 加密通道通过的 Mac,登录凭据 / token / SDP 不降级给中继看:宁可这次失败。
+            throw GatewayError.http(status: 428, message: AppLocalized("这台 Mac 的加密通道暂时不通，这个操作不走明文中继：直连后再试"))
         }
         let (data, response) = try await RelayRootRouter.shared.perform(original) { try await session.data(for: $0) }
         if let relative = machineRelative(original) {
@@ -104,6 +110,7 @@ extension LeoAgentClient {
                         if let event = try opener.next(raw) {
                             continuation.yield("data: " + event)
                         } else {
+                            self.relayE2EVerified = true
                             await self.noteRelayE2E(true)
                         }
                     }

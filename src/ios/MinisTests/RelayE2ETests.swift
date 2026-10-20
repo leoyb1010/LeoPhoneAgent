@@ -109,12 +109,35 @@ final class RelayE2ETests: XCTestCase {
         // 经中继拿到的不能顶掉扫码 / 直连固定的。
         XCTAssertFalse(RelayE2E.shouldPin(current: a, currentSource: .qr, new: b, source: .relay))
         XCTAssertFalse(RelayE2E.shouldPin(current: a, currentSource: .direct, new: b, source: .relay))
-        XCTAssertTrue(RelayE2E.shouldPin(current: a, currentSource: .relay, new: b, source: .relay))
+        // 中继首次信任的钥匙一旦存下,中继来源也不能再替换它;直连 / 扫码可以。
+        XCTAssertFalse(RelayE2E.shouldPin(current: a, currentSource: .relay, new: b, source: .relay))
+        XCTAssertTrue(RelayE2E.shouldPin(current: a, currentSource: .relay, new: b, source: .direct))
+        XCTAssertTrue(RelayE2E.shouldPin(current: a, currentSource: .relay, new: b, source: .qr))
         XCTAssertTrue(RelayE2E.shouldPin(current: a, currentSource: .qr, new: b, source: .direct))
         XCTAssertFalse(RelayE2E.shouldPin(current: nil, currentSource: nil, new: "short", source: .qr))
         XCTAssertEqual(RelayE2E.publicKey(fromCapabilities: ["relay_e2e": ["v": 1, "public_key": a]]), a)
         XCTAssertNil(RelayE2E.publicKey(fromCapabilities: ["relay_e2e": ["v": 2, "public_key": a]]))
         XCTAssertNil(RelayE2E.publicKey(fromCapabilities: [:]))
+    }
+
+    func testCredentialRequestsNeverDowngradeOnceVerified() {
+        let credential: [(String, String)] = [
+            ("POST", "/agents/claude/login"), ("POST", "/agents/claude/login/f1/code"),
+            ("GET", "/v1/grok/token"), ("POST", "/screen/session"), ("POST", "/screen/session/s1/ice"),
+        ]
+        for (method, path) in credential {
+            XCTAssertTrue(RelayE2E.carriesCredentials(method: method, path: path), path)
+            XCTAssertFalse(RelayE2E.mayFallBackToPlaintext(verified: true, method: method, path: path), path)
+            // 从没加密成功过的 Mac(旧版):照旧明文,不然连登录都做不了。
+            XCTAssertTrue(RelayE2E.mayFallBackToPlaintext(verified: false, method: method, path: path), path)
+        }
+        let ordinary: [(String, String)] = [
+            ("POST", "/harness/sessions/s1/send"), ("GET", "/harness/sessions"), ("GET", "/agents/claude/auth"),
+            ("GET", "/screen/snapshot?max_edge=1280"), ("GET", "/v1/capabilities"), ("DELETE", "/screen/session/s1"),
+        ]
+        for (method, path) in ordinary {
+            XCTAssertTrue(RelayE2E.mayFallBackToPlaintext(verified: true, method: method, path: path), path)
+        }
     }
 
     func testPairPayloadCarriesTheKeyAndOldCodesStillParse() {

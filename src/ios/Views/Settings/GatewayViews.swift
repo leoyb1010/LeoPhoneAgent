@@ -556,7 +556,7 @@ private struct GatewayHostRow: View {
     let host: GatewayHost
     let isReachable: Bool?
     /// [e2e] 最近一次经中继的请求有没有端到端加密;nil = 还没走过中继。
-    var relayE2E: Bool? = nil
+    var relayE2E: GatewayHostStore.RelayE2EStatus? = nil
     var route: GatewayRouteStatus? = nil
     /// [fix-remote] 当前走的路（直连 / 中继 / SSH）与延迟。
     var path: MacRouteSelector? = nil
@@ -578,8 +578,10 @@ private struct GatewayHostRow: View {
                     }.font(.caption).foregroundStyle(.secondary)
                 }
                 if let relayE2E {
-                    Label(relayE2E ? AppLocalized("中继：端到端加密") : AppLocalized("中继：未加密"),
-                          systemImage: relayE2E ? "lock.fill" : "lock.open")
+                    Label(relayE2E == .encrypted ? AppLocalized("中继：端到端加密")
+                            : relayE2E == .keyMismatch ? AppLocalized("中继：钥匙不一致（直连一次即可修复）")
+                            : AppLocalized("中继：未加密"),
+                          systemImage: relayE2E == .encrypted ? "lock.fill" : relayE2E == .keyMismatch ? "exclamationmark.lock" : "lock.open")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

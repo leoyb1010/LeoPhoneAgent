@@ -54,6 +54,8 @@ struct GatewayHost: Codable, Identifiable, Hashable {
     /// [e2e] 这台 Mac 的中继加密公钥(base64url,公钥不是秘密)与它的来源(扫码 / 直连 / 经中继首次信任)。
     var relayE2EKey: String? = nil
     var relayE2EKeySource: RelayE2E.KeySource? = nil
+    /// [e2e] 和这台 Mac 成功完成过一次加密往返:之后带凭据的请求不再退回明文中继。
+    var relayE2EVerified: Bool? = nil
 
     /// SSH 兜底实际用的目标：设置里填的 → Mac 广播的 → 内置默认（按中继里的机器名）。
     var resolvedSSHTarget: MacSSHTarget? {
@@ -84,8 +86,10 @@ final class GatewayHostStore: ObservableObject {
 
     @Published private(set) var hosts: [GatewayHost]
     @Published private(set) var routeStatuses: [String: GatewayRouteStatus] = [:]
-    /// [e2e] 每台主机最近一次经中继的请求有没有端到端加密(连接详情里标「中继：端到端加密 / 未加密」)。
-    @Published private(set) var relayE2E: [String: Bool] = [:]
+    /// [e2e] 每台主机经中继的加密状态(连接详情里标「中继：端到端加密 / 未加密 / 钥匙不一致」)。
+    enum RelayE2EStatus: Equatable { case encrypted, plaintext, keyMismatch }
+    @Published private(set) var relayE2E: [String: RelayE2EStatus] = [:]
+    private static let e2eLog = AppLogger(category: "RelayE2E")
     /// [T-link-problem] 每台主机当前的连接问题,以及哪些主机的自动重连 / 轮询已暂停(等用户点主按钮)。
     @Published private(set) var linkBook = LeoLinkProblemBook()
     /// Built clients live here, not in a view body: `client(for:)` does a
@@ -251,6 +255,7 @@ final class GatewayHostStore: ObservableObject {
                 saved.sshHostKey = host.sshHostKey ?? previous.sshHostKey
                 saved.relayE2EKey = host.relayE2EKey ?? previous.relayE2EKey
                 saved.relayE2EKeySource = host.relayE2EKeySource ?? previous.relayE2EKeySource
+                saved.relayE2EVerified = host.relayE2EVerified ?? previous.relayE2EVerified
             }
             // 设置里填的 SSH 兜底目标跟着编辑走；没填就保留原来的。
             saved.sshTargetOverride = host.sshTargetOverride ?? previous.sshTargetOverride
@@ -359,15 +364,29 @@ final class GatewayHostStore: ObservableObject {
         let host = hosts[index]
         if host.relayE2EKey == key { return true }
         guard RelayE2E.shouldPin(current: host.relayE2EKey, currentSource: host.relayE2EKeySource, new: key, source: source)
-        else { return false }
+        else {
+            if source == .relay, host.relayE2EKey != nil {
+                // 中继递来的和已固定的不一样:不换(可能是 Mac 换了钥匙,也可能是中继在换钥匙),等直连或扫码来修。
+                Self.e2eLog.warning("relay e2e key mismatch for host \(id); keeping pinned key until direct/QR")
+                if relayE2E[id] != .keyMismatch { relayE2E[id] = .keyMismatch }
+            }
+            return false
+        }
         hosts[index].relayE2EKey = key
         hosts[index].relayE2EKeySource = source
+        if relayE2E[id] == .keyMismatch { relayE2E.removeValue(forKey: id) }
         persist()
         return true
     }
 
+    /// 钥匙不一致是要用户直连一次才消的结论:之后的明文请求不把它冲成「未加密」。
     func recordRelayE2E(id: String, encrypted: Bool) {
-        if relayE2E[id] != encrypted { relayE2E[id] = encrypted }
+        let next: RelayE2EStatus = encrypted ? .encrypted : (relayE2E[id] == .keyMismatch ? .keyMismatch : .plaintext)
+        if relayE2E[id] != next { relayE2E[id] = next }
+        if encrypted, let index = hosts.firstIndex(where: { $0.id == id }), hosts[index].relayE2EVerified != true {
+            hosts[index].relayE2EVerified = true
+            persist()
+        }
     }
 
     func setSSHTargetOverride(_ target: MacSSHTarget?, for id: String) {
@@ -469,7 +488,8 @@ final class GatewayHostStore: ObservableObject {
         }
         let built = LeoAgentClient(baseURL: base, apiKey: key, harnessBaseURL: harnessBase,
                                    hostId: host.id, hostName: host.name, supportsDirectDiscovery: host.runsLeoPhoneAgent, expectedDeviceId: host.device?.deviceId, directOnly: host.directOnly == true, relayServices: services,
-                                   outboxIdentity: outboxIdentity, relayE2EKey: host.relayE2EKey)
+                                   outboxIdentity: outboxIdentity, relayE2EKey: host.relayE2EKey,
+                                   relayE2EVerified: host.relayE2EVerified == true)
         clients[host.id] = built
         // [fix-remote] 建好 client 就在后台问一次 capabilities：可开的 agent 列表、SSH 兜底目标与 sshd 公钥都记下来，
         // 之后直连与中继都不通时 SSH 兜底才有固定好的主机身份可用。
