@@ -11,10 +11,36 @@ final class WP42SendFlightAndPinOrderTests: XCTestCase {
     func testFliesToTheBubbleCornerOnceTheCellIsLaidOut() {
         let cell = CGRect(x: 0, y: 500, width: 390, height: 60)
         let landing = P.landingRect(source: source, cell: cell)
-        XCTAssertEqual(P.decide(source: source, cellFrame: cell, window: window, reduceMotion: false, waits: 0), .fly(to: landing))
+        XCTAssertEqual(P.decide(source: source, cellFrame: cell, previousCellFrame: cell, window: window, reduceMotion: false, waits: 0), .fly(to: landing))
         XCTAssertEqual(landing, CGRect(x: 90, y: 500, width: 300, height: 40), "trailing-top of the cell, user bubbles are right-aligned")
         XCTAssertEqual(P.landingRect(source: source, cell: CGRect(x: 0, y: 0, width: 200, height: 20)).size,
                        CGSize(width: 200, height: 20), "never bigger than the cell")
+    }
+
+    func testWaitsForTheCellToSettleBeforeFlying() {
+        // 键盘收起时 cell 还在往下走：第一次看到、或者位置还在变，就再等一帧；等满了按当前位置飞。
+        let cell = CGRect(x: 0, y: 500, width: 390, height: 60)
+        XCTAssertEqual(P.decide(source: source, cellFrame: cell, window: window, reduceMotion: false, waits: 1), .wait)
+        XCTAssertEqual(P.decide(source: source, cellFrame: cell, previousCellFrame: cell.offsetBy(dx: 0, dy: -40),
+                                window: window, reduceMotion: false, waits: 5), .wait)
+        XCTAssertEqual(P.decide(source: source, cellFrame: cell, previousCellFrame: cell.offsetBy(dx: 0, dy: -40),
+                                window: window, reduceMotion: false, waits: P.maxSettleWaits),
+                       .fly(to: P.landingRect(source: source, cell: cell)))
+    }
+
+    func testLandsOnTheBubbleNotTheWholeRow() {
+        let cell = CGRect(x: 0, y: 500, width: 390, height: 60)
+        let text = CGSize(width: 60, height: 20)
+        let bubble = P.bubbleFrame(cell: cell, text: text)
+        XCTAssertEqual(bubble, CGRect(x: 390 - 16 - 88, y: 520, width: 88, height: 40), "right-aligned, 16pt cell inset, bubble padding 28×20")
+        let landing = P.landingRect(source: source, cell: cell, bubbleText: text)
+        XCTAssertEqual(landing.minX, bubble.minX)
+        XCTAssertEqual(landing.minY, bubble.minY)
+        XCTAssertLessThanOrEqual(landing.width, bubble.width)
+        XCTAssertEqual(landing.width / landing.height, source.width / source.height, accuracy: 0.001, "scaled, never squashed")
+        // 长文本：气泡最宽 = 行宽 - 两侧 16 - 左侧 Spacer 60
+        XCTAssertEqual(P.bubbleFrame(cell: cell, text: CGSize(width: 1000, height: 40)).width, 390 - 32 - 60)
+        XCTAssertEqual(P.bubbleTextWidth(cellWidth: 390), 390 - 32 - 60 - 28)
     }
 
     func testAsyncInsertWaitsAFewFramesThenFadesIn() {

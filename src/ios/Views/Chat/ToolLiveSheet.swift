@@ -285,6 +285,41 @@ private struct CopyableURLCapsule: View {
 }
 
 /// Full-screen live sheet — Manus-style layout with nav bar, live content, and bottom status/navigation.
+/// 工具详情里的大图：后台读盘 + 降采样到 2048px（含解码），结果进 NativeMediaImageCache。
+/// 以前在 body 里同步 `UIImage(contentsOfFile:)`，每次重算都读一遍原图，解码还落在主线程绘制时。
+@MainActor
+final class ToolSheetImageLoader: ObservableObject {
+    static let shared = ToolSheetImageLoader()
+    /// 有图解码完就 +1，让正在看的详情页重算一次。
+    @Published private(set) var version = 0
+    private var inFlight: Set<String> = []
+    private var failed: Set<String> = []
+
+    /// 已解码就直接给；否则在后台开始解码并返回 nil（`isLoading` 为 true）。
+    func image(atPath path: String) -> UIImage? {
+        let key = "sheet:\(path)"
+        if let img = NativeMediaImageCache.shared.image(for: key) { return img }
+        guard !inFlight.contains(path), !failed.contains(path) else { return nil }
+        inFlight.insert(path)
+        Task.detached(priority: .userInitiated) {
+            let img = (try? Data(contentsOf: URL(fileURLWithPath: path))).flatMap { downsampleImageData($0, maxPixelSize: 2048) }
+            await MainActor.run {
+                let loader = ToolSheetImageLoader.shared
+                loader.inFlight.remove(path)
+                if let img {
+                    NativeMediaImageCache.shared.set(img, for: key)
+                    loader.version &+= 1
+                } else {
+                    loader.failed.insert(path)
+                }
+            }
+        }
+        return nil
+    }
+
+    func isLoading(_ path: String?) -> Bool { path.map { inFlight.contains($0) } ?? false }
+}
+
 struct ToolLiveSheet: View {
     let toolBlocks: [AssistantBlock]
     @State var currentIdx: Int
@@ -297,6 +332,7 @@ struct ToolLiveSheet: View {
 
     @State private var browserSnapshot: UIImage?
     @State private var snapshotTimer: Timer?
+    @ObservedObject private var sheetImages = ToolSheetImageLoader.shared
     @State private var showTerminal = false
     @State private var navCopyDone = false
     /// Incremented when the current block publishes changes, forcing SwiftUI to re-render.
@@ -680,8 +716,10 @@ struct ToolLiveSheet: View {
             // Fallback to block content
             switch block.kind {
             case .browserTool:
-                if let img = block.imageFilePath.flatMap({ UIImage(contentsOfFile: $0) }) {
+                if let img = block.imageFilePath.flatMap({ sheetImages.image(atPath: $0) }) {
                     browserResultContent(image: img, text: block.content)
+                } else if sheetImages.isLoading(block.imageFilePath) {
+                    imageLoadingPlaceholder
                 } else {
                     browserTextResultContent(block.content)
                 }
@@ -690,14 +728,18 @@ struct ToolLiveSheet: View {
             // without this arm the whole "image shows inline" promise was
             // dead code: only browser/read-image kinds ever drew it.
             case _ where block.imageFilePath != nil:
-                if let img = block.imageFilePath.flatMap({ UIImage(contentsOfFile: $0) }) {
+                if let img = block.imageFilePath.flatMap({ sheetImages.image(atPath: $0) }) {
                     browserResultContent(image: img, text: block.content)
+                } else if sheetImages.isLoading(block.imageFilePath) {
+                    imageLoadingPlaceholder
                 } else {
                     textContent
                 }
             case .readImageTool:
-                if let img = block.imageFilePath.flatMap({ UIImage(contentsOfFile: $0) }) {
+                if let img = block.imageFilePath.flatMap({ sheetImages.image(atPath: $0) }) {
                     browserResultContent(image: img, text: block.content)
+                } else if sheetImages.isLoading(block.imageFilePath) {
+                    imageLoadingPlaceholder
                 } else {
                     textContent
                 }
@@ -721,6 +763,11 @@ struct ToolLiveSheet: View {
         }
     }
 
+    /// 大图后台解码期间的占位（通常只有一两帧）。
+    private var imageLoadingPlaceholder: some View {
+        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     /// Render a persisted snapshot (image or text).
     @ViewBuilder
     private func snapshotContent(_ item: ToolSnapshotItem) -> some View {
@@ -728,8 +775,10 @@ struct ToolLiveSheet: View {
         case .image:
             if let ref = item.snapshot.mediaRef {
                 let url = item.mediaResolver(ref)
-                if let img = UIImage(contentsOfFile: url.path) {
+                if let img = sheetImages.image(atPath: url.path) {
                     browserResultContent(image: img, text: block.content)
+                } else if sheetImages.isLoading(url.path) {
+                    imageLoadingPlaceholder
                 } else {
                     textContent
                 }
@@ -1673,7 +1722,8 @@ struct ToolLiveSheet: View {
         let script: String? = browserScriptFromArgs()
 
         return VStack(spacing: 0) {
-            if let img = browserSnapshot ?? block.imageFilePath.flatMap({ UIImage(contentsOfFile: $0) }) {
+            // 新截图解码好之前先显示上一张（browserSnapshot），不闪「Loading」。
+            if let img = block.imageFilePath.flatMap({ sheetImages.image(atPath: $0) }) ?? browserSnapshot {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         // Action + URL capsules
@@ -1763,8 +1813,9 @@ struct ToolLiveSheet: View {
                 }
             }
         }
-        .onChange(of: block.imageFilePath) { path in
-            if let path, let img = UIImage(contentsOfFile: path) {
+        .onChange(of: block.imageFilePath) { oldPath, _ in
+            // 上一张当兜底；新路径的图在后台解码，好了 version 变化会让上面取到它。
+            if let oldPath, let img = sheetImages.image(atPath: oldPath) {
                 browserSnapshot = img
             }
         }
