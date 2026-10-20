@@ -134,6 +134,14 @@ enum DeepLinkRouter {
             // Buffered as well: a cold launch has no receiver mounted yet.
             Task { @MainActor in
                 guard await ChatStore.shared.sessionExists(id: id) else {
+                    // [up-home] 灵动岛上 Mac 任务的卡片也是 sessions/<id>(Mac 的会话 id):找到是哪台 Mac
+                    // 就打开那个 Mac 会话,以前点了没反应。
+                    if let hostId = await macHostId(forSessionId: id) {
+                        let target = ["macSessionId": id, "hostId": hostId, "machine": ""]
+                        NotificationNavigationStore.shared.setPendingMac(target)
+                        NotificationCenter.default.post(name: .openSessionFromIntent, object: nil, userInfo: target)
+                        return
+                    }
                     deepLinkLog.info("\(host) URL for unknown session — ignored")
                     return
                 }
@@ -161,6 +169,27 @@ enum DeepLinkRouter {
         default:
             deepLinkLog.info("unknown host '\(host)'")
         }
+    }
+
+    /// 这个会话 id 是不是某台 Mac 上的任务:先看内存(进行中列表、灵动岛桥),再挨台问一次
+    /// (冷启动时内存是空的)。
+    @MainActor
+    private static func macHostId(forSessionId id: String) async -> String? {
+        let store = GatewayHostStore.shared
+        let macs = store.activeHosts.filter { !$0.isAndroidBody }
+        if let known = MacLiveSessionsStore.shared.rows.first(where: { $0.session.id == id })?.hostId
+            ?? HarnessLiveActivityBridge.shared.hostId(forSessionId: id) {
+            return known
+        }
+        var reached = false
+        for host in macs {
+            guard let client = store.client(for: host),
+                  let sessions = try? await client.harnessSessions() else { continue }
+            reached = true
+            if sessions.contains(where: { $0.id == id }) { return host.id }
+        }
+        // 一台都问不到(没网)而只配了一台 Mac:就是它,控制台连上后自己补齐。
+        return !reached && macs.count == 1 ? macs[0].id : nil
     }
 
     // MARK: - Settings sub-router
