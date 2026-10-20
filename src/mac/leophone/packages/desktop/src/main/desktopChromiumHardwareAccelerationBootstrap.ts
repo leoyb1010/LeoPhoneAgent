@@ -7,9 +7,11 @@ interface ChromiumHardwareAccelerationApp {
 }
 
 export function resolveChromiumHardwareAccelerationSettingsFile(
-  homePath: string = homedir(),
+  homePath: string = process.env.ZCODE_DESKTOP_HOME_DIR?.trim() || process.env.HOME?.trim() || homedir(),
 ): string {
-  return join(homePath, ".zcode", "v2", "setting.json");
+  // [leo] 设置页把开关写进 ~/.leophoneagent/v2/setting.json（settingService 同一路径、同一 home 解析）；
+  // 以前读官方 ZCode 的 ~/.zcode：设置页开关不生效，官方关了加速 LeoBot 也跟着关。
+  return join(homePath, ".leophoneagent", "v2", "setting.json");
 }
 
 export function extractBootstrapChromiumHardwareAccelerationEnabled(rawValue: unknown): boolean {

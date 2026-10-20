@@ -166,6 +166,29 @@ describe("NodeHttpClientAdapter", () => {
     }
   });
 
+  // [leo] 走代理时 DNS 由代理做，本进程的拦截闸看不到；建 ProxyAgent 前必须先挡官方域名。
+  it("refuses to proxy requests to blocked official hosts", async () => {
+    const proxyRequests: string[] = [];
+    const proxy = http.createServer((request, response) => {
+      proxyRequests.push(request.url ?? "");
+      response.writeHead(502);
+      response.end();
+    });
+
+    try {
+      const proxyBaseUrl = await listenServer(proxy);
+      const adapter = createNodeHttpClientAdapter({ env: { ZCODE_HTTP_PROXY: proxyBaseUrl } });
+      await expect(adapter.request({ url: "http://open.bigmodel.cn/api" })).rejects.toMatchObject({
+        code: "egress_blocked",
+      });
+      const fetch = createNetworkProxyFetch({ httpProxy: proxyBaseUrl });
+      await expect(fetch("http://api.z.ai/v1")).rejects.toThrow(/不连接/);
+      expect(proxyRequests).toEqual([]);
+    } finally {
+      await closeServer(proxy);
+    }
+  });
+
   it("bypasses explicit proxy when ZCODE_NO_PROXY matches the target host", async () => {
     const proxyRequests: string[] = [];
     const upstream = http.createServer((_request, response) => {

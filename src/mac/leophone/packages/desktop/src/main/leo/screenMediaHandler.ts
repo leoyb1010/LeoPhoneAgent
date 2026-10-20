@@ -166,6 +166,12 @@ async function ensureWindow(logger: Logger): Promise<BrowserWindow> {
         .getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } })
         .then((sources) => {
           const source = sources.find((item) => item.display_id === wanted) ?? sources[0];
+          // 要的屏找不到（拔了副屏 / id 变了）时退回第一块：会话记的屏也跟着改，
+          // 否则看的是 A 屏、R2 注入坐标却按 B 屏换算，点击全落偏。
+          if (source?.display_id && source.display_id !== wanted) {
+            for (const entry of sessions.values()) entry.displayId = source.display_id;
+            notify();
+          }
           callback(source ? { video: source } : {});
         })
         .catch(() => callback({}));

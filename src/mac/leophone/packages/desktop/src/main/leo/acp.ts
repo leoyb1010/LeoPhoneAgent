@@ -9,6 +9,7 @@ import { ACP_COMMANDS_FILE, isAcpAgentId, parseAcpCommandsStore, pickAcpAgentCom
 import {
   CLAUDE_AGENT_ACP_PACKAGE,
   resolveClaudeAgentAcpEntry,
+  warmLoginShellPath,
   writeClaudeOAuthToken,
 } from "@zcode/shared/acp-detect";
 import { listAcpAgents } from "@zcode/services/acp-agent";
@@ -59,6 +60,8 @@ async function readAcpCommands(agentId: string, cwd: string) {
 }
 
 export function registerAcpIpc(): void {
+  // 启动时在后台把登录 shell 的 PATH 探好（异步，不卡主进程）；之后列 agent 直接用缓存。
+  void warmLoginShellPath();
   ipcMain.handle("leo:acp:commands", (event, agentId: unknown, cwd: unknown) =>
     isTrustedLeoSender(event) && isAcpAgentId(agentId) && typeof cwd === "string"
       ? readAcpCommands(agentId, cwd)

@@ -31,6 +31,8 @@ interface Peer {
   channel: RTCDataChannel | null;
 }
 
+/** 看屏视频码率上限（bps）。 */
+const SCREEN_MAX_BITRATE = 4_000_000;
 const peers = new Map<string, Peer>();
 /** 应答前等本机候选收集完(不做 Mac → 手机的 trickle,答案里一次带全);最多等这么久。 */
 const GATHER_TIMEOUT_MS = 2_500;
@@ -143,8 +145,13 @@ async function open(command: OpenCommand): Promise<{ answer: string }> {
     const capabilities = RTCRtpSender.getCapabilities("video");
     if (capabilities) transceiver.setCodecPreferences(preferH264(capabilities.codecs));
     const parameters = transceiver.sender.getParameters();
-    parameters.degradationPreference = "maintain-resolution";
-    for (const encoding of parameters.encodings) encoding.maxFramerate = command.maxFps;
+    // 以前 maintain-resolution 且不设码率上限：弱网时只能狂掉帧、码率冲到链路上限把中继 / 蜂窝塞满。
+    // 改 balanced（分辨率与帧率一起让）+ 4 Mbps 上限，1080p 文字画面够清楚。
+    parameters.degradationPreference = "balanced";
+    for (const encoding of parameters.encodings) {
+      encoding.maxFramerate = command.maxFps;
+      encoding.maxBitrate = SCREEN_MAX_BITRATE;
+    }
     await transceiver.sender.setParameters(parameters).catch(() => undefined);
     await pc.setLocalDescription(await pc.createAnswer());
     // 发送端用哪种编码由对端 offer 的顺序决定(JSEP),答案里排第一没用;手机若把 VP8 排前面就会走 libvpx 软编。

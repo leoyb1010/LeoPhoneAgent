@@ -5,6 +5,7 @@
 import http from "node:http";
 import https from "node:https";
 import { ProxyAgent } from "proxy-agent";
+import { isLeoBlockedHost } from "@zcode/shared/leo-network-guard";
 import {
   createHttpClientError,
   isHttpClientPortError,
@@ -249,6 +250,14 @@ function createRequestAgent(
   tlsCaCertificates: Buffer | undefined,
 ): http.Agent | undefined {
   if (proxyUrl) {
+    // [leo] 走代理时目标域名由代理解析，绕过了本进程的 DNS 拦截闸；建代理前先校验目标。
+    if (isLeoBlockedHost(url.hostname)) {
+      throw createHttpClientError({
+        code: "egress_blocked",
+        url: url.toString(),
+        message: `[leo] ${url.hostname} 属于官方服务,LeoBot 不连接`,
+      });
+    }
     return new ProxyAgent({
       ca: tlsCaCertificates,
       getProxyForUrl: () => proxyUrl,

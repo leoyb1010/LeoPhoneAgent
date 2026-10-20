@@ -29,9 +29,12 @@ a:active{opacity:.8}
 
 let hud: BrowserWindow | null = null;
 
-export function showControlHud(onDisconnect: () => void): void {
+export function showControlHud(onDisconnect: () => void, displayId?: string): void {
   if (hud && !hud.isDestroyed()) return;
-  const area = screen.getPrimaryDisplay().workArea;
+  // 多显示器时提示条放在被看 / 被操控的那块屏上（以前总在主屏，操控副屏时看不到）。
+  const display =
+    screen.getAllDisplays().find((item) => String(item.id) === displayId) ?? screen.getPrimaryDisplay();
+  const area = display.workArea;
   const window = new BrowserWindow({
     // macOS 上是不激活的 NSPanel:可以点,但不会成为前台 App、不抢键盘焦点。
     type: "panel",

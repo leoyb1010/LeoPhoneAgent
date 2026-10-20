@@ -17,6 +17,8 @@ interface ScreenState {
   tailnetOnly?: boolean;
   control?: boolean;
   accessibility?: boolean;
+  /** 注入助手 leo-input 在不在；缺了不能打开操控。 */
+  inputHelper?: boolean;
   hostError: string | null;
   permission: string;
 }
@@ -68,6 +70,7 @@ export function LeoScreenShareSettings() {
       .finally(() => setSaving(false));
   };
   const locked = saving || Boolean(state.hostError);
+  const helperMissing = state.inputHelper === false;
   return (
     <section className="space-y-2" data-testid="leo-screen-share-settings">
       <h3 className="px-1 text-ui-sm font-medium text-foreground-subtle">屏幕</h3>
@@ -104,11 +107,15 @@ export function LeoScreenShareSettings() {
         />
         <SettingsRow
           label="允许手机操控"
-          description="打开后，正在看屏的 iPhone / iPad 可以操作鼠标和键盘。被操控时菜单栏会出现红点「正在被控制」，在 Mac 上连按三次 Esc 立即断开。需要给 LeoBot 辅助功能权限。"
+          description={
+            helperMissing
+              ? "这台 Mac 上缺少操控助手（leo-input），暂时不能打开操控。重新安装 LeoBot 即可恢复。"
+              : "打开后，正在看屏的 iPhone / iPad 可以操作鼠标和键盘。被操控时菜单栏会出现红点「正在被控制」，在 Mac 上连按三次 Esc 立即断开（断开后 10 秒内不能再操控）。需要给 LeoBot 辅助功能权限。"
+          }
           control={
             <Switch
               checked={state.control === true}
-              disabled={locked || !state.enabled}
+              disabled={locked || !state.enabled || (helperMissing && state.control !== true)}
               aria-label="允许手机操控"
               onCheckedChange={(checked) => save(bridge.setScreenOptions({ control: checked }))}
             />

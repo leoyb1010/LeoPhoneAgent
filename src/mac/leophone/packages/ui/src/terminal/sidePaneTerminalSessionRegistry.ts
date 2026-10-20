@@ -16,6 +16,7 @@
 import type { FitAddon } from "@xterm/addon-fit";
 import type { ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { uiMemoryDiagnosticsRegistry } from "@/lib/memoryDiagnostics.js";
+import { releaseTerminalWebgl } from "@/terminal/terminalEnhancements.js";
 
 /**
  * 一个 side pane terminal 会话的常驻资源。
@@ -131,6 +132,8 @@ export const sidePaneTerminalSessionRegistry = {
     if (!stash) return;
     if (entry.hostEl.parentElement === stash) return;
     stash.appendChild(entry.hostEl);
+    // 藏起来的终端不占 WebGL 上下文：以前只 detach 不释放，终端一多就超过 Chromium 上限。
+    releaseTerminalWebgl(entry.term);
   },
 
   /** 显式关闭 side pane terminal tab 时调：真 dispose（杀 PTY + 销 xterm + 释放订阅）。 */

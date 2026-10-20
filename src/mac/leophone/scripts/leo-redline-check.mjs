@@ -10,6 +10,10 @@
  * 不匹配 `bigmodel` / `zhipu` 这类标识符：它们是 CLI 协议与旧配置读取共用的 provider id
  * （BUILTIN_MODEL_PROVIDER_IDS、zhipu-account 等），按 docs/mac-3.0 的约定「文件随包、行为切断」保留。
  *
+ * 另查源码里指向官方客户端数据目录的路径（`~/.zcode`、`join(homedir(), ".zcode")` 一类）：LeoBot 的数据根是
+ * ~/.leophoneagent，读官方目录会让两边设置互相串（曾经硬件加速开关就读的 ~/.zcode）。项目级 `<workspace>/.zcode`
+ * 是上游的项目配置目录，不算。注释不查；迁移旧数据这类确需写出的地方进 ZCODE_PATH_ALLOWLIST。
+ *
  * 用法（在 src/mac/leophone 下）：
  *   node scripts/leo-redline-check.mjs                 # 源码 + 已存在的构建产物
  *   node scripts/leo-redline-check.mjs --source-only
@@ -59,6 +63,37 @@ const EXCLUDED_PATH_PATTERNS = [
   // 构建与本地运行产物由 --artifacts 段单独扫描。
   /(^|\/)(dist|out|build|bundled-agents|\.turbo|coverage)\//,
 ];
+
+/** 家目录下的官方数据根：`~/.zcode`、`~/.zcode-beta`，或 `join(homedir() / home… / HOME, ".zcode"…)`。 */
+export const ZCODE_HOME_PATH_PATTERN =
+  /~\/\.zcode(?:-beta)?(?![\w-])|(?:homedir\(\)|\b\w*[hH]ome\w*|\bHOME\b)\s*,\s*["'`]\.zcode(?:-beta)?(?:["'`]|\/)/;
+
+/** 允许出现官方数据根路径的文件（迁移旧数据、给用户看的说明）。新增条目要写清理由。 */
+const ZCODE_PATH_ALLOWLIST = new Map([
+  ["scripts/leo-redline-check.mjs", "红线闸门自身"],
+  ["packages/ui/src/leo/leoReleaseNotes.ts", "更新说明里向用户解释「不再读取 ~/.zcode」"],
+]);
+
+/** 只在开发机上跑、不进安装包的脚本与上游调试工具。 */
+const ZCODE_PATH_EXCLUDED = [/(^|\/)scripts\//, /^apps\/zcode-cli\/packages\/debug\//];
+/** 只查代码；Markdown / 技能说明里的路径是文字，另行人工处理。 */
+const ZCODE_PATH_CODE_EXTENSIONS = /\.(?:[cm]?[jt]sx?|swift|sh|py)$/i;
+
+/** 去掉整行注释、行尾 `// …` 与 `/* …` 注释后再匹配：注释里写「不读 ~/.zcode」是在说明，不是在读。 */
+function stripComment(line) {
+  return line.replace(/^\s*(?:\/\/|\*|#).*$/, "").replace(/\/\*.*$/, "").replace(/(^|\s)\/\/\s.*$/, "");
+}
+
+function scanZcodePaths(relPath, text, hits) {
+  if (!ZCODE_PATH_CODE_EXTENSIONS.test(relPath) || ZCODE_PATH_ALLOWLIST.has(relPath)) return;
+  if (ZCODE_PATH_EXCLUDED.some((pattern) => pattern.test(relPath))) return;
+  if (!text.includes(".zcode")) return;
+  const lines = text.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = ZCODE_HOME_PATH_PATTERN.exec(stripComment(lines[index]));
+    if (match) hits.push({ file: relPath, line: index + 1, match: match[0], context: lines[index].trim().slice(0, 200) });
+  }
+}
 
 const TEXT_EXTENSIONS =
   /\.(?:[cm]?[jt]sx?|json|jsonc|html|css|scss|md|mdx|ya?ml|toml|env|sh|ps1|py|txt|plist|xml|svg)$|(^|\/)\.env[^/]*$/i;
@@ -120,7 +155,9 @@ function scanSource(hits) {
     const absolute = join(rootDir, relPath);
     const stats = statSync(absolute);
     if (stats.size > MAX_TEXT_BYTES) continue;
-    scanText(relPath, readFileSync(absolute, "utf8"), hits);
+    const text = readFileSync(absolute, "utf8");
+    scanText(relPath, text, hits);
+    scanZcodePaths(relPath, text, hits);
   }
   return files.length;
 }
@@ -227,7 +264,9 @@ function scanPaths(paths, hits) {
     const files = statSync(absolute).isDirectory() ? [...walk(absolute)] : [absolute];
     for (const file of files) {
       const relPath = toPosix(relative(rootDir, file));
-      scanText(relPath, readFileSync(file).toString("latin1"), hits);
+      const text = readFileSync(file).toString("latin1");
+      scanText(relPath, text, hits);
+      scanZcodePaths(relPath, text, hits);
       scanned += 1;
     }
   }
@@ -258,7 +297,7 @@ function main(argv) {
   }
 
   if (hits.length > 0) {
-    console.error(`[leo-redline] ✗ 发现 ${hits.length} 处官方服务地址（${summary.join(", ")}）：`);
+    console.error(`[leo-redline] ✗ 发现 ${hits.length} 处官方服务地址 / 官方数据目录（${summary.join(", ")}）：`);
     for (const hit of hits.slice(0, 200)) {
       const where = hit.line ? `${hit.file}:${hit.line}` : hit.file;
       console.error(`  ${where}  [${hit.match}]  ${hit.context}`);
@@ -266,7 +305,8 @@ function main(argv) {
     if (hits.length > 200) console.error(`  …… 另有 ${hits.length - 200} 处`);
     console.error(
       "[leo-redline] LeoBot 不连接官方服务：把地址改成本机死端口 http://127.0.0.1:9 或删除；" +
-        "确属拦截规则本身才进 scripts/leo-redline-check.mjs 的 ALLOWLIST。",
+        "确属拦截规则本身才进 scripts/leo-redline-check.mjs 的 ALLOWLIST。" +
+        "官方数据目录 ~/.zcode 改用 ~/.leophoneagent；迁移旧数据才进 ZCODE_PATH_ALLOWLIST。",
     );
     return 1;
   }

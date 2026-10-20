@@ -16,6 +16,7 @@ import {
 } from "electron";
 
 import { callLeoQuick, isTrustedLeoSender } from "../leoLinkIpc.js";
+import { afterFirstScreenIdle } from "./firstScreenIdle.js";
 import {
   buildQuickTrayMenu,
   computeQuickPanelBounds,
@@ -44,8 +45,14 @@ const SETTINGS_GET_CHANNEL = "leo:quick:settings:get";
 const SETTINGS_SET_CHANNEL = "leo:quick:settings:set";
 /** 主进程 → 主窗口:定位到某个任务(渲染端用侧栏同一个 handleSelectTask,能跨工作区切 tab)。 */
 const OPEN_TASK_CHANNEL = "leo:quick:open-task";
-/** 浮窗预热:启动后稍等再建,不和首屏抢资源;建好后 ⌥Space 只需 setBounds + show。 */
-const PANEL_PREWARM_DELAY_MS = 4_000;
+/**
+ * 浮窗预热:等主窗口首屏加载完、再空闲一会儿才建,不和首屏抢资源;建好后 ⌥Space 只需 setBounds + show。
+ * 以前是启动后固定 4 秒,冷启动慢的机器上正好和首屏渲染撞在一起。
+ */
+const PANEL_PREWARM_IDLE_MS = 3_000;
+/** 一直等不到首屏(主窗口没开)也最多等这么久。 */
+const PANEL_PREWARM_FALLBACK_MS = 30_000;
+
 /** 菜单点开前最多等这么久拿新数据,超时就用上一份。 */
 const MENU_REFRESH_BUDGET_MS = 400;
 
@@ -454,9 +461,14 @@ export function startLeoQuickEntry(deps: LeoQuickEntryDeps): void {
     syncTray();
     schedulePoll(1_500);
     if (settings.quickPanelEnabled) {
-      setTimeout(() => {
-        if (settings.quickPanelEnabled) ensurePanel();
-      }, PANEL_PREWARM_DELAY_MS).unref();
+      afterFirstScreenIdle(
+        () => {
+          if (settings.quickPanelEnabled) ensurePanel();
+        },
+        PANEL_PREWARM_IDLE_MS,
+        PANEL_PREWARM_FALLBACK_MS,
+        isLeoQuickPanelWindow,
+      );
     }
   })();
 }

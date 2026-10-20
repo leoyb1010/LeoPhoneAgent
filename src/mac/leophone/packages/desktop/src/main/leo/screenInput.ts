@@ -5,12 +5,13 @@ import { join } from "node:path";
 import { app, Menu, nativeImage, shell, systemPreferences, Tray } from "electron";
 
 import { hideControlHud, showControlHud } from "./screenControlHud.js";
-import { parseInputEvent } from "./screenInputCore.js";
+import { createControlCooldown, parseInputEvent } from "./screenInputCore.js";
 import {
   closeAllScreenPeers,
   onScreenPeerSessions,
   sendScreenPeerControlMessage,
   setScreenPeerInputSink,
+  type PeerSessionState,
 } from "./screenMediaHandler.js";
 
 /**
@@ -31,6 +32,11 @@ function helperPath(): string {
   return app.isPackaged
     ? join(process.resourcesPath, "leo-input", "leo-input")
     : join(import.meta.dirname, "../../resources/leo-input/leo-input");
+}
+
+/** 注入助手在不在（开发态没跑 build-leo-input 时缺）；缺了设置页不让打开操控。 */
+export function inputHelperAvailable(): boolean {
+  return process.platform === "darwin" && existsSync(helperPath());
 }
 
 export function accessibilityGranted(): boolean {
@@ -67,14 +73,20 @@ export function startScreenInput(logger: Logger): void {
   started = true;
   let helper: ChildProcessWithoutNullStreams | null = null;
   let helperSession: string | null = null;
+  let helperDisplay: string | null = null;
   let tray: Tray | null = null;
+  // 本机断开后冷却 10 秒（不关「允许操控」开关：以方便为先，冷却够挡住手机的自动重连立刻抢回操控）。
+  const cooldown = createControlCooldown();
+  let cooldownTimer: NodeJS.Timeout | null = null;
+  let lastSessions: PeerSessionState[] = [];
 
   const disconnect = (reason: string) => {
     logger.info(`[leo-input] disconnect: ${reason}`);
+    cooldown.start();
     void closeAllScreenPeers(logger);
   };
 
-  const showTray = () => {
+  const showTray = (displayId: string) => {
     if (tray && !tray.isDestroyed()) return;
     tray = new Tray(redDot());
     tray.setTitle(" 正在被控制");
@@ -86,7 +98,7 @@ export function startScreenInput(logger: Logger): void {
       ]),
     );
     // 红点可能被收进菜单栏溢出区:再加一个悬浮条,两者同时显示。
-    showControlHud(() => disconnect("hud"));
+    showControlHud(() => disconnect("hud"), displayId);
     logger.info(
       `[leo-input] controlled indicator shown, tray at ${JSON.stringify(tray.getBounds())}`,
     );
@@ -103,10 +115,12 @@ export function startScreenInput(logger: Logger): void {
     helper?.stdin.end();
     helper = null;
     helperSession = null;
+    helperDisplay = null;
   };
 
   const startHelper = (sessionId: string, displayId: string) => {
-    if (helper && helperSession === sessionId) return;
+    // 同一会话换了屏（要的屏不在、退回别的屏）也要重启：注入坐标必须按正在看的那块屏换算。
+    if (helper && helperSession === sessionId && helperDisplay === displayId) return;
     stopHelper();
     const binary = helperPath();
     if (!existsSync(binary)) {
@@ -126,6 +140,7 @@ export function startScreenInput(logger: Logger): void {
     const child = spawn(binary, args, { stdio: ["pipe", "pipe", "pipe"] });
     helper = child;
     helperSession = sessionId;
+    helperDisplay = displayId;
     let buffer = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
@@ -160,6 +175,7 @@ export function startScreenInput(logger: Logger): void {
       if (helper === child) {
         helper = null;
         helperSession = null;
+        helperDisplay = null;
       }
     });
   };
@@ -170,16 +186,30 @@ export function startScreenInput(logger: Logger): void {
     if (event) helper.stdin.write(`${JSON.stringify(event)}\n`);
   });
 
-  onScreenPeerSessions((sessions) => {
+  const apply = (sessions: PeerSessionState[]) => {
+    lastSessions = sessions;
     const controlled = sessions.find((session) => session.control);
-    if (controlled) {
-      startHelper(controlled.id, controlled.displayId);
-      showTray();
-    } else {
+    if (!controlled) {
       stopHelper();
       hideTray();
+      return;
     }
-  });
+    const wait = cooldown.remaining();
+    if (wait > 0) {
+      // 冷却中：不起助手（事件全丢），告诉手机原因；冷却结束再按当时的会话重新判断。
+      stopHelper();
+      hideTray();
+      sendScreenPeerControlMessage(controlled.id, JSON.stringify({ t: "status", ok: false, reason: "cooldown" }));
+      cooldownTimer ??= setTimeout(() => {
+        cooldownTimer = null;
+        apply(lastSessions);
+      }, wait);
+      return;
+    }
+    startHelper(controlled.id, controlled.displayId);
+    showTray(controlled.displayId);
+  };
+  onScreenPeerSessions(apply);
 
   app.on("will-quit", () => {
     helper?.kill();

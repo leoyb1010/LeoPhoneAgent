@@ -1,6 +1,4 @@
 import { execFile, spawn } from "node:child_process";
-import dns from "node:dns";
-import type { LookupFunction } from "node:net";
 import { promisify } from "node:util";
 
 import WebSocket from "ws";
@@ -8,7 +6,10 @@ import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 
 import type { LinkBridge, LinkRequest } from "./bridge.js";
 import type { HarnessEvent } from "./journal.js";
+import { tailnetLookup, watchSystemChanges } from "./relayNet.js";
 import type { Caller, CallerKind } from "./session.js";
+
+export { networkSignature, systemChangeDetector, tailnetLookup } from "./relayNet.js";
 
 type Logger = {
   info: (msg: string, meta?: unknown) => void;
@@ -42,35 +43,6 @@ const PONG_TIMEOUT_MS = 75_000;
 const STREAM_KEEPALIVE_MS = 25_000;
 const OUTBOX_LIMIT = 200;
 const CALLER_KINDS = new Set<CallerKind>(["iphone", "legacy", "master"]);
-const TAILNET_DNS = "100.100.100.100";
-
-/**
- * tailnet 域名(`*.ts.net`)用 Tailscale 自己的 DNS 解析。本机开着代理(Clash TUN)时,系统解析
- * 会给出代理的假 IP,和中继之间的常驻连接就绕到代理节点上:实测每个来回 2~3 秒,直连 tailnet 只要
- * 几十毫秒。解析不到(没开 Tailscale、不是 tailnet 域名)就退回系统解析。
- */
-export function tailnetLookup(servers: string[] = [TAILNET_DNS]): LookupFunction {
-  const resolver = new dns.Resolver({ timeout: 1500, tries: 1 });
-  resolver.setServers(servers);
-  return ((
-    hostname: string,
-    options: dns.LookupOptions,
-    callback: (...args: unknown[]) => void,
-  ) => {
-    const fallback = () => dns.lookup(hostname, options, callback as never);
-    if (!hostname.endsWith(".ts.net")) return fallback();
-    resolver.resolve4(hostname, (error, addresses) => {
-      if (error || addresses.length === 0) return fallback();
-      if (options.all)
-        callback(
-          null,
-          addresses.map((address) => ({ address, family: 4 })),
-        );
-      else callback(null, addresses[0], 4);
-    });
-  }) as LookupFunction;
-}
-
 /** 中继 0.2 转发时附带调用方;0.1 没有,记成 unknown。 */
 export function callerFrom(frame: Record<string, unknown>): Caller {
   const raw = frame["caller"];
@@ -123,8 +95,27 @@ export class RelayLink {
     private readonly device?: LeoDeviceDescriptor,
   ) {}
 
+  private stopSystemWatch: (() => void) | null = null;
+  /** 正在等退避时，叫醒它立刻重连。 */
+  private wakeBackoff: (() => void) | null = null;
+
   start(): void {
+    // 睡眠唤醒 / 换网后旧连接多半已死，但要等 75 秒心跳才判断开、再加最多 30 秒退避；这里检测到就立刻重连。
+    this.stopSystemWatch = watchSystemChanges((change) => this.reconnectNow(change));
     void this.runForever();
+  }
+
+  /** 丢掉当前连接、清零退避，马上重连。 */
+  reconnectNow(reason: string): void {
+    if (this.stopped) return;
+    this.logger.info("[leo/link] reconnecting now", { reason });
+    this.reconnectBackoffS = 0;
+    this.wakeBackoff?.();
+    try {
+      this.activeWs?.terminate();
+    } catch {
+      // 已经断了
+    }
   }
 
   status(): RelayLinkStatus {
@@ -138,6 +129,8 @@ export class RelayLink {
 
   stop(): void {
     this.stopped = true;
+    this.stopSystemWatch?.();
+    this.wakeBackoff?.();
     if (this.revocationRetry) {
       clearTimeout(this.revocationRetry);
       this.revocationRetry = null;
@@ -177,8 +170,15 @@ export class RelayLink {
       }
       this.state.connected = false;
       if (this.stopped) break;
-      await new Promise((resolve) => setTimeout(resolve, this.reconnectBackoffS * 1000));
-      this.reconnectBackoffS = Math.min(this.reconnectBackoffS * 2, 30);
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, this.reconnectBackoffS * 1000);
+        this.wakeBackoff = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      });
+      this.wakeBackoff = null;
+      this.reconnectBackoffS = Math.min(Math.max(this.reconnectBackoffS * 2, 1), 30);
     }
   }
 

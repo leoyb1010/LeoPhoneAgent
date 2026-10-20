@@ -1,6 +1,6 @@
 // [leo][WP-21] ACP 外部 agent 的本机检测（node-only：读 PATH 与文件系统）。
 // UI 状态（services）、Leo Link capabilities 与 CLI 启动（adapters/acp）共用同一份判断。
-import { execFile, spawnSync } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { accessSync, constants, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -46,30 +46,103 @@ export interface AcpEnvironment {
 }
 
 let loginShellPathCache: string[] | undefined;
+let loginShellWarm: Promise<string[]> | undefined;
+
+interface LoginShellOptions {
+  /** 测试注入：强制开 / 关登录 shell 探测（默认只对真实进程环境的 macOS 生效）。 */
+  enabled?: boolean;
+}
+
+function loginShellEnabled(env: NodeJS.ProcessEnv, options: LoginShellOptions): boolean {
+  if (options.enabled !== undefined) return options.enabled;
+  if (env !== process.env || process.platform !== "darwin") return false;
+  return !process.env.VITEST && process.env.LEO_ACP_LOGIN_SHELL !== "off";
+}
+
+/** 上次探到的登录 shell PATH 落盘：主进程 / Host 启动时预热写下，CLI 等其它进程直接读，不用再跑 shell。 */
+function loginShellSnapshotPath(env: NodeJS.ProcessEnv): string {
+  return join(leoDataRoot(env), "acp", "login-shell-path.json");
+}
+
+function readLoginShellSnapshot(env: NodeJS.ProcessEnv): string[] | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(loginShellSnapshotPath(env), "utf8")) as { path?: unknown };
+    return Array.isArray(parsed.path) ? parsed.path.filter((dir): dir is string => typeof dir === "string" && dir !== "") : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 从 `$SHELL -lic` 的输出里把 PATH 夹出来（交互式 rc 可能往 stdout 打招呼，所以用标记）。 */
+export function parseLoginShellPath(stdout: string): string[] | undefined {
+  const match = /__LEOPATH__(.*?)__LEOPATH__/s.exec(stdout);
+  return match ? match[1]!.split(delimiter).filter(Boolean) : undefined;
+}
 
 /**
- * [fix-remote] 用户登录 shell 的 PATH（只读一次、带超时）。LeoBot 从 Finder / launchd 启动时 PATH 只有
- * /usr/bin 一类系统目录，而 CLI 往往装在 shell 配置里才加进 PATH 的目录（nvm、bun、自定义前缀）。
+ * [fix-remote] 用户登录 shell 的 PATH。LeoBot 从 Finder / launchd 启动时 PATH 只有 /usr/bin 一类系统目录，
+ * 而 CLI 往往装在 shell 配置里才加进 PATH 的目录（nvm、bun、自定义前缀）。
+ * 绝不阻塞：以前首次调用同步跑 `zsh -lic`（最长 3 秒），主进程打开设置页 / Host 建模型注册表时整个卡住。
+ * 现在有内存缓存用缓存，否则用上次落盘的快照，再没有就先返回空（调用方仍有进程 PATH 与常见目录），
+ * 同时在后台异步跑一次登录 shell 刷新。
  * 只对真实进程环境生效：测试注入的 env、VITEST、LEO_ACP_LOGIN_SHELL=off 都不读，结果不随开发机变化。
  */
-export function loginShellPath(env: NodeJS.ProcessEnv = process.env): string[] {
-  if (env !== process.env || process.platform !== "darwin") return [];
-  if (process.env.VITEST || process.env.LEO_ACP_LOGIN_SHELL === "off") return [];
+export function loginShellPath(env: NodeJS.ProcessEnv = process.env, options: LoginShellOptions = {}): string[] {
+  if (!loginShellEnabled(env, options)) return [];
   if (loginShellPathCache) return loginShellPathCache;
-  const shell = env.SHELL?.trim() || "/bin/zsh";
-  try {
-    // 交互式 rc 可能往 stdout 打招呼：用标记把 PATH 夹出来。
-    const result = spawnSync(shell, ["-lic", "printf '__LEOPATH__%s__LEOPATH__' \"$PATH\""], {
-      encoding: "utf8",
-      timeout: 3000,
-      stdio: ["ignore", "pipe", "ignore"],
+  void warmLoginShellPath(env, options);
+  return readLoginShellSnapshot(env) ?? [];
+}
+
+/** 后台预热登录 shell 的 PATH（每个进程只跑一次）；结果进内存缓存并落盘给别的进程用。 */
+export function warmLoginShellPath(env: NodeJS.ProcessEnv = process.env, options: LoginShellOptions = {}): Promise<string[]> {
+  if (!loginShellEnabled(env, options)) return Promise.resolve([]);
+  loginShellWarm ??= new Promise<string | undefined>((resolve) => {
+    const shell = env.SHELL?.trim() || "/bin/zsh";
+    let stdout = "";
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(shell, ["-lic", "printf '__LEOPATH__%s__LEOPATH__' \"$PATH\""], {
+        stdio: ["ignore", "pipe", "ignore"],
+        env,
+      });
+    } catch {
+      resolve(undefined);
+      return;
+    }
+    const timer = setTimeout(() => child.kill("SIGKILL"), 3000);
+    child.stdout?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => {
+      if (stdout.length < 256 * 1024) stdout += chunk;
     });
-    const match = /__LEOPATH__(.*?)__LEOPATH__/s.exec(result.stdout ?? "");
-    loginShellPathCache = match ? match[1]!.split(delimiter).filter(Boolean) : [];
-  } catch {
-    loginShellPathCache = [];
-  }
-  return loginShellPathCache;
+    child.once("error", () => {
+      clearTimeout(timer);
+      resolve(undefined);
+    });
+    child.once("close", () => {
+      clearTimeout(timer);
+      resolve(stdout);
+    });
+  }).then(async (stdout) => {
+    const dirs = stdout === undefined ? undefined : parseLoginShellPath(stdout);
+    if (!dirs) return (loginShellPathCache ??= readLoginShellSnapshot(env) ?? []);
+    loginShellPathCache = dirs;
+    try {
+      const file = loginShellSnapshotPath(env);
+      await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+      await writeFile(file, JSON.stringify({ path: dirs, at: new Date().toISOString() }), { mode: 0o600 });
+    } catch {
+      // 落盘失败只影响别的进程的首次快速结果
+    }
+    return dirs;
+  });
+  return loginShellWarm;
+}
+
+/** 测试用：清掉进程内的登录 shell 缓存。 */
+export function resetLoginShellPathCache(): void {
+  loginShellPathCache = undefined;
+  loginShellWarm = undefined;
 }
 
 /** nvm 装的 node 全局包（gemini 等），新版本在前。 */

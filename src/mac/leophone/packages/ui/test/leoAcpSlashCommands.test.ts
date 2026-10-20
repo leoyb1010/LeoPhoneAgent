@@ -48,4 +48,27 @@ describe("ACP agent slash commands", () => {
     expect(acp.result.current?.map((command) => command.name)).toEqual(["review"]);
     acp.unmount();
   });
+
+  it("polling the same commands keeps the same array (no re-render of the session pane)", async () => {
+    const commands = vi.fn(async () => [{ name: "review", description: "Review the diff" }]);
+    (window as unknown as { leoAcp?: unknown }).leoAcp = { commands };
+    let renders = 0;
+    const acp = renderHook(() => {
+      renders += 1;
+      return useLeoAcpSlashCommands("claude-code", "/repo");
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const first = acp.result.current;
+    const rendersAfterLoad = renders;
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      await Promise.resolve();
+    });
+    expect(commands).toHaveBeenCalledTimes(2);
+    expect(acp.result.current).toBe(first);
+    expect(renders).toBe(rendersAfterLoad);
+    acp.unmount();
+  });
 });

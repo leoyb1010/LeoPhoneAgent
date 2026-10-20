@@ -41,6 +41,8 @@ interface ScreenResponse {
 }
 
 const RELAY_MIN_INTERVAL_MS = 1_000;
+/** 直连截图的最小间隔：手机连点刷新 / 轮询过快时每次都现截一张整屏 JPEG，主进程吃不消。 */
+const DIRECT_MIN_INTERVAL_MS = 250;
 const RELAY_MAX_BYTES = 200 * 1024;
 const RELAY_MAX_EDGE = 1280;
 
@@ -76,9 +78,12 @@ export function createScreenSnapshotService(deps: {
   capture: (options: CaptureOptions) => Promise<CaptureResult>;
   enabled: () => boolean | Promise<boolean>;
   now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
 }) {
   const now = deps.now ?? Date.now;
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const lastRelayServe = new Map<string, number>();
+  const nextDirectSlot = new Map<string, number>();
 
   return async function handle(req: ScreenRequest): Promise<ScreenResponse> {
     if (!(await deps.enabled()))
@@ -107,6 +112,12 @@ export function createScreenSnapshotService(deps: {
         });
       }
       lastRelayServe.set(key, now());
+    } else {
+      // 直连不报错（手机直连客户端不处理 429）：同一台设备排队，两次截图至少隔 250ms。
+      const key = req.caller.deviceId ?? req.caller.kind;
+      const slot = Math.max(now(), nextDirectSlot.get(key) ?? 0);
+      nextDirectSlot.set(key, slot + DIRECT_MIN_INTERVAL_MS);
+      if (slot > now()) await sleep(slot - now());
     }
 
     let options: CaptureOptions = {

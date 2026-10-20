@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ZCodeSlashCommand } from "@zcode/shared";
 import { ACP_PROVIDER_ID, isAcpAgentId, type AcpAgentCommand } from "@zcode/shared/acp";
 
@@ -33,11 +33,23 @@ export function toAcpSlashCommands(commands: readonly AcpAgentCommand[]): ZCodeS
   });
 }
 
+export function sameSlashCommands(a: readonly ZCodeSlashCommand[], b: readonly ZCodeSlashCommand[]): boolean {
+  return a.length === b.length && JSON.stringify(a) === JSON.stringify(b);
+}
+
 export function useLeoAcpSlashCommands(
   agentId: string | null,
   workspacePath: string,
 ): ZCodeSlashCommand[] | undefined {
-  const [commands, setCommands] = useState<ZCodeSlashCommand[]>([]);
+  const [commands, setCommandsState] = useState<ZCodeSlashCommand[]>([]);
+  const current = useRef(commands);
+  // 内容没变就不 setState：以前每 10 秒无条件 setState，近 4000 行的 SessionPane 跟着重渲。
+  // 用 ref 比较而不是函数式 setState，后者 React 仍会先把组件本身再渲染一遍才放弃。
+  const setCommands = (next: ZCodeSlashCommand[]) => {
+    if (sameSlashCommands(current.current, next)) return;
+    current.current = next;
+    setCommandsState(next);
+  };
   useEffect(() => {
     const bridge =
       typeof window === "undefined" ? undefined : (window as unknown as { leoAcp?: AcpCommandsBridge }).leoAcp;
@@ -50,7 +62,8 @@ export function useLeoAcpSlashCommands(
     const load = () =>
       void bridge.commands!(agentId, workspacePath)
         .then((next) => {
-          if (!cancelled) setCommands(toAcpSlashCommands(next));
+          if (cancelled) return;
+          setCommands(toAcpSlashCommands(next));
         })
         .catch(() => undefined);
     load();
