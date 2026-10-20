@@ -245,3 +245,42 @@ restore-legacy-sessions 进 `INTERNAL_OFFICIAL_PLUGIN_IDS`,设置页与插件市
 Peekaboo(`leo/bin`)/ leo-speech / 菜单栏模板图标三类 extraResources;`leo:bundle:mac` 顺序为
 发布说明校验 → 源码红线 → 取 Peekaboo → 编 leo-speech → 打包 → 产物红线。删除清单重新生成(711 条 / 2346 个上游文件),
 已包含 WP-01 的删除,下次同步上游时自动套用。
+
+## v3.16.1 定点摘取(2026-10-20,分支 wt/deps)
+
+上游 `0a1fc56d`(zai-org/ZCode main,10-19,「chore: sync ZCode source」,v3.16.1)。**没有整体 subtree 合并**:
+上游加回了远程 server / relay v2 / project-storage 迁移,和我们的删除面冲突。subtree 同步点仍是 `aac47556`,
+下次整体 `subtree merge` 时下面这些文件会与上游一致或只差我们的 `[leo]` 行,按常规三方合并即可。
+
+**已摘(每项单独提交,提交说明写了上游出处)**
+| 内容 | 文件(均在 `apps/zcode-cli/packages/` 下) |
+|---|---|
+| fs 文本编码:大文件 4KB 头部样本切在 UTF-8 多字节字符中间时误判 gb2312 / 拒读;短读未读满样本 | `adapters/src/fs/{text-metadata,text-range-reader}.ts`(原样)、`adapters/tests/fs-text-encoding.test.ts` |
+| 空 completion 收尾:零输出且明确超窗时直接转 `ModelContextExceeded` 走压缩/失败链,不再空响应重试;拒绝 / 内容过滤不重试;失败请求已报告用量随失败结算 | `adapters/src/model/{runner-diagnostics,runner-generate,runner-stream,errors}.ts`(原样)、`contracts/src/model/index.ts`(只 `usage` 字段)、`contracts/src/events/session.events.ts`、`core/src/subagent/runner.ts`(只用量 hunk)、`adapters/tests/runner-empty-completion-finish.test.ts`、`runner.test.ts` 一处 |
+| 附件冷恢复一致性:首发 / 队列 / resume 共用 `buildUserMessageEntries`;路径引用说明存 `metadata.pathReferenceText` 恢复时原样复用 | `core/src/agent/{message-history,session-history-hydrator,file-part-hydration}.ts`(只附件部分)、`core/src/runtime/helpers/{conversation,attachment-path-reference}.ts`、`contracts` `AttachmentStorageMetadata.pathReferenceText`、`adapters/tests/attachment-resume-wire.test.ts` |
+| TaskStop 查找失败提示不再被模型误读为「已停止」 | `core/src/tool/handlers/task-stop.ts`(只文案) |
+
+**没摘及原因**
+- **tool-search(MCP 工具延迟加载 / DeferredToolCall)**:不是 bug 修复而是一整套功能,CLI 内 57 个源文件
+  (message-history / hydrator / turn-loop / call-runner / subagent / server-operations 等核心路径,另有 30 个测试),
+  并且要动 `packages/shared`(`AppToolSearchMode`、runtime-preferences 协议字段)、`packages/services`、`packages/ui` 设置页
+  才能打开;上游默认 `off`,自己也标注「实验性,provider 不完整支持时可能导致缓存失效、Token 增加」。试合并有 5 处冲突
+  (subagent.ts 一大块、server-operations 夹带我们已删的 `ZCodeAutomationBotDeliveryTarget`),只搬 CLI 部分会成为打不开的死代码。
+  建议单独立项:CLI + shared 协议 + 设置页一起做,先保持默认 off。
+- Highspeed 加速卡、闲时任务(off-peak)、动态工作流提醒、模型 Registry 缺失时的创建期退回(和 Highspeed 绑在一起)、
+  MCP Apps 等待连接、附加目录 skills/commands 根、远程 server / relay v2、session-store 迁移重写(`schema.baseline.sql`、
+  `migration-runner.ts`、软删除 `deleted` 取代 `archived`)、office-runtime 与文档类插件:属官方功能或我们已删的模块,一律不摘。
+- 其余大量 diff 是 oxfmt 重排版,无行为变化。
+
+**复查**:摘完后对本分支相对改动 grep `z.ai / bigmodel / chatglm / zhipu / zcode.ai / codegeex / .zcode` 0 新增;
+`node scripts/leo-redline-check.mjs` 0 命中。
+
+## Electron 44 / claude-agent-sdk 0.3.304 补丁(2026-10-20,wt/deps,同步上游时复查,改动处标 `[leo]`)
+| 文件 | 内容 |
+|---|---|
+| `packages/desktop/package.json`、`pnpm-lock.yaml` | Electron 41.10.7 → 44.5.1;node-abi 4.28.0 → 4.38.0(否则 @electron/rebuild 认不出 44 的 ABI) |
+| `packages/desktop/src/main/pluginSandbox/host.ts` | 44 删了 `clipboard.writeImage`:改 `clipboard.write([new ClipboardItem({"image/png": Blob})])` |
+| `packages/desktop/scripts/gen-ui-fixture/presentation-checks.ts` | 夹具里的 readImage / readText / writeText 改异步剪贴板 |
+| `packages/desktop/src/main/desktopMainIpcPlatform.ts` | 43 起打开框默认「下载」且不记上次目录:选目录 / 选文件记住上次所在目录 |
+| `packages/desktop/scripts/dev.mjs` | 42 起不再 postinstall 下载二进制:`require("electron")` 按需下载并取路径 |
+| 根 `package.json` `pnpm.overrides` | `@agentclientprotocol/claude-agent-acp>@anthropic-ai/claude-agent-sdk: 0.3.304`;acp 升到 0.94+ 时去掉 |

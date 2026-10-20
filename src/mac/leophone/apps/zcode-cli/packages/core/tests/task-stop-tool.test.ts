@@ -312,7 +312,8 @@ describe("TaskStop tool", () => {
         code: 1,
         reason: "background_task_not_found",
       },
-      message: "No task found with ID: missing_task",
+      message:
+        'Invalid task ID "missing_task". This lookup failure does not mean the task has completed or stopped; use the full task_id returned when the task started to stop it.',
     });
   });
 

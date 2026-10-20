@@ -3426,6 +3426,7 @@ describe("AiSdkModelAdapter", () => {
       streamText() {
         return {
           fullStream: stream([
+            { type: "text-delta", id: "partial", text: "partial answer" },
             {
               type: "finish",
               finishReason: "other",
@@ -3451,6 +3452,7 @@ describe("AiSdkModelAdapter", () => {
     }
 
     expect(events).toEqual([
+      { type: "text_delta", id: "partial", text: "partial answer" },
       {
         type: "finish",
         finishReason: "other",

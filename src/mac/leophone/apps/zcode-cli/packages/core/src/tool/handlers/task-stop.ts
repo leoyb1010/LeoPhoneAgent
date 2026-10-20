@@ -11,6 +11,9 @@ import {
 } from "@zcode/contracts";
 import type { ToolEntry, ToolHandler } from "../types.js";
 
+const TASK_STOP_LOOKUP_FAILURE_GUIDANCE =
+  "This lookup failure does not mean the task has completed or stopped; use the full task_id returned when the task started to stop it.";
+
 const MAX_TASK_STOP_MODEL_BYTES = 100_000;
 
 // provider 请求直接使用 metadata.description，内部短说明会让模型看不到
@@ -75,7 +78,8 @@ const taskStopHandler: ToolHandler = async (input, context) => {
         toolCallId: context.toolCallId,
       });
     }
-    throw taskStopError(`No task found with ID: ${taskId}`, 1, {
+    // 单纯提示未找到任务容易被模型误读为已停止；明确查找失败不代表终态，并要求使用完整 ID。
+    throw taskStopError(`Invalid task ID "${taskId}". ${TASK_STOP_LOOKUP_FAILURE_GUIDANCE}`, 1, {
       reason: result.reason,
       taskId,
       taskType: result.type,

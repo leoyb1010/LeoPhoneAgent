@@ -2027,8 +2027,17 @@ function aggregateModelUsage(events: SessionEvent[]): ModelUsage | undefined {
   let usage: ModelUsage | undefined;
 
   for (const event of events) {
-    if (event.type !== SessionEventType.ModelComplete) continue;
     const payload = event.payload;
+    // 与主 turn 共用失败事件的用量事实，不增加独立汇总状态。
+    if (
+      event.type !== SessionEventType.ModelComplete &&
+      !(
+        event.type === SessionEventType.ModelNetworkStatus &&
+        isRecord(payload) &&
+        payload.type === "model_request_failed"
+      )
+    )
+      continue;
     if (!isRecord(payload) || !isRecord(payload.usage)) {
       continue;
     }

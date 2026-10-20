@@ -2028,11 +2028,11 @@ describe("session history hydrator", () => {
       {
         role: "user",
         content: [
+          { type: "text", text: "inspect if needed" },
           {
             type: "text",
             text: "[Attached application/octet-stream: /tmp/project/assets/demo.mp4]",
           },
-          { type: "text", text: "inspect if needed" },
         ],
       },
     ]);
