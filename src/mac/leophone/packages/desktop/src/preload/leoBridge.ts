@@ -83,6 +83,7 @@ if (process.platform === "darwin") {
   contextBridge.exposeInMainWorld("leoComputerUse", {
     status: () => ipcRenderer.invoke("leo:computer-use:status"),
     openSettings: (key: string) => ipcRenderer.invoke("leo:computer-use:open-settings", key),
+    relaunch: () => ipcRenderer.invoke("leo:computer-use:relaunch"),
   });
 }
 

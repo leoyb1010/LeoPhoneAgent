@@ -57,4 +57,11 @@ export function registerComputerUseIpc(): void {
     await shell.openExternal(url);
     return true;
   });
+  // [up-mac] 屏幕录制等权限在系统设置里打开后，macOS 要求 App 重启才认；给设置页一个一键重启。
+  ipcMain.handle("leo:computer-use:relaunch", (event) => {
+    if (!isTrustedLeoSender(event)) return false;
+    app.relaunch();
+    app.quit();
+    return true;
+  });
 }

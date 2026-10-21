@@ -29,6 +29,7 @@ type Status =
 interface ComputerUseBridge {
   status(): Promise<Status>;
   openSettings(key: PermissionKey): Promise<boolean>;
+  relaunch?(): Promise<boolean>;
 }
 
 const LABELS: Record<PermissionKey, { title: string; detail: string; where: string }> = {
@@ -196,6 +197,19 @@ export function LeoComputerUseSection() {
           ))
         )}
       </div>
+      {status?.state === "ok" && status.permissions.some((p) => !p.granted) ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-surface px-4 py-3 text-ui-sm text-foreground-subtle">
+          <span>
+            在系统设置里已经打开了？屏幕录制要重启 LeoBot 才生效；辅助功能如果打开了仍显示未允许，先在列表里用「−」删掉
+            LeoBot 再重新添加 /Applications/LeoBot.app（升级后旧条目可能失效）。
+          </span>
+          {api.relaunch ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => void api.relaunch?.()}>
+              重启 LeoBot
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
