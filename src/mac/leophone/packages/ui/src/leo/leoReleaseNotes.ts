@@ -13,6 +13,13 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.13.3",
+    date: "2026-10-21",
+    items: [
+      "插件市场里无图标插件的首字改取你看到的名字（「交互视图」显示「交」），不再取内部英文名。",
+    ],
+  },
+  {
     version: "1.13.2",
     date: "2026-10-21",
     items: [

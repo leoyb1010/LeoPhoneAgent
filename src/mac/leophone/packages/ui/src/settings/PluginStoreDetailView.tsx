@@ -125,7 +125,7 @@ export function PluginStoreDetailView({
     <div className="space-y-8" data-testid="plugin-store-detail" data-plugin-id={item.id}>
       {/* 头部：大图标后，显示名与菜单/主按钮同排；简介和来源提示另起一行。 */}
       <div className="space-y-3">
-        <PluginStoreAvatar item={item} className="size-16 rounded-2xl" iconClassName="size-6" />
+        <PluginStoreAvatar item={item} displayName={displayName} className="size-16 rounded-2xl" iconClassName="size-6" />
         <div
           className="flex min-w-0 items-center justify-between gap-3"
           data-testid="plugin-store-title-actions"

@@ -14,7 +14,10 @@ export function PluginStoreAvatar({
   className,
   iconClassName,
   fallbackIcon,
+  displayName,
 }: {
+  /** [leo] 用户看到的名字；无图标时取它的首字（「交互视图」显示「交」）。 */
+  displayName?: string;
   item: Pick<StorePluginItem, "name" | "listing"> & Partial<Pick<StorePluginItem, "id">>;
   className?: string;
   iconClassName?: string;
@@ -24,7 +27,7 @@ export function PluginStoreAvatar({
     <PluginIcon
       src={item.listing?.icon}
       pluginId={item.id}
-      name={item.name}
+      name={displayName ?? item.name}
       className={className}
       iconClassName={iconClassName}
       fallbackIcon={fallbackIcon}

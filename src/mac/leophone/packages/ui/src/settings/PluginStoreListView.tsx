@@ -195,7 +195,7 @@ export function PluginStoreListView({
                       onClick={() => actions.onOpenDetail(item.id)}
                     >
                       {/* Installed Strip 只表达已安装集合，启用态统一在管理视图展示，避免用透明度误伤品牌图标。 */}
-                      <PluginStoreAvatar item={item} className="size-10" />
+                      <PluginStoreAvatar item={item} displayName={displayName} className="size-10" />
                     </button>
                     {canUpdatePluginItem(item) ? (
                       <button
