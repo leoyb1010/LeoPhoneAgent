@@ -28,6 +28,12 @@ export function resolveLeoAgentKind(task: unknown): LeoAgentKind {
     const value = (task as { agentKind?: unknown }).agentKind;
     if (isLeoAgentKind(value)) return value;
   }
+  // 草稿 / 会话配置：providerId = "acp"、model = agent id（见 @zcode/shared/acp）。
+  if (task && typeof task === "object" && "provider" in task && "model" in task) {
+    const provider = (task as { provider?: unknown }).provider;
+    const model = (task as { model?: unknown }).model;
+    if (provider === "acp" && isLeoAgentKind(model) && model !== "leobot") return model;
+  }
   if (task && typeof task === "object" && "model" in task) {
     const model = (task as { model?: unknown }).model;
     const match = typeof model === "string" ? /^acp\/([^$]+)/.exec(model) : null;

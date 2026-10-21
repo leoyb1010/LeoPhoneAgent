@@ -2180,7 +2180,10 @@ function ConversationComposerImpl({
         {/* [leo][wp-31] 工具条五件：模型(右侧) · 模式 · agent · 附件(+ 菜单) · 麦克风。 */}
         <LeoComposerAgentTools
           disabled={disabled}
-          agentKind={resolveLeoAgentKind({ model: snapshot?.config?.model ?? draftConfig?.model })}
+          agentKind={resolveLeoAgentKind({
+            provider: snapshot?.config?.provider ?? draftConfig?.provider ?? draftConfig?.modelSelection?.providerId,
+            model: snapshot?.config?.model ?? draftConfig?.model ?? draftConfig?.modelSelection?.modelId,
+          })}
           onPickAgent={() => handleConfigPickerOpenChange("model", true)}
         />
         {/* Bug 原因：附件画廊 rebase 曾整段覆盖 leadingActions，误删 staging 的 CUA 常驻入口。
@@ -2213,6 +2216,7 @@ function ConversationComposerImpl({
       runningSubagentCount,
       snapshot?.backgroundWorks,
       snapshot?.config?.model,
+      snapshot?.config?.provider,
       workspaceIdentity,
       workspacePath,
     ],

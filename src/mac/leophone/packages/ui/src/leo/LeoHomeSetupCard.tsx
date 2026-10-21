@@ -32,14 +32,19 @@ export function LeoHomeSetupCard({ className }: { className?: string }) {
   useEffect(() => {
     if (!bridge || dismissed) return;
     let alive = true;
-    void bridge
-      .status()
-      .then((result) => {
-        if (alive && result.ok) setStatus(result.data);
-      })
-      .catch(() => undefined);
+    // 刚启动时中继还在连：只读一次会一直显示「还没连上中继」。每 5 秒刷新，直到不再需要这张卡。
+    const load = () =>
+      void bridge
+        .status()
+        .then((result) => {
+          if (alive && result.ok) setStatus(result.data);
+        })
+        .catch(() => undefined);
+    load();
+    const timer = window.setInterval(load, 5_000);
     return () => {
       alive = false;
+      window.clearInterval(timer);
     };
   }, [bridge, dismissed]);
 

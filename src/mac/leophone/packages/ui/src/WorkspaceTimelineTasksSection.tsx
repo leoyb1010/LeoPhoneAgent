@@ -870,7 +870,7 @@ export function WorkspaceTimelineTasksSection({
                         <li key={`${run.runKey}:fold`}>
                           <button
                             type="button"
-                            className="ml-3 rounded-md px-2 py-0.5 text-ui-xs text-foreground-subtlest hover:bg-surface-hover hover:text-foreground-subtle"
+                            className="-mt-0.5 ml-6 rounded-md px-1.5 py-0.5 text-ui-xs text-foreground-subtlest hover:bg-surface-hover hover:text-foreground-subtle"
                             onClick={() =>
                               setExpandedTitleRuns((current) => {
                                 const next = new Set(current);
@@ -880,7 +880,7 @@ export function WorkspaceTimelineTasksSection({
                               })
                             }
                           >
-                            {expanded ? "收起同名任务" : `还有 ${run.hidden.length} 个同名任务`}
+                            {expanded ? "↳ 收起同名任务" : `↳ 还有 ${run.hidden.length} 条同名任务`}
                           </button>
                         </li>,
                       ];
