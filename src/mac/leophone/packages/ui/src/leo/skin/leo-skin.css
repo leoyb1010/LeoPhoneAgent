@@ -411,3 +411,23 @@ html[data-leo-skin] [data-leo-approval-risk="high"] > :first-child::before {
     transform: none;
   }
 }
+
+/* [leo][up-design] 首页标志的呼吸：LeoBot 唯一的签名动效，周期取 token beat（1.6s × 2），幅度很小；
+   减少动态时完全静止。 */
+@keyframes leo-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.045);
+    opacity: 0.88;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html[data-leo-skin] .leo-breathe {
+    animation: leo-breathe calc(var(--leo-beat, 1.6s) * 2) var(--leo-ease-settle, ease-in-out) infinite;
+    transform-origin: center;
+  }
+}

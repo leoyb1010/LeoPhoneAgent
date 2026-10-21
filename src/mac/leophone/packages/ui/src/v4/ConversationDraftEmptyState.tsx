@@ -195,7 +195,7 @@ export function ConversationDraftEmptyState({
         className,
       )}
     >
-      <LeoMark className="relative z-10 h-8 w-8 text-foreground" />
+      <LeoMark className="leo-breathe relative z-10 h-8 w-8 text-foreground" />
       <p
         ref={greetingContainerRef}
         data-v4-draft-greeting="true"
