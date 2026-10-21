@@ -31,10 +31,22 @@ interface ComputerUseBridge {
   openSettings(key: PermissionKey): Promise<boolean>;
 }
 
-const LABELS: Record<PermissionKey, { title: string; detail: string }> = {
-  "screen-recording": { title: "屏幕录制", detail: "截图、识别界面元素（see）" },
-  accessibility: { title: "辅助功能", detail: "点按、输入、读取界面结构" },
-  "event-synthesizing": { title: "合成键盘鼠标事件", detail: "部分 App 的键盘快捷键（可选）" },
+const LABELS: Record<PermissionKey, { title: string; detail: string; where: string }> = {
+  "screen-recording": {
+    title: "屏幕录制",
+    detail: "截图、识别界面元素（see）",
+    where: "系统设置 › 隐私与安全性 › 屏幕与系统录音，打开 LeoBot",
+  },
+  accessibility: {
+    title: "辅助功能",
+    detail: "点按、输入、读取界面结构",
+    where: "系统设置 › 隐私与安全性 › 辅助功能，打开 LeoBot",
+  },
+  "event-synthesizing": {
+    title: "合成键盘鼠标事件",
+    detail: "部分 App 的键盘快捷键（可选）",
+    where: "系统设置 › 隐私与安全性 › 辅助功能（与上一项同一处）",
+  },
 };
 
 function bridge(): ComputerUseBridge | null {
@@ -165,7 +177,7 @@ export function LeoComputerUseSection() {
                   </span>
                 </div>
                 <div className="text-ui-sm text-foreground-subtle">
-                  {permission.granted ? LABELS[permission.key].detail : permission.instructions}
+                  {permission.granted ? LABELS[permission.key].detail : LABELS[permission.key].where}
                 </div>
               </div>
               {permission.granted ? null : (
