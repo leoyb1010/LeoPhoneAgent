@@ -669,6 +669,7 @@
 		LFFEBA266A95 /* PaperclipRetirement.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF312E7B01F2 /* PaperclipRetirement.swift */; };
 		E5Q000004 /* FontSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5Q000014 /* FontSettings.swift */; };
 		E5LEO0001 /* LeoDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0011 /* LeoDesignSystem.swift */; };
+		LFA176E7B34F /* LeoTokens.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFDC0CB32EBE /* LeoTokens.generated.swift */; };
 		E5LEO0002 /* ChatColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0012 /* ChatColors.swift */; };
 		E5LEO0003 /* SelectableMarkdownTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0013 /* SelectableMarkdownTheme.swift */; };
 		E5LEO0004 /* AgentActivityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0014 /* AgentActivityModels.swift */; };
@@ -1730,6 +1731,7 @@
 		LF312E7B01F2 /* PaperclipRetirement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperclipRetirement.swift; sourceTree = "<group>"; };
 		E5Q000014 /* FontSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontSettings.swift; sourceTree = "<group>"; };
 		E5LEO0011 /* LeoDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoDesignSystem.swift; sourceTree = "<group>"; };
+		LFDC0CB32EBE /* LeoTokens.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoTokens.generated.swift; sourceTree = "<group>"; };
 		E5LEO0012 /* ChatColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatColors.swift; sourceTree = "<group>"; };
 		E5LEO0013 /* SelectableMarkdownTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableMarkdownTheme.swift; sourceTree = "<group>"; };
 		E5LEO0014 /* AgentActivityModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityModels.swift; sourceTree = "<group>"; };
@@ -2615,6 +2617,7 @@
 				E5PRIV12 /* EnvVarRedactor.swift */,
 				E5Q000014 /* FontSettings.swift */,
 				E5LEO0011 /* LeoDesignSystem.swift */,
+				LFDC0CB32EBE /* LeoTokens.generated.swift */,
 				E5J000022 /* FileHandleSafeWrite.h */,
 				E5J000021 /* FileHandleSafeWrite.m */,
 				E5J000052 /* ObjCExceptionCatcher.h */,
@@ -4120,6 +4123,7 @@
 				AA0838A02F3B941A00049557 /* AboutView.swift in Sources */,
 				E5LEO0028 /* LeoReleaseNotesView.swift in Sources */,
 				E5LEO0001 /* LeoDesignSystem.swift in Sources */,
+				LFA176E7B34F /* LeoTokens.generated.swift in Sources */,
 				BB1000100F700000000000AA /* ContextPolicy.swift in Sources */,
 				E5CSM0001 /* ContextSizeMeter.swift in Sources */,
 				E5ICT0001 /* IncrementalContextTrimmer.swift in Sources */,

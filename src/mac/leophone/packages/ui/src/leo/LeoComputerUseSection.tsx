@@ -77,15 +77,22 @@ export function LeoComputerUseSection() {
   return (
     <div className="space-y-4" data-testid="leo-computer-use-section">
       <p className="text-ui-base leading-6 text-foreground-subtle">
-        Agent 通过 MCP「leo-screen」（随包的
-        Peekaboo）看屏幕、点按和输入，后台点击不抢鼠标。授权对象是 LeoBot
-        本身；改完权限后回到这里会自动刷新。
+        允许后，Agent 可以看屏幕、点按和输入；在后台操作，不抢你的鼠标。授权给 LeoBot
+        本身，改完回到这里会自动刷新。
       </p>
+      <details className="text-ui-sm text-foreground-subtlest">
+        <summary className="cursor-pointer select-none">技术细节</summary>
+        <p className="mt-1 leading-5">
+          通过随包的 Peekaboo{status?.state === "ok" && status.version ? ` ${status.version}` : ""}，以 MCP 服务「leo-screen」的形式提供给 Agent。
+        </p>
+      </details>
       <div className="overflow-hidden rounded-xl border border-border">
         <div className="flex items-center justify-between bg-surface px-4 py-2.5 text-ui-sm text-foreground-subtle">
           <span>
             权限
-            {status?.state === "ok" && status.version ? ` · Peekaboo ${status.version}` : ""}
+            {status?.state === "ok"
+              ? ` · ${status.permissions.some((p) => p.required && !p.granted) ? "还差几项" : "已就绪"}`
+              : ""}
           </span>
           <Button
             type="button"
@@ -140,21 +147,33 @@ export function LeoComputerUseSection() {
                 />
               )}
               <div className="min-w-0 flex-1">
-                <div className="text-ui-base font-medium text-foreground">
+                <div className="flex items-center gap-2 text-ui-base font-medium text-foreground">
                   {LABELS[permission.key].title}
                   {permission.required ? "" : "（可选）"}
+                  {/* 状态要有文字：只靠图标颜色，读屏和色弱用户都分不出来。 */}
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-px text-ui-xs font-normal",
+                      permission.granted
+                        ? "bg-success/10 text-success"
+                        : permission.required
+                          ? "bg-[color-mix(in_srgb,var(--leo-attention)_14%,transparent)] text-[var(--leo-attention)]"
+                          : "bg-muted text-foreground-subtle",
+                    )}
+                  >
+                    {permission.granted ? "已允许" : "未允许"}
+                  </span>
                 </div>
                 <div className="text-ui-sm text-foreground-subtle">
                   {permission.granted ? LABELS[permission.key].detail : permission.instructions}
                 </div>
               </div>
-              {permission.granted ? (
-                <span className="text-ui-sm text-foreground-subtle">已允许</span>
-              ) : (
+              {permission.granted ? null : (
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
+                  aria-label={`${LABELS[permission.key].title}：未允许，去系统设置开启`}
                   onClick={() => void api.openSettings(permission.key)}
                 >
                   去系统设置

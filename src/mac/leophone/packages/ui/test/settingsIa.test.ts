@@ -135,3 +135,19 @@ test("every nav entry has a zh and en hint", () => {
     }
   }
 });
+
+test("[leo] settings search reaches 藏宝阁 rows inside memory and phone sections", () => {
+  const config = createSettingsPageConfig({ isDesktop: true, isMacDesktop: true });
+  const candidates = buildSettingsSearchCandidates({
+    config,
+    formatMessage: (id: string) => id,
+    isDesktop: true,
+    isWindowsDesktop: false,
+    isWindowsHost: false,
+  });
+  const hits = filterSettingsSearchCandidates("藏宝阁", candidates);
+  const sections = hits.map((hit) => hit.sectionId);
+  assert.ok(sections.includes("memory"));
+  assert.ok(sections.includes("phone"));
+  assert.equal(hits.find((hit) => hit.sectionId === "memory")?.rowId, "leo-memory-recall-treasury");
+});

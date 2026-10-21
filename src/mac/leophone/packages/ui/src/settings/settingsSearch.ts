@@ -1,4 +1,5 @@
 import type { SettingsSectionId } from "@/lib/settingsNavigation.js";
+import { SECTION_SETTINGS_SEARCH_ROWS } from "@/settings/sectionSearchRows.js";
 import {
   GENERAL_SETTINGS_SEARCH_ROWS,
   type createSettingsPageConfig,
@@ -90,6 +91,23 @@ export function buildSettingsSearchCandidates({
         [row.keywords],
       );
     }
+  }
+
+  const sectionLabels = new Map<string, string>();
+  for (const section of config.settingsSections) sectionLabels.set(section.id, formatMessage(section.titleId));
+  for (const row of SECTION_SETTINGS_SEARCH_ROWS) {
+    const context = sectionLabels.get(row.sectionId);
+    if (!context) continue; // 这个平台没有该分区（例如 Web 端没有电脑操作）
+    add(
+      {
+        key: `row:${row.sectionId}:${row.label}`,
+        sectionId: row.sectionId,
+        ...(row.rowId ? { rowId: row.rowId } : {}),
+        label: row.label,
+        context,
+      },
+      [row.keywords],
+    );
   }
 
   return candidates;

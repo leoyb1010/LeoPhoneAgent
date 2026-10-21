@@ -96,6 +96,7 @@ import type { ConversationDropTargetController } from "@/v4/composer/conversatio
 import { shouldIgnoreEscapeForStopGeneration } from "@/v4/composer/escapeStop.js";
 import { LeoTaskGroupsHome } from "@/leo/LeoTaskGroupsHome.js";
 import { acpAgentIdOf, useLeoAcpSlashCommands } from "@/leo/useLeoAcpSlashCommands.js";
+import { LeoHomeSetupCard } from "@/leo/LeoHomeSetupCard.js";
 import { ConversationDraftEmptyState } from "@/v4/ConversationDraftEmptyState.js";
 import { LeoDraftStatusList } from "@/leo/LeoDraftStatusList.js";
 import { LeoRecentWorkspaces } from "@/leo/LeoRecentWorkspaces.js";
@@ -3710,6 +3711,7 @@ export function SessionPane({
       ) : null}
       {/* [leo][wp-31] 首页三段式第一段:最近工作区卡(≤5),一键继续;没有就不占位。
           独立条件槽位,不改变 composerNode 在 fragment 里的位置,草稿 → 会话时输入框不重挂。 */}
+      {isDraft && !compactForRemoteControl ? <LeoHomeSetupCard className="mb-3" /> : null}
       {isDraft ? <LeoRecentWorkspaces className="mb-4" /> : null}
       {composerNode}
       {/* [leo] 首页输入框下方:等你确认 / 在跑 / 做完待看,没有就不占位。 */}
@@ -3947,7 +3949,18 @@ export function SessionPane({
                         compactForRemoteControl={compactForRemoteControl}
                       />
                     </div>
-                  ) : null
+                  ) : snapshot?.control.phase === "completedSuccess" ||
+                    snapshot?.control.phase === "completedInterrupted" ||
+                    snapshot?.control.phase === "error" ? null : (
+                    // [leo][up-send] 新会话刚发出去、Host 的投影还没回来（约 1~2 秒）时，以前是一整屏空白。
+                    <div
+                      data-testid="leo-session-sending"
+                      className="flex w-full max-w-3xl items-center gap-2 px-6 text-ui-sm text-foreground-subtle motion-safe:animate-pulse"
+                    >
+                      <span className="size-1.5 rounded-full bg-[var(--leo-brand)]" aria-hidden="true" />
+                      正在发送…
+                    </div>
+                  )
                 }
                 centerEmptyStateWithDock={isDraft}
                 compactEmptyStateWithDock={compactForRemoteControl}

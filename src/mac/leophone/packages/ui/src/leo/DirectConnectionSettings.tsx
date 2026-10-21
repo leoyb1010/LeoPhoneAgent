@@ -102,6 +102,7 @@ export function DirectConnectionSettings({
             }
           />
           <SettingsRow
+            rowId="phoneSyncReplica"
             label="同步副本"
             description="允许已配对设备将同步副本保存到这台 Mac"
             control={
@@ -113,6 +114,7 @@ export function DirectConnectionSettings({
             }
           />
           <SettingsRow
+            rowId="phoneTreasury"
             label="藏宝阁"
             description="允许已配对设备访问这台 Mac 的藏宝阁"
             control={

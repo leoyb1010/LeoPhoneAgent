@@ -111,7 +111,7 @@ function swift() {
   const { color, motion, radius, space, font } = tokens;
   const lines = [
     `// ${HEADER}`,
-    "// Not wired yet: the iOS line maps LeoTheme / LeoMotion onto these constants.",
+    "// Wired: LeoTheme / LeoMotion / LeoSquishButtonStyle in Shared/LeoDesignSystem.swift read these constants.",
     "",
     "enum LeoTokens {",
     "    struct RGBA: Sendable {",
@@ -152,6 +152,8 @@ function swift() {
     `        static let springDamping: Double = ${motion.spring.damping}`,
     `        static let easeOut: [Double] = [${motion.ease.out.join(", ")}]`,
     `        static let easeSettle: [Double] = [${motion.ease.settle.join(", ")}]`,
+    `        static let pressScale: Double = ${motion.press.scale}`,
+    `        static let pressDuration: Double = ${motion.press.duration / 1000}`,
     "    }",
     "",
     "    /// Dynamic Type style names matching the Mac text-ui-* roles.",

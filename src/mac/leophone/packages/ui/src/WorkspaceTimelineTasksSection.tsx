@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { ZCodeTaskMeta } from "@zcode/shared";
 import { toast } from "@/components/ui/toast.js";
+import { foldRepeatedTaskTitles } from "@/leo/foldRepeatedTasks.js";
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -239,6 +240,8 @@ export function WorkspaceTimelineTasksSection({
   const workspaceServiceLookupRef = useRef(workspaceServiceLookup);
   itemByKeyRef.current = itemByKey;
   workspaceServiceLookupRef.current = workspaceServiceLookup;
+  // [leo][up-sidebar] 同名任务折叠的展开状态（按每段第一条的 key）。
+  const [expandedTitleRuns, setExpandedTitleRuns] = useState<Set<string>>(() => new Set());
   const timelineGroups = useMemo(
     () => {
       const visibleItems = items.filter((item) =>
@@ -801,7 +804,17 @@ export function WorkspaceTimelineTasksSection({
                     </div>
                   ) : null}
                   <ul className="space-y-0.5">
-                    {group.items.map((item) => {
+                    {foldRepeatedTaskTitles(
+                      group.items,
+                      (item) => buildTimelineItemKey(item.workspacePath, item.taskId, item.workspaceIdentity),
+                      (item) =>
+                        item.taskId === activeTaskId ||
+                        buildTimelineItemKey(item.workspacePath, item.taskId, item.workspaceIdentity) ===
+                          mobileActiveTaskKey,
+                    ).flatMap((run) => {
+                      const expanded = expandedTitleRuns.has(run.runKey);
+                      const visible = expanded ? [run.item, ...run.hidden] : [run.item];
+                      const rows = visible.map((item) => {
                       const itemKey = buildTimelineItemKey(
                         item.workspacePath,
                         item.taskId,
@@ -850,6 +863,27 @@ export function WorkspaceTimelineTasksSection({
                           intl={intl}
                         />
                       );
+                      });
+                      if (run.hidden.length === 0) return rows;
+                      return [
+                        ...rows,
+                        <li key={`${run.runKey}:fold`}>
+                          <button
+                            type="button"
+                            className="ml-3 rounded-md px-2 py-0.5 text-ui-xs text-foreground-subtlest hover:bg-surface-hover hover:text-foreground-subtle"
+                            onClick={() =>
+                              setExpandedTitleRuns((current) => {
+                                const next = new Set(current);
+                                if (next.has(run.runKey)) next.delete(run.runKey);
+                                else next.add(run.runKey);
+                                return next;
+                              })
+                            }
+                          >
+                            {expanded ? "收起同名任务" : `还有 ${run.hidden.length} 个同名任务`}
+                          </button>
+                        </li>,
+                      ];
                     })}
                   </ul>
                 </li>

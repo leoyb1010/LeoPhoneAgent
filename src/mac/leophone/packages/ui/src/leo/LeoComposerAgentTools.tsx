@@ -18,9 +18,12 @@ import { formatAccelerator } from "./quickEntryAccelerator.js";
 export function LeoComposerAgentTools({
   agentKind = LEO_DEFAULT_AGENT_KIND,
   disabled = false,
+  onPickAgent,
 }: {
   agentKind?: LeoAgentKind;
   disabled?: boolean;
+  /** 点徽标换执行者：打开模型菜单（里面有「外部 Agent」）。以前徽标只是个标签，看着能点却点不动。 */
+  onPickAgent?: () => void;
 }) {
   const bridge = leoSpeechBridge();
   const [hotkey, setHotkey] = useState<string | null>(null);
@@ -50,7 +53,21 @@ export function LeoComposerAgentTools({
   const micLabel = hotkey ? `语音输入（按住 ${hotkey}，或点一下开始 / 结束）` : "";
   return (
     <span className="flex shrink-0 items-center gap-1" data-leo-composer-agent-tools>
-      <LeoAgentBadge kind={agentKind} className="mx-0.5" />
+      {onPickAgent ? (
+        <ControlHintTooltip title="换一个执行者（LeoBot / Claude Code / Codex …）">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onPickAgent}
+            aria-label={`执行者：${agentKind === "leobot" ? "LeoBot" : agentKind}，点击更换`}
+            className="mx-0.5 rounded-full transition-opacity hover:opacity-80 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--leo-brand)]"
+          >
+            <LeoAgentBadge kind={agentKind} />
+          </button>
+        </ControlHintTooltip>
+      ) : (
+        <LeoAgentBadge kind={agentKind} className="mx-0.5" />
+      )}
       {hotkey ? (
         <ControlHintTooltip title={micLabel}>
           <Button

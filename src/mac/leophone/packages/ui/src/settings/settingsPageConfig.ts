@@ -426,3 +426,4 @@ export function resolveSettingsSectionForPlatform(
 }
 
 export type { SettingsSectionId };
+

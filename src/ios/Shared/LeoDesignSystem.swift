@@ -24,35 +24,35 @@ enum LeoTheme {
         static let warning = Color(uiColor: .systemOrange)
         /// [WP-42] 跨端 token `attention`(审批卡、等你确认):浅 #B86E12 / 深 #F0B86E,与 Mac `--leo-attention` 同值。
         static let attention = Color(uiColor: UIColor { trait in
-            trait.userInterfaceStyle == .dark
-                ? UIColor(red: 0xF0 / 255, green: 0xB8 / 255, blue: 0x6E / 255, alpha: 1)
-                : UIColor(red: 0xB8 / 255, green: 0x6E / 255, blue: 0x12 / 255, alpha: 1)
+            let token = trait.userInterfaceStyle == .dark ? LeoTokens.Color.attention.dark : LeoTokens.Color.attention.light
+            return UIColor(red: token.r / 255, green: token.g / 255, blue: token.b / 255, alpha: token.a)
         })
         /// [WP-42] token `brand.soft`:强调色的浅底(选中行、徽标底)。
         static let accentSoft = Color.accentColor.opacity(0.12)
     }
 
     enum Spacing {
-        static let xxs: CGFloat = 4
-        static let xs: CGFloat = 8
-        static let sm: CGFloat = 12
-        static let md: CGFloat = 16
-        static let lg: CGFloat = 24
-        static let xl: CGFloat = 32
+        static let xxs = CGFloat(LeoTokens.Spacing.s1)
+        static let xs = CGFloat(LeoTokens.Spacing.s2)
+        static let sm = CGFloat(LeoTokens.Spacing.s3)
+        static let md = CGFloat(LeoTokens.Spacing.s4)
+        static let lg = CGFloat(LeoTokens.Spacing.s5)
+        static let xl = CGFloat(LeoTokens.Spacing.s6)
     }
 
     /// Shape rule: fields 12pt, content surfaces 16pt, message bubbles 18pt,
     /// and circular/pill controls use Capsule or Circle explicitly.
     enum Radius {
-        static let field: CGFloat = 12
-        static let surface: CGFloat = 16
-        static let bubble: CGFloat = 18
+        // [up-design] 数值来自 design/tokens.json（LeoTokens.generated.swift），与 Mac 同一来源。
+        static let field = CGFloat(LeoTokens.Radius.field)
+        static let surface = CGFloat(LeoTokens.Radius.surface)
+        static let bubble = CGFloat(LeoTokens.Radius.bubble)
         /// [F2] Every composer (home, chat) — see `leoComposerChrome()`.
-        static let composer: CGFloat = 26
+        static let composer = CGFloat(LeoTokens.Radius.composer)
     }
 
     enum TouchTarget {
-        static let minimum: CGFloat = 44
+        static let minimum = CGFloat(LeoTokens.touchTarget)
     }
 
     /// [T-treasury-design] Long-form reading: comfortable leading and a capped
@@ -82,11 +82,11 @@ enum LeoTheme {
 /// This keeps the first migration mechanically equivalent and preserves the
 /// Composer height-correction timing assumptions tied to the 0.28s panel time.
 enum LeoMotion {
-    static let quick: Double = 0.12
-    static let standard: Double = 0.20
-    static let panel: Double = 0.28
-    static let emphasis: Double = 0.35
-    static let springResponse: Double = 0.30
+    static let quick = LeoTokens.Motion.duration1
+    static let standard = LeoTokens.Motion.duration2
+    static let panel = LeoTokens.Motion.duration3
+    static let emphasis = LeoTokens.Motion.duration4
+    static let springResponse = LeoTokens.Motion.springResponse
     /// [WP-42] 呼吸 / 思考扫光周期(token `beat`)。
     static let beat: Double = LeoMotionPolicy.beat
 
@@ -98,7 +98,7 @@ enum LeoMotion {
         reduceMotion ? nil : .easeInOut(duration: panel)
     }
 
-    static func spring(reduceMotion: Bool, dampingFraction: Double = 0.82) -> Animation? {
+    static func spring(reduceMotion: Bool, dampingFraction: Double = LeoTokens.Motion.springDamping) -> Animation? {
         reduceMotion ? nil : .spring(response: springResponse, dampingFraction: dampingFraction)
     }
 
@@ -139,13 +139,15 @@ struct LeoSquishButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.94 : 1))
+            // [up-design] 按压与回弹用 token（0.97 / 80ms / spring 0.30·0.82），与 Mac 的 press 一致。
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? LeoTokens.Motion.pressScale : 1))
             .animation(
                 reduceMotion
                     ? nil
                     : (configuration.isPressed
-                       ? .easeOut(duration: 0.08)
-                       : .spring(response: 0.36, dampingFraction: 0.68)),
+                       ? .easeOut(duration: LeoTokens.Motion.pressDuration)
+                       : .spring(response: LeoTokens.Motion.springResponse,
+                                 dampingFraction: LeoTokens.Motion.springDamping)),
                 value: configuration.isPressed
             )
     }
