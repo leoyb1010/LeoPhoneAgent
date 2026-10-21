@@ -102,7 +102,7 @@ struct SoulSettingsView: View {
                 }
             }
         }
-        .navigationTitle(AppLocalized("Soul"))
+        .navigationTitle(AppLocalized("人设"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

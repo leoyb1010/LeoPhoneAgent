@@ -31,7 +31,7 @@ struct ShortcutRecipesView: View {
                 }
             }
         }
-        .navigationTitle("快捷指令配方")
+        .navigationTitle("快捷指令模板")
         .navigationBarTitleDisplayMode(.inline)
     }
 

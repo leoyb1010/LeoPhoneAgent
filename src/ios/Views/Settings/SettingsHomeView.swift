@@ -107,48 +107,57 @@ struct SettingsHomeView: View {
                               icon: "server.rack", color: .gray,
                               hint: "旧通道，只在中继不可用时使用") { RemoteHostSettingsView() },
             ]),
-            SettingsGroup(id: "agent", title: "Agent", entries: [
+            // [up-settings] 以前「Agent」一组平铺 18 项、夹着内部代号；按用户要办的事拆成四组。
+            SettingsGroup(id: "agent", title: "模型与推理", entries: [
                 SettingsEntry("模型分组", keywords: "model group 回退 负载",
                               icon: "gearshape.circle.fill", color: .indigo) { ModelGroupsView() },
+                SettingsEntry("推理与模型", keywords: "thinking 推理 读图 压缩 标题 vision compact 上下文 裁剪 精简 context trim",
+                              icon: "brain.head.profile", color: .indigo,
+                              hint: "思考深度、读图、压缩与标题用哪个模型") { ThinkingAndModelSlotsView() },
+                SettingsEntry("快速判断模型", keywords: "jev 快速判断 typesafe system one 快速判断 分类 打分",
+                              icon: "bolt.horizontal.circle.fill", color: .indigo,
+                              hint: "TypeSafe 的快判断模型,填 Key 后 Agent 多一个 jev_decide 工具") { JevSettingsView() },
                 // 1.57 的实时出字、自动改字、热词、语音度量都在这一页;以前只能从 AI 服务商里翻到。
                 SettingsEntry("语音识别", keywords: "语音 识别 听写 实时出字 改字 热词 度量 离线 语言资源 speech",
                               icon: "waveform", color: .purple,
                               hint: "实时出字、自动改字、热词与离线语言包") { SystemSpeechResourcesView() },
-                SettingsEntry("推理与模型", keywords: "thinking 推理 读图 压缩 标题 vision compact 上下文 裁剪 精简 context trim",
-                              icon: "brain.head.profile", color: .indigo) { ThinkingAndModelSlotsView() },
-                SettingsEntry("Jev 快速判断", keywords: "jev typesafe system one 快速判断 分类 打分",
-                              icon: "bolt.horizontal.circle.fill", color: .indigo,
-                              hint: "TypeSafe 的快判断模型,填 Key 后 Agent 多一个 jev_decide 工具") { JevSettingsView() },
-                SettingsEntry("快捷任务", keywords: "quick task 捷径 快速任务",
-                              icon: "bolt.fill", color: .indigo) { QuickTaskSettingsView() },
-                SettingsEntry("子代理", keywords: "sub agent subagent helper 子代理 委派 角色 并行",
-                              icon: "person.2.fill", color: .indigo,
-                              hint: "让 Agent 把独立任务交给后台子代理并行完成") { HelperSettingsView() },
+            ]),
+            SettingsGroup(id: "abilities", title: "能力与工具", entries: [
+                SettingsEntry("技能", keywords: "skills 技能包",
+                              icon: "sparkles", color: .purple) { SkillsManagementView() },
+                SettingsEntry("MCP 集成", keywords: "mcp server 集成 工具",
+                              icon: "puzzlepiece.extension.fill", color: .orange) { MCPIntegrationsView() },
                 SettingsEntry("工具开关", keywords: "tools 工具 开关 浏览器 browser 子代理 定时跟进 关闭",
                               icon: "switch.2", color: .indigo,
                               hint: "浏览器、子代理、定时跟进可以分别关掉") { ToolTogglesSettingsView() },
-                SettingsEntry("能力中心", keywords: "capabilities 权限 能干什么",
+                SettingsEntry("手机能力与授权", keywords: "能力中心 capabilities 权限 能干什么",
                               icon: "square.grid.2x2.fill", color: .cyan,
                               hint: "Agent 能调用哪些手机能力，系统授权到哪一步") { CapabilitiesView() },
-                SettingsEntry("技能", keywords: "skills 技能包",
-                              icon: "sparkles", color: .purple) { SkillsManagementView() },
-                SettingsEntry("灵魂", keywords: "soul 人格 性格",
-                              icon: "heart.fill", color: .pink) { SoulSettingsView() },
-                SettingsEntry("记忆", keywords: "memory 记忆库",
-                              icon: "brain", color: .purple) { MemoryManagementView() },
-                SettingsEntry("MCP 集成", keywords: "mcp server 集成 工具",
-                              icon: "puzzlepiece.extension.fill", color: .orange) { MCPIntegrationsView() },
+                SettingsEntry("子代理", keywords: "sub agent subagent helper 子代理 委派 角色 并行",
+                              icon: "person.2.fill", color: .indigo,
+                              hint: "让 Agent 把独立任务交给后台子代理并行完成") { HelperSettingsView() },
                 SettingsEntry("邮箱账户", keywords: "mail email imap 邮箱 邮件 gmail qq 163 126 icloud",
                               icon: "envelope.fill", color: .blue,
                               hint: "授权 Gmail / QQ / 163 等邮箱,对话里直接读邮件") { MailAccountsView() },
+            ]),
+            SettingsGroup(id: "knowledge", title: "记忆与资料", entries: [
+                SettingsEntry("记忆", keywords: "memory 记忆库",
+                              icon: "brain", color: .purple) { MemoryManagementView() },
                 SettingsEntry("资料库", keywords: "brain archive 资料库 第二大脑 知识卡 文件 mini 网关 令牌",
                               icon: "books.vertical.fill", color: .brown,
                               hint: "连接 Mac 上的资料库,藏宝阁和 Agent 都能查你的旧资料") { BrainSettingsView() },
+                SettingsEntry("人设", keywords: "灵魂 soul 人格 性格",
+                              icon: "heart.fill", color: .pink,
+                              hint: "Agent 的说话风格和性格") { SoulSettingsView() },
+            ]),
+            SettingsGroup(id: "automation", title: "自动化", entries: [
+                SettingsEntry("快捷任务", keywords: "quick task 捷径 快速任务",
+                              icon: "bolt.fill", color: .indigo) { QuickTaskSettingsView() },
                 SettingsEntry("自动化", keywords: "automation 触发 位置 日历 充电",
                               icon: "bolt.badge.clock", color: .orange) { AutomationSettingsView() },
                 SettingsEntry("定时任务", keywords: "schedule cron 定时",
                               icon: "clock.badge", color: .orange) { ScheduledTaskSettingsView() },
-                SettingsEntry("快捷指令配方", keywords: "shortcuts 快捷指令 自动化 配方 siri 到家 车载 蓝牙 晨报 recipe",
+                SettingsEntry("快捷指令模板", keywords: "配方 shortcuts 快捷指令 自动化 配方 siri 到家 车载 蓝牙 晨报 recipe",
                               icon: "square.on.square", color: .orange,
                               hint: "到家、上车、按一下按钮，让 Agent 自己动起来") { ShortcutRecipesView() },
                 SettingsEntry("环境变量", keywords: "environment env 变量",
@@ -398,6 +407,9 @@ struct SettingsHomeView: View {
         case "common": return "star.fill"
         case "device": return "macbook.and.iphone"
         case "agent": return "sparkles"
+        case "abilities": return "wrench.and.screwdriver"
+        case "knowledge": return "books.vertical"
+        case "automation": return "bolt.badge.clock"
         case "general": return "paintbrush"
         case "data": return "externaldrive"
         default: return "lock.shield"
@@ -409,6 +421,9 @@ struct SettingsHomeView: View {
         case "common": return .orange
         case "device": return .teal
         case "agent": return .indigo
+        case "abilities": return .purple
+        case "knowledge": return .brown
+        case "automation": return .orange
         case "general": return .blue
         case "data": return .mint
         default: return .orange

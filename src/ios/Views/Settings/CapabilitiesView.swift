@@ -66,7 +66,7 @@ struct CapabilitiesView: View {
         }
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: Text("Search capabilities"))
-        .navigationTitle("Capabilities")
+        .navigationTitle("手机能力与授权")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { probe.refresh() }
     }

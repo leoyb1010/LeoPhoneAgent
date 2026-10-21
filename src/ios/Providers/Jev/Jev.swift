@@ -171,7 +171,7 @@ struct JevSettingsView: View {
                 Text("Jev 是 TypeSafe 的\"快判断\"模型:不写文字,只回答带概率的选择、打分和是否,几百毫秒出结果、成本极低。填好后 Agent 会多一个 jev_decide 工具,用来分类、分流、打分和过滤。Key 在 console.typesafe.ai 申请。")
             }
         }
-        .navigationTitle("Jev 快速判断")
+        .navigationTitle("快速判断模型")
         .navigationBarTitleDisplayMode(.inline)
         .alert("删除 Jev Key？", isPresented: $confirmDeleteKey) {
             Button("删除", role: .destructive) {

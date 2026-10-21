@@ -578,17 +578,26 @@ private struct GatewayHostRow: View {
                         Text(!route.available ? "连接不可用" : (path?.current?.label ?? (route.direct ? "直连" : "中继")))
                         if let ms = path?.latencyMilliseconds ?? route.latencyMilliseconds { Text("\(ms) ms") }
                     }.font(.caption).foregroundStyle(.secondary)
+                    // [up-device] 走中继但这台 Mac 开着直连：告诉用户怎么换到更快、更私密的直连。
+                    if route.available, !route.direct,
+                       host.device?.endpoints.contains(where: { $0.kind == "direct" }) == true {
+                        Label("可走直连：在这台 iPhone 上打开 Tailscale", systemImage: "bolt.horizontal")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                if let relayE2E {
-                    Label(relayE2E == .encrypted ? AppLocalized("中继：端到端加密")
-                            : relayE2E == .keyMismatch ? AppLocalized("中继：钥匙不一致（直连一次即可修复）")
-                            : AppLocalized("中继：未加密"),
-                          systemImage: relayE2E == .encrypted ? "lock.fill" : relayE2E == .keyMismatch ? "exclamationmark.lock" : "lock.open")
+                // [up-device] 加密状态：本次还没走过中继时，用「这台 Mac 加密成功过」作初值，而不是什么都不显示。
+                if let e2e = relayE2E ?? (host.relayE2EVerified == true ? .encrypted : nil) {
+                    Label(e2e == .encrypted ? AppLocalized("端到端加密")
+                            : e2e == .keyMismatch ? AppLocalized("钥匙不一致（直连一次即可修复）")
+                            : AppLocalized("中继未加密"),
+                          systemImage: e2e == .encrypted ? "lock.fill" : e2e == .keyMismatch ? "exclamationmark.lock" : "lock.open")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(e2e == .encrypted ? Color.secondary : Color.orange)
                 }
-                if let device = host.device {
-                    Text(device.capabilities.joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)
+                // [up-device] 以前把 harness · resumable-events · … 原样打印给用户看；只留人话。
+                if let summary = Self.capabilitySummary(host.device?.capabilities ?? []) {
+                    Text(summary).font(.caption2).foregroundStyle(.secondary)
                 }
                 if let address = displayedAddress {
                     Text(address)
@@ -609,6 +618,18 @@ private struct GatewayHostRow: View {
                 .foregroundStyle(.tertiary)
         }
         .contentShape(Rectangle())
+    }
+
+    /// Mac 广播的能力 → 用户看得懂的一句话；没有值得说的就不显示。
+    static func capabilitySummary(_ capabilities: [String]) -> String? {
+        let names: [(String, String)] = [
+            ("approval-events", AppLocalized("手机审批")),
+            ("resumable-events", AppLocalized("断线续传")),
+            ("sync-replica-v1", AppLocalized("同步副本")),
+            ("treasury-v1", AppLocalized("藏宝阁")),
+        ]
+        let parts = names.compactMap { capabilities.contains($0.0) ? $0.1 : nil }
+        return parts.isEmpty ? nil : AppLocalized("支持：") + parts.joined(separator: " · ")
     }
 
     /// 引擎地址;没有时退到直连的编码会话地址。经中继的机器返回 nil(地址里带钥匙路径,也没什么可看的)。
@@ -702,6 +723,8 @@ final class GatewayHostDraft: ObservableObject, Identifiable {
 }
 
 private struct GatewayHostEditor: View {
+    /// [up-device] 已添加的机器默认收起地址 / 密钥 / SSH。
+    @State private var showConnectionFields = false
     /// @ObservedObject 且对象由 GatewayEditorCoordinator 单例持有:本视图
     /// 被重建多少次都只是重新绑定同一份草稿,输入中的文字动不了。
     @ObservedObject var draft: GatewayHostDraft
@@ -753,6 +776,27 @@ private struct GatewayHostEditor: View {
                 }
 
                 Section {
+                    Button {
+                        Task { await test() }
+                    } label: {
+                        HStack {
+                            Text("测试连接")
+                            Spacer()
+                            if isTesting { ProgressView() }
+                        }
+                    }
+                    .disabled(!canTest || isTesting)
+                    if let testProblem {
+                        LeoLinkProblemView(problem: testProblem, isBusy: isTesting, onRetry: { Task { await test() } })
+                    } else if let testResult {
+                        Text(testResult).font(.system(size: 13)).foregroundStyle(.secondary)
+                    }
+                }
+
+                // [up-device] 已添加的 Mac：地址、密钥、SSH 这些开发者字段收进「连接信息」，默认收起。
+                // 扫码添加的机器这些都是自动填的，绝大多数人不需要看。
+                if draft.isNew || showConnectionFields {
+                Section {
                     TextField("https://…/leoagent-relay/relay/api/m/机器名", text: $draft.harnessURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -799,25 +843,19 @@ private struct GatewayHostEditor: View {
                     Text("直连和中继都连不上时，经 Tailscale 直接 SSH 到这台 Mac 跑命令行（没有审批与工具卡）。填了就优先用这里的；留空就用 Mac 自己报的地址或内置默认。端口留空按 Mac 报的或 22。")
                 }
 
-                Section {
-                    Button {
-                        Task { await test() }
-                    } label: {
-                        HStack {
-                            Text("测试连接")
-                            Spacer()
-                            if isTesting { ProgressView() }
+                } else {
+                    Section {
+                        Button {
+                            withAnimation(LeoMotion.standardEase(reduceMotion: LeoMotion.systemReduceMotion)) { showConnectionFields = true }
+                        } label: {
+                            Label("连接信息（地址、密钥、SSH）", systemImage: "slider.horizontal.3")
                         }
-                    }
-                    .disabled(!canTest || isTesting)
-                    if let testProblem {
-                        LeoLinkProblemView(problem: testProblem, isBusy: isTesting, onRetry: { Task { await test() } })
-                    } else if let testResult {
-                        Text(testResult).font(.system(size: 13)).foregroundStyle(.secondary)
+                    } footer: {
+                        Text("扫码添加的机器已自动填好，一般不用改。")
                     }
                 }
             }
-            .navigationTitle(Text(draft.isNew ? "添加 Mac" : "编辑 Mac"))
+            .navigationTitle(Text(draft.isNew ? "添加 Mac" : draft.name.isEmpty ? "Mac" : draft.name))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1027,9 +1065,24 @@ struct GatewayItemView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
 
+        case .notice where item.text.hasPrefix("→ "):
+            // [up-console] 用户发出的指令：和本机会话一样，右侧气泡，而不是一行灰色小字。
+            HStack {
+                Spacer(minLength: 48)
+                Text(String(item.text.dropFirst(2)))
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: LeoTheme.Radius.bubble, style: .continuous))
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .accessibilityLabel(Text("你：\(String(item.text.dropFirst(2)))"))
+
         case .notice:
             Text(item.text)
-                .font(.system(size: 12))
+                .font(.footnote)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -1549,12 +1602,15 @@ struct HarnessConsoleView: View {
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
 
-            Text(driver.journalStatus.label)
-                .font(.caption)
-                .foregroundStyle(driver.journalStatus.state == "degraded" ? Color.orange : Color.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14).padding(.vertical, 4)
-                .accessibilityValue("已保存 \(driver.journalStatus.durableSeq)，已收到 \(driver.journalStatus.latestSeq)，缺口 \(driver.journalStatus.missingRanges)")
+            // [up-console] 「日志已保存 / 状态未知」是给排障看的：一切正常时不占位，只在降级时提醒。
+            if driver.journalStatus.state == "degraded" {
+                Text(driver.journalStatus.label)
+                    .font(.caption)
+                    .foregroundStyle(Color.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14).padding(.vertical, 4)
+                    .accessibilityValue("已保存 \(driver.journalStatus.durableSeq)，已收到 \(driver.journalStatus.latestSeq)，缺口 \(driver.journalStatus.missingRanges)")
+            }
 
             // [A3] Mac 没认出这台 iPhone、本会话降级为逐项审批:在 Mac 上按步骤处理完,一点恢复全自动。
             if driver.fullAutoRefused && FullAutoGate.isOn {

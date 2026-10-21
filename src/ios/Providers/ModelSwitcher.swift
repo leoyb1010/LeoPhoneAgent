@@ -309,7 +309,9 @@ enum ModelSwitcher {
         if let entryId = ModelGroupRouter.resolve(group: group, sessionId: "draft",
                                                   store: store, verbose: false),
            let entry = store.entry(for: entryId) {
-            return entry.model.displayName
+            // [up-home] 同时说出「选的是哪个组」和「这次会用谁」。只显示模型名时，组里第一个可用模型
+            // 一变（下架、限流、换序），首页胶囊就换成另一个名字，看着像选择被改了。
+            return "\(group.name) · \(entry.model.displayName)"
         }
         return group.name
     }
