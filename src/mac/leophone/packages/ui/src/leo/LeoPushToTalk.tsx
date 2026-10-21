@@ -162,7 +162,7 @@ export function LeoPushToTalk() {
       aria-live="polite"
       className="pointer-events-none fixed inset-x-0 bottom-6 z-[60] flex justify-center"
     >
-      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-popover px-4 py-2 text-ui-sm text-foreground shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200 motion-reduce:animate-none">
+      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-popover px-4 py-2 text-ui-sm text-foreground shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-[var(--leo-dur-2)] motion-reduce:animate-none">
         {phase.kind === "error" ? (
           <>
             <span className="text-destructive">{phase.message}</span>

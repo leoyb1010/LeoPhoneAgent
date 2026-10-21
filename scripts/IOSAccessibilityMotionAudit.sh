@@ -28,4 +28,27 @@ if (( motion_failure != 0 )); then
     exit 1
 fi
 
-print "IOSAccessibilityMotionAudit: centralized haptics and repeating-motion gates passed"
+# [up-design] 界面过渡的曲线和时长走 LeoMotion（design/tokens.json）。下面这几处是刻意的（电平表、呼吸、
+# 高亮淡出等），列在白名单里；新增手写 .easeOut(duration:) / .spring(response:) 会让这里变红。
+adhoc_allowlist=(
+    "src/ios/Views/Chat/AudioWaveformView.swift"
+    "src/ios/Views/Chat/Voice/VoiceInputPanel.swift"
+    "src/ios/Views/Chat/Voice/InlineVoiceInputView.swift"
+    "src/ios/Views/Rootfs/FileBrowserView.swift"
+    "src/ios/Views/Chat/AssistantBlockView.swift"
+)
+adhoc_failure=0
+while IFS= read -r hit; do
+    [[ -z "$hit" ]] && continue
+    file="${hit%%:*}"
+    if (( ${adhoc_allowlist[(Ie)$file]} == 0 )); then
+        print -u2 "Ad-hoc animation curve (use LeoMotion): $hit"
+        adhoc_failure=1
+    fi
+done < <(rg -n '\.(easeInOut|easeOut|easeIn)\(duration:|\.spring\(response:' src/ios/Views --glob '*.swift' \
+    | rg -v 'LeoMotion|reduceMotion \? nil|^\S+:\d+:\s*//' || true)
+if (( adhoc_failure != 0 )); then
+    exit 1
+fi
+
+print "IOSAccessibilityMotionAudit: centralized haptics, repeating-motion and motion-token gates passed"

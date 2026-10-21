@@ -88,7 +88,7 @@ export function LeoWhatsNew() {
             ref={confirmRef}
             type="button"
             onClick={close}
-            className="rounded-lg bg-brand px-4 py-1.5 text-ui-base font-medium text-foreground-inverse transition-[filter] duration-150 hover:brightness-110 focus-visible:outline-2! focus-visible:outline-offset-2! focus-visible:outline-brand!"
+            className="rounded-lg bg-brand px-4 py-1.5 text-ui-base font-medium text-foreground-inverse transition-[filter] duration-[var(--leo-dur-1)] hover:brightness-110 focus-visible:outline-2! focus-visible:outline-offset-2! focus-visible:outline-brand!"
           >
             知道了
           </button>

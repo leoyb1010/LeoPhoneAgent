@@ -58,7 +58,7 @@ struct AppLockOverlay: View {
             let reason = AppLocalized("Unlock LeoBot")
             let ok = await BiometricAuth.authenticate(reason: reason)
             if ok {
-                withAnimation(.easeOut(duration: 0.25)) {
+                withAnimation(LeoMotion.panelEase(reduceMotion: LeoMotion.systemReduceMotion)) {
                     store.noteAppUnlock()
                     // [T-unlock-blank-flash] The privacy screen belongs to the
                     // app switcher, not to the moment after a successful

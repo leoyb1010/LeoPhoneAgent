@@ -232,7 +232,7 @@ struct AddProviderView: View {
         List {
             steppedContent.disabled(isSaving)
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.88), value: currentStep)
+        .animation(LeoMotion.spring(reduceMotion: LeoMotion.systemReduceMotion), value: currentStep)
         .interactiveDismissDisabled(isSaving)
         .onDisappear { cancelValidation() }
         .navigationTitle(navigationTitle)

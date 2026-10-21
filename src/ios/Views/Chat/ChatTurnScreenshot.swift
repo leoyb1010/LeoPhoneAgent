@@ -193,9 +193,9 @@ struct ChatScreenshotPreviewSheet: View {
     }
 
     private func flashToast(_ message: String) {
-        withAnimation(.easeOut(duration: 0.2)) { toast = message }
+        withAnimation(LeoMotion.standardEase(reduceMotion: LeoMotion.systemReduceMotion)) { toast = message }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-            withAnimation(.easeIn(duration: 0.25)) { toast = nil }
+            withAnimation(LeoMotion.panelEase(reduceMotion: LeoMotion.systemReduceMotion)) { toast = nil }
         }
     }
 }

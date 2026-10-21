@@ -689,7 +689,7 @@ struct SSHPortForwardView: View {
             }
         }
         .navigationTitle(Text("端口转发"))
-        .animation(.easeInOut(duration: 0.2), value: manager.states)
+        .animation(LeoMotion.standardEase(reduceMotion: LeoMotion.systemReduceMotion), value: manager.states)
     }
 
     private func row(_ rule: SSHPortForwardRule) -> some View {

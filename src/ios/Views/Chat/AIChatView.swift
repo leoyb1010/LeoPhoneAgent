@@ -597,7 +597,7 @@ struct AIChatView: View {
                                 .accessibilityIdentifier("sessionLoadingCard")
                         }
                     }
-                    .animation(.easeOut(duration: 0.28), value: vm.isLoadingSession)
+                    .animation(LeoMotion.panelEase(reduceMotion: LeoMotion.systemReduceMotion), value: vm.isLoadingSession)
                     .allowsHitTesting(false)
                 }
                 .overlay {
@@ -4220,7 +4220,7 @@ struct AIChatView: View {
                                     performSend()
                                 }
                             }
-                            withAnimation(.easeOut(duration: 0.18)) {
+                            withAnimation(LeoMotion.standardEase(reduceMotion: LeoMotion.systemReduceMotion)) {
                                 sendSwipeProgress = 0
                             }
                         } else if swipedUp && !hasText && !inputFocused {
@@ -4288,8 +4288,8 @@ struct AIChatView: View {
         // Single spring drives both popups' show/hide transitions. Short
         // snappy curve (~0.22s) — instant on `/` / `@` keypress with a
         // touch of overshoot to read as iOS 26-native.
-        .animation(.spring(response: 0.18, dampingFraction: 0.82), value: vm.showSlashMenu)
-        .animation(.spring(response: 0.18, dampingFraction: 0.82), value: vm.showMentionMenu)
+        .animation(LeoMotion.snappy(reduceMotion: LeoMotion.systemReduceMotion), value: vm.showSlashMenu)
+        .animation(LeoMotion.snappy(reduceMotion: LeoMotion.systemReduceMotion), value: vm.showMentionMenu)
     }
 
     /// [T-ipad-inputbar-height-zero] Bounds of the window hosting the chat, in
@@ -4473,7 +4473,7 @@ struct AIChatView: View {
                         .frame(maxHeight: Self.slashPickerFixedHeight)
                         .onChange(of: vm.mentionSelectedIndex) { newIndex in
                             guard newIndex >= 0, newIndex < rows.count else { return }
-                            withAnimation(.easeOut(duration: 0.12)) {
+                            withAnimation(LeoMotion.snappy(reduceMotion: LeoMotion.systemReduceMotion)) {
                                 proxy.scrollTo(newIndex, anchor: .center)
                             }
                         }
@@ -6146,7 +6146,7 @@ private struct EmptyChatWorkspaceCard: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         .padding(.bottom, 6)
-        .animation(.easeOut(duration: 0.2), value: showsMark)
+        .animation(LeoMotion.standardEase(reduceMotion: LeoMotion.systemReduceMotion), value: showsMark)
         .accessibilityElement(children: .contain)
     }
 

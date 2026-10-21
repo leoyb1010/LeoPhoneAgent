@@ -5048,6 +5048,18 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // on every request; measure them for this iteration so the guards
             // below and the calibration pair see the real fixed share.
             contextFixedTokens = ContextSizeMeter.estimateFixedTokens(systemPrompt: userSystemPrompt, tools: tools)
+            // [up-perf] 每次请求固定要带的前缀（实测新会话约 2.3 万 token），拆开记一行：系统提示多少、工具定义多少、
+            // 最大的几个工具是谁。首字慢的优化要按这个数据来，而不是凭感觉删工具。
+            if agentHistory.count <= 1 {
+                let systemTokens = ContextSizeMeter.estimateTokens(userSystemPrompt)
+                let biggest = tools
+                    .map { ($0.name, ContextSizeMeter.estimateFixedTokens(systemPrompt: "", tools: [$0])) }
+                    .sorted { $0.1 > $1.1 }
+                    .prefix(6)
+                    .map { "\($0.0)=\($0.1)" }
+                    .joined(separator: ",")
+                logger.info("[CtxMeter] fixed breakdown system=\(systemTokens) tools=\(contextFixedTokens - systemTokens) count=\(tools.count) top=\(biggest)")
+            }
 
             // Context window management: offload old tool content if approaching limit.
             // Judged on the outbound measurement, not `turnUsage.latestContextTokens`:
