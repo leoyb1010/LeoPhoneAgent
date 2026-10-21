@@ -12,6 +12,14 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.77.2",
+            date: "2026-10-21",
+            title: "SSH 兜底说清卡在哪",
+            highlights: [
+                "Mac 上的 Claude Code 请求失败时（比如那台 Mac 配的 API Key 过期，返回 401），以前它会安静地重试近 10 分钟，手机上只看到「处理中」。现在每次重试都会显示原因和第几次，认证失败时直接告诉你去那台 Mac 检查 Key 或重新登录。"
+            ]
+        ),
+        LeoRelease(
             version: "1.77.1",
             date: "2026-10-21",
             title: "动效节奏统一",

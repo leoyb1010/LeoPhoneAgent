@@ -206,6 +206,18 @@ enum SSHFallbackCLI {
             out.append(.session(id))
             if obj["subtype"] as? String == "init" { out.append(.progress("Claude Code 已在 Mac 上启动")) }
         }
+        // [up-link] Claude Code 请求失败会安静地重试最多 10 次（指数退避，前后近 10 分钟），以前手机上只看到「处理中」。
+        // 401/403 基本就是那台 Mac 上 Claude Code 的 Key / 登录失效（例如 ANTHROPIC_BASE_URL 指向的第三方接口 Key 过期）。
+        if type == "system", obj["subtype"] as? String == "api_retry" {
+            let status = obj["error_status"] as? Int
+            let attempt = obj["attempt"] as? Int ?? 0
+            let maxRetries = obj["max_retries"] as? Int ?? 0
+            let reason = (obj["error"] as? String) ?? "请求失败"
+            let hint = (status == 401 || status == 403)
+                ? "：这台 Mac 上 Claude Code 的 API Key 或登录无效，去那台 Mac 检查 ~/.claude/settings.json 或重新登录"
+                : ""
+            out.append(.progress("Claude Code 请求失败（\(status.map(String.init) ?? "?") \(reason)），第 \(attempt)/\(maxRetries) 次重试\(hint)"))
+        }
         // --include-partial-messages 的增量：正文仍以完整的 assistant 消息为准（避免重复），这里只报「还活着」。
         if type == "stream_event", let event = obj["event"] as? [String: Any] {
             switch event["type"] as? String {

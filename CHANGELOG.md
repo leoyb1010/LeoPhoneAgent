@@ -1,5 +1,9 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.77.2 (179) · SSH 兜底显示重试原因 - 2026-10-21
+
+- 实测定位 Mac mini「Claude Code 无响应」：mini 的 ~/.claude/settings.json 把 ANTHROPIC_BASE_URL 指向 DeepSeek，Key 失效返回 401，Claude Code 静默重试 10 次。SSH 兜底解析 stream-json 的 system/api_retry，逐次显示状态码与第几次，401/403 提示去那台 Mac 检查 Key 或重新登录。
+
 ## Mac 1.13.1 · iOS 1.77.1 (178) · 动效统一 - 2026-10-21
 
 - iOS 11 处手写动画曲线改用 LeoMotion token；动效门禁新增手写曲线检查（反向验证会红）；记录首轮请求固定前缀组成（[CtxMeter] fixed breakdown）。
