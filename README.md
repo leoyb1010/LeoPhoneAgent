@@ -2,7 +2,7 @@
 
 > 原名 LeoPhoneAgent，2026-10-06 先后改名 LOBE、LeoBot；仓库地址、Bundle ID 与数据目录沿用原名。
 
-[![iOS](https://img.shields.io/badge/iOS-1.77.3%20(180)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.77.4%20(181)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.13.1-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -168,7 +168,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.77.3 (180)`;Bundle ID `com.leoyuan.leophoneagent`。每一版改了什么以 `src/ios/Views/Settings/LeoReleaseNotesView.swift` 为准，下面只列近几版。
+- 当前源码版本/构建:`1.77.4 (181)`;Bundle ID `com.leoyuan.leophoneagent`。每一版改了什么以 `src/ios/Views/Settings/LeoReleaseNotesView.swift` 为准，下面只列近几版。
 - 2026-10-21 1.77.0：派给 Mac 的任务做完即可见（事件流 45 秒看门狗、快速重连、完成后不挂错误）；SSH 兜底显示进展；远程机器与设置说人话、设置按要办的事分组；设计值改读共享 token。
 - 2026-10-20 1.76.0：SSH 终端、改动面板与检查点、四种权限模式、接管终端里的 Claude Code、中继端到端加密（Mac 端在 1.13.0 才真正生效）。
 - 2026-10-15 1.74.0：iCloud 拉取拒收已下架模型的旧副本（按服务商最近一次的服务器列表判断）。

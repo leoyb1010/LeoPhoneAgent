@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.77.4",
+            date: "2026-10-21",
+            title: "默认走 Mac mini 中继，直连更快才切",
+            highlights: [
+                "实测小火箭里的 Tailscale 直连反而慢（1.8–5.7 秒，中继只要 0.2–1 秒），而且只有连着 VPN 才有。现在默认走 Mac mini 中继，只有直连实测比中继更快时才自动切过去；变慢了就切回中继，10 分钟后再测。",
+                "远程机器列表不再催你打开 Tailscale；「直连 / 中继」和延迟只在第一行写一次，不再出现前后矛盾的说法。"
+            ]
+        ),
+        LeoRelease(
             version: "1.77.3",
             date: "2026-10-21",
             title: "同一网络下自动走直连",

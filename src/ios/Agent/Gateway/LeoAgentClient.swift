@@ -161,6 +161,10 @@ actor LeoAgentClient {
     var directRoute: DirectDeviceRoute?
     var directProbeUntil = Date.distantPast
     var directCooldownUntil = Date.distantPast
+    /// [up-link] 直连能通但比中继慢（例如小火箭里的 Tailscale 走 DERP 远程中继）：这段时间内不用直连。
+    var directSlowUntil = Date.distantPast
+    /// 经中继做一次轻量请求（capabilities / 会话列表）的最近耗时，毫秒，指数平滑。
+    var relayLightLatencyMs: Double?
     var directLastFailure: Date?
     var directEnrollmentAttempted = false
     var directEnrollmentAfter = Date.distantPast

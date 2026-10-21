@@ -578,13 +578,6 @@ private struct GatewayHostRow: View {
                         Text(!route.available ? "连接不可用" : (path?.current?.label ?? (route.direct ? "直连" : "中继")))
                         if let ms = path?.latencyMilliseconds ?? route.latencyMilliseconds { Text("\(ms) ms") }
                     }.font(.caption).foregroundStyle(.secondary)
-                    // [up-device] 走中继但这台 Mac 开着直连：告诉用户怎么换到更快、更私密的直连。
-                    if route.available, !route.direct,
-                       host.device?.endpoints.contains(where: { $0.kind == "direct" }) == true {
-                        Label("可走直连：在这台 iPhone 上打开 Tailscale", systemImage: "bolt.horizontal")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
                 }
                 // [up-device] 加密状态：本次还没走过中继时，用「这台 Mac 加密成功过」作初值，而不是什么都不显示。
                 if let e2e = relayE2E ?? (host.relayE2EVerified == true ? .encrypted : nil) {
@@ -607,7 +600,8 @@ private struct GatewayHostRow: View {
                         .truncationMode(.middle)
                 } else {
                     // [T-gateway-row-relay] 中继发现的机器没有引擎地址,以前这里是一行空白。
-                    Text(host.harnessURL == nil ? statusText : AppLocalized("经中继 · \(statusText)"))
+                    // 走哪条路已经写在上面一行（直连 / 中继 + 延迟），这里只说在不在线。
+                    Text(route == nil && host.harnessURL != nil ? AppLocalized("经中继 · \(statusText)") : statusText)
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }

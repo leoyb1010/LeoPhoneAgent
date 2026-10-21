@@ -19,7 +19,7 @@ extension LeoAgentClient {
         // [WP-50] /screen/ (看屏) rides the direct route too; the Mac checks the grant's harness scope.
         guard relative.hasPrefix("/harness/") || relative.hasPrefix("/operations/") || relative.hasPrefix("/sync/v1/")
                 || relative.hasPrefix("/screen/") || relative == "/v1/capabilities" else { return nil }
-        guard Date() >= directCooldownUntil else { return nil }
+        guard Date() >= directCooldownUntil, Date() >= directSlowUntil else { return nil }
         await enrollDirectIfNeeded()
         guard let route = directRoute, let base = route.endpoint() else { return nil }
         if relative.hasPrefix("/sync/v1/"), !route.supports(scope: "sync", capability: "sync-replica-v1") { return nil }
@@ -45,12 +45,20 @@ extension LeoAgentClient {
             }
             probe.timeoutInterval = 3
             do {
+                let probeStart = Date()
                 let (data, response) = try await directSession.data(for: probe)
+                let probeMs = Date().timeIntervalSince(probeStart) * 1000
                 guard (response as? HTTPURLResponse)?.statusCode == 200,
                       let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                       let device = json["device"] as? [String: Any], device["deviceId"] as? String == route.device.deviceId
                 else { await directFailed(); return nil }
                 directProbeUntil = Date().addingTimeInterval(120)
+                // [up-link] 直连只在真的更快时用：中继（Mac mini）是默认路。没测过中继时，直连要像局域网一样快才用。
+                if DirectRoutePolicy.isSlower(directMs: probeMs, relayMs: relayLightLatencyMs) {
+                    directSlowUntil = Date().addingTimeInterval(DirectRoutePolicy.slowBackoff)
+                    await pinRelayE2E(from: json, source: .direct)
+                    return nil
+                }
                 // [e2e] 直连是 TLS 到 Mac 本机、并核对过设备 id:这里拿到的中继加密公钥可以固定(老手机不用重扫码)。
                 await pinRelayE2E(from: json, source: .direct)
             } catch { await directFailed(); return nil }
@@ -121,6 +129,15 @@ extension LeoAgentClient {
         }.value
     }
 
+    /// 中继上的轻量请求记一笔耗时，给「直连是否更快」做对照。
+    func noteRelayLatency(_ original: URLRequest, start: Date) {
+        guard original.httpMethod == nil || original.httpMethod == "GET",
+              let path = original.url?.path,
+              path.hasSuffix("/v1/capabilities") || path.hasSuffix("/harness/sessions") else { return }
+        let ms = Date().timeIntervalSince(start) * 1000
+        relayLightLatencyMs = relayLightLatencyMs.map { $0 * 0.7 + ms * 0.3 } ?? ms
+    }
+
     private func reportRoute(direct: Bool, start: Date) async {
         if let hostId {
             await GatewayHostStore.shared.recordPath(id: hostId, route: direct ? .direct : .relay, success: true,
@@ -164,6 +181,7 @@ extension LeoAgentClient {
         do {
             // [fix-remote] 中继有多个入口：按更快的发，入口坏了换同组另一个（RelayRootRouter）。
             let result = try await relayData(for: original)
+            noteRelayLatency(original, start: start)
             await reportRoute(direct: false, start: start)
             return result
         } catch let error as URLError {
@@ -266,5 +284,19 @@ extension LeoAgentClient {
     func replicaDeviceId() async -> String? {
         await enrollDirectIfNeeded()
         return directRoute?.device.deviceId ?? expectedDeviceId
+    }
+}
+
+
+/// [up-link] 直连 vs 中继：默认走中继（Mac mini），直连实测更快才切过去。
+enum DirectRoutePolicy {
+    /// 直连判定为慢之后多久再试（秒）。
+    static let slowBackoff: TimeInterval = 600
+    /// 还没有中继对照时，直连探测要快于这个值（毫秒）才算「局域网级」。
+    static let unknownRelayCeilingMs: Double = 400
+
+    static func isSlower(directMs: Double, relayMs: Double?) -> Bool {
+        guard let relayMs else { return directMs > unknownRelayCeilingMs }
+        return directMs > relayMs * 0.9
     }
 }
