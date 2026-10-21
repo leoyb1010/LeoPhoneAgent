@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.77.5",
+            date: "2026-10-21",
+            title: "设置首页修好",
+            highlights: [
+                "1.77.1 把 Agent 拆成四组后，「自动化」「外观与通用」「数据与关于」三组没显示出来，现在全部回来了（搜索一直能搜到）。",
+                "去掉「常用」下面多余的「更多」两个字。"
+            ]
+        ),
+        LeoRelease(
             version: "1.77.4",
             date: "2026-10-21",
             title: "默认走 Mac mini 中继，直连更快才切",

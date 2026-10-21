@@ -63,6 +63,9 @@ struct SettingsHomeView: View {
     @AppStorage("settings.group.agent.v2") private var openAgent = false
     @AppStorage("settings.group.general.v2") private var openGeneral = false
     @AppStorage("settings.group.data.v2") private var openData = false
+    @AppStorage("settings.group.abilities") private var openAbilities = false
+    @AppStorage("settings.group.knowledge") private var openKnowledge = false
+    @AppStorage("settings.group.automation") private var openAutomation = false
     /// 只为在开关变化时重画(groups 是静态的,直接读 UserDefaults)。
     @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -81,7 +84,7 @@ struct SettingsHomeView: View {
     /// 单列首页和 iPad 双栏的侧栏共用这一份。
     static var groups: [SettingsGroup] {
         [
-            // [up-home] 常用的四样留在首屏;其余收进下面的「更多」,搜索仍能搜到全部。
+            // [up-home] 常用的四样留在首屏;其余按分组折叠,搜索仍能搜到全部。
             SettingsGroup(id: "common", title: "常用", entries: [
                 SettingsEntry("远程机器", keywords: "mac android 舰队 中继 relay 密钥 macbook cortex studio fold ipad",
                               icon: "desktopcomputer", color: .teal,
@@ -218,13 +221,11 @@ struct SettingsHomeView: View {
                 if searching {
                     searchResults
                 } else {
-                    groupCard(groups[0], isOpen: $openCommon, index: 0)
-                    moreHeader
-                    groupCard(groups[1], isOpen: $openDevice, index: 1)
-                    groupCard(groups[2], isOpen: $openAgent, index: 2)
-                    orchestrationCard
-                    groupCard(groups[3], isOpen: $openGeneral, index: 3)
-                    groupCard(groups[4], isOpen: $openData, index: 4)
+                    // 按 id 取分组，分组增删不会再让后面的分组悄悄消失（1.77.1 拆分 Agent 后漏渲染了三组）。
+                    ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                        groupCard(group, isOpen: openBinding(group.id), index: index)
+                        if group.id == "automation" { orchestrationCard }
+                    }
                     feedbackCard
                 }
             }
@@ -351,14 +352,17 @@ struct SettingsHomeView: View {
         .leoStaggerEntrance(index: index + 1)
     }
 
-    private var moreHeader: some View {
-        Text("更多")
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 4)
-            .padding(.top, 8)
-            .accessibilityAddTraits(.isHeader)
+    private func openBinding(_ id: String) -> Binding<Bool> {
+        switch id {
+        case "common": return $openCommon
+        case "device": return $openDevice
+        case "agent": return $openAgent
+        case "abilities": return $openAbilities
+        case "knowledge": return $openKnowledge
+        case "automation": return $openAutomation
+        case "general": return $openGeneral
+        default: return $openData
+        }
     }
 
     private var orchestrationCard: some View {
