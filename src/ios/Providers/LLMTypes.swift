@@ -100,6 +100,40 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
     // explicitly so the values don't depend on the id heuristic (which also
     // now defaults modern Claude to 1M as a backstop). models.dev enrich can
     // still override at runtime.
+    // [leo] 当前一代（2026-10）。内置表缺这几项时，服务商不支持 /models 的 Anthropic 实例
+    // 每天刷新都会把用户分组里的 Claude 5.5 条目删掉，分组只好一路退到别的模型。
+    static let claudeFable51 = LLMModel(
+        id: "claude-fable-5-1",
+        displayName: "Claude Fable 5.1",
+        provider: "Anthropic",
+        contextWindow: 1_000_000,
+        maxOutputTokens: 128_000
+    )
+
+    static let claudeOpus55 = LLMModel(
+        id: "claude-opus-5-5",
+        displayName: "Claude Opus 5.5",
+        provider: "Anthropic",
+        contextWindow: 1_000_000,
+        maxOutputTokens: 128_000
+    )
+
+    static let claudeSonnet55 = LLMModel(
+        id: "claude-sonnet-5-5",
+        displayName: "Claude Sonnet 5.5",
+        provider: "Anthropic",
+        contextWindow: 1_000_000,
+        maxOutputTokens: 64_000
+    )
+
+    static let claudeHaiku55 = LLMModel(
+        id: "claude-haiku-5-5",
+        displayName: "Claude Haiku 5.5",
+        provider: "Anthropic",
+        contextWindow: 200_000,
+        maxOutputTokens: 64_000
+    )
+
     static let claudeFable5 = LLMModel(
         id: "claude-fable-5",
         displayName: "Claude Fable 5",
@@ -157,6 +191,7 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
     )
 
     static let allAnthropic: [LLMModel] = [
+        .claudeFable51, .claudeOpus55, .claudeSonnet55, .claudeHaiku55,
         .claudeFable5, .claudeOpus5, .claudeOpus48, .claudeOpus46, .claudeSonnet5, .claudeSonnet46, .claudeHaiku45,
     ]
 

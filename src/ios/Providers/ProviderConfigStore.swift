@@ -2337,6 +2337,14 @@ final class ProviderConfigStore: ObservableObject {
     }
 
     /// Auto-refresh: fetch models for a single instance, skipping if user has custom models.
+    /// 非权威来源刷新时用：新列表在前，原有但新列表里没有的模型保留在后。
+    nonisolated static func mergeKeepingExisting(_ fresh: [LLMModel], existing: [LLMModel]) -> [LLMModel] {
+        let freshIds = Set(fresh.map(\.id))
+        var seen = Set<String>()
+        let kept = existing.filter { !freshIds.contains($0.id) && seen.insert($0.id).inserted }
+        return fresh + kept
+    }
+
     private func autoRefreshModels(for instance: ProviderInstance) async {
         // [T-mimo-shadow-voice] No longer skipped for "voice-only" providers —
         // audio-modality template seed entries survive replaceEntries.
@@ -2348,7 +2356,14 @@ final class ProviderConfigStore: ObservableObject {
         do {
             logger.info("[ModelList] autoRefreshModels (DAILY): instance=\(instance.label) starting fetch")
             let result = try await Self.fetchModelsWithFallback(instance, forceRefresh: true)
-            guard replaceEntries(for: instance.id, models: result.models, caller: "autoRefreshModels(daily)",
+            // [leo] 只有服务商自己的 /models（source == "api"）才是真实清单，可以删掉不再提供的模型。
+            // 退回内置表 / models.dev 时只增不删：2026-10-21 Anthropic 实例走内置表（7 个，缺 5.5 系列），
+            // 把分组「Leo常用模型」排在前面的四个 Claude 全删了，之后每次对话都退到不带缓存的网关。
+            let models = result.source == "api"
+                ? result.models
+                : Self.mergeKeepingExisting(result.models, existing: config.modelEntries
+                    .filter { $0.providerInstanceId == instance.id }.map(\.baseModel))
+            guard replaceEntries(for: instance.id, models: models, caller: "autoRefreshModels(daily)",
                                  pruneCloudCopies: result.source == "api") else { return }
             logger.info("[ModelList] autoRefreshModels (DAILY): instance=\(instance.label) source=\(result.source) count=\(result.models.count)")
         } catch {
@@ -2449,6 +2464,13 @@ final class ProviderConfigStore: ObservableObject {
         let pruneOnceKey = "leo.models.cloudPruneOnce.v2"
         if !UserDefaults.standard.bool(forKey: pruneOnceKey) {
             UserDefaults.standard.set(true, forKey: pruneOnceKey)
+            lastRefresh = nil
+        }
+        // [leo] 1.77.6：内置 Anthropic 表补上 5.5 系列、非权威来源不再删模型。升级后立即重刷一次，
+        // 把今天被误删的 Claude 5.5 条目恢复回来，不等明天。
+        let restoreOnceKey = "leo.models.restoreDroppedOnce.v1"
+        if !UserDefaults.standard.bool(forKey: restoreOnceKey) {
+            UserDefaults.standard.set(true, forKey: restoreOnceKey)
             lastRefresh = nil
         }
         let calendar = Calendar.current

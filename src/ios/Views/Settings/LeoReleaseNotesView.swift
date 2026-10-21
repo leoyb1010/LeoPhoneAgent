@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.77.6",
+            date: "2026-10-21",
+            title: "常用模型组里的 Claude 回来了",
+            highlights: [
+                "每天自动刷新模型列表时，Anthropic 走的是内置清单，清单里缺 Claude 5.5 系列，结果把「Leo常用模型」排在前面的四个 Claude 删掉了，对话一直退到备用的 Gemini 网关，而且那条路不做缓存，每轮约 2.7 万 token 都要重算。",
+                "现在内置清单补上 Claude Fable 5.1 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5；只有服务商自己返回的列表才会删模型，内置清单只增不删。升级后会立即重刷一次，把被删的条目恢复。"
+            ]
+        ),
+        LeoRelease(
             version: "1.77.5",
             date: "2026-10-21",
             title: "设置首页修好",
