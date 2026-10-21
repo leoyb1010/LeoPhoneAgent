@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.77.3",
+            date: "2026-10-21",
+            title: "同一网络下自动走直连",
+            highlights: [
+                "以前用 Mac 上的访问密钥（~/.leoagent/key）添加的机器，中继认不出是哪台手机，Mac 因此不给直连授权，手机一直绕中继。现在首次打开会自动换成这台手机自己的设备钥匙（原来的钥匙不变），之后只要 Tailscale（包括小火箭里的）在线，就自动走更快的加密直连。",
+                "模拟器上也能编译运行单元测试相关代码（本机 OCR 工具只在真机启用）。"
+            ]
+        ),
+        LeoRelease(
             version: "1.77.2",
             date: "2026-10-21",
             title: "SSH 兜底说清卡在哪",

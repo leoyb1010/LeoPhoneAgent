@@ -53,7 +53,7 @@ final class ChatCompletionsWireTests: XCTestCase {
         XCTAssertFalse(brain.contains("let session = LanguageModelSession("), "every session goes through makeSession")
         let tools = try String(contentsOf: root.appendingPathComponent("Agent/LocalIntelligence/LocalBrain+Tools.swift"), encoding: .utf8)
         XCTAssertTrue(tools.contains("guide: .focused(.items)"), "default Spotlight guide overflows on-device context")
-        XCTAssertTrue(tools.contains("tools: [OCRTool()]"))
+        XCTAssertTrue(tools.contains("[OCRTool()]"))
         let send = try String(contentsOf: root.appendingPathComponent("Agent/Intents/SendPromptIntent.swift"), encoding: .utf8)
         XCTAssertTrue(send.contains("extension SendPromptIntent: LongRunningIntent, CancellableIntent {}"))
         let entity = try String(contentsOf: root.appendingPathComponent("Agent/Intents/SessionEntity.swift"), encoding: .utf8)

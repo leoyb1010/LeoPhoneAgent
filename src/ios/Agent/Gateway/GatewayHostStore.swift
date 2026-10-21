@@ -11,6 +11,7 @@
 //  key never rides iCloud to another device.
 //
 
+import CryptoKit
 import Foundation
 import Security
 import UIKit
@@ -105,6 +106,8 @@ final class GatewayHostStore: ObservableObject {
             hosts = []
         }
         migrateRelayRoots()
+        // [up-link] 用 Mac 主钥匙添加的机器换成这台手机自己的设备钥匙：带设备身份才能申请直连授权、才能单独撤销。
+        Task { @MainActor [weak self] in await self?.upgradeRelayKeysIfNeeded() }
         // [T-link-problem] 回到前台也算用户回来了:解除所有主机的暂停(见 LeoLinkProblemBook.resumeAll)。
         NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
@@ -614,5 +617,60 @@ final class GatewayHostStore: ObservableObject {
             return LeoLinkProblem.from(error: GatewayError.malformedResponse("health payload"), context: context(base))
         }
         return nil
+    }
+}
+
+
+// MARK: - [up-link] 主钥匙 → 设备钥匙
+
+extension GatewayHostStore {
+    private static let relayKeyLog = AppLogger(category: "RelayDeviceKey")
+
+    /// 以前按「访问密钥 = Mac 上 ~/.leoagent/key」添加的机器，用的是中继主钥匙：中继认不出是哪台手机，
+    /// Mac 因此拒绝给它发直连授权（静默 403），手机永远走中继。这里用中继自带的 /device/exchange
+    /// 把主钥匙换成这台手机自己的设备钥匙（主钥匙本身不变、其他设备不受影响），每组（中继根 + 钥匙）只试一次。
+    func upgradeRelayKeysIfNeeded() async {
+        var groups: [String: (root: String, key: String, hostIds: [String])] = [:]
+        for host in hosts {
+            guard let root = RelayMachinesClient.apiRoot(fromHarnessURL: host.harnessURL),
+                  let key = Self.accessKey(hostId: host.id), !key.isEmpty else { continue }
+            let tag = Self.relayKeyTag(root: root, key: key)
+            groups[tag, default: (root, key, [])].hostIds.append(host.id)
+        }
+        let defaults = UserDefaults.standard
+        for (tag, group) in groups {
+            let checkedKey = "leo.relayDeviceKey.checked." + tag
+            guard !defaults.bool(forKey: checkedKey),
+                  let url = URL(string: group.root + "/device/exchange") else { continue }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 10
+            request.setValue("Bearer \(group.key)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try? JSONSerialization.data(withJSONObject: ["name": UIDevice.current.name])
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if status == 200,
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let newKey = obj["accessKey"] as? String, !newKey.isEmpty {
+                    for id in group.hostIds {
+                        Self.saveAccessKey(newKey, hostId: id)
+                        clients.removeValue(forKey: id)
+                    }
+                    defaults.set(true, forKey: "leo.relayDeviceKey.checked." + Self.relayKeyTag(root: group.root, key: newKey))
+                    Self.relayKeyLog.info("exchanged master key for a device key on \(group.hostIds.count) host(s)")
+                }
+                // 200 = 换好了；401/403 = 已经是设备钥匙（或主钥匙已过期）：都不用再试。其余状态下次启动再试。
+                if [200, 401, 403].contains(status) { defaults.set(true, forKey: checkedKey) }
+            } catch {
+                Self.relayKeyLog.info("device key exchange deferred: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    nonisolated static func relayKeyTag(root: String, key: String) -> String {
+        let digest = SHA256.hash(data: Data((root.lowercased() + "|" + key).utf8))
+        return digest.prefix(12).map { String(format: "%02x", $0) }.joined()
     }
 }

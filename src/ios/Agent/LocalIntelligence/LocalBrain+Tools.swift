@@ -26,8 +26,14 @@ extension LocalBrain {
         guard availability == .ready else { return nil }
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
+            // 模拟器 SDK 没有 FoundationModels 的 OCRTool；模拟器上只靠附件本身作答（单测与 UI 测试用）。
+            #if targetEnvironment(simulator)
+            let tools: [any Tool] = []
+            #else
+            let tools: [any Tool] = [OCRTool()]
+            #endif
             let session = LanguageModelSession(
-                tools: [OCRTool()],
+                tools: tools,
                 instructions: "你帮用户看一张图片(多为截图)。需要读图里的文字时调用 OCR 工具,只依据图里实际有的内容回答,看不清就直说。回答简洁。")
             let response = try await session.respond {
                 Attachment(image).label("图片")

@@ -1,5 +1,10 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.77.3 (180) · 主钥匙自动换设备钥匙，打通直连 - 2026-10-21
+
+- 实测：中继上登记设备数为 0，手机一直用主钥匙；Mac 的 /direct-grants 要求调用方带设备身份，主钥匙请求被静默 403，手机永远走中继。启动时对每组（中继根 + 钥匙）调用 /relay/api/device/exchange 换设备钥匙并写回各主机，200/401/403 后不再重试。
+- LocalBrain 的 OCRTool 只在真机 SDK 存在，模拟器编译改为不带工具。
+
 ## iOS 1.77.2 (179) · SSH 兜底显示重试原因 - 2026-10-21
 
 - 实测定位 Mac mini「Claude Code 无响应」：mini 的 ~/.claude/settings.json 把 ANTHROPIC_BASE_URL 指向 DeepSeek，Key 失效返回 401，Claude Code 静默重试 10 次。SSH 兜底解析 stream-json 的 system/api_retry，逐次显示状态码与第几次，401/403 提示去那台 Mac 检查 Key 或重新登录。
