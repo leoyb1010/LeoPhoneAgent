@@ -35,7 +35,12 @@ enum MacSSHFallback {
         guard let command = SSHFallbackCLI.command(key: cliKey, prompt: prompt, cwd: cwd,
                                                    fullAuto: fullAuto, resumeId: resumeId) else { return "不支持这个 CLI" }
         let started = Date()
-        let result = await RemoteSSHExecutor.shared.stream(host: remote, command: command, timeout: 1800) { line in
+        let result = await RemoteSSHExecutor.shared.stream(host: remote, command: command, timeout: 1800, onStderr: { line in
+            // Mac 端的报错（未登录、找不到命令、代理不通）以前要等整轮失败才看得到。
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { return }
+            await onEvent(.progress("Mac：" + trimmed))
+        }) { line in
             for event in SSHFallbackCLI.events(key: cliKey, line: line) { await onEvent(event) }
         }
         await GatewayHostStore.shared.recordPath(

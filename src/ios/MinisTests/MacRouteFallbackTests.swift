@@ -135,7 +135,8 @@ final class MacRouteFallbackTests: XCTestCase {
     }
 
     func testStreamEventsCarryToolsAndSessionIds() {
-        XCTAssertEqual(SSHFallbackCLI.events(key: "claude", line: #"{"type":"system","subtype":"init","session_id":"s-1"}"#), [.session("s-1")])
+        XCTAssertEqual(SSHFallbackCLI.events(key: "claude", line: #"{"type":"system","subtype":"init","session_id":"s-1"}"#), [.session("s-1"), .progress("Claude Code 已在 Mac 上启动")])
+        XCTAssertEqual(SSHFallbackCLI.events(key: "claude", line: #"{"type":"stream_event","event":{"type":"message_start"}}"#), [.progress("正在生成回复…")])
         XCTAssertEqual(SSHFallbackCLI.events(key: "claude", line: #"{"type":"assistant","message":{"content":[{"type":"text","text":"看看"},{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls -la","description":"list"}}]}}"#),
                        [.text("看看"), .toolStarted(id: "t1", name: "Bash", input: "ls -la")])
         XCTAssertEqual(SSHFallbackCLI.events(key: "claude", line: #"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":[{"type":"text","text":"a\nb"}],"is_error":true}]}}"#),

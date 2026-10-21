@@ -400,7 +400,6 @@ final class SSHTerminalAccessoryBar: UIInputView {
 
     private weak var terminal: LeoSSHTerminalView?
     private let onCompose: () -> Void
-    private let haptic = UIImpactFeedbackGenerator(style: .soft)
     private var ctrlButton: UIButton?
     private var repeatTimer: Timer?
     private var ctrlObserver: NSObjectProtocol?
@@ -506,7 +505,7 @@ final class SSHTerminalAccessoryBar: UIInputView {
 
     private func makeButton(_ config: UIButton.Configuration, label: String, action: @escaping () -> Void) -> UIButton {
         let button = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in
-            self?.haptic.impactOccurred(intensity: 0.5)
+            LeoHaptics.impact(.soft)
             action()
         })
         button.accessibilityLabel = label
@@ -521,7 +520,7 @@ final class SSHTerminalAccessoryBar: UIInputView {
         let button = UIButton(configuration: config)
         button.accessibilityLabel = label
         button.addAction(UIAction { [weak self] _ in
-            self?.haptic.impactOccurred(intensity: 0.5)
+            LeoHaptics.impact(.soft)
             action()
             self?.repeatTimer?.invalidate()
             self?.repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { _ in

@@ -90,6 +90,7 @@ actor RemoteSSHExecutor {
     /// [fix-remote] 流式执行一条命令（SSH 兜底跑 CLI 的一轮回复）：按行回调 stdout，stderr 留最后几行做失败说明。
     /// 只认显式固定的主机公钥；凭据与命令都不进错误文字。
     func stream(host: RemoteHost, command: String, timeout: TimeInterval,
+                onStderr: (@Sendable (String) async -> Void)? = nil,
                 onLine: @escaping @Sendable (String) async -> Void) async -> ExecResult {
         let clamped = min(max(timeout, 10), Self.maxTimeout)
         let client: SSHClient
@@ -122,6 +123,7 @@ actor RemoteSSHExecutor {
                     case .stderr(let buffer):
                         for line in stderr.append(buffer.readableBytesView) where !line.isEmpty {
                             stderrTail.append(String(line.prefix(300)))
+                            await onStderr?(String(line.prefix(300)))
                         }
                         if stderrTail.count > 6 { stderrTail.removeFirst(stderrTail.count - 6) }
                     }

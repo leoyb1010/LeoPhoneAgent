@@ -125,6 +125,8 @@ struct MacSSHTarget: Codable, Hashable, Sendable {
 /// SSH 兜底一轮里，CLI 输出的一行变成的东西：正文、工具开始 / 结束、可以续上的会话号。
 enum SSHFallbackEvent: Equatable, Sendable {
     case text(String)
+    /// 进展提示（CLI 已启动、正在生成、Mac 端 stderr）：显示成灰色说明行，同时证明这一轮还活着。
+    case progress(String)
     case toolStarted(id: String, name: String, input: String)
     case toolFinished(id: String, output: String, isError: Bool)
     case session(String)
@@ -156,7 +158,7 @@ enum SSHFallbackCLI {
         case "claude":
             cli = "T=\"${ZCODE_HOME:-$HOME/.leophoneagent}/acp/claude-oauth-token\"; "
                 + "[ -s \"$T\" ] && export CLAUDE_CODE_OAUTH_TOKEN=\"$(cat \"$T\")\"; "
-                + "claude -p \(p) --output-format stream-json --verbose"
+                + "claude -p \(p) --output-format stream-json --verbose --include-partial-messages"
                 + (fullAuto ? " --dangerously-skip-permissions" : "")
                 + (resume.map { " --resume \(q($0))" } ?? "")
         case "codex":
@@ -200,7 +202,19 @@ enum SSHFallbackCLI {
     private static func claudeEvents(_ obj: [String: Any]) -> [SSHFallbackEvent] {
         let type = obj["type"] as? String
         var out: [SSHFallbackEvent] = []
-        if type == "system", let id = validSessionId(obj["session_id"] as? String) { out.append(.session(id)) }
+        if type == "system", let id = validSessionId(obj["session_id"] as? String) {
+            out.append(.session(id))
+            if obj["subtype"] as? String == "init" { out.append(.progress("Claude Code 已在 Mac 上启动")) }
+        }
+        // --include-partial-messages 的增量：正文仍以完整的 assistant 消息为准（避免重复），这里只报「还活着」。
+        if type == "stream_event", let event = obj["event"] as? [String: Any] {
+            switch event["type"] as? String {
+            case "message_start": out.append(.progress("正在生成回复…"))
+            case "content_block_start":
+                if (event["content_block"] as? [String: Any])?["type"] as? String == "thinking" { out.append(.progress("正在思考…")) }
+            default: break
+            }
+        }
         let content = (obj["message"] as? [String: Any])?["content"] as? [[String: Any]] ?? []
         if type == "assistant" {
             let text = content.compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }.joined()

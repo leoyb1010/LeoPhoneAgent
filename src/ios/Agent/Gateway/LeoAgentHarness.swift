@@ -190,7 +190,9 @@ extension LeoAgentClient {
             var req = try request("/harness/sessions/\(sessionId)/events?after=\(after)&journal_status=1",
                                   service: .harness)
             req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-            req.timeoutInterval = 3600
+            // 这是「两次收到字节之间」的空闲上限，不是整条流的寿命。中继每 25 秒、直连每 5 秒发一次
+            // keep-alive，45 秒什么都没收到就说明这条流已经半死：断开重连，而不是像以前那样傻等一小时。
+            req.timeoutInterval = HarnessStreamPolicy.idleTimeout
             let (lines, response) = try await routedLines(for: req)
             viaDirect = response.url?.host != req.url?.host
             guard let http = response as? HTTPURLResponse else {
@@ -262,6 +264,10 @@ final class HarnessSessionDriver: ObservableObject {
     /// unanswerable from any surface, CLI blocked forever.
     @Published private(set) var pendingApprovals: [GatewayApprovalRequest] = []
     @Published private(set) var lastError: String?
+    /// lastError 来自传输层掉线（而不是 Mac 报的失败）：重连收到消息后自动清掉。
+    private var lastErrorIsTransport = false
+    /// SSH 兜底最近一次收到输出的时间（看门狗用）。
+    private var lastSSHActivity = Date()
     /// [T-link-problem] 连接类失败的结构化说明:谁的问题 + 一个主按钮。控制台优先显示它,
     /// 没有才退回 lastError 的文字。要用户处理的问题还会让自动重连停下(见 follow)。
     @Published private(set) var problem: LeoLinkProblem?
@@ -567,9 +573,12 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     private func applySSH(_ event: SSHFallbackEvent) {
+        lastSSHActivity = Date()
         switch event {
         case .text(let text):
             appendSSHText(text)
+        case .progress(let text):
+            if items.last?.text != text { note(text) }
         case .toolStarted(let id, let name, let input):
             let preview = input.split(separator: "\n", maxSplits: 1).first.map { String($0.prefix(200)) } ?? ""
             append(GatewayTranscriptItem(kind: .tool(name: name, isRunning: true, isError: false, duration: nil),
@@ -592,6 +601,9 @@ final class HarnessSessionDriver: ObservableObject {
             sshNoticeShown = true
             note(MacSSHFallback.notice)
         }
+        // 先把这条指令显示出来：SSH 那头可能要几十秒才有第一行输出，不能让人怀疑发没发出去。
+        let echo = "→ " + prompt
+        if !items.contains(where: { $0.text == echo }) { note(echo) }
         viaSSH = true
         isRunning = true
         status = "running"
@@ -606,6 +618,25 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     private func runSSHTurn(remote: RemoteHost, hostId: String, prompt: String, fullAuto: Bool, resumeId: String?) async {
+        lastSSHActivity = Date()
+        // 看门狗：一直没有输出就说一声，并提示可以停止，别让人对着「处理中」干等半小时。
+        let watchdog = Task { [weak self] in
+            var warned = false
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                guard let self, !Task.isCancelled else { return }
+                let silent = await MainActor.run { Date().timeIntervalSince(self.lastSSHActivity) }
+                if silent >= 60, !warned {
+                    warned = true
+                    await MainActor.run {
+                        self.note("Mac 上已经 \(Int(silent)) 秒没有输出：可能还在思考，也可能卡在登录或网络上。可以点停止后重试。")
+                    }
+                } else if silent < 60 {
+                    warned = false
+                }
+            }
+        }
+        defer { watchdog.cancel() }
         let failure = await MacSSHFallback.run(remote: remote, hostId: hostId, cliKey: harness.key, prompt: prompt, cwd: cwd,
                                                fullAuto: fullAuto, resumeId: resumeId) { [weak self] event in
             await self?.applySSH(event)
@@ -1087,10 +1118,20 @@ final class HarnessSessionDriver: ObservableObject {
         while !Task.isCancelled {
             var cleanClose = false
             var failure: Error?
+            let streamStartedAt = Date()
+            var deliveredThisStream = false
             do {
                 await MainActor.run { self.journalStatus = HarnessJournalStatus() }
                 for try await item in client.harnessEvents(sessionId: sessionId, after: lastSeq) {
                     if Task.isCancelled { return }
+                    if !deliveredThisStream {
+                        deliveredThisStream = true
+                        // 重连后第一条消息到了：之前那句「网络连接已中断」不再成立。
+                        await MainActor.run {
+                            if self.lastErrorIsTransport { self.lastError = nil; self.lastErrorIsTransport = false }
+                            if self.problem?.pausesAutoReconnect == false { self.problem = nil }
+                        }
+                    }
                     await MainActor.run {
                         if let journal = item.journal {
                             self.journalStatus = journal
@@ -1122,7 +1163,12 @@ final class HarnessSessionDriver: ObservableObject {
                     }
                 } else {
                     failure = error
-                    await MainActor.run { self.lastError = error.localizedDescription }
+                    await MainActor.run {
+                        // 一轮已经结束（idle）时掉线只是安静地重连，不在界面上挂红字。
+                        guard self.status != "idle" else { return }
+                        self.lastError = error.localizedDescription
+                        self.lastErrorIsTransport = true
+                    }
                 }
             }
             if Task.isCancelled { return }
@@ -1149,7 +1195,9 @@ final class HarnessSessionDriver: ObservableObject {
             // Reset once a reconnect actually delivered something: the budget
             // is for CONSECUTIVE failures, not for a long healthy session that
             // happened to blip seven times over an hour.
-            if lastSeq > seenAtAttemptStart { attempt = 0; lastProblem = nil }
+            // 一条流活过一段时间（收着 keep-alive）也算健康：退避从头算，而不是越断越慢。
+            let streamWasHealthy = Date().timeIntervalSince(streamStartedAt) >= HarnessStreamPolicy.healthyStreamSeconds
+            if lastSeq > seenAtAttemptStart || streamWasHealthy { attempt = 0; lastProblem = nil }
             seenAtAttemptStart = lastSeq
             attempt += 1
             if attempt > 6 {
@@ -1168,9 +1216,12 @@ final class HarnessSessionDriver: ObservableObject {
             // picking up at lastSeq loses nothing.
             await MainActor.run {
                 self.resumeCount += 1
-                self.note(AppLocalized("Reconnecting…"))
+                // 空闲时重连对用户不可见；运行中只记一次，不刷屏。
+                if self.status != "idle", self.items.last?.text != AppLocalized("Reconnecting…") {
+                    self.note(AppLocalized("Reconnecting…"))
+                }
             }
-            try? await Task.sleep(nanoseconds: UInt64(min(30, 1 << attempt)) * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: HarnessStreamPolicy.backoffNanoseconds(attempt: attempt))
         }
     }
 
@@ -1302,6 +1353,12 @@ final class HarnessSessionDriver: ObservableObject {
                 return
             }
             if name == "session.created" { return }   // metadata, already shown by the launcher
+            // 轮次开始：只改状态，不把事件名摆给用户看。
+            if name == "run.started" || name == "turn.started" {
+                if status == "idle" || status == "starting" { status = "running" }
+                return
+            }
+            if HarnessStreamPolicy.silentEvents.contains(name) { return }
             // 权限模式变了(手机、Mac 桌面或 agent 自己切的):胶囊跟着变。
             if name == "mode" {
                 if let mode = HarnessMode(rawValue: payload["mode"] ?? "") {
@@ -1322,8 +1379,11 @@ final class HarnessSessionDriver: ObservableObject {
             // Engine chatter (retries, init banners) shows up here. Surfacing
             // it is what made a broken CLI on the Mac diagnosable instead of
             // looking like a silent hang.
-            let detail = payload["raw"] ?? payload["text"] ?? ""
-            note("\(name) \(String(describing: detail).prefix(160))")
+            let detail = String(describing: payload["raw"] ?? payload["text"] ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            // 有可读内容才显示，而且只显示内容；空的引擎事件不再以 "xxx.yyy" 的样子出现。
+            guard !detail.isEmpty else { return }
+            note(String(detail.prefix(160)))
         }
     }
 
@@ -1421,5 +1481,32 @@ extension HarnessSessionDriver {
                            directExpiresAt: direct?.expiresAt, updatedAt: Date(),
                            relayE2EKey: await client.relayE2EKeyForShare()).save()
         }
+    }
+}
+
+
+/// [up-link] Mac 会话事件流的节奏参数，集中在一处便于测试。
+enum HarnessStreamPolicy {
+    /// 两次收到字节之间的最长空闲（秒）。中继 keep-alive 25 秒一次，直连 5 秒一次。
+    static let idleTimeout: TimeInterval = 45
+    /// 流活过这么久再断，算一次健康连接后的掉线：重连从最快档开始。
+    static let healthyStreamSeconds: TimeInterval = 20
+    /// 只影响状态、不该出现在时间线里的事件。
+    static let silentEvents: Set<String> = [
+        "run.started", "turn.started", "session.created", "session.resumed", "heartbeat", "keepalive", "journal.status",
+    ]
+
+    /// 第一次几乎立刻重连（中继常常只是换了一条上游），之后 1、2、4、8、15 秒。
+    static func backoffNanoseconds(attempt: Int) -> UInt64 {
+        let seconds: Double
+        switch attempt {
+        case ...1: seconds = 0.3
+        case 2: seconds = 1
+        case 3: seconds = 2
+        case 4: seconds = 4
+        case 5: seconds = 8
+        default: seconds = 15
+        }
+        return UInt64(seconds * 1_000_000_000)
     }
 }
