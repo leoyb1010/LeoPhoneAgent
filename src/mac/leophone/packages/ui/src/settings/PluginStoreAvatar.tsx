@@ -24,6 +24,7 @@ export function PluginStoreAvatar({
     <PluginIcon
       src={item.listing?.icon}
       pluginId={item.id}
+      name={item.name}
       className={className}
       iconClassName={iconClassName}
       fallbackIcon={fallbackIcon}

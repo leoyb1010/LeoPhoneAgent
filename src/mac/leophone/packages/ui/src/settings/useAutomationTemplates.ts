@@ -6,6 +6,7 @@ import {
 } from "@/hooks/useClientScenesResource.js";
 import { logger } from "@/logger.js";
 import {
+  LEO_LOCAL_SCHEDULED_TEMPLATES,
   mapClientScenesToAutomationTemplates,
   type AutomationTemplateCatalog,
 } from "@/settings/automationTemplateCatalog.js";
@@ -44,8 +45,12 @@ export function useAutomationTemplates(
     });
   }, [catalog.rejectedScheduledTemplateIds]);
 
+  // [leo] 服务端没有模板（LeoBot 连不到官方 Client Scenes）时用本地模板兜底。
+  const scheduled =
+    !loading && catalog.scheduled.length === 0 ? [...LEO_LOCAL_SCHEDULED_TEMPLATES] : catalog.scheduled;
   return {
     ...catalog,
+    scheduled,
     loading,
   };
 }

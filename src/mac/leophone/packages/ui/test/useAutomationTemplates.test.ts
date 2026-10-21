@@ -7,6 +7,7 @@ import type {
   ClientScenesResponse,
   IClientScenesService,
 } from "@zcode/services";
+import { LEO_LOCAL_SCHEDULED_TEMPLATES } from "@/settings/automationTemplateCatalog.js";
 import { useAutomationTemplates } from "@/settings/useAutomationTemplates.js";
 
 const loggerWarn = vi.hoisted(() => vi.fn());
@@ -106,7 +107,10 @@ describe("useAutomationTemplates", () => {
 
     expect(result.current.loading).toBe(true);
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.scheduled).toEqual([]);
+    // [leo] 远端没有模板时用本地模板兜底。
+    expect(result.current.scheduled.map((template) => template.id)).toEqual(
+      LEO_LOCAL_SCHEDULED_TEMPLATES.map((template) => template.id),
+    );
     expect(loggerWarn).toHaveBeenCalledWith(
       "[automation-templates] Client Scenes 请求失败，保留手动创建入口",
       { error: "offline" },
@@ -124,7 +128,10 @@ describe("useAutomationTemplates", () => {
 
     expect(result.current.loading).toBe(true);
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.scheduled).toEqual([]);
+    // [leo] 远端没有模板时用本地模板兜底。
+    expect(result.current.scheduled.map((template) => template.id)).toEqual(
+      LEO_LOCAL_SCHEDULED_TEMPLATES.map((template) => template.id),
+    );
   });
 
   it("ignores a late response from the previous service attachment", async () => {

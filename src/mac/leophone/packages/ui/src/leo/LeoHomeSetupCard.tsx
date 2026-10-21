@@ -77,7 +77,7 @@ export function LeoHomeSetupCard({ className }: { className?: string }) {
         <div className="text-ui-base font-medium text-foreground">连上你的 iPhone</div>
         <div className="text-ui-sm text-foreground-subtle">
           {status.connected
-            ? "扫一次码，就能在手机上给这台 Mac 派任务、批准操作、看屏幕；同一网络下走加密直连。"
+            ? "扫一次码，就能在手机上给这台 Mac 派任务、批准操作、看屏幕；全程端到端加密。"
             : "这台 Mac 还没连上中继。打开「连接手机」看看原因，连上后扫码即可。"}
         </div>
       </div>

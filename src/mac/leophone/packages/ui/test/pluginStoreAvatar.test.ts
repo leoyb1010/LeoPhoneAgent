@@ -37,7 +37,7 @@ describe("PluginStoreAvatar", () => {
     expect(render("plugin-creator@personal")).toContain(icon);
   });
 
-  it("uses a neutral surface icon when listing icon is missing", () => {
+  it("shows the plugin name initial on a neutral surface when listing icon is missing", () => {
     const html = renderToStaticMarkup(
       createElement(PluginStoreAvatar, {
         item: { name: "example-plugin" },
@@ -45,7 +45,9 @@ describe("PluginStoreAvatar", () => {
       }),
     );
 
-    expect(html).toContain("lucide-blocks");
+    // [leo] 无图标时显示名称首字，商店卡片不再全是同一个积木。
+    expect(html).toContain(">E<");
+    expect(html).not.toContain("lucide-blocks");
     expect(html).not.toContain("lucide-puzzle");
     expect(html).toContain("rounded-xl");
     expect(html).toContain("bg-surface");
