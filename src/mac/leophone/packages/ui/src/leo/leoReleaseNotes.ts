@@ -13,6 +13,14 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.13.1",
+    date: "2026-10-21",
+    items: [
+      "首页的 LeoBot 标志会很轻地呼吸（系统开了「减少动态效果」时保持静止）。",
+      "状态列表、语音浮条和「本次更新」按钮的动效时长统一到设计 token，和 iPhone 端同一节奏。",
+    ],
+  },
+  {
     version: "1.13.0",
     date: "2026-10-21",
     items: [

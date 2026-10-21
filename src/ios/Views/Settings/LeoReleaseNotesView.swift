@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.77.1",
+            date: "2026-10-21",
+            title: "动效节奏统一",
+            highlights: [
+                "提示条、斜杠 / @ 菜单、加载过渡、添加服务商步骤等动效改用统一的时长和曲线，开了「减少动态效果」时一律不动。",
+                "为后续提速做准备：记录每次新对话固定要带的提示词和工具说明各占多少，便于有据可查地缩短首字等待。"
+            ]
+        ),
+        LeoRelease(
             version: "1.77.0",
             date: "2026-10-21",
             title: "派给 Mac 的任务秒回，界面说人话",

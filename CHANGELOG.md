@@ -1,5 +1,10 @@
 # LeoPhoneAgent 更新记录
 
+## Mac 1.13.1 · iOS 1.77.1 (178) · 动效统一 - 2026-10-21
+
+- iOS 11 处手写动画曲线改用 LeoMotion token；动效门禁新增手写曲线检查（反向验证会红）；记录首轮请求固定前缀组成（[CtxMeter] fixed breakdown）。
+- Mac 首页标志呼吸动效（token beat，Reduce Motion 静止）；LeoBot 自有组件的时长改用 --leo-dur-*。
+
 ## Mac 1.13.0 · iOS 1.77.0 (177) · 实测评估落地第一轮 - 2026-10-21
 
 - 依据：`~/Desktop/LeoBot_全面实测评估与升级计划_20261021.md`（Mac / iPhone 实机测试 + 互通代码审读）与 Codex 评估报告复核。
