@@ -1,5 +1,17 @@
 # LeoPhoneAgent 更新记录
 
+## Mac 1.13.0 · iOS 1.77.0 (177) · 实测评估落地第一轮 - 2026-10-21
+
+- 依据：`~/Desktop/LeoBot_全面实测评估与升级计划_20261021.md`（Mac / iPhone 实机测试 + 互通代码审读）与 Codex 评估报告复核。
+- 中继稳定性（根因）：Mac 的网卡指纹把 AirDrop / utun 的 fe80 链路本地地址算进去，每 10~45 秒误判一次「换网」并主动断开中继，中继随之关掉手机正在跟的事件流 → 手机端反复重连、结果晚 30~60 秒。改为只看 IPv4 与可路由 IPv6、换网先 ping 探测；心跳 10s / 判死 30s。
+- 端到端加密（根因）：Electron 44 的 BoringSSL 没有 chacha20-poly1305，1.12.0 Mac 端一个 /e2e 信封都解不开（e2e_rejected），手机全部退回明文。改为纯 TS 的 ChaCha20-Poly1305（RFC 8439 向量 + iOS 跨端向量 + Electron 运行时实测）。
+- iOS 事件流：请求空闲上限 3600s → 45s；重连 0.3/1/2/4/8/15s，健康流掉线退避清零；idle 时掉线不挂红字，重连后清掉；run.started 不再显示原名；SSH 兜底加 --include-partial-messages、stderr 实时、指令回显、60 秒无输出提醒。
+- 数据保护（Codex F02/F03/F04/F05/F09）：中继 treasury-sync 与任务组索引损坏时另存并只读 / 503；选模失败该成员停下；清理前停止成员并留补丁快照；藏宝阁搜索先 SQL 筛再取。
+- 凭据（F01）：macOS 钥匙串随机根密钥（enc:v2），Host 与 CLI 共用规则，enc:v1 读取时升级。
+- 门禁（F07/F10）：CI 去掉已删测试；Swift 安全 harness 补依赖（20/20）；SSH 附件键触感走 LeoHaptics（动效门禁转绿）。
+- Mac 体验：设置搜索覆盖具体项；权限「已允许 / 未允许」文字；执行者徽标按实际 agent 显示并可点；首页「连上你的 iPhone」卡；侧栏同名任务折叠；新会话「正在发送…」。
+- iOS 体验：远程机器去掉原始能力标签、直连提示、连接信息默认收起；Mac 会话页用户气泡；设置拆成四组并改名；模型胶囊「组名 · 模型」；LeoTheme / LeoMotion / 按压动效改读 LeoTokens。
+
 ## Mac 1.12.0 · iOS 1.76.0 (176) · 十月体检全量落地 - 2026-10-20
 
 - 依据：`~/Desktop/文档/LeoBot/LeoBot_十月体检_20261020.html`（上下游、开源对标、iOS SSH / 主路径 / 流畅度 / 看屏、Mac 链路与渲染的静态审计）。

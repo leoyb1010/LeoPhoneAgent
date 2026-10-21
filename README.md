@@ -2,9 +2,9 @@
 
 > 原名 LeoPhoneAgent，2026-10-06 先后改名 LOBE、LeoBot；仓库地址、Bundle ID 与数据目录沿用原名。
 
-[![iOS](https://img.shields.io/badge/iOS-1.76.0%20(176)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.77.0%20(177)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
-[![macOS source](https://img.shields.io/badge/macOS_source-1.12.0-7C3AED.svg)](src/mac/leophone/package.json)
+[![macOS source](https://img.shields.io/badge/macOS_source-1.13.0-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -168,7 +168,9 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.74.0 (172)`;Bundle ID `com.leoyuan.leophoneagent`
+- 当前源码版本/构建:`1.77.0 (177)`;Bundle ID `com.leoyuan.leophoneagent`。每一版改了什么以 `src/ios/Views/Settings/LeoReleaseNotesView.swift` 为准，下面只列近几版。
+- 2026-10-21 1.77.0：派给 Mac 的任务做完即可见（事件流 45 秒看门狗、快速重连、完成后不挂错误）；SSH 兜底显示进展；远程机器与设置说人话、设置按要办的事分组；设计值改读共享 token。
+- 2026-10-20 1.76.0：SSH 终端、改动面板与检查点、四种权限模式、接管终端里的 Claude Code、中继端到端加密（Mac 端在 1.13.0 才真正生效）。
 - 2026-10-15 1.74.0：iCloud 拉取拒收已下架模型的旧副本（按服务商最近一次的服务器列表判断）。
 - 2026-10-15 1.73.0：服务商下架的模型不再从 iCloud 复活（刷新时同步删除云端旧副本）。
 - 2026-10-15 1.72.0 / Mac 1.10.0：下架服务器任务（Paperclip），升级自动清理残留；Mac 图标机器人放大。
@@ -231,7 +233,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Mac 桌面端(LeoPhoneAgent 1.x)
 
-- 当前源码版本：`1.5.1`，主工程 `src/mac/leophone/`；本机 `/Applications/LeoPhoneAgent.app` 已安装经公证的 `1.5.1`（Electron 41.10.7）。公开热更新版本以 `leocodebox-updates` 发布仓实际 Release 为准，不能由源码版本推断已发布。
+- 当前源码版本：`1.13.0`（Electron 44.5.1），主工程 `src/mac/leophone/`；每一版改了什么以 `packages/ui/src/leo/leoReleaseNotes.ts` 为准。已安装版本以 `/Applications/LeoBot.app` 的 Info.plist 为准，公开热更新版本以发布仓实际 Release 为准，不能由源码版本推断已发布。
 - Leo Link：手机可经中继或已配置的 Tailscale HTTPS 直连同一 Mac Host/runtime，支持会话、审批、全自动、停止与事件续传。直连使用独立设备授权，支持一次性扫码与撤销。
 - 远控操作使用稳定请求编号和持久化回执，保留任务编号与 V4 输入 admission 对账；未知执行结果明确提示，不盲目重放。
 - 「连接手机」中可分别启用同步副本与藏宝阁访问。Tailscale Serve 的 HTTPS 转发需显式配置；不会自动覆盖现有规则。
