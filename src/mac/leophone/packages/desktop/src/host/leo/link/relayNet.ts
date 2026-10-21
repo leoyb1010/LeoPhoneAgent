@@ -9,11 +9,26 @@ const SYSTEM_WATCH_MS = 5_000;
 /** 两次 5 秒心跳之间隔了超过这么久，说明机器睡过（定时器在睡眠里不走）。 */
 const WAKE_GAP_MS = 20_000;
 
-/** 网卡地址指纹（不含回环）；换 Wi-Fi、插拔网线、开关 VPN 都会变。 */
+/** AirDrop / 低延迟 WLAN / 隧道自带的链路本地地址会随时增删，不代表换网。 */
+const VOLATILE_INTERFACE = /^(awdl|llw|anpi|ap\d|bridge)/;
+
+/**
+ * 网卡地址指纹（不含回环）；换 Wi-Fi、插拔网线、开关 VPN 都会变。
+ * 只看 IPv4 与可路由的 IPv6：fe80:: 链路本地地址在 AirDrop、utun 上每隔几十秒就会出现/消失，
+ * 把它们算进来会让中继连接每 10~45 秒被无故重连一次，手机那边的事件流就跟着断。
+ */
 export function networkSignature(interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os.networkInterfaces()): string {
   const addresses: string[] = [];
   for (const [name, infos] of Object.entries(interfaces)) {
-    for (const info of infos ?? []) if (!info.internal) addresses.push(`${name}/${info.address}`);
+    if (VOLATILE_INTERFACE.test(name)) continue;
+    for (const info of infos ?? []) {
+      if (info.internal) continue;
+      const family = String(info.family);
+      if (family === "IPv6" || family === "6") {
+        if (/^fe80:/i.test(info.address)) continue;
+      }
+      addresses.push(`${name}/${info.address}`);
+    }
   }
   return addresses.sort().join(",");
 }
@@ -72,4 +87,30 @@ export function watchSystemChanges(onChange: (change: "wake" | "network") => voi
   }, SYSTEM_WATCH_MS);
   timer.unref();
   return () => clearInterval(timer);
+}
+
+/** 发一个 ping，timeoutMs 内收到 pong 就算活着。只依赖 ws 的 ping/pong 接口，方便测试。 */
+export function probeAlive(
+  ws: { ping(): void; once(event: "pong", listener: () => void): unknown; off(event: "pong", listener: () => void): unknown },
+  timeoutMs: number,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const onPong = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    const timer = setTimeout(() => {
+      ws.off("pong", onPong);
+      resolve(false);
+    }, timeoutMs);
+    timer.unref?.();
+    ws.once("pong", onPong);
+    try {
+      ws.ping();
+    } catch {
+      clearTimeout(timer);
+      ws.off("pong", onPong);
+      resolve(false);
+    }
+  });
 }

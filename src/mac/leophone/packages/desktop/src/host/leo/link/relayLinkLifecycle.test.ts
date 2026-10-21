@@ -96,3 +96,42 @@ test("network signature ignores loopback and interface order", () => {
   assert.equal(networkSignature(a), networkSignature(b));
   assert.equal(networkSignature(a), "en0/192.168.1.2,utun4/100.64.0.9");
 });
+
+test("network signature ignores link-local IPv6 and AirDrop interfaces", () => {
+  type Interfaces = Parameters<typeof networkSignature>[0];
+  const base = {
+    en0: [{ address: "192.168.3.8", family: "IPv4", internal: false }],
+    utun4: [
+      { address: "100.81.83.56", family: "IPv4", internal: false },
+      { address: "fd7a:115c:a1e0::238:5339", family: "IPv6", internal: false },
+    ],
+  };
+  const noisy = {
+    ...base,
+    awdl0: [{ address: "fe80::4024:5eff:fe29:5726", family: "IPv6", internal: false }],
+    llw0: [{ address: "fe80::4024:5eff:fe29:5726", family: "IPv6", internal: false }],
+    utun7: [{ address: "fe80::1713:d48e:65d4:788a", family: "IPv6", internal: false }],
+  };
+  assert.equal(networkSignature(noisy as unknown as Interfaces), networkSignature(base as unknown as Interfaces));
+  assert.equal(
+    networkSignature(base as unknown as Interfaces),
+    "en0/192.168.3.8,utun4/100.81.83.56,utun4/fd7a:115c:a1e0::238:5339",
+  );
+});
+
+test("verifyOrReconnect() keeps a healthy connection", async () => {
+  let connections = 0;
+  const { server, wsUrl } = await relayServer((ws) => {
+    connections++;
+    ws.on("message", () => ws.send(JSON.stringify({ type: "registered", version: "0.2" })));
+  });
+  const keys: MachineKeyStore = { async get() { return null; }, async set() {} };
+  const link = new RelayLink({ wsUrl, name: "M", registerKey: "k".repeat(20) }, bridge, keys, silent, "t");
+  link.start();
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  link.verifyOrReconnect("network");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  link.stop();
+  server.close();
+  assert.equal(connections, 1);
+});

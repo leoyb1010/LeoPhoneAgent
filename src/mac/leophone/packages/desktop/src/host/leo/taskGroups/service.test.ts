@@ -175,3 +175,52 @@ test("LeoBot member is pinned to a LeoBot model, never silently to an external a
   assert.equal(none.created[0]!.modelSelection?.modelId, "codex");
   await noModel.cleanup({ groupId: failed.id });
 });
+
+test("corrupt group index is preserved, not silently overwritten", async () => {
+  const repo = makeRepo();
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "leo-group-root-")));
+  writeFileSync(join(root, "groups.json"), '{"version":1,"groups":[{"id":"x"');
+  const { port } = fakeTasks();
+  const groups = createLeoTaskGroups({ tasks: port, workspaces: async () => [repo], root });
+  await assert.rejects(groups.list(), (error: unknown) => error instanceof TaskGroupError && error.status === 503);
+  await assert.rejects(
+    groups.create({ prompt: "p", agents: [{ kind: "leo" }], workspacePath: repo }),
+    (error: unknown) => error instanceof TaskGroupError && error.status === 503,
+  );
+  assert.equal(readFileSync(join(root, "groups.json"), "utf8"), '{"version":1,"groups":[{"id":"x"');
+});
+
+test("model selection failure stops the LeoBot member instead of dispatching", async () => {
+  const repo = makeRepo();
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "leo-group-root-")));
+  const { port, created } = fakeTasks();
+  const groups = createLeoTaskGroups({
+    tasks: port,
+    workspaces: async () => [repo],
+    root,
+    leoModelSelection: async () => {
+      throw new Error("boom");
+    },
+  });
+  const group = await groups.create({ prompt: "p", agents: [{ kind: "leo" }], workspacePath: repo });
+  assert.equal(created.length, 0);
+  assert.match(group.members[0]!.error ?? "", /读取 LeoBot 模型失败/);
+});
+
+test("cleanup stops running members and keeps a patch of unadopted work", async () => {
+  const repo = makeRepo();
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "leo-group-root-")));
+  const { port } = fakeTasks();
+  const stopped: string[] = [];
+  port.stopTask = async (input) => {
+    stopped.push(input.taskId);
+  };
+  const groups = createLeoTaskGroups({ tasks: port, workspaces: async () => [repo], root });
+  const group = await groups.create({ prompt: "p", agents: [{ kind: "leo" }], workspacePath: repo });
+  writeFileSync(join(group.members[0]!.worktreePath, "app.txt"), "changed\n");
+  await groups.cleanup({ groupId: group.id });
+  assert.deepEqual(stopped, ["task-1"]);
+  const snapshot = join(root, "snapshots", group.id, "1-leobot.patch");
+  assert.ok(existsSync(snapshot));
+  assert.match(readFileSync(snapshot, "utf8"), /changed/);
+});

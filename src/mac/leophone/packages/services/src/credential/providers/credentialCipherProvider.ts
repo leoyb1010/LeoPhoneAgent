@@ -1,8 +1,11 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { homedir, platform, userInfo } from "node:os";
+import { credentialRootSecret } from "./credentialRootKey.js";
 import { CREDENTIAL_DECRYPT_ERROR_CODE, CREDENTIAL_DECRYPT_ERROR_PREFIX } from "@zcode/shared";
 
 const ENCRYPTED_VALUE_PREFIX = "enc:v1:";
+/** 钥匙串根密钥加密的新格式。 */
+const ENCRYPTED_VALUE_PREFIX_V2 = "enc:v2:";
 const CREDENTIAL_CIPHER_ALGORITHM = "aes-256-gcm";
 const CREDENTIAL_CIPHER_IV_BYTES = 12;
 const CREDENTIAL_CIPHER_AUTH_TAG_BYTES = 16;
@@ -11,6 +14,8 @@ const CREDENTIAL_SECRET_ENV_KEY = "ZCODE_CREDENTIAL_SECRET";
 export interface CredentialCipherProvider {
   encrypt(value: string): string;
   decrypt(value: string): string;
+  /** 这条密文还是旧格式（主机信息派生密钥），且已有更安全的格式可换。 */
+  needsUpgrade?(value: string): boolean;
 }
 
 interface CredentialCipherProviderOptions {
@@ -57,17 +62,21 @@ export function createCredentialCipherProvider(
   options: CredentialCipherProviderOptions = {},
 ): CredentialCipherProvider {
   const env = options.env ?? process.env;
-  const key = deriveCipherKey(defaultCredentialSecret(env));
+  const legacyKey = deriveCipherKey(defaultCredentialSecret(env));
+  // 显式配置了 secret 就沿用它（v1）；否则优先钥匙串随机根密钥（v2）。
+  const rootSecret = env[CREDENTIAL_SECRET_ENV_KEY] ? null : credentialRootSecret(env);
+  const v2Key = rootSecret ? deriveCipherKey(`leobot-credential-root:${rootSecret}`) : null;
 
   return {
     encrypt(value: string): string {
+      const key = v2Key ?? legacyKey;
       const iv = randomBytes(CREDENTIAL_CIPHER_IV_BYTES);
       const cipher = createCipheriv(CREDENTIAL_CIPHER_ALGORITHM, key, iv);
       const encrypted = Buffer.concat([cipher.update(value, "utf-8"), cipher.final()]);
       const authTag = cipher.getAuthTag();
 
       return [
-        ENCRYPTED_VALUE_PREFIX,
+        v2Key ? ENCRYPTED_VALUE_PREFIX_V2 : ENCRYPTED_VALUE_PREFIX,
         bufferToBase64url(iv),
         ".",
         bufferToBase64url(authTag),
@@ -77,11 +86,16 @@ export function createCredentialCipherProvider(
     },
 
     decrypt(value: string): string {
-      if (!value.startsWith(ENCRYPTED_VALUE_PREFIX)) {
+      const isV2 = value.startsWith(ENCRYPTED_VALUE_PREFIX_V2);
+      if (!isV2 && !value.startsWith(ENCRYPTED_VALUE_PREFIX)) {
         return value;
       }
+      if (isV2 && !v2Key) {
+        throw createCredentialDecryptError("钥匙串里的凭据根密钥不可用");
+      }
+      const key = isV2 ? (v2Key as Buffer) : legacyKey;
 
-      const payload = value.slice(ENCRYPTED_VALUE_PREFIX.length);
+      const payload = value.slice((isV2 ? ENCRYPTED_VALUE_PREFIX_V2 : ENCRYPTED_VALUE_PREFIX).length);
       const parts = payload.split(".");
       const [ivRaw, authTagRaw, cipherRaw] = parts;
 
@@ -110,6 +124,10 @@ export function createCredentialCipherProvider(
       } catch {
         throw createCredentialDecryptError("密钥不匹配或密文已损坏");
       }
+    },
+
+    needsUpgrade(value: string): boolean {
+      return Boolean(v2Key) && value.startsWith(ENCRYPTED_VALUE_PREFIX);
     },
   };
 }

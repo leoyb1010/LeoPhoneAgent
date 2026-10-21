@@ -6,10 +6,12 @@ import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 
 import type { LinkBridge, LinkRequest } from "./bridge.js";
 import type { HarnessEvent } from "./journal.js";
-import { tailnetLookup, watchSystemChanges } from "./relayNet.js";
+import { probeAlive, tailnetLookup, watchSystemChanges } from "./relayNet.js";
 import type { Caller, CallerKind } from "./session.js";
 
 export { networkSignature, systemChangeDetector, tailnetLookup } from "./relayNet.js";
+export { callerFrom } from "./relayCaller.js";
+import { callerFrom } from "./relayCaller.js";
 
 type Logger = {
   info: (msg: string, meta?: unknown) => void;
@@ -38,24 +40,13 @@ export type RelayLinkStatus = {
   lastErrorAt: number | null;
 };
 
-const PING_INTERVAL_MS = 25_000;
-const PONG_TIMEOUT_MS = 75_000;
+const PING_INTERVAL_MS = 10_000;
+/** 三次心跳没回就判死；以前 75 秒，期间手机看到的是一直「处理中」。 */
+const PONG_TIMEOUT_MS = 30_000;
+/** 换网后先探一次：这么久内有回音就说明旧连接还活着，不必重连。 */
+const NETWORK_PROBE_MS = 4_000;
 const STREAM_KEEPALIVE_MS = 25_000;
 const OUTBOX_LIMIT = 200;
-const CALLER_KINDS = new Set<CallerKind>(["iphone", "legacy", "master"]);
-/** 中继 0.2 转发时附带调用方;0.1 没有,记成 unknown。 */
-export function callerFrom(frame: Record<string, unknown>): Caller {
-  const raw = frame["caller"];
-  if (!raw || typeof raw !== "object") return { kind: "unknown" };
-  const obj = raw as Record<string, unknown>;
-  const kind = String(obj["kind"] ?? "") as CallerKind;
-  return {
-    kind: CALLER_KINDS.has(kind) ? kind : "unknown",
-    ...(obj["device_id"] ? { deviceId: String(obj["device_id"]) } : {}),
-    ...(obj["name"] ? { name: String(obj["name"]) } : {}),
-  };
-}
-
 /**
  * [leo-link] 挂到自营中继上的出站 WebSocket(移植自 leocodebox relay-client.service.ts)。
  * 帧协议与 relay.py 对偶:register / registered / http / resp / stream_open / stream_data /
@@ -101,7 +92,10 @@ export class RelayLink {
 
   start(): void {
     // 睡眠唤醒 / 换网后旧连接多半已死，但要等 75 秒心跳才判断开、再加最多 30 秒退避；这里检测到就立刻重连。
-    this.stopSystemWatch = watchSystemChanges((change) => this.reconnectNow(change));
+    this.stopSystemWatch = watchSystemChanges((change) => {
+      if (change === "wake") this.reconnectNow(change);
+      else this.verifyOrReconnect(change);
+    });
     void this.runForever();
   }
 
@@ -116,6 +110,16 @@ export class RelayLink {
     } catch {
       // 已经断了
     }
+  }
+
+  /** 换网后先探一次再决定（重连会让中继关掉手机正在跟的事件流）；见 relayNet.probeAlive。 */
+  verifyOrReconnect(reason: string): void {
+    if (this.stopped) return;
+    const ws = this.activeWs;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return this.reconnectNow(reason);
+    void probeAlive(ws, NETWORK_PROBE_MS).then((alive) => {
+      if (!alive && this.activeWs === ws) this.reconnectNow(`${reason}-probe-timeout`);
+    });
   }
 
   status(): RelayLinkStatus {

@@ -36,9 +36,11 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import math
 import os
 import secrets
+import shutil
 import time
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
@@ -200,6 +202,8 @@ class Relay:
         self.treasury_asset_dir = treasury_asset_dir or os.path.join(
             os.path.dirname(self.treasury_sync_path), "treasury-assets")
         self.treasury_asset_requests: Dict[str, Dict[str, Any]] = {}
+        self.treasury_sync_corrupt: Optional[str] = None
+        self.treasury_sync_corrupt_backup: Optional[str] = None
         self._load_treasury_sync()
 
     # -- treasury sync -----------------------------------------------------
@@ -383,8 +387,22 @@ class Relay:
             )
             self.treasury_updated_at = float(saved.get("updated_at") or 0)
             return
-        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        except FileNotFoundError:
             pass
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            # 读坏了 ≠ 没有：当成空库，下一次写入就会把原文件（历史、去重、游标基线）覆盖掉。
+            # 另存一份证据，进入只读保护，所有藏宝阁接口返回 503，等人处理。
+            self.treasury_sync_corrupt = f"{type(exc).__name__}: {exc}"[:300]
+            backup = f"{self.treasury_sync_path}.corrupt-{int(time.time())}"
+            try:
+                shutil.copy2(self.treasury_sync_path, backup)
+                self.treasury_sync_corrupt_backup = backup
+            except OSError:
+                pass
+            logging.getLogger("leoagent.relay").error(
+                "treasury sync store is corrupt; refusing writes (backup=%s): %s",
+                getattr(self, "treasury_sync_corrupt_backup", None), self.treasury_sync_corrupt)
+            return
 
         # One-time compatibility import from the old whole-snapshot mirror.
         # 旧收藏与 treasury-sync.json 放在同一目录(默认就是 ~/.leoagent);写死家目录会让
@@ -413,7 +431,17 @@ class Relay:
         except (OSError, json.JSONDecodeError, TypeError, ValueError):
             pass
 
+    def _treasury_corrupt_response(self) -> Optional[web.Response]:
+        if not self.treasury_sync_corrupt:
+            return None
+        return web.json_response({"error": {
+            "code": "treasury_store_corrupt",
+            "message": "中继上的藏宝阁同步文件损坏，已停止写入以保护原文件；请在中继机器上恢复或重建。",
+        }}, status=503)
+
     def _persist_treasury_sync(self) -> None:
+        if self.treasury_sync_corrupt:
+            raise OSError("treasury sync store is corrupt; refusing to overwrite")
         directory = os.path.dirname(self.treasury_sync_path)
         if directory:
             os.makedirs(directory, mode=0o700, exist_ok=True)
@@ -1489,6 +1517,9 @@ class Relay:
         """
         if not self._authorized(request):
             return self._unauthorized()
+        corrupt = self._treasury_corrupt_response()
+        if corrupt is not None:
+            return corrupt
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001
@@ -1554,6 +1585,9 @@ class Relay:
     async def post_treasury_changes(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return self._unauthorized()
+        corrupt = self._treasury_corrupt_response()
+        if corrupt is not None:
+            return corrupt
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001
@@ -1599,6 +1633,9 @@ class Relay:
     async def get_treasury_changes(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return self._unauthorized()
+        corrupt = self._treasury_corrupt_response()
+        if corrupt is not None:
+            return corrupt
         try:
             after = max(0, int(request.query.get("after", "0")))
             limit = max(1, min(TREASURY_BATCH_LIMIT, int(request.query.get("limit", "500"))))
@@ -1635,6 +1672,9 @@ class Relay:
     async def get_treasury_items(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return self._unauthorized()
+        corrupt = self._treasury_corrupt_response()
+        if corrupt is not None:
+            return corrupt
         try:
             after = max(0, int(request.query.get("after_sequence", "0")))
             limit = max(1, min(1_000, int(request.query.get("limit", "1000"))))

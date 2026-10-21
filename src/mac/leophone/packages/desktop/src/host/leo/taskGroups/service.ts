@@ -2,7 +2,7 @@
 // 每个 agent 在自己的 git worktree 里干活，互不干扰；用户对比各方案的改动，采纳一个落回原仓库，
 // 然后一键清理全部 worktree。任务组状态落在 <数据根>/worktrees/groups.json，由 Host 独占。
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { acpAgentInfo, acpModelSelection, isAcpAgentId, type AcpAgentId } from "@zcode/shared/acp";
@@ -69,6 +69,8 @@ export interface TaskGroupTaskPort {
     modelSelection?: TaskGroupModelSelection;
   }): Promise<{ taskId: string; traceId?: string }>;
   sendPrompt(input: { taskId: string; traceId?: string; content: string }): Promise<void>;
+  /** 清理前先停掉还在跑的成员；没有实现时清理只删 worktree（旧行为）。 */
+  stopTask?(input: { taskId: string; workspacePath: string }): Promise<void>;
 }
 
 export interface LeoTaskGroups {
@@ -83,13 +85,33 @@ const MAX_AGENTS = 4;
 const PROMPT_MAX_CHARS = 20_000;
 const DIFF_MAX_CHARS = 400_000;
 
-function readStore(file: string): TaskGroup[] {
+/**
+ * 不存在 = 空；读坏了（截断、乱码、结构不对）不能当成空：那样下一次 save 会把原文件覆盖掉，
+ * 任务组和 worktree 的对应关系就永久丢了。先把坏文件另存一份，再抛错让界面提示。
+ */
+export function readStore(file: string): TaskGroup[] {
   if (!existsSync(file)) return [];
+  let raw: string;
   try {
-    const parsed = JSON.parse(readFileSync(file, "utf8")) as { groups?: TaskGroup[] };
-    return Array.isArray(parsed.groups) ? parsed.groups : [];
-  } catch {
-    return [];
+    raw = readFileSync(file, "utf8");
+  } catch (error) {
+    throw new TaskGroupError(503, `任务组索引读不出来：${(error as Error).message}`);
+  }
+  try {
+    const parsed = JSON.parse(raw) as { groups?: unknown };
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.groups)) throw new Error("结构不对");
+    return parsed.groups as TaskGroup[];
+  } catch (error) {
+    const backup = `${file}.corrupt-${Date.now()}`;
+    try {
+      copyFileSync(file, backup);
+    } catch {
+      // 另存失败也不能覆盖原文件
+    }
+    throw new TaskGroupError(
+      503,
+      `任务组索引损坏（已另存为 ${backup}），原文件未改动：${(error as Error).message}`,
+    );
   }
 }
 
@@ -203,11 +225,19 @@ export function createLeoTaskGroups(deps: {
           throw new TaskGroupError(500, error instanceof WorktreeError ? error.message : String(error));
         }
         // 各 agent 各开一个任务：工作区就是自己的 worktree（保留用户所在的子目录），首条输入同一份需求。
-        const leoSelection = members.some((member) => member.agent.kind === "leo")
-          ? await deps.leoModelSelection?.().catch(() => undefined)
-          : undefined;
+        // 解析失败 ≠ 跟随默认：吞掉错误会让 LeoBot 那份悄悄用别的模型跑。失败就让该成员带着原因停下。
+        let leoSelection: TaskGroupModelSelection | null | undefined;
+        let leoSelectionError: string | undefined;
+        if (members.some((member) => member.agent.kind === "leo") && deps.leoModelSelection) {
+          try {
+            leoSelection = await deps.leoModelSelection();
+          } catch (error) {
+            leoSelectionError = `读取 LeoBot 模型失败：${error instanceof Error ? error.message : String(error)}`;
+          }
+        }
         for (const member of members) {
           try {
+            if (member.agent.kind === "leo" && leoSelectionError) throw new Error(leoSelectionError);
             if (member.agent.kind === "leo" && leoSelection === null) {
               throw new Error("LeoBot 还没有可用的模型，先在设置里配置一个");
             }
@@ -275,6 +305,25 @@ export function createLeoTaskGroups(deps: {
         const { groups, group } = find(body);
         for (const member of group.members) {
           if (member.state === "removed") continue;
+          // 先停：还在跑的 agent 失去工作目录会乱写或报一堆错。
+          if (member.taskId && deps.tasks.stopTask) {
+            await deps.tasks
+              .stopTask({ taskId: member.taskId, workspacePath: member.taskWorkspacePath })
+              .catch(() => undefined);
+          }
+          // 没被采纳的方案先留一份补丁，删了 worktree 也能找回来。
+          if (member.state === "active" && group.mergedMemberId !== member.id && existsSync(member.worktreePath)) {
+            try {
+              const diff = await worktreeDiff(member.worktreePath, group.baseCommit);
+              if (diff.patch.trim()) {
+                const dir = join(root, "snapshots", group.id);
+                mkdirSync(dir, { recursive: true });
+                writeFileSync(join(dir, `${member.id}-${slugify(member.label)}.patch`), diff.patch);
+              }
+            } catch {
+              // 快照失败不挡清理
+            }
+          }
           await removeLeoWorktree({ repoRoot: group.repoRoot, worktreePath: member.worktreePath, branch: member.branch });
           if (member.state === "active") member.state = "removed";
         }

@@ -88,6 +88,7 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
             sendPrompt: async (input) => {
               await taskService.sendPrompt({ ...input, traceId: input.traceId ?? "", clientMode: "desktop-continuous" });
             },
+            stopTask: (input) => taskService.stopGeneration(input),
           },
           workspaces: async () =>
             resolveQuickWorkspaces(await deps.services.getOptional(ISettingService)?.get().catch(() => undefined)),

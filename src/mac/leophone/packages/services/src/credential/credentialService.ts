@@ -19,8 +19,7 @@ import { getAppConfigDir } from "../paths.js";
  * 凭据存储路径
  *
  * 当前持久化格式仍是 JSON，但 value 会在写入前加密，读取时自动解密。
- * 后续可切换到 Electron safeStorage（钥匙串）托管密钥，
- * 届时 host process 需要向 main 进程请求 encrypt/decrypt。
+ * [leo] macOS 上密钥来自钥匙串里的随机根密钥（enc:v2，见 credentialRootKey.ts）；旧 enc:v1 读取后自动升级。
  */
 const logger = createServiceLogger("credentialService");
 
@@ -98,7 +97,20 @@ export function createCredentialService(
         return null;
       }
 
-      return cipherProvider.decrypt(rawValue);
+      const plain = cipherProvider.decrypt(rawValue);
+      // 旧格式读出来就顺手换成钥匙串根密钥加密（失败不影响这次读取）。
+      if (cipherProvider.needsUpgrade?.(rawValue)) {
+        const credentialsFile = getCredentialsFile();
+        void withFileLock(credentialsFile, async () => {
+          const current = await readAll(credentialsFile);
+          if (current[validatedKey] !== rawValue) return;
+          current[validatedKey] = cipherProvider.encrypt(plain);
+          await writeAll(credentialsFile, current);
+        }).catch((error: unknown) => {
+          logger.warn(undefined, "credential upgrade skipped", { key: validatedKey, error: String(error) });
+        });
+      }
+      return plain;
     },
 
     async save(key: string, value: string): Promise<void> {

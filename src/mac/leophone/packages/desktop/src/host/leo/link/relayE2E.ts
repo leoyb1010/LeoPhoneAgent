@@ -1,14 +1,6 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createPrivateKey,
-  createPublicKey,
-  diffieHellman,
-  generateKeyPairSync,
-  hkdfSync,
-  randomUUID,
-  type KeyObject,
-} from "node:crypto";
+import { createPrivateKey, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomUUID, type KeyObject } from "node:crypto";
+
+import { chachaPolyOpen, chachaPolySeal } from "./chacha20poly1305.js";
 import { link, mkdir, open, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 
@@ -57,18 +49,14 @@ function nonce(counter: number): Buffer {
 }
 
 export function seal(key: Buffer, counter: number, plaintext: Buffer, aad: Buffer): string {
-  const cipher = createCipheriv("chacha20-poly1305", key, nonce(counter), { authTagLength: 16 });
-  cipher.setAAD(aad, { plaintextLength: plaintext.length });
-  return Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]).toString("base64url");
+  // 不能用 createCipheriv("chacha20-poly1305")：Electron 的 BoringSSL 没有这个算法（见 chacha20poly1305.ts）。
+  return Buffer.from(chachaPolySeal(key, nonce(counter), plaintext, aad)).toString("base64url");
 }
 
 export function unseal(key: Buffer, counter: number, sealed: string, aad: Buffer): Buffer {
   const data = Buffer.from(sealed, "base64url");
   if (data.length < 16) throw new Error("e2e ciphertext too short");
-  const decipher = createDecipheriv("chacha20-poly1305", key, nonce(counter), { authTagLength: 16 });
-  decipher.setAAD(aad, { plaintextLength: data.length - 16 });
-  decipher.setAuthTag(data.subarray(data.length - 16));
-  return Buffer.concat([decipher.update(data.subarray(0, data.length - 16)), decipher.final()]);
+  return Buffer.from(chachaPolyOpen(key, nonce(counter), data, aad));
 }
 
 export const sealRequest = (keys: E2EKeys, plaintext: Buffer) => seal(keys.req, 0, plaintext, AAD_REQ);

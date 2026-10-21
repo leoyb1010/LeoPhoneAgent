@@ -1,7 +1,10 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { homedir, platform, userInfo } from "node:os";
+import { credentialRootSecret } from "./credential-root-key.js";
 
 const ENCRYPTED_VALUE_PREFIX = "enc:v1:";
+/** 钥匙串根密钥加密的新格式。 */
+const ENCRYPTED_VALUE_PREFIX_V2 = "enc:v2:";
 const CREDENTIAL_CIPHER_ALGORITHM = "aes-256-gcm";
 const CREDENTIAL_CIPHER_IV_BYTES = 12;
 const CREDENTIAL_CIPHER_AUTH_TAG_BYTES = 16;
@@ -19,15 +22,24 @@ export interface ZCodeCredentialCipherOptions {
 export function createZCodeCredentialCipher(
   options: ZCodeCredentialCipherOptions = {},
 ): ZCodeCredentialCipher {
-  const key = deriveCipherKey(resolveCredentialSecret(options.env ?? process.env));
+  const env = options.env ?? process.env;
+  const legacyKey = deriveCipherKey(resolveCredentialSecret(env));
+  // 与 Host 的 credentialCipherProvider 同一规则：显式 secret 用 v1，否则钥匙串根密钥 v2。
+  const rootSecret = env[CREDENTIAL_SECRET_ENV_KEY]?.trim() ? null : credentialRootSecret(env);
+  const v2Key = rootSecret ? deriveCipherKey(`leobot-credential-root:${rootSecret}`) : null;
 
   return {
     decrypt(value: string): string {
       if (!isEncryptedZCodeCredentialValue(value)) {
         return value;
       }
+      const isV2 = value.startsWith(ENCRYPTED_VALUE_PREFIX_V2);
+      if (isV2 && !v2Key) {
+        throw new Error("Credential decrypt failed: keychain root key unavailable");
+      }
+      const key = isV2 ? (v2Key as Buffer) : legacyKey;
 
-      const payload = value.slice(ENCRYPTED_VALUE_PREFIX.length);
+      const payload = value.slice((isV2 ? ENCRYPTED_VALUE_PREFIX_V2 : ENCRYPTED_VALUE_PREFIX).length);
       const parts = payload.split(".");
       const [ivRaw, authTagRaw, cipherRaw] = parts;
 
@@ -59,13 +71,14 @@ export function createZCodeCredentialCipher(
     },
 
     encrypt(value: string): string {
+      const key = v2Key ?? legacyKey;
       const iv = randomBytes(CREDENTIAL_CIPHER_IV_BYTES);
       const cipher = createCipheriv(CREDENTIAL_CIPHER_ALGORITHM, key, iv);
       const encrypted = Buffer.concat([cipher.update(value, "utf-8"), cipher.final()]);
       const authTag = cipher.getAuthTag();
 
       return [
-        ENCRYPTED_VALUE_PREFIX,
+        v2Key ? ENCRYPTED_VALUE_PREFIX_V2 : ENCRYPTED_VALUE_PREFIX,
         iv.toString("base64url"),
         ".",
         authTag.toString("base64url"),
@@ -77,7 +90,7 @@ export function createZCodeCredentialCipher(
 }
 
 export function isEncryptedZCodeCredentialValue(value: string): boolean {
-  return value.startsWith(ENCRYPTED_VALUE_PREFIX);
+  return value.startsWith(ENCRYPTED_VALUE_PREFIX) || value.startsWith(ENCRYPTED_VALUE_PREFIX_V2);
 }
 
 function deriveCipherKey(secret: string): Buffer {

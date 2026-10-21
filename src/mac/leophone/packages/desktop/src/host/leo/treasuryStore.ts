@@ -143,12 +143,30 @@ export class TreasuryStore {
     readingState?: ReadingState | null;
     includeArchived?: boolean;
   }): Array<TreasuryItem & { score: number }> {
+    const needle = params.query.trim().toLocaleLowerCase();
+    // 先在 SQL 里按关键词 / 类型 / 阅读状态筛，再取最近 2000 条打分。以前先取最近 2000 条再筛：
+    // 收藏多了以后旧内容永远搜不到（Codex 评估 F09）。LIKE 对 ASCII 不分大小写，中文按原字匹配。
+    const where: string[] = [];
+    const args: string[] = [];
+    if (!params.includeArchived) where.push("archived = 0");
+    if (needle) {
+      const like = `%${needle.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+      where.push("(title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\' OR tags LIKE ? ESCAPE '\\')");
+      args.push(like, like, like);
+    }
+    if (params.kinds && params.kinds.length > 0) {
+      where.push(`kind IN (${params.kinds.map(() => "?").join(",")})`);
+      args.push(...params.kinds.map((value) => value.toLocaleLowerCase()));
+    }
+    if (params.readingState) {
+      where.push("reading_state = ?");
+      args.push(params.readingState);
+    }
     const rows = this.handle()
       .prepare(
-        `SELECT * FROM items ${params.includeArchived ? "" : "WHERE archived = 0"} ORDER BY updated_at DESC LIMIT 2000`,
+        `SELECT * FROM items ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY updated_at DESC LIMIT 2000`,
       )
-      .all() as unknown as Row[];
-    const needle = params.query.trim().toLocaleLowerCase();
+      .all(...args) as unknown as Row[];
     const kinds = new Set((params.kinds ?? []).map((value) => value.toLocaleLowerCase()));
     const tags = new Set((params.tags ?? []).map((value) => value.toLocaleLowerCase()));
     const scored: Array<TreasuryItem & { score: number }> = [];

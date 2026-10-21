@@ -29,6 +29,7 @@ for file in \
     src/ios/Agent/Gateway/HarnessOutbox.swift \
     src/ios/MinisTests/HarnessOutboxTests.swift \
     src/ios/Agent/Session/RemoteSSHTrust.swift \
+    src/ios/Agent/Session/RemoteSSHSupport.swift \
     src/ios/MinisTests/RemoteSSHTrustTests.swift; do
     cp "$root/$file" "$work/Tests/"
 done

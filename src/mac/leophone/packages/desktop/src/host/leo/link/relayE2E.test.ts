@@ -205,3 +205,22 @@ test("bridge: /e2e reaches the normal route table; a Mac without e2e answers 404
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("pure-TS ChaCha20-Poly1305 matches RFC 8439 §2.8.2", async () => {
+  const { chachaPolyOpen, chachaPolySeal } = await import("./chacha20poly1305.js");
+  const key = Buffer.from("808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f", "hex");
+  const nonce = Buffer.from("070000004041424344454647", "hex");
+  const aad = Buffer.from("50515253c0c1c2c3c4c5c6c7", "hex");
+  const plaintext = Buffer.from(
+    "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.",
+  );
+  const sealed = Buffer.from(chachaPolySeal(key, nonce, plaintext, aad));
+  assert.equal(
+    sealed.subarray(0, 16).toString("hex"),
+    "d31a8d34648e60db7b86afbc53ef7ec2",
+  );
+  assert.equal(sealed.subarray(sealed.length - 16).toString("hex"), "1ae10b594f09e26a7e902ecbd0600691");
+  assert.equal(Buffer.from(chachaPolyOpen(key, nonce, sealed, aad)).toString(), plaintext.toString());
+  sealed[3] = sealed[3]! ^ 1;
+  assert.throws(() => chachaPolyOpen(key, nonce, sealed, aad));
+});
