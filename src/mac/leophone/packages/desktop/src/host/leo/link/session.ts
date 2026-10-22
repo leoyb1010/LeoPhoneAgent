@@ -371,6 +371,8 @@ export class LinkSession {
         this.pendingApprovals.delete(event.requestId);
         this.clearApprovalTimer(event.requestId);
         const approved = event.action === "accept";
+        // [leo] 无人值守时有人拒了计划(接管前就推出去的卡):和手机拒绝 / 超时一样记失败。
+        if (!approved) this.unattended?.markFailed(UNATTENDED_PLAN_REASON);
         this.emit({ event: "approval.responded", approval_id: event.requestId, choice: approved ? "once" : "deny" });
         if (approved) this.leavePlanMode();
         return;
@@ -408,7 +410,7 @@ export class LinkSession {
 
   /**
    * [leo] 手机那一轮 / 无人值守运行里内核发来的提问。
-   * 计划审批(ExitPlanMode)变成审批卡;其它提问(AskUserQuestion)手机还答不了:拒绝并把问题原文告诉手机,
+   * 计划审批(ExitPlanMode)变成审批卡(无人值守时直接 decline,见 onPlanApproval);其它提问(AskUserQuestion)手机还答不了:拒绝并把问题原文告诉手机,
    * 无人值守时还要把这次运行记成失败并停掉,不然它永远挂着(手动运行的占位也一直不放)。
    */
   private onElicitation(request: ElicitationRequest): void {
@@ -432,6 +434,21 @@ export class LinkSession {
   /** [leo] 计划审批卡:批准 = 退出计划模式、开始执行;拒绝 = 留在计划模式(内核随后结束这一轮)。 */
   private onPlanApproval(request: ElicitationRequest, plan: string): void {
     if (this.pendingApprovals.has(request.requestId)) return;
+    if (this.unattended) {
+      // [leo] 无人值守:计划模式每轮都以 ExitPlanMode 收尾(内核提醒强制),早报这类只读运行的产出已经有了。
+      // 立刻 decline(内核 plan_exit_denied 结束这一轮,记成功),不推卡、不等 30 分钟、不改判失败。
+      if (this.handledQuestions.has(request.requestId)) return;
+      this.handledQuestions.add(request.requestId);
+      void this.deps.taskService
+        .respondElicitation({ taskId: this.sessionId, workspacePath: this.cwd, requestId: request.requestId, action: "decline" })
+        .catch((error: unknown) => {
+          // 没送进内核就停掉这一轮,不能让运行永远挂着。
+          this.deps.logger.warn("[leo/link] unattended plan decline failed", { error: String(error) });
+          return this.stop();
+        })
+        .catch((error: unknown) => this.deps.logger.warn("[leo/link] stopping after plan decline failed", { error: String(error) }));
+      return;
+    }
     const text = plan.trim();
     const capped = text.length > PLAN_TEXT_MAX ? `${text.slice(0, PLAN_TEXT_MAX - 1)}…` : text;
     const event: HarnessEvent = {

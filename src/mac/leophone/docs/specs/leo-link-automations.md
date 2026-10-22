@@ -195,19 +195,21 @@
    中继（APNs、`recent_events`）→ 手机 / 手表；手机用 `POST /harness/sessions/<session_id>/approval` 照常答。
    手机已接管的任务（会话内建的自动化投递回原会话）直接进入无人值守。
    以前：只有手机发起的一轮才推审批，自动化任务的审批从不到手机。
-   **提问也接管**（`elicitation_request`，见下文「计划审批与提问」）：计划审批（`ExitPlanMode`）和普通审批一样推卡、
-   30 分钟计时；`AskUserQuestion` 没人能答，立刻 `decline` + `stopGeneration`，运行改判
+   **提问也接管**（`elicitation_request`，见下文「计划审批与提问」）：计划审批（`ExitPlanMode`）**立刻 `decline`、不推卡、
+   不改判**——计划模式下内核提醒强制每轮以 `ExitPlanMode` 收尾，早报这类只读运行的产出此时已有，`decline` 后内核
+   `plan_exit_denied` 结束这一轮，运行记成功（以前推卡等 30 分钟，没人批就记成「计划未获批准」，`plan` 模板几乎每次都失败）；
+   `AskUserQuestion` 没人能答，立刻 `decline` + `stopGeneration`，运行改判
    `"需要人工回答问题，无人值守已跳过"`。以前提问不接管，运行永远挂着，手动运行的占位（manual claim）也一直不放。
 2. **30 分钟自动拒绝**：每条推出去的审批起一个内存计时（`UNATTENDED_APPROVAL_MS`）。到点没人答（手机、手表、Mac 上答都算）：
-   记下改判 `failAutomationRun(runId, "审批 30 分钟无人处理,已自动拒绝")`（计划审批是 `"计划未获批准"`），回内核 `deny`
-   （计划审批回 `decline`），送到了再 `stopGeneration` 停掉这一轮。**拒绝没送进内核就撤销改判**（`takeAutomationRunFailure`）
+   记下改判 `failAutomationRun(runId, "审批 30 分钟无人处理,已自动拒绝")`，回内核 `deny`，送到了再 `stopGeneration` 停掉这一轮。**拒绝没送进内核就撤销改判**（`takeAutomationRunFailure`）
    并重新计时：之后有人批了、运行跑成功，不会被记成审批超时（以前先改判后送，没送到也留着改判）。改判在送出之前记下，
-   是因为拒绝可能让这一轮立刻结束（计划被拒内核自己停），Host 收终态时改判必须已经在。
+   是因为拒绝可能让这一轮立刻结束，Host 收终态时改判必须已经在。
    内核随后报的终态是 `stopped`，Host 的 `trackCronRunOutcome` 取走改判，按 `failed` + 该原因回写运行记录并发
    `automation.run.completed`（`status:"failed"`，`summary` 即该原因）。运行记录仍只有 Host 一个写入方。
 3. **计时清除**：审批被答（手机 / Mac）、这一轮结束（`run.completed / failed / cancelled`）、`automation.run.completed`、
    会话或桥接关闭时清掉。答复没送到内核（卡片还在）时重新计时。不持久化：Mac 重启后挂着的审批不再自动拒绝。
-4. **手机拒绝计划**：无人值守运行里手机对计划卡点「拒绝」→ `decline`，运行改判 `"计划未获批准"`（内核随后自己结束这一轮）。
+4. **计划不推卡**：无人值守运行里的 `ExitPlanMode` 直接 `decline`（见 1），手机收不到计划卡，也就没有「手机拒绝计划」。
+   只有接管前就已推给手机的计划卡（极少见）还走计时 / 手机答复，拒绝或超时记 `"计划未获批准"`。
 
 ```
 dispatchCronRun ─sendPrompt ACK─► publishAutomationRunStarted ─► LinkBridge 盯任务流
@@ -217,6 +219,7 @@ dispatchCronRun ─sendPrompt ACK─► publishAutomationRunStarted ─► LinkB
            手机 POST …/approval ───────────────► respondPermission / respondElicitation（计时清掉）
            30 分钟无人答 ──► failAutomationRun ─► deny / decline ─送到─► stopGeneration（没送到 → 撤销改判、重新计时）
            AskUserQuestion ─► failAutomationRun ─► decline ─► stopGeneration
+           ExitPlanMode ─► decline（不改判）─► 内核 plan_exit_denied 结束这一轮 ─► 成功
 内核终态(stopped) ─► trackCronRunOutcome: takeAutomationRunFailure → failed + 原因 ─► settle（回写） ─► publishAutomationRunCompleted ─► 推送
 ```
 
@@ -226,7 +229,7 @@ dispatchCronRun ─sendPrompt ACK─► publishAutomationRunStarted ─► LinkB
 
 | mode | 行为 | 无人值守时 |
 | --- | --- | --- |
-| `plan` | 只读：只读工具与非破坏性 MCP 工具直接放行，写文件 / 执行命令一律**直接拒绝、不问** | 最接近「只读、从不问」。例外：工具自报 `alwaysAsk`、需要用户交互的工具（提问、退出计划）仍会问 → 走上面的推送 / 30 分钟拒绝 |
+| `plan` | 只读：只读工具与非破坏性 MCP 工具直接放行，写文件 / 执行命令一律**直接拒绝、不问** | 最接近「只读、从不问」。例外：工具自报 `alwaysAsk` 仍会问 → 走上面的推送 / 30 分钟拒绝；提问立刻跳过并记失败；退出计划立刻 `decline`、记成功 |
 | `guarded` | 自主：普通调用放行，只有危险命令（`rm`、`git reset --hard` 等）逐次确认 | 偶尔问 |
 | `build` | 逐项确认：写文件、执行命令都要批 | 经常问，不适合无人值守 |
 | `yolo` | 全自动：不问（要认得出设备才能设） | 不问，也不受只读约束 |
@@ -247,6 +250,7 @@ dispatchCronRun ─sendPrompt ACK─► publishAutomationRunStarted ─► LinkB
     会话报告的模式回到进计划之前的权限模式（多半是 `build`）。
   - 拒绝：`respondElicitation({action:"decline"})`，留在计划模式，内核结束这一轮。
   - Mac 上答了：流里的 `elicitation_response` 让手机收卡（`approval.responded`）。
+  - 无人值守运行：不推卡，立刻 `decline`（见上文「无人值守」1），计划正文留在会话记录里当本次产出。
   - 以前：手机那一轮的计划审批被自动 `cancel`，内核记成被拒，这一轮直接结束，计划从没到过手机。
 - **其它提问**（`AskUserQuestion`）：手机还答不了。回 `decline`，发 `session.note` 带上问题和选项原文（用户可以直接发消息回答）；
   内核按同一 `requestId` 重发时不再答第二次。手机那一轮不停（agent 按没得到回答继续）；无人值守见上文（改判 + 停）。
