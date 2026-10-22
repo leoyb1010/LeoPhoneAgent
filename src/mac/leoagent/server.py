@@ -35,7 +35,7 @@ from aiohttp import web
 from . import harness
 from .harness import HarnessManager, available_harnesses
 
-VERSION = "0.2.2"
+VERSION = "0.2.3"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8646
 # 事件流空闲保活间隔:与 relay_client / Mac 桥接约定的 25 秒一致。

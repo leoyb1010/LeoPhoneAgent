@@ -5,4 +5,4 @@ surface the phone talks to (through the Mac bridge), and the relay server that
 runs on the always-on Mac.
 """
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
