@@ -15,6 +15,14 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.18.0",
+    date: "2026-10-22",
+    items: [
+      "手机上的「远端主机」现在也能看到这台 Mac 上 Codex（桌面端和命令行）的任务：哪些开着、哪些正在干活，标题和目录一目了然；也可以在手机上接管继续（Codex 还开着那个会话时，会提示先在 Mac 上退出 Codex）。",
+      "自己退出 LeoBot 后不会再被自动拉起：Studio / mini / Air 上的常驻守护只在 LeoBot 意外崩溃时才重新打开它。",
+    ],
+  },
+  {
     version: "1.17.0",
     date: "2026-10-22",
     items: [
