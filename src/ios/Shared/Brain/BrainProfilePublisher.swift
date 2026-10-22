@@ -101,7 +101,7 @@ final class BrainProfilePublisher {
         }
     }
 
-    /// 更新同一张卡;409 时取最新版本号再试一次;卡在网关上被删了就新建;
+    /// 更新同一张卡;409 时取最新版本号再试一次;本机没记录或卡在网关上被删了,先认领已有的同名卡,没有才新建;
     /// 网关不认 confirmed 状态就退回 reference。
     private func save(body: String, previous: BrainProfileCard.State?, client: BrainClient) async throws -> BrainCard {
         var status = previous?.status ?? BrainProfileCard.preferredStatus
@@ -118,14 +118,30 @@ final class BrainProfilePublisher {
                 return try await client.saveCard(retry).0
             }
         }
-        guard let previous else { return try await attempt(draft(id: nil, version: nil)) }
+        func update(_ id: String, version: Int) async throws -> BrainCard {
+            do {
+                return try await attempt(draft(id: id, version: version))
+            } catch BrainError.versionConflict {
+                let latest = try await client.card(id).0
+                return try await attempt(draft(id: id, version: latest.version))
+            }
+        }
+        // [up3-ios] 本机没记录时先认领网关上已有的同名卡,找不到才新建(Mac 只认第一张的 id)。
+        func adoptOrCreate(excluding: String?) async throws -> BrainCard {
+            let existing = try await BrainProfileCard.findExisting(
+                excluding: excluding,
+                search: { try await client.search(BrainProfileCard.title, scope: .cards, includePrivate: false).items },
+                fetch: { try await client.card($0).0 })
+            guard let existing else { return try await attempt(draft(id: nil, version: nil)) }
+            if let adopted = existing.status { status = adopted }
+            profileLog.info("profile card: adopting existing card v\(existing.version)")
+            return try await update(existing.id, version: existing.version)
+        }
+        guard let previous else { return try await adoptOrCreate(excluding: nil) }
         do {
-            return try await attempt(draft(id: previous.cardId, version: previous.version))
-        } catch BrainError.versionConflict {
-            let latest = try await client.card(previous.cardId).0
-            return try await attempt(draft(id: previous.cardId, version: latest.version))
+            return try await update(previous.cardId, version: previous.version)
         } catch BrainError.notFound {
-            return try await attempt(draft(id: nil, version: nil))
+            return try await adoptOrCreate(excluding: previous.cardId)
         }
     }
 }
