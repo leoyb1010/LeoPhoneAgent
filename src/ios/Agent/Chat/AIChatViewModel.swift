@@ -825,6 +825,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     let retrySnapshotReloadSignal = PassthroughSubject<Void, Never>()
     /// Whether the message list is scrolled near the bottom. Updated by CollectionViewMessageList.
     @Published var isNearBottom: Bool = true
+    /// [chat-chrome] 用户手指滚动开始(true)/ 停下(false)。悬浮的 ↑↓ 按钮只在滚动时出现、停 2 秒就收起,
+    /// 平时不压在回答内容上(用户反馈:按钮挡住代码块的「复制」)。
+    let userScrollPhase = PassthroughSubject<Bool, Never>()
 
     /// Whether the viewport is already at the very first user turn's top — i.e.
     /// the up-button ("scroll to previous turn") has nowhere further up to go.

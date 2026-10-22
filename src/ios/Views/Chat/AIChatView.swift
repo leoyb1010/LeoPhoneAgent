@@ -332,6 +332,9 @@ struct AIChatView: View {
     @AppStorage("appLanguage") private var observedAppLanguage: String = ""
     @State private var isForcePulling = false
     @State private var forcePullToast: String?
+    /// [chat-chrome] 悬浮 ↑↓ 按钮是否已「歇下」(停止滚动 2 秒后收起,滚动时再出现)。
+    @State private var scrollButtonsResting = false
+    @State private var scrollButtonsRestWork: DispatchWorkItem?
     @State private var compactConfirmMessageId: UUID?
     /// [T-delete-from-here] User message awaiting the "从此处删除" confirmation.
     @State private var deleteFromHereMessageId: UUID?
@@ -2631,6 +2634,10 @@ struct AIChatView: View {
                 .frame(maxWidth: maxContentWidth ?? .infinity, alignment: .trailing)
                 .padding(.horizontal, 12)
                 .padding(.bottom, floatingControlsBottom - 4)
+                // [chat-chrome] 停下 2 秒就收起,不压在回答上;再滚动立刻出现。
+                .opacity(scrollButtonsResting ? 0 : 1)
+                .allowsHitTesting(!scrollButtonsResting)
+                .animation(LeoMotion.standardEase(reduceMotion: reduceMotion), value: scrollButtonsResting)
                 .animation(LeoMotion.standardEase(), value: vm.isNearBottom)
                 .animation(LeoMotion.standardEase(), value: vm.isAtFirstTurn)
                 .animation(LeoMotion.standardEase(), value: floatingBarHeight)
@@ -2668,6 +2675,13 @@ struct AIChatView: View {
             }
         }
         .animation(LeoMotion.standardEase(reduceMotion: reduceMotion), value: newMessagePillVisible)
+        .onReceive(vm.userScrollPhase) { scrolling in
+            if scrolling { wakeScrollButtons(restAfter: nil) } else { wakeScrollButtons(restAfter: 2) }
+        }
+        .onChange(of: vm.isNearBottom) { _, nearBottom in
+            // 程序性地离开底部(跳到上一轮等)也先亮出来,2 秒后再收
+            if !nearBottom { wakeScrollButtons(restAfter: 2) }
+        }
         // [T-browser-download-ux-v2] Floating download button — same visual
         // family as the scroll buttons, stacked ABOVE their slot (the scroll
         // group can show up to two 36pt buttons + spacing, so offset by 92pt)
@@ -2685,6 +2699,16 @@ struct AIChatView: View {
             .animation(LeoMotion.standardEase(), value: floatingBarHeight)
             .capsuleProtectedFrame("downloadButton")
         }
+    }
+
+    /// [chat-chrome] 亮出悬浮 ↑↓ 按钮;给了 restAfter 就在那么多秒后收起(期间再滚动会重新计时)。
+    private func wakeScrollButtons(restAfter seconds: Double?) {
+        scrollButtonsRestWork?.cancel()
+        scrollButtonsResting = false
+        guard let seconds else { return }
+        let work = DispatchWorkItem { scrollButtonsResting = true }
+        scrollButtonsRestWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
 
     /// [chat-chrome] Bottom edge for controls floating over the list: above

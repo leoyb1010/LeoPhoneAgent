@@ -4630,6 +4630,7 @@ extension CollectionViewMessageListV3 {
 
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             ScrollHitchMeter.shared.begin()
+            vm?.userScrollPhase.send(true)
             AppLogger(category: "ScrollDiag").info("[ScrollDiag][willBeginDragging] offset=\(String(format: "%.0f", scrollView.contentOffset.y)) contentSize=\(String(format: "%.0f", scrollView.contentSize.height)) visibleCells=\(viewController?.collectionView?.visibleCells.count ?? -1)")
             #if DEBUG
             // [DecelDisplayLink] Safety: if the user grabs again mid-decel, stop
@@ -4663,6 +4664,7 @@ extension CollectionViewMessageListV3 {
         }
 
         func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            if !decelerate { vm?.userScrollPhase.send(false) }
             if !decelerate {
                 ScrollHitchMeter.shared.end()
                 settleAfterInteraction(scrollView)
@@ -4689,6 +4691,7 @@ extension CollectionViewMessageListV3 {
         }
 
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            vm?.userScrollPhase.send(false)
             ScrollHitchMeter.shared.end()
             // [ScrollDecel] DECELERATION END — summarize the phase: total
             // duration, frames, how many were slow (dropped), final offset.
