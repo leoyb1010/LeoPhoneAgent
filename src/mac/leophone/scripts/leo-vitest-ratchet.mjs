@@ -123,6 +123,11 @@ if (total === 0) {
 }
 
 const current = failingIds(report);
+// vitest 自己判失败、却一个失败用例都没记下(测试之外的未处理错误、收集期崩溃等):不能当通过。
+if (report.success === false && current.size === 0) {
+  console.error("leo-vitest-ratchet: vitest 报告失败但没有失败用例(多半是测试之外的未处理错误),按失败处理");
+  process.exit(1);
+}
 const baseline = new Set(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")).failures : []);
 let fresh = [...current].filter((id) => !baseline.has(id)).sort();
 // --related 只跑了一部分文件:没跑到的基线条目不算"修好"。
