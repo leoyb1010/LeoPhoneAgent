@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.84.1",
+            date: "2026-10-23",
+            title: "iPad 弹窗位置修正",
+            highlights: [
+                "iPad 上清理缓存、删除 / 恢复快捷任务、清空设备活动、撤销配置改动、屏幕亮度这些确认框，都从对应的按钮弹出，不再从页面左边冒出来盖住侧栏。",
+                "iPad 上导出、日志、iCloud 同步日志、服务商导出等分享面板改成从分享按钮弹出的小窗。"
+            ]
+        ),
+        LeoRelease(
             version: "1.84.0",
             date: "2026-10-23",
             title: "iPad 好用多了，灵动岛不再挡着",

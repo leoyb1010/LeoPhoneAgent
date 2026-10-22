@@ -1,5 +1,10 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.84.1 (191) · iPad 确认框与分享面板锚点 - 2026-10-23
+
+- 剩余 6 处页面级 `confirmationDialog` 挂到触发控件（存储清理、快捷任务删除/恢复、设备活动清空、配置撤销、亮度）；新增 `leoShareSheet`：iPad 上从按钮弹 popover，其他设备仍是 sheet（导出预览、日志、iCloud 同步日志、服务商导出、全部发送到 Mac）。
+- 装机脚本：CoreDevice 3002「Connection interrupted」每台最多重试 3 次。
+
 ## iOS 1.84.0 (190) · 实时活动前台不显示 + iPad 全面排查 - 2026-10-23
 
 - **实时活动 / 灵动岛**：决策函数 `LiveActivityPresencePolicy`（App 在前台 / 任务在跑 / 关注 / 开关 / 已有卡片 → 不起 / 起 / 保持 / 立即结束 / 带最终状态结束）。回到前台立即结束所有卡片（含中继 push-to-start 起的）；离开前台（will-deactivate，5 s 后台任务断言）才起本地卡并让 Mac 会话桥起卡；iPad 多窗口有任一 LeoBot 窗口在前台就算前台；控制台打开不再起卡；结束卡片时向中继注销 update token。
