@@ -1,20 +1,24 @@
 import { openAsBlob } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 
 import { ZCODE_VERSION } from "@zcode/shared";
 
-import type { McpCallToolResult, McpHttpServer, McpToolDescriptor } from "./mcpHttpEndpoint.js";
+import { BRAIN_TOOLS, TOOL_BUDGET_MS } from "./brainToolDefs.js";
+import type { McpCallToolResult, McpHttpServer } from "./mcpHttpEndpoint.js";
+import { PROFILE_CARD_TITLE } from "./profileCard.js";
 
 /**
  * [leo] 第二大脑(leo-brain)的九个工具,由 Host 的本机 MCP 端点 `/api/leo/brain/mcp` 提供。
- * 原先是每个 workspace 一个的 stdio 子进程 `leo/brain-mcp.mjs`,这里是它的原样移植:工具名、描述、
- * 参数和返回形状不变(参考实现是网关随附的 leo_brain_mcp.py)。
+ * 原先是每个 workspace 一个的 stdio 子进程 `leo/brain-mcp.mjs`,这里是它的移植:工具名、参数和
+ * 返回形状不变(参考实现是网关随附的 leo_brain_mcp.py);描述补了「什么时候用」。
  *
  * - 本机 agent key 在 `~/.config/leo-brain/leobot-mac.key`(0600),**每次请求时**读,只放进
  *   Authorization 头;不写进 MCP 配置、不进日志、不进返回内容。
  * - 网关地址 `LEO_BRAIN_URL`(Host 进程环境),默认 Cloudflare 隧道。
+ * - 工具定义和每个工具的总时限在 brainToolDefs.ts;Host 这边的网关请求比时限早 HOST_MARGIN_MS
+ *   收手,模型拿到的是具体的「超时 / HTTP 错误」而不是 CLI 的通用超时。
  */
 
 const VERSION = "1.0.0";
@@ -32,6 +36,25 @@ class BrainError extends Error {}
 
 type Args = Record<string, unknown>;
 type Json = Record<string, unknown>;
+
+interface CallInit {
+  params?: Record<string, unknown>;
+  body?: unknown;
+  headers?: Record<string, string>;
+  raw?: boolean;
+  /** 单次网关请求的秒数上限;同时受整个工具调用的时限约束。 */
+  timeout?: number;
+}
+type Call = (method: string, path: string, init?: CallInit) => Promise<unknown>;
+interface ToolContext {
+  call: Call;
+  /** CLI 在 tools/call 的 `_meta` 里带来的当前工作区(绝对路径);没有就是 undefined。 */
+  workspace: string | undefined;
+}
+
+/** Host 比 CLI 的时限早这么多收手。 */
+const HOST_MARGIN_MS = 5_000;
+const ASK_MAX_WAIT_SECONDS = 45;
 
 export interface BrainToolsOptions {
   keyFile?: string;
@@ -57,112 +80,17 @@ const str = (value: unknown) => (typeof value === "string" ? value : "");
 const strArray = (value: unknown) =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 
-const REF = { type: "string", description: "结果里的 ref，例如 file:ab12…、card:…、memory:…" };
-
-const TOOL_DEFS: Array<[string, string, Json, string[]]> = [
-  ["brain_brief", "先调用这个：返回本 key 的权限、资料规模与推荐用法（纯文本）。", {}, []],
-  [
-    "brain_search",
-    "在 Leo 的第二大脑里一次检索文档、知识卡、照片、视频和记忆，返回紧凑结果（标题/日期/摘要/定位/web_url/缩略图链接），按类型分组。",
-    {
-      query: { type: "string" },
-      include_private: { type: "boolean", description: "包含私密资料（家庭照片、个人记录）" },
-      kind: { type: "string", enum: ["all", "document", "card", "image", "video"] },
-      limit: { type: "integer", default: 12 },
-      offset: { type: "integer", default: 0 },
-      group: { type: "boolean", default: true },
-    },
-    ["query"],
-  ],
-  [
-    "brain_media_search",
-    "用自然语言找照片或视频（人物、时间、地点、场景，如「去年夏天布布在海边」）。返回理解后的条件和紧凑结果，含签名缩略图/播放链接。",
-    {
-      query: { type: "string" },
-      kind: { type: "string", enum: ["all", "photo", "video"] },
-      year: { type: "string" },
-      limit: { type: "integer", default: 12 },
-      offset: { type: "integer", default: 0 },
-    },
-    ["query"],
-  ],
-  [
-    "brain_read",
-    "读一份资料或知识卡的原文片段（按 locator 定位，带分页）。",
-    {
-      ref: REF,
-      locator: { type: "string" },
-      offset: { type: "integer", default: 0 },
-      max_chars: { type: "integer", default: 6000 },
-    },
-    ["ref"],
-  ],
-  [
-    "brain_media_get",
-    "取一张照片或一段视频的详情：Gemini 描述、标签、画面分段、语音转写、可打开的链接；include_image=true 时附带缩略图供看图。",
-    {
-      ref: REF,
-      include_image: { type: "boolean", default: false },
-      segments_offset: { type: "integer", default: 0 },
-    },
-    ["ref"],
-  ],
-  [
-    "brain_link",
-    "为资料生成可直接在手机/浏览器打开的签名链接；variant: thumb/preview（24h）、video（6h）、raw 原件（1h）、web 网页深链。",
-    {
-      refs: { type: "array", items: { type: "string" } },
-      variant: { type: "string", enum: ["thumb", "preview", "video", "raw", "web"] },
-      ttl_hours: { type: "number" },
-    },
-    ["refs"],
-  ],
-  [
-    "brain_ask",
-    "基于原文证据回答问题（每个结论带 [n] 引用与 web_url）。最多等 wait_seconds；没完成会返回 id，再传 id 继续等。",
-    {
-      question: { type: "string" },
-      id: { type: "string", description: "继续等待之前的回答" },
-      include_private: { type: "boolean" },
-      mode: { type: "string", enum: ["answer", "analyze", "prepare"] },
-      refs: { type: "array", items: { type: "string" } },
-      wait_seconds: { type: "integer", default: 25 },
-    },
-    [],
-  ],
-  [
-    "brain_save_card",
-    "把结论存成草稿知识卡（不会自动确认，Leo 会在审阅队列里看）。",
-    {
-      title: { type: "string" },
-      body: { type: "string" },
-      sources: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: { ref: { type: "string" }, locator: { type: "string" } },
-        },
-      },
-      category: { type: "string" },
-      idempotency_key: { type: "string" },
-    },
-    ["title", "body"],
-  ],
-  [
-    "brain_upload",
-    "把本机一个文件存进第二大脑收件箱（自动解析、向量化、提炼；相同内容不重复保存）。",
-    { path: { type: "string" }, name: { type: "string" }, idempotency_key: { type: "string" } },
-    ["path"],
-  ],
-];
-
-export const BRAIN_TOOLS: readonly McpToolDescriptor[] = TOOL_DEFS.map(
-  ([name, description, properties, required]) => ({
-    name,
-    description,
-    inputSchema: { type: "object", properties, required },
-  }),
-);
+/** CLI 在 tools/call 的 `_meta` 里带当前工作区(adapters/src/mcp/index.ts mcpRequestMeta)。 */
+function workspaceFromMeta(meta: Record<string, unknown>): string | undefined {
+  const context = meta["com.zcode/request-context"];
+  const candidates = [
+    meta["workspace_path"],
+    context && typeof context === "object" ? (context as Json)["workspace_path"] : undefined,
+  ];
+  return candidates.find(
+    (value): value is string => typeof value === "string" && isAbsolute(value),
+  );
+}
 
 const NOTE = "提示：OCR、转写、模型描述可能有误，只当线索；发给 Leo 的链接用 web_url 或签名 url。";
 
@@ -185,22 +113,18 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
     }
   };
 
-  async function call(
+  async function request(
+    deadline: number,
     method: string,
     path: string,
-    init: {
-      params?: Record<string, unknown>;
-      body?: unknown;
-      headers?: Record<string, string>;
-      raw?: boolean;
-      timeout?: number;
-    } = {},
+    init: CallInit = {},
   ): Promise<unknown> {
     let url = base + path;
     if (init.params) {
       const query = new URLSearchParams();
       for (const [name, value] of Object.entries(init.params)) {
-        if (value !== undefined && value !== null && value !== "") query.append(name, String(value));
+        if (value !== undefined && value !== null && value !== "")
+          query.append(name, String(value));
       }
       url += `?${query}`;
     }
@@ -215,13 +139,16 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
       headers["Content-Type"] = "application/json";
     }
     Object.assign(headers, init.headers ?? {});
-    const timeout = init.timeout ?? 40;
+    const timeoutMs = Math.min((init.timeout ?? 40) * 1000, deadline - Date.now());
+    if (timeoutMs <= 0)
+      throw new BrainError(`连不上第二大脑网关 ${base}：超时（这次调用的时限已用完）`);
+    const timeout = Math.round(timeoutMs / 1000);
     let response: Response;
     try {
       response = await doFetch(url, {
         method,
         headers,
-        signal: AbortSignal.timeout(timeout * 1000),
+        signal: AbortSignal.timeout(timeoutMs),
         ...(body === undefined ? {} : { body }),
       });
     } catch (error) {
@@ -247,9 +174,9 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
       : payload.toString("utf8");
   }
 
-  const tools: Record<string, (a: Args) => Promise<unknown>> = {
-    brain_brief: () => call("GET", "/v1/brief"),
-    brain_search: (a) =>
+  const tools: Record<string, (a: Args, ctx: ToolContext) => Promise<unknown>> = {
+    brain_brief: (_a, { call }) => call("GET", "/v1/brief"),
+    brain_search: (a, { call }) =>
       call("GET", "/v1/search", {
         params: {
           q: need(a, "query"),
@@ -262,7 +189,7 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
           max_chars: a["max_chars"] ?? 9000,
         },
       }),
-    brain_media_search: (a) =>
+    brain_media_search: (a, { call }) =>
       call("GET", "/v1/media/search", {
         params: {
           q: need(a, "query"),
@@ -273,7 +200,7 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
           view: "compact",
         },
       }),
-    brain_read: async (a) => {
+    brain_read: async (a, { call }) => {
       const ref = String(need(a, "ref"));
       const [kind, ident] = ref.includes(":")
         ? [ref.slice(0, ref.indexOf(":")), refId(ref)]
@@ -318,7 +245,7 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
         next_offset: next < d.total ? next : null,
       };
     },
-    brain_media_get: async (a) => {
+    brain_media_get: async (a, { call }) => {
       const ident = refId(String(need(a, "ref")));
       const d = await call("GET", `/v1/media/${seg(ident)}`, {
         params: { view: "compact", segments_offset: a["segments_offset"] ?? 0 },
@@ -332,7 +259,7 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
       }
       return content;
     },
-    brain_link: (a) =>
+    brain_link: (a, { call }) =>
       call("POST", "/v1/links", {
         body: {
           items: strArray(need(a, "refs")).map((ref) => ({
@@ -342,16 +269,23 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
           ttl_hours: a["ttl_hours"] ?? null,
         },
       }),
-    brain_ask: (a) => {
+    brain_ask: (a, { call }) => {
+      // 网关最多等 wait 秒;再留 10 s 网络余量,都在本工具 60 s 时限之内。
+      const requested = Number(a["wait_seconds"] ?? 25);
+      const wait = Number.isFinite(requested)
+        ? Math.max(0, Math.min(requested, ASK_MAX_WAIT_SECONDS))
+        : 25;
       if (a["id"])
         return call("GET", `/v1/answers/${seg(a["id"])}`, {
-          params: { wait: a["wait_seconds"] ?? 25 },
+          params: { wait },
+          timeout: wait + 10,
         });
       const refs = strArray(a["refs"]);
       const fileIds = refs.filter((ref) => ref.startsWith("file:")).map(refId);
       const recordRefs = refs.filter((ref) => ref.includes(":") && !ref.startsWith("file:"));
       return call("POST", "/v1/ask", {
-        params: { wait: a["wait_seconds"] ?? 25 },
+        params: { wait },
+        timeout: wait + 10,
         body: {
           question: need(a, "question"),
           mode: a["mode"] ?? "answer",
@@ -361,7 +295,13 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
         },
       });
     },
-    brain_save_card: async (a) => {
+    brain_save_card: async (a, { call }) => {
+      const title = String(need(a, "title"));
+      if (title.trim() === PROFILE_CARD_TITLE) {
+        throw new BrainError(
+          `标题「${PROFILE_CARD_TITLE}」留给 iPhone 维护的用户画像卡，agent 不能用这个标题存卡；换一个标题再存。`,
+        );
+      }
       const sources = (Array.isArray(a["sources"]) ? a["sources"] : [])
         .map((source) => (source && typeof source === "object" ? (source as Json) : {}))
         .filter((source) => str(source["ref"]).startsWith("file:"))
@@ -372,7 +312,7 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
       const idempotencyKey = str(a["idempotency_key"]);
       const d = (await call("POST", "/v1/cards", {
         body: {
-          title: need(a, "title"),
+          title,
           body: need(a, "body"),
           sources,
           category: a["category"] || "个人知识",
@@ -387,8 +327,13 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
         web_url: `${PUBLIC}/#card/${String(d["id"])}`,
       };
     },
-    brain_upload: async (a) => {
-      const path = expandHome(String(need(a, "path")));
+    brain_upload: async (a, { call, workspace }) => {
+      // Host 进程的 cwd 是 "/",相对路径只能按 CLI 带来的工作区解析;拿不到工作区就要求绝对路径。
+      const given = expandHome(String(need(a, "path")));
+      if (!isAbsolute(given) && !workspace) {
+        throw new BrainError(`需要绝对路径：${given}（拿不到当前工作区，没法解析相对路径）`);
+      }
+      const path = isAbsolute(given) ? given : resolve(workspace!, given);
       const info = await stat(path).catch(() => null);
       if (!info?.isFile()) throw new BrainError(`文件不存在：${path}`);
       if (info.size > 256 * 1024 * 1024) throw new BrainError("超过 256MB，请直接放进收件箱目录");
@@ -399,7 +344,7 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
       const idempotencyKey = str(a["idempotency_key"]);
       if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
       // 按文件流式上传:Host 是常驻进程,不能为一次上传把整个文件读进内存。
-      return call("POST", "/v1/inbox", { body: await openAsBlob(path), headers, timeout: 300 });
+      return call("POST", "/v1/inbox", { body: await openAsBlob(path), headers, timeout: 325 });
     },
   };
 
@@ -407,14 +352,16 @@ export function createBrainMcpServer(options: BrainToolsOptions = {}): McpHttpSe
     name: "leo-brain",
     version: VERSION,
     instructions:
-      "Leo 的第二大脑：先 brain_brief，再 brain_search / brain_media_search；需要原文用 brain_read；给 Leo 的链接只用 web_url 或 brain_link 生成的签名链接。",
+      "Leo 的第二大脑：问题涉及 Leo 本人、他的项目、之前的工作或资料时直接 brain_search（不必先 brain_brief），照片视频用 brain_media_search；需要原文用 brain_read，回答注明标题；给 Leo 的链接只用 web_url 或 brain_link 生成的签名链接。",
     listTools: () => BRAIN_TOOLS,
-    async callTool(name, args): Promise<McpCallToolResult> {
+    async callTool(name, args, meta = {}): Promise<McpCallToolResult> {
       const tool = tools[name];
       if (!tool) throw new Error(`未知工具 ${name}`);
+      const deadline = Date.now() + (TOOL_BUDGET_MS.get(name) ?? 45_000) - HOST_MARGIN_MS;
+      const call: Call = (method, path, init) => request(deadline, method, path, init);
       let out: unknown;
       try {
-        out = await tool(args);
+        out = await tool(args, { call, workspace: workspaceFromMeta(meta) });
       } catch (error) {
         if (!(error instanceof BrainError) && !(error instanceof TypeError)) throw error;
         return { content: [{ type: "text", text: `失败：${error.message}` }], isError: true };

@@ -22,6 +22,8 @@ export interface McpToolDescriptor {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** [leo] 工具级扩展;CLI 读 `_meta.timeoutMs` 当这个工具的时限(不声明默认 30 s)。 */
+  _meta?: Record<string, unknown>;
 }
 
 export interface McpCallToolResult {
@@ -34,8 +36,15 @@ export interface McpHttpServer {
   version: string;
   instructions?: string;
   listTools(): readonly McpToolDescriptor[];
-  /** 抛出的异常回成 JSON-RPC -32603;工具层面的失败应自己返回 `isError: true`。 */
-  callTool(name: string, args: Record<string, unknown>): Promise<McpCallToolResult>;
+  /**
+   * 抛出的异常回成 JSON-RPC -32603;工具层面的失败应自己返回 `isError: true`。
+   * `meta` 是 tools/call 的 `params._meta`(CLI 在里面带 workspace_path 等请求上下文)。
+   */
+  callTool(
+    name: string,
+    args: Record<string, unknown>,
+    meta?: Record<string, unknown>,
+  ): Promise<McpCallToolResult>;
 }
 
 const DEFAULT_PROTOCOL_VERSION = "2025-06-18";
@@ -103,7 +112,7 @@ async function dispatch(server: McpHttpServer, message: JsonRpcMessage): Promise
       if (typeof name !== "string" || !server.listTools().some((tool) => tool.name === name)) {
         throw new JsonRpcError(-32602, `unknown tool: ${String(name)}`);
       }
-      return server.callTool(name, asRecord(params["arguments"]));
+      return server.callTool(name, asRecord(params["arguments"]), asRecord(params["_meta"]));
     }
     default:
       throw new JsonRpcError(-32601, `method not found: ${String(message.method)}`);

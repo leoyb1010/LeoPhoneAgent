@@ -59,7 +59,11 @@ const store = {
 } as never;
 
 const treasury = createTreasuryMcpServer(store);
-const brain = createBrainMcpServer({ keyFile, baseUrl: "https://gateway.test", fetch: fakeGateway });
+const brain = createBrainMcpServer({
+  keyFile,
+  baseUrl: "https://gateway.test",
+  fetch: fakeGateway,
+});
 
 let server: Server;
 let base = "";
@@ -100,7 +104,10 @@ test("treasury: the CLI's SDK client connects, lists and calls tools; payload st
       arguments: { query: "saved" },
     });
     const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
-    const payload = JSON.parse(text) as { untrusted_content: boolean; items: Array<{ id: string }> };
+    const payload = JSON.parse(text) as {
+      untrusted_content: boolean;
+      items: Array<{ id: string }>;
+    };
     assert.equal(payload.untrusted_content, true);
     assert.equal(payload.items[0]!.id, "t1");
     // 写操作缺 user_confirmed:照旧是 {error} 放在 text 里,不是协议错误。
@@ -134,9 +141,91 @@ test("brain: key is read per request into Authorization only; gateway errors bec
     assert.equal(gatewayCalls.at(-1)!.auth, "Bearer rotated-key");
     assert.ok(!(failed.content as Array<{ text: string }>)[0]!.text.includes("rotated-key"));
 
-    const uploaded = await client.callTool({ name: "brain_upload", arguments: { path: uploadFile } });
+    const uploaded = await client.callTool({
+      name: "brain_upload",
+      arguments: { path: uploadFile },
+    });
     assert.notEqual(uploaded.isError, true);
     assert.equal(gatewayCalls.at(-1)!.body, "hello brain");
+  } finally {
+    await client.close();
+  }
+});
+
+test("brain: every tool advertises its own time budget in tools/list _meta (the CLI default is 30 s)", async () => {
+  const client = await connect("/brain");
+  try {
+    const { tools } = await client.listTools();
+    const budget = Object.fromEntries(
+      tools.map((tool) => [
+        tool.name,
+        (tool._meta as { timeoutMs?: number } | undefined)?.timeoutMs,
+      ]),
+    );
+    assert.deepEqual(budget, {
+      brain_brief: 45_000,
+      brain_search: 45_000,
+      brain_media_search: 45_000,
+      brain_read: 45_000,
+      brain_media_get: 60_000,
+      brain_link: 45_000,
+      brain_ask: 60_000,
+      brain_save_card: 45_000,
+      brain_upload: 330_000,
+    });
+  } finally {
+    await client.close();
+  }
+});
+
+test("brain_upload: relative paths resolve against the CLI workspace from _meta, never the Host cwd", async () => {
+  const client = await connect("/brain");
+  try {
+    const text = (result: Awaited<ReturnType<typeof client.callTool>>) =>
+      (result.content as Array<{ text: string }>)[0]!.text;
+    const bare = await client.callTool({ name: "brain_upload", arguments: { path: "note.txt" } });
+    assert.equal(bare.isError, true);
+    assert.match(text(bare), /需要绝对路径/);
+
+    gatewayCalls.length = 0;
+    const flat = await client.callTool({
+      name: "brain_upload",
+      arguments: { path: "note.txt" },
+      _meta: { workspace_path: dir },
+    });
+    assert.notEqual(flat.isError, true, text(flat));
+    assert.equal(gatewayCalls.at(-1)!.body, "hello brain");
+
+    gatewayCalls.length = 0;
+    const nested = await client.callTool({
+      name: "brain_upload",
+      arguments: { path: "./note.txt" },
+      _meta: { "com.zcode/request-context": { workspace_path: dir } },
+    });
+    assert.notEqual(nested.isError, true, text(nested));
+    assert.equal(gatewayCalls.at(-1)!.body, "hello brain");
+  } finally {
+    await client.close();
+  }
+});
+
+test("brain_save_card: the phone-owned 「Leo 画像」 title is refused before reaching the gateway", async () => {
+  const client = await connect("/brain");
+  try {
+    gatewayCalls.length = 0;
+    const refused = await client.callTool({
+      name: "brain_save_card",
+      arguments: { title: " Leo 画像 ", body: "我是 Leo" },
+    });
+    assert.equal(refused.isError, true);
+    assert.match((refused.content as Array<{ text: string }>)[0]!.text, /留给 iPhone/);
+    assert.equal(gatewayCalls.length, 0);
+    const saved = await client.callTool({
+      name: "brain_save_card",
+      arguments: { title: "Leo 画像笔记", body: "别的结论" },
+    });
+    assert.notEqual(saved.isError, true);
+    assert.match(gatewayCalls.at(-1)!.body!, /"status":"draft"/);
   } finally {
     await client.close();
   }
@@ -146,7 +235,10 @@ test("protocol edges: notifications are 202, GET is 405, unknown tools are a JSO
   const post = (body: unknown) =>
     fetch(`${base}/treasury`, {
       method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
       body: JSON.stringify(body),
     });
   assert.equal((await post({ jsonrpc: "2.0", method: "notifications/initialized" })).status, 202);
@@ -156,7 +248,9 @@ test("protocol edges: notifications are 202, GET is 405, unknown tools are a JSO
   ).json()) as { id: number; error: { code: number } };
   assert.equal(unknown.id, 7);
   assert.equal(unknown.error.code, -32602);
-  const discover = (await (await post({ jsonrpc: "2.0", id: 8, method: "server/discover" })).json()) as {
+  const discover = (await (
+    await post({ jsonrpc: "2.0", id: 8, method: "server/discover" })
+  ).json()) as {
     error: { code: number };
   };
   assert.equal(discover.error.code, -32601);

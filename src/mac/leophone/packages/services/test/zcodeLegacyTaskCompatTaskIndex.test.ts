@@ -5036,6 +5036,58 @@ describe("ZCode legacy task compat task index", () => {
     subscription.dispose();
   });
 
+  it.each([
+    { response: "我来看一下项目目录。", expected: [] },
+    { response: "  我来看一下项目目录。\n", expected: [] },
+    { response: "目录里有 3 个包。", expected: ["目录里有 3 个包。"] },
+  ])(
+    "[leo] 回合停在工具之后：response 就是已显示的工具前言时不再补发（$response）",
+    async ({ response, expected }) => {
+      const { eventEmitter, service } = createService();
+      const task = await service.createTask({ workspacePath: "/repo", provider: "glm" });
+      const received: ZCodeStreamEvent[] = [];
+      const subscription = service.onDynamicTaskEvent({
+        workspacePath: "/repo",
+        taskId: task.taskId,
+        deliveryKind: "bot-channel-continuous",
+      })((event) => {
+        received.push(event);
+      });
+      let seq = 0;
+      const emit = (type: ZCodeSessionEvent["type"], payload: Record<string, unknown>) =>
+        eventEmitter.fire({
+          type: "session.event",
+          event: {
+            eventId: `preface_${++seq}`,
+            sessionId: task.taskId,
+            turnId: "turn_preface",
+            seq,
+            timestamp: seq,
+            traceId: "turn_preface",
+            type,
+            payload,
+          },
+        });
+      emit("turn.started", { inputId: "input_preface" });
+      emit("session.updated", {
+        kind: "text_delta",
+        delta: "我来看一下项目目录。",
+        assistantMessageId: "preface",
+      });
+      emit("tool.updated", { kind: "scheduled", toolCallId: "ls", toolName: "Bash", input: {} });
+      const before = received.length;
+      emit("turn.completed", { inputId: "input_preface", response, resultType: "success" });
+      const terminal = received.slice(before);
+      expect(
+        terminal
+          .filter((event) => event.type === "agent_message_chunk")
+          .map((event) => event.content),
+      ).toEqual(expected);
+      expect(terminal.at(-1)?.type).toBe("task_complete");
+      subscription.dispose();
+    },
+  );
+
   it("uses prompt inputId as per-turn traceId for session stream events", async () => {
     const { agent, eventEmitter, service } = createService();
     const task = await service.createTask({ workspacePath: "/repo", provider: "glm" });

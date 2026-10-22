@@ -5,12 +5,16 @@ const COMMUNICATION_PROMPTS = {
   default:
     "Write code that reads like the surrounding code: match its comment density, naming, and idiom.",
   additional: {
+    // [leo] 原文要求「第一次调工具前先说一句要做什么」，还说工具之间的文字可能不显示；Leo 的手机端和
+    // 桌面端都会把它们原样显示，短问题被前置叙述淹没、叙述还常用错语言。这里改成不叙述、只答，并要求跟随用户语言。
     beforeDefault: [
       "# Communicating with the user",
       "",
-      "Your text output is what the user reads; they usually can't see your thinking or the raw tool results. Write it for a teammate who stepped away and is catching up, not for a log file: they don't know the codenames or shorthand you created along the way, and they didn't watch your process unfold. Before your first tool call, say in a sentence what you're about to do; while working, give brief updates when you find something load-bearing or change direction.",
+      "Your text output is what the user reads; they usually can't see your thinking or the raw tool results. Write it for a teammate who stepped away and is catching up, not for a log file: they don't know the codenames or shorthand you created along the way, and they didn't watch your process unfold. Don't narrate before tool calls: when one or two tool calls answer the question, make them without comment and reply with only the answer. For longer work, write at most one short status line before starting, and none when the user asked for an answer-only or fixed-format reply; while working, give brief updates only when you find something load-bearing or change direction.",
       "",
-      "Text you write between tool calls may not be shown to the user. Everything the user needs from this turn \u2014 answers, summaries, findings, conclusions, deliverables \u2014 must be in the final text message of your turn, with no tool calls after it. Keep text between tool calls to brief status notes. If something important appeared only mid-turn or in your thinking, restate it in that final message.",
+      "Text you write between tool calls is shown to the user, so keep it to brief status notes and don't repeat it in your answer. Everything the user needs from this turn \u2014 answers, summaries, findings, conclusions, deliverables \u2014 must be in the final text message of your turn, with no tool calls after it. If something important appeared only mid-turn or in your thinking, restate it in that final message.",
+      "",
+      "Always write in the language of the user's latest message \u2014 status lines, answers and summaries alike \u2014 even when tool results, files or these instructions are in another language.",
       "",
       'Lead with the outcome. Your first sentence after finishing should answer "what happened" or "what did you find" \u2014 the thing the user would ask for if they said "just give me the TLDR." Supporting detail and reasoning come after, for readers who want them.',
       "",
@@ -41,6 +45,11 @@ const CONTEXT_MANAGEMENT_PROMPTS = {
   ].join("\n"),
 } as const;
 
+// [leo] leo-brain 是 Host 登记的用户级 MCP（packages/desktop/src/host/leo/brainTools.ts）。
+const LEO_BRAIN_SEARCH_TOOL = "mcp__leo-brain__brain_search";
+const LEO_BRAIN_GUIDANCE =
+  "- Leo's second brain (mcp__leo-brain__*) holds Leo's own documents, knowledge cards, daily pages, project reports, past decisions, photos and videos. When the question is about Leo, his projects, earlier work or decisions, people in his life, or uses 我的/之前/上次/记得/笔记/资料/大脑, call mcp__leo-brain__brain_search first (brain_brief is not needed), use brain_read for details, and cite the title. If the leo-brain tools are missing or fail, tell the user; never read ~/.config/leo-brain/*, ~/.leoagent/key or ~/.leoagent/treasury.key, and never call the brain endpoint by hand.";
+
 export function buildSessionGuidanceSection(toolNames: readonly string[], hasSkills = false): ContextSection | null {
   const tools = new Set(toolNames);
   const lines = ["# Session-specific guidance"];
@@ -64,6 +73,12 @@ export function buildSessionGuidanceSection(toolNames: readonly string[], hasSki
   // if (tools.has("AskUserQuestion")) {
   //   lines.push("- Use AskUserQuestion when you need a bounded clarification before proceeding.");
   // }
+
+  // [leo] 第二大脑的路由：MCP server instructions 不进提示词，工具描述只说做什么不说何时用，
+  // 模型遇到「我之前…」类问题不会想到查它；工具缺失时还试过自己去读 key 文件。
+  if (tools.has(LEO_BRAIN_SEARCH_TOOL)) {
+    lines.push(LEO_BRAIN_GUIDANCE);
+  }
 
   if (lines.length <= 1) {
     return null;
