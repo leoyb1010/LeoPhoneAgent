@@ -799,7 +799,8 @@ export class LinkSession {
         this.emit({
           event: "session.note",
           kind: "resume_failed",
-          text: "没能接上终端里的那个会话，已新开一个对话：Claude 看不到之前的上下文。Mac 上的 Claude Code 版本可能太旧，更新后可重新接管。",
+          // [codex-sessions] Codex 会话同样走这里:名字取任务实际的 agent。
+          text: `没能接上终端里的那个会话，已新开一个对话：${this.harnessName} 看不到之前的上下文。Mac 上的 ${this.harnessName} 版本可能太旧，或 Mac 上还开着这个会话；更新或关掉后可重新接管。`,
         });
       },
       (cause: unknown) => this.deps.logger.warn("[leo/link] resume check failed", { error: String(cause) }),

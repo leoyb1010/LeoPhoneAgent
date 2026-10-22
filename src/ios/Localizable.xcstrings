@@ -78420,6 +78420,160 @@
           }
         }
       }
+    },
+    "Mac 上的会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessions on the Mac"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 上的会话"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 上的會話"
+          }
+        }
+      }
+    },
+    "还没有 Claude Code / Codex 会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Claude Code or Codex sessions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有 Claude Code / Codex 会话"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "還沒有 Claude Code / Codex 會話"
+          }
+        }
+      }
+    },
+    "在 Mac 终端里用 claude、或在 Codex 里开的会话会出现在这里，点一下就能在手机上看到之前的对话、接着发消息。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessions you start with claude in a Mac terminal, or in Codex, show up here. Tap one to see the earlier conversation on your phone and keep going."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Mac 终端里用 claude、或在 Codex 里开的会话会出现在这里，点一下就能在手机上看到之前的对话、接着发消息。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Mac 終端機裡用 claude、或在 Codex 裡開的會話會出現在這裡，點一下就能在手機上看到之前的對話、接著發訊息。"
+          }
+        }
+      }
+    },
+    "接管后就是 Mac 上的一个 Claude Code / Codex 任务：历史从 Mac 同步过来，之后的消息在原会话上继续。终端里还开着的，最好先在终端退出 claude；Codex 的会话要先在 Mac 上退出 Codex 才能接上。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taking over makes it a Claude Code / Codex task on the Mac: the history syncs from the Mac and new messages continue the original session. If it is still open in a terminal, quit claude there first; for a Codex session, quit Codex on the Mac first so it can be picked up."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接管后就是 Mac 上的一个 Claude Code / Codex 任务：历史从 Mac 同步过来，之后的消息在原会话上继续。终端里还开着的，最好先在终端退出 claude；Codex 的会话要先在 Mac 上退出 Codex 才能接上。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接管後就是 Mac 上的一個 Claude Code / Codex 任務：歷史從 Mac 同步過來，之後的訊息在原會話上繼續。終端機裡還開著的，最好先在終端機退出 claude；Codex 的會話要先在 Mac 上退出 Codex 才能接上。"
+          }
+        }
+      }
+    },
+    "列出 Mac 上的 Claude Code / Codex 会话，点一下在手机上接着干": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lists Claude Code and Codex sessions on the Mac; tap one to continue it on your phone"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "列出 Mac 上的 Claude Code / Codex 会话，点一下在手机上接着干"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "列出 Mac 上的 Claude Code / Codex 會話，點一下在手機上接著做"
+          }
+        }
+      }
+    },
+    "Codex 正在干活": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex is working"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex 正在干活"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex 正在工作"
+          }
+        }
+      }
+    },
+    "Codex 里还开着": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Codex"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex 里还开着"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex 裡還開著"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

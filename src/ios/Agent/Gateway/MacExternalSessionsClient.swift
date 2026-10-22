@@ -3,6 +3,7 @@
 //  MinisApp
 //
 //  [takeover] 接管 Mac 终端里已开着的 Claude Code 会话:列出、接管(线格式在 Shared/MacExternalSessions.swift)。
+//  [codex-sessions] 新 Mac 的列表里还有 Codex(桌面版 / 终端 codex)的会话(agent "codex"),接管走同一条路。
 //  接管后就是一个普通的 Mac 任务,会话页、续传、审批全部复用 HarnessConsoleView。
 //
 
@@ -11,9 +12,14 @@ import SwiftUI
 
 extension LeoAgentClient {
     /// nil = 这台 Mac 没有这个接口(旧版 LeoBot / 旧 leoagent 回 404):入口隐藏。
-    func externalSessions() async throws -> [MacExternalSession]? {
+    /// busy:这一轮还在跑的会话 id(只有 Codex 报;共享线格式里没有这个字段,在这里单独取)。
+    func externalSessions() async throws -> (sessions: [MacExternalSession], busy: Set<String>)? {
         do {
-            return MacExternalSessionsWire.parseList(try await getJSON(MacExternalSessionsWire.listPath, service: .harness))
+            let obj = try await getJSON(MacExternalSessionsWire.listPath, service: .harness)
+            let busy = (obj["sessions"] as? [[String: Any]] ?? []).compactMap { row in
+                (row["busy"] as? Bool) == true ? row["id"] as? String : nil
+            }
+            return (MacExternalSessionsWire.parseList(obj), Set(busy))
         } catch GatewayError.http(let status, _) where status == 404 || status == 405 {
             return nil
         } catch GatewayError.harnessNotConfigured {
@@ -21,7 +27,7 @@ extension LeoAgentClient {
         }
     }
 
-    /// 接管:Mac 开(或找回已开的)一个 Claude Code 任务,事件流先回放终端里的历史。
+    /// 接管:Mac 开(或找回已开的)一个 Claude Code / Codex 任务,事件流先回放之前的历史。
     func takeOverExternalSession(_ session: MacExternalSession) async throws -> MacTakeoverResult {
         let obj = try await postJSON(MacExternalSessionsWire.createPath,
                                      body: MacExternalSessionsWire.takeoverBody(session), service: .harness)
@@ -40,6 +46,8 @@ final class MacTerminalSessionsStore: ObservableObject {
     struct HostSessions: Identifiable {
         let host: GatewayHost
         var sessions: [MacExternalSession]
+        /// [codex-sessions] 这一轮还在跑的会话 id(Codex)。
+        var busy: Set<String> = []
         var id: String { host.id }
     }
 
@@ -98,7 +106,7 @@ final class MacTerminalSessionsStore: ObservableObject {
         var loaded: [HostSessions] = []
         var supported = supportedHostIds
         var firstError: String?
-        await withTaskGroup(of: (GatewayHost, Result<[MacExternalSession]?, Error>).self) { group in
+        await withTaskGroup(of: (GatewayHost, Result<(sessions: [MacExternalSession], busy: Set<String>)?, Error>).self) { group in
             for host in hosts {
                 guard let client = GatewayHostStore.shared.client(for: host) else { continue }
                 group.addTask {
@@ -108,9 +116,9 @@ final class MacTerminalSessionsStore: ObservableObject {
             }
             for await (host, result) in group {
                 switch result {
-                case .success(.some(let sessions)):
+                case .success(.some(let page)):
                     supported.insert(host.id)
-                    loaded.append(HostSessions(host: host, sessions: sessions))
+                    loaded.append(HostSessions(host: host, sessions: page.sessions, busy: page.busy))
                 case .success(.none):
                     supported.remove(host.id)
                 case .failure(let error):
