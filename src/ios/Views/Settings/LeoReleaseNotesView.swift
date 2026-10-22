@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.79.0",
+            date: "2026-10-22",
+            title: "定时任务交给 Mac 跑",
+            highlights: [
+                "跟 LeoBot 说「每天 8 点帮我……」「每周一早上……」，它会把任务建在你常开的 Mac 上（默认 Mac Studio，也可以点名哪台），到点由 Mac 执行，手机锁屏、没网也照跑，跑完推一条通知。也能让它列出、暂停、修改、删除或立刻跑一次。需要 Mac 升到 1.14.0。",
+                "回到 App 时，同步、小组件刷新、技能重载这些后台活推到画面出来之后再做，刚回来就滑动对话不再被它们卡住。",
+                "启动那一秒少打几十行网络代理的诊断日志。"
+            ]
+        ),
+        LeoRelease(
             version: "1.78.0",
             date: "2026-10-22",
             title: "连续对话更快、更省",

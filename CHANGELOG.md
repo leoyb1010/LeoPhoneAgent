@@ -1,5 +1,14 @@
 # LeoPhoneAgent 更新记录
 
+## Mac 1.14.0 · iOS 1.79.0 (185) · Mac 当执行者、第二大脑进 Mac、首轮与内存 - 2026-10-22
+
+- P3：Leo Link 新增 `/automations`（列 / 建 / 改 / 删 / 立即跑，请求 id 幂等，yolo 需可识别设备），定时任务跑完推 `automation.run.completed`（中继发 APNs）；iOS 新增 `mac_automation` 工具（执行者：点名 > 上次 > Studio），补拉事件转通知，系统提示改为优先交给 Mac。契约：`src/mac/leophone/docs/specs/leo-link-automations.md`。
+- P2：Mac 随包 `leo-brain` MCP（9 个工具，Node 移植自资料库网关的 MCP），仅本机有 `~/.config/leo-brain/leobot-mac.key` 时登记；四台 Mac 已各发一把 read/write:cards/write:inbox 的 key。
+- P1：superpowers 插件默认关（每会话少约 8.2K 字符 SessionStart 注入）；主车道闲置 20 分钟回收（无会话、无自动化运行、无订阅、非手机默认工作区，任一不确定就不回收；`LEO_MAIN_LANE_IDLE_RECYCLE=0` 关闭）。
+- iOS 性能：回前台的非界面工作推到首帧后 1.5 s（滑动中顺延，最多 3 s，进后台立即执行）；fg.frame 增记 first / active / stall；HangCounter 从 willEnterForeground 开始计；代理诊断多行字典降到 verbose。
+- 门禁：iOS 装机链加入性能预算（从真机拉上一版 perf.jsonl；fg.frame / scroll.hitch 只看最新一版自己的样本）；Mac CI 跑 vitest 棘轮（13969 测试，基线 1）；`.githooks/pre-push` 按推送范围跑。
+- Mac 根 package-lock 版本与 package.json 对齐（此前停在 1.12.0）。
+
 ## iOS 1.78.0 (184) · 中继 0.2.2 · 跨轮缓存修正、收进大脑、机群地基 - 2026-10-22
 
 - 依据：`~/Desktop/LeoBot_深度分析与升级计划_20261022.html`（P0–P2）。
