@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 
-import { TreasuryStore } from "./treasuryStore.js";
+// 库路径在模块加载时由 LEOAGENT_HOME 定死:必须先指到临时目录再加载,否则会往用户真实的
+// ~/.leoagent/treasury.sqlite 里写 2101 条测试笔记(2026-10-22 实际发生过)。
+process.env["LEOAGENT_HOME"] = mkdtempSync(join(tmpdir(), "leo-treasury-test-"));
+const { TreasuryStore } = await import("./treasuryStore.js");
 
 test("search finds an old item even when more than 2000 newer items exist (F09)", () => {
   const store = new TreasuryStore();
