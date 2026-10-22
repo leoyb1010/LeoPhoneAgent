@@ -92,6 +92,7 @@ final class RelayEventCatchUp: ObservableObject {
         }
         var approvals: [RelayEventItem] = []
         var finished: [RelayEventItem] = []
+        var automationRuns: [RelayEventItem] = []
         for item in plan.items {
             let fingerprint = item.fingerprint
             guard !notifiedSet.contains(fingerprint) else { continue }
@@ -108,11 +109,17 @@ final class RelayEventCatchUp: ObservableObject {
                 approvals.append(item)
             case "run.failed", "run.completed":
                 finished.append(item)
+            case "automation.run.completed":   // [P3] Mac 上的定时任务跑完
+                automationRuns.append(item)
             default:
                 break
             }
         }
         postFinished(finished)
+        for item in automationRuns.suffix(RelayCatchUpPolicy.maxIndividualNotices) {
+            let notice = MacAutomationLogic.runNotice(machine: item.machine, event: item.raw)
+            postSimple(title: notice.title, body: notice.body)
+        }
         if !approvals.isEmpty {
             // Only what the Mac is still waiting on: one already answered on the
             // lock screen, the watch or the Mac itself must not come back as a

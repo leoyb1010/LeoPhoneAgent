@@ -487,6 +487,11 @@ extension AIChatViewModel {
             ))
         }
 
+        // [P3] 定时任务交给常开的 Mac:舰队打开且有跑 LeoBot 的 Mac 才注册。
+        if MacFleetFeature.isEnabled(), let automation = MacAutomationTool.definition() {
+            tools.append(automation)
+        }
+
         // [T-ask-user] Only an attended conversation can stop to ask the user.
         if askUserIsOffered { tools.append(AskUserTool.definition) }
         // [F2-tool-toggles] Browser / self-scheduling switches (Settings › 工具开关).

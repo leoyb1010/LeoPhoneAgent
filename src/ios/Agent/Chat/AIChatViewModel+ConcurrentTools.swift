@@ -880,6 +880,11 @@ extension AIChatViewModel {
             }
 
         // [T-jev-1.41] TypeSafe Jev 快判断。state 可以是 JSON 或纯文本;questions 必须是 JSON 对象。
+        case MacAutomationTool.name:
+            let result = await MacAutomationTool.execute(argsJson: argsJson)
+            toolOutput = result.output
+            toolSuccess = result.success
+
         case "jev_decide":
             let args = (try? JSONSerialization.jsonObject(with: Data(argsJson.utf8)) as? [String: Any]) ?? [:]
             // 模型常把 state / questions 直接传成对象而不是 JSON 字符串:两种都收。以前对象形态的 state 会被当成空串,

@@ -560,6 +560,14 @@ extension LeoAgentClient {
     }
 
     /// 工作区相对 HEAD 的改动 + 每轮开始时的检查点。
+    /// [P3] Mac 定时任务(/automations,Leo Link)。返回 Mac 的原始 JSON 文本;
+    /// 404 时由调用方提示"这台 Mac 的 LeoBot 太旧"。
+    func automationCall(_ request: MacAutomationLogic.Request) async throws -> String {
+        let req = try self.request(request.path, method: request.method,
+                                   body: request.body.map { Data($0.utf8) }, service: .harness)
+        return String(data: try await send(req), encoding: .utf8) ?? "{}"
+    }
+
     func harnessChanges(sessionId: String) async throws -> HarnessChanges {
         HarnessChanges.parse(try await getJSON("/harness/sessions/\(sessionId)/changes", service: .harness))
     }

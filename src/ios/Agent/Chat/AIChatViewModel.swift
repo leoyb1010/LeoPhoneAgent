@@ -2133,7 +2133,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             + "- What NOT to remember: passwords, API keys, tokens, secrets, or any sensitive credentials. Warn the user about the risk first; only proceed if they explicitly confirm.\n"
             + "- Keep memories concise, factual, and general-purpose — avoid noise that won't be useful later.\n\n"
             + "Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended, so in-app scheduled scripts may not run as expected. "
-            + "For recurring tasks that must fire beyond the current conversation, tell the user to set up an automation in Apple Shortcuts — it is the only reliable way to trigger periodic execution on iOS. "
+            + "For recurring or later tasks that must fire beyond the current conversation: if the mac_automation tool is available, create it there — it runs on the user's always-on Mac even when this phone is locked, and the result comes back as a notification. "
+            + "Only without that tool, tell the user to set up an automation in Apple Shortcuts. "
             + "(Waiting or polling WITHIN the current turn is different — that is what shell_execute `delay` chains are for, per the shell_execute notes above.)"
     }
 
