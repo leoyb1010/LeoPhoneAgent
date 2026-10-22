@@ -15,6 +15,9 @@ project="$repo_root/src/ios/LeoPhoneAgent.xcodeproj"
 
 echo "==> [1/4] 发版闸门"
 "$repo_root/scripts/IOSReleaseReadinessAudit.sh"
+# [up-b-ci] CI 闸门:HEAD 在 GitHub 上是红的就不装(LEO_CI_GATE=warn 显式放行);
+# 还在跑 / 查不到(离线)只大声警告,不挡离线发版。
+"$repo_root/scripts/LeoCIStatus.sh" --gate
 
 # [T-icloud-xattr] DerivedData 绝不能落在仓库里:这个仓在 iCloud 同步盘上,
 # FileProvider 会给构建产物挂 xattr,codesign 直接报 "detritus not allowed"。
