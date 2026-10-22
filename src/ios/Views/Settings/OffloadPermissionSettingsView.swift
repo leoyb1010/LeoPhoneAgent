@@ -66,29 +66,29 @@ struct OffloadPermissionSettingsView: View {
                                  comment: "Permissions: wipe voice-correction learning data"),
                           systemImage: "trash")
                 }
+                .confirmationDialog(
+                    AppLocalized("Clear all collected voice correction data?",
+                           comment: "Permissions: confirm wipe of correction learning data"),
+                    isPresented: $showClearCorrectionConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button(AppLocalized("Clear All", comment: "Confirm clearing correction data"),
+                           role: .destructive) {
+                        Task {
+                            if let db = VoiceCorrectionDB.shared {
+                                await db.clearTable("confusion_dictionary")
+                                await db.clearTable("typed_vocabulary")
+                                await db.clearTable("correction_events")
+                            }
+                            correctionDataCleared = true
+                        }
+                    }
+                    Button(AppLocalized("Cancel", comment: "Cancel"), role: .cancel) {}
+                }
             } header: {
                 Text("Voice Correction Learning")
             } footer: {
                 Text("When enabled, your manual fixes to voice transcripts (original → corrected pairs), accepted/rejected AI corrections, and frequently typed terms are stored in a local on-device database to make future voice corrections smarter. Nothing is uploaded. Default is off; existing data stays until you clear it.")
-            }
-            .confirmationDialog(
-                AppLocalized("Clear all collected voice correction data?",
-                       comment: "Permissions: confirm wipe of correction learning data"),
-                isPresented: $showClearCorrectionConfirm,
-                titleVisibility: .visible
-            ) {
-                Button(AppLocalized("Clear All", comment: "Confirm clearing correction data"),
-                       role: .destructive) {
-                    Task {
-                        if let db = VoiceCorrectionDB.shared {
-                            await db.clearTable("confusion_dictionary")
-                            await db.clearTable("typed_vocabulary")
-                            await db.clearTable("correction_events")
-                        }
-                        correctionDataCleared = true
-                    }
-                }
-                Button(AppLocalized("Cancel", comment: "Cancel"), role: .cancel) {}
             }
             .alert(AppLocalized("Voice correction data cleared",
                           comment: "Permissions: wipe done confirmation"),
@@ -101,26 +101,27 @@ struct OffloadPermissionSettingsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Set All Bypass") { confirmAllBypass = true }
+                    // [ipad-shell] 挂在按钮上:iPad 上确认框从这个按钮弹出,不再从右栏左边缘冒出来、盖住设置侧栏。
+                    .confirmationDialog("所有能力都改成「自动允许」?", isPresented: $confirmAllBypass, titleVisibility: .visible) {
+                        Button("全部自动允许", role: .destructive) {
+                            Task { @MainActor in
+                                guard await BiometricAuth.authorizeLoweringProtection(
+                                    reason: AppLocalized("Allow every capability without asking")
+                                ) else { return }
+                                manager.setAllBypass()
+                                // The minis-config master switch is a separate
+                                // store from OffloadPermissionManager (different
+                                // subsystem) so its own setAllBypass doesn't touch
+                                // it. Flip it on here so "Set All Bypass" really
+                                // does enable everything the user can see on this
+                                // screen.
+                                configGate.enabled = true
+                            }
+                        }
+                    } message: {
+                        Text("Agent 调用手机能力时不再先问你;你设成「不允许」的也会改成自动允许。之后可以逐项改回来。")
+                    }
             }
-        }
-        .confirmationDialog("所有能力都改成「自动允许」?", isPresented: $confirmAllBypass, titleVisibility: .visible) {
-            Button("全部自动允许", role: .destructive) {
-                Task { @MainActor in
-                    guard await BiometricAuth.authorizeLoweringProtection(
-                        reason: AppLocalized("Allow every capability without asking")
-                    ) else { return }
-                    manager.setAllBypass()
-                    // The minis-config master switch is a separate
-                    // store from OffloadPermissionManager (different
-                    // subsystem) so its own setAllBypass doesn't touch
-                    // it. Flip it on here so "Set All Bypass" really
-                    // does enable everything the user can see on this
-                    // screen.
-                    configGate.enabled = true
-                }
-            }
-        } message: {
-            Text("Agent 调用手机能力时不再先问你;你设成「不允许」的也会改成自动允许。之后可以逐项改回来。")
         }
     }
 

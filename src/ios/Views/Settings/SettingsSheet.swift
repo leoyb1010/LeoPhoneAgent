@@ -99,6 +99,9 @@ struct SettingsSheet: View {
                     if let entry = SettingsHomeView.groups.flatMap(\.entries).first(where: { $0.id == splitSelection }) {
                         entry.destination()
                             .environment(\.isSettingsSplitDetailRoot, true)
+                            // [ipad-shell] 右栏每页标题一样大:没写标题样式的页面(远程主机、推理与模型…)
+                            // 以前是大标题,写了 .inline 的(外观、权限…)是小标题,切一项跳一下。
+                            .navigationBarTitleDisplayMode(.inline)
                     } else {
                         ContentUnavailableView("选择一项设置", systemImage: "gearshape.2",
                                                description: Text("左边按分组列出了全部设置，也可以直接搜索。"))

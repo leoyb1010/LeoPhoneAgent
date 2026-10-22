@@ -501,14 +501,6 @@ struct CollectionsView: View {
             refreshClipboardHint()
         }
         .onDisappear { commitPendingDeletion() }
-        .confirmationDialog("删除所选的 \(selection.count) 条收藏？", isPresented: $confirmBatchDelete,
-                            titleVisibility: .visible) {
-            Button("删除", role: .destructive) {
-                requestDelete(selection)
-                selection = []
-            }
-            Button("取消", role: .cancel) {}
-        }
     }
 
     @ViewBuilder
@@ -897,6 +889,15 @@ struct CollectionsView: View {
                         Label("删除所选", systemImage: "trash")
                     }
                     .disabled(selection.isEmpty)
+                    // [ipad-shell] 挂在按钮上:iPad 上确认框从底栏这个按钮弹出。
+                    .confirmationDialog("删除所选的 \(selection.count) 条收藏？", isPresented: $confirmBatchDelete,
+                                        titleVisibility: .visible) {
+                        Button("删除", role: .destructive) {
+                            requestDelete(selection)
+                            selection = []
+                        }
+                        Button("取消", role: .cancel) {}
+                    }
                 }
             }
         }

@@ -88,11 +88,6 @@ struct BackupRestoreView: View {
         .fileImporter(isPresented: $showPicker, allowedContentTypes: [BackupDelivery.contentType, .data]) { result in
             if case .success(let url) = result { adopt(staging: url) }
         }
-        .confirmationDialog("开始恢复？", isPresented: $showConfirm, titleVisibility: .visible) {
-            Button("恢复所选内容") { startRestore() }
-        } message: {
-            Text("恢复会合并到现有数据，不会删除任何内容；本地更新的内容会保留。")
-        }
         .onAppear {
             if packageURL == nil, let initialPackage {
                 packageURL = initialPackage
@@ -200,6 +195,12 @@ struct BackupRestoreView: View {
             }
             .disabled(selected.isEmpty || runner.isRunning
                       || (selected.contains(.chats) && plan.runningSessions > 0))
+            // [ipad-shell] 挂在按钮上:iPad 上确认框从这个按钮弹出。
+            .confirmationDialog("开始恢复？", isPresented: $showConfirm, titleVisibility: .visible) {
+                Button("恢复所选内容") { startRestore() }
+            } message: {
+                Text("恢复会合并到现有数据，不会删除任何内容；本地更新的内容会保留。")
+            }
             if plan.runningSessions > 0, selected.contains(.chats) {
                 Text("有 \(plan.runningSessions) 个相关对话正在运行，请等它们结束后再恢复对话。")
                     .font(.footnote).foregroundStyle(LeoTheme.ColorToken.warning)

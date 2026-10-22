@@ -112,6 +112,8 @@ struct HomeComposerHost: View {
     let capsule: HomeCapsuleLabel
     let capsuleMenu: AnyView
     var onChooseModel: (() -> Void)? = nil
+    /// [ipad-shell] Regular width: the model picker is a popover on the model chip.
+    var modelPopover: HomeModelPopover? = nil
     let plusMenu: AnyView
     let isBusy: Bool
     let onSubmit: () -> Void
@@ -127,6 +129,7 @@ struct HomeComposerHost: View {
             capsule: capsule,
             capsuleMenu: capsuleMenu,
             onChooseModel: onChooseModel,
+            modelPopover: modelPopover,
             plusMenu: plusMenu,
             isBusy: isBusy,
             canSend: !isBusy && !draft.trimmed.isEmpty,
@@ -146,6 +149,7 @@ struct HomeComposerBar: View {
     /// 执行位置菜单,由 ContentView 组装。AnyView 截断类型链。
     let capsuleMenu: AnyView
     var onChooseModel: (() -> Void)? = nil
+    var modelPopover: HomeModelPopover? = nil
     /// "+" 菜单内容。
     let plusMenu: AnyView
     let isBusy: Bool
@@ -248,6 +252,7 @@ struct HomeComposerBar: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text("选择模型:\(capsule.model ?? AppLocalized("默认"))"))
             .accessibilityIdentifier("home.model-picker")
+            .modifier(HomeModelPopoverModifier(popover: modelPopover))
         }
     }
 
@@ -583,5 +588,29 @@ struct HomeActionSheet: View {
         // 所以只记下来,等面板真正收起(onDismiss)再执行。
         onPick(action)
         dismiss()
+    }
+}
+
+/// [ipad-shell] iPad 首页的模型选择:从「选择模型」胶囊弹出的 popover。以前是从屏幕底部升起的
+/// 半高面板,和胶囊没有关系,13 寸横屏下还被底边截掉一截。
+struct HomeModelPopover {
+    let isPresented: Binding<Bool>
+    let content: AnyView
+}
+
+private struct HomeModelPopoverModifier: ViewModifier {
+    let popover: HomeModelPopover?
+
+    func body(content: Content) -> some View {
+        if let popover {
+            // No forced arrow edge: the system puts it where the room is (above the chip on
+            // the centred workbench, below it when the keyboard pushes the composer up).
+            content.popover(isPresented: popover.isPresented) {
+                popover.content
+                    .frame(minWidth: 360, idealWidth: 420, minHeight: 360, idealHeight: 520)
+            }
+        } else {
+            content
+        }
     }
 }
