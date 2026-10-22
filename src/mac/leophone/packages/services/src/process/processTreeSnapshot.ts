@@ -7,6 +7,11 @@ import type {
 } from "#src/process/processTreeTypes.js";
 
 const PROCESS_LOOKUP_TIMEOUT_MS = 1_000;
+// spawnSync 默认 maxBuffer 只有 1 MiB。全表带 command= 时繁忙的 Mac 很容易超过它（ENOBUFS），
+// 以前这会让后代清理拿到空表。全表扫描已不带 command=（见 readPosixProcessList），这里再给足余量。
+const PROCESS_LIST_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
+const POSIX_IDENTITY_COLUMNS = "pid=,ppid=,pgid=,lstart=";
+const DARWIN_COMMAND_COLUMNS = "pid=,ppid=,pgid=,lstart=,command=";
 const DOTNET_UNIX_EPOCH_TICKS = 621_355_968_000_000_000n;
 const TICKS_PER_MILLISECOND = 10_000n;
 
@@ -36,7 +41,7 @@ function parsePosixProcessList(stdout: string, includeCommand: boolean): Process
     const processGroupId = parsePositiveInteger(processGroupIdText);
     const lstart = fields.slice(3, 8).join(" ");
     const command = includeCommand ? fields.slice(8).join(" ") : "";
-    // Darwin 的 ps 只暴露秒级 lstart；追加完整 command 作为复用校验熵。
+    // Darwin 的 ps 只暴露秒级 lstart；候选 PID 补读时追加完整 command 作为复用校验熵。
     // Linux 随后会用 /proc start ticks 覆盖该值。
     const startTime = includeCommand ? `${lstart}|command:${command}` : lstart;
     if (pid === undefined || parentPid === undefined || !processGroupId || !startTime) {
@@ -71,31 +76,95 @@ function parseWindowsCreationTimeMs(startTime: string): number | undefined {
   }
 }
 
-function readPosixProcessList(options: ProcessTreeTerminatorOptions): ProcessIdentity[] {
-  const includeCommand = process.platform === "darwin";
-  const result = spawnSync(
-    "ps",
-    includeCommand
-      ? ["-axo", "pid=,ppid=,pgid=,lstart=,command="]
-      : ["-eo", "pid=,ppid=,pgid=,lstart="],
-    {
-      encoding: "utf8",
-      timeout: PROCESS_LOOKUP_TIMEOUT_MS,
-    },
-  );
+/**
+ * 跑一次 ps，返回 stdout；失败返回 undefined（已记日志）。
+ * - ENOBUFS 当作错误记下来，但不把整张表当空：只丢掉最后一条可能被截断的行，其余完整行照常用。
+ * - `allowNoMatch`：`ps -p` 一个都没找到时 BSD/procps 都回 status 1 + 空输出，这是「都已退出」，不是失败。
+ */
+function runPosixPs(
+  args: readonly string[],
+  options: ProcessTreeTerminatorOptions,
+  allowNoMatch = false,
+): string | undefined {
+  const result = spawnSync("ps", args, {
+    encoding: "utf8",
+    maxBuffer: PROCESS_LIST_MAX_BUFFER_BYTES,
+    timeout: PROCESS_LOOKUP_TIMEOUT_MS,
+  });
+  if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOBUFS") {
+    warn(
+      options,
+      `查询 runtime 后代进程失败（进程表超过 ${PROCESS_LIST_MAX_BUFFER_BYTES} 字节缓冲，ENOBUFS），只使用已读到的完整行:`,
+      result.error,
+    );
+    const stdout = typeof result.stdout === "string" ? result.stdout : "";
+    return stdout.slice(0, stdout.lastIndexOf("\n") + 1);
+  }
   if (result.error) {
     warn(options, "查询 runtime 后代进程失败（进程表查询）:", result.error);
-    return [];
+    return undefined;
   }
   if (result.signal === "SIGTERM" || result.signal === "SIGKILL") {
     warn(options, `查询 runtime 后代进程失败（进程表超时） signal=${result.signal}`);
-    return [];
+    return undefined;
+  }
+  if (allowNoMatch && result.status === 1 && !result.stdout?.trim()) {
+    return "";
   }
   if (result.status !== 0 || !result.stdout) {
     warn(options, `查询 runtime 后代进程失败（进程表查询） status=${result.status ?? "unknown"}`);
+    return undefined;
+  }
+  return result.stdout;
+}
+
+function readPosixProcessList(options: ProcessTreeTerminatorOptions): ProcessIdentity[] {
+  // 全表扫描只读 pid/ppid/pgid/lstart；Darwin 需要的 command 熵只在
+  // refineDarwinProcessIdentities 里按候选 PID 补读，不再把整机每条命令行都读进来。
+  const stdout = runPosixPs(
+    process.platform === "darwin"
+      ? ["-axo", POSIX_IDENTITY_COLUMNS]
+      : ["-eo", POSIX_IDENTITY_COLUMNS],
+    options,
+  );
+  return stdout === undefined ? [] : parsePosixProcessList(stdout, false);
+}
+
+/**
+ * Darwin 的 lstart 只有秒级精度，身份里还要追加完整 command 作为 PID 复用校验熵。
+ * 只对候选 PID 补读一次（带 command=）；两次读取之间 PID 被复用 / reparent 时
+ * 不能拼出混合身份，ppid / pgid / lstart 对不上的直接丢弃，与 Linux 的 /proc 复核同一原则。
+ */
+function refineDarwinProcessIdentities(
+  identities: readonly ProcessIdentity[],
+  options: ProcessTreeTerminatorOptions,
+): ProcessIdentity[] {
+  if (identities.length === 0) {
     return [];
   }
-  return parsePosixProcessList(result.stdout, includeCommand);
+  const stdout = runPosixPs(
+    ["-o", DARWIN_COMMAND_COLUMNS, "-p", identities.map((identity) => identity.pid).join(",")],
+    options,
+    true,
+  );
+  if (stdout === undefined) {
+    return [];
+  }
+  const withCommandByPid = new Map(
+    parsePosixProcessList(stdout, true).map((identity) => [identity.pid, identity]),
+  );
+  return identities.flatMap((identity) => {
+    const withCommand = withCommandByPid.get(identity.pid);
+    if (
+      !withCommand ||
+      withCommand.parentPid !== identity.parentPid ||
+      withCommand.processGroupId !== identity.processGroupId ||
+      !withCommand.startTime.startsWith(`${identity.startTime}|command:`)
+    ) {
+      return [];
+    }
+    return [withCommand];
+  });
 }
 
 function readWindowsProcessList(options: ProcessTreeTerminatorOptions): readonly ProcessIdentity[] {
@@ -183,7 +252,13 @@ function refineLinuxProcessIdentity(identity: ProcessIdentity): ProcessIdentity 
   }
 }
 
-function refineProcessIdentities(identities: readonly ProcessIdentity[]): ProcessIdentity[] {
+function refineProcessIdentities(
+  identities: readonly ProcessIdentity[],
+  options: ProcessTreeTerminatorOptions,
+): ProcessIdentity[] {
+  if (process.platform === "darwin") {
+    return refineDarwinProcessIdentities(identities, options);
+  }
   if (process.platform !== "linux") {
     return [...identities];
   }
@@ -230,6 +305,7 @@ export function filterCurrentProcessIdentities(
   const currentByPid = new Map(
     refineProcessIdentities(
       readProcessList(options).filter((identity) => trackedPids.has(identity.pid)),
+      options,
     ).map((identity) => [identity.pid, identity]),
   );
   return identities.filter((identity) => {
@@ -269,7 +345,7 @@ export function captureProcessTreeSnapshot(
       identity,
     ]),
   );
-  const identities = refineProcessIdentities([...snapshotCandidates.values()]);
+  const identities = refineProcessIdentities([...snapshotCandidates.values()], options);
   if (!identities.some((identity) => identity.pid === child.pid)) {
     return undefined;
   }
@@ -294,6 +370,7 @@ export function captureProcessGroupSnapshot(
   // 边界按 Host spawn 时拥有的 PGID 查询，避免把进程表扫描带入协议消息热路径。
   const identities = refineProcessIdentities(
     readProcessList(options).filter((identity) => identity.processGroupId === processGroupId),
+    options,
   );
   if (identities.length === 0) {
     return undefined;
