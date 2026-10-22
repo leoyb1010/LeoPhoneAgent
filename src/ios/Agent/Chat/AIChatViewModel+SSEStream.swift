@@ -1004,6 +1004,16 @@ extension AIChatViewModel {
                 }
                 if stopGate.record(reason) {
                     result.stopReason = reason
+                    // [P1-cache] 每次请求落一条缓存命中，perf.jsonl 里能直接看出前缀 / 历史缓存是否生效。
+                    let u = result.turnUsage
+                    let total = u.inputTokens + u.cacheReadTokens + u.cacheCreationTokens
+                    if total > 0 {
+                        LeoPerf.record("llm.cache", ms: 0, extra: [
+                            "model": provider.model.id, "in": u.inputTokens,
+                            "read": u.cacheReadTokens, "write": u.cacheCreationTokens,
+                            "hit": Int((Double(u.cacheReadTokens) / Double(total) * 100).rounded()),
+                        ])
+                    }
                 } else {
                     logger.info("[StreamDone] ignoring a second terminal event")
                 }

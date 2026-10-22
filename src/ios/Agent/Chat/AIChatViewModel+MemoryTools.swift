@@ -42,8 +42,10 @@ extension AIChatViewModel {
                 let content = read.text
                 let lines = content.components(separatedBy: "\n")
                 // [B7] 200 lines AND a byte cap: one 10 MB line is still one line.
-                let preview = MemoryDailyLog.capped(lines.prefix(200).joined(separator: "\n"),
-                                                    maxBytes: MemoryDailyLog.maxDailyFragmentBytes)
+                let budget = fragments.isEmpty ? MemoryDailyLog.maxDailyFragmentBytes
+                                               : MemoryDailyLog.maxOlderDailyFragmentBytes   // [P1-cache]
+                let head = lines.prefix(200).joined(separator: "\n")
+                let preview = MemoryDailyLog.capped(head, maxBytes: budget)
                 // [T-memory-recency-tiers] Label the AGE, not just the date.
                 // Every entry used to arrive with equal weight, so a
                 // preference stated a month ago read as current fact. The
@@ -61,7 +63,7 @@ extension AIChatViewModel {
                 var entry = "\(label) daily log (\(dateStr).md):\n\(preview)"
                 if lines.count > 200 {
                     entry += "\n... (\(lines.count - 200) more lines, use memory_get to search)"
-                } else if read.truncated {
+                } else if read.truncated || preview != head {
                     entry += "\n... (more entries, use memory_get to search)"
                 }
                 fragments.append(entry)

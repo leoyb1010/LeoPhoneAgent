@@ -20,6 +20,9 @@ enum MemoryDailyLog {
     static let maxCorrectionBytes = 1024
     /// One day's log as injected into the system prompt.
     static let maxDailyFragmentBytes = 16 * 1024
+    /// [P1-cache] 最近一天之外的日志只放开头（memory_write 往前插，开头就是最新的几条）。
+    /// 每轮都随请求发出去，三天全量最坏 48 KB；其余靠 recall / memory_get 按需取。
+    static let maxOlderDailyFragmentBytes = 4 * 1024
     /// GLOBAL.md as injected into the system prompt.
     static let maxGlobalFragmentBytes = 32 * 1024
     /// All corrections together as injected into the system prompt.

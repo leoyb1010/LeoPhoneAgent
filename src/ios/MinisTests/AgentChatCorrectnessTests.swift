@@ -159,4 +159,18 @@ final class AgentChatCorrectnessTests: XCTestCase {
         let date = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 20, hour: 14, minute: 5)))
         XCTAssertEqual(AgentChatCorrectness.promptClock(date, timeZone: shanghai), "2026-10-20 14:05 Tuesday")
     }
+
+    /// [P1-cache] 系统提示尾段在所有消息之前，只能放一天才变一次的日期；分钟级时间跟着用户消息走。
+    func testSystemTailDateIsStableWithinADayAndSentAtCarriesTheMinute() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        let shanghai = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        calendar.timeZone = shanghai
+        let morning = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: 9, minute: 1)))
+        let evening = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: 23, minute: 59)))
+        XCTAssertEqual(AgentChatCorrectness.promptDate(morning, timeZone: shanghai), "2026-10-22 Thursday")
+        XCTAssertEqual(AgentChatCorrectness.promptDate(morning, timeZone: shanghai),
+                       AgentChatCorrectness.promptDate(evening, timeZone: shanghai))
+        let reminder = AgentChatCorrectness.sentAtReminder(morning, timeZone: shanghai)
+        XCTAssertEqual(reminder, "<system-reminder>Sent at 2026-10-22 09:01 Thursday (Asia/Shanghai).</system-reminder>")
+    }
 }

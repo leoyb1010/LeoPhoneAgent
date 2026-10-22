@@ -76,6 +76,22 @@ enum AgentChatCorrectness {
 
     /// Last assistant row, even when a queued user message sits after it.
     /// 系统提示里的本地时间：精确到分钟 + 英文星期（如 "2026-10-20 14:05 Tuesday"）。
+    /// [P1-cache] 系统提示只放日期（一天变一次）。精确到分钟的时间放进每条用户消息自己的
+    /// `sentAtReminder`：分钟钟表留在 system 尾段时，跨一分钟整段对话历史的缓存就全部失效。
+    static func promptDate(_ now: Date, timeZone: TimeZone) -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd EEEE"
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = timeZone
+        return fmt.string(from: now)
+    }
+
+    /// 发送时刻，随用户消息落盘：历史里的字节从此固定，下一轮照样命中缓存。
+    /// `<system-reminder>` 块在气泡、复制、编辑里都会被 `stripSystemReminders` 去掉。
+    static func sentAtReminder(_ now: Date, timeZone: TimeZone) -> String {
+        "<system-reminder>Sent at \(promptClock(now, timeZone: timeZone)) (\(timeZone.identifier)).</system-reminder>"
+    }
+
     static func promptClock(_ now: Date, timeZone: TimeZone) -> String {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd HH:mm EEEE"

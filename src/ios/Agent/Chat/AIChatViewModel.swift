@@ -1850,7 +1850,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     ## Recording todos, schedules and reminders
     When the user asks to record a todo, appointment, meeting, trip or "提醒我…", analyse it before writing anything:
-    1. Take today's date, weekday and time from "Current local time" at the end of this prompt (exact to the minute). Resolve every relative expression to an absolute local date and time: 今天/明天/后天/大后天, 周X/下周X, X号, 早上/上午/中午/下午/晚上, Chinese numerals (三点半 = 3:30, 下午三点 = 15:00, 晚上八点 = 20:00). Anything said for tomorrow or later must be written on that day, never today. If the time has already passed today and no day was given, use the next occurrence and say so.
+    1. Take today's date and weekday from "Current local date" at the end of this prompt, and the time from the "Sent at" reminder on the user's latest message (exact to the minute). Resolve every relative expression to an absolute local date and time: 今天/明天/后天/大后天, 周X/下周X, X号, 早上/上午/中午/下午/晚上, Chinese numerals (三点半 = 3:30, 下午三点 = 15:00, 晚上八点 = 20:00). Anything said for tomorrow or later must be written on that day, never today. If the time has already passed today and no day was given, use the next occurrence and say so.
     2. Choose the target:
        - Something happening at a time (meeting, appointment, trip, call) → `apple-calendar create --title <title> --start <YYYY-MM-DDTHH:MM> --end <end> --alarm <minutes>`; end = start + 1h unless a duration or end is given.
        - A task with a deadline or "remind me to …" → `apple-reminders create --title <title> --due <YYYY-MM-DDTHH:MM> --alarm <minutes>`; a date with no time → `--due <YYYY-MM-DD>` (all-day).
@@ -1893,8 +1893,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         stable += toolTogglesPromptFragment
         stable += Self.schedulingPromptFragment
 
-        // 时间在 volatile tail（缓存边界之后），精确到分钟不影响前缀缓存；日程录入靠它算「明天/周五」。
-        var volatileTail = "Current local time: \(AgentChatCorrectness.promptClock(Date(), timeZone: .current)) (\(TimeZone.current.identifier)). "
+        // [P1-cache] 尾段在所有消息之前：这里任何一个字节变了，后面整段对话历史都要重新计费。
+        // 所以只放日期；每条用户消息带自己的「Sent at …」（sentAtReminder），日程录入照样能算「明天/周五」。
+        var volatileTail = "Current local date: \(AgentChatCorrectness.promptDate(Date(), timeZone: .current)) (\(TimeZone.current.identifier)). "
+            + "Each user message carries its exact send time in a <system-reminder>; for the live clock during a long task, run `date` in the shell. "
             + "Device languages: \((UserDefaults.standard.object(forKey: "AppleLanguages") as? [String] ?? Locale.preferredLanguages).joined(separator: ", "))."
         // [T-memory-toggle-gates-injection-and-tools-ios] Memory injection
         // (GLOBAL.md + recent daily logs) is gated by the per-session
@@ -2829,6 +2831,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             if !text.isEmpty {
                 userParts.append(.text(text))
             }
+            userParts.append(.text(AgentChatCorrectness.sentAtReminder(Date(), timeZone: .current)))   // [P1-cache]
             let userMessage = AgentMessage(role: .user, parts: userParts)
             let userIdx = self.agentHistory.count
             self.agentHistory.append(userMessage)
@@ -4157,6 +4160,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 }
             }
 
+            combinedParts.append(.text(AgentChatCorrectness.sentAtReminder(Date(), timeZone: .current)))   // [P1-cache]
             let queueAgentMsg = AgentMessage(role: .user, parts: combinedParts)
             let qIdx = self.agentHistory.count
             self.agentHistory.append(queueAgentMsg)
@@ -4310,6 +4314,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             }
         }
 
+        qCombinedParts.append(.text(AgentChatCorrectness.sentAtReminder(Date(), timeZone: .current)))   // [P1-cache]
         let queueMsg = AgentMessage(role: .user, parts: qCombinedParts)
         let queueIdx = agentHistory.count
         agentHistory.append(queueMsg)
