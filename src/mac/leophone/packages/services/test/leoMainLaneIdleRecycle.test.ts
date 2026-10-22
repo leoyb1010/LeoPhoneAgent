@@ -1,9 +1,10 @@
-// [leo] 主泳道空闲回收：只测纯判定函数，不测进程拉起。
-import { describe, expect, it } from "vitest";
+// [leo] 主泳道空闲回收：判定函数 + 扫描计时（假进程表 / 假时钟），不测真实进程拉起。
+import { describe, expect, it, vi } from "vitest";
 import {
   LEO_MAIN_LANE_IDLE_RECYCLE_MS,
   LEO_RUNNING_AUTOMATION_RUN_MAX_AGE_MS,
   countRunningAutomationRuns,
+  createLeoMainLaneIdleRecycler,
   decideLeoMainLaneIdleRecycle,
   type LeoMainLaneRecycleFacts,
 } from "#src/zcode-agent/leoMainLaneIdleRecycle.js";
@@ -102,5 +103,67 @@ describe("countRunningAutomationRuns", () => {
         NOW,
       ),
     ).toBe(1);
+  });
+});
+
+describe("createLeoMainLaneIdleRecycler", () => {
+  type Listener = (message: { method: string; params?: unknown }) => void;
+  function fakeClient() {
+    const listeners: Listener[] = [];
+    const noop = () => ({ dispose: () => undefined });
+    return {
+      emit: (method: string, params?: unknown) => {
+        for (const listener of listeners) listener({ method, params });
+      },
+      client: {
+        isDisposed: false,
+        pendingOperationRequestCount: 0,
+        storageStartup: { isWaiting: false },
+        onNotification: (listener: Listener) => {
+          listeners.push(listener);
+          return { dispose: () => undefined };
+        },
+        onRequest: noop,
+        onPendingRequestsDrained: noop,
+      },
+    };
+  }
+
+  it("样本报 0 常驻 session 且 20 分钟无活动才回收；中途有活动则重新计时", async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = fakeClient();
+      const recycled: string[] = [];
+      const managed = { workspacePath: "/tmp/leo-ws", client: fake.client };
+      const recycler = createLeoMainLaneIdleRecycler({
+        processManager: {
+          onRuntimeLifecycle: () => ({ dispose: () => undefined }),
+          getExistingClient: () => undefined,
+          listManagedProcesses: () => (recycled.length > 0 ? [] : [managed]),
+        } as never,
+        countConversationSubscriptions: () => 0,
+        isStartupWaiting: () => false,
+        countRunningAutomationRuns: async () => 0,
+        recycle: async (workspace) => {
+          recycled.push(workspace.workspacePath);
+        },
+        log: () => undefined,
+      });
+      const tickMinutes = async (minutes: number) => {
+        for (let minute = 0; minute < minutes; minute += 1) {
+          fake.emit("process/resourceSample", { residentSessionCount: 0 });
+          await vi.advanceTimersByTimeAsync(60_000);
+        }
+      };
+      await tickMinutes(16); // 首次扫描登记并开始计时
+      fake.emit("conversation/frame"); // 有活动：重新计时
+      await tickMinutes(19);
+      expect(recycled).toEqual([]);
+      await tickMinutes(2);
+      expect(recycled).toEqual(["/tmp/leo-ws"]);
+      recycler.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
