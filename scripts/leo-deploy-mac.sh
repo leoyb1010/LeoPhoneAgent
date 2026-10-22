@@ -37,10 +37,24 @@ for h in ${(s:,:)HOSTS}; do
   ka=$KEEPALIVE; [[ $h == mbp ]] && ka=0
   # 暂存目录不存在就用已装版本克隆一份当增量基准(没装过就从空目录开始,等于全量)
   ssh -o BatchMode=yes "$h" "mkdir -p $STAGE; [ -d $STAGE/LeoBot.app ] || { [ -d /Applications/LeoBot.app ] && cp -Rc /Applications/LeoBot.app $STAGE/LeoBot.app; }; true" || { echo "  ✗ 连不上"; fail+=$h; continue; }
+  # LEO_DEPLOY_DMG_URL:远端自己从 URL(如 GitHub Release)下载同一个 DMG,校验 sha256 后解进暂存目录,
+  # 下面的 rsync 就几乎不用传。Air 走香港中转 ~70 KB/s,直连 GitHub ~3.9 MB/s。下载或校验失败就退回增量 rsync。
+  if [[ -n "${LEO_DEPLOY_DMG_URL:-}" ]]; then
+    pre=$(ssh -o BatchMode=yes "$h" "U='$LEO_DEPLOY_DMG_URL' SUM=$SUM STAGE=$STAGE zsh -s" <<'PREFETCH'
+f=$STAGE/download.dmg
+curl -fsSL --retry 3 -o $f "$U" || { echo "download-failed"; exit 0; }
+[ "$(shasum -a 256 $f | awk '{print $1}')" = "$SUM" ] || { echo "sha-mismatch"; rm -f $f; exit 0; }
+M=$(hdiutil attach -nobrowse -readonly $f | awk '/\/Volumes\//{print substr($0, index($0,"/Volumes/"))}')
+rm -rf $STAGE/LeoBot.app && ditto "$M/LeoBot.app" $STAGE/LeoBot.app; hdiutil detach "$M" -quiet; rm -f $f
+echo "prefetched"
+PREFETCH
+)
+    echo "  URL 预取:$pre"
+  fi
   sent=1
   for try in 1 2 3 4 5; do
     stats=$(rsync -a --delete --stats -e "ssh -o BatchMode=yes -o ServerAliveInterval=15" "$MNT/LeoBot.app/" "$h:$STAGE/LeoBot.app/" 2>&1) && { sent=0; break; }
-    echo "  传输中断,重试 $try"; sleep 5
+    echo "  传输中断,重试 $try:$(echo "$stats" | grep -v -i -E "^(total|file list|literal|matched|sent|number)" | tail -2 | tr '\n' ' ')"; sleep 5
   done
   (( sent == 0 )) || { echo "  ✗ 传输失败"; fail+=$h; continue; }
   echo "$stats" | grep -i -E "^(literal data|matched data|total transferred file size|total bytes sent)" | sed 's/^/  /'
