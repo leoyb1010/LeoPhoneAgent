@@ -808,10 +808,7 @@ export default {
     : {}),
   extraResources: [
     { from: resolve(workspaceRoot, noticesFileName), to: noticesFileName },
-    // [leo] 藏宝阁的 MCP 服务(stdio)。Agent 子进程按 process.resourcesPath 解析它。
-    { from: "leo/treasury-mcp.mjs", to: "leo/treasury-mcp.mjs" },
-    // [leo] 第二大脑 MCP 服务(stdio),同样按 process.resourcesPath 解析。
-    { from: "leo/brain-mcp.mjs", to: "leo/brain-mcp.mjs" },
+    // [leo][up-d-mac] 藏宝阁 / 第二大脑 MCP 已改为 Host 本机 HTTP 端点,不再随包 stdio 脚本。
     // [leo] Apache-2.0 要求随分发附上许可证与 NOTICE:ZCode 的原文放进 Resources/licenses/zcode。
     { from: "../../LICENSE", to: "licenses/zcode/LICENSE" },
     { from: "../../NOTICE.md", to: "licenses/zcode/NOTICE.md" },

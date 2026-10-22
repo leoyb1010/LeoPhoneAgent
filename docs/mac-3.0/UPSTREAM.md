@@ -179,7 +179,7 @@ node scripts/leo-upstream-delete.mjs --generate <新 commit>   # 收尾:按「�
 
 **三处静默失效(必须修,已修)**
 1. 自动更新:3.15.1 改成 `enabled: ZCODE_PRODUCT_FLAVOR === "production" && ZCODE_AUTO_UPDATE_ENABLED`,后者默认关。
-   `leo:bundle:mac` 显式注入 `ZCODE_AUTO_UPDATE=1`,并把 `ZCODE_ARMS_RUM_ENDPOINT` / `ZCODE_TELEMETRY_REPORT_ENDPOINT` 置空。
+   `leo:bundle:mac` 显式注入 `ZCODE_AUTO_UPDATE=1`(up-d-mac 起改为 `=0`,见文末),并把 `ZCODE_ARMS_RUM_ENDPOINT` / `ZCODE_TELEMETRY_REPORT_ENDPOINT` 置空。
 2. 官方地址:`zcodeEndpoint.ts` 的 `TEST_*`、Web 远控中继默认值;`.env.production` / `.env.development` 的官方地址与
    OAuth client id 改成死端口 / 空(vite / tsup 会编进产物,`desktop/test/viteRendererConfig.test.ts` 断言渲染层是死端口)。
 3. 网络兜底:3.15.1 的 `main/observeBeforeRequest.ts` 统一分发 `onBeforeRequest`,资源管理器抓包开 / 关会重装、清除监听。
@@ -300,3 +300,15 @@ Peekaboo(`leo/bin`)/ leo-speech / 菜单栏模板图标三类 extraResources;`le
 - 摘取标准:安全修复、崩溃 / 数据丢失修复、与 Leo 自有功能直接相关的修复。新功能(如 tool-search 牵动 57 个核心文件)不摘,除非单独立项评估。
 - 每季度看一次上游 changelog,按上面的标准列摘取清单;每次摘取在本文件追加一节(摘了什么、没摘什么、为什么)。
 - Leo 自有改动继续收在 `host/leo`、`main/leo`、`ui/src/leo`、`*/leo` 与带 `[leo]` 标记的上游文件里,不扩散。
+
+## 内存瘦身补丁(up-d-mac,同步上游时复查,改动处标 `[leo]`)
+| 文件 | 内容 |
+|---|---|
+| 根 `package.json` `leo:bundle:mac` | `ZCODE_AUTO_UPDATE=0`:自动更新轮询关闭(机队改由 `scripts/leo-deploy-mac.sh` 推送;`leo:finalize:mac` 生成 manifest / latest-mac.yml 不受影响) |
+| `packages/desktop/src/main/autoUpdater.ts` | `refreshAutoUpdaterReleaseChannel`、`requestAutoUpdateCheckWithoutWindow` 在构建期关闭自动更新时直接返回(上游这两处不看 `autoUpdaterDisabledForProductFlavor`,设置同步切通道会拿未配置的 updater 发请求) |
+| `packages/services/src/zcode-agent/zcodeAgentService.ts` | `getClient` / `getReadOnlyClient` 拆出 `*Unnoted` 内层,外层与 `prepareStorage`、`resolveAccountRequestAuth` 拿到 client 时调 `leoMainLaneIdleRecycler.noteClientAcquired`(拿到 client 到首个请求之间不被空闲回收) |
+| `packages/desktop/electron-builder.config.js` | extraResources 去掉 `leo/treasury-mcp.mjs`、`leo/brain-mcp.mjs`(两个 stdio 脚本已删,藏宝阁 / 第二大脑改为 Host 本机 HTTP MCP 端点 `/api/leo/{treasury,brain}/mcp`,见 `docs/specs/leo-brain-mcp.md`) |
+| `packages/services/src/runtime-tools/agentProxyEnv.ts`、`services/test/agentProxyEnv.test.ts` | `buildAgentRuntimeEnv`:设了代理时 `NO_PROXY` / `ZCODE_NO_PROXY` 自动补 `localhost,127.0.0.1,::1`(CLI http 层只按 ZCODE_NO_PROXY 绕过,不会自己放过回环;Host 的 MCP 端点与订阅模型代理都在 127.0.0.1) |
+| `apps/zcode-cli/packages/contracts/src/interfaces/mcp.port.ts` | `McpServerConfigBase.leoLazyStart`(仅宿主生成,公共配置 schema 不收) |
+| `apps/zcode-cli/packages/adapters/src/mcp/index.ts` | 按需启动:`connectServer` 连上列完工具后对 `leoLazyStart` 的 stdio server 调 `leoParkServer`(停进程、保留 connected 与工具表);`resolveConnectedRecord` 遇停放记录走 `leoWakeServer`(并发单飞,失败恢复停放);`pingServer` 对停放记录回 true(设置页存活校验不拉起) |
+| `apps/zcode-cli/packages/bootstrap/src/app/built-in-node-repl.ts` | 内置 node_repl 带 `leoLazyStart: true`:每个 workspace 常驻约 200 MB 的 node_repl 只在首次 Browser Use / Computer Use 调用时拉起;测试 `adapters/test/leo/mcp-lazy-start.test.ts`、`bootstrap/test/leo/node-repl-lazy-start.test.ts` |

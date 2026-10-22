@@ -1,3 +1,4 @@
+import type { McpHttpServer, McpToolDescriptor } from "./mcpHttpEndpoint.js";
 import type { TreasuryItem, TreasuryKind } from "./treasuryStore.js";
 import { TreasuryStore } from "./treasuryStore.js";
 
@@ -173,4 +174,26 @@ export function executeTreasuryTool(
   }
 
   return { error: `unknown tool: ${name}` };
+}
+
+/**
+ * [leo] 藏宝阁的本机 MCP 端点(`/api/leo/treasury/mcp`)。返回形状与原 stdio 脚本 treasury-mcp.mjs
+ * 一致:工具返回体整体 JSON 化放进第一个 text 块(CLI 的记忆召回 treasury-recall 按这个形状解析),
+ * 执行报错也照旧放成 `{"error": ...}`,不标 isError。
+ */
+export function createTreasuryMcpServer(store: TreasuryStore): McpHttpServer {
+  return {
+    name: "leo-treasury",
+    version: "1.0.0",
+    listTools: () => TREASURY_TOOLS as unknown as readonly McpToolDescriptor[],
+    async callTool(name, args) {
+      let payload: unknown;
+      try {
+        payload = executeTreasuryTool(store, name, args);
+      } catch (error) {
+        payload = { error: String(error) };
+      }
+      return { content: [{ type: "text", text: JSON.stringify(payload) }] };
+    },
+  };
 }

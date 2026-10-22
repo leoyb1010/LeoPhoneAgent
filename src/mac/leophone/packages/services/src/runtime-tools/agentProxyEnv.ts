@@ -72,11 +72,26 @@ export function buildAgentRuntimeEnv(input: {
   caCertPath?: string | undefined;
 }): Record<string, string> {
   const proxyEnv = buildAgentProxyEnv(input.httpProxy);
+  // [leo] 设了代理时回环地址恒直连:藏宝阁 / 第二大脑 MCP、订阅模型代理都在 Host 的
+  // 127.0.0.1 本机接口上,CLI 的 http 层只按 ZCODE_NO_PROXY 绕过,不会自己放过回环地址。
+  const noProxy =
+    Object.keys(proxyEnv).length > 0 ? withLoopbackNoProxy(input.noProxy) : input.noProxy;
   return {
     ...proxyEnv,
-    ...buildAgentNoProxyEnv(input.noProxy),
+    ...buildAgentNoProxyEnv(noProxy),
     ...buildAgentCaCertEnv(input.caCertPath),
   };
+}
+
+const LEO_LOOPBACK_NO_PROXY = ["localhost", "127.0.0.1", "::1"] as const;
+
+function withLoopbackNoProxy(noProxy: string | undefined): string {
+  const tokens = (noProxy ?? "")
+    .split(",")
+    .map((token) => token.trim())
+    .filter(Boolean);
+  const present = new Set(tokens.map((token) => token.toLowerCase()));
+  return [...tokens, ...LEO_LOOPBACK_NO_PROXY.filter((host) => !present.has(host))].join(",");
 }
 
 /**

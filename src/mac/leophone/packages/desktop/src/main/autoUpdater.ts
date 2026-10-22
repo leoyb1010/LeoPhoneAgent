@@ -1407,6 +1407,9 @@ export function refreshAutoUpdaterReleaseChannel(
     logger.info(`[auto-update] skip ${reason}: not packaged`);
     return;
   }
+  // [leo] 构建期关了自动更新(Leo 由 leo-deploy-mac.sh 推送新版):设置同步带来的通道切换
+  // 不能绕过 initAutoUpdater 的关闭,去拿未配置的 updater 发请求。
+  if (autoUpdaterDisabledForProductFlavor) return;
 
   if (menuState.kind === "download-progress" || menuState.kind === "update-downloaded") {
     logger.info(`[auto-update] skip ${reason}: state=${menuState.kind} channel=${nextChannel}`);
@@ -1940,6 +1943,8 @@ export function requestAutoUpdateCheckWithoutWindow(reason = "force-update") {
     logger.info(`[auto-update] skip ${reason}: not packaged`);
     return;
   }
+  // [leo] 同上:构建期关了自动更新就不检查。
+  if (autoUpdaterDisabledForProductFlavor) return;
 
   if (menuState.kind === "update-downloaded") {
     void quitAndInstallUpdate();
