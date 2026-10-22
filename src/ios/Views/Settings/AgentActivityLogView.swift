@@ -45,6 +45,20 @@ struct AgentActivityLogView: View {
                         Button("Clear Activity", role: .destructive) {
                             showClearConfirmation = true
                         }
+                        // [ipad-anchors] 挂在按钮上:iPad 上确认框从这个按钮弹出,不再从右栏左边缘冒出来盖住设置侧栏。
+                        .confirmationDialog(
+                            "Clear device activity?",
+                            isPresented: $showClearConfirmation,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Clear Activity", role: .destructive) {
+                                AgentActivityLog.shared.clearAll()
+                                reload()
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("This removes the local execution history. Conversations are not affected.")
+                        }
                     }
                 } footer: {
                     Text("Stores run phase, time and tool name on this device. Prompts, tool inputs and outputs are never included or synced to iCloud.")
@@ -92,19 +106,6 @@ struct AgentActivityLogView: View {
         .listStyle(.insetGrouped)
         .onAppear(perform: reload)
         .onChange(of: log.revision) { _ in reload() }
-        .confirmationDialog(
-            "Clear device activity?",
-            isPresented: $showClearConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear Activity", role: .destructive) {
-                AgentActivityLog.shared.clearAll()
-                reload()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the local execution history. Conversations are not affected.")
-        }
     }
 
     private func reload() {

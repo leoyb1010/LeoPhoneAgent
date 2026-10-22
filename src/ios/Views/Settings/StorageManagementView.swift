@@ -161,6 +161,27 @@ struct StorageManagementView: View {
                 }
                 .disabled(isClearingTreasuryCache ||
                     vm.treasuryUsage.thumbnailCacheBytes + vm.treasuryUsage.syncCacheBytes == 0)
+                // [ipad-anchors] 挂在按钮上:iPad 上确认框从这一行弹出,不再从右栏左边缘冒出来盖住设置侧栏。
+                .confirmationDialog(
+                    "清理藏宝阁可重建缓存？",
+                    isPresented: $showTreasuryCacheConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("清理缓存", role: .destructive) {
+                        isClearingTreasuryCache = true
+                        Task.detached(priority: .userInitiated) {
+                            _ = CollectionStore.clearThumbnailCache()
+                            _ = CollectionStore.clearSyncCache()
+                            await MainActor.run {
+                                isClearingTreasuryCache = false
+                                vm.load()
+                            }
+                        }
+                    }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    Text("本机原始附件、正文、笔记和收藏条目会保留；跨端正文或附件可在需要时重新获取。")
+                }
             } header: {
                 Text("藏宝阁")
             } footer: {
@@ -202,26 +223,6 @@ struct StorageManagementView: View {
         .navigationTitle("Storage")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { vm.load() }
-        .confirmationDialog(
-            "清理藏宝阁可重建缓存？",
-            isPresented: $showTreasuryCacheConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("清理缓存", role: .destructive) {
-                isClearingTreasuryCache = true
-                Task.detached(priority: .userInitiated) {
-                    _ = CollectionStore.clearThumbnailCache()
-                    _ = CollectionStore.clearSyncCache()
-                    await MainActor.run {
-                        isClearingTreasuryCache = false
-                        vm.load()
-                    }
-                }
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("本机原始附件、正文、笔记和收藏条目会保留；跨端正文或附件可在需要时重新获取。")
-        }
     }
 
     private func storageRow(icon: String, color: Color, label: LocalizedStringKey, value: String) -> some View {

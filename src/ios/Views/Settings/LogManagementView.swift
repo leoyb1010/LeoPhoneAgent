@@ -228,11 +228,12 @@ struct LogManagementView: View {
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
+                    // [ipad-anchors] iPad: popover from this button; iPhone: same sheet as before.
+                    .leoShareSheet(isPresented: $showShareSheet) {
+                        LogShareSheet(urls: vm.logFiles.map(\.url))
+                    }
                 }
             }
-        }
-        .sheet(isPresented: $showShareSheet) {
-            LogShareSheet(urls: vm.logFiles.map(\.url))
         }
         .alert("Delete All Logs?", isPresented: $showDeleteAllConfirm) {
             Button("Delete All", role: .destructive) {

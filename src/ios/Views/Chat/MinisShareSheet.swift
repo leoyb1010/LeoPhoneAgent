@@ -99,3 +99,65 @@ struct MinisShareSheet: UIViewControllerRepresentable {
         return filtered.isEmpty ? "share" : String(filtered.prefix(40))
     }
 }
+
+// MARK: - [ipad-anchors] Anchored share sheet
+
+/// iPad: the share sheet opens as a popover pointing at the view this is attached
+/// to (the share button) instead of a form sheet in the middle of the screen.
+/// iPhone: exactly the old `.sheet`. In compact width on iPad (Slide Over, narrow
+/// split) the popover adapts to a sheet on its own.
+extension View {
+    func leoShareSheet<Content: View>(
+        isPresented: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        modifier(LeoShareSheetModifier(isPresented: isPresented, sheet: content))
+    }
+
+    func leoShareSheet<Item: Identifiable, Content: View>(
+        item: Binding<Item?>,
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping (Item) -> Content
+    ) -> some View {
+        modifier(LeoShareSheetItemModifier(item: item, onDismiss: onDismiss, sheet: content))
+    }
+}
+
+private let leoShareUsesPopover = UIDevice.current.userInterfaceIdiom == .pad
+
+private extension View {
+    /// Roughly the system share popover's size.
+    func leoSharePopoverFrame() -> some View {
+        frame(minWidth: 320, idealWidth: 375, minHeight: 420, idealHeight: 560)
+    }
+}
+
+private struct LeoShareSheetModifier<Sheet: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    let sheet: () -> Sheet
+
+    func body(content: Content) -> some View {
+        if leoShareUsesPopover {
+            content.popover(isPresented: $isPresented) { sheet().leoSharePopoverFrame() }
+        } else {
+            content.sheet(isPresented: $isPresented, content: sheet)
+        }
+    }
+}
+
+private struct LeoShareSheetItemModifier<Item: Identifiable, Sheet: View>: ViewModifier {
+    @Binding var item: Item?
+    let onDismiss: (() -> Void)?
+    let sheet: (Item) -> Sheet
+
+    func body(content: Content) -> some View {
+        if leoShareUsesPopover {
+            // `.popover` has no onDismiss: the content leaving the screen is the dismissal.
+            content.popover(item: $item) { value in
+                sheet(value).leoSharePopoverFrame().onDisappear { onDismiss?() }
+            }
+        } else {
+            content.sheet(item: $item, onDismiss: onDismiss, content: sheet)
+        }
+    }
+}

@@ -62,6 +62,20 @@ struct ProviderInstanceDetailView: View {
                     Image(systemName: "square.and.arrow.up")
                 }
                 .accessibilityLabel("导出配置（不含密钥）")
+                // [ipad-anchors] iPad: popover from this button; iPhone: same sheet as before.
+                .leoShareSheet(isPresented: $showExportShare) {
+                    if let json = store.exportInstanceJSON(instanceId) {
+                        let label = store.instance(for: instanceId).map(\.label) ?? "provider"
+                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(label)-safe.json")
+                        let _ = try? json.write(to: tempURL, atomically: true, encoding: .utf8)
+                        ProviderShareSheet(url: tempURL)
+                            .presentationDetents([.medium])
+                    } else {
+                        Text("Failed to export provider configuration.")
+                            .foregroundStyle(.secondary)
+                            .presentationDetents([.medium])
+                    }
+                }
             }
         }
         .sheet(isPresented: $showAddCustomModel) {
@@ -379,19 +393,6 @@ struct ProviderInstanceDetailView: View {
                 Button("Delete Provider", role: .destructive) {
                     showDeleteConfirm = true
                 }
-            }
-        }
-        .sheet(isPresented: $showExportShare) {
-            if let json = store.exportInstanceJSON(instanceId) {
-                let label = store.instance(for: instanceId).map(\.label) ?? "provider"
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(label)-safe.json")
-                let _ = try? json.write(to: tempURL, atomically: true, encoding: .utf8)
-                ProviderShareSheet(url: tempURL)
-                    .presentationDetents([.medium])
-            } else {
-                Text("Failed to export provider configuration.")
-                    .foregroundStyle(.secondary)
-                    .presentationDetents([.medium])
             }
         }
     }
