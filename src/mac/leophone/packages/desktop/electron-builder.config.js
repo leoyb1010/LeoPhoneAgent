@@ -808,7 +808,11 @@ export default {
     : {}),
   extraResources: [
     { from: resolve(workspaceRoot, noticesFileName), to: noticesFileName },
-    // [leo][up-d-mac] 藏宝阁 / 第二大脑 MCP 已改为 Host 本机 HTTP 端点,不再随包 stdio 脚本。
+    // [leo][up-d-mac] 藏宝阁 / 第二大脑 MCP 已改为 Host 本机 HTTP 端点,LeoBot 自己不再起 stdio 脚本。
+    // [up3-runtime] 但外部 agent(Codex / Claude Code / Cursor / OpenCode)的配置仍按旧路径
+    // 启动 Resources/leo/treasury-mcp.mjs;这里随包带一个 stdio→HTTP 转发垫片,让它们不用改配置。
+    // brain-mcp.mjs 在机群上没有外部配置引用,不再随包。
+    { from: "leo/treasury-mcp.mjs", to: "leo/treasury-mcp.mjs" },
     // [leo] Apache-2.0 要求随分发附上许可证与 NOTICE:ZCode 的原文放进 Resources/licenses/zcode。
     { from: "../../LICENSE", to: "licenses/zcode/LICENSE" },
     { from: "../../NOTICE.md", to: "licenses/zcode/NOTICE.md" },
