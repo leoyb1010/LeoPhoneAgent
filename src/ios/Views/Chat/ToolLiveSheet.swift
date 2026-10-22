@@ -188,7 +188,14 @@ fileprivate func attributedShellLine(_ text: String) -> AttributedString {
     return AttributedString(mutable)
 }
 
-/// The floating toolbar: collapsed shows thumbnail + status bar + snapshot chips, expanded opens a full-screen live sheet.
+/// The floating tool strip above the composer.
+///
+/// [chat-chrome] Collapsed it is ONE 36pt line (status · current tool · n/m),
+/// so it never towers over the reply being streamed. The chevron expands the
+/// live preview thumbnail inline, above the line — inside the measured strip,
+/// so the message list's bottom inset grows with it and nothing overlaps the
+/// last message. Tapping the title or the thumbnail opens the full live sheet.
+/// Expand / collapse is a smooth resize, a plain fade under Reduce Motion.
 struct FloatingToolBar: View {
     let toolBlocks: [AssistantBlock]
     var toolSnapshots: [ToolSnapshotItem] = []
@@ -196,8 +203,13 @@ struct FloatingToolBar: View {
     var onBrowserTakeover: (() -> Void)?
     var onTakeoverDone: (() -> Void)?
     @State private var selectedIdx: Int? = nil
+    /// Full live sheet.
     @State private var expanded = false
+    /// Inline preview thumbnail above the line. Remembered: someone who wants
+    /// to watch the live preview shouldn't have to re-open it every run.
+    @AppStorage("toolStripPreviewExpanded") private var previewExpanded = false
     @AppStorage("toolPreviewEnabled") private var toolPreviewEnabled: Bool = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var displayedIdx: Int {
         if let idx = selectedIdx, idx < toolBlocks.count { return idx }
@@ -213,8 +225,6 @@ struct FloatingToolBar: View {
         toolBlocks[displayedIdx]
     }
 
-    private static let thumbnailWidth: CGFloat = 100
-
     /// The snapshot corresponding to the currently displayed tool block, matched by ID.
     private var displayedSnapshot: ToolSnapshotItem? {
         guard let blockId = displayedBlock.toolUseId else { return nil }
@@ -222,28 +232,29 @@ struct FloatingToolBar: View {
     }
 
     var body: some View {
-        // Collapsed: thumbnail (optional) + status bar
-        ZStack(alignment: .bottomLeading) {
+        VStack(alignment: .leading, spacing: LeoChromeMetrics.activitySpacing) {
+            if toolPreviewEnabled && previewExpanded {
+                ToolPreviewThumbnail(
+                    block: displayedBlock,
+                    snapshot: displayedSnapshot,
+                    browserPool: browserPool,
+                    onTap: { expanded = true }
+                )
+                .padding(.leading, 4)
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                .accessibilityLabel(Text("Open live preview"))
+                .accessibilityAddTraits(.isButton)
+            }
             ToolStatusBar(
                 block: displayedBlock,
                 toolBlocks: toolBlocks,
                 displayedIdx: displayedIdx,
                 expanded: $expanded,
                 selectedIdx: $selectedIdx,
-                leadingInset: toolPreviewEnabled ? Self.thumbnailWidth + 18 : 0
+                previewExpanded: toolPreviewEnabled ? $previewExpanded : nil
             )
-
-            if toolPreviewEnabled {
-                ToolPreviewThumbnail(
-                    block: displayedBlock,
-                    snapshot: displayedSnapshot,
-                    browserPool: browserPool,
-                    onTap: { withAnimation { expanded = true } }
-                )
-                .offset(x: 10)
-            }
         }
-        // .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: -4)
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: previewExpanded)
         .animation(LeoMotion.quickEase(), value: displayedIdx)
         .sheet(isPresented: $expanded) {
             ToolLiveSheet(
@@ -2076,7 +2087,7 @@ private struct ToolPreviewThumbnail: View {
                     .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 8, bottomTrailingRadius: 8))
             }
         }
-        .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 3)
+        .shadow(color: .black.opacity(0.18), radius: 4, x: 0, y: 2)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
         .onAppear {
@@ -2330,78 +2341,90 @@ private struct ToolPreviewThumbnail: View {
     }
 }
 
-/// Bottom status bar: status icon + description + counter + expand chevron.
+/// One-line status bar: status icon + description + counter + preview toggle.
 private struct ToolStatusBar: View {
     @ObservedObject var block: AssistantBlock
     let toolBlocks: [AssistantBlock]
     let displayedIdx: Int
     @Binding var expanded: Bool
     @Binding var selectedIdx: Int?
-    var leadingInset: CGFloat = 0
+    /// nil when previews are off in Settings: no toggle is shown.
+    var previewExpanded: Binding<Bool>?
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 6) {
             statusIcon
-
-            // [T-step-timestamp v2 aa8b1128] Inline HH:mm:ss prefix removed
-            // — see ToolLiveSheet.sheetNavBar for the new "start +
-            // elapsed" display, surfaced only inside the tapped-open
-            // detail sheet so the always-visible status bar stays clean.
+                .frame(width: 18)
 
             Text(displayTitle)
-                .font(.system(size: 13, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(ChatColors.secondaryText)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .frame(maxWidth: .infinity, minHeight: LeoChromeMetrics.activityRowHeight, alignment: .leading)
                 .contentShape(Rectangle())
-                .onTapGesture { withAnimation { expanded = true } }
-
-            Spacer(minLength: 1)
+                .onTapGesture { expanded = true }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint(Text("Open live preview"))
 
             if toolBlocks.count > 1 {
-                HStack(spacing: 2) {
-                    Button {
+                HStack(spacing: 0) {
+                    stepButton("chevron.left", enabled: displayedIdx > 0) {
                         let prev = (selectedIdx ?? displayedIdx) - 1
-                        if prev >= 0 { withAnimation { selectedIdx = prev } }
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(displayedIdx > 0 ? ChatColors.primaryText : ChatColors.tertiaryText)
-                            .frame(width: 20, height: 20)
-                            .contentShape(Rectangle())
+                        if prev >= 0 { selectedIdx = prev }
                     }
-                    .disabled(displayedIdx <= 0)
+                    .accessibilityLabel(Text("Previous tool"))
 
-                    Text("\(displayedIdx + 1)/\(toolBlocks.count)")
+                    Text(verbatim: "\(displayedIdx + 1)/\(toolBlocks.count)")
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(ChatColors.secondaryText)
+                        .fixedSize()
 
-                    Button {
+                    stepButton("chevron.right", enabled: displayedIdx < toolBlocks.count - 1) {
                         let next = (selectedIdx ?? displayedIdx) + 1
-                        if next < toolBlocks.count { withAnimation { selectedIdx = next } }
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(displayedIdx < toolBlocks.count - 1 ? ChatColors.primaryText : ChatColors.tertiaryText)
-                            .frame(width: 20, height: 20)
-                            .contentShape(Rectangle())
+                        if next < toolBlocks.count { selectedIdx = next }
                     }
-                    .disabled(displayedIdx >= toolBlocks.count - 1)
+                    .accessibilityLabel(Text("Next tool"))
                 }
             }
+
+            if let previewExpanded {
+                Button {
+                    previewExpanded.wrappedValue.toggle()
+                } label: {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(ChatColors.secondaryText)
+                        .rotationEffect(.degrees(previewExpanded.wrappedValue ? 180 : 0))
+                        .frame(width: 32, height: LeoChromeMetrics.activityRowHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(previewExpanded.wrappedValue ? "Hide preview" : "Show preview"))
+            }
         }
-        .padding(.leading, leadingInset > 0 ? leadingInset : 12)
-        .padding(.trailing, 12)
-        .padding(.vertical, 5)
-        .frame(minHeight: 38)
+        .padding(.leading, 12)
+        .padding(.trailing, 4)
+        .frame(minHeight: LeoChromeMetrics.activityRowHeight)
         .frame(maxWidth: .infinity)
         .background(Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.15, alpha: 1) : UIColor.systemBackground }))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous)
                 .stroke(Color(UIColor.separator).opacity(0.3), lineWidth: 0.5)
         )
-        .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.08, alpha: 0.75) : UIColor(white: 0, alpha: 0.12) }), radius: 8, x: 0, y: 4)
+    }
+
+    private func stepButton(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(enabled ? ChatColors.primaryText : ChatColors.tertiaryText)
+                .frame(width: 28, height: LeoChromeMetrics.activityRowHeight)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     @ViewBuilder

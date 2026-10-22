@@ -268,7 +268,12 @@ struct AIChatView: View {
     /// finger sends. Set below 1.0 so users get earlier confirmation that
     /// they've reached the trigger zone.
     private static let kSendSwipeArmFraction: CGFloat = 0.8
+    /// [chat-chrome] Height of the activity strip (tool progress + run status)
+    /// floating above the composer; part of the message list's bottom inset.
     @State private var floatingBarHeight: CGFloat = 0
+    /// [chat-chrome] Measured width of this chat column (iPad split / sidebar
+    /// aware) — drives the header title cap.
+    @State private var chatColumnWidth: CGFloat = 0
     @State private var showFileBrowser = false
     @State private var showArtifactTray = false
     /// [T-delivery-tray] Live artifact count for the permanent toolbar badge.
@@ -528,8 +533,7 @@ struct AIChatView: View {
                                 }
                         }
                         VStack(spacing: 0) {
-                            floatingToolPreview
-                                .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0, alpha: 0.25) : UIColor(white: 0, alpha: 0) }), radius: 6, x: 0, y: 4)
+                            activityStrip
                             #if DEBUG
                             if isReadOnly {
                                 forkBanner
@@ -616,6 +620,13 @@ struct AIChatView: View {
             kernelBootOverlay
         }
         .background(ChatColors.background)
+        // [chat-chrome] Column width for the header cap. Rounded so a sub-point
+        // jitter during a transition doesn't re-push the toolbar.
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width.rounded()
+        } action: { width in
+            if width > 0, width != chatColumnWidth { chatColumnWidth = width }
+        }
         .onDrop(of: [.image, .movie, .fileURL, .data], isTargeted: $isDropTargeted) { providers in
             handleDropProviders(providers)
             return true
@@ -1912,9 +1923,24 @@ struct AIChatView: View {
         // every current OS has been taking the plain-frame branch anyway — the
         // else branch was unreachable dead code that only looked like a
         // fallback. Keeping the branch that actually runs, unconditionally.
-        let cap = max(120, LeoWindowMetrics.bounds.width - 140)
+        //
+        // [chat-chrome] The cap now comes from the chat COLUMN width (not the
+        // window: an iPad split view or a sidebar-inset pane is much narrower
+        // than the window) and from how many bar items actually sit beside the
+        // title, so title and model pill never run under the back button or
+        // the trailing tray / "…" buttons.
         titleView
-            .frame(maxWidth: cap)
+            .frame(maxWidth: headerPrincipalCap)
+    }
+
+    /// [chat-chrome] Width the centered title + model pill may use.
+    private var headerPrincipalCap: CGFloat {
+        let column = chatColumnWidth > 0 ? chatColumnWidth : LeoWindowMetrics.bounds.width
+        let trailing = (artifactCount > 0 && !titleIsVisuallyLocked) ? 2 : 1
+        let cap = ChatHeaderLayout.principalCap(columnWidth: column,
+                                                leadingItems: hSizeClass == .regular ? 2 : 1,
+                                                trailingItems: trailing)
+        return cap.rounded(.down)
     }
 
     /// [T-ios-navbar-toolbar-host] Everything the toolbar DISPLAYS (principal
@@ -1935,7 +1961,8 @@ struct AIChatView: View {
             fastModeEnabled: codexFastModeEnabled,
             isProcessing: vm.isProcessing,
             isEditing: vm.editingMessageIndex != nil,
-            artifactCount: artifactCount
+            artifactCount: artifactCount,
+            principalCap: headerPrincipalCap
         )
     }
 
@@ -2104,124 +2131,64 @@ struct AIChatView: View {
             .buttonStyle(.plain)
             .disabled(!canEditTitle)
 
-            // [T-navbar-group-provider-gap 2026-07-25] Legacy row gap 1 → -1:
-            // on iOS 16-18 the provider·model line (row 2) sat flush against
-            // the navbar band's bottom edge (field screenshot: group name and
-            // row 2 had a visibly larger gap than row 2 had bottom clearance).
-            // Tightening ONLY the group↔provider gap moves row 2 up inside
-            // the band, giving the last line breathing room from the bottom.
-            // -1 still leaves ~2pt visual space (caption2's descender zone +
-            // the 9pt row's cap headroom); the calibrated title↔group overlap
-            // (outer -3) and the group pill's vertical padding are untouched.
-            // iOS 26 keeps spacing 1 — the liquid-glass band has no crowding.
-            VStack(spacing: 1) {
-                HStack(spacing: 4) {
-                    Button {
-                        showModelPicker = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(isAuthed ? Color.green : Color.orange)
-                                .frame(width: 6, height: 6)
-                            if isGroupBound {
-                                Image(systemName: "square.stack.3d.up")
-                                    .font(.system(size: 8))
-                                    .foregroundStyle(ChatColors.tertiaryText)
-                            }
-                            Text(modelName)
-                                .font(.caption2)
-                                .foregroundStyle(ChatColors.secondaryText)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 8, weight: .semibold))
+            // [chat-chrome] Row 2 is ONE adaptive model pill (was: a caption2
+            // model line with a ~14pt hit area plus a 9pt "provider · model"
+            // third row that clipped at the bar edge). The pill shows what the
+            // send will use — "group · model" when group-bound, else the model
+            // — and degrades full → short name → middle-truncated within the
+            // header cap. Provider and group stay in the VoiceOver label.
+            // The thinking badge is a separate sibling (its own sheet) and
+            // never shrinks; the pill text gives way first.
+            HStack(spacing: 4) {
+                Button {
+                    showModelPicker = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(isAuthed ? Color.green : Color.orange)
+                            .frame(width: 6, height: 6)
+                        if isGroupBound {
+                            Image(systemName: "square.stack.3d.up")
+                                .font(.system(size: 9, weight: .semibold))
                                 .foregroundStyle(ChatColors.tertiaryText)
                         }
-                        .layoutPriority(-1)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if let detail = resolved {
-                    // Row 2: "provider · model" + the thinking-level badge as a
-                    // SEPARATE tappable sibling (not nested in the model-picker
-                    // Button) so the badge opens ThinkingLevelSheetView while the
-                    // text still opens the model picker — mirroring how row 1's
-                    // model-name Button and badge were laid out. The model name
-                    // truncates first (layoutPriority(-1) + lineLimit(1)); the
-                    // badge keeps its intrinsic size and always shows in full.
-                    HStack(spacing: 4) {
-                        // [T-codex-fast-mode] Circular-background ⚡ badge in
-                        // front of the resolved model line (row 3) while Fast
-                        // Mode is active (Codex OAuth only). User-requested
-                        // placement: this row names the actual model; row 2
-                        // may show a group name instead.
+                        // [T-codex-fast-mode] ⚡ while Fast Mode is on.
                         if codexFastModeEnabled && activeModelSupportsFastMode {
-                            // Sized to the row's 9pt text cap height so the
-                            // badge reads as an inline glyph, not a button.
                             Image(systemName: "bolt.fill")
-                                .font(.system(size: 5, weight: .bold))
+                                .font(.system(size: 6, weight: .bold))
                                 .foregroundStyle(.white)
-                                .frame(width: 9, height: 9)
+                                .frame(width: 11, height: 11)
                                 .background(Circle().fill(Color.orange))
-                                // Match the row text's descender clearance so
-                                // the badge centers on the same visual band.
-                                .padding(.bottom, 4)
                         }
-                        Button {
-                            showModelPicker = true
-                        } label: {
-                            Text("\(detail.providerLabel) · \(detail.modelName)")
-                                .font(.system(size: 9))
-                                .foregroundStyle(ChatColors.secondaryText)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                // [NavTitleClip 2026-05-16] Reserve clearance
-                                // under the resolved-detail line so the final
-                                // glyph descenders ("g","p","y") don't touch
-                                // the navbar's bottom safe-area cutoff on
-                                // iOS 26. 2 → 4pt: 2 wasn't enough when text
-                                // included descenders ("Fake Hang 1" clipped
-                                // the lowered "1" stroke).
-                                // [T-navbar-title-model-gap] Legacy needs only
-                                // 1pt — the 4pt clearance is an iOS 26
-                                // liquid-glass-band requirement; on 16-18 it
-                                // was pure height waste, now traded into the
-                                // title→model gap (see the outer VStack).
-                                .padding(.bottom, 4)
-                                // Force vertical sizing to fit the full
-                                // glyph including descender so the line's
-                                // own frame doesn't crop before the navbar
-                                // gets a chance to lay it out.
-                                .fixedSize(horizontal: false, vertical: true)
-                                .layoutPriority(-1)
-                        }
-                        .buttonStyle(.plain)
-                        // Show the badge only when the model supports thinking
-                        // AND thinking is actually enabled. When the level is Off
-                        // a grey "Off" pill read as ambiguous (users couldn't tell
-                        // it meant "thinking disabled"), so we hide the badge
-                        // entirely rather than render a placeholder. The picker
-                        // still lists Off, so users can turn thinking back off from
-                        // there.
-                        if !vm.availableThinkingLevels.isEmpty, vm.currentThinkingLevel.isEnabled {
-                            thinkingLevelBadge
-                                .fixedSize()
-                                // Match the model-name line's descender
-                                // clearance so the badge sits on the same
-                                // baseline band and isn't clipped at the
-                                // navbar's bottom cutoff.
-                                // [T-navbar-title-model-gap] Match the
-                                // provider text's legacy clearance.
-                                .padding(.bottom, 4)
-                        }
+                        LeoAdaptiveText(candidates: headerModelCandidates(modelName: modelName,
+                                                                          isGroupBound: isGroupBound,
+                                                                          resolvedModel: resolved?.modelName))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(ChatColors.secondaryText)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(ChatColors.tertiaryText)
                     }
+                    .padding(.horizontal, LeoChromeMetrics.headerPillHorizontalPadding)
+                    .frame(minHeight: LeoChromeMetrics.headerPillHeight)
+                    .background(Capsule().fill(Color.secondary.opacity(0.10)))
+                    // The nav bar is ~44pt for two rows, so the pill's hit area
+                    // is the full lower half of the bar and at least 44pt wide.
+                    .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: 24)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(headerModelAccessibilityLabel(modelName: modelName, resolved: resolved)))
+                .accessibilityHint(Text("选择模型"))
+                .accessibilityIdentifier("chat.header.model-pill")
+
+                if !vm.availableThinkingLevels.isEmpty, vm.currentThinkingLevel.isEnabled {
+                    thinkingLevelBadge
+                        .fixedSize()
                 }
             }
             .padding(.horizontal, 8)
-            // [T-navbar-title-model-gap] 3 → 2 on legacy: part of the
-            // height-neutral trade that funds the wider title→model gap.
-            .padding(.vertical, 3)
+            .padding(.vertical, 1)
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.red.opacity(0.35 * fallbackPulseOpacity))
@@ -2284,6 +2251,19 @@ struct AIChatView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: titleIsVisuallyLocked)
     }
 
+    /// [chat-chrome] Header pill spellings, widest first (see ModelNameCompaction).
+    private func headerModelCandidates(modelName: String, isGroupBound: Bool, resolvedModel: String?) -> [String] {
+        ModelNameCompaction.headerCandidates(displayName: modelName, isGroupBound: isGroupBound, resolvedModel: resolvedModel)
+    }
+
+    private func headerModelAccessibilityLabel(modelName: String,
+                                               resolved: (providerLabel: String, modelName: String)?) -> String {
+        guard let resolved else { return modelName }
+        return resolved.modelName == modelName
+            ? "\(modelName), \(resolved.providerLabel)"
+            : "\(modelName), \(resolved.providerLabel) · \(resolved.modelName)"
+    }
+
     @ViewBuilder
     private var thinkingLevelBadge: some View {
         let level = vm.currentThinkingLevel
@@ -2297,14 +2277,18 @@ struct AIChatView: View {
         HStack(spacing: 2) {
             Image("ThinkingIcon")
                 .resizable()
-                .frame(width: 6, height: 6)
+                .frame(width: 8, height: 8)
             Text(vm.thinkingWasClamped ? "\(level.displayName)(上限)" : level.displayName)
-                .font(.system(size: 8, weight: .medium))
+                .font(.caption2.weight(.medium))
+                .lineLimit(1)
         }
         .foregroundStyle(ChatColors.secondaryText)
-        .padding(.horizontal, 4)
-        .padding(.vertical, 1)
+        .padding(.horizontal, 6)
+        .frame(minHeight: LeoChromeMetrics.headerPillHeight)
         .background(Capsule().fill(Color.secondary.opacity(0.10)))
+        // [chat-chrome] Same row height and hit band as the model pill.
+        .frame(minWidth: 32, minHeight: 24)
+        .contentShape(Rectangle())
         .onTapGesture {
             showThinkingLevelSheet = true
         }
@@ -2610,7 +2594,7 @@ struct AIChatView: View {
             // within one screen of the bottom, at rest) would mount an empty
             // VStack.
             if !vm.messages.isEmpty && !vm.isNearBottom {
-                VStack(spacing: 10) {
+                VStack(spacing: 4) {
                     // Up-button: walk back one user turn at a time. Visible when
                     // off the bottom AND there's still an earlier turn to jump to
                     // (isAtFirstTurn == false). Once the user has walked all the
@@ -2644,13 +2628,12 @@ struct AIChatView: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.8)))
                     }
                 }
-                .padding(.trailing, 4)
                 .frame(maxWidth: maxContentWidth ?? .infinity, alignment: .trailing)
                 .padding(.horizontal, 12)
-                .padding(.bottom, inputBarHeight + (hasFloatingPreview ? 80 : 12))
+                .padding(.bottom, floatingControlsBottom - 4)
                 .animation(LeoMotion.standardEase(), value: vm.isNearBottom)
                 .animation(LeoMotion.standardEase(), value: vm.isAtFirstTurn)
-                .animation(LeoMotion.standardEase(), value: hasFloatingPreview)
+                .animation(LeoMotion.standardEase(), value: floatingBarHeight)
                 // The capsule must not cover these floating scroll-jump buttons.
                 .capsuleProtectedFrame("scrollButtons")
             }
@@ -2678,7 +2661,7 @@ struct AIChatView: View {
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .padding(.bottom, inputBarHeight + (hasFloatingPreview ? 80 : 12))
+                .padding(.bottom, floatingControlsBottom - 4)
                 .transition(.opacity)
                 .accessibilityLabel("有新消息，跳到底部")
                 .capsuleProtectedFrame("newMessagePill")
@@ -2697,10 +2680,17 @@ struct AIChatView: View {
             .padding(.trailing, 4)
             .frame(maxWidth: maxContentWidth ?? .infinity, alignment: .trailing)
             .padding(.horizontal, 12)
-            .padding(.bottom, inputBarHeight + (hasFloatingPreview ? 80 : 12) + 92)
-            .animation(LeoMotion.standardEase(), value: hasFloatingPreview)
+            // Two 44pt scroll targets + 4pt gap sit below.
+            .padding(.bottom, floatingControlsBottom + 92)
+            .animation(LeoMotion.standardEase(), value: floatingBarHeight)
             .capsuleProtectedFrame("downloadButton")
         }
+    }
+
+    /// [chat-chrome] Bottom edge for controls floating over the list: above
+    /// the composer AND the activity strip, by their measured heights.
+    private var floatingControlsBottom: CGFloat {
+        ChatListInsets.floatingControlBottom(inputBarHeight: inputBarHeight, activityStripHeight: floatingBarHeight)
     }
 
     /// [T-new-message-pill] Single gate for the pill: unseen content AND the
@@ -2728,13 +2718,16 @@ struct AIChatView: View {
         AnyView(Image(systemName: systemName)
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(.secondary)
-            .frame(width: 36, height: 36)
+            .frame(width: LeoChromeMetrics.floatingButton, height: LeoChromeMetrics.floatingButton)
             .background { ScrollToBottomBackground().clipShape(Circle()) }
             // Border + shadow give the near-opaque disc its edge on a white
             // page — at 0.25/0.12 the button had no readable outline over
             // plain reply text. [T-ios-scrollbtn-invisible-lightmode]
             .overlay(Circle().stroke(Color.gray.opacity(0.35), lineWidth: 0.5))
             .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
+            // [chat-chrome] 44pt hit area around the 36pt disc.
+            .frame(width: LeoChromeMetrics.hitTarget, height: LeoChromeMetrics.hitTarget)
+            .contentShape(Circle())
             .accessibilityLabel(Text(accessibilityLabel)))
     }
 
@@ -2755,41 +2748,65 @@ struct AIChatView: View {
 
     // MARK: - Floating Tool Preview
 
+    /// [chat-chrome] The "what the model is doing" strip above the composer:
+    /// run status (phase · open timeline) and tool progress share ONE 36pt
+    /// line. It floats over the list like the composer, and its measured
+    /// height feeds the list's bottom inset (`floatingBarHeight`), so the
+    /// last message is never under it — expanded preview included — and a
+    /// following list re-pins to the bottom when it grows.
     @ViewBuilder
-    private var floatingToolPreview: some View {
+    private var activityStrip: some View {
         let allToolBlocks = vm.messages
             .filter { $0.role == .assistant && !$0.isCompactedHistory }
             .flatMap { $0.blocks.filter { $0.toolStatus != nil } }
-        if !allToolBlocks.isEmpty, !isShortHeight {
-            FloatingToolBar(toolBlocks: allToolBlocks, toolSnapshots: vm.toolSnapshots, browserPool: vm.browserTabPool, onBrowserTakeover: {
-                vm.browserTakeoverActive = true
-            }, onTakeoverDone: {
-                vm.resumeFromBrowserTakeover()
-            })
-                .frame(maxWidth: maxContentWidth)
-                .padding(.horizontal, 12)
-                // [T-ios-geometry-observer-crash] onGeometryChange replaces the
-                // GeometryReader+onAppear+onChange scaffold: writing state from
-                // onChange(of: geo.*) inside the geometry-observer path re-drives
-                // layout and trips a precondition on the iOS 18 async renderer
-                // (ViewGraphGeometryObservers.needsUpdate SIGTRAP). The action
-                // also fires with the initial value, covering the old onAppear.
-                .onGeometryChange(for: CGFloat.self) { proxy in
-                    proxy.size.height
-                } action: { newH in
-                    floatingBarHeight = newH
-                }
-                .onDisappear {
-                    floatingBarHeight = 0
-                }
+        let showTools = !allToolBlocks.isEmpty && !isShortHeight
+        HStack(alignment: .bottom, spacing: LeoChromeMetrics.activitySpacing) {
+            if !isShortHeight {
+                AgentCurrentStatusCard(
+                    sessionId: vm.sessionId ?? sessionId ?? draftId,
+                    isProcessing: vm.isProcessing,
+                    isSuspended: vm.isSuspended,
+                    // [T-ask-user] The question card is the way to continue.
+                    canResume: vm.canResume && vm.dormantAskUserToolUseId == nil,
+                    failureReason: currentFailureReason,
+                    onRetry: { performTypedRetry() },
+                    onResume: {
+                        vm.resume()
+                        vm.forceScrollToBottom.send()
+                    },
+                    onReviewProvider: {
+                        DeepLinkCoordinator.shared.pendingSettingsTarget = .providers
+                    },
+                    onRetryKernel: {
+                        vm.retryKernelBoot()
+                    },
+                    compact: showTools
+                )
+            }
+            if showTools {
+                FloatingToolBar(toolBlocks: allToolBlocks, toolSnapshots: vm.toolSnapshots, browserPool: vm.browserTabPool, onBrowserTakeover: {
+                    vm.browserTakeoverActive = true
+                }, onTakeoverDone: {
+                    vm.resumeFromBrowserTakeover()
+                })
+            }
         }
-    }
-
-    /// Whether the floating tool preview is visible.
-    private var hasAnyToolBlocks: Bool {
-        vm.messages.contains(where: {
-            $0.role == .assistant && !$0.isCompactedHistory && $0.blocks.contains { $0.toolStatus != nil }
-        })
+        .frame(maxWidth: maxContentWidth)
+        .padding(.horizontal, LeoComposerMetrics.outerPadding)
+        .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: showTools)
+        // [T-ios-geometry-observer-crash] onGeometryChange (not a
+        // GeometryReader + onChange) — the iOS 18 async renderer trips on
+        // state writes from the geometry-observer path. Fires with the
+        // initial value; an empty strip measures 0.
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height
+        } action: { newH in
+            if abs(newH - floatingBarHeight) > 0.5 { floatingBarHeight = newH }
+        }
+        .onDisappear {
+            floatingBarHeight = 0
+        }
     }
 
     // MARK: - Floating Speech Button
@@ -3543,7 +3560,9 @@ struct AIChatView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
-        .padding(.top, 8)
+        // [chat-chrome] The chips' 44pt hit areas already carry 6pt of air
+        // above the 32pt capsules.
+        .padding(.top, 2)
         return AnyView(strip)
     }
 
@@ -3690,13 +3709,12 @@ struct AIChatView: View {
                 } label: { Label(style.title, systemImage: style.icon) }
             }
         } label: {
-            Label(rewriting ? "改写中…" : "改写", systemImage: "wand.and.stars")
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
+            LeoChromePillLabel(rewriting ? AppLocalized("改写中…") : AppLocalized("改写"),
+                               systemImage: "wand.and.stars", showsChevron: false, surface: .glass)
+                .fixedSize()
         }
         .disabled(rewriting)
-        .buttonStyle(.glass)
-        .controlSize(.small)
+        .buttonStyle(.plain)
         .hoverEffect(.lift)
     }
 
@@ -3727,17 +3745,22 @@ struct AIChatView: View {
     /// 长按 = 直接弹出钉好的常用,一步换完,不开任何面板 —— 这才是
     /// 日常最短路径。两条路都在同一个控件上,不必记两个地方。
     private var modelCapsule: some View {
+        // [chat-chrome] Standard chrome pill: 32pt glass capsule in a 44pt hit
+        // area, width-capped, full → short → middle-truncated name, so a long
+        // model id never pushes the approval badge or rewrite chip off the row.
         Button {
             showQuickModelSwitch = true
         } label: {
-            Label(modelCapsuleLabel, systemImage: "cpu")
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
+            LeoChromePillLabel(modelCapsuleLabel, systemImage: "cpu", showsChevron: false,
+                               maxWidth: hSizeClass == .regular ? LeoChromeMetrics.modelPillMaxWidthRegular
+                                                                : LeoChromeMetrics.modelPillMaxWidth,
+                               minWidth: LeoChromeMetrics.modelPillMinWidth, surface: .glass)
         }
-        .buttonStyle(.glass)
-        .controlSize(.small)
+        .buttonStyle(.plain)
         .hoverEffect(.lift)
+        .accessibilityLabel(Text(verbatim: modelCapsuleLabel))
         .accessibilityHint("点按管理常用模型,长按直接切换")
+        .accessibilityIdentifier("chat.composer.model-pill")
         .contextMenu { pinnedQuickMenu }
     }
 
@@ -3868,27 +3891,8 @@ struct AIChatView: View {
         VStack(spacing: 0) {
             Color.clear.frame(height: 0)
                 .onAppear { LeoPerf.coldStep("inputReady") }
-            if !isShortHeight {
-                AgentCurrentStatusCard(
-                    sessionId: vm.sessionId ?? sessionId ?? draftId,
-                    isProcessing: vm.isProcessing,
-                    isSuspended: vm.isSuspended,
-                    // [T-ask-user] The question card is the way to continue.
-                    canResume: vm.canResume && vm.dormantAskUserToolUseId == nil,
-                    failureReason: currentFailureReason,
-                    onRetry: { performTypedRetry() },
-                    onResume: {
-                        vm.resume()
-                        vm.forceScrollToBottom.send()
-                    },
-                    onReviewProvider: {
-                        DeepLinkCoordinator.shared.pendingSettingsTarget = .providers
-                    },
-                    onRetryKernel: {
-                        vm.retryKernelBoot()
-                    }
-                )
-            }
+            // [chat-chrome] The run-status chip moved into `activityStrip`, on the
+            // same line as the tool progress, measured with it (one inset).
 
             // [WP-42] One GlassEffectContainer for the composer shell and the glass that
             // floats with it ("Move to…" pill): they blend / morph instead of stacking panes.
@@ -3897,7 +3901,9 @@ struct AIChatView: View {
                 // [T-motion-effects] The chat's own "working" heartbeat: three
                 // breathing dots by the composer while a reply is in flight.
                 // Lives in the SwiftUI composer area, not the UIKit list.
-                if vm.isProcessing, !voiceInputActive, !isShortHeight {
+                // [chat-chrome] Elsewhere the activity strip already says the run is
+                // going; only the short-height layout (no strip) keeps the dots.
+                if vm.isProcessing, !voiceInputActive, isShortHeight {
                     ComposerWorkingIndicator(sessionId: vm.sessionId)
                 }
                 if !voiceInputActive, vm.editingMessageIndex == nil, !isShortHeight {
@@ -4857,11 +4863,6 @@ struct AIChatView: View {
         }
     }
 
-    /// Whether the floating tool preview is visible.
-    private var hasFloatingPreview: Bool {
-        hasAnyToolBlocks
-    }
-
     /// Max content width — unconstrained in compact (portrait iPhone),
     /// capped in regular (landscape / iPad) for readability.
     /// [T-readable-width] About 45 CJK characters a line on iPad; the list's
@@ -5144,6 +5145,8 @@ private struct ChatToolbarKey: Equatable {
     /// B13: Save as Skill is off while a sent message is being edited.
     let isEditing: Bool
     let artifactCount: Int
+    /// [chat-chrome] Title width cap — changes on rotation / split resize.
+    let principalCap: CGFloat
 }
 
 /// [T-ios-navbar-toolbar-host] Zero-footprint host that owns the navigation
@@ -5197,6 +5200,7 @@ private struct ChatToolbarHost<Title: View, Trailing: View>: View, Equatable {
             if lhs.key.isProcessing != rhs.key.isProcessing { diffs.append("isProcessing") }
             if lhs.key.isEditing != rhs.key.isEditing { diffs.append("isEditing") }
             if lhs.key.artifactCount != rhs.key.artifactCount { diffs.append("artifactCount") }
+            if lhs.key.principalCap != rhs.key.principalCap { diffs.append("principalCap") }
             if lhs.key.fastModeEnabled != rhs.key.fastModeEnabled { diffs.append("fastModeEnabled") }
             NavbarEvalStats.logger.info("[NavbarEval] host == FALSE diffs=[\(diffs.joined(separator: ","))]")
         }
