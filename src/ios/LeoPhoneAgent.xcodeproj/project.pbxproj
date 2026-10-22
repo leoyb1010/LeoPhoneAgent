@@ -241,11 +241,15 @@
 		E5UIF02A /* LeoEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF02F /* LeoEmptyState.swift */; };
 		E5UIF03A /* LeoInlineError.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF03F /* LeoInlineError.swift */; };
 		E5UIF05A /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
+		LFD1EBD99221 /* OnboardingStepPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF3500C03EBA /* OnboardingStepPage.swift */; };
 		LF5C3A50F061 /* OnboardingGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF89D32ACBA0 /* OnboardingGate.swift */; };
 		E5UIF06A /* HomeContextStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF06F /* HomeContextStrip.swift */; };
 		LFB413556CC1 /* HomeMacScreenCover.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF8ED340523B /* HomeMacScreenCover.swift */; };
 		LF3D0F50B05E /* MacTerminalSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF0503F2B2AA /* MacTerminalSessionsView.swift */; };
 		E5UIF05T /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
+		LFF7E2DFF1BF /* OnboardingStepPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF3500C03EBA /* OnboardingStepPage.swift */; };
+		LFEGIOST001 /* LeoDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0011 /* LeoDesignSystem.swift */; };
+		LFEGIOST002 /* LeoTokens.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFDC0CB32EBE /* LeoTokens.generated.swift */; };
 		LF964EADC933 /* OnboardingGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF89D32ACBA0 /* OnboardingGate.swift */; };
 		E5JV00001 /* Jev.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JV00002 /* Jev.swift */; };
 		E5CUR0021 /* PromptCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0022 /* PromptCacheKey.swift */; };
@@ -1336,6 +1340,7 @@
 		E5UIF02F /* LeoEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoEmptyState.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF03F /* LeoInlineError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoInlineError.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF05F /* LeoUIPolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoUIPolicies.swift"; sourceTree = SOURCE_ROOT; };
+		LF3500C03EBA /* OnboardingStepPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Components/OnboardingStepPage.swift; sourceTree = SOURCE_ROOT; };
 		LF89D32ACBA0 /* OnboardingGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Components/OnboardingGate.swift; sourceTree = SOURCE_ROOT; };
 		E5UIF06F /* HomeContextStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Home/HomeContextStrip.swift"; sourceTree = SOURCE_ROOT; };
 		LF8ED340523B /* HomeMacScreenCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Home/HomeMacScreenCover.swift; sourceTree = SOURCE_ROOT; };
@@ -2550,6 +2555,7 @@
 				E5UIF02F /* LeoEmptyState.swift */,
 				E5UIF03F /* LeoInlineError.swift */,
 				E5UIF05F /* LeoUIPolicies.swift */,
+				LF3500C03EBA /* OnboardingStepPage.swift */,
 				LF89D32ACBA0 /* OnboardingGate.swift */,
 				E5UIF06F /* HomeContextStrip.swift */,
 				LF8ED340523B /* HomeMacScreenCover.swift */,
@@ -3977,6 +3983,9 @@
 				E5SHL0002 /* SyncHealth.swift in Sources */,
 				E5QTK0003 /* QuickTaskCatalog.swift in Sources */,
 				E5UIF05T /* LeoUIPolicies.swift in Sources */,
+				LFF7E2DFF1BF /* OnboardingStepPage.swift in Sources */,
+				LFEGIOST001 /* LeoDesignSystem.swift in Sources */,
+				LFEGIOST002 /* LeoTokens.generated.swift in Sources */,
 				LF964EADC933 /* OnboardingGate.swift in Sources */,
 				E5MDS0003T /* MarkdownStripper.swift in Sources */,
 				E5L3KMMT /* KeyedMemo.swift in Sources */,
@@ -4155,6 +4164,7 @@
 				E5UIF02A /* LeoEmptyState.swift in Sources */,
 				E5UIF03A /* LeoInlineError.swift in Sources */,
 				E5UIF05A /* LeoUIPolicies.swift in Sources */,
+				LFD1EBD99221 /* OnboardingStepPage.swift in Sources */,
 				LF5C3A50F061 /* OnboardingGate.swift in Sources */,
 				E5UIF06A /* HomeContextStrip.swift in Sources */,
 				LFB413556CC1 /* HomeMacScreenCover.swift in Sources */,

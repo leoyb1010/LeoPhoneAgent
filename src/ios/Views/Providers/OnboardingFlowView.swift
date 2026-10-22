@@ -56,25 +56,11 @@ struct OnboardingFlowView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            progress
-                .padding(.top, LeoTheme.Spacing.md)
-            ScrollView {
-                stepContent
-                    .id(step)
-                    .transition(stepTransition)
-                    .frame(maxWidth: 520)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, LeoTheme.Spacing.xl)
-                    .padding(.top, LeoTheme.Spacing.xl)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            actions
-                .frame(maxWidth: 520)
-                .padding(.horizontal, LeoTheme.Spacing.xl)
-                .padding(.bottom, LeoTheme.Spacing.lg)
+        OnboardingStepPage(step: step, transition: stepTransition) {
+            stepDetail
+        } actions: {
+            stepActions
         }
-        .background(LeoTheme.ColorToken.groupedBackground.ignoresSafeArea())
         .navigationTitle(Text("新手引导"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -90,176 +76,55 @@ struct OnboardingFlowView: View {
         .sheet(isPresented: $showDefaultModels) { NavigationStack { OnboardingModelSelectionView() } }
     }
 
-    // MARK: - Pieces
-
     private var stepTransition: AnyTransition {
         reduceMotion ? .opacity : .asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
                                               removal: .move(edge: .leading).combined(with: .opacity))
-    }
-
-    private var progress: some View {
-        HStack(spacing: LeoTheme.Spacing.xs) {
-            ForEach(OnboardingGate.Step.allCases, id: \.self) { s in
-                Capsule()
-                    .fill(s.rawValue <= step.rawValue ? LeoTheme.ColorToken.accent : LeoTheme.ColorToken.separator)
-                    .frame(width: s == step ? 24 : 8, height: 8)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("第 \(step.rawValue + 1) 步，共 \(OnboardingGate.Step.allCases.count) 步"))
-    }
-
-    @ViewBuilder
-    private var stepContent: some View {
-        VStack(spacing: LeoTheme.Spacing.lg) {
-            Image(systemName: symbol)
-                .font(.system(size: 30, weight: .semibold))
-                .foregroundStyle(LeoTheme.ColorToken.accent)
-                .frame(width: 72, height: 72)
-                .background(LeoTheme.ColorToken.accentSoft, in: Circle())
-                .accessibilityHidden(true)
-            VStack(spacing: LeoTheme.Spacing.sm) {
-                Text(title)
-                    .font(.title2.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .accessibilityAddTraits(.isHeader)
-                Text(message)
-                    .font(.body)
-                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            stepDetail
-        }
-    }
-
-    private var symbol: String {
-        switch step {
-        case .model: return "cpu"
-        case .mac: return "macbook.and.iphone"
-        case .firstTask: return "paperplane"
-        }
-    }
-
-    private var title: LocalizedStringKey {
-        switch step {
-        case .model: return "连接模型"
-        case .mac: return "配对 Mac"
-        case .firstTask: return "派第一个任务"
-        }
-    }
-
-    private var message: LocalizedStringKey {
-        switch step {
-        case .model: return "LeoBot 靠大模型思考和干活。添加一个模型服务商（填 API Key 或登录账号）就能开始。"
-        case .mac: return "在 Mac 上的 LeoBot 打开配对二维码，用手机扫一下，就能把任务派给 Mac 去做。没有 Mac 可以跳过。"
-        case .firstTask: return "试试让 LeoBot 帮你做件事。下面这句会放进首页输入框，改一改再发送。"
-        }
     }
 
     @ViewBuilder
     private var stepDetail: some View {
         switch step {
         case .model:
+            if hasModel { OnboardingUI.status(Text("模型已连接")) }
+        case .mac:
+            if hasMac { OnboardingUI.status(Text("已配对 Mac")) }
+            if let pairResult { OnboardingUI.note(Text(verbatim: pairResult)) }
+        case .firstTask:
+            OnboardingUI.samplePromptCard(Self.samplePrompt)
+            if !hasModel { OnboardingUI.note(Text("还没连接模型：发送时会先请你连接。")) }
+        }
+    }
+
+    @ViewBuilder
+    private var stepActions: some View {
+        switch step {
+        case .model:
             if hasModel {
-                statusRow(Text("模型已连接"), done: true)
+                OnboardingUI.primary("下一步", id: "onboarding.next") { advance() }
+                if providerStore.defaultPrimaryGroupId == nil {
+                    OnboardingUI.secondary("选择默认模型", id: "onboarding.model.defaults") { showDefaultModels = true }
+                }
+            } else {
+                OnboardingUI.primary("添加模型服务商", id: "onboarding.model.add") {
+                    if providerStore.instances.isEmpty { showAddProvider = true } else { showModelLibrary = true }
+                }
+                OnboardingUI.secondary("稍后再说", id: "onboarding.model.later") { advance() }
             }
         case .mac:
             if hasMac {
-                statusRow(Text("已配对 Mac"), done: true)
-            }
-            if let pairResult {
-                Text(pairResult)
-                    .font(.footnote)
-                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
-                    .multilineTextAlignment(.center)
+                OnboardingUI.primary("下一步", id: "onboarding.next") { advance() }
+            } else {
+                OnboardingUI.primary(pairing ? "正在打开相机…" : "扫码配对", id: "onboarding.mac.scan") { scanPairCode() }
+                    .disabled(pairing)
+                OnboardingUI.secondary("跳过这一步", id: "onboarding.mac.skip") { advance() }
             }
         case .firstTask:
-            Text(Self.samplePrompt)
-                .font(.callout)
-                .foregroundStyle(LeoTheme.ColorToken.primaryText)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(LeoTheme.Spacing.md)
-                .background(LeoTheme.ColorToken.surface,
-                            in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
-            if !hasModel {
-                Text("还没连接模型：发送时会先请你连接。")
-                    .font(.footnote)
-                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
-            }
+            OnboardingUI.primary("放进输入框", id: "onboarding.task.prefill") { finish(prefill: Self.samplePrompt) }
+            OnboardingUI.secondary("直接开始", id: "onboarding.task.done") { finish(prefill: nil) }
         }
-    }
-
-    private func statusRow(_ text: Text, done: Bool) -> some View {
-        Label { text } icon: {
-            Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(done ? LeoTheme.ColorToken.success : LeoTheme.ColorToken.tertiaryText)
+        if step != .model {
+            OnboardingUI.back { go(to: OnboardingGate.Step(rawValue: step.rawValue - 1) ?? .model) }
         }
-        .font(.subheadline.weight(.semibold))
-        .padding(.horizontal, LeoTheme.Spacing.md)
-        .padding(.vertical, LeoTheme.Spacing.xs)
-        .background(LeoTheme.ColorToken.surface, in: Capsule())
-    }
-
-    // MARK: - Actions
-
-    @ViewBuilder
-    private var actions: some View {
-        VStack(spacing: LeoTheme.Spacing.xs) {
-            switch step {
-            case .model:
-                if hasModel {
-                    primary("下一步", id: "onboarding.next") { advance() }
-                    if providerStore.defaultPrimaryGroupId == nil {
-                        secondary("选择默认模型") { showDefaultModels = true }
-                    }
-                } else {
-                    primary("添加模型服务商", id: "onboarding.model.add") {
-                        if providerStore.instances.isEmpty { showAddProvider = true } else { showModelLibrary = true }
-                    }
-                    secondary("稍后再说", id: "onboarding.model.later") { advance() }
-                }
-            case .mac:
-                if hasMac {
-                    primary("下一步", id: "onboarding.next") { advance() }
-                } else {
-                    primary(pairing ? "正在打开相机…" : "扫码配对", id: "onboarding.mac.scan") { scanPairCode() }
-                        .disabled(pairing)
-                    secondary("跳过这一步", id: "onboarding.mac.skip") { advance() }
-                }
-            case .firstTask:
-                primary("放进输入框", id: "onboarding.task.prefill") { finish(prefill: Self.samplePrompt) }
-                secondary("直接开始", id: "onboarding.task.done") { finish(prefill: nil) }
-            }
-            if step != .model {
-                Button("上一步") { go(to: OnboardingGate.Step(rawValue: step.rawValue - 1) ?? .model) }
-                    .font(.footnote)
-                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
-                    .frame(minHeight: LeoTheme.TouchTarget.minimum)
-            }
-        }
-    }
-
-    private func primary(_ title: LocalizedStringKey, id: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: LeoTheme.TouchTarget.minimum + 6)
-        }
-        .buttonStyle(.borderedProminent)
-        .buttonBorderShape(.capsule)
-        .accessibilityIdentifier(id)
-    }
-
-    private func secondary(_ title: LocalizedStringKey, id: String = "", action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity, minHeight: LeoTheme.TouchTarget.minimum)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(LeoTheme.ColorToken.accent)
-        .accessibilityIdentifier(id)
     }
 
     private func advance() {
