@@ -583,8 +583,25 @@ private struct BridgedAssistantFooterV3: View {
     /// footers (a raw UserDefaults read was invisible to SwiftUI).
     @AppStorage("leo.tldrEnabled") private var tldrEnabled: Bool = false
     var maxWidth: CGFloat
+    /// [E2] 本次显示期间已点过 / 关掉了「值得收进大脑？」(账本里也记了,这里只为立刻重绘)。
+    @State private var brainSuggestionHandledId: UUID?
 
     // showUsage and usageContentVisible are on bridge, toggled by double-tap on block cells.
+
+    /// [E2] 刚完成、看起来值得留的回复下面出一行建议;资料库没连、点过或关过都不出。
+    private var showBrainSuggestion: Bool {
+        guard showActionBar, bridge.isLastReply, bridge.onNextStep != nil, brainSuggestionHandledId != message.id,
+              BrainStore.shared.isConfigured,
+              !ReplyNextStep.BrainSuggestionLedger().isHandled(message.id) else { return false }
+        return ReplyNextStep.suggestsBrain(reply: ReplyContentMemo.shared.entry(for: message).markdown,
+                                           hasError: message.error != nil)
+    }
+
+    private func finishBrainSuggestion() {
+        ReplyNextStep.BrainSuggestionLedger().markHandled(message.id)
+        brainSuggestionHandledId = message.id
+        bridge.onFooterLayoutChanged?()
+    }
 
     private var hasVisibleContent: Bool {
         message.blocks.contains { block in
@@ -680,6 +697,14 @@ private struct BridgedAssistantFooterV3: View {
                     .padding(.top, 2)
                 }
                 ReplyActionBarV3(message: message, bridge: bridge)
+                if showBrainSuggestion {
+                    BrainKeepSuggestionChip(
+                        onSave: {
+                            finishBrainSuggestion()
+                            bridge.onNextStep?(.brain)
+                        },
+                        onDismiss: finishBrainSuggestion)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1583,8 +1608,10 @@ extension CollectionViewMessageListV3 {
             let canResume: Bool
             let showUsage: Bool
             let hasRetryRow: Bool
+            let isLastReply: Bool
             init(_ bridge: CellStateBridgeV2) {
                 isActiveMessage = bridge.isActiveMessage
+                isLastReply = bridge.isLastReply
                 canResume = bridge.canResume
                 showUsage = bridge.showUsage
                 hasRetryRow = bridge.autoRetryAttempt != 0
@@ -1601,6 +1628,8 @@ extension CollectionViewMessageListV3 {
             // edges that matter happen between calls.
             let beforeShape = lastFooterShapeByMessage[message.id] ?? FooterHeightShape(bridge)
             bridge.isActiveMessage = isActive
+            bridge.isLastReply = isLast && message.role == .assistant
+            bridge.onFooterLayoutChanged = { [weak self] in self?.invalidateFooterHeight(messageId: message.id) }
             bridge.commandStartTime = vm.commandStartTime
             bridge.onStop = isActive ? { [weak self] in self?.onStop?() } : nil
             bridge.browserPool = vm.browserTabPool
@@ -1746,6 +1775,10 @@ extension CollectionViewMessageListV3 {
             for msg in messages.dropLast() {
                 if msg.role == .assistant, let b = cellBridges[msg.id], b.isActiveMessage {
                     b.isActiveMessage = false
+                }
+                // [E2] 不再是最后一条:走一遍完整更新,页脚形状变了会丢旧高度(建议行随之收起)。
+                if msg.role == .assistant, let b = cellBridges[msg.id], b.isLastReply {
+                    updateBridge(b, message: msg, in: messages)
                 }
             }
             for msg in messages where msg.role == .user {

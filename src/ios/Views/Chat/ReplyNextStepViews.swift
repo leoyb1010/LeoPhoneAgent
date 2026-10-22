@@ -91,3 +91,46 @@ struct ReplyQuickTaskForm: View {
         dismiss()
     }
 }
+
+/// [E2] 回复下面的一行轻提示:「值得收进大脑？」。点它走下一步里同一个「收进大脑」动作
+/// (存成草稿知识卡,在资料库确认);点 × 关掉。每条回复最多出一次,从不自动保存。
+struct BrainKeepSuggestionChip: View {
+    let onSave: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: LeoTheme.Spacing.xs) {
+            Button(action: onSave) {
+                HStack(spacing: LeoTheme.Spacing.xxs) {
+                    Image(systemName: ReplyNextStep.Action.brain.symbolName)
+                        .accessibilityHidden(true)
+                    Text("值得收进大脑？")
+                        .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                    Text("收进大脑")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(LeoTheme.ColorToken.accent)
+                }
+                .padding(.horizontal, LeoTheme.Spacing.sm)
+                .padding(.vertical, LeoTheme.Spacing.xxs + 2)
+                .background(LeoTheme.ColorToken.accentSoft, in: Capsule())
+                .contentShape(Capsule())
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityHint(Text("存成资料库里的草稿知识卡"))
+            .accessibilityIdentifier("reply.brainSuggestion")
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(LeoTheme.ColorToken.tertiaryText)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(Text("不用了"))
+            .accessibilityIdentifier("reply.brainSuggestion.dismiss")
+            Spacer(minLength: 0)
+        }
+        .font(.system(size: 12))
+        .buttonStyle(.plain)
+    }
+}

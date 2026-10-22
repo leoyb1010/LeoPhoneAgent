@@ -523,6 +523,12 @@ struct ContentView: View {
                     stackLayout
                 }
             }
+            // [G2] 首启新手引导 + 空状态 / 设置里再进来(宿主是零尺寸背景视图)。
+            .background(OnboardingHost(onPrefill: { prompt in
+                activeToolSheet = nil
+                homeDraft.text = prompt
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { homePromptFocused = true }
+            }))
             // Home "/" panel and brightness picker: shared by both layouts (they
             // used to hang off the iPhone list only, so "/" was dead on iPad).
             .sheet(isPresented: $showHomeActions, onDismiss: runPendingHomeAction) { homeActionSheet }
@@ -3320,7 +3326,8 @@ struct ContentView: View {
             },
             onConnectModel: {
                 if providerStore.instances.isEmpty { showAddProvider = true } else { showSelectModels = true }
-            }
+            },
+            onOnboarding: { NotificationCenter.default.post(name: .onboardingRequested, object: nil) }
         )
         .background(LeoTheme.ColorToken.groupedBackground)
     }

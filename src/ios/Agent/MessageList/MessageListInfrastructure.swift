@@ -1121,6 +1121,10 @@ final class CellStateBridgeV2: ObservableObject {
     @Published var onShareCard: (() -> Void)?
     /// [E1] 回复的「下一步」(收藏 / 快捷任务 / 定时 / 发到 Mac)。
     @Published var onNextStep: ((ReplyNextStep.Action) -> Void)?
+    /// [E2] 这条是对话里最后一条消息且是回复:「值得收进大脑？」只挂在刚完成的那条下面。
+    @Published var isLastReply: Bool = false
+    /// [E2] 页脚内容在 cell 内部变了(建议被关掉):让列表丢掉旧高度重新量。
+    var onFooterLayoutChanged: (() -> Void)?
     /// True while this reply is still streaming — disables "Read from Start".
     @Published var isStreaming: Bool = false
     @Published var browserPool: BrowserTabPool?

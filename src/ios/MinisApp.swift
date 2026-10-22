@@ -379,6 +379,9 @@ struct MinisApp: App {
         // [T-brain] devicectl 拷进来的资料库令牌文件:导入钥匙串后立即删除。
         fgSteps.next("fg.step.brainProvision")
         BrainStore.shared.importProvisionFileIfPresent()
+        // [E1] 「Leo 画像」卡:内容指纹和上次发布的不同才发(没连资料库 / 没写卡权限时什么都不做)。
+        BrainProfilePublisher.shared.start()
+        Task { @MainActor in await BrainProfilePublisher.shared.publishIfChanged(reason: "foreground") }
         // [T-ios-live-activity-soft-finish] If a completed task's Live
         // Activity is lingering (soft-finished, awaiting the user), the
         // user is now back in the app — dismiss it.

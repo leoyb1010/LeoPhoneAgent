@@ -373,6 +373,8 @@ struct HomeEmptyState: View {
     let hasModel: Bool
     let onSuggestion: (String) -> Void
     let onConnectModel: () -> Void
+    /// [G2] 没配好模型时,再进一次新手引导。
+    var onOnboarding: (() -> Void)? = nil
 
     /// Also offered under the iPad home workbench composer.
     static let suggestions = ["帮我整理今天要做的事", "打开手电筒", "总结剪贴板里的内容"]
@@ -406,6 +408,13 @@ struct HomeEmptyState: View {
                 Button("连接模型,处理更复杂的任务", action: onConnectModel)
                     .font(.footnote.weight(.semibold))
                     .padding(.top, 4)
+                if let onOnboarding {
+                    Button("看看新手引导", action: onOnboarding)
+                        .font(.footnote)
+                        .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                        .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                        .accessibilityIdentifier("home.onboarding")
+                }
             }
             Spacer(minLength: 120)
         }
