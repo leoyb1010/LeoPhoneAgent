@@ -22,7 +22,7 @@ async function makeTempHome(prefix = "zcode-subagents-home-"): Promise<string> {
 }
 
 /** 在临时 HOME 下构造一个内置官方插件缓存目录（无 installed_plugins.json 记录），返回版本根目录。 */
-// [leo] 用户级数据根为 ~/.leophoneagent；官方插件夹具改用 superpowers（Leo 默认启用），
+// [leo] 用户级数据根为 ~/.leophoneagent；官方插件夹具改用 skill-creator（默认启用；superpowers 自 P1 起默认关闭），
 // 上游用的 documents 在 Leo 不随包、不默认启用。
 async function writeOfficialPluginFixture(
   home: string,
@@ -90,7 +90,7 @@ describe("subagent markdown helpers", () => {
         );
       }
     }
-    const pluginRoot = await writeOfficialPluginFixture(home, "superpowers", "0.1.4", "direct");
+    const pluginRoot = await writeOfficialPluginFixture(home, "skill-creator", "0.1.4", "direct");
     await mkdir(join(pluginRoot, "agents", "nested"));
     await writeFile(
       join(pluginRoot, "agents", "nested", "deep.md"),
@@ -103,10 +103,10 @@ describe("subagent markdown helpers", () => {
         result.agents.filter((agent) => agent.source === "user").map((agent) => agent.name),
       ).toEqual(mode === "settingsUserOnly" ? ["user-direct"] : ["user-direct", "project-direct"]);
       expect(result.pluginAgents.map((agent) => agent.name).sort()).toEqual([
-        "superpowers:deep",
-        "superpowers:direct",
+        "skill-creator:deep",
+        "skill-creator:direct",
       ]);
-      expect(result.pluginAgents.find((agent) => agent.name === "superpowers:deep")?.path).toBe(
+      expect(result.pluginAgents.find((agent) => agent.name === "skill-creator:deep")?.path).toBe(
         join(pluginRoot, "agents", "nested", "deep.md"),
       );
       expect(result.diagnostics).toEqual([]);
@@ -115,17 +115,17 @@ describe("subagent markdown helpers", () => {
 
   it("lists built-in official plugin agents from the official cache without an install record", async () => {
     // Bug 根因：discoverPluginAgents 只读 installed_plugins.json，内置官方插件由 CLI seed 到
-    // cache/zcode-plugins-official 且没有安装记录，superpowers:visual-judge 在 Settings 永远不可见。
+    // cache/zcode-plugins-official 且没有安装记录，skill-creator:visual-judge 在 Settings 永远不可见。
     const home = await makeTempHome();
     const workspacePath = join(home, "workspace");
-    const oldRoot = await writeOfficialPluginFixture(home, "superpowers", "0.1.9", "visual-judge");
-    const newRoot = await writeOfficialPluginFixture(home, "superpowers", "0.1.10", "visual-judge");
-    const invalidRoot = await writeOfficialPluginFixture(home, "superpowers", "99.0", "visual-judge");
+    const oldRoot = await writeOfficialPluginFixture(home, "skill-creator", "0.1.9", "visual-judge");
+    const newRoot = await writeOfficialPluginFixture(home, "skill-creator", "0.1.10", "visual-judge");
+    const invalidRoot = await writeOfficialPluginFixture(home, "skill-creator", "99.0", "visual-judge");
     await writeFile(
       join(invalidRoot, ".zcode-plugin", "plugin.json"),
       JSON.stringify({ name: "wrong" }),
     );
-    await writeOfficialPluginFixture(home, "superpowers", "99.0.backup-1", "visual-judge");
+    await writeOfficialPluginFixture(home, "skill-creator", "99.0.backup-1", "visual-judge");
     await mkdir(join(newRoot, "..", "0.1.4.backup-1"), { recursive: true });
     await mkdir(join(newRoot, "..", ".seed-lock"), { recursive: true });
     // ios-simulator 不在默认启用集合里，且 config 没有显式启用，必须被忽略。
@@ -145,11 +145,11 @@ describe("subagent markdown helpers", () => {
 
     const result = await service.list({ workspacePath, provider: "glm" });
 
-    expect(result.pluginAgents.map((agent) => agent.name)).toEqual(["superpowers:visual-judge"]);
+    expect(result.pluginAgents.map((agent) => agent.name)).toEqual(["skill-creator:visual-judge"]);
     expect(result.pluginAgents[0]).toMatchObject({
-      id: "plugin:superpowers@zcode-plugins-official:visual-judge",
-      pluginId: "superpowers@zcode-plugins-official",
-      pluginName: "superpowers",
+      id: "plugin:skill-creator@zcode-plugins-official:visual-judge",
+      pluginId: "skill-creator@zcode-plugins-official",
+      pluginName: "skill-creator",
       // 多版本缓存共存时取数字感知最新的版本目录，而不是字典序首项。
       path: join(newRoot, "agents", "visual-judge.md"),
       scope: "user",
@@ -158,12 +158,12 @@ describe("subagent markdown helpers", () => {
     expect(result.pluginAgents[0]?.path).not.toBe(join(oldRoot, "agents", "visual-judge.md"));
     expect(
       result.agents.filter((agent) => agent.source === "plugin").map((agent) => agent.name),
-    ).toEqual(["superpowers:visual-judge", "visual-judge"]);
+    ).toEqual(["skill-creator:visual-judge", "visual-judge"]);
     await writeFile(
       join(home, ".leophoneagent", "cli", "config.json"),
       JSON.stringify({
         plugins: {
-          enabledPlugins: { "superpowers@zcode-plugins-official": false },
+          enabledPlugins: { "skill-creator@zcode-plugins-official": false },
           suppressedBuiltins: ["browser-use@zcode-plugins-official"],
         },
       }),
@@ -174,7 +174,7 @@ describe("subagent markdown helpers", () => {
   it("settingsUserOnly 仍返回本地插件资源，不引入运行时别名或项目文件", async () => {
     const home = await makeTempHome();
     const workspacePath = join(home, "workspace");
-    await writeOfficialPluginFixture(home, "superpowers", "0.1.4", "visual-judge");
+    await writeOfficialPluginFixture(home, "skill-creator", "0.1.4", "visual-judge");
     const projectPath = join(workspacePath, ".zcode", "agents", "project.md");
     await mkdir(join(workspacePath, ".zcode", "agents"), { recursive: true });
     const projectContent =
@@ -182,7 +182,7 @@ describe("subagent markdown helpers", () => {
     await writeFile(projectPath, projectContent);
     const service = createSubagentsService({ homeDir: home, isDesktopRuntime: true });
     const result = await service.list({ workspacePath, mode: "settingsUserOnly" });
-    expect(result.pluginAgents.map((agent) => agent.name)).toEqual(["superpowers:visual-judge"]);
+    expect(result.pluginAgents.map((agent) => agent.name)).toEqual(["skill-creator:visual-judge"]);
     expect(result.pluginAgents[0]?.readOnly).toBe(true);
     expect(
       result.agents.some((agent) => agent.source === "plugin" || agent.scope === "workspace"),
@@ -193,13 +193,13 @@ describe("subagent markdown helpers", () => {
   it("prefers the install record over the official cache for the same plugin id", async () => {
     const home = await makeTempHome();
     const workspacePath = join(home, "workspace");
-    await writeOfficialPluginFixture(home, "superpowers", "0.1.4", "visual-judge");
-    const installedRoot = join(home, "installed", "superpowers");
+    await writeOfficialPluginFixture(home, "skill-creator", "0.1.4", "visual-judge");
+    const installedRoot = join(home, "installed", "skill-creator");
     await mkdir(join(installedRoot, ".zcode-plugin"), { recursive: true });
     await mkdir(join(installedRoot, "agents"), { recursive: true });
     await writeFile(
       join(installedRoot, ".zcode-plugin", "plugin.json"),
-      JSON.stringify({ name: "superpowers" }),
+      JSON.stringify({ name: "skill-creator" }),
       "utf8",
     );
     await writeFile(
@@ -213,8 +213,8 @@ describe("subagent markdown helpers", () => {
         version: 1,
         plugins: [
           {
-            id: "superpowers@zcode-plugins-official",
-            name: "superpowers",
+            id: "skill-creator@zcode-plugins-official",
+            name: "skill-creator",
             marketplace: "zcode-plugins-official",
             version: "9.9.9",
             installPath: installedRoot,
@@ -227,7 +227,7 @@ describe("subagent markdown helpers", () => {
     await writeFile(
       join(home, ".leophoneagent", "cli", "config.json"),
       JSON.stringify({
-        plugins: { enabledPlugins: { "superpowers@zcode-plugins-official": true } },
+        plugins: { enabledPlugins: { "skill-creator@zcode-plugins-official": true } },
       }),
       "utf8",
     );
@@ -242,8 +242,8 @@ describe("subagent markdown helpers", () => {
       join(home, ".leophoneagent", "cli", "config.json"),
       JSON.stringify({
         plugins: {
-          enabledPlugins: { "superpowers@zcode-plugins-official": true },
-          suppressedBuiltins: ["superpowers@zcode-plugins-official"],
+          enabledPlugins: { "skill-creator@zcode-plugins-official": true },
+          suppressedBuiltins: ["skill-creator@zcode-plugins-official"],
         },
       }),
     );
@@ -251,7 +251,7 @@ describe("subagent markdown helpers", () => {
     await writeFile(
       join(home, ".leophoneagent", "cli", "config.json"),
       JSON.stringify({
-        plugins: { enabledPlugins: { "superpowers@zcode-plugins-official": false } },
+        plugins: { enabledPlugins: { "skill-creator@zcode-plugins-official": false } },
       }),
     );
     expect((await service.list({ workspacePath, provider: "glm" })).pluginAgents).toEqual([]);
@@ -948,11 +948,11 @@ tools:
 
   it("lists built-in official plugin agents from the official cache without an install record", async () => {
     // Bug 根因：discoverPluginAgents 只读 installed_plugins.json，内置官方插件由 CLI seed 到
-    // cache/zcode-plugins-official 且没有安装记录，superpowers:visual-judge 在 Settings 永远不可见。
+    // cache/zcode-plugins-official 且没有安装记录，skill-creator:visual-judge 在 Settings 永远不可见。
     const home = await makeTempHome();
     const workspacePath = join(home, "workspace");
-    const oldRoot = await writeOfficialPluginFixture(home, "superpowers", "0.1.2", "visual-judge");
-    const newRoot = await writeOfficialPluginFixture(home, "superpowers", "0.1.4", "visual-judge");
+    const oldRoot = await writeOfficialPluginFixture(home, "skill-creator", "0.1.2", "visual-judge");
+    const newRoot = await writeOfficialPluginFixture(home, "skill-creator", "0.1.4", "visual-judge");
     await mkdir(join(newRoot, "..", "0.1.4.backup-1"), { recursive: true });
     await mkdir(join(newRoot, "..", ".seed-lock"), { recursive: true });
     // ios-simulator 不在默认启用集合里，且 config 没有显式启用，必须被忽略。
@@ -972,11 +972,11 @@ tools:
 
     const result = await service.list({ workspacePath, provider: "glm" });
 
-    expect(result.pluginAgents.map((agent) => agent.name)).toEqual(["superpowers:visual-judge"]);
+    expect(result.pluginAgents.map((agent) => agent.name)).toEqual(["skill-creator:visual-judge"]);
     expect(result.pluginAgents[0]).toMatchObject({
-      id: "plugin:superpowers@zcode-plugins-official:visual-judge",
-      pluginId: "superpowers@zcode-plugins-official",
-      pluginName: "superpowers",
+      id: "plugin:skill-creator@zcode-plugins-official:visual-judge",
+      pluginId: "skill-creator@zcode-plugins-official",
+      pluginName: "skill-creator",
       // 多版本缓存共存时取数字感知最新的版本目录，而不是字典序首项。
       path: join(newRoot, "agents", "visual-judge.md"),
       scope: "user",
@@ -985,19 +985,19 @@ tools:
     expect(result.pluginAgents[0]?.path).not.toBe(join(oldRoot, "agents", "visual-judge.md"));
     expect(
       result.agents.filter((agent) => agent.source === "plugin").map((agent) => agent.name),
-    ).toEqual(["superpowers:visual-judge", "visual-judge"]);
+    ).toEqual(["skill-creator:visual-judge", "visual-judge"]);
   });
 
   it("prefers the install record over the official cache for the same plugin id", async () => {
     const home = await makeTempHome();
     const workspacePath = join(home, "workspace");
-    await writeOfficialPluginFixture(home, "superpowers", "0.1.4", "visual-judge");
-    const installedRoot = join(home, "installed", "superpowers");
+    await writeOfficialPluginFixture(home, "skill-creator", "0.1.4", "visual-judge");
+    const installedRoot = join(home, "installed", "skill-creator");
     await mkdir(join(installedRoot, ".zcode-plugin"), { recursive: true });
     await mkdir(join(installedRoot, "agents"), { recursive: true });
     await writeFile(
       join(installedRoot, ".zcode-plugin", "plugin.json"),
-      JSON.stringify({ name: "superpowers" }),
+      JSON.stringify({ name: "skill-creator" }),
       "utf8",
     );
     await writeFile(
@@ -1011,8 +1011,8 @@ tools:
         version: 1,
         plugins: [
           {
-            id: "superpowers@zcode-plugins-official",
-            name: "superpowers",
+            id: "skill-creator@zcode-plugins-official",
+            name: "skill-creator",
             marketplace: "zcode-plugins-official",
             version: "9.9.9",
             installPath: installedRoot,
@@ -1025,7 +1025,7 @@ tools:
     await writeFile(
       join(home, ".leophoneagent", "cli", "config.json"),
       JSON.stringify({
-        plugins: { enabledPlugins: { "superpowers@zcode-plugins-official": true } },
+        plugins: { enabledPlugins: { "skill-creator@zcode-plugins-official": true } },
       }),
       "utf8",
     );
@@ -1041,10 +1041,10 @@ tools:
   it("persists plugin agent model overrides by agent id and echoes them in list", async () => {
     const home = await makeTempHome();
     const workspacePath = join(home, "workspace");
-    const pluginRoot = await writeOfficialPluginFixture(home, "superpowers", "0.1.4", "visual-judge", {
+    const pluginRoot = await writeOfficialPluginFixture(home, "skill-creator", "0.1.4", "visual-judge", {
       model: "custom:custom-openai:gpt-5.4",
     });
-    const agentId = "plugin:superpowers@zcode-plugins-official:visual-judge";
+    const agentId = "plugin:skill-creator@zcode-plugins-official:visual-judge";
     const service = createSubagentsService({ homeDir: home, isDesktopRuntime: true });
 
     const before = await service.list({ workspacePath, provider: "glm" });

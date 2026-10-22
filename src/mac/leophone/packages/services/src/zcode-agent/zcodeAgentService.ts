@@ -351,6 +351,10 @@ import { AutomationRepo } from "#src/session/automationRepo.js";
 import { TaskIndexRepo } from "#src/session/taskIndexRepo.js";
 import { ZCodeAgentMcpStatusModeUnsupportedError } from "#src/zcode-agent/zcodeAgentErrors.js";
 import { ZCodeAgentProcessManager } from "./zcodeAgentProcessManager.js";
+import {
+  countRunningAutomationRuns as countLeoRunningAutomationRuns,
+  createLeoMainLaneIdleRecycler,
+} from "./leoMainLaneIdleRecycle.js"; // [leo]
 import type { ZCodeAgentProcessManagerOptions } from "./zcodeAgentProcessManager.js";
 import type { IOffPeakTaskService } from "#src/session/offPeakTask.js";
 import {
@@ -1376,6 +1380,40 @@ export function createZCodeAgentService(
     // Process manager 只会为当前 available runtime 发布 unavailable；这里再绑定当前
     // active client 做第二层 identity guard，避免旧 runtime 的迟到回收误伤换代结果。
     invalidateWorkspaceClient(event.workspaceKey, active.client);
+  });
+  // [leo] 主泳道空闲回收（判定见 leoMainLaneIdleRecycle.ts）；回收动作与 disposeWorkspace 相同，
+  // 下一次 getClient 透明重新拉起。
+  const leoMainLaneIdleRecycler = createLeoMainLaneIdleRecycler({
+    processManager,
+    countConversationSubscriptions: (workspaceKey) => {
+      let count = 0;
+      for (const route of v4SubscriptionRoutes.values()) {
+        if (route.workspaceKey === workspaceKey && route.topic.startsWith("conversation/")) {
+          count += 1;
+        }
+      }
+      return count;
+    },
+    isStartupWaiting: (workspaceKey) => waitingWorkspaceStartups.has(workspaceKey),
+    countRunningAutomationRuns: async (workspace) => {
+      let count = 0;
+      for (const automation of await automationService.list(workspace)) {
+        const runs = await automationService.listRuns(automation.automationId, workspace);
+        count += countLeoRunningAutomationRuns(runs, Date.now());
+      }
+      return count;
+    },
+    recycle: async (workspace) => {
+      const workspaceKey = resolveWorkspaceKey(workspace);
+      cancelWaitingWorkspaceStartup(workspaceKey);
+      clearV4SubscriptionRoutes(workspaceKey);
+      cuaOperationTurnTracker?.clearWorkspaceKey(workspaceKey);
+      const active = activeClientsByWorkspaceKey.get(workspaceKey);
+      if (active) invalidateWorkspaceClient(workspaceKey, active.client);
+      else interactionPreferenceSyncByWorkspaceKey.delete(workspaceKey);
+      await processManager.disposeWorkspace(workspace);
+    },
+    log: (message, data) => logger.info(undefined, message, data),
   });
 
   async function resolveAccountRequestAuth(
@@ -3517,6 +3555,7 @@ export function createZCodeAgentService(
     clearV4SubscriptionRoutes();
     v4RouteRuntimeRestartDisposable.dispose();
     runtimeLifecycleDisposable.dispose();
+    leoMainLaneIdleRecycler.dispose(); // [leo]
   }
 
   // 3.12.2：远端灰度读取不能放进客户端就绪与创建命令：失败时串行重试会阻塞普通聊天。

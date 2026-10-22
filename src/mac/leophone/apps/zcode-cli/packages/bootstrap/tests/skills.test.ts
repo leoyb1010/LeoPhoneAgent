@@ -98,31 +98,53 @@ describe("inspectZCodeSkill", () => {
     }
   });
 
-  // [leo] 文档四件套（docx/pdf/pptx/xlsx）不随包；默认启用的随包内容插件是 browser-use 与 superpowers。
+  // [leo] 文档四件套（docx/pdf/pptx/xlsx）不随包；默认启用的随包内容插件是 browser-use。
+  // superpowers 随包但默认关闭（P1 首轮提速），在项目配置里显式开启后其技能才可见。
   it("discovers bundled content skills through default-enabled official plugins", async () => {
     const dir = await mkdtemp(join(tmpdir(), "zcode-bootstrap-document-skills-"));
 
     try {
       const env = { ZCODE_STORAGE_DIR: join(dir, "storage") };
+      const bundledSkillNames = (skills: { name: string }[]) =>
+        skills
+          .filter((skill) =>
+            ["control-browser", "docx", "pdf", "pptx", "using-superpowers", "web-gui-tester", "xlsx"].includes(
+              skill.name,
+            ),
+          )
+          .map((skill) => skill.name)
+          .toSorted();
       const outcome = await listZCodeSkills({
         env,
         skipUserConfig: true,
         workingDirectory: dir,
       });
       const bundledSkills = outcome.skills.filter((skill) =>
-        ["control-browser", "docx", "pdf", "pptx", "using-superpowers", "web-gui-tester", "xlsx"].includes(
-          skill.name,
-        ),
+        ["control-browser", "web-gui-tester"].includes(skill.name),
       );
 
-      expect(bundledSkills.map((skill) => skill.name).toSorted()).toEqual([
+      expect(bundledSkillNames(outcome.skills)).toEqual(["control-browser", "web-gui-tester"]);
+      expect(bundledSkills.map((skill) => skill.scope)).toEqual(["system", "system"]);
+      expect(bundledSkills.map((skill) => skill.source)).toEqual(["plugin", "plugin"]);
+      expect(outcome.diagnostics).toEqual([]);
+
+      await mkdir(join(dir, ".zcode"), { recursive: true });
+      await writeFile(
+        join(dir, ".zcode", "config.json"),
+        JSON.stringify({
+          plugins: { enabledPlugins: { "superpowers@zcode-plugins-official": true } },
+        }),
+      );
+      const enabledOutcome = await listZCodeSkills({
+        env,
+        skipUserConfig: true,
+        workingDirectory: dir,
+      });
+      expect(bundledSkillNames(enabledOutcome.skills)).toEqual([
         "control-browser",
         "using-superpowers",
         "web-gui-tester",
       ]);
-      expect(bundledSkills.map((skill) => skill.scope)).toEqual(["system", "system", "system"]);
-      expect(bundledSkills.map((skill) => skill.source)).toEqual(["plugin", "plugin", "plugin"]);
-      expect(outcome.diagnostics).toEqual([]);
 
       const superpowersInspection = await inspectZCodeSkill({
         env,

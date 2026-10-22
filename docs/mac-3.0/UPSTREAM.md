@@ -284,3 +284,12 @@ Peekaboo(`leo/bin`)/ leo-speech / 菜单栏模板图标三类 extraResources;`le
 | `packages/desktop/src/main/desktopMainIpcPlatform.ts` | 43 起打开框默认「下载」且不记上次目录:选目录 / 选文件记住上次所在目录 |
 | `packages/desktop/scripts/dev.mjs` | 42 起不再 postinstall 下载二进制:`require("electron")` 按需下载并取路径 |
 | 根 `package.json` `pnpm.overrides` | `@agentclientprotocol/claude-agent-acp>@anthropic-ai/claude-agent-sdk: 0.3.304`;acp 升到 0.94+ 时去掉 |
+
+## P1 首轮提速 / 空闲内存补丁(up-p1-mac,同步上游时复查,改动处标 `[leo]`)
+| 文件 | 内容 |
+|---|---|
+| `apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts` | superpowers 去掉 `defaultEnabled`(默认关,仍随包可开);`packages/shared/src/plugin-marketplaces.ts` 名单同步删掉。无迁移:随包 seed 不落盘 `enabledPlugins`,只有手动切换才写 |
+| `packages/shared/src/zcode-protocol/index.ts` | `zcodeProcessResourceSampleSchema` 加可选 `residentSessionCount` |
+| `apps/zcode-cli/packages/bootstrap/src/zcode-protocol/resource-sampler.ts` | 60s 资源样本附带进程内常驻 session 数 |
+| `packages/services/src/zcode-agent/zcodeAgentService.ts` | 挂 `createLeoMainLaneIdleRecycler`(新文件 `leoMainLaneIdleRecycle.ts`):主泳道 20 分钟空闲回收,回收动作同 `disposeWorkspace` |
+| `packages/services/package.json` | 导出 `./leo-main-lane-idle-recycle`(手机桥接登记默认工作区不回收) |

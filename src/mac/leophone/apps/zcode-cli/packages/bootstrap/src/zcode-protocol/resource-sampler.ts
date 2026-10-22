@@ -25,7 +25,8 @@ export function startProtocolResourceSampler(
       onSample: (sample, memoryUsage) => {
         send({
           method: zcodeProtocolNotifications.processResourceSample,
-          params: sample,
+          // [leo] 附带常驻 session 数，Host 主泳道空闲回收只在它为 0 时才考虑回收进程。
+          params: { ...sample, residentSessionCount: readResidentSessionCount(server) },
         });
         // resident session TTL / 水位收敛借用资源采样节拍（60s）作兜底，不新增定时器；
         // sampler 对 onSample 已有异常兜底，单次 rebalance 失败不影响遥测上报。
@@ -62,6 +63,15 @@ export function startProtocolResourceSampler(
     return sampler;
   } catch {
     // 资源遥测是 best effort，初始化失败不能改变 Agent 启动结果。
+    return undefined;
+  }
+}
+
+// [leo] 读不到时省略字段：Host 把“未知”当作“有工作”，不会回收。
+function readResidentSessionCount(server: ZCodeProtocolAgentServer): number | undefined {
+  try {
+    return server.collectMemoryDiagnostics().sessions;
+  } catch {
     return undefined;
   }
 }
