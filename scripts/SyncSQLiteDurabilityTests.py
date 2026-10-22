@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Run real SQLite failure/retry tests against exact extracted ChatStore methods.
 
-UIKit/SwiftAnthropic/UI notification types are isolated with test-only stubs;
+UIKit/SwiftAnthropic/UI notification types, the session-list cache and the
+derived preview column are isolated with test-only stubs;
 SQL mutation, conflict checks, transactions and commit/error paths are production
 source. Also executes the full production delivery-ledger smoke suite.
 """
@@ -27,9 +28,25 @@ def method(text, name):
     return text[start:end]
 
 
+def merge_outcome_decl(work):
+    """Write the exact SyncMergeOutcome/SyncInboundDisposition value types.
+
+    They live in SyncInboundHardening.swift, whose other declarations
+    (sanitizer/quarantine/applier) pull unrelated app dependencies.
+    """
+    hardening = (ROOT / 'src/ios/Agent/Sync/V2/SyncInboundHardening.swift').read_text()
+    outcome = hardening.split('// MARK: - Merge outcome', 1)[1].split('// MARK: - Sanitizer', 1)[0]
+    assert 'enum SyncInboundDisposition' in outcome and 'enum SyncMergeOutcome' in outcome, 'merge outcome section moved'
+    path = work / 'MergeOutcome.swift'
+    path.write_text('import Foundation\n' + outcome)
+    return path
+
+
 support = r'''
 import Foundation
 import SQLite3
+// Mirrors ChatStore.swift's file-private destructor constant used by the extracted methods.
+private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 struct TestLogger { func info(_ x: String) {}; func warning(_ x: String) {}; func debug(_ x: String) {} }
 let iCloudLogger = TestLogger()
 struct SyncDevice { let id: String; let deviceName: String; let zoneName: String; let lastSeen: Date; let osVersion: String; let uploadTypes: [String] }
@@ -41,6 +58,10 @@ final class ChatSQLProbe {
     let db: OpaquePointer?
     init(_ db: OpaquePointer?) { self.db = db }
     func invalidateSessionListCache() {}
+    func invalidateSessionListCache(sessionId: String) {}
+    // Derived preview cache (SessionPreviewRule + parts text extraction); recorded, not recomputed.
+    var previewRecomputes: [String] = []
+    func recomputeStoredPreview(sessionId: String) { previewRecomputes.append(sessionId) }
     func isResurrectionOfDeleted(_ id: String, remoteUpdatedAt: Date) -> Bool { false }
     static func partFlags(fromPartsJSON: String) -> Int { 0 }
     static func partFlagsSQLExpr(_ x: String) -> String { "0" }
@@ -66,7 +87,7 @@ main = r'''
         func failed(_ operation: () throws -> Void) { do { try operation(); preconditionFailure("failed storage was acknowledged") } catch {} }
         sql("CREATE TABLE sessions(id TEXT PRIMARY KEY,title TEXT,category TEXT,model_id TEXT,created_at REAL,updated_at REAL,remote_origin_device_id TEXT,memory_enabled INTEGER,model_binding TEXT,pinned_at REAL,origin_device_id TEXT,last_writer_device_id TEXT)")
         sql("CREATE TABLE messages(id TEXT PRIMARY KEY,session_id TEXT,role TEXT,parts_json TEXT,created_at REAL,token_usage TEXT,sort_order INTEGER,reasoning_content TEXT,stream_interrupt_count INTEGER,updated_at REAL,part_flags INTEGER)")
-        sql("CREATE TABLE remote_messages AS SELECT * FROM messages")
+        sql("CREATE TABLE remote_messages(id TEXT NOT NULL,device_id TEXT NOT NULL,session_id TEXT NOT NULL,role TEXT NOT NULL,parts_json TEXT NOT NULL,created_at REAL NOT NULL,token_usage TEXT,sort_order INTEGER NOT NULL DEFAULT 0,reasoning_content TEXT,stream_interrupt_count INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(id,device_id))")
         sql("CREATE TABLE sync_devices(device_id TEXT PRIMARY KEY,device_name TEXT,zone_name TEXT,last_seen REAL,os_version TEXT,upload_types TEXT)")
         let store = ChatSQLProbe(db)
         let session = ChatSession(id: "s", title: "old", category: nil, modelId: "m", createdAt: Date(timeIntervalSince1970: 1), updatedAt: Date(timeIntervalSince1970: 1))
@@ -105,7 +126,19 @@ main = r'''
         sql("PRAGMA query_only=OFF")
         try store.upsertSyncDevice(device)
         precondition(scalar("SELECT COUNT(*) FROM sync_devices") == "1")
-        print("SQLiteInboundSmoke: nil DB, read-only DB, SQL failures, transaction rollback, replay, local-newer, active-session deferral and idempotent delete passed")
+        do {
+            try store.mergeRemoteMessage(id: "orphan", sessionId: "later", role: "user", partsJson: "[]", createdAt: Date(timeIntervalSince1970: 4), tokenUsageJson: nil, sortOrder: 0, reasoningContent: nil, streamInterruptCount: 0, updatedAt: Date(timeIntervalSince1970: 4))
+            preconditionFailure("orphan message must report a parked disposition, not success")
+        } catch let disposition as SyncInboundDisposition {
+            precondition(disposition == .parked(dependency: SyncRecordID(type: "SessionV2", id: "later")))
+        }
+        precondition(scalar("SELECT device_id FROM remote_messages WHERE id='orphan'") == ChatSQLProbe.parkedMessageDeviceId, "parked row must survive the savepoint")
+        precondition(scalar("SELECT COUNT(*) FROM messages WHERE id='orphan'") == "0")
+        try store.mergeRemoteSession(ChatSession(id: "later", title: "later", category: nil, modelId: "m", createdAt: Date(timeIntervalSince1970: 4), updatedAt: Date(timeIntervalSince1970: 4)), fromDeviceId: "peer")
+        precondition(scalar("SELECT session_id FROM messages WHERE id='orphan'") == "later", "parked message must backfill when its session lands")
+        precondition(scalar("SELECT COUNT(*) FROM remote_messages WHERE device_id='" + ChatSQLProbe.parkedMessageDeviceId + "'") == "0", "parked copy must be cleared after backfill")
+        precondition(store.previewRecomputes.contains("later"), "backfill must refresh the session preview")
+        print("SQLiteInboundSmoke: nil DB, read-only DB, SQL failures, transaction rollback, replay, local-newer, active-session deferral, idempotent delete and orphan park/backfill passed")
     }
 }
 '''
@@ -118,12 +151,16 @@ with tempfile.TemporaryDirectory(prefix='sync-sqlite-') as temp:
     subprocess.run(flags + [str(sync / 'SyncDeliveryLedger.swift'), str(ROOT / 'scripts/SyncDeliveryLedgerSmoke.swift'), '-o', str(ledger)], check=True)
     subprocess.run([str(ledger)], check=True)
     source = (ROOT / 'src/ios/Agent/Chat/ChatStore.swift').read_text()
-    methods = ['withInboundMutation', 'prepareInbound', 'stepInbound', 'upsertSyncDevice',
-               'mergeRemoteSession', 'mergeRemoteMessage', 'deleteLocalMessage']
+    methods = ['withInboundMutation', 'prepareInbound', 'stepInbound', 'upsertSyncDevice', 'syncDeviceName',
+               'mergeRemoteSession', 'mergeRemoteMessage', 'parkInboundMessage', 'sessionIdForMessage',
+               'deleteLocalMessage']
+    parked_line = next(line for line in source.splitlines() if 'static let parkedMessageDeviceId' in line)
     probe = work / 'Probe.swift'
-    probe.write_text(support + '\n'.join(method(source, x) for x in methods) + main)
+    probe.write_text(support + parked_line + '\n' + '\n'.join(method(source, x) for x in methods) + main)
     binary = work / 'inbound-sql'
-    subprocess.run(flags + [str(sync / 'SessionProvenanceStore.swift'), str(probe), '-o', str(binary)], check=True)
+    subprocess.run(flags + [str(sync / 'SessionProvenanceStore.swift'), str(sync / 'PortableRecord.swift'),
+                            str(sync / 'SyncDeliveryLedger.swift'), str(merge_outcome_decl(work)),
+                            str(probe), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
 
 # Exercise SyncCore's actual freeze boundary with its store adapter backed by
@@ -195,5 +232,6 @@ with tempfile.TemporaryDirectory(prefix='sync-frozen-') as temp:
     flags = [a.swiftc, '-module-cache-path', str(work / 'cache'), '-parse-as-library']
     if a.sqlite_module: flags += ['-I', a.sqlite_module, '-L', a.sqlite_module]
     subprocess.run(flags + [str(sync / 'SyncDeliveryLedger.swift'), str(sync / 'PortableRecord.swift'),
-                           str(sync / 'SyncCoreHydrators.swift'), str(probe), '-o', str(binary)], check=True)
+                           str(sync / 'SyncCoreHydrators.swift'), str(merge_outcome_decl(work)),
+                           str(probe), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], env={**os.environ, 'SYNC_TEST_DB': str(work / 'db.sqlite'), 'SYNC_TEST_ROOT': str(work)}, check=True)

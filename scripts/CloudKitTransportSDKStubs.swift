@@ -24,3 +24,9 @@ actor ChatStore {
     static let shared = ChatStore()
     func markRecordsPushed(_ recordNames: [String]) {}
 }
+
+// [up-perf-ios] 定时补拉前先让开回前台窗口。真实实现在 src/ios/Diagnostics/LeoPerf.swift
+// (依赖 UIKit/MetricKit/滚动计量,不适合拉进这个只做 SDK 类型检查的编译单元);这里只镜像签名。
+enum LeoPerf {
+    @MainActor static func waitForForegroundSettle(resumeGrace: TimeInterval = 0) async {}
+}

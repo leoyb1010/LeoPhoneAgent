@@ -6613,6 +6613,14 @@ extension ChatStore {
             }
             let changes = Int(sqlite3_changes(db))
             sqlite3_finalize(stmt); stmt = nil
+            // A message parked before its session (parkInboundMessage) must die with the
+            // tombstone too, or mergeRemoteSession's backfill would resurrect it.
+            if try prepareInbound("DELETE FROM remote_messages WHERE id = ? AND device_id = ?", &stmt) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (messageId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 2, (Self.parkedMessageDeviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                _ = try stepInbound(stmt)
+            }
+            sqlite3_finalize(stmt); stmt = nil
             if changes > 0, let sid = previewSession { recomputeStoredPreview(sessionId: sid) }
             if changes > 0 {
                 iCloudLogger.warning("[EditSync] [iCloud] deleteLocalMessage: removed '\(messageId.prefix(8))' from local messages (inbound tombstone applied)")
