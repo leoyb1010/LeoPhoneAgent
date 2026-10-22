@@ -1,5 +1,13 @@
 # LeoPhoneAgent 更新记录
 
+## Mac 1.18.0 · iOS 1.83.0 (189) · Codex 任务 + 对话界面与回答渲染 - 2026-10-22
+
+- **Codex 任务远端可见**（Mac 1.18.0）：读 `~/.codex/sessions/**/rollout-*.jsonl`（桌面端与 CLI 同一处），`thread-writer-locks/<id>.lock` 判开着、最近一轮未结束判干活中；排除 exec / 子代理 / LeoBot 自己的会话；可接管（codex-acp 按 id 续上），Codex 还开着该会话时 409 提示先退出。实测四台都列出了真实 Codex 任务。
+- **主动退出不再被拉起**（Mac 1.18.0）：正常退出写 `~/.leoagent/leobot-user-quit`，常驻守护见标记不拉起，崩溃仍拉起；部署脚本拉起前清标记。
+- **对话界面**（iOS）：模型胶囊自适应（中段截断、按宽度降级、iPad 上限更宽）；「模型在做什么」收成一行 36pt 活动条，实测高度进列表底部 inset，展开也不遮挡；统一按钮规范（可点区域 ≥ 44pt、胶囊 32pt）；输入框里「进行中」不再贴着圆角；悬浮 ↑↓ 按钮滚动时出现、停 2 秒收起。
+- **回答渲染**（iOS）：修 9 处可见缺陷（列表对齐与项目符号、待办框、长代码块默认滚到底、流式时语言标签与含 `|` 的代码行、行内公式、嵌套引用）；代码块标题行 + 复制 + 右侧渐隐；表格表头着色只留横线；跟随系统字号（上限 2 倍）；流式逐批淡入（落后不超过 0.2 s）；完成后操作行淡入一次；Reduce Motion 下不做动画。仅 DEBUG 的渲染夹具在 `scripts/ios-render-fixture/`。
+- 红线检查白名单补 `leoReleaseNotesArchive.ts`。
+
 ## Mac 1.17.0 · iOS 1.82.0 (188) · 中继 0.2.5 · 手机远控补全 + 省电 - 2026-10-22
 
 契约：`src/mac/leophone/docs/specs/leo-link-remote-controls.md`（字段都是可选新增，新旧两端互相兼容，iOS 按 `/v1/capabilities.features` 显示控件）。
