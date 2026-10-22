@@ -43,6 +43,7 @@ import {
   leoReadStateLimit,
   readLeoTextFileForModel,
 } from "../leo/read-format.js"; // [leo]
+import { assertLeoReadAllowed } from "../leo/secret-paths.js"; // [leo]
 import {
   formatReadPdfOutput,
   formatReadPdfPagesOutput,
@@ -167,6 +168,7 @@ export const readHandler: ToolHandler = async (input, context) => {
     workingDirectory: context.workingDirectory,
     workspaceRoot: context.workspaceRoot,
   });
+  assertLeoReadAllowed(filePath); // [leo] LeoBot 凭据文件不进模型上下文
 
   try {
     const imageMime = inferImageMimeFromPath(filePath);

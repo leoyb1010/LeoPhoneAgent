@@ -50,11 +50,7 @@ const config = {
   leoLazyStart: true,
 };
 
-const spawnedPids = () =>
-  readFileSync(spawnLog, "utf8")
-    .split("\n")
-    .filter(Boolean)
-    .map(Number);
+const spawnedPids = () => readFileSync(spawnLog, "utf8").split("\n").filter(Boolean).map(Number);
 
 function isAlive(pid: number): boolean {
   try {
@@ -105,6 +101,56 @@ test("lazy-start server: tools listed, process stopped, woken once by concurrent
     await adapter.callTool({ serverName: "node_repl", toolName: "js", arguments: {} });
     assert.equal(spawnedPids().length, 2);
     assert.ok(isAlive(wokenPid));
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a failed wake surfaces the start error to the caller and the status, and the next call retries", async () => {
+  writeFileSync(spawnLog, "");
+  const failMarker = join(dir, "fail-next-start");
+  const flaky = join(dir, "flaky.mjs");
+  writeFileSync(
+    flaky,
+    `import { existsSync } from "node:fs";
+if (existsSync(${JSON.stringify(failMarker)})) {
+  process.stderr.write("node_repl boot failed: missing runtime\\n");
+  process.exit(3);
+}
+await import(${JSON.stringify(serverScript)});
+`,
+  );
+  const adapter = createMcpAdapter({ env: {} });
+  try {
+    await adapter.connectServer("node_repl", { ...config, args: [flaky] });
+    const [firstPid] = spawnedPids();
+    await waitUntil(() => !isAlive(firstPid!));
+
+    writeFileSync(failMarker, "");
+    await assert.rejects(
+      adapter.callTool({ serverName: "node_repl", toolName: "js", arguments: {} }),
+      (error: Error) => {
+        assert.match(error.message, /node_repl failed to start/);
+        assert.doesNotMatch(error.message, /is not connected/);
+        return true;
+      },
+    );
+    const failed = (await adapter.status())["node_repl"];
+    assert.equal(failed?.status, "failed");
+    assert.ok(failed?.error);
+    // 工具仍在列表里(停放状态保留),修好后下一次调用照常拉起。
+    assert.deepEqual(
+      (await adapter.listTools()).map((tool) => tool.toolName),
+      ["js"],
+    );
+    rmSync(failMarker);
+    const result = await adapter.callTool({
+      serverName: "node_repl",
+      toolName: "js",
+      arguments: {},
+    });
+    assert.match((result.content[0] as { text: string }).text, /^pid \d+$/);
+    assert.equal((await adapter.status())["node_repl"]?.status, "connected");
   } finally {
     await adapter.close();
   }

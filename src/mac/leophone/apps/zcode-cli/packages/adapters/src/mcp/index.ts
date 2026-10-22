@@ -463,7 +463,10 @@ class NodeMcpAdapter implements McpPort {
     });
   }
 
-  /** [leo] 首次调用时拉起已停的按需启动 server；失败时恢复停放状态，下一次调用再试。 */
+  /**
+   * [leo] 首次调用时拉起已停的按需启动 server；失败时恢复停放（工具照常列出，下一次调用再试），
+   * 但状态记成这次的失败（设置页看得到），并把启动错误抛给本次调用（工具结果里看得到原因）。
+   */
   private leoWakeServer(name: string, parked: McpServerRecord): Promise<void> {
     const pending = this.leoWaking.get(name);
     if (pending) return pending;
@@ -476,7 +479,13 @@ class NodeMcpAdapter implements McpPort {
       .then((status) => {
         if (status.status === "connected") return;
         this.leoWokenServers.delete(name);
-        this.records.set(name, { ...parked, abortController: undefined, connecting: undefined });
+        this.records.set(name, {
+          ...parked,
+          status: { ...status, toolCount: parked.tools.length },
+          abortController: undefined,
+          connecting: undefined,
+        });
+        throw new Error(`MCP server ${name} failed to start: ${status.error ?? status.status}`);
       })
       .finally(() => this.leoWaking.delete(name));
     this.leoWaking.set(name, waking);
