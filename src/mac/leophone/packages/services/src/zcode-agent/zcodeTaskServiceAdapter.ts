@@ -264,7 +264,10 @@ export function createZCodeTaskServiceAdapter(
   const runtimeCommandDrains = new Map<string, Promise<void>>();
   const apiRetryByTaskKey = new Map<string, ZCodeApiRetryStatus | null>();
   const backgroundTaskControlsByTaskKey = new Map<string, ZCodeBackgroundTaskControlItem[]>();
-  const streamedTurnText = new Map<string, { messageId?: string; text: string }>();
+  const streamedTurnText = new Map<
+    string,
+    { messageId?: string; text: string; closedByTool?: boolean }
+  >();
   const activePromptInputIds = new Map<string, InputId>();
   const toolProjectionMemoryByTaskKey = new Map<string, ZCodeToolProjectionMemory>();
   const liveToolProjectionsByTaskKey = new Map<string, Map<string, LiveToolProjection>>();
@@ -4109,7 +4112,7 @@ function mapStateUpdated(
 function mapSessionEvent(
   params: TaskTarget,
   event: ZCodeSessionEvent,
-  streamedTurnText: Map<string, { messageId?: string; text: string }>,
+  streamedTurnText: Map<string, { messageId?: string; text: string; closedByTool?: boolean }>,
   activePromptInputId?: InputId,
   toolProjectionMemory?: ZCodeToolProjectionMemory,
   backgroundTaskControlsByTaskKey?: Map<string, ZCodeBackgroundTaskControlItem[]>,
@@ -4202,7 +4205,9 @@ function mapSessionEvent(
   );
   if (modelStreaming) {
     if (modelStreaming.type === "agent_message_chunk" && !modelStreaming.parentToolUseId) {
-      const previous = streamedTurnText.get(turnKey);
+      // [leo] 工具前言（closedByTool）只留给 turn.completed 比对，工具之后的正文从头累计。
+      const recorded = streamedTurnText.get(turnKey);
+      const previous = recorded?.closedByTool ? undefined : recorded;
       const messageId = modelStreaming.messageId;
       const sameMessage = !messageId || !previous?.messageId || messageId === previous.messageId;
       streamedTurnText.set(turnKey, {
@@ -4218,8 +4223,11 @@ function mapSessionEvent(
 
   if (event.type === "tool.updated") {
     // 工具调用前的前言不是最终回答；下一条模型消息需要独立核对已接收正文。
+    // [leo] 前言先留着并标记 closedByTool：回合若在工具后直接结束，core 的 response 就是这段前言，
+    // 终态兜底不能把它再发一遍（「模型复读」）。
     if (payload.kind === "scheduled" && !parentToolUseIdFromToolPayload(payload)) {
-      streamedTurnText.delete(turnKey);
+      const preface = streamedTurnText.get(turnKey);
+      if (preface) streamedTurnText.set(turnKey, { ...preface, closedByTool: true });
     }
     return mapToolUpdated(params.taskId, traceId, eventInputId, payload, toolProjectionMemory);
   }
@@ -4295,10 +4303,15 @@ function mapSessionEvent(
     const response = stringValue(payload.response);
     // Bugfix: 只记录“本轮收到过文字”会让工具前言屏蔽最终回答兜底。
     // 在终态之前补齐当前模型消息缺少的后缀；完整正文已到达时不重复投递。
-    const streamed = streamedTurnText.get(turnKey)?.text ?? "";
-    const missingResponse = response?.startsWith(streamed)
-      ? response.slice(streamed.length)
-      : response;
+    const entry = streamedTurnText.get(turnKey);
+    // [leo] 工具之后再没有正文、response 就是那段已显示的前言：不再补发。
+    const repeatsPreface = entry?.closedByTool === true && response?.trim() === entry.text.trim();
+    const streamed = entry && !entry.closedByTool ? entry.text : "";
+    const missingResponse = repeatsPreface
+      ? ""
+      : response?.startsWith(streamed)
+        ? response.slice(streamed.length)
+        : response;
     if (missingResponse) {
       events.push({
         type: "agent_message_chunk",
