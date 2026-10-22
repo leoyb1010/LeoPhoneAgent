@@ -14,8 +14,8 @@ import { createRegistryBackedTestApp as createZCodeApp } from "./helpers/registr
 
 const roots: string[] = [];
 
-// [leo] Leo 默认启用随包 superpowers 插件，其 SessionStart hook（受信任的插件来源）会在每个会话
-// 启动时执行；本文件只验证项目级 workspace Hook 的 Trust 准入，因此在用户配置里关掉该插件，
+// [leo] 随包 superpowers 插件启用时，其 SessionStart hook（受信任的插件来源）会在每个会话
+// 启动时执行；本文件只验证项目级 workspace Hook 的 Trust 准入，因此在用户配置里显式关掉该插件（不依赖默认值），
 // 让 commands 只反映项目 hook。
 function userConfigJson(storageRoot: string): string {
   return JSON.stringify({

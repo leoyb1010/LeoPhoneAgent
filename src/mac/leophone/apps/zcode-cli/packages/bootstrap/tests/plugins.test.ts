@@ -62,6 +62,16 @@ it("computer-use 默认不启用（电脑控制需用户在设置页显式开启
     false,
   );
 });
+// [leo] P1 首轮提速：superpowers 的 SessionStart hook 给每个会话注入约 5.6K 字符技能全文并多跑
+// 一个 hook 子进程，改回默认关闭（仍随包、可在插件页开启）。和 CUA 一样单独钉住默认态。
+it("superpowers 默认不启用（随包，需用户在插件页开启）", () => {
+  const superpowers = OFFICIAL_PLUGIN_DEFINITIONS.find(
+    (definition) => definition.name === "superpowers",
+  );
+  expect(superpowers).toBeDefined();
+  expect(superpowers?.defaultEnabled ?? false).toBe(false);
+  expect(DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS.has("superpowers@zcode-plugins-official")).toBe(false);
+});
 const ANDROID_EMULATOR_PLUGIN_ID = "android-emulator@zcode-plugins-official";
 const IOS_SIMULATOR_MCP_ID = "plugin:ios-simulator:ios-simulator";
 const ANDROID_EMULATOR_MCP_ID = "plugin:android-emulator:android-emulator";
@@ -2614,14 +2624,18 @@ describe("ZCode plugins", () => {
         skillCount: 1,
         skillRootCount: 1,
       });
-      // [leo] documents 不随包；Leo 随包且默认启用 superpowers（official-plugin-definitions.ts）。
+      // [leo] documents 不随包；superpowers 随包但默认关闭：被发现、不注入 skill 与 SessionStart hook。
       expect(documentPlugin).toBeUndefined();
       expect(superpowersPlugin).toMatchObject({
-        enabled: true,
+        enabled: false,
         name: "superpowers",
-        skillRootCount: 1,
+        skillRootCount: 0,
       });
-      expect(superpowersPlugin?.skillCount).toBeGreaterThan(0);
+      expect(
+        (outcome.hooks.SessionStart ?? []).some((hook) =>
+          JSON.stringify(hook).includes("superpowers"),
+        ),
+      ).toBe(false);
       // 回归原因：启动发现链路与 overview 使用同一份 browser-use 内置内容，
       // web-gui-tester 加入后这里也必须稳定报告两个 skill。
       expect(browserUsePlugin).toMatchObject({
