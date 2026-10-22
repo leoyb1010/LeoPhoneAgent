@@ -1,5 +1,18 @@
 # LeoPhoneAgent 更新记录
 
+## Mac 1.16.0 · 中继 0.2.4 · 第三轮审计修复 - 2026-10-22
+
+多智能体审计（8 个维度、109 个智能体、每条发现独立对抗验证）确认 46 条，按文件归属分 5 批并行修复、逐批独立复审后合入。
+
+- **安全**：Studio 自建 runner 加本机硬边界（`scripts/fleet/leo-runner-job-guard.sh`，只放行本仓库 main 的 push / 手动 / 定时），仓库 fork PR 一律需批准；Studio 大脑 key 曾被模型读进上下文，已在网关吊销并换新；CLI 读文件拒绝 `~/.config/leo-brain/*`、`~/.leoagent/key`、`~/.leoagent/treasury.key`。
+- **计划模式**：手机发起的回合，ExitPlanMode 推审批卡（带计划正文，`once`/`deny`）；无人值守运行直接收下计划作为结果，AskUserQuestion 立即结束并写明原因，不再挂死。
+- **定时任务**：`template_id` 让模板的权限模式生效；手机切模式不再被短路；无人值守审批的回答也推送（Live Activity 回到运行中）；自动拒绝在送达后才记失败。
+- **提示词**：去掉「调工具前先说一句」，一两步能答的直接答，跟随用户语言；第二大脑路由只针对用户自己的知识，不碰工作区代码；turn.completed 不再重发工具前的话。
+- **第二大脑 / 画像**：每个大脑工具在 tools/list `_meta.timeoutMs` 声明预算（上传 330 s）；上传相对路径按工作区解析；`brain_save_card` 拒绝保留标题「Leo 画像」；画像只认 confirmed/reference + 用户画像，每轮重新查找更新的卡，key 缺失或连续 401/403 清理本机缓存，注入时用 `<user_profile>` 隔离。
+- **兼容 / 稳定**：重新随包提供 `Resources/leo/treasury-mcp.mjs`（stdio→Host HTTP MCP 代理），外部 Agent 的藏宝阁恢复；桌面会话事件 schema 补齐 CLI 实际发出的字段（Studio 4 天丢了 99 条）；`ps` 进程表只读 pid/ppid/pgid/lstart，ENOBUFS 不再让清理失效；恢复的手机会话不再启动即订阅（每台每天数十到上百次重试）。
+- **中继 0.2.4**（mini 已部署）：APNs collapse id = `relay-automation-` + sha256(key)[:40]（与 iOS 同一公式）；审批事件保护限 24 h / 50 条；Live Activity 随 `automation.run.completed/failed` 收起、随 `approval.responded` 回到运行中；SIGTERM 优雅退出（1012 关 socket、落盘队列/状态，`shutdown_timeout=3`，plist `ExitTimeOut=15`），日志带时间戳。实测重启 exit code 0、4 台 Mac 7 秒内全部重连。
+- **发版与运维**：部署改增量（远端 APFS 克隆当基准，只 rsync 变化文件，codesign --deep --strict + Gatekeeper 校验后替换；旧版存档只留 3 份；回滚还原 CLI 配置）；`LeoCIStatus --gate` 能在真实发版路径上拦红（看在跑运行里已失败的 job、按 first-parent 回溯）；vitest 棘轮能数到未处理错误；native-model-audit 补 Homebrew PATH。
+
 ## Mac 1.15.1 - 2026-10-22
 
 - 修复：1.15.0 启动时藏宝阁 / 第二大脑 / 屏幕三个 MCP 登记并发读改写同一份 `~/.leophoneagent/cli/config.json`，藏宝阁迁到共享 HTTP 端点那次写入被覆盖回已删除的 stdio 脚本，藏宝阁工具不可用。改为串行登记；Studio / mini / MBP 实机确认 `leo-treasury` / `leo-brain` 均为 http，tools/list 分别 4 / 9 个工具。
