@@ -13,7 +13,7 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 project="$repo_root/src/ios/LeoPhoneAgent.xcodeproj"
 
-echo "==> [1/3] 发版闸门"
+echo "==> [1/4] 发版闸门"
 "$repo_root/scripts/IOSReleaseReadinessAudit.sh"
 
 # [T-icloud-xattr] DerivedData 绝不能落在仓库里:这个仓在 iCloud 同步盘上,
@@ -32,13 +32,24 @@ else
 fi
 [ -n "$udids" ] || { echo "没有在线真机" >&2; exit 1; }
 
+# [up-p0-gates] 性能预算闸门:装新版前,先从目标 iPhone/iPad 拉"当前已装版本"的 perf.jsonl
+# 和最新日志跑 IOSPerfBudgetGate。超预算就挡住(本次是性能修复时用 LEO_PERF_GATE=warn 显式放行);
+# 拉不到数据会打印 "SKIPPED: no perf data",不会静默通过。
+echo "==> [2/4] 性能预算闸门"
+devices_now=$(xcrun devicectl list devices 2>/dev/null || true)
+perf_udid=""
+for u in $udids; do
+  if ! printf '%s\n' "$devices_now" | grep "$u" | grep -qi 'Watch'; then perf_udid="$u"; break; fi
+done
+"$repo_root/scripts/IOSPerfGateFromDevice.sh" $perf_udid
+
 # 指定一台新设备时，让 Xcode 为实际设备更新描述文件；generic 目标不会注册新机。
 build_destination='generic/platform=iOS'
 if [ "$#" -eq 1 ]; then
   build_destination="id=$1"
 fi
 
-echo "==> [2/3] 构建 Release"
+echo "==> [3/4] 构建 Release"
 xcodebuild -project "$project" -scheme LeoPhoneAgent \
   -configuration Release -destination "$build_destination" \
   -derivedDataPath "$derived" -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
@@ -74,7 +85,7 @@ if [ -n "$watch_app" ]; then
   done
 fi
 
-echo "==> [3/3] 安装"
+echo "==> [4/4] 安装"
 rc=0
 for u in $udids; do
   printf '    %s ... ' "$u"

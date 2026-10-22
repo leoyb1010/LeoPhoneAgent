@@ -72,6 +72,7 @@ jobs:
           run_check python3 scripts/SessionFileDeletionPendingTests.py
           run_check python3 scripts/CloudKitUnknownRecordRetentionTests.py
           run_check python3 scripts/SyncSQLiteDurabilityTests.py
+          run_check python3 scripts/IOSPerfBudgetGateTests.py
           exit "$failed"
       - name: Run MinisTests
         if: ${{ !cancelled() }}
@@ -221,6 +222,10 @@ jobs:
           set -euo pipefail
           PATH="$PWD/node_modules/.bin:$PATH" pnpm --dir apps/zcode-cli build
           pnpm build:bootstrap
+      - name: Mac vitest known-failure ratchet
+        # 全量 vitest(test:unit 口径);失败必须在 scripts/leo-vitest-known-failures.json 里,
+        # 否则红。放在构建之后:部分用例依赖 @zcode/e2e-report、@zcode/adapters 的 dist。
+        run: pnpm leo:test:vitest-ratchet
 
       - name: Actual full Web renderer on isolated local services
         timeout-minutes: 8
