@@ -26,7 +26,7 @@ except ModuleNotFoundError:
 
 from . import relay as relay_module
 from .harness import HARNESSES, HarnessSession
-from .relay import Machine, Relay
+from .relay import Machine, Relay, automation_run_collapse_id
 
 
 class RelayRejectedLogTests(unittest.TestCase):
@@ -778,6 +778,24 @@ class RelayAutomationPushTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(ok["user_info"]["harnessSessionId"], "task-1")
             self.assertEqual(failed["title"], "⏰ Mac Studio 定时任务没跑成")
             self.assertNotEqual(ok["collapse_id"], failed["collapse_id"])
+
+    def test_collapse_id_is_bounded_hash_shared_with_ios(self):
+        # APNs collapse id 限 64 字节;原样拼长 run_id 会被截断,同一任务的多次运行折成一条。
+        long_a = {"run_id": "automation-" + "x" * 70 + ":1"}
+        long_b = {"run_id": "automation-" + "x" * 70 + ":2"}
+        self.assertEqual(len(long_a["run_id"]), 83)
+        run_91 = {"run_id": "r" * 91}
+        for event in (long_a, long_b, run_91):
+            self.assertLessEqual(len(automation_run_collapse_id(event).encode()), 64)
+        self.assertNotEqual(automation_run_collapse_id(long_a), automation_run_collapse_id(long_b))
+        # iOS MacAutomationLogic.runNotificationId 用同一公式,固定值两端对得上。
+        self.assertEqual(automation_run_collapse_id({"run_id": "run-test-123"}),
+                         "relay-automation-" + hashlib.sha256(b"run-test-123").hexdigest()[:40])
+        self.assertEqual(automation_run_collapse_id({"run_id": "run-test-123"}),
+                         "relay-automation-fef95c788b1b3f4cddcd6f35d7c06f4677fdc11d")
+        # 没 run_id 的老事件:退到 automation_id-timestamp,组成方式不变。
+        self.assertEqual(automation_run_collapse_id({"automation_id": "a1", "timestamp": 1700000000}),
+                         "relay-automation-" + hashlib.sha256(b"a1-1700000000").hexdigest()[:40])
 
 
 if __name__ == "__main__":

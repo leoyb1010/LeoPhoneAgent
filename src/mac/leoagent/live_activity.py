@@ -32,6 +32,12 @@ DISMISS_AFTER_S = 5
 
 START_EVENTS = {"session.created", "run.started", "turn.started"}
 END_OUTCOMES = {"run.completed": "done", "run.failed": "attention", "run.cancelled": "stopped"}
+# 无人值守的定时任务:Mac 只推审批和 automation.run.completed(status 分成败),不推 run.*。
+# 审批推送拉起的「等你审批」卡得靠它收掉,否则一直挂着。按 status 折成对应的 run 终态。
+AUTOMATION_END_EVENTS = {"automation.run.completed", "automation.run.failed"}
+AUTOMATION_STATUS_TO_END = {"succeeded": "run.completed", "stopped": "run.cancelled"}
+# 审批答完回到运行中:只改已有的卡,不为它新拉一张。
+RESUME_EVENTS = {"approval.resolved", "approval.responded"}
 
 # ContentState 里的字符串上限,与 iOS `cappedForPayload()` 一致(4KB 硬上限)。
 MAX_TITLE = 24
@@ -130,12 +136,14 @@ class LiveActivityPlanner:
             return []
         title = f"🖥 {machine}"
         alert = None
+        if kind in AUTOMATION_END_EVENTS:
+            kind = AUTOMATION_STATUS_TO_END.get(str(event.get("status") or ""), "run.failed")
         if kind == "approval.request":
             tool = str(event.get("tool") or "一条命令")[:40]
             # 锁屏只写工具名,与审批通知同一口径:命令里可能带密钥。
             row = snapshot(sid, title, icon=APPROVAL_ICON, status=f"等你审批:{tool}")
             alert = {"title": "需要你批准", "body": f"{machine} · {tool}"}
-        elif kind == "approval.resolved" or kind in START_EVENTS:
+        elif kind in RESUME_EVENTS or kind in START_EVENTS:
             row = snapshot(sid, title, icon=RUNNING_ICON, status="运行中…")
         elif kind in END_OUTCOMES:
             outcome = END_OUTCOMES[kind]
@@ -149,8 +157,8 @@ class LiveActivityPlanner:
         tokens = update_tokens.get(sid) or []
         for token in tokens:
             card = self.cards.setdefault(token, {})
-            if sid not in card and kind in END_OUTCOMES:
-                # 卡上没有这个会话:它的结束与这张卡无关。
+            if sid not in card and (kind in END_OUTCOMES or kind in RESUME_EVENTS):
+                # 卡上没有这个会话:它的结束/审批回执与这张卡无关。
                 continue
             card[sid] = {**card.get(sid, {}), **row, "title": card.get(sid, {}).get("title") or row["title"]}
             state = content_state(list(card.values()))
@@ -162,7 +170,7 @@ class LiveActivityPlanner:
                                                stale_date=int(now + STALE_AFTER_S),
                                                # 例行进度用 5 不占预算;审批要立刻亮屏
                                                priority=10 if alert else 5))
-        if tokens or kind in END_OUTCOMES:
+        if tokens or kind in END_OUTCOMES or kind in RESUME_EVENTS:
             return pushes
         # 这台手机还没有这张卡(App 被杀、或卡被划掉):审批/开跑时远程拉起一张。
         last = self.started.get(sid)

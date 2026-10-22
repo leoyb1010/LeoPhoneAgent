@@ -181,6 +181,31 @@ class RelayQueuePersistTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(kinds), self.relay.MAX_EVENTS)
         self.assertIn("approval.request", kinds)
 
+    async def test_approval_protection_is_bounded(self):
+        # 攒满 200 条审批(其中 150 条已超 24h)后,新来的完成事件不能一进来就被挤掉。
+        old = time.time() - 25 * 3600
+        for i in range(self.relay.MAX_EVENTS):
+            self.relay._record_event("MacBook", {"event": "approval.request", "approval_id": f"a{i}"})
+            if i < 150:
+                self.relay.recent_events[-1]["received_at"] = old
+        self.relay._record_event("Studio", {"event": "run.completed", "session_id": "s1"})
+        events = [e["event"] for e in self.relay.recent_events]
+        self.assertEqual(len(events), self.relay.MAX_EVENTS)
+        self.assertEqual(events[-1]["event"], "run.completed")
+        # 被淘汰的是最旧的过期审批,24h 内的都还在。
+        ids = {e.get("approval_id") for e in events}
+        self.assertNotIn("a0", ids)
+        self.assertTrue({f"a{i}" for i in range(150, 200)} <= ids)
+        # 全是新审批时只保最新 50 条:再来 200 条完成事件,审批只剩最新 50 条。
+        self.relay.recent_events = []
+        for i in range(120):
+            self.relay._record_event("MacBook", {"event": "approval.request", "approval_id": f"n{i}"})
+        for i in range(self.relay.MAX_EVENTS):
+            self.relay._record_event("Studio", {"event": "run.completed", "session_id": f"r{i}"})
+        kept = [e["event"]["approval_id"] for e in self.relay.recent_events
+                if e["event"]["event"] == "approval.request"]
+        self.assertEqual(kept, [f"n{i}" for i in range(70, 120)])
+
     async def test_status_file_is_written_at_startup(self):
         with open(self.relay.status_path, encoding="utf-8") as f:
             status = json.load(f)
