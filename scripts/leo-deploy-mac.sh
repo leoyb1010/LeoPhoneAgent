@@ -6,6 +6,10 @@
 #
 # 宿主机(studio / mini / air)默认同时安装 com.leoyuan.leobot-keepalive 常驻守护;mbp 不装。
 # 中继在线判定读 mini 上中继 0.2.2 写的 ~/.leoagent/relay-status.json。
+#
+# 传输走增量:远端先把已装的 LeoBot.app 以 APFS 克隆(秒级、不占空间)放进暂存目录,再把新 .app
+# rsync 上去 —— 只传变了的文件 / 块。以前每台都整包传 255 MB 的 DMG,Air 走香港中转约 70 KB/s 要一个小时。
+# 完整性靠 codesign --verify --deep --strict(签名封住包内每个文件)+ Gatekeeper 公证评估,任何字节不对都过不去。
 set -uo pipefail
 DMG=${1:?usage: leo-deploy-mac.sh <dmg> <host,...> [--no-keepalive]}
 HOSTS=${2:?usage: leo-deploy-mac.sh <dmg> <host,...> [--no-keepalive]}
@@ -18,6 +22,10 @@ V=$(basename "$DMG" | sed -E 's/LeoBot-([0-9.]+)-.*/\1/')
 SUM=$(shasum -a 256 "$DMG" | awk '{print $1}')
 echo "LeoBot $V  sha256 ${SUM[1,16]}…"
 fail=()
+MNT=$(hdiutil attach -nobrowse -readonly "$DMG" | awk '/\/Volumes\//{print substr($0, index($0,"/Volumes/"))}')
+[[ -d "$MNT/LeoBot.app" ]] || { echo "DMG 里没有 LeoBot.app" >&2; exit 2; }
+trap 'hdiutil detach "$MNT" -quiet 2>/dev/null' EXIT
+STAGE=/tmp/LeoBot-$V.stage
 
 relay_has() {   # relay_has <relay-name> <version> → 0 表示该 Mac 以该版本连在中继上
   ssh -o BatchMode=yes -o ConnectTimeout=8 mini "cat ~/.leoagent/relay-status.json 2>/dev/null" | \
@@ -27,12 +35,22 @@ relay_has() {   # relay_has <relay-name> <version> → 0 表示该 Mac 以该版
 for h in ${(s:,:)HOSTS}; do
   echo "\n== $h"
   ka=$KEEPALIVE; [[ $h == mbp ]] && ka=0
-  rsync -a --partial --inplace -e "ssh -o BatchMode=yes" "$DMG" "$h:/tmp/LeoBot-$V.dmg" || { echo "  ✗ 传输失败"; fail+=$h; continue; }
+  # 暂存目录不存在就用已装版本克隆一份当增量基准(没装过就从空目录开始,等于全量)
+  ssh -o BatchMode=yes "$h" "mkdir -p $STAGE; [ -d $STAGE/LeoBot.app ] || { [ -d /Applications/LeoBot.app ] && cp -Rc /Applications/LeoBot.app $STAGE/LeoBot.app; }; true" || { echo "  ✗ 连不上"; fail+=$h; continue; }
+  sent=1
+  for try in 1 2 3 4 5; do
+    stats=$(rsync -a --delete --stats -e "ssh -o BatchMode=yes -o ServerAliveInterval=15" "$MNT/LeoBot.app/" "$h:$STAGE/LeoBot.app/" 2>&1) && { sent=0; break; }
+    echo "  传输中断,重试 $try"; sleep 5
+  done
+  (( sent == 0 )) || { echo "  ✗ 传输失败"; fail+=$h; continue; }
+  echo "$stats" | grep -i -E "^(literal data|matched data|total transferred file size|total bytes sent)" | sed 's/^/  /'
   (( ka )) && scp -q "$HERE/fleet/com.leoyuan.leobot-keepalive.plist" "$h:/tmp/com.leoyuan.leobot-keepalive.plist"
-  out=$(ssh -o BatchMode=yes "$h" "V=$V SUM=$SUM KA=$ka zsh -s" <<'REMOTE'
+  out=$(ssh -o BatchMode=yes "$h" "V=$V STAGE=$STAGE KA=$ka zsh -s" <<'REMOTE'
 set -u
-dmg=/tmp/LeoBot-$V.dmg
-[ "$(shasum -a 256 $dmg | awk '{print $1}')" = "$SUM" ] || { echo "RESULT sha-mismatch"; exit 1; }
+staged=$STAGE/LeoBot.app
+# 增量拼出来的包必须和签名一字不差,再过一遍公证评估;不对就不动线上版本
+codesign --verify --deep --strict "$staged" 2>/dev/null || { echo "RESULT staged-signature-invalid"; rm -rf "$STAGE"; exit 1; }
+spctl -a --type exec "$staged" 2>/dev/null || { echo "RESULT staged-gatekeeper-rejected"; rm -rf "$STAGE"; exit 1; }
 ts=$(date +%Y%m%d%H%M)
 old=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" /Applications/LeoBot.app/Contents/Info.plist 2>/dev/null || echo none)
 uid=$(id -u); ka_plist=~/Library/LaunchAgents/com.leoyuan.leobot-keepalive.plist
@@ -63,8 +81,7 @@ for i in {1..30}; do pgrep -xq LeoBot || break; sleep 1; done
 pgrep -xq LeoBot && pkill -x LeoBot && sleep 2
 mkdir -p ~/LeoBot-archives; archived=""
 if [ -d /Applications/LeoBot.app ]; then archived=~/LeoBot-archives/LeoBot-$old-replaced-$ts.app; mv /Applications/LeoBot.app "$archived"; fi
-M=$(hdiutil attach -nobrowse -readonly $dmg | awk '/\/Volumes\//{print substr($0, index($0,"/Volumes/"))}')
-ditto "$M/LeoBot.app" /Applications/LeoBot.app; hdiutil detach "$M" -quiet; rm -f $dmg
+mv "$staged" /Applications/LeoBot.app; rm -rf "$STAGE"
 ok=1
 spctl -a --type exec /Applications/LeoBot.app 2>/dev/null || { echo "gatekeeper-rejected"; ok=0; }
 new=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" /Applications/LeoBot.app/Contents/Info.plist 2>/dev/null)
@@ -84,6 +101,8 @@ if [ $ok = 0 ]; then
   fi
   exit 1
 fi
+# 旧版存档只留最近 3 份(每份约 700 MB,不清理时每台已堆到 4–10 GB)
+ls -dt ~/LeoBot-archives/LeoBot-*-replaced-*.app 2>/dev/null | tail -n +4 | while read -r d; do rm -rf "$d"; done
 echo "RESULT installed $V (was $old) archived=$archived"
 REMOTE
 )
