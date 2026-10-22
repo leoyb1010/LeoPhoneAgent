@@ -34,15 +34,27 @@ enum ChatSearchSQL {
     /// Predicate true when a text part of `alias`'s parts_json contains the
     /// pattern. Binds: one `?` (pattern) or two when `prefilter` (the cheap raw
     /// LIKE that skips most rows before JSON is parsed).
+    /// Parts that are a whole `<system-reminder>…</system-reminder>` (the
+    /// per-message「Sent at …」stamp) are hidden from the bubble, so they don't
+    /// match either — otherwise "Sent" or a timezone id hits every user message.
     static func textPartPredicate(alias: String, prefilter: Bool) -> String {
         let raw = prefilter ? "\(alias).parts_json LIKE ? ESCAPE '\\' AND " : ""
+        let value = "json_extract(CASE WHEN jp.type = 'object' THEN jp.value ELSE '{}' END, '$.value')"
         return """
             (\(raw)EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(\(alias).parts_json) \
             THEN \(alias).parts_json ELSE '[]' END) jp \
             WHERE jp.type = 'object' \
             AND json_extract(CASE WHEN jp.type = 'object' THEN jp.value ELSE '{}' END, '$.type') = 'text' \
-            AND json_extract(CASE WHEN jp.type = 'object' THEN jp.value ELSE '{}' END, '$.value') LIKE ? ESCAPE '\\'))
+            AND \(value) NOT LIKE '<system-reminder>%</system-reminder>' \
+            AND \(value) LIKE ? ESCAPE '\\'))
             """
+    }
+
+    /// `textPartPredicate` for one keyword plus its binds, in order.
+    static func textPartMatch(alias: String, keyword: String) -> (sql: String, bindings: [String]) {
+        let pattern = containsPattern(keyword)
+        let prefilter = canPrefilterRaw(keyword)
+        return (textPartPredicate(alias: alias, prefilter: prefilter), prefilter ? [pattern, pattern] : [pattern])
     }
 
     /// The sidebar search: sessions whose title or message text contains the

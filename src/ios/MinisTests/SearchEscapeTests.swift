@@ -107,6 +107,29 @@ final class SearchEscapeTests: XCTestCase {
         XCTAssertTrue(like("c:\\dir", ChatSearchSQL.containsPattern("c:\\d")))
     }
 
+    /// The per-message「Sent at …」part is hidden from bubbles; it must not
+    /// make "Sent" / a timezone id match every user message.
+    func testSentAtReminderPartIsNotSearchable() throws {
+        let stamp = AgentChatCorrectness.sentAtReminder(Date(timeIntervalSince1970: 0),
+                                                        timeZone: TimeZone(identifier: "Asia/Shanghai")!)
+        insertSession("S1", title: "Trip", updated: 2, messages: [try parts(["plan the trip", stamp])])
+        insertSession("S2", title: "Mail", updated: 1, messages: [try parts(["I sent the mail"])])
+        XCTAssertEqual(search("Sent"), ["S2"], "only real text containing 'sent'")
+        XCTAssertEqual(search("Asia/Shanghai"), [])
+        XCTAssertEqual(search("system-reminder"), [])
+        XCTAssertEqual(search("plan"), ["S1"], "the message's own text still matches")
+
+        // Same predicate the sessions tool / message search use.
+        let match = ChatSearchSQL.textPartMatch(alias: "m", keyword: "Shanghai")
+        var stmt: OpaquePointer?
+        XCTAssertEqual(sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM messages m WHERE \(match.sql)", -1, &stmt, nil),
+                       SQLITE_OK, String(cString: sqlite3_errmsg(db)))
+        for (i, value) in match.bindings.enumerated() { sqlite3_bind_text(stmt, Int32(i + 1), value, -1, transient) }
+        XCTAssertEqual(sqlite3_step(stmt), SQLITE_ROW)
+        XCTAssertEqual(sqlite3_column_int(stmt, 0), 0)
+        sqlite3_finalize(stmt)
+    }
+
     func testQueryIsBounded() {
         XCTAssertNil(ChatSearchSQL.normalizedQuery("   \n"))
         XCTAssertEqual(ChatSearchSQL.normalizedQuery(String(repeating: "q", count: 100_000))?.count, ChatSearchSQL.maxQueryLength)

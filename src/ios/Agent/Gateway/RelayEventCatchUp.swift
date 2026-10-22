@@ -117,8 +117,17 @@ final class RelayEventCatchUp: ObservableObject {
         }
         postFinished(finished)
         for item in automationRuns.suffix(RelayCatchUpPolicy.maxIndividualNotices) {
-            let notice = MacAutomationLogic.runNotice(machine: item.machine, event: item.raw)
-            postSimple(title: notice.title, body: notice.body)
+            // 正文是 Mac 给的结果摘要;隐私模式下只说跑完了。标识按 run_id 固定,和中继的 APNs 同一条不重复;
+            // 点开走现有的 harnessSessionId 路由,进那次运行的 Mac 会话。
+            let notice = MacAutomationLogic.runNotice(
+                machine: item.machine, event: item.raw,
+                privacy: BackgroundKeepAliveManager.shared.liveActivityPrivacyMode)
+            var info: [String: Any] = ["machine": item.machine]
+            if let sid = MacAutomationLogic.runSessionId(item.raw) { info["harnessSessionId"] = sid }
+            if let hostId = GatewayHostStore.shared.hostMatching(machine: item.machine)?.id { info["hostId"] = hostId }
+            postSimple(title: notice.title, body: notice.body,
+                       identifier: MacAutomationLogic.runNotificationId(event: item.raw),
+                       userInfo: info, bodyLimit: MacAutomationLogic.summaryLimit, alreadyPrivate: true)
         }
         if !approvals.isEmpty {
             // Only what the Mac is still waiting on: one already answered on the
@@ -177,19 +186,21 @@ final class RelayEventCatchUp: ObservableObject {
                                      sessionId: sessionId, approval: approval)
     }
 
-    private func postSimple(title: String, body: String) {
+    private func postSimple(title: String, body: String, identifier: String? = nil,
+                            userInfo: [String: Any] = [:], bodyLimit: Int = 120, alreadyPrivate: Bool = false) {
         // 前台不发终态提示(用户正看着 app),审批则不受此限——它要人拍板。
         guard UIApplication.shared.applicationState != .active else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         // Task output is private: with Task Status Privacy on, the lock screen
         // only learns that something finished.
-        content.body = BackgroundKeepAliveManager.shared.liveActivityPrivacyMode
+        content.body = !alreadyPrivate && BackgroundKeepAliveManager.shared.liveActivityPrivacyMode
             ? AppLocalized("打开 App 查看结果")
-            : String(body.prefix(120))
+            : String(body.prefix(bodyLimit))
         content.sound = .default
+        content.userInfo = userInfo
         UNUserNotificationCenter.current().add(
-            UNNotificationRequest(identifier: "relay-\(UUID().uuidString)",
+            UNNotificationRequest(identifier: identifier ?? "relay-\(UUID().uuidString)",
                                   content: content, trigger: nil))
     }
 }

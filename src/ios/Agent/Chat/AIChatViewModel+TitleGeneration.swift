@@ -185,9 +185,9 @@ extension AIChatViewModel {
               let firstAssistantAny = assistantMessages.first else { return }
 
         func extractText(_ msg: RawMessage, limit: Int) -> String {
-            String(msg.parts.compactMap {
+            AgentChatCorrectness.titleSourceText(msg.parts.compactMap {
                 if case .text(let s) = $0 { return s } else { return nil }
-            }.joined(separator: "\n").prefix(limit))
+            }, limit: limit)
         }
         func hasText(_ msg: RawMessage) -> Bool {
             !extractText(msg, limit: Int.max)

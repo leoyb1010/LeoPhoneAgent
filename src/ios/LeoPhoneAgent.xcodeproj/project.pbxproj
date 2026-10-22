@@ -753,6 +753,7 @@
 		E5GWH1001 /* LeoAgentHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH1002 /* LeoAgentHarness.swift */; };
 		E5GWV0001 /* GatewayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWV0002 /* GatewayViews.swift */; };
 		LF4569085442 /* HarnessChangesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF723511AE9 /* HarnessChangesView.swift */; };
+		LF391D1B7247 /* MacAutomationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFDF71F20429 /* MacAutomationsView.swift */; };
 		LFFF7A120AA9 /* MacScreenLiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF12689023D8 /* MacScreenLiveViews.swift */; };
 		LF0FA1A41C6D /* MacScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF26AE1ABDCE /* MacScreenViews.swift */; };
 		E5GWD0001 /* GatewayRunDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWD0002 /* GatewayRunDriver.swift */; };
@@ -1806,6 +1807,7 @@
 		E5GWH1002 /* LeoAgentHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentHarness.swift; sourceTree = SOURCE_ROOT; };
 		E5GWV0002 /* GatewayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/GatewayViews.swift; sourceTree = SOURCE_ROOT; };
 		LFF723511AE9 /* HarnessChangesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Gateway/HarnessChangesView.swift; sourceTree = SOURCE_ROOT; };
+		LFDF71F20429 /* MacAutomationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Gateway/MacAutomationsView.swift; sourceTree = SOURCE_ROOT; };
 		LF12689023D8 /* MacScreenLiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/MacScreenLiveViews.swift; sourceTree = SOURCE_ROOT; };
 		LF26AE1ABDCE /* MacScreenViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/MacScreenViews.swift; sourceTree = SOURCE_ROOT; };
 		E5GWD0002 /* GatewayRunDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayRunDriver.swift; sourceTree = SOURCE_ROOT; };
@@ -2890,6 +2892,7 @@
 				E5E15704F /* MacResultInbox.swift */,
 				E5GWV0002 /* GatewayViews.swift */,
 				LFF723511AE9 /* HarnessChangesView.swift */,
+				LFDF71F20429 /* MacAutomationsView.swift */,
 				LF12689023D8 /* MacScreenLiveViews.swift */,
 				LF26AE1ABDCE /* MacScreenViews.swift */,
 				E5GWD0002 /* GatewayRunDriver.swift */,
@@ -4386,6 +4389,7 @@
 				E5GWH1001 /* LeoAgentHarness.swift in Sources */,
 				E5GWV0001 /* GatewayViews.swift in Sources */,
 				LF4569085442 /* HarnessChangesView.swift in Sources */,
+				LF391D1B7247 /* MacAutomationsView.swift in Sources */,
 				LFFF7A120AA9 /* MacScreenLiveViews.swift in Sources */,
 				LF0FA1A41C6D /* MacScreenViews.swift in Sources */,
 				E5GWD0001 /* GatewayRunDriver.swift in Sources */,

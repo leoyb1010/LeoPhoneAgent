@@ -787,6 +787,21 @@ private struct GatewayHostEditor: View {
                     }
                 }
 
+                // [C3] 这台 Mac 上的定时任务:列表、开关、立即运行、删除、从模板新建。
+                if !draft.isNew, let saved = GatewayHostStore.shared.hosts.first(where: { $0.id == draft.id }),
+                   !saved.isAndroidBody {
+                    Section {
+                        NavigationLink {
+                            MacAutomationsView(host: saved)
+                        } label: {
+                            Label("定时任务", systemImage: "clock.badge.checkmark")
+                        }
+                        .accessibilityIdentifier("gateway.automations")
+                    } footer: {
+                        Text("在这台 Mac 上按计划自动运行的任务，手机锁屏或离线时照样跑。")
+                    }
+                }
+
                 // [up-device] 已添加的 Mac：地址、密钥、SSH 这些开发者字段收进「连接信息」，默认收起。
                 // 扫码添加的机器这些都是自动填的，绝大多数人不需要看。
                 if draft.isNew || showConnectionFields {

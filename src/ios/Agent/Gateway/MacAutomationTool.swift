@@ -23,6 +23,7 @@ enum MacAutomationTool {
     static func definition() -> AgentToolDefinition? {
         let names = hosts.map(\.name)
         guard !names.isEmpty else { return nil }
+        let phoneZone = TimeZone.current.identifier
         return AgentToolDefinition(
             name: name,
             description: "Create and manage recurring or one-off scheduled tasks that RUN ON ONE OF THE USER'S MACS (always-on, so they fire even when this phone is locked or offline; results come back as a notification). Use this — not Apple Shortcuts — whenever the user wants something done on a schedule (每天/每周/每小时/明早 8 点…). Actions: list, create (prompt + schedule), update (id + fields; enabled=false pauses), delete (id), run (id, run once now). The prompt must be fully self-contained: it runs later on the Mac with no access to this conversation. Confirm the time and what it will do with the user before create/delete. Macs: \(names.joined(separator: ", ")).",
@@ -33,7 +34,7 @@ enum MacAutomationTool {
                 "id": AgentToolParam(type: .string, description: "Automation id (from list) for update / delete / run."),
                 "name": AgentToolParam(type: .string, description: "Short name shown in lists and notifications."),
                 "prompt": AgentToolParam(type: .string, description: "The self-contained task the Mac agent will run each time."),
-                "schedule": AgentToolParam(type: .string, description: "A 5-field cron in the Mac's local time, or a JSON object: {\"kind\":\"daily\",\"time\":\"08:00\"}, {\"kind\":\"weekly\",\"time\":\"09:00\",\"weekdays\":[1,3,5]} (0=Sunday), {\"kind\":\"hourly\",\"minute\":15}, {\"kind\":\"once\",\"date\":\"2026-10-23\",\"time\":\"08:00\"}."),
+                "schedule": AgentToolParam(type: .string, description: "A 5-field cron, or a JSON object: {\"kind\":\"daily\",\"time\":\"08:00\"}, {\"kind\":\"weekly\",\"time\":\"09:00\",\"weekdays\":[1,3,5]} (0=Sunday), {\"kind\":\"hourly\",\"minute\":15}, {\"kind\":\"once\",\"date\":\"2026-10-23\",\"time\":\"08:00\"}. Write times in the phone's time zone (\(phoneZone)). once is converted to an absolute time for you; cron / hourly / daily / weekly fire in the Mac's local time zone (usually the same — the result says if it differs)."),
                 "enabled": AgentToolParam(type: .boolean, description: "update only: false pauses, true resumes."),
                 "workspace": AgentToolParam(type: .string, description: "Optional absolute folder on the Mac to run in (default: the folder phone tasks use)."),
                 "agent": AgentToolParam(type: .string, description: "Optional agent on the Mac: zcode (default, LeoBot) or an installed CLI such as claude / codex."),
@@ -56,19 +57,38 @@ enum MacAutomationTool {
               let client = GatewayHostStore.shared.client(for: host) else {
             return ("Error: 找不到可用的 Mac(在 设置 → 远程机器 里添加,或换个名字)", false)
         }
+        let phoneZone = TimeZone.current
         do {
-            let request = try MacAutomationLogic.request(action: action, args: args)
+            let request = try MacAutomationLogic.request(action: action, args: args, timeZone: phoneZone)
             let raw = try await client.automationCall(request)
             if action == .create {
                 // 用户在哪台上建过,下次默认还用那台。
                 UserDefaults.standard.set(ref.id, forKey: MacAutomationLogic.executorDefaultsKey)
             }
-            return ("{\"mac\":\(jsonString(ref.name)),\"result\":\(raw)}", true)
+            // 手机时区写进结果;Mac 报了时区(结果里或 capabilities 里)且不同,就明说。
+            let macZone = MacAutomationLogic.macTimeZone(from: try? JSONSerialization.jsonObject(with: Data(raw.utf8)))
+                ?? GatewayHostStore.shared.macTimeZones[ref.id]
+            var output = "{\"mac\":\(jsonString(ref.name)),\"phone_time_zone\":\(jsonString(phoneZone.identifier))"
+            if let warning = MacAutomationLogic.timeZoneWarning(phone: phoneZone.identifier, mac: macZone) {
+                output += ",\"time_zone_warning\":\(jsonString(warning))"
+            }
+            return (output + ",\"result\":\(raw)}", true)
         } catch let error as MacAutomationLogic.ArgumentError {
             return ("Error: \(error.localizedDescription)", false)
         } catch {
-            if case GatewayError.http(let status, _) = error, status == 404 {
-                return ("Error: \(ref.name) 上的 LeoBot 不支持定时任务接口(需要 Mac 1.14.0 或更新),或这个 id 不存在", false)
+            if LeoAgentClient.isNotFound(error) {
+                // 带 id 的 404:列表通 = 路由在、id 不在这台;列表也 404 = Mac 太旧。
+                var listReachable: Bool?
+                if action != .list && action != .create {
+                    do {
+                        _ = try await client.automationCall(try MacAutomationLogic.request(action: .list, args: [:]))
+                        listReachable = true
+                    } catch {
+                        listReachable = LeoAgentClient.isNotFound(error) ? false : nil
+                    }
+                }
+                let kind = MacAutomationLogic.classifyNotFound(action: action, listReachable: listReachable)
+                return (MacAutomationLogic.notFoundMessage(kind, mac: ref.name), false)
             }
             return ("Error: \(ref.name): \(error.localizedDescription)", false)
         }
