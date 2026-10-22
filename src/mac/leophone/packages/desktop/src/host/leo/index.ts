@@ -5,6 +5,7 @@ import {
   IModelSelectionService,
   IProviderSettingsService,
   ISettingService,
+  IZCodeAgentService,
   IZCodeTaskService,
 } from "@zcode/services";
 import type { ServiceCollection } from "@zcode/services";
@@ -140,6 +141,8 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
                     logger: deps.logger,
                     appVersion: ZCODE_VERSION,
                     treasuryStore: store ?? undefined,
+                    // [up-p3-mac] 手机经 /automations 管理 Mac 上的定时任务(和设置页同一个服务)。
+                    automationService: deps.services.getOptional(IZCodeAgentService),
                   }),
                 )
                 .catch((error: unknown) => {

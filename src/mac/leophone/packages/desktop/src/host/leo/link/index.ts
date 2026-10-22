@@ -10,7 +10,7 @@ import { leoDeviceDescriptorSchema, type LeoDeviceDescriptor } from "@zcode/shar
 import { createSyncReplica, createTreasuryHandler } from "../sync/index.js";
 import type { TreasuryStore } from "../treasuryStore.js";
 import { leoPath } from "../leoPaths.js";
-import { LinkBridge } from "./bridge.js";
+import { LinkBridge, type LinkBridgeDeps } from "./bridge.js";
 import { createAgentLogin, readSshTarget } from "./sshTarget.js";
 import { resolveLeoBotModelSelection } from "../leobotModelSelection.js";
 import { DirectGrants } from "./directGrants.js";
@@ -46,10 +46,7 @@ import {
   type RelayLinkStatus,
 } from "./relayLink.js";
 
-type Logger = {
-  info: (msg: string, meta?: unknown) => void;
-  warn: (msg: string, meta?: unknown) => void;
-};
+type Logger = LinkBridgeDeps["logger"];
 
 const LEOAGENT_URL = "http://127.0.0.1:8646";
 
@@ -306,6 +303,8 @@ export async function startLeoLink(deps: {
   logger: Logger;
   appVersion: string | null;
   treasuryStore?: TreasuryStore;
+  /** [up-p3-mac] Mac 的自动化服务(IZCodeAgentService);手机经 /automations 管理定时任务。 */
+  automationService?: LinkBridgeDeps["automations"];
 }): Promise<{ stop(): Promise<void> } | null> {
   if (!linkEnabled()) {
     deps.logger.info("[leo/link] disabled (~/.leoagent/link.json)");
@@ -397,6 +396,7 @@ export async function startLeoLink(deps: {
       settings: screenSettings,
       turnConfig: readTurnConfigFile,
     }),
+    automations: deps.automationService, // [up-p3-mac] 跑完的推送也由桥接订阅
     recentWorkspaces: async () => {
       const settings = await deps.settingService?.get();
       return (settings?.lastWorkspaceSession ?? [])

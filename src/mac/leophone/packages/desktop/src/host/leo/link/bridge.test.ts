@@ -7,6 +7,7 @@ import path from "node:path";
 import test from "node:test";
 
 import type { IZCodeTaskService } from "@zcode/services";
+import { acpModelSelection } from "@zcode/shared/acp";
 import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 
 import { LinkBridge, readSSHHostKeys, type LinkBridgeDeps, type LinkRequest } from "./bridge.js";
@@ -109,6 +110,7 @@ async function withBridge(
     acpAgentVersion?: LinkBridgeDeps["acpAgentVersion"];
     zcodeModelSelection?: LinkBridgeDeps["zcodeModelSelection"];
     agentLogin?: LinkBridgeDeps["agentLogin"];
+    automations?: LinkBridgeDeps["automations"];
   } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(path.join(os.tmpdir(), "leo-link-")));
@@ -135,6 +137,7 @@ async function withBridge(
     ...(options.acpAgentVersion ? { acpAgentVersion: options.acpAgentVersion } : {}),
     ...(options.zcodeModelSelection ? { zcodeModelSelection: options.zcodeModelSelection } : {}),
     ...(options.agentLogin ? { agentLogin: options.agentLogin } : {}),
+    ...(options.automations ? { automations: options.automations } : {}),
   });
   try {
     await run({ bridge, zcode, dir, pushed });
@@ -1658,4 +1661,397 @@ test("mode / changes / diff / revert routes: modes, per-turn checkpoints in a gi
     assert.equal((await bridge.handle(req("POST", `/harness/sessions/${plain}/revert`, { paths: ["a.txt"] }))).status, 409);
     assert.equal((await bridge.handle(req("GET", "/harness/sessions/missing/changes"))).status, 404);
   });
+});
+
+// -- [up-p3-mac] /automations(docs/specs/leo-link-automations.md) --------------------------------------
+
+type FakeAutomation = import("@zcode/shared").ZCodeAutomation;
+type FakeRun = import("@zcode/shared").ZCodeAutomationRun;
+
+/** 假的自动化服务:只做内存表,记下桥接怎么调它(真服务的领域规则不在这里重复)。 */
+function fakeAutomations(options: { limit?: number } = {}) {
+  const items: FakeAutomation[] = [];
+  const runs = new Map<string, FakeRun[]>();
+  const calls: Call[] = [];
+  let next = 0;
+  let inFlight = new Set<string>();
+  const find = (id: string) => items.find((item) => item.automationId === id);
+  const service = {
+    async listAllAutomations() {
+      return items.map((item) => ({ ...item }));
+    },
+    async listAutomationRuns(params: { automationId: string }) {
+      return runs.get(params.automationId) ?? [];
+    },
+    async createAutomation(params: Record<string, unknown>) {
+      calls.push(["createAutomation", params]);
+      if (items.length >= (options.limit ?? 20))
+        throw new Error("[AUTOMATION_CREATE_LIMIT_REACHED] At most 20 automations may be retained.");
+      if (String(params["cronExpr"]).startsWith("99")) {
+        const invalid = new Error(`非法的 cron 表达式：${String(params["cronExpr"])}`);
+        invalid.name = "InvalidCronExprError";
+        throw invalid;
+      }
+      next += 1;
+      const created: FakeAutomation = {
+        automationId: `automation-${next}`,
+        title: String(params["title"]),
+        cronExpr: String(params["cronExpr"]),
+        prompt: String(params["prompt"]),
+        ...(params["mode"] ? { mode: params["mode"] as FakeAutomation["mode"] } : {}),
+        ...(params["modelSelection"]
+          ? { modelSelection: params["modelSelection"] as FakeAutomation["modelSelection"] }
+          : {}),
+        workspaceKey: String(params["workspacePath"]),
+        workspacePath: String(params["workspacePath"]),
+        locationKind: "local",
+        recurring: params["recurring"] !== false,
+        runCount: 0,
+        enabled: true,
+        lifecycleStatus: "active",
+        nextRunAt: 1_800_000_000_000,
+        dispatchStatus: "idle",
+        dispatchAttempts: 0,
+        createdAt: 1_761_000_000_000 + next,
+        updatedAt: 1_761_000_000_000 + next,
+      };
+      items.push(created);
+      return { ...created };
+    },
+    async updateAutomation(params: Record<string, unknown>) {
+      calls.push(["updateAutomation", params]);
+      const item = find(String(params["automationId"]));
+      if (!item) return null;
+      if (typeof params["title"] === "string") item.title = params["title"];
+      if (typeof params["prompt"] === "string") item.prompt = params["prompt"];
+      if (typeof params["cronExpr"] === "string") item.cronExpr = params["cronExpr"];
+      if (typeof params["mode"] === "string") item.mode = params["mode"] as FakeAutomation["mode"];
+      return { ...item };
+    },
+    async setAutomationEnabled(params: Record<string, unknown>) {
+      calls.push(["setAutomationEnabled", params]);
+      const item = find(String(params["automationId"]));
+      if (item) item.enabled = params["enabled"] === true;
+    },
+    async deleteAutomation(params: Record<string, unknown>) {
+      calls.push(["deleteAutomation", params]);
+      const index = items.findIndex((item) => item.automationId === params["automationId"]);
+      if (index >= 0) items.splice(index, 1);
+    },
+    async runAutomationNow(params: Record<string, unknown>) {
+      calls.push(["runAutomationNow", params]);
+      const id = String(params["automationId"]);
+      if (inFlight.has(id)) return { status: "duplicate" as const };
+      inFlight.add(id);
+      return { status: "queued" as const };
+    },
+  };
+  return {
+    service: service as unknown as NonNullable<LinkBridgeDeps["automations"]>,
+    items,
+    runs,
+    calls,
+    named: (name: string) => calls.filter(([n]) => n === name).map(([, p]) => p),
+    finishRuns: () => {
+      inFlight = new Set();
+    },
+  };
+}
+
+type AutomationBody = {
+  automation: Record<string, unknown> & { id: string; schedule: Record<string, unknown> };
+};
+const errorCode = (body: unknown) => (body as { error: { code: string } }).error.code;
+
+test("automations: without the service the routes are closed and capabilities say so", async () => {
+  await withBridge(async ({ bridge, pushed }) => {
+    assert.equal((await bridge.handle(req("GET", "/automations"))).status, 404);
+    const caps = await bridge.handle(req("GET", "/v1/capabilities"));
+    assert.equal((caps.body as { features: Record<string, unknown> }).features["automations"], false);
+    await bridge.automationRunCompleted({
+      automationId: "a",
+      runId: "a:1",
+      trigger: "schedule",
+      outcome: "succeeded",
+      taskId: "t",
+      workspacePath: "/w",
+    });
+    assert.equal(pushed.length, 0);
+  });
+});
+
+test("automations: create uses phone-task defaults, is idempotent per request id, and follows the full-auto rule", async () => {
+  const automations = fakeAutomations();
+  await withBridge(
+    async ({ bridge, dir }) => {
+      const caps = await bridge.handle(req("GET", "/v1/capabilities"));
+      assert.equal((caps.body as { features: Record<string, unknown> }).features["automations"], true);
+
+      const body = {
+        name: "日报",
+        prompt: "汇总昨天的提交",
+        schedule: { kind: "daily", time: "09:00" },
+        workspace: dir,
+      };
+      assert.equal((await bridge.handle(req("POST", "/automations", body))).status, 400, "没有操作编号不建");
+      const first = await bridge.handle(req("POST", "/automations", body, iphone, "op-create-1"));
+      assert.equal(first.status, 201, JSON.stringify(first.body));
+      const created = (first.body as AutomationBody).automation;
+      assert.equal(created.name, "日报");
+      assert.equal(created.workspace, dir);
+      assert.equal(created.mode, "build");
+      assert.deepEqual(created.schedule, {
+        cron: "0 9 * * *",
+        recurring: true,
+        kind: "daily",
+        human: "每天 09:00",
+        time: "09:00",
+      });
+      assert.deepEqual(automations.named("createAutomation")[0], {
+        workspacePath: dir,
+        title: "日报",
+        prompt: "汇总昨天的提交",
+        cronExpr: "0 9 * * *",
+        recurring: true,
+        mode: "build",
+        modelSelection: sonnet,
+      });
+
+      // 同一编号重试:同一个回执,不重复建。
+      const retry = await bridge.handle(req("POST", "/automations", body, iphone, "op-create-1"));
+      assert.deepEqual(retry, first);
+      assert.equal(automations.named("createAutomation").length, 1);
+      const conflict = await bridge.handle(
+        req("POST", "/automations", { ...body, prompt: "别的" }, iphone, "op-create-1"),
+      );
+      assert.equal(conflict.status, 409);
+      assert.equal(errorCode(conflict.body), "request_id_conflict");
+      const receipt = await bridge.handle(req("GET", "/operations/op-create-1", undefined, iphone));
+      assert.equal((receipt.body as { state: string }).state, "completed");
+
+      // 没给工作区:和手机开任务同一规则(没有手机会话时是主目录)。
+      const home = await bridge.handle(
+        req("POST", "/automations", { prompt: "看看磁盘", schedule: "15 * * * *" }, iphone, "op-create-2"),
+      );
+      assert.equal(home.status, 201, JSON.stringify(home.body));
+      assert.equal((home.body as AutomationBody).automation.workspace, os.homedir());
+      assert.equal((home.body as AutomationBody).automation.name, "看看磁盘");
+
+      // 一次性:recurring=false。
+      const at = new Date(Date.now() + 3_600_000).toISOString();
+      const once = await bridge.handle(
+        req("POST", "/automations", { prompt: "提醒", schedule: { kind: "once", at }, workspace: dir }, iphone, "op-once"),
+      );
+      assert.equal(once.status, 201);
+      assert.equal(automations.named("createAutomation").at(-1)?.["recurring"], false);
+
+      // 全自动:认不出设备 403,认得出的可以。
+      const yolo = { ...body, full_auto: true };
+      const refused = await bridge.handle(req("POST", "/automations", yolo, unknown, "op-yolo-unknown"));
+      assert.equal(refused.status, 403);
+      assert.equal(errorCode(refused.body), "device_not_recognized");
+      const allowed = await bridge.handle(req("POST", "/automations", yolo, legacy, "op-yolo-fold"));
+      assert.equal(allowed.status, 201);
+      assert.equal((allowed.body as AutomationBody).automation.mode, "yolo");
+
+      // 校验与服务错误都成为正常响应(重试拿到同一个错误,不卡在 uncertain)。
+      const missingDir = await bridge.handle(
+        req("POST", "/automations", { ...body, workspace: path.join(dir, "nope") }, iphone, "op-missing-dir"),
+      );
+      assert.equal(missingDir.status, 400);
+      const badTime = { ...body, schedule: { kind: "daily", time: "25:00" } };
+      assert.equal((await bridge.handle(req("POST", "/automations", badTime, iphone, "op-bad"))).status, 400);
+      const invalid = { ...body, schedule: "99 9 * * *" };
+      const invalidCron = await bridge.handle(req("POST", "/automations", invalid, iphone, "op-invalid-cron"));
+      assert.equal(invalidCron.status, 400);
+      assert.deepEqual(await bridge.handle(req("POST", "/automations", invalid, iphone, "op-invalid-cron")), invalidCron);
+      const badAgent = await bridge.handle(req("POST", "/automations", { ...body, harness: "nope" }, iphone, "op-agent"));
+      assert.equal(badAgent.status, 400);
+    },
+    { automations: automations.service, zcodeModelSelection: async () => sonnet },
+  );
+});
+
+test("automations: create maps no-model and the automation limit, ACP agents pick their model", async () => {
+  await withBridge(
+    async ({ bridge, dir }) => {
+      const body = { prompt: "x", schedule: "0 9 * * *", workspace: dir };
+      assert.equal((await bridge.handle(req("POST", "/automations", body, iphone, "op-1"))).status, 409);
+    },
+    { automations: fakeAutomations().service, zcodeModelSelection: async () => null },
+  );
+  const automations = fakeAutomations({ limit: 1 });
+  await withBridge(
+    async ({ bridge, dir }) => {
+      const claude = await bridge.handle(
+        req("POST", "/automations", { prompt: "x", schedule: "0 9 * * *", workspace: dir, harness: "claude" }, iphone, "op-1"),
+      );
+      assert.equal(claude.status, 201, JSON.stringify(claude.body));
+      assert.deepEqual(automations.named("createAutomation")[0]?.["modelSelection"], acpModelSelection("claude-code"));
+      const full = await bridge.handle(
+        req("POST", "/automations", { prompt: "y", schedule: "0 9 * * *", workspace: dir }, iphone, "op-2"),
+      );
+      assert.equal(full.status, 409);
+      assert.equal(errorCode(full.body), "automation_limit");
+    },
+    {
+      automations: automations.service,
+      zcodeModelSelection: async () => sonnet,
+      acpAgents: () => [{ id: "claude-code", name: "Claude Code", harnessKey: "claude", available: true }],
+    },
+  );
+});
+
+test("automations: list, patch, enable/disable, run now, delete through the automation service", async () => {
+  const automations = fakeAutomations();
+  await withBridge(
+    async ({ bridge, dir }) => {
+      const make = async (extra: Record<string, unknown>, op: string) => {
+        const body = { prompt: "p", schedule: "0 9 * * *", workspace: dir, ...extra };
+        const created = await bridge.handle(req("POST", "/automations", body, iphone, op));
+        return (created.body as AutomationBody).automation.id;
+      };
+      const id = await make({ name: "普通" }, "op-a");
+      const yoloId = await make({ name: "全自动", mode: "yolo" }, "op-b");
+      automations.runs.set(id, [
+        {
+          runId: `${id}:1`,
+          automationId: id,
+          workspaceKey: dir,
+          trigger: "schedule",
+          dispatchStatus: "dispatched",
+          outcome: "failed",
+          error: "boom",
+          sessionId: "task-x",
+          attempts: 1,
+          createdAt: 1_000,
+          updatedAt: 2_000,
+        },
+      ]);
+
+      const listed = await bridge.handle(req("GET", "/automations"));
+      assert.equal(listed.status, 200);
+      const rows = (listed.body as { automations: Array<Record<string, unknown>> }).automations;
+      assert.deepEqual(rows.map((row) => row["id"]), [yoloId, id], "新建的在前");
+      assert.deepEqual(rows[1]?.["last_run"], {
+        status: "failed",
+        at: 2,
+        task_id: "task-x",
+        trigger: "schedule",
+        error: "boom",
+      });
+      assert.equal((await bridge.handle(req("GET", `/automations/${id}`))).status, 200);
+
+      // 停用 + 改计划:分别走 setAutomationEnabled / updateAutomation,作用域是它自己的工作区。
+      const patched = await bridge.handle(
+        req("PATCH", `/automations/${id}`, {
+          enabled: false,
+          schedule: { kind: "weekly", time: "08:00", weekdays: [1, 5] },
+        }),
+      );
+      assert.equal(patched.status, 200, JSON.stringify(patched.body));
+      assert.deepEqual(automations.named("updateAutomation")[0], {
+        automationId: id,
+        workspacePath: dir,
+        cronExpr: "0 8 * * 1,5",
+        recurring: true,
+        scheduleRule: null,
+        scheduleEditedByUser: true,
+      });
+      assert.deepEqual(automations.named("setAutomationEnabled")[0], {
+        automationId: id,
+        workspacePath: dir,
+        enabled: false,
+      });
+      const view = (patched.body as AutomationBody).automation;
+      assert.equal(view.enabled, false);
+      assert.equal(view.next_run_at, null);
+      assert.equal(view.schedule.human, "每周一、五 08:00");
+      assert.equal((await bridge.handle(req("PATCH", `/automations/${id}`, {}))).status, 400);
+
+      // 全自动的那条:认不出设备不能改内容 / 启用 / 立即运行,但能改名、停用。
+      const patchAs = async (target: string, body: unknown) =>
+        (await bridge.handle(req("PATCH", `/automations/${target}`, body, unknown))).status;
+      assert.equal(await patchAs(yoloId, { prompt: "rm -rf" }), 403);
+      assert.equal(await patchAs(yoloId, { enabled: true }), 403);
+      assert.equal(await patchAs(id, { mode: "yolo" }), 403);
+      assert.equal(await patchAs(yoloId, { name: "改名", enabled: false }), 200);
+      assert.equal((await bridge.handle(req("POST", `/automations/${yoloId}/run`, undefined, unknown))).status, 403);
+
+      // 立即运行:排上 202;已有一次在跑 409;带编号的重试拿同一个回执,不再触发。
+      const run = await bridge.handle(req("POST", `/automations/${id}/run`, undefined, iphone, "op-run-1"));
+      assert.deepEqual(run, { status: 202, body: { ok: true, status: "queued" } });
+      assert.deepEqual(await bridge.handle(req("POST", `/automations/${id}/run`, undefined, iphone, "op-run-1")), run);
+      assert.equal(automations.named("runAutomationNow").length, 1);
+      const busy = await bridge.handle(req("POST", `/automations/${id}/run`, undefined, iphone, "op-run-2"));
+      assert.equal(busy.status, 409);
+      assert.equal(errorCode(busy.body), "automation_run_in_flight");
+      assert.equal((await bridge.handle(req("POST", `/automations/${yoloId}/run`, undefined, iphone))).status, 202);
+      assert.equal((await bridge.handle(req("GET", `/automations/${id}/run`))).status, 405);
+
+      assert.deepEqual(await bridge.handle(req("DELETE", `/automations/${id}`)), {
+        status: 200,
+        body: { ok: true, deleted: true },
+      });
+      assert.deepEqual(automations.named("deleteAutomation")[0], { automationId: id, workspacePath: dir });
+      assert.equal((await bridge.handle(req("DELETE", `/automations/${id}`))).status, 404);
+      assert.equal((await bridge.handle(req("PATCH", `/automations/${id}`, { name: "x" }))).status, 404);
+      assert.equal((await bridge.handle(req("GET", "/automations/a%20b"))).status, 400);
+      assert.equal((await bridge.handle(req("PUT", "/automations"))).status, 405);
+    },
+    { automations: automations.service, zcodeModelSelection: async () => sonnet },
+  );
+});
+
+test("automations: a finished run is pushed to the phone and its task becomes adoptable", async () => {
+  const automations = fakeAutomations();
+  await withBridge(
+    async ({ bridge, dir, pushed, zcode }) => {
+      const body = { name: "日报", prompt: "p", schedule: "0 9 * * *", workspace: dir };
+      const created = await bridge.handle(req("POST", "/automations", body, iphone, "op-a"));
+      const id = (created.body as AutomationBody).automation.id;
+      await bridge.automationRunCompleted({
+        automationId: id,
+        runId: `${id}:1761181200000`,
+        trigger: "schedule",
+        outcome: "failed",
+        error: "模型额度用完了",
+        taskId: "task-auto-1",
+        workspacePath: dir,
+      });
+      assert.equal(pushed.length, 1);
+      const { timestamp, ...event } = pushed[0]!;
+      assert.equal(typeof timestamp, "number");
+      assert.deepEqual(event, {
+        event: "automation.run.completed",
+        automation_id: id,
+        name: "日报",
+        status: "failed",
+        summary: "模型额度用完了",
+        task_id: "task-auto-1",
+        session_id: "task-auto-1",
+        run_id: `${id}:1761181200000`,
+        trigger: "schedule",
+        workspace: dir,
+      });
+
+      // 工作区不在 Mac 最近项目里也能接管:手机点通知打开这个任务。
+      const stop = await bridge.handle(req("POST", "/harness/sessions/task-auto-1/stop", {}, iphone));
+      assert.equal(stop.status, 200, JSON.stringify(stop.body));
+      assert.equal(zcode.subscriptionCount(), 1);
+
+      // 自动化已删:名字用占位,照样推。
+      await bridge.automationRunCompleted({
+        automationId: "automation-gone",
+        runId: "automation-gone:manual:1",
+        trigger: "manual",
+        outcome: "succeeded",
+        taskId: "task-auto-2",
+        workspacePath: dir,
+      });
+      assert.equal(pushed[1]?.["name"], "定时任务");
+      assert.equal(pushed[1]?.["summary"], "已在 Mac 上跑完");
+    },
+    { automations: automations.service, zcodeModelSelection: async () => sonnet },
+  );
 });

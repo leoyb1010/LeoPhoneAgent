@@ -8,6 +8,8 @@ import { setLeoMainLanePinnedWorkspacesProvider } from "@zcode/services/leo-main
 import type { ModelSelection, ZCodeTaskMode } from "@zcode/shared";
 import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 
+import { onAutomationRunCompleted, type AutomationRunCompleted } from "./automationEvents.js";
+import { LinkAutomations, type LinkAutomationService } from "./automations.js";
 import { fetchDesktopTasks, type DesktopTask } from "./desktopTasks.js";
 import type { HarnessEvent } from "./journal.js";
 import { DirectGrants } from "./directGrants.js";
@@ -118,6 +120,8 @@ export type LinkBridgeDeps = {
   acpSessionsPath?: string;
   /** [e2e] 经中继的端到端加密(docs/specs/leo-link-e2e.md);没有就不认 /e2e,手机退回明文。 */
   e2e?: RelayE2E;
+  /** [up-p3-mac] Mac 的自动化服务(docs/specs/leo-link-automations.md);没有就不开 /automations。 */
+  automations?: LinkAutomationService;
 };
 
 function authSummary(state: AcpAuthState): { logged_in: boolean | null; method?: string; login_kind: string } {
@@ -155,6 +159,8 @@ const ZCODE = "zcode";
 const CLAUDE_ACP = "claude-code";
 /** 重启后认回的任务数上限;更老的手机上也早就翻不到了。 */
 const INDEX_LIMIT = 50;
+/** [up-p3-mac] 推过通知、等手机点开接管的自动化任务最多记这么多(进程内)。 */
+const AUTOMATION_TASK_LIMIT = 50;
 
 /**
  * [leo-link] 手机协议 v0.4 在新 Mac 上的实现。中继帧在进程内交到这里,
@@ -174,6 +180,13 @@ export class LinkBridge {
   private readonly takingOver = new Map<string, Promise<LinkResponse>>();
   /** 最近一次列出的桌面任务;接管时按它找工作区。 */
   private desktopTasks = new Map<string, DesktopTask>();
+  /**
+   * [up-p3-mac] 推过「定时任务跑完」的任务:工作区不一定在 Mac 最近项目里,
+   * 不记下来手机点通知就接管不了(desktopTasks 每次列表都会整份换掉,不能放那里)。
+   */
+  private readonly automationTasks = new Map<string, DesktopTask>();
+  private readonly automations: LinkAutomations | null;
+  private readonly stopAutomationEvents: () => void;
 
   private readonly leoagent: LeoagentForwarder;
   /** 认回任务期间不写任务表:这时只认回了一部分,写下去再赶上崩溃,没认回的那些就丢了。 */
@@ -183,6 +196,23 @@ export class LinkBridge {
   constructor(private readonly deps: LinkBridgeDeps) {
     this.leoagent = new LeoagentForwarder(deps.leoagent);
     this.receipts = new OperationReceipts(path.join(deps.journalDir, "operations"));
+    this.automations = deps.automations
+      ? new LinkAutomations({
+          service: deps.automations,
+          resolveCwd: (requested) => this.resolveCwd(requested),
+          resolveModel: (harness) => this.automationModel(harness),
+          checkpoint: (req, value) => this.receipts.checkpoint(req, value),
+          logger: deps.logger,
+        })
+      : null;
+    // [up-p3-mac] 自动化跑完(Host 已先回写运行记录)→ 推给手机;桥接关掉时退订。
+    this.stopAutomationEvents = this.automations
+      ? onAutomationRunCompleted((run) => {
+          void this.automationRunCompleted(run).catch((cause: unknown) => {
+            deps.logger.warn("[leo/link] automation push failed", { error: String(cause) });
+          });
+        })
+      : () => undefined;
   }
 
   /** 读回任务表:Mac 重启后,手机上已有的任务照样能续传、续聊、审批。 */
@@ -330,6 +360,7 @@ export class LinkBridge {
     req: LinkRequest,
     checkpoint: Record<string, unknown>,
   ): Promise<LinkResponse | null> {
+    if (req.path === "/automations") return this.automations?.recover(checkpoint) ?? null;
     if (
       req.path === "/harness/sessions" &&
       ["creating", "ready", "sending"].includes(String(checkpoint["stage"]))
@@ -405,6 +436,7 @@ export class LinkBridge {
 
   async close(): Promise<void> {
     setLeoMainLanePinnedWorkspacesProvider(undefined);
+    this.stopAutomationEvents();
     await Promise.allSettled([...this.sessions.values()].map((session) => session.close()));
     // mode_update/接管会排队写sessions.json；先排空索引再释放session，
     // 否则close返回后仍会创建文件，且晚到写入可能把已清空的Map保存成空索引。
@@ -452,6 +484,10 @@ export class LinkBridge {
       });
     }
     if (pathname.startsWith("/agents/")) return this.agentLogin(method, pathname, req);
+    if (pathname === "/automations" || pathname.startsWith("/automations/")) {
+      if (!this.automations) return error(404, "这台 Mac 不支持定时任务");
+      return this.automations.handle(method, pathname, req);
+    }
     if (pathname === "/harness/sessions") {
       if (method === "GET") return this.list();
       if (method === "POST") return this.createOnce(req);
@@ -579,8 +615,9 @@ export class LinkBridge {
   }
 
   private async adopt(taskId: string): Promise<LinkSession | null> {
-    const task = this.desktopTasks.get(taskId);
+    const task = this.desktopTasks.get(taskId) ?? this.automationTasks.get(taskId);
     if (!task) return null;
+    this.automationTasks.delete(taskId);
     const session = this.newSession(task.taskId, task.cwd, task.mode);
     session.title = task.title;
     session.createdAt = task.createdAt / 1000;
@@ -616,6 +653,52 @@ export class LinkBridge {
     if (requested && requested !== "~") return path.resolve(expandHome(requested));
     const recent = [...this.sessions.values()].sort((a, b) => b.updatedAt - a.updatedAt)[0];
     return recent?.cwd ?? os.homedir();
+  }
+
+  /**
+   * [up-p3-mac] 定时任务的 agent / 模型:和手机开任务(create)同一规则。
+   * zcode → LeoBot 默认模型(一个都没配 409);外部 agent → 对应 ACP 模型;认不出 / 用不了 400。
+   */
+  private async automationModel(harness: string): Promise<{ modelSelection?: ModelSelection } | LinkResponse> {
+    if (harness === ZCODE) {
+      const selected = await this.zcodeModel();
+      if (selected === null) return error(409, LEOBOT_NO_MODEL_MESSAGE);
+      return selected ? { modelSelection: selected } : {};
+    }
+    const agent = this.availableAcpAgents().find((candidate) => candidate.harnessKey === harness || candidate.id === harness);
+    if (agent) return { modelSelection: acpModelSelection(agent.id) };
+    const known = (this.deps.acpAgents?.() ?? []).find((candidate) => candidate.harnessKey === harness || candidate.id === harness);
+    return error(
+      400,
+      known
+        ? `这台 Mac 上的「${known.name}」用不了：${known.unavailableReason ?? "启动不了"}`
+        : `这台 Mac 上没有可用的「${harness}」`,
+    );
+  }
+
+  /**
+   * [up-p3-mac] 自动化跑完(docs/specs/leo-link-automations.md):推一条 automation.run.completed 给手机,
+   * 并记下这个任务,手机点通知时能接管查看。运行记录已由 Host 先回写,这里只做通知。
+   */
+  async automationRunCompleted(run: AutomationRunCompleted): Promise<void> {
+    if (!this.automations) return;
+    const { event, name, mode } = await this.automations.completedEvent(run);
+    if (!this.sessions.has(run.taskId)) {
+      const now = Date.now();
+      this.automationTasks.delete(run.taskId);
+      this.automationTasks.set(run.taskId, {
+        taskId: run.taskId,
+        cwd: run.workspacePath,
+        title: name,
+        status: "available",
+        mode: linkMode(mode) ?? "build",
+        createdAt: now,
+        updatedAt: now,
+      });
+      while (this.automationTasks.size > AUTOMATION_TASK_LIMIT)
+        this.automationTasks.delete(this.automationTasks.keys().next().value!);
+    }
+    this.deps.push(event);
   }
 
   private legacyEnabled(): boolean {
@@ -754,6 +837,8 @@ export class LinkBridge {
           // [takeover] 接管 Mac 终端里的 Claude Code 会话(/harness/external-sessions)。
           external_sessions: true,
           relay_e2e: Boolean(this.deps.e2e),
+          // [up-p3-mac] 手机管理 Mac 上的定时任务(/automations)。
+          automations: Boolean(this.automations),
         },
         harnesses: [
           {
