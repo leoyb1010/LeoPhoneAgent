@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(fileURLToPath(import.meta.url), "../..");
 const BASELINE = join(ROOT, "scripts/leo-vitest-known-failures.json");
 const VITEST = join(ROOT, "node_modules/.bin/vitest");
+const UNHANDLED_REPORTER = join(ROOT, "scripts/leo-vitest-unhandled.mjs");
 const BASE_ARGS = ["run", "--exclude", "packages/desktop/test/e2e/**/*.test.ts"];
 
 const argv = process.argv.slice(2);
@@ -53,16 +54,19 @@ function runVitest(files, mode = "run") {
   }
   const dir = mkdtempSync(join(tmpdir(), "leo-vitest-ratchet-"));
   const out = join(dir, "report.json");
+  // [up3-relay-scripts] JSON 报告的 success 不看测试之外的未处理错误,另用小 reporter 数出来。
+  const unhandledOut = join(dir, "unhandled.txt");
   const res = spawnSync(
     VITEST,
-    [mode, ...BASE_ARGS.slice(1), ...(mode === "related" ? ["--run"] : []), "--reporter=dot", "--reporter=json", `--outputFile.json=${out}`, ...files],
-    { cwd: ROOT, stdio: ["ignore", "inherit", "inherit"] },
+    [mode, ...BASE_ARGS.slice(1), ...(mode === "related" ? ["--run"] : []), "--reporter=dot", "--reporter=json", `--reporter=${UNHANDLED_REPORTER}`, `--outputFile.json=${out}`, ...files],
+    { cwd: ROOT, stdio: ["ignore", "inherit", "inherit"], env: { ...process.env, LEO_VITEST_UNHANDLED_OUT: unhandledOut } },
   );
-  if (!existsSync(out)) {
-    console.error(`leo-vitest-ratchet: vitest 没有产出 JSON 报告(exit ${res.status}, signal ${res.signal})`);
+  if (!existsSync(out) || !existsSync(unhandledOut)) {
+    console.error(`leo-vitest-ratchet: vitest 没有产出 JSON 报告或未处理错误计数(exit ${res.status}, signal ${res.signal})`);
     process.exit(2);
   }
   const report = JSON.parse(readFileSync(out, "utf8"));
+  report.leoUnhandledErrors = Number(readFileSync(unhandledOut, "utf8")) || 0;
   rmSync(dir, { recursive: true, force: true });
   return report;
 }
@@ -123,9 +127,11 @@ if (total === 0) {
 }
 
 const current = failingIds(report);
-// vitest 自己判失败、却一个失败用例都没记下(测试之外的未处理错误、收集期崩溃等):不能当通过。
-if (report.success === false && current.size === 0) {
-  console.error("leo-vitest-ratchet: vitest 报告失败但没有失败用例(多半是测试之外的未处理错误),按失败处理");
+// 测试之外的未处理错误(漏 await 的 reject、定时器里抛错等):vitest 自己退出码非 0,但不记在任何用例上,
+// JSON 报告的 success 也不看它。不管基线里有多少已知失败,有就拦。
+// (--report 读现成报告时没有这个计数,只能跳过。)
+if (report.leoUnhandledErrors > 0) {
+  console.error(`leo-vitest-ratchet: FAIL — vitest 有 ${report.leoUnhandledErrors} 个测试之外的未处理错误(见上方 Unhandled Errors)`);
   process.exit(1);
 }
 const baseline = new Set(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")).failures : []);

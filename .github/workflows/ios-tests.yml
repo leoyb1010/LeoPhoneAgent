@@ -70,8 +70,11 @@ jobs:
     # (leomac-studio);Xcode 用 runner 自己的 xcode-select(Studio 上是 /Applications/Xcode.app),不再硬写路径。
     #
     # 安全:仓库是公开的。fork 的 PR 一旦落到自托管机,就是在用户的 Studio 上执行陌生代码。
-    # 所以这个 job 永远不在 pull_request 上跑(只 push 到 main / 手动 dispatch,二者都要写权限)。
-    # 不要去掉这个 if,也不要改用 pull_request_target。
+    # 下面这个 if 只是方便(PR 上不排队等 Studio),不是边界:fork PR 能连同工作流文件一起改掉它。
+    # 真正的边界是两层:① runner 本机的 job-started hook(scripts/fleet/leo-runner-job-guard.sh,
+    # 经 ACTIONS_RUNNER_HOOK_JOB_STARTED 挂上)在任何步骤执行前只放行本仓库 main 上的 push / 手动 / 定时;
+    # ② 仓库的 fork PR 审批策略(all_external_contributors):外部贡献者的 PR 工作流要人工批准才跑。
+    # 别改用 pull_request_target。
     if: github.event_name != 'pull_request'
     runs-on: [self-hosted, macOS, leobot-studio, xcode27]
     # 只有一台 Studio runner,job 天然串行排队,不会并行抢模拟器。不加 concurrency 组:
@@ -167,11 +170,15 @@ jobs:
     # Three macOS simulator legs (35-45 min each): run on demand only.
     # [up-b-fixtures] Same self-hosted Studio runner as ios-unit-tests: GitHub-hosted images have no
     # Xcode 27, and the old hardcoded DEVELOPER_DIR=/Applications/Xcode_27.1.app does not exist there.
-    # Xcode comes from the runner's own xcode-select. workflow_dispatch only (needs write access),
-    # so a fork PR can never reach the self-hosted machine; do not add pull_request triggers here.
+    # Xcode comes from the runner's own xcode-select. The `if:` below (workflow_dispatch only) is a
+    # convenience, not the security boundary: a fork PR can edit this file. The boundary is enforced on
+    # the runner by scripts/fleet/leo-runner-job-guard.sh (ACTIONS_RUNNER_HOOK_JOB_STARTED: only this
+    # repo's main push / workflow_dispatch / schedule run) plus the repo's fork-PR approval policy
+    # (all_external_contributors). Do not add pull_request triggers here.
     # The harness project deploys at iOS 26.0, so the runner's iOS 27 whitelisted iPhone/iPad
     # simulators run it; no pinned iOS 26.5 runtime, no simctl create, no brew installs on the Studio.
-    # Missing xcodegen / Xcode 27 / simulator => the leg is skipped with a ::warning, not failed.
+    # Missing xcodegen / Xcode 27 / simulator => that leg is skipped with a ::warning; if EVERY leg
+    # skips, native-model-audit-ran fails (someone explicitly asked for the audit).
     if: github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, macOS, leobot-studio, xcode27]
     timeout-minutes: ${{ matrix.timeout }}
@@ -195,6 +202,9 @@ jobs:
             device: iPad
             timeout: 45
     steps:
+      # The runner service's PATH has no Homebrew dir, so xcodegen was never found and every leg skipped.
+      - name: Add Homebrew to PATH
+        run: echo /opt/homebrew/bin >> "$GITHUB_PATH"
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -215,6 +225,16 @@ jobs:
           udid=$(python3 scripts/CISelectIOSSimulator.py "$family") || skip "no existing $AUDIT_DEVICE_FAMILY simulator on an iOS 27 runtime"
           echo "NATIVE_AUDIT_DESTINATION=platform=iOS Simulator,id=$udid" >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
+      # Marker for native-model-audit-ran: proves at least one leg actually ran.
+      - name: Mark leg as run
+        if: steps.preflight.outputs.ready == 'true'
+        run: mkdir -p "$RUNNER_TEMP/native-audit-ran" && echo "${{ matrix.label }}" > "$RUNNER_TEMP/native-audit-ran/label.txt"
+      - uses: actions/upload-artifact@v4
+        if: steps.preflight.outputs.ready == 'true'
+        with:
+          name: native-model-audit-ran-${{ matrix.label }}
+          path: ${{ runner.temp }}/native-audit-ran/label.txt
+          retention-days: 1
       - name: Test production SwiftUI model views on ${{ matrix.device }} Simulator
         if: steps.preflight.outputs.ready == 'true'
         run: bash scripts/native-model-audit/run.sh '${{ matrix.source_ref }}' '${{ matrix.label }}'
@@ -240,6 +260,29 @@ jobs:
             native-model-audit-results/${{ matrix.label }}/**/attachments/*.txt
           if-no-files-found: warn
           retention-days: 14
+
+  native-model-audit-ran:
+    # Someone explicitly dispatched the audit: every leg skipping (no xcodegen / Xcode 27 / simulator)
+    # must not look green. Each leg that really ran uploads a native-model-audit-ran-<label> marker.
+    if: ${{ always() && github.event_name == 'workflow_dispatch' }}
+    needs: native-model-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        # No marker at all is exactly the case checked below, so a "nothing matched" here is not fatal.
+        continue-on-error: true
+        with:
+          pattern: native-model-audit-ran-*
+          path: native-audit-ran
+      - name: Fail if every leg was skipped
+        run: |
+          set -euo pipefail
+          if [ -z "$(find native-audit-ran -name label.txt 2>/dev/null)" ]; then
+            echo "::error::native-model-audit: every leg was skipped on the runner (see the ::warning lines in each leg's Preflight)"
+            exit 1
+          fi
+          echo "legs that ran: $(cat native-audit-ran/*/label.txt | tr '\n' ' ')"
 
   mac-quality:
     name: Current Mac 1.x source checks

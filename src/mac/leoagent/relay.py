@@ -142,6 +142,16 @@ def _device_push_tokens(device: Dict[str, Any]) -> List[Tuple[str, str]]:
             out.append(pair)
     return out
 
+
+def automation_run_collapse_id(event: Dict[str, Any]) -> str:
+    """定时任务一次运行的通知标识,APNs collapse id 与 iOS 补拉的本地通知用同一个
+    (MacAutomationLogic.runNotificationId 同一公式)。APNs 限 64 字节:原样拼 run_id
+    会被截断,同一任务的多次运行就折叠成一条,所以对 key 取 sha256 前 40 位(共 57 字符)。
+    key 优先 run_id,没有时退到 automation_id + '-' + timestamp(老事件)。"""
+    key = event.get("run_id") or (str(event.get("automation_id") or "") + "-" + str(event.get("timestamp") or ""))
+    return "relay-automation-" + hashlib.sha256(str(key).encode()).hexdigest()[:40]
+
+
 class Relay:
     def __init__(self, key: str, extra_keys: Optional[list] = None,
                  rejected_log: Optional[str] = None,
@@ -1525,23 +1535,30 @@ class Relay:
     # -- 事件缓冲 -------------------------------------------------------------
 
     MAX_EVENTS = 200
+    # 超上限时受保护的审批:只保 24h 内的、最多最新 50 条。不设界的话攒满 200 条审批后,
+    # 每条新来的完成事件一进来就被挤掉。
+    PROTECTED_APPROVAL_MAX_AGE_S = 24 * 3600
+    PROTECTED_APPROVALS = 50
 
     def _record_event(self, machine_name: str, event: Dict[str, Any]) -> None:
+        now = time.time()
         item = {
             "machine": machine_name,
-            "received_at": time.time(),
+            "received_at": now,
             "event": event,
         }
         self.recent_events.append(item)
         if len(self.recent_events) > self.MAX_EVENTS:
-            # 超上限先淘汰最旧的非审批事件:高频定时任务的完成事件不能把还没处理的审批挤掉
-            # (手机回前台补拉靠这里)。全是审批时才按时间淘汰。
+            # 超上限先淘汰最旧的非保护事件:高频定时任务的完成事件不能把还没处理的审批挤掉
+            # (手机回前台补拉靠这里)。全是受保护的审批时才按时间淘汰。
             overflow = len(self.recent_events) - self.MAX_EVENTS
-            keep_approvals = [i for i, e in enumerate(self.recent_events)
-                              if (e.get("event") or {}).get("event") == "approval.request"]
-            drop = [i for i in range(len(self.recent_events)) if i not in set(keep_approvals)][:overflow]
+            approvals = [i for i, e in enumerate(self.recent_events)
+                         if (e.get("event") or {}).get("event") == "approval.request"
+                         and now - float(e.get("received_at") or 0) < self.PROTECTED_APPROVAL_MAX_AGE_S]
+            protected = set(approvals[-self.PROTECTED_APPROVALS:])
+            drop = [i for i in range(len(self.recent_events)) if i not in protected][:overflow]
             if len(drop) < overflow:
-                drop += keep_approvals[:overflow - len(drop)]
+                drop += sorted(protected)[:overflow - len(drop)]
             dropped = set(drop)
             self.recent_events = [e for i, e in enumerate(self.recent_events) if i not in dropped]
         # 唤醒所有等着的手机
@@ -1616,8 +1633,8 @@ class Relay:
                         "machine": machine_name,
                         "sent_at": time.time(),
                     },
-                    # 与 iOS 补拉时的本地通知同一个标识(relay-automation-<run_id>):APNs 和补拉只留一条。
-                    collapse_id=f"relay-automation-{event.get('run_id') or (str(event.get('automation_id') or '') + '-' + str(event.get('timestamp') or ''))}",
+                    # 与 iOS 补拉时的本地通知同一个标识:APNs 和补拉只留一条。
+                    collapse_id=automation_run_collapse_id(event),
                 )
         except Exception as exc:  # noqa: BLE001
             print(f"[relay] apns push failed: {exc}", flush=True)

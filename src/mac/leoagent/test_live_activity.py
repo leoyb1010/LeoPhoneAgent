@@ -86,6 +86,38 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(rows["s1"]["outcome"], "attention")
         self.assertFalse(rows["s2"]["isCompleted"])
 
+    def test_automation_run_end_closes_unattended_approval_card(self):
+        # 无人值守的定时任务:审批推送拉起「等你审批」卡,Mac 不推 run.*,只推 automation.run.completed。
+        planner = LiveActivityPlanner()
+        started = planner.plan("approval.request", "Mac", {"session_id": "task-1", "tool": "Bash"}, {}, now=NOW)
+        self.assertEqual([p.event for p in started], ["start"])
+        # 卡拉起后 iOS 登记 update token。
+        planner.bind(TOKEN_A, [{"session_id": "task-1", "title": "🖥 Mac"}])
+        tokens = {"task-1": [TOKEN_A]}
+        # 审批答完回到运行中(只改已有的卡)。
+        resumed = planner.plan("approval.responded", "Mac", {"session_id": "task-1"}, tokens, now=NOW + 1)
+        self.assertEqual([(p.event, p.alert) for p in resumed], [("update", None)])
+        self.assertEqual(resumed[0].content_state["sessions"][0]["toolStatus"], "运行中…")
+        for status, outcome in (("succeeded", "done"), ("failed", "attention"), ("stopped", "stopped")):
+            fresh = LiveActivityPlanner()
+            fresh.bind(TOKEN_A, [{"session_id": "task-1"}])
+            done = fresh.plan("automation.run.completed", "Mac",
+                              {"session_id": "task-1", "status": status, "run_id": "r1"}, tokens, now=NOW + 2)
+            self.assertEqual([(p.event, p.alert) for p in done], [("end", None)])  # 不额外响铃
+            self.assertEqual(done[0].content_state["sessions"][0]["outcome"], outcome)
+        failed = planner.plan("automation.run.failed", "Mac", {"session_id": "task-1"}, tokens, now=NOW + 3)
+        self.assertEqual([p.event for p in failed], ["end"])
+        self.assertEqual(failed[0].content_state["sessions"][0]["outcome"], "attention")
+
+    def test_automation_end_and_resume_never_push_start(self):
+        planner = LiveActivityPlanner()
+        for kind in ("automation.run.completed", "automation.run.failed", "approval.responded", "approval.resolved"):
+            self.assertEqual(planner.plan(kind, "Mac", {"session_id": "s1", "status": "succeeded"}, {}, now=NOW), [])
+        # 卡上没有这个会话:结束/回执都不碰它。
+        planner.bind(TOKEN_A, [{"session_id": "s2"}])
+        self.assertEqual(planner.plan("automation.run.completed", "Mac", {"session_id": "s1", "status": "succeeded"},
+                                      {"s1": [TOKEN_A]}, now=NOW), [])
+
     def test_payload_matches_ios_content_state(self):
         state = content_state([snapshot("s" * 100, "x" * 80, icon="terminal.fill", status="y" * 80)])
         self.assertEqual(set(state), CONTENT_STATE_KEYS)
@@ -298,6 +330,25 @@ class RelayLiveActivityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events, [("update", TOKEN_A), ("end", TOKEN_A)])
         self.assertEqual(self.pusher.live[0].content_state["sessions"][0]["title"], "🖥 MacBook · Claude")
         # 审批横幅照常发,Live Activity 是额外一条
+        self.assertEqual(len(self.pusher.alerts), 2)
+
+    async def test_unattended_approval_card_ends_on_automation_run_completed(self):
+        ws = await self.mac()
+        await self.send_event(ws, {"event": "approval.request", "session_id": "task-1", "tool": "Bash",
+                                   "approval_id": "a1"})
+        self.assertEqual([p.event for p in self.pusher.live], ["start"])
+        # push-to-start 拉起的卡,iOS 登记它的 update token。
+        resp = await self.client.post("/relay/api/device", headers=self.auth(), json={
+            "kind": "activity_update", "token": TOKEN_A, "bundle_id": "com.example.app",
+            "environment": "development", "session_ids": ["task-1"],
+            "sessions": [{"session_id": "task-1", "title": "🖥 MacBook"}]})
+        self.assertEqual(resp.status, 200)
+        await self.send_event(ws, {"event": "automation.run.completed", "session_id": "task-1",
+                                   "status": "succeeded", "run_id": "run-1", "automation_id": "auto-1"})
+        self.assertEqual([(p.event, p.token) for p in self.pusher.live], [("start", None), ("end", TOKEN_A)])
+        self.assertIsNone(self.pusher.live[-1].alert)
+        self.assertNotIn(TOKEN_A, self.relay.live_planner.cards)
+        # 审批横幅 + 定时任务完成横幅,Live Activity 不另加提醒。
         self.assertEqual(len(self.pusher.alerts), 2)
 
     async def test_approval_with_no_card_push_starts_and_kill_switch_stops_it(self):

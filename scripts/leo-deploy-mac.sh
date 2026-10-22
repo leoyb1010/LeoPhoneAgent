@@ -81,6 +81,11 @@ for i in {1..30}; do pgrep -xq LeoBot || break; sleep 1; done
 pgrep -xq LeoBot && pkill -x LeoBot && sleep 2
 mkdir -p ~/LeoBot-archives; archived=""
 if [ -d /Applications/LeoBot.app ]; then archived=~/LeoBot-archives/LeoBot-$old-replaced-$ts.app; mv /Applications/LeoBot.app "$archived"; fi
+# 新版启动会改写 CLI 配置(1.15.x 把 leo-treasury / leo-brain 写成 1.14.x 严格 schema 不认的 MCP 条目,
+# 回滚后旧版会把这两条静默删掉)。装之前存一份放在旧版存档旁边,两条回滚路径都还原它。
+cfg=~/.leophoneagent/cli/config.json; cfg_snap=""
+# 不用 cp -p:存档按 mtime 清理,快照的 mtime 得是存的时刻;配置里有密钥,umask 077。
+if [ -n "$archived" ] && [ -f "$cfg" ]; then cfg_snap=${archived%.app}.cli-config.json; ( umask 077 && cp "$cfg" "$cfg_snap" ) || cfg_snap=""; fi
 mv "$staged" /Applications/LeoBot.app; rm -rf "$STAGE"
 ok=1
 spctl -a --type exec /Applications/LeoBot.app 2>/dev/null || { echo "gatekeeper-rejected"; ok=0; }
@@ -94,6 +99,7 @@ fi
 if [ $ok = 0 ]; then
   if [ -n "$archived" ]; then
     pkill -x LeoBot 2>/dev/null; sleep 2; rm -rf /Applications/LeoBot.app; mv "$archived" /Applications/LeoBot.app
+    [ -n "$cfg_snap" ] && cp -p "$cfg_snap" "$cfg"
     launch_gui; echo "RESULT rolled-back-to $old"
   else
     # 全新机器没有可回滚的旧版:装坏了就是失败,不能报「installed」。
@@ -103,6 +109,7 @@ if [ $ok = 0 ]; then
 fi
 # 旧版存档只留最近 3 份(每份约 700 MB,不清理时每台已堆到 4–10 GB)
 ls -dt ~/LeoBot-archives/LeoBot-*-replaced-*.app 2>/dev/null | tail -n +4 | while read -r d; do rm -rf "$d"; done
+ls -t ~/LeoBot-archives 2>/dev/null | grep -E '^LeoBot-.*-replaced-.*\.cli-config\.json$' | tail -n +4 | while read -r f; do rm -f ~/LeoBot-archives/"$f"; done
 echo "RESULT installed $V (was $old) archived=$archived"
 REMOTE
 )
@@ -117,8 +124,9 @@ REMOTE
     else
       echo "  ✗ 90 秒内没以 $V 连上中继,回滚"
       archived=$(echo "$out" | sed -n 's/.*archived=\(.*\)$/\1/p')
+      snap=${archived%.app}.cli-config.json   # 安装前存的 CLI 配置(远端脚本里同名),有就还原
       # 先卸常驻守护:不然 pkill 到 rm 之间它会把新版又拉起来,回滚后跑的还是新版。
-      [[ -n $archived ]] && ssh -o BatchMode=yes "$h" "uid=\$(id -u); p=~/Library/LaunchAgents/com.leoyuan.leobot-keepalive.plist; launchctl bootout gui/\$uid/com.leoyuan.leobot-keepalive 2>/dev/null; pkill -x LeoBot; for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -xq LeoBot || break; sleep 1; done; rm -rf /Applications/LeoBot.app; mv '$archived' /Applications/LeoBot.app; [ -f \$p ] && launchctl bootstrap gui/\$uid \$p 2>/dev/null; for l in com.leoyuan.leobot-keepalive com.leoyuan.leophoneagent-app; do launchctl print gui/\$uid/\$l >/dev/null 2>&1 && launchctl kickstart gui/\$uid/\$l && break; done; true" && echo "  已回滚"
+      [[ -n $archived ]] && ssh -o BatchMode=yes "$h" "uid=\$(id -u); p=~/Library/LaunchAgents/com.leoyuan.leobot-keepalive.plist; launchctl bootout gui/\$uid/com.leoyuan.leobot-keepalive 2>/dev/null; pkill -x LeoBot; for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -xq LeoBot || break; sleep 1; done; rm -rf /Applications/LeoBot.app; mv '$archived' /Applications/LeoBot.app; [ -f '$snap' ] && cp -p '$snap' ~/.leophoneagent/cli/config.json; [ -f \$p ] && launchctl bootstrap gui/\$uid \$p 2>/dev/null; for l in com.leoyuan.leobot-keepalive com.leoyuan.leophoneagent-app; do launchctl print gui/\$uid/\$l >/dev/null 2>&1 && launchctl kickstart gui/\$uid/\$l && break; done; true" && echo "  已回滚"
       fail+=$h
     fi
   fi
