@@ -1616,7 +1616,8 @@ class Relay:
                         "machine": machine_name,
                         "sent_at": time.time(),
                     },
-                    collapse_id=f"{kind}-{event.get('run_id') or event.get('session_id', '')}",
+                    # 与 iOS 补拉时的本地通知同一个标识(relay-automation-<run_id>):APNs 和补拉只留一条。
+                    collapse_id=f"relay-automation-{event.get('run_id') or (str(event.get('automation_id') or '') + '-' + str(event.get('timestamp') or ''))}",
                 )
         except Exception as exc:  # noqa: BLE001
             print(f"[relay] apns push failed: {exc}", flush=True)
