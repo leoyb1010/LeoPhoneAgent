@@ -270,13 +270,17 @@ class WindowedPercentileTests(unittest.TestCase):
         self.assertIn("over the 30 most recent sample(s)", r.detail)
         self.assertEqual(r.notes, ["1.61.0: n=30 p50=100.0 p90=100.0"])
 
-    def test_fg_frame_window_that_straddles_builds_fails_and_lists_each_build(self):
+    def test_fg_frame_judges_only_the_latest_build(self):
+        # 2026-10-22: old builds' slow samples used to fail the new build when pooled.
         old = frames(5, 2000, v="1.60.0", t0=1759990000.0)
         new = frames(25, 100, v="1.61.0")
         _, results = gate.check_perf(old + new)
         r = named(results, "fg.frame")
-        self.assertEqual(r.status, gate.FAIL)       # 27th smallest of 30 is one of the five slow ones
-        self.assertEqual(r.notes, ["1.61.0: n=25 p50=100.0 p90=100.0", "1.60.0: n=5 p50=2000.0 p90=2000.0"])
+        self.assertEqual(r.status, gate.PASS)
+        self.assertEqual(r.notes, ["1.61.0: n=25 p50=100.0 p90=100.0"])
+        # ...and a slow latest build still fails, whatever older builds did.
+        _, results = gate.check_perf(frames(25, 100, v="1.60.0", t0=1759990000.0) + frames(5, 2000, v="1.61.0"))
+        self.assertEqual(named(results, "fg.frame").status, gate.FAIL)
 
     def test_fg_frame_budget_boundary_is_inclusive(self):
         _, results = gate.check_perf(frames(5, gate.BUDGET_FG_FRAME_P90_MS))
@@ -306,12 +310,12 @@ class WindowedPercentileTests(unittest.TestCase):
         _, results = gate.check_perf(hitches(over))
         self.assertEqual(named(results, "scroll.hitch").status, gate.FAIL)
 
-    def test_scroll_hitch_pools_builds_like_fg_frame(self):
+    def test_scroll_hitch_does_not_borrow_samples_from_older_builds(self):
         records = hitches([5.0] * 12, v="1.60.0", t0=1759990000.0) + hitches([6.0] * 12, v="1.61.0")
         _, results = gate.check_perf(records)
         r = named(results, "scroll.hitch")
-        self.assertEqual(r.status, gate.PASS, "12 + 12 samples are enough only when pooled")
-        self.assertEqual(len(r.notes), 2)
+        self.assertEqual(r.status, gate.WARN, "12 samples of the latest build are not enough on their own")
+        self.assertEqual(len(r.notes), 1)
 
 
 class StreamingHangTests(unittest.TestCase):

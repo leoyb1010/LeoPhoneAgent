@@ -20,8 +20,8 @@ Budgets (FAIL = exit 1):
     (latest version; `prewarm` and `bg` cold events are not user launches and are excluded)
   * any TextContainerGuard line after the LAST launch (except the per-session
     background summary)                                                  > 0
-  * fg.frame p90 over the most recent 30 samples, all versions pooled   > 500 ms
-  * scroll.hitch p90 over the most recent 30 samples, all versions pooled
+  * fg.frame p90 over the most recent 30 samples of the latest build     > 500 ms
+  * scroll.hitch p90 over the most recent 30 samples of the latest build
     (needs >= 20 samples)                                               > 20 ms/s
   * main-thread hang >= 250 ms while streaming (latest version)         > 0
 
@@ -37,7 +37,7 @@ median; perf.jsonl `cold.bg` is what separates them.
 
 Usage: IOSPerfBudgetGate.py --perf perf.jsonl --log minis-2026-10-10.log [--version 1.61.0]
   --version pins every perf budget to that build; without it the latest build in
-  perf.jsonl scopes the per-build checks and fg.frame / scroll.hitch pool all builds.
+  perf.jsonl scopes every per-build check, fg.frame / scroll.hitch included.
 """
 import argparse
 import json
@@ -62,7 +62,7 @@ BUDGET_LAUNCH_HANG_MS = 500
 LAUNCH_HANG_WINDOW_S = 3
 BUDGET_TEXT_GUARD_LINES = 0
 BUDGET_FG_FRAME_P90_MS = 500
-FG_FRAME_WINDOW = 30          # K: most recent fg.frame samples, all versions pooled
+FG_FRAME_WINDOW = 30          # K: most recent fg.frame samples of the build in scope
 FG_FRAME_MIN_SAMPLES = 5
 BUDGET_SCROLL_HITCH_P90 = 20  # ms of hitch per second of scrolling
 SCROLL_HITCH_WINDOW = 30
@@ -262,11 +262,11 @@ def check_windowed_p90(event, unit, scope, budget, window, min_samples):
     notes = version_notes(recent)
     if len(recent) < min_samples:
         return Result(name, WARN,
-                      "NOT EVALUATED: %d sample(s) < %d needed (window: most recent %d, all versions pooled)"
+                      "NOT EVALUATED: %d sample(s) < %d needed (window: most recent %d of this build)"
                       % (len(recent), min_samples, window), notes)
     p90 = percentile([_ms(r) for r in recent], 90)
     return Result(name, PASS if p90 <= budget else FAIL,
-                  "p90 %.1f %s over the %d most recent sample(s), all versions pooled (%d in file)"
+                  "p90 %.1f %s over the %d most recent sample(s) of this build (%d in scope)"
                   % (p90, unit, len(recent), len(samples)), notes)
 
 
@@ -298,14 +298,15 @@ def check_stream_hangs(mine):
 
 
 def check_perf(records, version=None):
-    explicit = version is not None
     ordered = sorted(records, key=_t)
     if version is None:
         version = next((r.get("v") for r in reversed(ordered) if r.get("v")), None)
     mine = [r for r in ordered if r.get("v") == version]
-    # fg.frame / scroll.hitch pool recent samples across builds (a single build rarely
-    # has enough); an explicit --version pins them to that build.
-    pooled = mine if explicit else ordered
+    # fg.frame / scroll.hitch are judged on the latest build only. Pooling across builds
+    # (the old rule) let samples from builds that are already gone fail a release: on
+    # 2026-10-22, 21 of the 30 pooled fg.frame samples came from 1.75/1.76 while 1.77.x's
+    # own p90 was 357 ms. Too few samples for this build -> WARN (not evaluated), never PASS.
+    pooled = mine
 
     results = [check_launch_hangs(mine, version)]
     summary = cold_summary(mine)
