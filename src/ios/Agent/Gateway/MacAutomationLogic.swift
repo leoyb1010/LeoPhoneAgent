@@ -7,6 +7,7 @@
 //  请求的契约见 src/mac/leophone/docs/specs/leo-link-automations.md。
 //
 
+import CryptoKit
 import Foundation
 
 enum MacAutomationLogic {
@@ -31,6 +32,17 @@ enum MacAutomationLogic {
 
     enum Action: String, CaseIterable {
         case list, create, update, delete, run
+    }
+
+    /// [up3-ios] 手机能指定的权限模式(Mac 的 yolo 只认 Mac 本机,手机不给)。不传 = Mac 默认 build,
+    /// 无人值守跑不合适:只读的任务用 plan,要跑命令的用 guarded。
+    static let modes: [String] = ["plan", "guarded", "build"]
+
+    static func mode(_ raw: Any?) throws -> String? {
+        guard let text = (raw as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+              !text.isEmpty else { return nil }
+        guard modes.contains(text) else { throw ArgumentError.invalid("mode 只能是 \(modes.joined(separator: " / "))") }
+        return text
     }
 
     struct Request: Equatable {
@@ -173,6 +185,7 @@ enum MacAutomationLogic {
             if let name = args["name"] as? String, !name.isEmpty { body["name"] = name }
             if let dir = args["workspace"] as? String, !dir.isEmpty { body["workspace"] = dir }
             if let agent = args["agent"] as? String, !agent.isEmpty { body["harness"] = agent }
+            if let picked = try mode(args["mode"]) { body["mode"] = picked }
             return Request(method: "POST", path: "/automations", body: body)
         case .update:
             var body: [String: Any] = [:]
@@ -180,7 +193,8 @@ enum MacAutomationLogic {
             if let prompt = args["prompt"] as? String, !prompt.isEmpty { body["prompt"] = prompt }
             if args["schedule"] != nil { body["schedule"] = try anchorOnce(try schedule(args["schedule"]), timeZone: timeZone) }
             if let enabled = args["enabled"] as? Bool { body["enabled"] = enabled }
-            guard !body.isEmpty else { throw ArgumentError.invalid("update 至少要改 name / prompt / schedule / enabled 之一") }
+            if let picked = try mode(args["mode"]) { body["mode"] = picked }
+            guard !body.isEmpty else { throw ArgumentError.invalid("update 至少要改 name / prompt / schedule / enabled / mode 之一") }
             return Request(method: "PATCH", path: "/automations/" + (try needId()), body: body)
         case .delete:
             return Request(method: "DELETE", path: "/automations/" + (try needId()), body: nil)
@@ -194,12 +208,32 @@ enum MacAutomationLogic {
 
     /// 通知标识:按 run_id 固定(中继 APNs 的 collapse id 用同一个),补拉和推送是同一条、不叠两条。
     /// 没 run_id 的旧事件退到 automation_id + 时间戳。
+    /// [up3-ios] APNs collapse id 上限 64 字节,run_id 本身就可能更长:两边都取
+    /// "relay-automation-" + SHA-256(key) 的前 40 位小写十六进制(共 57 字符)。key 与中继逐字一致:
+    /// run_id 非空就是 run_id,否则是 Python 的 str(automation_id or '') + '-' + str(timestamp or '')。
     static func runNotificationId(event: [String: Any]) -> String {
-        if let run = event["run_id"] as? String, !run.isEmpty { return "relay-automation-\(run)" }
-        let automation = event["automation_id"] as? String ?? ""
-        let stamp = (event["timestamp"] as? Double).map { String(Int($0)) }
-            ?? (event["timestamp"] as? Int).map(String.init) ?? ""
-        return "relay-automation-\(automation)-\(stamp)"
+        let run = pythonStr(event["run_id"])
+        let key = run.isEmpty ? pythonStr(event["automation_id"]) + "-" + pythonStr(event["timestamp"]) : run
+        let digest = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+        return "relay-automation-" + digest.prefix(40)
+    }
+
+    /// 中继的 `str(x or '')`:空 / 0 / 缺省都是 "";整数不带小数点,浮点数按 Python repr(最短往返表示,
+    /// 整值也带 ".0")。JSON 解出来的 NSNumber 靠 objCType 分整数和浮点。
+    static func pythonStr(_ raw: Any?) -> String {
+        switch raw {
+        case let text as String:
+            return text
+        case let number as NSNumber:
+            if CFGetTypeID(number) == CFBooleanGetTypeID() { return number.boolValue ? "True" : "" }
+            if CFNumberIsFloatType(number) {
+                let value = number.doubleValue
+                return value == 0 ? "" : "\(value)"
+            }
+            return number.int64Value == 0 ? "" : String(number.int64Value)
+        default:
+            return ""
+        }
     }
 
     /// 这次运行在 Mac 上的会话(点通知打开它)。
@@ -252,9 +286,18 @@ extension MacAutomationLogic {
         let lastRunStatus: String?
         let lastRunAt: Date?
         let nextRunAt: Date?
+        /// [up3-ios] 上次运行的结果摘要(失败 / 没派发出去的原因)和那次运行的 Mac 会话。
+        var lastRunSummary: String? = nil
+        var lastRunSessionId: String? = nil
 
         /// 一次性任务跑完了:开关没意义。
         var isFinished: Bool { state == "completed" }
+
+        /// 不是成功的那几种状态下,把原因显示成第二行。
+        var lastRunProblem: String? {
+            guard let status = lastRunStatus, !["succeeded", "running", "pending"].contains(status) else { return nil }
+            return lastRunSummary
+        }
     }
 
     static func summaries(fromList json: Any?) -> [Summary] {
@@ -275,7 +318,11 @@ extension MacAutomationLogic {
                        state: row["state"] as? String ?? "active",
                        lastRunStatus: lastRun?["status"] as? String,
                        lastRunAt: seconds(lastRun?["at"]),
-                       nextRunAt: seconds(row["next_run_at"]))
+                       nextRunAt: seconds(row["next_run_at"]),
+                       lastRunSummary: (lastRun?["summary"] as? String)
+                           .map { String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(summaryLimit)) }
+                           .flatMap { $0.isEmpty ? nil : $0 },
+                       lastRunSessionId: (lastRun?["session_id"] as? String).flatMap { $0.isEmpty ? nil : $0 })
     }
 
     /// `GET /automations/templates`(Mac 新加的接口)里的一条。字段名宽松:Mac 端还在定。
@@ -304,7 +351,10 @@ extension MacAutomationLogic {
                     for key in ["human", "recurring"] { dict.removeValue(forKey: key) }
                     sched = dict
                 }
-                body = ["name": name, "prompt": prompt, "schedule": sched]
+                var fields: [String: Any] = ["name": name, "prompt": prompt, "schedule": sched]
+                // [up3-ios] 模板带的权限模式(只读的早报是 plan)跟着建;不带就是 Mac 默认 build。
+                if let picked = try? mode(row["mode"]) { fields["mode"] = picked }
+                body = fields
             } else {
                 body = ["template_id": id]
             }

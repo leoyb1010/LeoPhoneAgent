@@ -56704,6 +56704,12 @@
             "state": "translated",
             "value": "刪除"
           }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
         }
       }
     },
@@ -77223,6 +77229,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "不用了"
+          }
+        }
+      }
+    },
+    "查看这次运行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View This Run"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看这次运行"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看這次執行"
           }
         }
       }

@@ -180,6 +180,17 @@ struct MacAutomationsView: View {
                 }
                 .buttonStyle(.borderless)
                 .accessibilityIdentifier("macAutomations.run")
+                // [up3-ios] 上次那次运行在 Mac 上的会话:走通知点开同一条路由(openMacSession)。
+                if let sessionId = item.lastRunSessionId {
+                    Button {
+                        openRun(sessionId)
+                    } label: {
+                        Label("查看这次运行", systemImage: "arrow.up.forward.app")
+                            .font(.caption.weight(.medium))
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityIdentifier("macAutomations.openRun")
+                }
                 Button(role: .destructive) {
                     pendingDelete = item
                 } label: {
@@ -209,6 +220,13 @@ struct MacAutomationsView: View {
             }
             .font(.caption)
             .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+            // [up3-ios] 失败 / 没派发出去 / 错过:把 Mac 给的原因写出来。
+            if let problem = item.lastRunProblem {
+                Text(verbatim: problem)
+                    .font(.caption)
+                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                    .lineLimit(3)
+            }
         } else {
             Text("还没运行过")
                 .font(.caption)
@@ -291,6 +309,12 @@ struct MacAutomationsView: View {
 
     private func delete(_ item: MacAutomationLogic.Summary) async {
         await perform(item, { try MacAutomationLogic.request(action: .delete, args: ["id": item.id]) })
+    }
+
+    /// ContentView 收到后关掉设置这类 sheet,再打开那个 Mac 会话(和点通知同一条路)。
+    private func openRun(_ sessionId: String) {
+        NotificationCenter.default.post(name: .openSessionFromIntent, object: nil,
+                                        userInfo: ["macSessionId": sessionId, "hostId": host.id, "machine": host.name])
     }
 
     private func create(from template: MacAutomationLogic.Template) async {
