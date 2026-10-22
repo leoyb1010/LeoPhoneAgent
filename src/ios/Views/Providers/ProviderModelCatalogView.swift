@@ -94,16 +94,6 @@ struct ProviderModelCatalogView: View {
                 Button(action: onAddCustom) { Label("Add Custom Model", systemImage: "plus") }
             }
         }
-        .confirmationDialog("Hide selected models?", isPresented: $showHideConfirmation, titleVisibility: .visible) {
-            Button("Hide selected models", role: .destructive) {
-                if store.setEntriesHidden(ids: selectedIds, hidden: true) { selectedIds.removeAll() }
-                else { message = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.") }
-            }
-            .accessibilityIdentifier("model-catalog.confirm-hide")
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Hidden models disappear from model selection and chat-group fallback. Saved direct-chat and voice bindings remain. Favorites and group membership are preserved; show the models again to restore availability.")
-        }
         .confirmationDialog("Delete Model", isPresented: Binding(
             get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
         ), titleVisibility: .visible) {
@@ -168,6 +158,17 @@ struct ProviderModelCatalogView: View {
             }.disabled(selectedEntries.isEmpty)
             Button("Hide selected models", role: .destructive) { showHideConfirmation = true }
                 .disabled(selectedEntries.isEmpty)
+                // [ipad-shell] 挂在按钮上:iPad 上确认框从这一行弹出。
+                .confirmationDialog("Hide selected models?", isPresented: $showHideConfirmation, titleVisibility: .visible) {
+                    Button("Hide selected models", role: .destructive) {
+                        if store.setEntriesHidden(ids: selectedIds, hidden: true) { selectedIds.removeAll() }
+                        else { message = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.") }
+                    }
+                    .accessibilityIdentifier("model-catalog.confirm-hide")
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Hidden models disappear from model selection and chat-group fallback. Saved direct-chat and voice bindings remain. Favorites and group membership are preserved; show the models again to restore availability.")
+                }
         } header: { Text("Organize selected models") }
         footer: { Text("Selection is kept when you change the search or filter. Nothing changes until you choose an action.") }
     }

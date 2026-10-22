@@ -1907,10 +1907,10 @@ struct ContentView: View {
         .sheet(isPresented: $showSelectModels) {
             NavigationStack { ModelLibraryView() }
         }
-        .sheet(isPresented: $showHomeModelPicker) {
-            QuickModelSwitchSheet(sessionId: nil, ensureSessionId: nil, pickedKey: homeModelChoice,
-                                  onPick: { homeModelChoice = $0 },
-                                  onResetToDefault: { homeModelChoice = nil })
+        // iPhone: bottom sheet. iPad: a popover on the chip (see `homeComposerStack`).
+        .sheet(isPresented: Binding(get: { showHomeModelPicker && !isWideLayout },
+                                    set: { showHomeModelPicker = $0 })) {
+            homeModelPickerContent
         }
         // [T-session-attention-bar] Aggregate what needs the user, above the
         // list. Individual rows already carry badges, but with several
@@ -2047,7 +2047,14 @@ struct ContentView: View {
         let screens = MacScreenHosts.candidates
         let logins = homeLoginChoices
         // [takeover] Mac 终端里开着的 Claude Code 会话:点开列表,一点接着干(旧 Mac 不支持时不出现)。
-        MacTerminalSessionsButton()
+        // [ipad-shell] iPad 侧栏一行约 268pt:「进行中」标题 ~96 + 带字的 终端会话 82 + 看屏 58 + 登录 58
+        // = 294,放不下,标题被挤成「进…」。最长的这个在侧栏里只留图标(读屏仍念「终端会话」),
+        // 三个一起是 96 + 40 + 58 + 58 = 252。
+        if isWideLayout {
+            MacTerminalSessionsButton().labelStyle(.iconOnly)
+        } else {
+            MacTerminalSessionsButton()
+        }
         if screens.count == 1 {
             Button { openHomeMacScreen(screens[0]) } label: {
                 Label("看屏", systemImage: "display").font(.caption.weight(.semibold))
@@ -2488,12 +2495,17 @@ struct ContentView: View {
                     .onMove(perform: group.label == "Pinned" && !isSelecting && !isSearching
                             ? { from, to in movePinned(group.ids, from: from, to: to) } : nil)
                 } header: {
+                    // [ipad-shell] 折叠的「昨天 / 本周 / 本月 / 更早」以前每个占 50pt 再隔 22pt,
+                    // 四个空节吃掉侧栏将近 300pt。表头去掉上下默认留白,节与节之间不再额外留空。
                     sectionHeader(group: group)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 }
             }
 
         }
         .listStyle(.plain)
+        .listSectionSpacing(0)
+        .environment(\.defaultMinListHeaderHeight, 0)
         // [WP-43] OpenClaw's sidebar: ideal 300, max 320 (was 340/380/500).
         .navigationSplitViewColumnWidth(min: LeoWorkspaceLayoutPolicy.sidebarWidth.min,
                                         ideal: LeoWorkspaceLayoutPolicy.sidebarWidth.ideal,
@@ -2737,45 +2749,31 @@ struct ContentView: View {
                 .accessibilityLabel(Text("搜索对话"))
             }
         }
-        // [T-ipad-home-workbench] 开着某个对话时,回到右侧首页工作台开新任务。
+        // [T-ipad-home-workbench] 回到右侧首页工作台开新任务。
+        // [ipad-shell] iPad 侧栏 300pt 只放得下 设置 + 3 个按钮 + 收起侧栏:这一格常驻(没开对话时
+        // 直接把光标放进首页输入栏),藏宝阁、Mac 控制台收进「更多」。以前开着对话时多出这一格,
+        // 藏宝阁和「更多」被系统挤进一个看不出是什么的溢出菜单;配了 Mac 时不开对话也溢出。
         ToolbarItem(placement: .topBarTrailing) {
-            if !isSelecting, isWideLayout, selectedSessionId != nil {
+            if !isSelecting, isWideLayout {
                 Button {
-                    selectedSessionId = nil
+                    if selectedSessionId != nil {
+                        selectedSessionId = nil
+                    } else {
+                        homePromptFocused = true
+                    }
                 } label: {
                     Image(systemName: "square.and.pencil")
                 }
                 .accessibilityLabel(Text("新任务"))
             }
         }
-        // [T-collections] 收藏一级入口:分享进来的东西从这里翻。iPad 侧栏只有 380pt 宽,
-        // 推进去太挤,改成整页面板。
+        // [T-collections] 收藏一级入口:分享进来的东西从这里翻。iPad 在「更多」菜单里(整页面板)。
         ToolbarItem(placement: .topBarTrailing) {
-            if !isSelecting {
-                if isWideLayout {
-                    Button { activeToolSheet = .collections } label: {
-                        Image(systemName: "star.square.on.square")
-                    }
-                    .accessibilityLabel(Text("Leo藏宝阁"))
-                } else {
-                    NavigationLink { CollectionsView() } label: {
-                        Image(systemName: "star.square.on.square")
-                    }
-                    .accessibilityLabel(Text("Leo藏宝阁"))
+            if !isSelecting, !isWideLayout {
+                NavigationLink { CollectionsView() } label: {
+                    Image(systemName: "star.square.on.square")
                 }
-            }
-        }
-        // [T-settings-ia] Mac 控制台是主功能,不是设置项——iPad 常驻标题栏(整页面板);
-        // iPhone 收进首页胶囊菜单和 "/" 面板。
-        ToolbarItem(placement: .topBarTrailing) {
-            if !isSelecting, isWideLayout, macFleetEnabled {
-                Button {
-                    showMacConsole = true
-                } label: {
-                    Image(systemName: "desktopcomputer")
-                        .font(.system(size: 15, weight: .medium))
-                }
-                .accessibilityLabel(Text("Mac 控制台"))
+                .accessibilityLabel(Text("Leo藏宝阁"))
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
@@ -2794,7 +2792,23 @@ struct ContentView: View {
         ToolbarItem(placement: .topBarTrailing) {
             if !isSelecting, isWideLayout {
                 Menu {
-                    // iPad 侧栏标题栏最多会挤 6 个图标(380pt 宽),闹钟收进这个菜单。
+                    Button { activeToolSheet = .collections } label: {
+                        Label("Leo藏宝阁", systemImage: "star.square.on.square")
+                    }
+                    // [T-settings-ia] Mac 控制台是主功能:iPad 放在「更多」第一屏(整页面板)。
+                    if macFleetEnabled {
+                        Button { showMacConsole = true } label: {
+                            Label("Mac 控制台", systemImage: "desktopcomputer")
+                        }
+                    }
+                    // 侧栏放不下居中的标题,同步状态的入口跟着进菜单。
+                    if SyncV2Bootstrap.isEnabled {
+                        Button { activeToolSheet = .syncMigrationDetail } label: {
+                            Label("iCloud Sync", systemImage: "icloud")
+                        }
+                    }
+                    Divider()
+                    // iPad 侧栏标题栏放不下更多图标,闹钟收进这个菜单。
                     if hasAlarms {
                         Button {
                             showAlarmList = true
@@ -2837,10 +2851,8 @@ struct ContentView: View {
                     }
                     #endif
                 } label: {
-                    Image("TerminalCircle")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 24, height: 24)
+                    // 菜单里第一项是藏宝阁,不只是终端:用通用的「更多」图标。
+                    Image(systemName: "ellipsis")
                         .accessibilityLabel(Text("更多工具"))
                 }
             }
@@ -3486,6 +3498,12 @@ struct ContentView: View {
         }
     }
 
+    private var homeModelPickerContent: some View {
+        QuickModelSwitchSheet(sessionId: nil, ensureSessionId: nil, pickedKey: homeModelChoice,
+                              onPick: { homeModelChoice = $0 },
+                              onResetToDefault: { homeModelChoice = nil })
+    }
+
     /// 结果条 + 玻璃输入栏:iPhone 首页底部和 iPad 首页工作台共用这一条。
     private var homeComposerStack: some View {
         // [WP-42] Banner and composer share one GlassEffectContainer: the banner's glass
@@ -3506,6 +3524,8 @@ struct ContentView: View {
                 capsule: homeCapsuleLabel,
                 capsuleMenu: AnyView(homeCapsuleMenuContent),
                 onChooseModel: homeTargetIsIPhone ? { showHomeModelPicker = true } : nil,
+                modelPopover: isWideLayout ? HomeModelPopover(isPresented: $showHomeModelPicker,
+                                                              content: AnyView(homeModelPickerContent)) : nil,
                 plusMenu: AnyView(homePlusMenuContent),
                 isBusy: homeRoutingInProgress,
                 onSubmit: { runHomePrompt() },
@@ -5960,13 +5980,23 @@ private struct SessionRow: View, Equatable {
             // so neither the conversation topic nor the last message reads
             // as plain text in the list. The avatar and trailing lock-icon
             // overlay sit outside this VStack so they stay crisp.
+            // [ipad-shell] 时间贴在标题那一行右边,第二行(预览)占满整行。以前时间单独占一列、
+            // 上下居中,两行都让出这一列:300pt 的 iPad 侧栏里预览只剩 10 来个字。
             VStack(alignment: .leading, spacing: 4) {
-                highlightedText(
-                    session.title ?? AppLocalized("New Chat"),
-                    font: .system(size: fontSettings.scaledApp(16), weight: .semibold),
-                    color: Color(UIColor.label)
-                )
-                .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    highlightedText(
+                        session.title ?? AppLocalized("New Chat"),
+                        font: .system(size: fontSettings.scaledApp(16), weight: .semibold),
+                        color: Color(UIColor.label)
+                    )
+                    .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(relativeDate(session.updatedAt))
+                        .font(.system(size: fontSettings.scaledApp(13)))
+                        .foregroundStyle(Color(UIColor.tertiaryLabel))
+                        .lineLimit(1)
+                        .fixedSize()
+                }
 
                 if let origin = session.originDeviceId, origin != DeviceIdentity.deviceId {
                     let label = session.originDeviceName ?? String(origin.prefix(8))
@@ -6013,13 +6043,7 @@ private struct SessionRow: View, Equatable {
             // chain on the lock flag is the cheapest universal fix.
             .modifier(LockedRowEffect(isLocked: isVisuallyLocked))
 
-            Spacer(minLength: 1)
-
-            VStack(alignment: .trailing, spacing: 4) {
-                // Date
-                Text(relativeDate(session.updatedAt))
-                    .font(.system(size: fontSettings.scaledApp(13)))
-                    .foregroundStyle(Color(UIColor.tertiaryLabel))
+            if isVisuallyLocked || session.isPinned {
                 if isVisuallyLocked {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 10))

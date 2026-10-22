@@ -96,6 +96,12 @@ struct BackupSettingsView: View {
                             .lineLimit(2)
                     }
                     Button("停止备份", role: .destructive) { showStopConfirm = true }
+                        // [ipad-shell] 挂在按钮上:iPad 上确认框从这个按钮弹出。
+                        .confirmationDialog("停止备份？", isPresented: $showStopConfirm, titleVisibility: .visible) {
+                            Button("停止", role: .destructive) { runner.stop() }
+                        } message: {
+                            Text("已完成的部分会被丢弃，不会生成备份包。")
+                        }
                 } else {
                     Button {
                         startExport()
@@ -185,11 +191,6 @@ struct BackupSettingsView: View {
             localPackages = BackupDelivery.localPackages()
         }
         .onChange(of: runner.activity) { localPackages = BackupDelivery.localPackages() }
-        .confirmationDialog("停止备份？", isPresented: $showStopConfirm, titleVisibility: .visible) {
-            Button("停止", role: .destructive) { runner.stop() }
-        } message: {
-            Text("已完成的部分会被丢弃，不会生成备份包。")
-        }
         .sheet(item: Binding(get: { shareURL.map(BackupIdentifiedURL.init) }, set: { shareURL = $0?.url })) { item in
             BackupShareSheet(url: item.url) { shareURL = nil }
         }
