@@ -140,17 +140,26 @@ final class PushRegistrar {
                 Task { @MainActor in
                     // [remote-ctl-power] 开关关着时中继还拿着旧的 push-to-start token(没有注销接口):
                     // 它拉起的卡直接收掉,不登记 update token,中继也就不会再推更新叫醒手机。
-                    guard MacFollowLogic.liveActivityEnabled() else {
+                    // [la-foreground] App 在前台(人就在对话里)时拉起的也直接收掉:审批卡已经在 App 里,
+                    // 灵动岛 / iPad 顶部横幅只会挡内容。不登记 token,中继下次事件仍会 push-to-start;
+                    // 退到后台时由 HarnessLiveActivityBridge 为关注且在跑的会话自己起卡。
+                    let action = LiveActivityPresencePolicy.decide(
+                        appActive: AgentLiveActivityManager.shared.isAppInForeground, taskRunning: true,
+                        followed: true, enabled: MacFollowLogic.liveActivityEnabled(), existingActivity: true)
+                    guard action == .keep else {
                         await activity.end(nil, dismissalPolicy: .immediate)
                         return
                     }
+                    let activityId = activity.id
                     for await data in activity.pushTokenUpdates {
                         let state = activity.content.state
                         let token = LiveActivityTokenRegistration.hex(data)
+                        self.relayActivityTokens[activityId] = token
                         // 失败重试在里面退避,别挡住下一次 token 更新。
                         Task { await self.registerActivityUpdateToken(token, sessions: state.sessions,
                                                                       privacyMode: state.privacyMode) }
                     }
+                    self.relayActivityTokens.removeValue(forKey: activityId)
                 }
             }
         }
@@ -174,6 +183,19 @@ final class PushRegistrar {
             .first(where: { $0.relayEventsURL != nil }) else { return }
         registerGenerations["activity_update:\(token)", default: 0] &+= 1   // 还在重试的旧登记别再发
         _ = await client.unregisterActivityToken(token)
+    }
+
+    /// [la-foreground] 中继拉起、还在屏上的卡的 update token(activity id → token)。
+    private var relayActivityTokens: [String: String] = [:]
+
+    /// [la-foreground] App 把中继拉起的卡全部收掉了(回到前台):向中继注销它们的 update token。
+    /// 否则中继下一次事件仍往死卡上 update、不再 push-to-start,后台时就没有卡了。
+    func forgetRelayActivityTokens() {
+        let tokens = Array(relayActivityTokens.values)
+        relayActivityTokens = [:]
+        for token in tokens {
+            Task { await unregisterActivityUpdateToken(token) }
+        }
     }
 
     /// 把 token 送到中继。中继与全部 Mac 共用同一把钥匙,所以任取一台

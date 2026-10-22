@@ -9,8 +9,11 @@
 //  LiveSessionSnapshot 喂进去。
 //
 //  生命周期(ActivityKit 铁律:活动只能在前台创建,更新随时可以):
-//  - driver 注册(此时必在前台)→ 立刻 start——锁屏/灵动岛马上有;
+//  - [la-foreground] App 在前台(任一 LeoBot 窗口 active)时不起卡:人就在对话里,卡只会挡内容
+//    (iPad 顶部横幅)。离开前台的那一刻(AgentLiveActivityManager.leaveForeground → refresh)
+//    为关注且在跑的会话 start;以前是 driver 注册(打开控制台)就 start。
 //  - 状态变化(审批到达/解决、回合结束)→ update,后台也合法;
+//  - 回到前台 → 卡全部立即结束(含中继拉起的),update token 向中继注销;
 //  - 没有活跃 driver → end。
 //  [up-home] 离开控制台(driver detach)时任务还在 Mac 上跑:卡片不撤,改由
 //  MacLiveSessionsStore 的轮询驱动(审批、运行中),Mac 报这一轮结束 / 会话不在了才结束卡片。
@@ -83,8 +86,8 @@ final class HarnessLiveActivityBridge {
     }
 
     private init() {
-        // 回到前台后补一次刷新:后台期间 end 掉聊天活动的话,Mac 任务
-        // 需要一个前台时机才能 start(后台 start 会被系统拒)。
+        // 回到前台后补一次刷新:离开控制台的会话靠它重新对一次 Mac 的列表。
+        // [la-foreground] 前台不起卡(refresh 里会跳过),卡在离开前台时起。
         NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification,
             object: nil, queue: .main) { [weak self] _ in
@@ -244,7 +247,7 @@ final class HarnessLiveActivityBridge {
         refresh()
     }
 
-    /// driver 状态变化时喊一声(update 在后台也合法,start 只在前台发生)。
+    /// driver 状态变化时喊一声(update 在后台也合法;start 只在离开前台的那一刻发生 [la-foreground])。
     func refresh() {
         entries = entries.filter { $0.value.driver != nil }
         Self.registeredSessionIds = Set(entries.values.compactMap { $0.driver?.sessionId })
@@ -287,6 +290,16 @@ final class HarnessLiveActivityBridge {
             return
         }
         let manager = AgentLiveActivityManager.shared
+        // [la-foreground] 前台不要卡:管理者在场景激活时已把所有卡收掉,这里只交还所有权。
+        // 离开前台时 leaveForeground 再调 refresh,那时 start。
+        let presence = LiveActivityPresencePolicy.decide(
+            appActive: manager.isAppInForeground, taskRunning: true, followed: true,
+            enabled: MacFollowLogic.liveActivityEnabled(), existingActivity: startedByBridge && manager.hasLiveActivity)
+        if presence == .none || presence == .endImmediately {
+            if presence == .endImmediately { manager.endActivity() }
+            startedByBridge = false
+            return
+        }
         // 聊天任务在跑(tracker 里有不是 Mac 会话的):它的卡优先,不插队。
         let chatRunning = !SessionActivityTracker.shared.activeSessions.subtracting(Self.registeredSessionIds).isEmpty
         if startedByBridge && manager.hasLiveActivity {
@@ -300,7 +313,7 @@ final class HarnessLiveActivityBridge {
         } else if !chatRunning, !snapshots.contains(where: { manager.hasActivity(forSessionId: $0.sessionId) }) {
             // 按会话判断:中继已为这个会话拉起卡就不再另起一张(以前看 hasLiveActivity,
             // 中继卡在屏时 App 回前台会再起一张本地卡,锁屏上两张)。
-            // start 仅前台合法;后台时跳过,didBecomeActive 会补。
+            // start 仅在离开前台的那一刻合法(还没进后台);后台时跳过,中继的 push-to-start 兜底。
             guard UIApplication.shared.applicationState != .background else { return }
             // [WP-41] Mac 任务卡带 update token:App 被挂起/杀掉后,中继照样能推审批与完成。
             manager.startActivity(sessions: snapshots, remotePush: true)

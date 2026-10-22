@@ -243,11 +243,12 @@ final class LogHygieneTests: XCTestCase {
     func testLiveActivityNotForegroundFailureIsNotAnErrorLine() throws {
         let text = try source("Agent/Background/AgentLiveActivityManager.swift")
         XCTAssertTrue(text.contains("static func isNotForegroundFailure(_ error: Error) -> Bool"))
-        XCTAssertGreaterThanOrEqual(text.components(separatedBy: "Self.isNotForegroundFailure(error)").count - 1, 3,
-                                    "start, renew restart and pendingStart recovery all classify the failure")
-        // 三处 error 行都在 else 分支里,「Target is not foreground」走 info。
-        for marker in ["[LiveActivity][start] Failed to start", "[LiveActivity][renew] Failed to restart",
-                       "[LiveActivity][renew] pendingStart recovery still failed"] {
+        // [la-foreground] 前台 renew 与 pendingStart 恢复已删除(回前台一律收卡,离开前台时重新起卡),
+        // 只剩 start 一处请求 Activity。
+        XCTAssertGreaterThanOrEqual(text.components(separatedBy: "Self.isNotForegroundFailure(error)").count - 1, 1,
+                                    "start classifies the failure")
+        // error 行在 else 分支里,「Target is not foreground」走 info。
+        for marker in ["[LiveActivity][start] Failed to start"] {
             guard let range = text.range(of: marker) else { return XCTFail("missing \(marker)") }
             let before = text[text.startIndex..<range.lowerBound]
             let lastLines = before.split(separator: "\n").suffix(2).joined(separator: "\n")
