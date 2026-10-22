@@ -144,14 +144,27 @@ def percentile(values, p):
     return ordered[k]
 
 
-def check_log(lines):
+def launch_version(segment):
+    """`v=` on the launch marker (LoggingManager writes it); None for older builds."""
+    m = re.search(r"\bv=(\S+)", segment[0][1]) if segment else None
+    return m.group(1) if m else None
+
+
+def check_log(lines, version=None):
     segments = launch_segments(lines)
     if not segments:
         return [Result("launch marker present", FAIL, "no '%s' line in the day log" % LAUNCH_MARKER)]
     results = []
 
-    # Every launch in the log, not just the last: a quiet last launch used to hide
-    # noisy earlier ones (the audit's median was 77 lines while the last launch had 46).
+    # Every launch of the build under test, not just the last: a quiet last launch used
+    # to hide noisy earlier ones (the audit's median was 77 lines while the last launch
+    # had 46). Launches of OTHER builds in the same day log are left out (2026-10-22: the
+    # 1.79.0 launch had 26 lines, but three 1.77.x launches kept the median at 83).
+    if version and any(launch_version(s) for s in segments):
+        segments = [s for s in segments if launch_version(s) == version]
+        if not segments:
+            return [Result("launch-second log lines", WARN,
+                           "NOT EVALUATED: no launch of version %s in the day log" % version)]
     per_launch = [busiest_second(s) for s in segments]
     recent = per_launch[-LAUNCH_RECENT_N:]
     p50 = percentile(per_launch, 50)
@@ -337,7 +350,7 @@ def run(perf_path, log_path, version=None, out=sys.stdout):
     with open(perf_path, encoding="utf-8", errors="replace") as f:
         perf_records = load_perf(f.read().splitlines())
     version, perf_results = check_perf(perf_records, version)
-    results = check_log(log_lines) + perf_results
+    results = check_log(log_lines, version) + perf_results
     print("IOSPerfBudgetGate (version %s)" % (version or "?"), file=out)
     for r in results:
         print("  [%s] %s — %s" % (r.status, r.name, r.detail), file=out)

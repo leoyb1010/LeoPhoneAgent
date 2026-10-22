@@ -132,6 +132,26 @@ class LaunchLogTests(unittest.TestCase):
         self.assertEqual(named(results, "p50").status, gate.PASS)
         self.assertIn("over %d launch(es)" % (gate.LAUNCH_RECENT_N + 1), named(results, "p50").detail)
 
+    def test_only_launches_of_the_build_under_test_count(self):
+        # 2026-10-22: the 1.79.0 launch had 26 lines; three 1.77.x launches kept the median at 83.
+        lines = day_log(84, 83, 130, 26)
+        versions = ["1.77.5", "1.77.6", "1.77.6", "1.79.0"]
+        marked, i = [], 0
+        for line in lines:
+            if "process launch" in line:
+                line += " v=" + versions[i]
+                i += 1
+            marked.append(line)
+        results = gate.check_log(marked, "1.79.0")
+        self.assertEqual(named(results, "p50").status, gate.PASS)
+        self.assertIn("over 1 launch(es)", named(results, "p50").detail)
+        # ...and a noisy build under test still fails on its own launches.
+        self.assertEqual(named(gate.check_log(marked, "1.77.6"), "p50").status, gate.FAIL)
+        # No launch of that build in the log: not evaluated, never a pass.
+        self.assertEqual(gate.check_log(marked, "9.9.9")[0].status, gate.WARN)
+        # Logs written before markers carried v= keep the old all-launches behaviour.
+        self.assertEqual(named(gate.check_log(lines, "1.79.0"), "p50").status, gate.FAIL)
+
     def test_budget_boundaries_are_inclusive(self):
         ok = gate.check_log(day_log(gate.BUDGET_LAUNCH_SECOND_LINES_P50))
         self.assertEqual(named(ok, "p50").status, gate.PASS)
