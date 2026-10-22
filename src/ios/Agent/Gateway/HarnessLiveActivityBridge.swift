@@ -17,6 +17,8 @@
 //  后台时轮询停了,卡片靠中继的 Live Activity 推送更新(WP-41)。
 //  聊天任务的 activity 在跑时不抢——它的管理者持续 update,插队只会互相
 //  覆盖;聊天优先,Mac 任务等它结束后的下一次状态变化再上。
+//  [remote-ctl-power] 只给关注的会话上卡、要推送令牌(following == nil 的旧版 Mac 按关注);
+//  打开一个没关注的桌面任务看看不起卡,在手机上发消息后 Mac 改成关注,卡随列表刷新补上。
 //
 
 import Combine
@@ -57,6 +59,28 @@ final class HarnessLiveActivityBridge {
     nonisolated(unsafe) static var registeredSessionIds: Set<String> = []
     /// 只有这里拉起的 activity 才由这里结束,不碰聊天任务的。
     private var startedByBridge = false
+    /// [remote-ctl-power] 这里登记进 tracker(会上卡、会要推送令牌)的会话:只有关注的。
+    private var carded: Set<String> = []
+    /// 上次为「不关注但在跑的控制台」补刷列表的时间(在手机上发了消息,Mac 会把它改成关注)。
+    private var followProbeAt: Date = .distantPast
+
+    /// [remote-ctl-power] 只给关注的会话上卡(nil / 列表里还没有 = 关注:手机上新建的、旧版 Mac 都照旧)。
+    private func isFollowed(_ sid: String) -> Bool {
+        !MacLiveSessionsStore.shared.isKnownUnfollowed(sessionId: sid)
+    }
+
+    /// 关注的进 tracker(灵动岛只认 tracker 里的会话);变成不关注就撤卡。
+    private func setCarded(_ sid: String, _ on: Bool) {
+        if on {
+            guard carded.insert(sid).inserted else { return }
+            SessionActivityTracker.shared.setActive(sid, source: "HarnessLiveActivityBridge")
+        } else {
+            guard carded.remove(sid) != nil else { return }
+            SessionActivityTracker.shared.setInactive(sid, finalPhase: .suspended, haptic: false,
+                                                      source: "HarnessLiveActivityBridge")
+            AgentLiveActivityManager.shared.dropSession(sid)
+        }
+    }
 
     private init() {
         // 回到前台后补一次刷新:后台期间 end 掉聊天活动的话,Mac 任务
@@ -76,7 +100,12 @@ final class HarnessLiveActivityBridge {
         rowsWatch = MacLiveSessionsStore.shared.$rows
             .receive(on: RunLoop.main)
             .sink { [weak self] rows in
-                Task { @MainActor in self?.reconcileDetached(rows: rows, fresh: false) }
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.reconcileDetached(rows: rows, fresh: false)
+                    // [remote-ctl-power] 关注变了(在手机上发了消息、点了「关注」)要跟着上卡 / 撤卡。
+                    if !self.entries.isEmpty { self.refresh() }
+                }
             }
     }
 
@@ -94,6 +123,13 @@ final class HarnessLiveActivityBridge {
         for (sid, var item) in detached {
             let row = rows.first { $0.hostId == item.hostId && $0.session.id == sid }
             if fresh { item.confirmed = true }
+            // [remote-ctl-power] 在桌面上取消了关注:Mac 不再推它,卡片也不留。
+            if row?.isFollowed == false {
+                detached.removeValue(forKey: sid)
+                setCarded(sid, false)
+                changed = true
+                continue
+            }
             if let row {
                 item.status = row.isWaiting ? "waiting_for_approval" : row.session.status
                 item.approvalCommand = row.session.pendingApprovalCommand
@@ -101,6 +137,7 @@ final class HarnessLiveActivityBridge {
             let ended = row == nil || (row?.session.status == "idle" && row?.isWaiting == false)
             if ended && item.confirmed {
                 detached.removeValue(forKey: sid)
+                carded.remove(sid)
                 // 列表里没了:可能是跑完很久(available)、被停或失败,这里分不清,不给结论,只撤卡。
                 if row == nil {
                     SessionActivityTracker.shared.setInactive(sid, finalPhase: .suspended, haptic: false,
@@ -137,6 +174,7 @@ final class HarnessLiveActivityBridge {
                   let client = GatewayHostStore.shared.client(for: host) else { return false }
             try? await client.stopHarness(sessionId: sessionId)
             detached.removeValue(forKey: sessionId)
+            carded.remove(sessionId)
             SessionActivityTracker.shared.setInactive(sessionId, finalPhase: .cancelled, haptic: false,
                                                       source: "HarnessLiveActivityBridge")
             refresh()
@@ -154,8 +192,14 @@ final class HarnessLiveActivityBridge {
         // _startActivity/_updateActivity 都会按 SessionActivityTracker
         // .activeSessions 过滤传入的 snapshot。Mac 会话从不进那个集合,
         // 所以不登记的话喂进去的全被丢掉,灵动岛永远是空的。
+        // [remote-ctl-power] 只登记关注的:打开一个没关注的桌面任务看看,不起卡、不要推送令牌。
         if let sid = driver.sessionId {
-            SessionActivityTracker.shared.setActive(sid, source: "HarnessLiveActivityBridge")
+            if isFollowed(sid) {
+                carded.insert(sid)
+                SessionActivityTracker.shared.setActive(sid, source: "HarnessLiveActivityBridge")
+            } else {
+                setCarded(sid, false)
+            }
         }
         // [WP-44] Most recently opened Mac task = the share sheet's "发给 Mac 当前任务".
         driver.publishShareTarget(hostName: hostName ?? "Mac")
@@ -177,7 +221,8 @@ final class HarnessLiveActivityBridge {
             }
             // [up-home] 还在 Mac 上跑(包括等审批):卡片留着,交给 MacLiveSessionsStore 驱动,
             // 跑完才结束(见 reconcileDetached)。以前一离开控制台卡片就没了。
-            if phase == .suspended, driver.isRunning, let hostId = driver.macScreenClient.hostId {
+            // [remote-ctl-power] 没关注的没上过卡,离开就离开,不留卡。
+            if phase == .suspended, driver.isRunning, carded.contains(sid), let hostId = driver.macScreenClient.hostId {
                 let entry = entries[ObjectIdentifier(driver)]
                 detached[sid] = Detached(hostId: hostId, hostName: entry?.hostName ?? "Mac",
                                          harnessName: driver.harness.name, status: driver.status,
@@ -187,6 +232,7 @@ final class HarnessLiveActivityBridge {
                 Task { await pollDetached() }
                 return
             }
+            carded.remove(sid)
             SessionActivityTracker.shared.setInactive(sid, finalPhase: phase, haptic: false,
                                                       source: "HarnessLiveActivityBridge")
             // [T-la-false-failure] Still running on the Mac; only this phone stopped
@@ -208,13 +254,27 @@ final class HarnessLiveActivityBridge {
         Self.onScreenSessionIds = Set(entries.values.compactMap { entry in
             entry.driver.flatMap { $0.isRunning ? $0.sessionId : nil }
         })
+        // [remote-ctl-power] 关注随列表变:变成关注就上卡,变成不关注就撤卡。
+        var watchingUnfollowedRun = false
+        for entry in entries.values {
+            guard let d = entry.driver, let sid = d.sessionId else { continue }
+            let followed = isFollowed(sid)
+            setCarded(sid, followed)
+            if !followed, d.status == "running" { watchingUnfollowedRun = true }
+        }
+        // 开着一个没关注的桌面任务、它跑起来了:多半是在手机上发了消息(Mac 随即把它改成关注)。
+        // 补刷一次列表,卡片不用等下一轮 60 s 的轮询;最多 15 s 一次。
+        if watchingUnfollowedRun, Date().timeIntervalSince(followProbeAt) > 15 {
+            followProbeAt = Date()
+            Task { await MacLiveSessionsStore.shared.refresh() }
+        }
         let detachedSnapshots: [LiveSessionSnapshot] = detached.map { sid, item in
             let waiting = item.status == "waiting_for_approval"
             return snapshot(sid: sid, title: "🖥 \(item.hostName) · \(item.harnessName)", waiting: waiting,
                             command: item.approvalCommand, idle: item.status == "idle")
         }
         let snapshots: [LiveSessionSnapshot] = detachedSnapshots + entries.values.compactMap { entry in
-            guard let d = entry.driver, d.isRunning, let sid = d.sessionId else { return nil }
+            guard let d = entry.driver, d.isRunning, let sid = d.sessionId, carded.contains(sid) else { return nil }
             let waiting = d.pendingApproval
             return snapshot(sid: sid, title: "🖥 \(entry.hostName) · \(d.harness.name)", waiting: waiting != nil,
                             command: waiting?.command, idle: d.status == "idle")

@@ -35,15 +35,23 @@ final class MacLiveSessionsStore: ObservableObject {
             }
         }
 
+        /// [remote-ctl-power] 关注(nil = 旧版 Mac,按关注处理)。
+        var isFollowed: Bool { MacFollowLogic.isFollowed(session.following) }
+
+        var facts: MacFollowLogic.Facts {
+            MacFollowLogic.Facts(hostId: hostId, sessionId: session.id, status: session.status, seq: session.seq,
+                                 waiting: session.waitingForApproval, following: session.following,
+                                 title: session.displayTitle, pendingApprovalId: session.pendingApprovalId,
+                                 pendingApprovalCommand: session.pendingApprovalCommand)
+        }
+
+        /// 比显示、轮询、手表要用的全部事实:以前比的是会话类型名,改了标题、关注都不刷新。
         static func == (a: Row, b: Row) -> Bool {
-            a.id == b.id && a.session.status == b.session.status
-                && a.session.seq == b.session.seq
-                && a.session.waitingForApproval == b.session.waitingForApproval
-                && a.session.name == b.session.name
-                && a.session.pendingApprovalCommand == b.session.pendingApprovalCommand
+            a.hostName == b.hostName && a.facts == b.facts
         }
     }
 
+    /// Mac 上全部「进行中」的行(不论关注与否;Siri、深链、实时活动按会话查)。首页只列 `followedRows`。
     @Published private(set) var rows: [Row] = []
     /// 点了「停止」、Mac 还没报停下来的行:显示「正在停止…」。
     @Published private(set) var stopping: Set<String> = []
@@ -58,9 +66,24 @@ final class MacLiveSessionsStore: ObservableObject {
 
     private var pollTask: Task<Void, Never>?
 
-    /// 轮询间隔:主界面可见时才跑。20 秒足够"知道有没有事",
-    /// 又不会把电池和流量当消耗品。
-    private let interval: TimeInterval = 20
+    /// [remote-ctl-power] 最近一次列表里 Mac 明说「不关注」的会话 id(任何状态)。
+    /// 补拉通知、实时活动据此跳过;不在里面的(没拉到、旧版 Mac)按关注处理。
+    private(set) var unfollowedSessionIds: Set<String> = []
+    /// 首页轮询推到手表的审批 id(控制台没开时也让手表能答);审批不在了就收卡。
+    private var watchArmedApprovals: Set<String> = []
+    /// 手表直接答过的审批(ponytail: 进程内只增,一天也就几条)。
+    private var answeredApprovals: Set<String> = []
+
+    /// 首页「进行中」:关注的会话。
+    var followedRows: [Row] { MacFollowLogic.partition(rows, facts: \.facts).followed }
+    /// 不关注、但在跑 / 等审批的桌面任务:首页只显示数量,点开再列。
+    var unfollowedBusyRows: [Row] { MacFollowLogic.partition(rows, facts: \.facts).unfollowedBusy }
+
+    func isKnownUnfollowed(sessionId: String) -> Bool { unfollowedSessionIds.contains(sessionId) }
+
+    /// 轮询间隔:只在 App 在前台时跑(进后台 stop)。[remote-ctl-power] 有关注的任务在跑 / 等审批
+    /// 才 20 秒一轮,否则 60 秒 —— 桌面上没关注的活不让手机勤快醒。
+    var interval: TimeInterval { MacFollowLogic.pollInterval(rows.map(\.facts)) }
 
     private init() {}
 
@@ -69,7 +92,8 @@ final class MacLiveSessionsStore: ObservableObject {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
-                try? await Task.sleep(nanoseconds: UInt64((self?.interval ?? 20) * 1_000_000_000))
+                let seconds = self?.interval ?? MacFollowLogic.quietPollInterval
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             }
         }
     }
@@ -95,6 +119,7 @@ final class MacLiveSessionsStore: ObservableObject {
         let hosts = GatewayHostStore.shared.activeHosts
         guard !hosts.isEmpty else {
             if !rows.isEmpty { rows = [] }
+            unfollowedSessionIds = []
             return
         }
 
@@ -104,6 +129,9 @@ final class MacLiveSessionsStore: ObservableObject {
         var failedHosts: Set<String> = []
         /// 成功的主机列出的全部会话(任何状态):不再出现的,「已清理」记录随之删掉。
         var listed: Set<String> = []
+        /// 成功的主机这次报的会话,以及其中明说不关注的。
+        var fetchedSessionIds: Set<String> = []
+        var unfollowedListed: Set<String> = []
         let store = GatewayHostStore.shared
         await withTaskGroup(of: (GatewayHost, Result<[HarnessSessionSummary], Error>).self) { group in
             for host in hosts {
@@ -132,6 +160,8 @@ final class MacLiveSessionsStore: ObservableObject {
                     continue
                 }
                 for session in sessions {
+                    fetchedSessionIds.insert(session.id)
+                    if session.following == false { unfollowedListed.insert(session.id) }
                     let row = Row(hostId: host.id, hostName: host.name, session: session)
                     listed.insert(row.id)
                     if Self.liveStatuses.contains(session.status), !isDismissed(row) { collected.append(row) }
@@ -139,6 +169,9 @@ final class MacLiveSessionsStore: ObservableObject {
             }
         }
         collected.append(contentsOf: rows.filter { failedHosts.contains($0.hostId) })
+        // 有主机没拉到:它的会话沿用上一轮的关注记录;都拉到了就以这一轮为准。
+        unfollowedSessionIds = failedHosts.isEmpty ? unfollowedListed
+            : unfollowedSessionIds.subtracting(fetchedSessionIds).union(unfollowedListed)
         if failedHosts.isEmpty, dismissed.keys.contains(where: { !listed.contains($0) }) {
             dismissed = dismissed.filter { listed.contains($0.key) }
             UserDefaults.standard.set(dismissed, forKey: Self.dismissedKey)
@@ -151,18 +184,75 @@ final class MacLiveSessionsStore: ObservableObject {
             return a.session.seq > b.session.seq
         }
         if collected != rows {
+            let watchBefore = watchStatus.signature
             rows = collected
-            // [WP-44] Mirror to the watch's Mac page / complications.
-            WatchBridge.shared.pushStatus()
+            // [WP-44] Mirror to the watch's Mac page / complications — [remote-ctl-power] only
+            // when what the watch shows changed (unfollowed rows never reach it).
+            if watchStatus.signature != watchBefore { WatchBridge.shared.pushStatus() }
         }
+        syncWatchApprovals()
     }
 
     /// [WP-44] What the watch shows: counts plus the first few rows, waiting first.
+    /// [remote-ctl-power] Followed sessions only, titled by the task title; waiting rows carry
+    /// their approval so a tap on the wrist re-opens the card.
     var watchStatus: WatchMacStatus {
-        WatchMacStatus.summarize(rows.map { row in
-            (id: row.id, title: "\(row.hostName) · \(row.session.name)", status: row.statusText,
-             waiting: row.isWaiting, running: ["running", "starting"].contains(row.session.status))
+        let items = MacFollowLogic.watchItems(rows.map { (facts: $0.facts, statusText: $0.statusText) })
+        return WatchMacStatus.summarize(approvals: items.map { item in
+            (id: item.id, title: item.title, status: item.status, waiting: item.waiting, running: item.running,
+             approvalId: item.approvalId, detail: item.detail,
+             risk: item.detail.map { CommandRisk.assess($0).rawValue })
         })
+    }
+
+    /// [remote-ctl-power] 关注的会话等审批时,控制台没开也把审批卡推到手表(控制台开着时 driver 已推、
+    /// 已登记处理者的不重复推);审批不在了就收卡。只在前台轮询时发生。
+    private func syncWatchApprovals() {
+        let pending = MacFollowLogic.watchApprovals(rows.map(\.facts))
+        let current = Set(pending.compactMap(\.pendingApprovalId))
+        for facts in pending {
+            guard let approvalId = facts.pendingApprovalId, !watchArmedApprovals.contains(approvalId) else { continue }
+            watchArmedApprovals.insert(approvalId)
+            guard !WatchBridge.shared.hasApprovalHandler(approvalId: approvalId) else { continue }
+            WatchBridge.shared.sendApprovalRequest(approvalId: approvalId, command: facts.pendingApprovalCommand,
+                                                   reason: nil, choices: ["once", "deny"])
+        }
+        for gone in watchArmedApprovals.subtracting(current) {
+            watchArmedApprovals.remove(gone)
+            WatchBridge.shared.clearApprovalRequest(approvalId: gone)
+        }
+    }
+
+    /// [remote-ctl-power] 手表答了一个审批、却没有控制台 driver 接:直接 POST 到那台 Mac
+    /// (`/harness/sessions/:id/approval`)。冷启动时列表还是空的,先刷一次再找。返回是否送到。
+    @discardableResult
+    func answerApproval(approvalId: String, choice: String) async -> Bool {
+        // 手表的回答可能从实时消息和排队通道各到一次:只送一次。
+        guard answeredApprovals.insert(approvalId).inserted else { return false }
+        if !rows.contains(where: { $0.session.pendingApprovalId == approvalId }) { await refresh() }
+        // 列表里已经没有这条审批:别处答过了(或 Mac 已不在等),什么都不发。
+        guard let row = rows.first(where: { $0.session.pendingApprovalId == approvalId }),
+              let client = client(for: row.hostId) else { return false }
+        do {
+            try await client.approveHarness(sessionId: row.session.id, choice: choice, approvalId: approvalId)
+        } catch {
+            answeredApprovals.remove(approvalId)   // 没送到:下一次(排队通道)还能再试
+            return false
+        }
+        HarnessApprovalNotifier.clear(sessionId: row.session.id, approvalId: approvalId)
+        Task { await refresh() }
+        return true
+    }
+
+    /// [remote-ctl-power] 「关注」一个桌面任务:之后它进「进行中」,推送、实时活动照常。
+    /// 要 Mac 报 `follow` 能力;旧版 Mac 给一句原因。
+    func follow(_ row: Row) async throws {
+        guard let client = client(for: row.hostId) else { throw GatewayError.notConfigured }
+        guard await client.harnessSupportsFollow() else {
+            throw GatewayError.http(status: 404, message: AppLocalized("这台 Mac 还不支持关注，请先更新 Mac 端"))
+        }
+        try await client.setHarnessFollowing(sessionId: row.session.id, following: true)
+        await refresh()
     }
 
     private func isDismissed(_ row: Row) -> Bool {

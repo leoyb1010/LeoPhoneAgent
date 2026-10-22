@@ -17,6 +17,11 @@ struct WatchMacStatus: Codable, Equatable {
         var title: String
         var status: String
         var waiting: Bool
+        /// [remote-ctl-power] 等审批的行带上审批(id、命令、风险),手表点这一行就重开审批卡。
+        /// 可选:旧手机不带、旧手表忽略,两边照常解码。
+        var approvalId: String? = nil
+        var detail: String? = nil
+        var risk: String? = nil
     }
 
     var running: Int
@@ -32,6 +37,16 @@ struct WatchMacStatus: Codable, Equatable {
     /// 从手机端的任务行汇总(等你审批的排最前)。
     static func summarize(_ items: [(id: String, title: String, status: String, waiting: Bool, running: Bool)],
                           now: Date = Date()) -> WatchMacStatus {
+        summarize(approvals: items.map {
+            (id: $0.id, title: $0.title, status: $0.status, waiting: $0.waiting, running: $0.running,
+             approvalId: nil, detail: nil, risk: nil)
+        }, now: now)
+    }
+
+    /// [remote-ctl-power] 同上,等审批的行带上审批(手表点行重开审批卡)。
+    static func summarize(approvals items: [(id: String, title: String, status: String, waiting: Bool, running: Bool,
+                                             approvalId: String?, detail: String?, risk: String?)],
+                          now: Date = Date()) -> WatchMacStatus {
         let sorted = items.sorted { lhs, rhs in
             if lhs.waiting != rhs.waiting { return lhs.waiting }
             if lhs.running != rhs.running { return lhs.running }
@@ -42,7 +57,10 @@ struct WatchMacStatus: Codable, Equatable {
             waiting: items.filter(\.waiting).count,
             rows: sorted.prefix(maxRows).map {
                 Row(id: String($0.id.prefix(80)), title: String($0.title.prefix(40)),
-                    status: String($0.status.prefix(40)), waiting: $0.waiting)
+                    status: String($0.status.prefix(40)), waiting: $0.waiting,
+                    approvalId: $0.approvalId.map { String($0.prefix(120)) },
+                    // 手表审批卡上的命令;applicationContext 有大小上限,截短。
+                    detail: $0.detail.map { String($0.prefix(300)) }, risk: $0.risk)
             },
             updatedAt: now)
     }
@@ -59,7 +77,9 @@ struct WatchMacStatus: Codable, Equatable {
 
     /// 签名只看会改变手表显示的字段:同样的状态不再占 applicationContext 的推送配额。
     var signature: String {
-        "\(running)|\(waiting)|" + rows.map { "\($0.id):\($0.status):\($0.waiting)" }.joined(separator: ",")
+        "\(running)|\(waiting)|" + rows.map {
+            "\($0.id):\($0.title):\($0.status):\($0.waiting):\($0.approvalId ?? "")"
+        }.joined(separator: ",")
     }
 
     private static let encoder: JSONEncoder = {

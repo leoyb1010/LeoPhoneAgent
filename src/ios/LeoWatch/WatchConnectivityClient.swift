@@ -487,6 +487,15 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
 
     // MARK: - Approvals
 
+    /// [remote-ctl-power] Re-open a waiting Mac task's approval from the Mac page (after the
+    /// card timed out, or when it never arrived live). The phone answers it with or without
+    /// an open console.
+    func reopenApproval(_ row: WatchMacStatus.Row) {
+        guard row.waiting, let approvalId = row.approvalId, !approvalId.isEmpty else { return }
+        pendingApproval = WatchApproval(runId: approvalId, detail: row.detail ?? "",
+                                        choices: ["once", "deny"], risk: row.risk ?? "medium")
+    }
+
     /// Answer a pending gateway approval from the wrist.
     ///
     /// Live message when the phone is reachable; otherwise (or when the live

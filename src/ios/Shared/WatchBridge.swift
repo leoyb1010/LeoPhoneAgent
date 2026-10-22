@@ -322,9 +322,16 @@ final class WatchBridge: NSObject, ObservableObject {
         approvalHandlers.removeValue(forKey: approvalId)
     }
 
+    func hasApprovalHandler(approvalId: String) -> Bool { approvalHandlers[approvalId] != nil }
+
     /// Dispatch a wrist answer to the driver that owns that exact approval.
+    /// [remote-ctl-power] No driver (console closed, or the approval came from the home
+    /// poll / the Mac page): answer the Mac directly instead of dropping it.
     func resolveApproval(approvalId: String, choice: String) {
-        guard let handler = approvalHandlers[approvalId] else { return }
+        guard let handler = approvalHandlers[approvalId] else {
+            Task { await MacLiveSessionsStore.shared.answerApproval(approvalId: approvalId, choice: choice) }
+            return
+        }
         approvalHandlers.removeValue(forKey: approvalId)
         handler(choice)
     }
