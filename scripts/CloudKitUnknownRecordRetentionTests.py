@@ -83,7 +83,9 @@ struct UpgradedFutureFixture: Syncable {
         pass.begin()
         let future = try pass.claim(from: journal)!
         precondition(future.records[0].unknownFields == converted.unknownFields)
-        // SyncCore intentionally withholds ACK for this unsupported type.
+        // A withheld delivery (SyncCore withholds ACK only for transient retries;
+        // unknown types it quarantines, see the source checks below) must not
+        // stall known records behind it.
         journal.release(future.id)
         let next = try pass.claim(from: journal)!
         precondition(next.records.first?.id == known.id, "unknown entry must not stop known records")
@@ -129,7 +131,19 @@ with tempfile.TemporaryDirectory(prefix='cloudkit-unknown-') as temporary:
                     str(probe), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
 
+# Since the inbound hardening (8b1cbb0cf) SyncCore.processInbound delegates per-record work to
+# SyncInboundApplier: known fields are reclassified before the merger sees the record, and an
+# unknown type is retained replayably in quarantine (then replayed once a build registers it).
 core = (SYNC / 'SyncCore.swift').read_text()
 inbound = method(core, 'processInbound')
-assert 'record = record.reclassifyingKnownFields(metadata.knownCloudKeys)' in inbound
-assert inbound.index('reclassifyingKnownFields') < inbound.index('SyncCoreHydrators.shared.mergeRemote(record)')
+assert 'inboundApplier(' in inbound and '.apply(batch)' in inbound
+wiring = method(core, 'inboundApplier')
+assert '.init(version: meta.version, knownKeys: meta.knownCloudKeys)' in wiring
+assert 'merge: { await hydrators.mergeRemote($0) }' in wiring
+replay = method(core, 'replayQuarantine')
+assert 'registry.metadata(for: type)' in replay and 'SyncInboundQuarantine.shared.all()' in replay
+applier = method((SYNC / 'SyncInboundHardening.swift').read_text(), 'applyRecord')
+unknown = applier[applier.index('guard let meta = metadata(raw.id.type)'):]
+assert 'quarantine.add(recordId: raw.id, record: raw, reason: "unknownRecordType", replayable: true' in unknown[:400]
+assert 'let record = raw.reclassifyingKnownFields(meta.knownKeys)' in applier
+assert applier.index('reclassifyingKnownFields') < applier.index('await merge(sanitized)')

@@ -46,7 +46,18 @@ class SyncBoundaryTests(unittest.TestCase):
         ticket = (SYNC / 'SyncDeliveryLedger.swift').read_text().split('struct SyncDeliveryTicket', 1)[1].split('\n}', 1)[0]
         declaration = self.work / 'Ticket.swift'
         declaration.write_text('import Foundation\nstruct SyncDeliveryTicket' + ticket + '\n}\n')
-        self.compile_run([declaration, SYNC / 'PortableRecord.swift', SYNC / 'UploadPolicy.swift',
+        # Dispatch now returns SyncMergeOutcome and mergers throw SyncInboundDisposition.
+        # Extract those exact value types too: the rest of SyncInboundHardening.swift
+        # (sanitizer/quarantine/applier) pulls in logger, file-safety and session deps.
+        hardening = (SYNC / 'SyncInboundHardening.swift').read_text()
+        self.assertIn('// MARK: - Merge outcome', hardening)
+        self.assertIn('// MARK: - Sanitizer', hardening)
+        outcome = hardening.split('// MARK: - Merge outcome', 1)[1].split('// MARK: - Sanitizer', 1)[0]
+        self.assertIn('enum SyncMergeOutcome', outcome)
+        self.assertIn('enum SyncInboundDisposition', outcome)
+        outcome_decl = self.work / 'MergeOutcome.swift'
+        outcome_decl.write_text('import Foundation\n' + outcome)
+        self.compile_run([declaration, outcome_decl, SYNC / 'PortableRecord.swift', SYNC / 'UploadPolicy.swift',
                           SYNC / 'SyncCoreHydrators.swift', ROOT / 'scripts/SyncInboundHydratorsSmoke.swift'], 'inbound')
 
     def test_all_changed_domain_sources_parse(self):

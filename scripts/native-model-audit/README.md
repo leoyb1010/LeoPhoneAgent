@@ -16,7 +16,10 @@ bash scripts/native-model-audit/run.sh WORKTREE current
 ```
 
 `NATIVE_AUDIT_DESTINATION` can select an installed iPhone Simulator. The workflow
-uses iPhone 17 Pro / iOS 26.5 with Xcode 26.6 and saves both versions separately.
+runs on the self-hosted Studio runner (Xcode 27, its existing whitelisted iOS 27
+simulators via `scripts/CISelectIOSSimulator.py`; the harness deploys at iOS 26.0) and
+saves both versions separately. A runner without Xcode 27, xcodegen or a matching
+simulator skips the leg with a warning instead of creating devices.
 No build, archive, signing, release, or deploy step for the product is involved.
 
 Baseline runs native screenshot/codec cases only; current runs the full interaction
@@ -115,7 +118,7 @@ is not native runtime evidence or a full-app build.
 
 ## iPad scope
 
-The generated target declares both iPhone and iPad device families; iPad evidence is native tablet layout, not iPhone compatibility scaling. The current-ipad CI job selects an available iPad on the pinned iOS26.5 runtime and runs the same full unit/UI suite and seven strict preflight journeys. Normal/AX3 text, light/dark, search, select, dismiss, save rejection/retry and persistence assertions stay enabled. This adds tablet component evidence without implying whole-app startup, multi-scene, iSH, device or CloudKit integration.
+The generated target declares both iPhone and iPad device families; iPad evidence is native tablet layout, not iPhone compatibility scaling. The current-ipad CI job selects the runner's existing iPad simulator (iOS 27 runtime) and runs the same full unit/UI suite and seven strict preflight journeys. Normal/AX3 text, light/dark, search, select, dismiss, save rejection/retry and persistence assertions stay enabled. This adds tablet component evidence without implying whole-app startup, multi-scene, iSH, device or CloudKit integration.
 
 The reorder diagnostics preserve two distinct user paths: one real drag held in Edit until its observable onMove/pins result, and the same single real drag followed immediately by Done/close. Neither retries the gesture or invokes move directly. Both retain in-memory and process-relaunch order assertions. Frame and drop samples remain available even on bounded observation failure. Missing current production controls fail rather than becoming a baseline-only skip.
 

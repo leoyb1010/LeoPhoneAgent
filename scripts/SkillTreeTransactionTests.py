@@ -46,7 +46,7 @@ actor ChatStore {
 enum SkillImportSource { case file; var dbValue: String { "file" } }
 struct Skill { let id: String; var name: String; var description: String; var version: String
  var importSource: SkillImportSource; var isEnabled: Bool; var installedAt: Date
- var updatedAt: Date; var body: String; var useCount: Double = 0 }
+ var updatedAt: Date; var bodyPreview: String; var fullBody: String? = nil; var useCount: Double = 0 }
 final class SkillStore {
  let fm = FileManager.default
  let skillsDir: URL, rootfsSkillsDir: URL
@@ -135,6 +135,8 @@ with tempfile.TemporaryDirectory(prefix='skill-tree-tests-') as temp:
     if args.sqlite_module:
         command += ['-I', args.sqlite_module, '-L', args.sqlite_module]
     command += [str(SYNC / name) for name in ['SyncFileSafety.swift', 'SafeSkillArchive.swift', 'SkillSyncTreeTransaction.swift']]
+    # [B18] SkillStore's extracted methods call the pure SKILL.md rules (SkillManifest.bodyPreview etc.).
+    command += [str(ROOT / 'src/ios/Agent/Session/SkillManifest.swift')]
     command += [str(generated), str(ROOT / 'scripts/SkillTreeTransactionSmoke.swift'), '-o', str(binary)]
     subprocess.run(command, check=True)
     subprocess.run([str(binary), 'ordinary', str(work)], check=True)

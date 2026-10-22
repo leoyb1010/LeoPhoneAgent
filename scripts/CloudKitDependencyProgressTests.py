@@ -37,8 +37,9 @@ chat = (ROOT / 'src/ios/Agent/Chat/ChatStore.swift').read_text()
 marker_start = chat.index('struct CompactMarker:')
 marker = chat[marker_start:chat.index('\n}', marker_start) + 2]
 chat_methods = ['withInboundMutation', 'prepareInbound', 'stepInbound', 'mergeRemoteSession',
-                'mergeRemoteMessage', 'deleteLocalMessage', 'mergeRemoteCompactMarker',
-                'insertCompactMarkerRow', 'getCompactMarker', 'readCompactMarker']
+                'mergeRemoteMessage', 'parkInboundMessage', 'sessionIdForMessage', 'deleteLocalMessage',
+                'mergeRemoteCompactMarker', 'insertCompactMarkerRow', 'getCompactMarker', 'readCompactMarker']
+parked_line = next(line for line in chat.splitlines() if 'static let parkedMessageDeviceId' in line)
 provider = (ROOT / 'src/ios/Providers/ProviderConfigDB.swift').read_text()
 provider_support = '''
 final class ProviderSQLProbe {
@@ -62,7 +63,7 @@ final class Harness {
         sql("PRAGMA foreign_keys=ON")
         sql("CREATE TABLE sessions(id TEXT PRIMARY KEY,title TEXT,category TEXT,model_id TEXT,created_at REAL,updated_at REAL,remote_origin_device_id TEXT,memory_enabled INTEGER,model_binding TEXT,pinned_at REAL,origin_device_id TEXT,last_writer_device_id TEXT)")
         sql("CREATE TABLE messages(id TEXT PRIMARY KEY,session_id TEXT,role TEXT,parts_json TEXT,created_at REAL,token_usage TEXT,sort_order INTEGER,reasoning_content TEXT,stream_interrupt_count INTEGER,updated_at REAL,part_flags INTEGER)")
-        sql("CREATE TABLE remote_messages AS SELECT * FROM messages")
+        sql("CREATE TABLE remote_messages(id TEXT NOT NULL,device_id TEXT NOT NULL,session_id TEXT NOT NULL,role TEXT NOT NULL,parts_json TEXT NOT NULL,created_at REAL NOT NULL,token_usage TEXT,sort_order INTEGER NOT NULL DEFAULT 0,reasoning_content TEXT,stream_interrupt_count INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(id,device_id))")
         sql("CREATE TABLE compact_markers(id TEXT PRIMARY KEY,session_id TEXT,summary TEXT,first_kept_sort_order INTEGER,compacted_count INTEGER,created_at REAL,ui_boundary_sort_order INTEGER,boundary_message_id TEXT,first_kept_message_id TEXT,last_compacted_message_id TEXT,version INTEGER)")
         sql("CREATE TABLE provider_instances(id TEXT PRIMARY KEY,label TEXT,provider_type TEXT,credential_type TEXT,custom_base_url TEXT,append_v1_suffix INTEGER,image_endpoint_mode TEXT,image_endpoint_resolved TEXT,is_enabled INTEGER,sort_order INTEGER,secret_blob TEXT,secret_kind TEXT,secret_updated_at REAL,created_at REAL,updated_at REAL,extras_json TEXT,custom_user_agent TEXT,azure_mode INTEGER)")
         sql("CREATE TABLE provider_model_entries(id TEXT PRIMARY KEY,provider_instance_id TEXT NOT NULL,base_model_json TEXT,overrides_json TEXT,is_custom INTEGER,is_hidden INTEGER,user_modified_at REAL,sort_order INTEGER,updated_at REAL,extras_json TEXT,FOREIGN KEY(provider_instance_id) REFERENCES provider_instances(id) ON DELETE CASCADE)")
@@ -76,8 +77,26 @@ final class Harness {
         guard sqlite3_step(s) == SQLITE_ROW, let t = sqlite3_column_text(s, 0) else { return "" }
         return String(cString: t)
     }
+    // Stand-in for SyncCore + SyncInboundApplier dispatch. `.parked` counts as handled (the child
+    // waits durably in remote_messages and backfills when its session merges), so the page ACKs.
+    // `.awaitingParent` is quarantined and replayed when the parent lands in production; here the
+    // journal holds it instead (release + later retry), the same "held until parent" guarantee.
     func apply(_ batch: SyncInboundBatch) throws {
         for r in batch.records {
+            do { try applyRecord(r) } catch let disposition as SyncInboundDisposition {
+                guard case .parked = disposition else { throw disposition }
+                applied.append("parked:" + r.id.description)
+                continue
+            }
+            applied.append(r.id.description)
+        }
+        for id in batch.deletes {
+            guard id.type == "MessageV2" else { throw CocoaError(.fileWriteUnknown) }
+            try chat.deleteLocalMessage(messageId: id.id)
+            applied.append("delete:" + id.description)
+        }
+    }
+    func applyRecord(_ r: PortableRecord) throws {
             func str(_ key: String) -> String { if case .string(let value) = r.fields[key] { return value }; return "" }
             switch r.id.type {
             case "SessionV2":
@@ -92,13 +111,6 @@ final class Harness {
                 _ = try provider.upsertEntryFromInbound(id: r.id.id, providerInstanceId: str("providerInstanceId"), baseModelJson: "{}", overridesJson: nil, isCustom: false, isHidden: false, userModifiedAt: nil, sortOrder: 0, updatedAt: r.updatedAt.timeIntervalSince1970, extrasJson: nil)
             default: throw CocoaError(.fileReadUnknown)
             }
-            applied.append(r.id.description)
-        }
-        for id in batch.deletes {
-            guard id.type == "MessageV2" else { throw CocoaError(.fileWriteUnknown) }
-            try chat.deleteLocalMessage(messageId: id.id)
-            applied.append("delete:" + id.description)
-        }
     }
     @discardableResult func drain(_ journal: CloudKitInboundJournal, limit: Int = 256) throws -> Int {
         var pass = CloudKitInboundJournal.DeliveryPass(limit: limit)
@@ -143,7 +155,9 @@ final class Harness {
             check(j.pendingCount == 0)
             check(h.scalar("SELECT COUNT(*) FROM messages") == "1")
             check(h.scalar("SELECT COUNT(*) FROM compact_markers") == "1")
-            check(h.applied.firstIndex(of: "SessionV2:s")! < h.applied.firstIndex(of: "MessageV2:m")!)
+            check(h.scalar("SELECT session_id FROM messages WHERE id='m'") == "s", "parked child must land under its parent")
+            check(h.scalar("SELECT COUNT(*) FROM remote_messages") == "0", "parked copy must be consumed by the parent merge")
+            check(h.applied.firstIndex(of: "SessionV2:s")! < h.applied.firstIndex(of: "CompactMarkerV2:c")!, "held child must apply after its parent")
         }
         // A recent child with a parent far outside the time window. The actual
         // dependency mapper yields a stable parent ID; network response is a
@@ -152,7 +166,8 @@ final class Harness {
             let (h, j, path) = try setup("old-parent")
             let file = path.appendingPathComponent("temporary")
             try Data("child asset".utf8).write(to: file)
-            let child = PortableRecord(id: .init(type: "MessageV2", id: "m"), fields: ["sessionId": .string("old")], assets: ["asset": .init(key: "asset", fileURL: file, size: 11, mimeType: nil)], updatedAt: Date())
+            // Messages park (see "parked-old-parent"); compact markers are still held until the parent.
+            let child = PortableRecord(id: .init(type: "CompactMarkerV2", id: "m"), fields: ["sessionId": .string("old")], assets: ["asset": .init(key: "asset", fileURL: file, size: 11, mimeType: nil)], updatedAt: Date())
             try j.append(records: [child], deletes: [])
             try fm.removeItem(at: file)
             check(try h.drain(j) == 1, "no progress must stop retrying")
@@ -164,7 +179,20 @@ final class Harness {
             try resumed.append(records: [cloudRecords[CloudKitInboundJournal.dependency(for: child)!]!], deletes: [])
             h.reopen(); try h.drain(resumed)
             check(resumed.pendingCount == 0)
-            check(h.scalar("SELECT updated_at FROM messages WHERE id='m'") != "1.0", "deferred child must preserve its updatedAt")
+            check(h.scalar("SELECT created_at FROM compact_markers WHERE id='m'") != "1.0", "deferred child must preserve its own clock")
+        }
+        // Parked child: ACKed at once (no retry loop), lands when the old parent is fetched, and a
+        // tombstone that arrives while it is parked must win over the parked copy.
+        do {
+            let (h, j, _) = try setup("parked-old-parent")
+            try j.append(records: [rec("MessageV2", "m", parent: "old"), rec("MessageV2", "gone", parent: "old")], deletes: [])
+            check(try h.drain(j) == 2 && j.pendingCount == 0, "parked child must not hold the inbox (one attempt per entry, no retry)")
+            check(h.scalar("SELECT COUNT(*) FROM remote_messages") == "2")
+            try j.append(records: [], deletes: [.init(type: "MessageV2", id: "gone")])
+            try j.append(records: [rec("SessionV2", "old", clock: 1)], deletes: [])
+            h.reopen(); try h.drain(j)
+            check(j.pendingCount == 0 && h.scalar("SELECT COUNT(*) FROM messages WHERE id='m'") == "1")
+            check(h.scalar("SELECT COUNT(*) FROM messages WHERE id='gone'") == "0", "tombstone must not be undone by a parked copy")
         }
         do {
             let (h, j, _) = try setup("provider")
@@ -190,14 +218,18 @@ final class Harness {
         }
         // Same-record mutations and deletes are barriers, even across pages.
         do {
+            // A missing parent now parks (handled), so the held upsert is a transient storage failure.
             let (h, j, _) = try setup("ordering")
+            try h.apply(SyncInboundBatch(records: [rec("SessionV2", "s", clock: 1)], deletes: [], sourceDeviceId: nil))
+            h.applied.removeAll()
+            h.sql("CREATE TRIGGER fail_message BEFORE INSERT ON messages BEGIN SELECT RAISE(ABORT,'disk full'); END")
             let first = rec("MessageV2", "m", parent: "s", clock: 2)
             try j.append(records: [first], deletes: [])
             try j.append(records: [], deletes: [first.id])
             try j.append(records: [rec("MessageV2", "m", parent: "s", clock: 3), rec("SessionV2", "healthy")], deletes: [])
             try h.drain(j)
             check(!h.applied.contains("delete:MessageV2:m"), "delete overtook failed upsert")
-            try j.append(records: [rec("SessionV2", "s", clock: 1)], deletes: [])
+            h.sql("DROP TRIGGER fail_message")
             try h.drain(j)
             check(h.applied.filter { $0.contains("MessageV2:m") } == ["MessageV2:m", "delete:MessageV2:m", "MessageV2:m"])
             check(h.scalar("SELECT updated_at FROM messages WHERE id='m'") == "3.0")
@@ -265,7 +297,7 @@ final class Harness {
             }
             check(j.pendingCount == 0 && h.scalar("SELECT COUNT(*) FROM messages") == "9")
         }
-        print("CloudKitDependencyProgress: same/cross-page + event parents, old-parent ID recovery, Message/CompactMarker/Provider SQL, restart/partial ACK/write faults, delete barriers, unsupported poison, overlapping leases and bounded passes passed")
+        print("CloudKitDependencyProgress: same/cross-page + event parents, old-parent ID recovery, parked children + tombstone-while-parked, Message/CompactMarker/Provider SQL, restart/partial ACK/write faults, delete barriers, unsupported poison, overlapping leases and bounded passes passed")
     }
 }
 '''
@@ -276,16 +308,31 @@ assert 'record(for: ckID)' in transport, 'old parents need a date-window-indepen
 assert 'hasPendingInbound()' not in transport, 'backlog must not prevent ingestion'
 assert 'inboundPass.claim(from: journal)' in transport
 assert 'await fetchInboundDependency(dependency)' in transport
+# Since the inbound hardening (8b1cbb0cf) an unknown type no longer withholds the whole batch's ACK
+# ("blocked"); it is retained replayably in quarantine so later changes keep progressing. Only a
+# transient .retry blocks. Children waiting for a parent are replayed when that parent arrives.
 core = (sync / 'SyncCore.swift').read_text()
-unknown = core[core.index('guard let metadata = registry.metadata(for: record.id.type)'):]
-assert 'blocked += 1' in unknown[:500]
+applier = method((sync / 'SyncInboundHardening.swift').read_text(), 'applyRecord')
+unknown = applier[applier.index('guard let meta = metadata(raw.id.type)'):]
+assert 'quarantine.add(recordId: raw.id, record: raw, reason: "unknownRecordType", replayable: true' in unknown[:400]
+assert applier.count('summary.blocked += 1') == 1
+assert applier.index('summary.blocked += 1') > applier.index('case .retry:')
+assert 'reason: "awaitingParent"' in applier and 'replayable: true, dependency: parent' in applier
+assert 'await replayQuarantine(parents: arrivedSessions)' in method(core, 'processInbound')
 with tempfile.TemporaryDirectory(prefix='cloud-dependency-build-') as temp:
     work = Path(temp)
     probe = work / 'Probe.swift'
-    probe.write_text('import Foundation\n' + marker + '\n' + support + '\n'.join(method(chat, n) for n in chat_methods) + '\n}\n' + provider_support + '\n'.join(method(provider, n) for n in provider_methods) + '\n}\n' + main)
+    probe.write_text('import Foundation\n' + marker + '\n' + support + parked_line + '\n' + '\n'.join(method(chat, n) for n in chat_methods) + '\n}\n' + provider_support + '\n'.join(method(provider, n) for n in provider_methods) + '\n}\n' + main)
+    # SyncMergeOutcome/SyncInboundDisposition are exact value types from SyncInboundHardening.swift;
+    # its sanitizer/quarantine/applier pull unrelated app deps.
+    hardening = (sync / 'SyncInboundHardening.swift').read_text()
+    outcome = hardening.split('// MARK: - Merge outcome', 1)[1].split('// MARK: - Sanitizer', 1)[0]
+    assert 'enum SyncInboundDisposition' in outcome and 'enum SyncMergeOutcome' in outcome, 'merge outcome section moved'
+    outcome_decl = work / 'MergeOutcome.swift'
+    outcome_decl.write_text('import Foundation\n' + outcome)
     binary = work / 'dependencies'
     flags = [a.swiftc, '-suppress-warnings', '-module-cache-path', str(work / 'cache'), '-parse-as-library']
     if a.sqlite_module:
         flags += ['-I', a.sqlite_module, '-L', a.sqlite_module]
-    subprocess.run(flags + [str(sync / 'SyncDeliveryLedger.swift'), str(sync / 'PortableRecord.swift'), str(sync / 'CloudKitInboundJournal.swift'), str(sync / 'SessionProvenanceStore.swift'), str(probe), '-o', str(binary)], check=True)
+    subprocess.run(flags + [str(sync / 'SyncDeliveryLedger.swift'), str(sync / 'PortableRecord.swift'), str(sync / 'CloudKitInboundJournal.swift'), str(sync / 'SessionProvenanceStore.swift'), str(outcome_decl), str(probe), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)

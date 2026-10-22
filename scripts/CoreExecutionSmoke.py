@@ -36,6 +36,8 @@ if CommandLine.arguments[1] == "git" {
         subprocess.run([args.swiftc, '-module-cache-path', str(cls.root / 'cache'),
                         str(ROOT / 'src/ios/Shared/CommandRisk.swift'),
                         str(ROOT / 'src/ios/Agent/Session/RemoteSSHTrust.swift'),
+                        # RemoteSSHTrust 用 RemoteSSHText(up-ssh 拆出的共享文本工具)。
+                        str(ROOT / 'src/ios/Agent/Session/RemoteSSHSupport.swift'),
                         str(main), '-o', str(cls.binary)], check=True)
 
     @classmethod
@@ -117,7 +119,9 @@ print(json.dumps({'argv':sys.argv[1:], 'knownHosts':p.read_text(), 'path':str(p)
         self.assertIn('GlobalKnownHostsFile=/dev/null', value['argv'])
         self.assertEqual(value['argv'][:2], ['-F', '/dev/null'])
         self.assertIn('leo-pinned-target ssh-ed25519 ', value['knownHosts'])
-        self.assertEqual(value['argv'][-1], "printf '%s' fixture")
+        # up-ssh: 远端先打开始标记再跑原命令(网关据此区分"ssh 没连上 255"和"命令自己 exit 255")。
+        # 原命令仍须原样、作为单个参数到达远端。
+        self.assertEqual(value['argv'][-1], "printf '%s\\n' '[leo-relay-started]'; printf '%s' fixture")
         self.assertFalse(Path(value['path']).exists(), 'temporary public-key file must be removed')
 
 

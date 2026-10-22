@@ -154,11 +154,16 @@ jobs:
     name: Native model UI (${{ matrix.label }}, ${{ matrix.device }})
     # Test-only fixtures, no app signing, credentials, submodules, or releases.
     # Three macOS simulator legs (35-45 min each): run on demand only.
+    # [up-b-fixtures] Same self-hosted Studio runner as ios-unit-tests: GitHub-hosted images have no
+    # Xcode 27, and the old hardcoded DEVELOPER_DIR=/Applications/Xcode_27.1.app does not exist there.
+    # Xcode comes from the runner's own xcode-select. workflow_dispatch only (needs write access),
+    # so a fork PR can never reach the self-hosted machine; do not add pull_request triggers here.
+    # The harness project deploys at iOS 26.0, so the runner's iOS 27 whitelisted iPhone/iPad
+    # simulators run it; no pinned iOS 26.5 runtime, no simctl create, no brew installs on the Studio.
+    # Missing xcodegen / Xcode 27 / simulator => the leg is skipped with a ::warning, not failed.
     if: github.event_name == 'workflow_dispatch'
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, leobot-studio, xcode27]
     timeout-minutes: ${{ matrix.timeout }}
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     strategy:
       fail-fast: false
       matrix:
@@ -179,27 +184,28 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Install native harness project generator
-        run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
-      - name: Select actual simulator device family
+          persist-credentials: false
+      - name: Preflight (Xcode 27, xcodegen, existing ${{ matrix.device }} simulator)
+        id: preflight
         env:
           AUDIT_DEVICE_FAMILY: ${{ matrix.device }}
         run: |
-          if [[ "$AUDIT_DEVICE_FAMILY" == "iPad" ]]; then
-            SIMULATOR=$(xcrun simctl list devices available -j | python3 -c '
-          import json,sys
-          devices=[d for runtime,items in json.load(sys.stdin)["devices"].items() if "iOS-26-5" in runtime for d in items if d["name"].startswith("iPad")]
-          if not devices: raise SystemExit("No available native iPad on pinned iOS26.5 runtime")
-          print(sorted(devices,key=lambda d:d["name"])[0]["udid"])
-          ')
-            echo "NATIVE_AUDIT_DESTINATION=platform=iOS Simulator,id=$SIMULATOR" >> "$GITHUB_ENV"
-          else
-            echo "NATIVE_AUDIT_DESTINATION=platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0" >> "$GITHUB_ENV"
-          fi
+          set -euo pipefail
+          skip() { echo "::warning::native-model-audit (${{ matrix.label }}) skipped on this runner: $*"; echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0; }
+          xcode-select -p
+          major=$(xcodebuild -version | awk '/^Xcode/ {split($2, v, "."); print v[1]}')
+          [ "${major:-0}" -ge 27 ] || skip "Xcode ${major:-?} found, need 27+"
+          command -v xcodegen >/dev/null 2>&1 || skip "xcodegen is not installed (install it on the runner: brew install xcodegen)"
+          family=$(echo "$AUDIT_DEVICE_FAMILY" | tr '[:upper:]' '[:lower:]')
+          # Reuses an existing (policy-whitelisted) simulator only; never creates one.
+          udid=$(python3 scripts/CISelectIOSSimulator.py "$family") || skip "no existing $AUDIT_DEVICE_FAMILY simulator on an iOS 27 runtime"
+          echo "NATIVE_AUDIT_DESTINATION=platform=iOS Simulator,id=$udid" >> "$GITHUB_ENV"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
       - name: Test production SwiftUI model views on ${{ matrix.device }} Simulator
+        if: steps.preflight.outputs.ready == 'true'
         run: bash scripts/native-model-audit/run.sh '${{ matrix.source_ref }}' '${{ matrix.label }}'
       - uses: actions/upload-artifact@v4
-        if: ${{ always() }}
+        if: ${{ always() && steps.preflight.outputs.ready == 'true' }}
         with:
           name: native-model-audit-${{ matrix.label }}
           path: |
@@ -209,7 +215,7 @@ jobs:
           retention-days: 14
 
       - uses: actions/upload-artifact@v4
-        if: ${{ always() }}
+        if: ${{ always() && steps.preflight.outputs.ready == 'true' }}
         with:
           name: native-model-audit-images-${{ matrix.label }}
           path: |
