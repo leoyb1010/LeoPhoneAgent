@@ -286,8 +286,8 @@ status, duration_ms}`（`path` 不含查询串，不记正文；出错记 warn�
 - 运行结果摘要只在本 Host 的运行结束时算一次；绑定原会话的自动化，若结束前用户在该会话里又聊了，读到的「最后一条助手消息」
   可能不是这次运行的。
 - 手机「关闭全自动」（`/harness/full-auto`）只管会话，不改 yolo 自动化；要停就 `PATCH enabled:false`。
-- iOS 的补拉（`RelayEventCatchUp`）目前只认 `run.completed` / `run.failed` / `approval.request`：要在 App 前台补拉时显示，
-  iOS 端需要加 `automation.run.completed` 分支（APNs 由中继直接发，不依赖它）。
+- iOS 的补拉（`RelayEventCatchUp`）认 `run.completed` / `run.failed` / `approval.request` / `automation.run.completed`；
+  定时任务跑完的本地通知 id 与中继 APNs collapse id 同一公式，同一次运行不会出两条横幅。
 
 ## 验收
 
