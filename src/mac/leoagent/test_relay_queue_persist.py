@@ -128,6 +128,65 @@ class RelayQueuePersistTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0.02)
         self.assertEqual(status["machines"], [])
 
+    async def test_unexpected_send_error_puts_items_back_instead_of_sticking(self):
+        # 审查发现:send_json 抛 RuntimeError(ws 已关)时整批卡在「排队中」直到中继重启。
+        ws, ack = await self.register(self.client, "MacBook", MASTER, pin=True)
+        machine_key = ack["machine_key"]
+        await ws.close()
+        for _ in range(50):
+            if "MacBook" not in self.relay.machines:
+                break
+            await asyncio.sleep(0.02)
+        await self.queue_one(self.client, "req-x1")
+        from .relay import Machine
+
+        class DeadWS:
+            async def send_json(self, _):
+                raise RuntimeError("websocket closed")
+        machine = Machine("MacBook", DeadWS(), {})
+        self.relay.machines["MacBook"] = machine
+        await self.relay._flush_queue(machine)
+        self.assertEqual([i["request_id"] for i in self.relay.offline_queue["MacBook"]], ["req-x1"])
+        self.assertEqual(self.relay.queue_inflight, {})
+        del self.relay.machines["MacBook"]
+        ws2, _ = await self.register(self.client, "MacBook", machine_key)
+        frame = json.loads((await ws2.receive(timeout=3)).data)
+        self.assertEqual(frame["request_id"], "req-x1")
+        await ws2.close()
+
+    async def test_bad_item_in_queue_file_does_not_block_startup(self):
+        now = time.time()
+        with open(self.relay.queue_path, "w", encoding="utf-8") as f:
+            json.dump({"version": 1, "offline_queue": {"MacBook": [
+                {"request_id": "ok", "queued_at": now},
+                {"request_id": ["unhashable"], "queued_at": now},
+                {"request_id": "bad-time", "queued_at": "yesterday"},
+            ]}, "inflight": {}, "queue_results": {"r": {"status": "delivered", "at": "x"}}}, f)
+        relay2, _ = await self.start_relay()
+        self.assertEqual([i["request_id"] for i in relay2.offline_queue["MacBook"]], ["ok"])
+
+    async def test_persisted_results_drop_response_bodies(self):
+        self.relay.queue_results["r1"] = {"status": "delivered", "at": time.time(), "response": {"big": "x" * 1000}}
+        self.relay._persist_queue()
+        with open(self.relay.queue_path, encoding="utf-8") as f:
+            saved = json.load(f)
+        self.assertNotIn("response", saved["queue_results"]["r1"])
+        self.assertIn("response", self.relay.queue_results["r1"])   # 内存里的照旧给手机查
+
+    async def test_approvals_survive_event_buffer_overflow(self):
+        self.relay._record_event("MacBook", {"event": "approval.request", "approval_id": "a1"})
+        for i in range(self.relay.MAX_EVENTS + 20):
+            self.relay._record_event("Studio", {"event": "automation.run.completed", "run_id": str(i)})
+        kinds = [e["event"]["event"] for e in self.relay.recent_events]
+        self.assertEqual(len(kinds), self.relay.MAX_EVENTS)
+        self.assertIn("approval.request", kinds)
+
+    async def test_status_file_is_written_at_startup(self):
+        with open(self.relay.status_path, encoding="utf-8") as f:
+            status = json.load(f)
+        self.assertEqual(status["machines"], [])
+        self.assertGreater(status["updated_at"], time.time() - 60)
+
 
 if __name__ == "__main__":
     unittest.main()

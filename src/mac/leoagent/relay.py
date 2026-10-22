@@ -178,6 +178,8 @@ class Relay:
         # [P0] 在线机器快照,给 mini 上的 LeoFleetDoctor 读(文件而非接口:不对公网暴露机器名)。
         self.status_path = os.path.join(state_dir, "relay-status.json")
         self._last_touch_persist = 0.0
+        # 同一台 Mac 同一时间只跑一个 flush:新旧连接交替时两个 flush 会互相覆盖 queue_inflight[name]。
+        self._flush_locks: Dict[str, asyncio.Lock] = {}
         self._load_state()
         self._load_queue()
         # 被拒的钥匙落盘(0600,仅本机可读),便于把它收编进 RELAY_KEYS。
@@ -934,22 +936,35 @@ class Relay:
             items = list(inflight.get(name) or []) + list(queue.get(name) or [])
             seen, kept = set(), []
             for item in items:
-                if not isinstance(item, dict) or item.get("request_id") in seen:
+                # 单条坏数据只丢这一条,不能挡启动。
+                try:
+                    rid = item["request_id"]
+                    if not isinstance(rid, str) or rid in seen:
+                        continue
+                    queued_at = float(item.get("queued_at") or 0)
+                except (TypeError, ValueError, KeyError):
                     continue
-                seen.add(item.get("request_id"))
-                if now - float(item.get("queued_at") or 0) < QUEUE_TTL_S:
+                seen.add(rid)
+                if now - queued_at < QUEUE_TTL_S:
                     kept.append(item)
                 else:
-                    results[item.get("request_id")] = {"status": "expired", "at": now}
+                    results[rid] = {"status": "expired", "at": now}
             if kept:
                 self.offline_queue[name] = kept
         cutoff = now - QUEUE_TTL_S
-        self.queue_results = {rid: r for rid, r in results.items()
-                              if isinstance(r, dict) and r.get("at", 0) >= cutoff}
+        def fresh(r: Any) -> bool:
+            try:
+                return isinstance(r, dict) and float(r.get("at", 0)) >= cutoff
+            except (TypeError, ValueError):
+                return False
+        self.queue_results = {rid: r for rid, r in results.items() if isinstance(rid, str) and fresh(r)}
 
     def _persist_queue(self) -> None:
+        # 投递结果只落状态,不落 Mac 的响应正文:正文可能很大,每投一条都整文件 fsync 太重;
+        # 重启后查询照样能答 delivered / failed。
+        results = {rid: {k: v for k, v in r.items() if k != "response"} for rid, r in self.queue_results.items()}
         payload = {"version": 1, "offline_queue": self.offline_queue,
-                   "inflight": self.queue_inflight, "queue_results": self.queue_results}
+                   "inflight": self.queue_inflight, "queue_results": results}
         tmp = self.queue_path + ".tmp"
         try:
             os.makedirs(os.path.dirname(self.queue_path), mode=0o700, exist_ok=True)
@@ -1519,7 +1534,16 @@ class Relay:
         }
         self.recent_events.append(item)
         if len(self.recent_events) > self.MAX_EVENTS:
-            del self.recent_events[: len(self.recent_events) - self.MAX_EVENTS]
+            # 超上限先淘汰最旧的非审批事件:高频定时任务的完成事件不能把还没处理的审批挤掉
+            # (手机回前台补拉靠这里)。全是审批时才按时间淘汰。
+            overflow = len(self.recent_events) - self.MAX_EVENTS
+            keep_approvals = [i for i, e in enumerate(self.recent_events)
+                              if (e.get("event") or {}).get("event") == "approval.request"]
+            drop = [i for i in range(len(self.recent_events)) if i not in set(keep_approvals)][:overflow]
+            if len(drop) < overflow:
+                drop += keep_approvals[:overflow - len(drop)]
+            dropped = set(drop)
+            self.recent_events = [e for i, e in enumerate(self.recent_events) if i not in dropped]
         # 唤醒所有等着的手机
         for fut in self.event_waiters:
             if not fut.done():
@@ -1581,10 +1605,11 @@ class Relay:
             elif kind == "automation.run.completed":
                 ok = event.get("status") == "succeeded"
                 name = str(event.get("name") or "定时任务")[:60]
-                summary = str(event.get("summary") or "")[:120]
+                # 锁屏只写任务名和成败:summary / 错误原文可能带路径、命令输出甚至密钥片段,
+                # 和 run.completed、审批推送同一口径(详情进 App 看)。
                 await self.apns.send_alert(
                     title=f"⏰ {machine_name} 定时任务{'完成' if ok else '没跑成'}",
-                    body=f"{name} · {summary}" if summary else name,
+                    body=f"{name} · 打开 App 查看结果",
                     user_info={
                         "automationId": str(event.get("automation_id") or ""),
                         "harnessSessionId": str(event.get("session_id") or ""),
@@ -1987,18 +2012,26 @@ class Relay:
             await machine.ws.send_json({"type": "http", "id": request_id,
                                         "method": request.method, "path": tail,
                                         "body": body, "caller": caller.public(),
+                                        "trace_id": request.headers.get("X-Leo-Trace-Id", "")[:64],
                                         "request_id": request.headers.get("X-Leo-Request-Id", "")})
         except (ConnectionError, RuntimeError) as exc:
             # Mac 的连接正好半死:不能把待答项留在 pending 里,也不该回 500。
             machine.pending.pop(request_id, None)
             return web.json_response(
                 {"error": {"message": f"转发到这台 Mac 失败:{type(exc).__name__}"}}, status=502)
+        started = time.monotonic()
+        trace = request.headers.get("X-Leo-Trace-Id", "")[:64]
         try:
             frame = await asyncio.wait_for(fut, timeout=REQUEST_TIMEOUT_S)
         except (asyncio.TimeoutError, ConnectionError):
             machine.pending.pop(request_id, None)
+            print(f"[relay] {request.method} {name}{tail} timed out trace={trace or '-'}", flush=True)
             return web.json_response(
                 {"error": {"message": "这台 Mac 没有按时响应"}}, status=504)
+        elapsed = time.monotonic() - started
+        if elapsed >= 5:
+            # 慢请求留一行,带手机给的 trace id,方便和手机 / Mac 两端日志对上。
+            print(f"[relay] slow {request.method} {name}{tail} {elapsed:.1f}s trace={trace or '-'}", flush=True)
         return web.json_response(frame.get("body"), status=int(frame.get("status") or 200))
 
     @staticmethod
@@ -2185,6 +2218,22 @@ class Relay:
 
     async def _flush_queue(self, machine: Machine) -> None:
         """Mac 上线后按顺序投递排队的请求,结果留 24 小时供手机查询。"""
+        lock = self._flush_locks.setdefault(machine.name, asyncio.Lock())
+        async with lock:
+            try:
+                await self._flush_queue_locked(machine)
+            except BaseException:
+                # 没料到的异常(含取消):投递中的条目放回队首并落盘,下次上线照常补投,
+                # 不能停在「排队中」等中继重启。Mac 端按 request id 去重。
+                rest = self.queue_inflight.pop(machine.name, [])
+                if rest:
+                    for item in rest:
+                        self.queue_results.pop(item.get("request_id"), None)
+                    self.offline_queue[machine.name] = rest + self.offline_queue.get(machine.name, [])
+                    self._persist_queue()
+                raise
+
+    async def _flush_queue_locked(self, machine: Machine) -> None:
         items = self.offline_queue.pop(machine.name, [])
         if not items:
             return
@@ -2224,8 +2273,8 @@ class Relay:
                 machine.pending.pop(frame_id, None)
                 self.queue_results[item["request_id"]] = {"status": "failed", "at": time.time(),
                                                           "error": "timeout"}
-            except ConnectionError:
-                # 连接断了,不是 Mac 拒了:这条连同后面的放回去,下次上线再投。
+            except (ConnectionError, RuntimeError):
+                # 连接断了(或 ws 已关:send_json 抛 RuntimeError),不是 Mac 拒了:这条连同后面的放回去,下次上线再投。
                 # (Mac 桥按 request id 去重;老的 Python 路径可能收过这一条。)
                 machine.pending.pop(frame_id, None)
                 self._requeue(machine, items[index:])
@@ -2259,6 +2308,11 @@ class Relay:
 
     def build_app(self) -> web.Application:
         app = web.Application()
+
+        async def write_status_on_start(_app: web.Application) -> None:
+            # 重启后先写一份「没人在线」的快照:否则巡检读到的是重启前的旧在线表,会误判通过。
+            self._write_status()
+        app.on_startup.append(write_status_on_start)
         app.router.add_get("/relay/health", self.health)
         app.router.add_get("/relay/agent", self.agent_ws)
         app.router.add_get("/relay/api/machines", self.list_machines)

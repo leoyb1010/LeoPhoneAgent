@@ -771,7 +771,9 @@ class RelayAutomationPushTests(unittest.IsolatedAsyncioTestCase):
                                                   "summary": "模型额度用完了"})
             ok, failed = sent
             self.assertEqual(ok["title"], "⏰ Mac Studio 定时任务完成")
-            self.assertEqual(ok["body"], "日报 · 已在 Mac 上跑完")
+            # 锁屏只写任务名:summary / 错误原文(可能带路径、密钥片段)不上锁屏。
+            self.assertEqual(ok["body"], "日报 · 打开 App 查看结果")
+            self.assertNotIn("额度", failed["body"])
             self.assertEqual(ok["user_info"]["automationId"], "automation-1")
             self.assertEqual(ok["user_info"]["harnessSessionId"], "task-1")
             self.assertEqual(failed["title"], "⏰ Mac Studio 定时任务没跑成")
