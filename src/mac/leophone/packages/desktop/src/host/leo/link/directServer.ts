@@ -124,9 +124,14 @@ export async function startDirectServer(args: {
         caller,
         transport: "direct",
         requestId: typeof requestId === "string" ? requestId : undefined,
-        body: req.method === "POST" ? await jsonBody(req) : undefined,
+        // PATCH /automations/<id> 也带正文(改名 / 停用);以前只读 POST 的,直连改定时任务一律 400。
+        body: req.method === "POST" || req.method === "PATCH" ? await jsonBody(req) : undefined,
         ...(typeof req.headers["if-none-match"] === "string"
           ? { ifNoneMatch: req.headers["if-none-match"] }
+          : {}),
+        // [up-c-mac] 链路追踪号(手机直连时带的请求头),只用于日志。
+        ...(typeof req.headers["x-leo-trace-id"] === "string"
+          ? { traceId: req.headers["x-leo-trace-id"] }
           : {}),
       };
       if (req.method === "GET" && /^\/harness\/sessions\/[^/]+\/events$/.test(url.pathname)) {

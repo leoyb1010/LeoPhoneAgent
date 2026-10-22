@@ -6,14 +6,18 @@ import {
   type ModelSelection,
   type ZCodeAutomation,
 } from "@zcode/shared";
+import { LEO_AUTOMATION_TEMPLATES } from "@zcode/shared/leo-automation-templates";
 
 import type { AutomationRunCompleted } from "./automationEvents.js";
 import {
   automationView,
+  describeSchedule,
+  latestRun,
   parseCreate,
   parsePatch,
   patchNeedsFullAuto,
 } from "./automationPayload.js";
+import { AutomationResults, runSummary } from "./automationResults.js";
 import type { LinkRequest, LinkResponse } from "./bridge.js";
 import type { HarnessEvent } from "./journal.js";
 import { deviceNotRecognized, error, mayUseFullAuto } from "./linkPolicy.js";
@@ -71,13 +75,34 @@ export type LinkAutomationsDeps = {
   checkpoint: (req: LinkRequest, value: Record<string, unknown>) => Promise<void>;
   logger: Logger;
   now?: () => Date;
+  /** [up-c-mac] 这次运行的最终助手回复(原文);读不到给 null。没有就只给固定文案。 */
+  finalReply?: (run: AutomationRunCompleted) => Promise<string | null>;
+  /** [up-c-mac] 运行摘要落盘的文件;没有就只记在内存里。 */
+  resultsFile?: string;
 };
 
 const FULL_AUTO_REFUSED =
   "认不出是哪台设备发来的，不能让定时任务全自动地跑；按步骤在 Mac 上处理后再试";
 
+/** [up-c-mac] 手机可直接拿来建的模板(和 Mac 自动化页「从模板开始」同一份,中文)。 */
+function templatesView() {
+  return LEO_AUTOMATION_TEMPLATES.map((template) => ({
+    id: template.id,
+    name: template.title.cn,
+    description: template.description.cn,
+    prompt: template.prompt.cn,
+    // 和自动化视图的 schedule 同形;整份原样放回 POST /automations 的 schedule 也认(按其中的 cron)。
+    schedule: describeSchedule({ cronExpr: template.cronExpr, recurring: true }),
+    mode: template.mode,
+  }));
+}
+
 export class LinkAutomations {
-  constructor(private readonly deps: LinkAutomationsDeps) {}
+  private readonly results: AutomationResults;
+
+  constructor(private readonly deps: LinkAutomationsDeps) {
+    this.results = new AutomationResults(deps.resultsFile ?? null);
+  }
 
   private now(): Date {
     return this.deps.now?.() ?? new Date();
@@ -89,8 +114,18 @@ export class LinkAutomations {
       if (method === "POST") return this.create(req);
       return error(405, "Method not allowed");
     }
+    if (pathname === "/automations/templates")
+      return method === "GET"
+        ? { status: 200, body: { templates: templatesView() } }
+        : error(405, "Method not allowed");
     const match = /^\/automations\/([^/]+)(\/run)?$/.exec(pathname);
-    const id = decodeURIComponent(match?.[1] ?? "");
+    // 畸形的 % 转义(如 %E0%A4%A)让 decodeURIComponent 抛 URIError,以前冒成 500;它就是不合法的 id。
+    let id = "";
+    try {
+      id = decodeURIComponent(match?.[1] ?? "");
+    } catch {
+      return error(400, "定时任务 id 不合法");
+    }
     if (!match || !AUTOMATION_ID.test(id)) return error(400, "定时任务 id 不合法");
     if (match[2]) return method === "POST" ? this.run(id, req) : error(405, "Method not allowed");
     if (method === "PATCH") return this.patch(id, req);
@@ -113,18 +148,32 @@ export class LinkAutomations {
     return found ? { status: 201, body: { automation: await this.view(found) } } : null;
   }
 
-  /** 运行结束 → 推给手机的事件(名字、模式以自动化服务为准;查不到就用占位)。 */
+  /** 名字、模式以自动化服务为准;查不到(已删)用占位。 */
+  async describe(automationId: string): Promise<{ name: string; mode?: string }> {
+    const automation = await this.find(automationId).catch(() => null);
+    return { name: automation?.title ?? "定时任务", ...(automation?.mode ? { mode: automation.mode } : {}) };
+  }
+
+  /**
+   * 运行结束 → 推给手机的事件。summary:成功 = 最终回复的纯文本摘要(≤280 字),
+   * 失败 = 错误原因(≤280 字),停止 = 固定文案;同时记下,之后 GET 的 last_run.summary 就是它。
+   */
   async completedEvent(
     run: AutomationRunCompleted,
   ): Promise<{ event: HarnessEvent; name: string; mode?: string }> {
     const automation = await this.find(run.automationId).catch(() => null);
     const name = automation?.title ?? "定时任务";
-    const summary =
-      run.outcome === "succeeded"
-        ? "已在 Mac 上跑完"
-        : run.outcome === "stopped"
-          ? "运行被停止"
-          : (run.error?.trim() || "运行失败").slice(0, 200);
+    const reply =
+      run.outcome === "succeeded" && this.deps.finalReply
+        ? await this.deps.finalReply(run).catch((cause: unknown) => {
+            this.deps.logger.warn("[leo/link] reading automation reply failed", { error: String(cause) });
+            return null;
+          })
+        : null;
+    const summary = runSummary(run.outcome, run.error, reply);
+    await this.results.set(run.runId, summary).catch((cause: unknown) => {
+      this.deps.logger.warn("[leo/link] saving automation result failed", { error: String(cause) });
+    });
     return {
       name,
       ...(automation?.mode ? { mode: automation.mode } : {}),
@@ -170,7 +219,9 @@ export class LinkAutomations {
         });
         return [];
       });
-    return automationView(automation, runs);
+    const last = latestRun(runs);
+    const recorded = last ? await this.results.get(last.runId).catch(() => undefined) : undefined;
+    return automationView(automation, runs, recorded);
   }
 
   private scope(automation: ZCodeAutomation) {

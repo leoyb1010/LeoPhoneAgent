@@ -74,6 +74,20 @@ test("direct listener validates local grant and target, ignores spoofed caller, 
     assert.equal(seen.at(-1)?.caller.kind, "iphone");
     assert.equal(seen.at(-1)?.requestId, "same-op");
     assert.equal(seen.at(-1)?.transport, "direct");
+    assert.equal(seen.at(-1)?.traceId, undefined);
+    // PATCH 带正文(手机直连改 / 停定时任务);追踪号只当标签往下传。
+    assert.equal(
+      (
+        await fetch(`${url}/automations/automation-1`, {
+          method: "PATCH",
+          headers: { ...headers, "X-Leo-Trace-Id": "trace-1" },
+          body: JSON.stringify({ enabled: false }),
+        })
+      ).status,
+      200,
+    );
+    assert.deepEqual(seen.at(-1)?.body, { enabled: false });
+    assert.equal(seen.at(-1)?.traceId, "trace-1");
     await grants.revoke("phone");
     assert.equal((await fetch(`${url}/health`, { headers })).status, 401);
   } finally {

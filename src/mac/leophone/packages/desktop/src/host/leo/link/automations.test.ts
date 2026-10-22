@@ -3,7 +3,23 @@ import test from "node:test";
 
 import type { ZCodeAutomation, ZCodeAutomationRun } from "@zcode/shared";
 
-import { onAutomationRunCompleted, publishAutomationRunCompleted } from "./automationEvents.js";
+import { LEO_AUTOMATION_TEMPLATES } from "@zcode/shared/leo-automation-templates";
+
+import {
+  failAutomationRun,
+  onAutomationRunCompleted,
+  onAutomationRunStarted,
+  publishAutomationRunCompleted,
+  publishAutomationRunStarted,
+  takeAutomationRunFailure,
+} from "./automationEvents.js";
+import {
+  AutomationResults,
+  finalReplyText,
+  plainSummary,
+  RESULT_SUMMARY_MAX,
+  runSummary,
+} from "./automationResults.js";
 import {
   automationView,
   describeSchedule,
@@ -184,9 +200,20 @@ test("automations: view picks the latest run and maps statuses", () => {
     status: "succeeded",
     at: 9,
     task_id: "task-9",
+    session_id: "task-9",
     trigger: "schedule",
     error: null,
+    // 成功但没记下摘要(别的窗口 / 升级前跑的):不冷恢复会话去读,给 null。
+    summary: null,
   });
+  const runs = [run({ runId: "new", outcome: "succeeded", sessionId: "task-9" })];
+  assert.equal(automationView(automation(), runs, "写好了日报").last_run?.summary, "写好了日报");
+  assert.equal(
+    automationView(automation(), [run({ outcome: "failed", error: "x".repeat(400) })]).last_run?.summary?.length,
+    RESULT_SUMMARY_MAX,
+    "没记下的失败按运行记录现算,同样 ≤280",
+  );
+  assert.equal(automationView(automation(), [run({ outcome: "stopped" })]).last_run?.summary, "运行被停止");
   assert.equal(view.next_run_at, 1_761_267_600);
   assert.equal(view.mode, "build");
   assert.equal(view.schedule.human, "每天 09:00");
@@ -291,4 +318,117 @@ test("automations: run-completed broadcast survives a throwing subscriber and st
   offBad();
   publishAutomationRunCompleted({ ...run, runId: "a:2" });
   assert.deepEqual(seen, ["a:1"]);
+});
+
+test("automations: run summary strips markdown, collapses whitespace and caps at 280 chars", () => {
+  assert.equal(
+    plainSummary("# 早报\n\n- **完成** 了 `lint` 修复\n- 见 [PR](https://x/1)\n\n> 引用  内容\n1. 第一 *条*"),
+    "早报 完成 了 lint 修复 见 PR 引用 内容 第一 条",
+  );
+  assert.equal(plainSummary("snake_case_name 和 a*b 不动"), "snake_case_name 和 a*b 不动");
+  assert.equal(plainSummary("```ts\nconst a = 1;\n```\n| a | b |"), "const a = 1; a b");
+  const long = plainSummary("字".repeat(500));
+  assert.equal(Array.from(long).length, RESULT_SUMMARY_MAX);
+  assert.ok(long.endsWith("…"));
+  // 按字符截:不把 emoji 劈成半个代理对。
+  const emoji = plainSummary("😀".repeat(300));
+  assert.equal(Array.from(emoji).length, RESULT_SUMMARY_MAX);
+  assert.ok(!emoji.includes("\uFFFD"));
+  assert.equal(plainSummary("短的"), "短的");
+
+  assert.equal(runSummary("succeeded", undefined, "**今天** 要做 3 件事"), "今天 要做 3 件事");
+  assert.equal(runSummary("succeeded", undefined, null), "已在 Mac 上跑完");
+  assert.equal(runSummary("stopped", "ignored", "ignored"), "运行被停止");
+  assert.equal(runSummary("failed", "  ", null), "运行失败");
+  assert.equal(Array.from(runSummary("failed", "e".repeat(1000), null)).length, RESULT_SUMMARY_MAX);
+});
+
+test("automations: final reply is the text after the last tool call of the last assistant message", () => {
+  const msg = (overrides: Record<string, unknown>) =>
+    ({ role: "assistant", content: "", timestamp: 1, ...overrides }) as never;
+  assert.equal(
+    finalReplyText([
+      msg({ role: "user", content: "跑一下" }),
+      msg({
+        content: "先看看 读到了 结论",
+        parts: [
+          { type: "content", content: "先看看" },
+          { type: "tool-call", toolIndex: 0 },
+          { type: "thought", content: "思考不算" },
+          { type: "content", content: "结论：一切正常" },
+        ],
+        tools: [{ output: "SECRET=1" }],
+      }),
+    ]),
+    "结论：一切正常",
+  );
+  // 最后一次工具调用之后没正文(被打断):退回最后一段正文。
+  assert.equal(
+    finalReplyText([
+      msg({ parts: [{ type: "content", content: "中间说明" }, { type: "tool-call", toolIndex: 0 }] }),
+    ]),
+    "中间说明",
+  );
+  assert.equal(finalReplyText([msg({ content: " 老格式整条 " })]), "老格式整条");
+  assert.equal(finalReplyText([msg({}), msg({ role: "user", content: "还没回复" })]), null);
+  assert.equal(finalReplyText([]), null);
+  assert.equal(finalReplyText([msg({ parts: [{ type: "tool-call", toolIndex: 0 }] })]), null);
+});
+
+test("automations: results are remembered per run and survive a restart", async () => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const dir = await mkdtemp(path.join(os.tmpdir(), "leo-results-"));
+  try {
+    const file = path.join(dir, "automation-results.json");
+    const first = new AutomationResults(file);
+    await first.set("a:1", "摘要一");
+    await first.set("a:2", "摘要二");
+    const reopened = new AutomationResults(file);
+    assert.equal(await reopened.get("a:1"), "摘要一");
+    assert.equal(await reopened.get("a:2"), "摘要二");
+    assert.equal(await reopened.get("a:3"), undefined);
+    for (let index = 0; index < 205; index += 1) await reopened.set(`b:${index}`, "x");
+    assert.equal(await reopened.get("a:1"), undefined, "只留最近 200 次");
+    assert.equal(await reopened.get("b:204"), "x");
+    assert.equal(await new AutomationResults(null).get("a:1"), undefined);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("automations: run-started broadcast and the one-shot failure override", () => {
+  const seen: string[] = [];
+  const off = onAutomationRunStarted((run) => seen.push(run.runId));
+  publishAutomationRunStarted({
+    automationId: "a",
+    runId: "a:1",
+    trigger: "manual",
+    taskId: "t",
+    workspacePath: "/w",
+  });
+  off();
+  publishAutomationRunStarted({ automationId: "a", runId: "a:2", trigger: "manual", taskId: "t", workspacePath: "/w" });
+  assert.deepEqual(seen, ["a:1"]);
+
+  assert.equal(takeAutomationRunFailure("a:1"), undefined);
+  failAutomationRun("a:1", "审批超时");
+  assert.equal(takeAutomationRunFailure("a:1"), "审批超时");
+  assert.equal(takeAutomationRunFailure("a:1"), undefined, "取一次就清掉");
+});
+
+test("automations: built-in templates use editor-friendly cron and the brief uses leo-brain read-only", () => {
+  const brief = LEO_AUTOMATION_TEMPLATES.find((template) => template.id === "leo-daily-brief");
+  assert.ok(brief);
+  assert.equal(brief.title.cn, "每日早报");
+  assert.equal(brief.mode, "plan");
+  for (const text of [brief.prompt.cn, brief.prompt.en]) {
+    assert.match(text, /brain_brief/);
+    assert.match(text, /brain_search/);
+    assert.match(text, /3–5/);
+  }
+  assert.match(brief.prompt.cn, /不读日历/, "日历要系统授权(TCC),早报不碰");
+  for (const template of LEO_AUTOMATION_TEMPLATES)
+    assert.equal(describeSchedule({ cronExpr: template.cronExpr, recurring: true }).kind === "cron", false);
 });

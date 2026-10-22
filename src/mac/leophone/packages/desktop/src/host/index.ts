@@ -16,7 +16,11 @@ import "@zcode/shared/leo-network-guard";
  */
 import { createHostDatabaseStartup } from "./hostDatabaseStartup.js";
 import { startLeoHostServices } from "./leo/index.js";
-import { publishAutomationRunCompleted } from "./leo/link/automationEvents.js";
+import {
+  publishAutomationRunCompleted,
+  publishAutomationRunStarted,
+  takeAutomationRunFailure,
+} from "./leo/link/automationEvents.js";
 import { createHostNetworkCapture } from "./hostNetworkCapture.js";
 import { randomUUID } from "node:crypto";
 import { createPluginSandboxRegistrationBridge } from "./pluginSandbox/index.js";
@@ -659,10 +663,15 @@ function trackCronRunOutcome(params: {
   const disposable = params.zcodeTaskService.onDynamicTaskTerminalOutcome(params.taskId)(
     (result) => {
       if (result.inputId !== params.traceId) return;
+      // [up-c-mac] Leo Link 自动拒绝了无人处理的审批并停掉这一轮:内核报 stopped,
+      // 运行记录按失败回写并带上原因(docs/specs/leo-link-automations.md「无人值守的审批」)。
+      const failure = takeAutomationRunFailure(params.runId);
+      const outcome = failure ? "failed" : result.outcome;
+      const error = failure ?? result.error;
       void settleCronRunTerminalOutcome({
         ...params,
-        outcome: result.outcome,
-        error: result.error,
+        outcome,
+        error,
         repo: cronAutomationRepo,
         logWarn: (message, error) => logger.warn(message, error),
       }).then(() =>
@@ -672,8 +681,8 @@ function trackCronRunOutcome(params: {
           automationId: params.automationId,
           runId: params.runId,
           trigger: params.trigger,
-          outcome: result.outcome,
-          ...(result.error ? { error: result.error } : {}),
+          outcome,
+          ...(error ? { error } : {}),
           taskId: params.taskId,
           workspacePath: params.workspacePath,
         }),
@@ -797,6 +806,16 @@ async function dispatchCronRun(request: CronRunDispatchRequest): Promise<{
       content: request.prompt,
       clientMode: "desktop-continuous",
       automationId: request.automationId,
+    });
+    // [up-c-mac] 已交给内核:Leo Link 盯住这次运行的审批(无人值守时推给手机,30 分钟没人答自动拒绝)。
+    // 放在 ACK 之后:派发失败的运行不会留下一个永远等不到终态的订阅;第一条审批至少隔一次模型往返。
+    publishAutomationRunStarted({
+      automationId: request.automationId,
+      runId: request.runId,
+      trigger,
+      taskId: task.taskId,
+      workspacePath: request.workspacePath,
+      ...(request.mode ? { mode: request.mode } : {}),
     });
     // prompt 创建的定时任务带 targetTaskId，追加原会话不能计成 session_create。
     if (!request.targetTaskId) {

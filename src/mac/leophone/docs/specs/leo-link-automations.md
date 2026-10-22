@@ -4,9 +4,12 @@
 手机只是遥控器，计划、触发、执行、运行记录都在 Mac 的「自动化」里；跑完把结果推回手机。
 
 实现：`packages/desktop/src/host/leo/link/automationPayload.ts`（计划换算、视图、请求校验、全自动规则，纯函数）、
-`automations.ts`（转调自动化服务、错误映射、回执检查点）、
-`bridge.ts`（路由、回执、推送）、`automationEvents.ts`（运行结束的进程内广播）、
-`packages/desktop/src/host/index.ts` 的 `trackCronRunOutcome`（发布运行结束）。
+`automations.ts`（转调自动化服务、错误映射、回执检查点、模板）、
+`automationResults.ts`（运行结果摘要：取最终回复、去 markdown、截断、按运行记下）、
+`bridge.ts`（路由、回执、推送、无人值守的审批）、`session.ts`（审批卡与自动拒绝计时）、
+`automationEvents.ts`（运行开跑 / 结束的进程内广播、失败改判）、
+`packages/desktop/src/host/index.ts` 的 `dispatchCronRun` / `trackCronRunOutcome`（发布开跑与结束、取走改判再回写）、
+`packages/shared/src/leoAutomationTemplates.ts`（自带模板，Mac 自动化页与手机共用）。
 字段蛇形命名，和 `/harness` 路由同风格、同鉴权（中继 / 直连已配对设备）。
 
 ## 状态所有者
@@ -16,11 +19,14 @@
   setAutomationEnabled / deleteAutomation / runAutomationNow` 读写（和桌面「自动化」设置页同一条路径）。
   Leo Link 不直接写它的存储，也不另存一份。
 - **手机不存副本**：列表每次 `GET /automations` 现拉；推送事件只是通知，以 `GET` 为准。
-- Leo Link 自己只落两样传输层东西：操作回执（`journals/operations/`，幂等用）和推送 outbox（中继断线时攒着）。
+- Leo Link 自己只落三样东西：操作回执（`journals/operations/`，幂等用）、推送 outbox（中继断线时攒着），
+  和运行结果摘要缓存（`journals/automation-results.json`，运行 id → 摘要，最近 200 次）。摘要是派生值，
+  不是运行记录的一部分：运行结束时会话还活着，读最终回复很便宜；事后再读要冷恢复会话，所以算一次记下来。
 
 ## 接口
 
-计划时间一律按 **Mac 本机时区**解释（调度器在 Mac 上跑）。时间戳一律是 Unix **秒**（浮点，同 `/harness/sessions`）。
+计划时间一律按 **Mac 本机时区**解释（调度器在 Mac 上跑）。Mac 的 IANA 时区（如 `"Asia/Shanghai"`）在
+`/v1/capabilities` 顶层和每个自动化对象里都给 `time_zone`（每次现取，改了系统时区不用重启），手机和自己的不同时提示。时间戳一律是 Unix **秒**（浮点，同 `/harness/sessions`）。
 
 ### 计划（schedule）的写法
 
@@ -49,13 +55,15 @@
 {
   "id": "automation-…", "name": "日报", "prompt": "汇总昨天的提交",
   "schedule": { "kind": "daily", "cron": "0 9 * * *", "human": "每天 09:00", "recurring": true, "time": "09:00" },
+  "time_zone": "Asia/Shanghai",   // Mac 本机 IANA 时区，计划按它解释
   "enabled": true,
   "state": "active",              // active | paused | completed | failed（领域 lifecycleStatus）
   "workspace": "/Users/me/app",
   "mode": "build",                // plan | guarded | build | yolo；桌面建的可能为 null（跟随工作区默认）
   "target_task_id": null,         // 会话里建的自动化绑定的任务（每次投递回该任务）
   "run_count": 3,
-  "last_run": { "status": "succeeded", "at": 1761181200.0, "task_id": "task-…", "trigger": "schedule", "error": null } ,
+  "last_run": { "status": "succeeded", "at": 1761181200.0, "task_id": "task-…", "session_id": "task-…",
+                "trigger": "schedule", "error": null, "summary": "今天要做 修登录 bug …" },
   "next_run_at": 1761267600.0,    // null = 不会再跑（暂停 / 已完成）
   "created_at": 1761000000.0, "updated_at": 1761000000.0
 }
@@ -63,6 +71,10 @@
 
 `last_run.status`：`running | succeeded | failed | stopped`（任务结果），`dispatch_failed`（没能派发，如没配模型），
 `skipped`（错过窗口），`pending`（已认领待派发）。从未跑过为 `null`。
+
+`last_run.session_id` 与 `task_id` 同值，可直接打开 `/harness/sessions/<session_id>/events`（桥接按需接管该任务）。
+`last_run.summary`（见「运行结果摘要」）：这台 Mac 上 Leo Link 记下的摘要优先；没记下的（别的窗口跑的、升级前跑的）
+失败 / 停止按运行记录现算，成功的为 `null`（不为它冷恢复会话），未结束为 `null`。
 
 ### 端点
 
@@ -83,8 +95,22 @@
 - `DELETE /automations/<id>` → `200 {"ok":true,"deleted":true}`；不存在 404（重试的 DELETE 把 404 当成功）。
 - `POST /automations/<id>/run`（立即运行，不改原计划）→ `202 {"ok":true,"status":"queued"}`；
   已有一次手动运行在跑 → `409 {"error":{"code":"automation_run_in_flight",…}}`。带操作编号时重试拿到同一个回执。
-- 不存在的 id 一律 404；id 只允许 `[A-Za-z0-9_.:-]{1,200}`。
-- `capabilities.features.automations: true`（旧 Mac 没有 → 手机隐藏入口；旧 Mac 上这些路径 404）。
+- `GET /automations/templates` → `200 {"templates":[{"id","name","description","prompt","schedule","mode"}…]}`：
+  Mac 自带模板（和 Mac 自动化页「从模板开始」同一份 `LEO_AUTOMATION_TEMPLATES`，中文）。`schedule` 与自动化视图同形，
+  整份原样放回 `POST /automations` 的 `schedule` 也认（按其中的 `cron`）；`mode` 是建议的权限模式（见下文「模式」）。
+  iOS 依赖 `id` / `name` / `prompt` / `schedule` 四个字段，用模板建 = `POST /automations` 带该模板的 `prompt` + `schedule`（+ `name`）；
+  `description` / `mode` 是附加字段，旧手机忽略。其它方法 405。目前三条：`leo-daily-brief` 每日早报（`0 9 * * *`，`plan`）、`leo-repo-health` 下班前跑一遍测试
+  （`0 18 * * 1-5`，`guarded`）、`leo-weekly-review` 每周回顾（`0 20 * * 0`，`plan`）。
+- 不存在的 id 一律 404；id 只允许 `[A-Za-z0-9_.:-]{1,200}`；畸形的 `%` 转义（`decodeURIComponent` 抛 URIError）400。
+- `capabilities.features.automations: true`（旧 Mac 没有 → 手机隐藏入口；旧 Mac 上这些路径 404）；
+  `capabilities.features.automation_templates: true`（旧 Mac 上 `/automations/templates` 会被当成 id，404）。
+
+### 每日早报模板
+
+提示词要求：先 `brain_brief`，再 `brain_search` 查今天 / 昨天的日报页和最近 3 天新增的知识卡，需要时 `brain_read`
+（`leo-brain` MCP 每台配好钥匙的 Mac 都注册，见 `leo-brain-mcp.md`；不可用就跳过并说明）；再看本项目昨天的提交和任务；
+最后列 3–5 条能直接动手的「今天要做」。只读：不改文件、不调 `brain_save_card` / `brain_upload`。
+**不读日历**：经 `osascript` 读日历 App 会触发 macOS 的自动化 / 日历授权弹窗（TCC），无人值守时没人点，所以跳过。
 
 ## 调用方规则
 
@@ -115,7 +141,7 @@
   "event": "automation.run.completed",
   "automation_id": "automation-…", "name": "日报",
   "status": "succeeded",                 // succeeded | failed | stopped
-  "summary": "已在 Mac 上跑完",           // 失败时是错误原因（≤200 字）
+  "summary": "今天要做 修登录 bug …",     // 见「运行结果摘要」（≤280 字）
   "task_id": "task-…", "session_id": "task-…",   // 同一个值；手机可直接打开 /harness/sessions/<id>/events
   "run_id": "automation-…:1761181200000", "trigger": "schedule",   // schedule | manual
   "workspace": "/Users/me/app",
@@ -136,9 +162,72 @@
 ```
 
 - 先回写运行记录再推送：手机收到通知后 `GET /automations` 看到的 `last_run` 已是终态。
+- 摘要先记下再推送：`last_run.summary` 与推送里的 `summary` 是同一句。
+- 每条 `automation.run.completed` 都带 `run_id`：iOS 用 `relay-automation-<run_id>` 作通知 id 去重。
 - 只推真正开跑了的运行；派发失败（没模型、Host 未就绪，调度器会重试）不推，看 `last_run.status = dispatch_failed`。
 - 推送的任务记进桥接的「可接管任务」（≤50 条，进程内）：手机点通知打开 `task_id`，即使该工作区不在 Mac 最近项目里也能接管查看。
 - 中继断线时进 `RelayLink` outbox（超限丢最旧），重连补发；直连（Tailscale）没有推送通道，靠 `GET /automations`。
+
+## 运行结果摘要
+
+`summary`（推送与 `last_run.summary` 同一规则，`automationResults.ts`）：
+
+- `succeeded`：这次运行的**最终助手回复**。运行结束时经 `getTaskSnapshot({messageLimit: 6})` 读该任务最后一条消息：
+  必须是助手消息（最后是用户消息 = 还没回复）；取它最后一次工具调用之后的正文段（思考、工具调用及其输出一律不取），
+  那段为空就取最后一段正文，没有分段信息用整条 `content`。去 markdown 标记（标题 / 列表 / 引用 / 粗斜体 / 行内代码 /
+  链接只留文字 / 代码围栏 / 表格竖线 / HTML 标签）、压空白，超过 280 字截到 279 字加「…」（按字符，不劈 emoji）。
+  读不到或为空 → `已在 Mac 上跑完`。
+- `failed`：错误原因同样压空白、≤280 字；空则 `运行失败`。
+- `stopped`：`运行被停止`。
+
+## 无人值守的审批
+
+自动化跑出来的是桌面任务，没人在 Mac 前时审批会一直挂着。现在：
+
+1. **推给手机**：运行一交给内核（`sendPrompt` ACK 后），Host 发 `publishAutomationRunStarted`；桥接盯住该任务的流。
+   没出审批的运行不接管（不进手机任务列表、不写会话日志）；出了第一条审批才把任务接管成会话（和手机点开桌面任务同一条
+   `adopt` 路径），从此审批卡与手机自己开的任务**完全一样**：`approval.request` 事件（`session_id` / `approval_id` /
+   `run_id` / `command` / `tool` / `description` / `choices`，另加 `automation_id`）先落会话日志再经 `deps.push` →
+   中继（APNs、`recent_events`）→ 手机 / 手表；手机用 `POST /harness/sessions/<session_id>/approval` 照常答。
+   手机已接管的任务（会话内建的自动化投递回原会话）直接进入无人值守。
+   以前：只有手机发起的一轮才推审批，自动化任务的审批从不到手机。
+2. **30 分钟自动拒绝**：每条推出去的审批起一个内存计时（`UNATTENDED_APPROVAL_MS`）。到点没人答（手机、手表、Mac 上答都算）：
+   先 `failAutomationRun(runId, "审批 30 分钟无人处理,已自动拒绝")`，再回内核 `deny`、`stopGeneration` 停掉这一轮。
+   内核随后报的终态是 `stopped`，Host 的 `trackCronRunOutcome` 取走改判，按 `failed` + 该原因回写运行记录并发
+   `automation.run.completed`（`status:"failed"`，`summary` 即该原因）。运行记录仍只有 Host 一个写入方。
+3. **计时清除**：审批被答（手机 / Mac）、这一轮结束（`run.completed / failed / cancelled`）、`automation.run.completed`、
+   会话或桥接关闭时清掉。答复没送到内核（卡片还在）时重新计时。不持久化：Mac 重启后挂着的审批不再自动拒绝。
+
+```
+dispatchCronRun ─sendPrompt ACK─► publishAutomationRunStarted ─► LinkBridge 盯任务流
+                                                                    │ permission_request
+                                                                    ▼
+                                         adopt → LinkSession(unattended) ─approval.request─► journal ─► push ─► 中继 ─► 手机/手表
+           手机 POST …/approval ───────────────► respondPermission（计时清掉）
+           30 分钟无人答 ──► failAutomationRun ─► deny ─► stopGeneration
+内核终态(stopped) ─► trackCronRunOutcome: takeAutomationRunFailure → failed + 原因 ─► settle（回写） ─► publishAutomationRunCompleted ─► 推送
+```
+
+### 模式（`mode`）对无人值守的含义
+
+以 CLI 权限服务（`apps/zcode-cli/packages/core/src/permission/service.ts`）为准：
+
+| mode | 行为 | 无人值守时 |
+| --- | --- | --- |
+| `plan` | 只读：只读工具与非破坏性 MCP 工具直接放行，写文件 / 执行命令一律**直接拒绝、不问** | 最接近「只读、从不问」。例外：工具自报 `alwaysAsk`、需要用户交互的工具（提问、退出计划）仍会问 → 走上面的推送 / 30 分钟拒绝 |
+| `guarded` | 自主：普通调用放行，只有危险命令（`rm`、`git reset --hard` 等）逐次确认 | 偶尔问 |
+| `build` | 逐项确认：写文件、执行命令都要批 | 经常问，不适合无人值守 |
+| `yolo` | 全自动：不问（要认得出设备才能设） | 不问，也不受只读约束 |
+
+没有「只读且保证从不问」的模式：`plan` 是最接近的，上面的例外不改（不为无人值守另造放行规则）。只读的定时任务
+（早报、回顾）建议 `plan`；要跑命令的（测试）建议 `guarded`。
+
+## 链路追踪号
+
+请求带追踪号时（中继帧 `trace_id`；中继若原样转发请求头，也认 `headers` 里的 `X-Leo-Trace-Id`；直连读请求头
+`X-Leo-Trace-Id`），`LinkBridge.handle` 为这次请求记一行 info：`[leo/link] request {trace_id, method, path, transport,
+status, duration_ms}`（`path` 不含查询串，不记正文；出错记 warn）。`/e2e` 信封和解开后的内层请求各记一行，同一个号。
+只认 `[A-Za-z0-9_.:-]{1,128}`，其它当没带；追踪号只是标签，不参与任何判断。中继目前还不转发它（需中继侧配合）。
 
 ## 已知限制
 
@@ -147,8 +236,12 @@
 - Mac 必须开着 App 才会触发（调度器在 Electron 里）；关着的时间里错过的触发按调度器的补跑 / 跳过规则处理。
 - 多窗口时，定时触发由 main 分给某个 Window Host；Leo Link 只在抢到本地端口的那个 Host 里。触发落到别的 Host 时
   这次运行不推送（运行记录照常，`GET /automations` 看得到）。单窗口（常态）不受影响。
-- `build` 模式的无人值守运行遇到审批会停在 Mac 上等人（不推审批卡：不是手机那一轮）。接管前就已挂起的审批能否在手机上出现
-  尚未验证；无人值守的任务建议用 `guarded`（自主）或在认得出的设备上用 `yolo`。
+- 无人值守的审批只覆盖权限审批；任务里的提问（elicitation）仍留在 Mac 上等人。
+- 「开跑」只在 `dispatchCronRun` 的 `sendPrompt` ACK 后发出：之前就已出现的审批（实际上至少隔一次模型往返）不会被接管；
+  多窗口时开跑落到没有 Leo Link 的 Host 上同样不接管。
+- 自动拒绝计时只在内存里：Mac / App 重启后挂着的审批不再自动拒绝。
+- 运行结果摘要只在本 Host 的运行结束时算一次；绑定原会话的自动化，若结束前用户在该会话里又聊了，读到的「最后一条助手消息」
+  可能不是这次运行的。
 - 手机「关闭全自动」（`/harness/full-auto`）只管会话，不改 yolo 自动化；要停就 `PATCH enabled:false`。
 - iOS 的补拉（`RelayEventCatchUp`）目前只认 `run.completed` / `run.failed` / `approval.request`：要在 App 前台补拉时显示，
   iOS 端需要加 `automation.run.completed` 分支（APNs 由中继直接发，不依赖它）。
@@ -157,6 +250,12 @@
 
 - `node --import ./scripts/test-isolation/home.mjs --import tsx --test packages/desktop/src/host/leo/link/automations.test.ts`：
   白名单、计划换算（daily / weekly / hourly / once / cron、非法输入）、描述、请求校验、调用方规则、视图、运行结束广播（`automationPayload.ts` / `automationEvents.ts`）。
+  另含运行摘要（去 markdown、≤280、按字符截断、最终回复取法、按运行记下并跨重启）、开跑广播与失败改判、模板（早报用 leo-brain、不读日历）。
 - `bridge.test.ts` 的 `automations:` 用例：假自动化服务走完整路由（白名单、列表、建（默认工作区 / 模型 / 模式）、
-  同编号重试不重复建、缺编号 400、yolo 需认得出设备、改 / 停 / 删 / 立即运行、运行结束推送与可接管）。
+  同编号重试不重复建、缺编号 400、yolo 需认得出设备、改 / 停 / 删 / 立即运行、运行结束推送与可接管）；
+  成功运行推最终回复摘要且 `last_run.summary` 一致、`session_id` 可打开事件流；无人值守审批（不出审批不接管、出了审批推
+  `approval.request`、手机能答、超时自动拒绝 + 停止 + 改判、运行结束清计时、普通手机任务不计时）；模板端点、畸形转义 400；
+  追踪号（中继帧 / 请求头取法、带号请求记一行）。
+- `directServer.test.ts`：直连 `PATCH` 带正文、`X-Leo-Trace-Id` 往下传。
+- `packages/desktop/test/cronHostSessionCreateTelemetry.test.ts`（vitest，装载生产 `dispatchCronRun`）：「已开跑」只在 `sendPrompt` accepted 后发、首发被拒不发。
 - `src/mac/leoagent/test_relay_security.py` 的 `RelayAutomationPushTests`：中继对 `automation.run.completed` 发 APNs。

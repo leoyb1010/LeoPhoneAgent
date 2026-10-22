@@ -5,10 +5,22 @@ import path from "node:path";
 
 import type { IZCodeTaskService } from "@zcode/services";
 import { setLeoMainLanePinnedWorkspacesProvider } from "@zcode/services/leo-main-lane-idle-recycle";
-import type { ModelSelection, ZCodeTaskMode } from "@zcode/shared";
+import type {
+  ModelSelection,
+  ZCodePermissionRequest,
+  ZCodeStreamEvent,
+  ZCodeTaskMode,
+} from "@zcode/shared";
 import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 
-import { onAutomationRunCompleted, type AutomationRunCompleted } from "./automationEvents.js";
+import {
+  failAutomationRun,
+  onAutomationRunCompleted,
+  onAutomationRunStarted,
+  type AutomationRunCompleted,
+  type AutomationRunStarted,
+} from "./automationEvents.js";
+import { finalReplyText } from "./automationResults.js";
 import { LinkAutomations, type LinkAutomationService } from "./automations.js";
 import { fetchDesktopTasks, type DesktopTask } from "./desktopTasks.js";
 import type { HarnessEvent } from "./journal.js";
@@ -37,6 +49,7 @@ import {
   isLinkPath,
   LINK_MODES,
   linkMode,
+  macTimeZone,
   mayUseFullAuto,
   record,
   validSessionId,
@@ -56,6 +69,11 @@ export type LinkRequest = {
   transport?: "direct" | "relay";
   /** [WP-50] 直连带过来的 If-None-Match(中继不转发请求头,走 if_none_match 查询参数)。 */
   ifNoneMatch?: string;
+  /**
+   * [up-c-mac] 手机 → 中继 → Mac 的链路追踪号(中继帧 trace_id / 直连 X-Leo-Trace-Id);
+   * 带了就给这次请求记一行日志,慢请求能从手机一路对到 Mac。只做标签,不参与任何判断。
+   */
+  traceId?: string;
 };
 /** binary / headers 只有直连能用(看屏的 JPEG);中继只认 JSON body。 */
 export type LinkResponse = {
@@ -122,7 +140,27 @@ export type LinkBridgeDeps = {
   e2e?: RelayE2E;
   /** [up-p3-mac] Mac 的自动化服务(docs/specs/leo-link-automations.md);没有就不开 /automations。 */
   automations?: LinkAutomationService;
+  /** [up-c-mac] 无人值守的自动化审批多久没人答就自动拒绝;默认 30 分钟(测试注入短的)。 */
+  unattendedApprovalMs?: number;
 };
+
+/** [up-c-mac] 无人值守的自动化运行:没人答的审批自动拒绝时,运行记录里的失败原因。 */
+export const UNATTENDED_APPROVAL_REASON = "审批 30 分钟无人处理,已自动拒绝";
+const UNATTENDED_APPROVAL_MS = 30 * 60 * 1000;
+/** 链路追踪号:只认普通字符,免得日志里混进换行之类。 */
+const TRACE_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
+
+/**
+ * [up-c-mac] 盯着一次自动化运行的任务流,等第一条审批。没审批的运行不接管(不进手机任务列表、不写日志);
+ * 出了审批才接管成会话,之后由会话自己订阅、推审批卡、计时。
+ */
+type AutomationWatch = {
+  run: AutomationRunStarted;
+  dispose: () => void;
+  queue: ZCodePermissionRequest[];
+  adopting: boolean;
+};
+const FINISHED_RUN_LIMIT = 100;
 
 function authSummary(state: AcpAuthState): { logged_in: boolean | null; method?: string; login_kind: string } {
   return { logged_in: state.logged_in, login_kind: state.login_kind, ...(state.method ? { method: state.method } : {}) };
@@ -187,6 +225,10 @@ export class LinkBridge {
   private readonly automationTasks = new Map<string, DesktopTask>();
   private readonly automations: LinkAutomations | null;
   private readonly stopAutomationEvents: () => void;
+  /** [up-c-mac] 正在跑的自动化运行(按 runId);跑完 / 接管后摘掉。 */
+  private readonly automationWatches = new Map<string, AutomationWatch>();
+  /** 终态先于「已开跑」到达(极快的运行)时,别再为它挂一个永远不会摘的订阅。 */
+  private readonly finishedRuns = new Set<string>();
 
   private readonly leoagent: LeoagentForwarder;
   /** 认回任务期间不写任务表:这时只认回了一部分,写下去再赶上崩溃,没认回的那些就丢了。 */
@@ -203,16 +245,25 @@ export class LinkBridge {
           resolveModel: (harness) => this.automationModel(harness),
           checkpoint: (req, value) => this.receipts.checkpoint(req, value),
           logger: deps.logger,
+          finalReply: (run) => this.automationReply(run),
+          resultsFile: path.join(deps.journalDir, "automation-results.json"),
         })
       : null;
     // [up-p3-mac] 自动化跑完(Host 已先回写运行记录)→ 推给手机;桥接关掉时退订。
-    this.stopAutomationEvents = this.automations
-      ? onAutomationRunCompleted((run) => {
-          void this.automationRunCompleted(run).catch((cause: unknown) => {
-            deps.logger.warn("[leo/link] automation push failed", { error: String(cause) });
-          });
-        })
-      : () => undefined;
+    // [up-c-mac] 开跑 → 盯住它的审批(无人值守时推给手机,30 分钟没人答自动拒绝)。
+    const stops = this.automations
+      ? [
+          onAutomationRunCompleted((run) => {
+            void this.automationRunCompleted(run).catch((cause: unknown) => {
+              deps.logger.warn("[leo/link] automation push failed", { error: String(cause) });
+            });
+          }),
+          onAutomationRunStarted((run) => this.automationRunStarted(run)),
+        ]
+      : [];
+    this.stopAutomationEvents = () => {
+      for (const stop of stops) stop();
+    };
   }
 
   /** 读回任务表:Mac 重启后,手机上已有的任务照样能续传、续聊、审批。 */
@@ -321,12 +372,40 @@ export class LinkBridge {
   }
 
   async handle(req: LinkRequest): Promise<LinkResponse> {
+    const traceId = req.traceId && TRACE_ID.test(req.traceId) ? req.traceId : undefined;
+    if (!traceId) return this.dispatch(req);
+    // [up-c-mac] 带追踪号的请求记一行(只记路径,不记查询串和正文):手机 → 中继 → Mac 按同一个号对上。
+    const startedAt = Date.now();
+    const meta = {
+      trace_id: traceId,
+      method: req.method.toUpperCase(),
+      path: req.path.split("?")[0],
+      transport: req.transport ?? "relay",
+    };
+    try {
+      const response = await this.dispatch({ ...req, traceId });
+      this.deps.logger.info("[leo/link] request", { ...meta, status: response.status, duration_ms: Date.now() - startedAt });
+      return response;
+    } catch (cause) {
+      this.deps.logger.warn("[leo/link] request failed", { ...meta, duration_ms: Date.now() - startedAt, error: String(cause) });
+      throw cause;
+    }
+  }
+
+  private async dispatch(req: LinkRequest): Promise<LinkResponse> {
     const url = new URL(req.path, "http://link.invalid");
     if (this.deps.directGrants?.isRevoked(req.caller)) return error(403, "设备授权已撤销");
     const method = req.method.toUpperCase();
     // [e2e] 中继只看到密文信封;解开后按内层请求重新走一遍本函数(白名单、回执都照旧),调用方仍是中继鉴过权的那个。
     if (url.pathname === "/e2e" && method === "POST" && this.deps.e2e)
-      return this.deps.e2e.handle(req.body, (inner) => this.handle({ ...inner, caller: req.caller, ...(req.transport ? { transport: req.transport } : {}) }));
+      return this.deps.e2e.handle(req.body, (inner) =>
+        this.handle({
+          ...inner,
+          caller: req.caller,
+          ...(req.transport ? { transport: req.transport } : {}),
+          ...(req.traceId ? { traceId: req.traceId } : {}),
+        }),
+      );
     if (url.pathname === "/direct-grants" && method === "POST") {
       if (req.transport === "direct" || !req.caller.deviceId || req.caller.kind === "unknown")
         return error(403, "请先通过中继或本机配对授权");
@@ -437,6 +516,8 @@ export class LinkBridge {
   async close(): Promise<void> {
     setLeoMainLanePinnedWorkspacesProvider(undefined);
     this.stopAutomationEvents();
+    for (const watch of this.automationWatches.values()) watch.dispose();
+    this.automationWatches.clear();
     await Promise.allSettled([...this.sessions.values()].map((session) => session.close()));
     // mode_update/接管会排队写sessions.json；先排空索引再释放session，
     // 否则close返回后仍会创建文件，且晚到写入可能把已清空的Map保存成空索引。
@@ -682,6 +763,12 @@ export class LinkBridge {
    */
   async automationRunCompleted(run: AutomationRunCompleted): Promise<void> {
     if (!this.automations) return;
+    // [up-c-mac] 运行结束:不再盯它,自动拒绝计时作废(会话的一轮结束通常已清过,这里兜住内核没发终态事件的情况)。
+    this.automationWatches.get(run.runId)?.dispose();
+    this.automationWatches.delete(run.runId);
+    this.finishedRuns.add(run.runId);
+    while (this.finishedRuns.size > FINISHED_RUN_LIMIT) this.finishedRuns.delete(this.finishedRuns.keys().next().value!);
+    this.sessions.get(run.taskId)?.setUnattended(null);
     const { event, name, mode } = await this.automations.completedEvent(run);
     if (!this.sessions.has(run.taskId)) {
       const now = Date.now();
@@ -699,6 +786,81 @@ export class LinkBridge {
         this.automationTasks.delete(this.automationTasks.keys().next().value!);
     }
     this.deps.push(event);
+  }
+
+  /** [up-c-mac] 这次运行的最终助手回复;会话刚跑完还活着,读快照不会冷恢复。 */
+  private async automationReply(run: AutomationRunCompleted): Promise<string | null> {
+    const snapshot = await this.deps.taskService.getTaskSnapshot({
+      taskId: run.taskId,
+      workspacePath: run.workspacePath,
+      messageLimit: 6,
+    });
+    return finalReplyText(snapshot?.messages ?? []);
+  }
+
+  /**
+   * [up-c-mac] 自动化开跑(docs/specs/leo-link-automations.md「无人值守的审批」)。
+   * 手机已接管的任务(会话内建的自动化投递回原会话)直接进入无人值守;否则只盯任务流,出了审批再接管。
+   */
+  automationRunStarted(run: AutomationRunStarted): void {
+    if (!this.automations || this.finishedRuns.has(run.runId) || this.automationWatches.has(run.runId)) return;
+    const existing = this.sessions.get(run.taskId);
+    if (existing) {
+      this.armUnattended(existing, run);
+      return;
+    }
+    const watch: AutomationWatch = { run, dispose: () => undefined, queue: [], adopting: false };
+    const subscription = this.deps.taskService.onDynamicTaskEvent({
+      workspacePath: run.workspacePath,
+      taskId: run.taskId,
+      deliveryKind: "bot-channel-continuous",
+    })((event: ZCodeStreamEvent) => {
+      if (event.type !== "permission_request") return;
+      watch.queue.push(event);
+      if (!watch.adopting) void this.adoptAutomationRun(watch);
+    });
+    watch.dispose = () => subscription.dispose();
+    this.automationWatches.set(run.runId, watch);
+  }
+
+  private async adoptAutomationRun(watch: AutomationWatch): Promise<void> {
+    watch.adopting = true;
+    const { run } = watch;
+    try {
+      const { name, mode } = await this.automations!.describe(run.automationId);
+      if (this.automationWatches.get(run.runId) !== watch) return; // 等名字期间运行已结束
+      if (!this.sessions.has(run.taskId)) {
+        const now = Date.now();
+        this.automationTasks.set(run.taskId, {
+          taskId: run.taskId,
+          cwd: run.workspacePath,
+          title: name,
+          status: "running",
+          mode: linkMode(mode ?? run.mode) ?? "build",
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      const session = this.sessions.get(run.taskId) ?? (await this.adoptDesktopTask(run.taskId));
+      if (!session) return;
+      // 会话已订阅任务流:后续审批由它自己收,这里只把接管期间攒下的补交给它。
+      watch.dispose();
+      this.automationWatches.delete(run.runId);
+      if (this.finishedRuns.has(run.runId)) return;
+      this.armUnattended(session, run);
+      for (const request of watch.queue.splice(0)) session.ingestPermissionRequest(request);
+    } catch (cause) {
+      watch.adopting = false;
+      this.deps.logger.warn("[leo/link] adopting automation run failed", { error: String(cause) });
+    }
+  }
+
+  private armUnattended(session: LinkSession, run: AutomationRunStarted): void {
+    session.setUnattended({
+      automationId: run.automationId,
+      timeoutMs: this.deps.unattendedApprovalMs ?? UNATTENDED_APPROVAL_MS,
+      onTimeout: () => failAutomationRun(run.runId, UNATTENDED_APPROVAL_REASON),
+    });
   }
 
   private legacyEnabled(): boolean {
@@ -813,6 +975,8 @@ export class LinkBridge {
         version: VERSION,
         server: "leophoneagent",
         app_version: this.deps.appVersion,
+        // [up-c-mac] Mac 的 IANA 时区:定时任务按它触发,手机发现和自己不同时提示。
+        time_zone: macTimeZone(),
         device: this.deps.device,
         // [e2e] 手机只在直连或扫码时固定它;经中继拿到的只作首次信任(见 spec)。
         ...(this.deps.e2e ? { relay_e2e: { v: 1, public_key: this.deps.e2e.publicKeyText } } : {}),
@@ -839,6 +1003,8 @@ export class LinkBridge {
           relay_e2e: Boolean(this.deps.e2e),
           // [up-p3-mac] 手机管理 Mac 上的定时任务(/automations)。
           automations: Boolean(this.automations),
+          // [up-c-mac] GET /automations/templates(Mac 自带模板,手机可一键建)。
+          automation_templates: Boolean(this.automations),
         },
         harnesses: [
           {
