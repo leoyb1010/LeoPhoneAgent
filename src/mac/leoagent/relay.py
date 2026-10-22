@@ -43,10 +43,11 @@ import secrets
 import shutil
 import time
 import uuid
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
-from aiohttp import WSMsgType, web
+from aiohttp import WSCloseCode, WSMsgType, web
 
 from .apns import build_pusher
 from .live_activity import LiveActivityPlanner
@@ -76,6 +77,15 @@ TREASURY_ASSET_REQUEST_LIMIT = 10_000
 TREASURY_BODY_LIMIT = 8 * 1024 * 1024
 TREASURY_ATTACHMENT_LIMIT = 128 * 1024 * 1024
 TREASURY_ASSET_TTL_S = 30 * 24 * 3600
+# launchd 的 ExitTimeOut 是 5 s:优雅停机要在这之内收完,否则被 SIGKILL。
+SHUTDOWN_TIMEOUT_S = 3
+SHUTDOWN_WS_CLOSE_S = 1.0
+
+
+def log(message: str) -> None:
+    """一行日志:本地时区 ISO-8601 时间戳打头。launchd 下 stdout 是文件,必须逐行 flush。"""
+    stamp = datetime.now().astimezone().isoformat(timespec="milliseconds")
+    print(f"{stamp} {message}", flush=True)
 
 
 class Caller:
@@ -208,6 +218,8 @@ class Relay:
         self.live_planner = LiveActivityPlanner()
         # 后台任务引用集(防 GC,见 _push_apns 调用处)
         self._bg_tasks: set = set()
+        # 所有 Mac 注册通道(含还没发 register 的):停机时要逐个关掉。
+        self._agent_sockets: set = set()
         # Phase 4 Treasury sync: metadata changes are append-only and items are
         # materialized by deterministic last-write-wins. Bodies/attachments are
         # intentionally absent here; their separate on-demand channel can be
@@ -938,7 +950,7 @@ class Relay:
                 os.replace(self.queue_path, backup)
             except OSError:
                 pass
-            print(f"[relay] queue file unreadable ({cause}); kept as {backup}", flush=True)
+            log(f"[relay] queue file unreadable ({cause}); kept as {backup}")
             return
         now = time.time()
         for name in set(queue) | set(inflight):
@@ -986,7 +998,7 @@ class Relay:
                 os.fsync(f.fileno())
             os.replace(tmp, self.queue_path)
         except (OSError, TypeError, ValueError) as cause:
-            print(f"[relay] queue persist failed: {cause}", flush=True)
+            log(f"[relay] queue persist failed: {cause}")
 
     def _write_status(self) -> None:
         payload = {
@@ -1414,6 +1426,7 @@ class Relay:
     async def agent_ws(self, request: web.Request) -> web.WebSocketResponse:
         ws = web.WebSocketResponse(heartbeat=25)
         await ws.prepare(request)
+        self._agent_sockets.add(ws)
 
         machine: Optional[Machine] = None
         try:
@@ -1459,7 +1472,7 @@ class Relay:
                             pass
                     machine = Machine(name, ws, dict(frame.get("info") or {}))
                     self.machines[name] = machine
-                    print(f"[relay] {name} online", flush=True)
+                    log(f"[relay] {name} online")
                     self._write_status()
                     ack: Dict[str, Any] = {"type": "registered", "version": VERSION,
                                             "revokedDeviceIds": sorted(self.revoked_devices)}
@@ -1517,10 +1530,11 @@ class Relay:
                     # 只认这条连接注册时的名字:帧里自报的 machine 能冒充别的 Mac 发审批推送。
                     self._record_event(machine.name, dict(frame.get("event") or {}))
         finally:
+            self._agent_sockets.discard(ws)
             if machine is not None:
                 if self.machines.get(machine.name) is machine:
                     del self.machines[machine.name]
-                    print(f"[relay] {machine.name} offline", flush=True)
+                    log(f"[relay] {machine.name} offline")
                     self._write_status()
                 # 请求和流跟着这条连接走,被同名重连顶掉时也一样(Mac 换网、睡醒:
                 # 新连接先到,旧的这时才断)。新连接不认识它们,这里不了结,手机就
@@ -1567,7 +1581,7 @@ class Relay:
                 fut.set_result(None)
         self.event_waiters.clear()
         kind = event.get("event", "?")
-        print(f"[relay] event {kind} from {machine_name}", flush=True)
+        log(f"[relay] event {kind} from {machine_name}")
         # [T-live-mission] 关键事件转 APNs:app 完全没运行时的唯一触达路径。
         if self.apns.enabled:
             # 持引用!事件循环只持任务弱引用,裸 create_task 的协程挂在
@@ -1637,7 +1651,7 @@ class Relay:
                     collapse_id=automation_run_collapse_id(event),
                 )
         except Exception as exc:  # noqa: BLE001
-            print(f"[relay] apns push failed: {exc}", flush=True)
+            log(f"[relay] apns push failed: {exc}")
         await self._push_live_activity(machine_name, event)
 
     async def _push_live_activity(self, machine_name: str, event: Dict[str, Any]) -> None:
@@ -1654,7 +1668,7 @@ class Relay:
                 if push.event == "end" and push.token and sent:
                     self.live_planner.forget(push.token)
         except Exception as exc:  # noqa: BLE001
-            print(f"[relay] live activity push failed: {exc}", flush=True)
+            log(f"[relay] live activity push failed: {exc}")
 
     async def put_collections(self, request: web.Request) -> web.Response:
         """Compatibility adapter for clients that still send a whole snapshot.
@@ -2043,13 +2057,13 @@ class Relay:
             frame = await asyncio.wait_for(fut, timeout=REQUEST_TIMEOUT_S)
         except (asyncio.TimeoutError, ConnectionError):
             machine.pending.pop(request_id, None)
-            print(f"[relay] {request.method} {name}{tail} timed out trace={trace or '-'}", flush=True)
+            log(f"[relay] {request.method} {name}{tail} timed out trace={trace or '-'}")
             return web.json_response(
                 {"error": {"message": "这台 Mac 没有按时响应"}}, status=504)
         elapsed = time.monotonic() - started
         if elapsed >= 5:
             # 慢请求留一行,带手机给的 trace id,方便和手机 / Mac 两端日志对上。
-            print(f"[relay] slow {request.method} {name}{tail} {elapsed:.1f}s trace={trace or '-'}", flush=True)
+            log(f"[relay] slow {request.method} {name}{tail} {elapsed:.1f}s trace={trace or '-'}")
         return web.json_response(frame.get("body"), status=int(frame.get("status") or 200))
 
     @staticmethod
@@ -2322,6 +2336,31 @@ class Relay:
             self._bg_tasks.add(task)
             task.add_done_callback(self._bg_tasks.discard)
 
+    async def _shutdown(self, _app: Optional[web.Application] = None) -> None:
+        """停机:用 1012(service restart)关掉所有 Mac 通道,再落盘排队和在线快照。
+        Mac 收到 1012 立刻重连;它们的处理协程随之收尾,手机挂着的 SSE 流收到
+        stream_close 去重连。不关的话 aiohttp 会一直等到 shutdown_timeout。"""
+        sockets = list(self._agent_sockets)
+        if sockets:
+            log(f"[relay] shutting down: closing {len(sockets)} machine socket(s)")
+
+            async def close(ws: web.WebSocketResponse) -> None:
+                try:
+                    await asyncio.wait_for(
+                        ws.close(code=WSCloseCode.SERVICE_RESTART, message=b"service restart"),
+                        SHUTDOWN_WS_CLOSE_S)
+                except Exception:  # noqa: BLE001
+                    pass
+
+            await asyncio.gather(*(close(ws) for ws in sockets))
+            # 让各连接的 finally 跑完(注销机器、了结请求和流),快照才是「没人在线」。
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + SHUTDOWN_WS_CLOSE_S
+            while (self._agent_sockets or self.machines) and loop.time() < deadline:
+                await asyncio.sleep(0.01)
+        self._persist_queue()
+        self._write_status()
+
     # -- wiring ---------------------------------------------------------------
 
     def build_app(self) -> web.Application:
@@ -2331,6 +2370,7 @@ class Relay:
             # 重启后先写一份「没人在线」的快照:否则巡检读到的是重启前的旧在线表,会误判通过。
             self._write_status()
         app.on_startup.append(write_status_on_start)
+        app.on_shutdown.append(self._shutdown)
         app.router.add_get("/relay/health", self.health)
         app.router.add_get("/relay/agent", self.agent_ws)
         app.router.add_get("/relay/api/machines", self.list_machines)
@@ -2374,13 +2414,14 @@ def main(argv: Optional[list] = None) -> int:
     args = parser.parse_args(argv)
     key = os.getenv("RELAY_KEY", "").strip()
     if len(key) < 16:
-        print("RELAY_KEY is required and must be at least 16 characters.", flush=True)
+        log("RELAY_KEY is required and must be at least 16 characters.")
         return 2
     extra = [k.strip() for k in os.getenv("RELAY_KEYS", "").split(":") if k.strip()]
     rejected_log = os.path.expanduser("~/.leoagent/relay-rejected.log")
     relay = Relay(key=key, extra_keys=extra, rejected_log=rejected_log)
-    print(f"LeoAgent relay {VERSION} on http://{args.host}:{args.port}", flush=True)
-    web.run_app(relay.build_app(), host=args.host, port=args.port, print=None)
+    log(f"LeoAgent relay {VERSION} on http://{args.host}:{args.port}")
+    web.run_app(relay.build_app(), host=args.host, port=args.port, print=None,
+                shutdown_timeout=SHUTDOWN_TIMEOUT_S)
     return 0
 
 
