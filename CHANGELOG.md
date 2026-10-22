@@ -1,5 +1,10 @@
 # LeoPhoneAgent 更新记录
 
+## Mac 1.15.1 - 2026-10-22
+
+- 修复：1.15.0 启动时藏宝阁 / 第二大脑 / 屏幕三个 MCP 登记并发读改写同一份 `~/.leophoneagent/cli/config.json`，藏宝阁迁到共享 HTTP 端点那次写入被覆盖回已删除的 stdio 脚本，藏宝阁工具不可用。改为串行登记；Studio / mini / MBP 实机确认 `leo-treasury` / `leo-brain` 均为 http，tools/list 分别 4 / 9 个工具。
+- 发版闸门：`RepositoryEntryPointAudit.py`（README 版本徽章等入口一致性）加到 `leo:bundle:mac` 链首，以前只在 CI 跑，本地发版漏改 README 拦不住。
+
 ## Mac 1.15.0 · iOS 1.80.0 (186) · 中继 0.2.3 · 复审修复 + CI 恢复 + 定时任务补强 + 内存 + 画像 - 2026-10-22
 
 - 依据：`~/Desktop/LeoBot_复审与下一阶段计划_20261022.html`（A–G）。
