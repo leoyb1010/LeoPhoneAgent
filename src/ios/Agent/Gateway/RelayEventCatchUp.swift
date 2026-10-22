@@ -51,7 +51,8 @@ final class RelayEventCatchUp: ObservableObject {
         NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification,
             object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in await self?.catchUp() }
+            // [up-perf-ios] 首帧之后再对账:didBecomeActive 里起的 Task 会排在回前台那一帧前面。
+            LeoPerf.afterNextFrame { Task { @MainActor in await self?.catchUp() } }
         }
     }
 

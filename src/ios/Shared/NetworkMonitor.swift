@@ -143,7 +143,10 @@ final class NetworkMonitor {
         if direct {
             logger.info("[Proxy] (\(reason)) direct — no system proxy, probe=\(probeTypes) exceptions=\((exceptions ?? []).count)")
         } else {
-            logger.info(summary)
+            // [up-perf-ios] 走代理时(真机常态:本地 VPN 代理 127.0.0.1:1082)也只留这一行:主机、端口、
+            // 例外和探测结果都在里面。原来另外两行里 extra keys 是一个多行字典(__SCOPED__ 每个网卡一段),
+            // 一次就是 33 行,占了启动那一秒 84 行里的 34 行。整份原始字典留在 .verbose。
+            logger.info("\(summary) probe=\(probeTypes)")
         }
 
         // Also dump every other key CFNetwork hands back so we don't miss
@@ -158,12 +161,9 @@ final class NetworkMonitor {
         let extras = dict.filter { !knownKeys.contains($0.key) }
         if direct {
             logger.verbose(summary)
-            if !extras.isEmpty { logger.verbose("[Proxy] dump (\(reason)) extra keys: \(extras)") }
-            logger.verbose("[Proxy] dump (\(reason)) CFNetworkCopyProxiesForURL(api.anthropic.com)=\(probe)")
-        } else {
-            if !extras.isEmpty { logger.info("[Proxy] dump (\(reason)) extra keys: \(extras)") }
-            logger.info("[Proxy] dump (\(reason)) CFNetworkCopyProxiesForURL(api.anthropic.com)=\(probe)")
         }
+        if !extras.isEmpty { logger.verbose("[Proxy] dump (\(reason)) extra keys: \(extras)") }
+        logger.verbose("[Proxy] dump (\(reason)) CFNetworkCopyProxiesForURL(api.anthropic.com)=\(probe)")
     }
 
     private func activeInterfaceTypes(_ path: NWPath) -> Set<NWInterface.InterfaceType> {

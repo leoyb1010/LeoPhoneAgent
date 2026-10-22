@@ -64,10 +64,13 @@ final class HarnessLiveActivityBridge {
         NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification,
             object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                self.refresh()
-                if !self.detached.isEmpty { await self.pollDetached() }
+            // [up-perf-ios] 首帧之后再刷 Live Activity:didBecomeActive 里起的 Task 会排在回前台那一帧前面。
+            LeoPerf.afterNextFrame {
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.refresh()
+                    if !self.detached.isEmpty { await self.pollDetached() }
+                }
             }
         }
         rowsWatch = MacLiveSessionsStore.shared.$rows

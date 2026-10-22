@@ -56,26 +56,39 @@ enum LeoPerf {
         HangCounter.shared.start(active: launchActive)
         let center = NotificationCenter.default
         center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
-            LeoPerf.lock.lock(); LeoPerf.wasInBackground = true; LeoPerf.backgroundEpoch += 1; LeoPerf.lock.unlock()
+            LeoPerf.lock.lock()
+            LeoPerf.wasInBackground = true; LeoPerf.backgroundEpoch += 1; LeoPerf.settleAnchor = nil
+            LeoPerf.lock.unlock()
+            ForegroundFrameMeter.shared.stop()
+            // 回前台后没等到 active 就又退回后台时,不会再有 willResignActive 把它关掉。
+            HangCounter.shared.setActive(false)
         }
         center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
             // 只量真正从后台回来的;冷启动时系统也会发这条通知,那段算在 cold 里。
+            let now = CACurrentMediaTime()
             LeoPerf.lock.lock()
             let returning = LeoPerf.wasInBackground
-            if returning { LeoPerf.foregroundAt = CACurrentMediaTime() }
+            if returning { LeoPerf.foregroundAt = now; LeoPerf.settleAnchor = now }
             LeoPerf.wasInBackground = false
             LeoPerf.lock.unlock()
-            if returning { LeoPerf.fgLedger.beginForeground() }
+            guard returning else { return }
+            LeoPerf.fgLedger.beginForeground()
+            // [up-perf-ios] 回前台的画面从这一刻起就在屏幕上(系统转场里),主线程卡顿用户看得见;
+            // 以前要等 didBecomeActive 才开始计卡顿,这一段里卡多久都记不到。
+            HangCounter.shared.setActive(true)
+            ForegroundFrameMeter.shared.begin(at: now)
         }
         center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
             HangCounter.shared.setActive(true)
+            ForegroundFrameMeter.shared.markActive(at: CACurrentMediaTime())
             LeoPerf.lock.lock(); let began = LeoPerf.foregroundAt; LeoPerf.foregroundAt = nil; LeoPerf.lock.unlock()
             guard let began else { return }
             // 等 active 回调都跑完,再等下一帧真正画出来。
             DispatchQueue.main.async {
                 FirstFrameProbe.once {
                     let ms = (CACurrentMediaTime() - began) * 1000
-                    LeoPerf.record("fg.frame", ms: ms)
+                    // `ms` 的定义不变(门禁读它);`first` / `active` / `stall` 拆开系统转场和主线程占用。
+                    LeoPerf.record("fg.frame", ms: ms, extra: ForegroundFrameMeter.shared.finish())
                     LeoPerf.fgLedger.frameRecorded(ms: ms)
                 }
             }
@@ -145,6 +158,59 @@ enum LeoPerf {
     private static var coldDone = false
     private static var foregroundAt: CFTimeInterval?
     private static var wasInBackground = false
+    /// [up-perf-ios] 这一次回前台(willEnterForeground)的时刻,回后台清掉。`waitForForegroundSettle` 用。
+    private static var settleAnchor: CFTimeInterval?
+
+    // MARK: - 回前台之后再跑的非界面工作
+
+    private final class Once {
+        private var done = false
+        func claim() -> Bool { if done { return false }; done = true; return true }
+    }
+
+    /// [up-perf-ios] 回前台的非界面工作:首帧上屏后再等 `ForegroundSettlePolicy.settleDelay`,
+    /// 用户在滑就再等一会儿(见 `ForegroundSettlePolicy`)。只推迟不丢:首帧回调没来(首帧之前又回了后台)
+    /// 有 `fallbackDelay` 兜底,回到后台则立刻跑。
+    static func afterForegroundSettles(_ action: @escaping @MainActor () -> Void) {
+        let once = Once()
+        let run: @MainActor () -> Void = { if once.claim() { action() } }
+        afterNextFrame { pollSettle(anchor: CACurrentMediaTime(), run) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + ForegroundSettlePolicy.fallbackDelay) {
+            MainActor.assumeIsolated { run() }
+        }
+    }
+
+    @MainActor private static func pollSettle(anchor: CFTimeInterval, _ run: @escaping @MainActor () -> Void) {
+        let decision = ForegroundSettlePolicy.decide(sinceAnchor: CACurrentMediaTime() - anchor,
+                                                     scrolling: ScrollHitchMeter.shared.isScrolling,
+                                                     inForeground: UIApplication.shared.applicationState != .background)
+        switch decision {
+        case .run:
+            run()
+        case .wait(let seconds):
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                MainActor.assumeIsolated { pollSettle(anchor: anchor, run) }
+            }
+        }
+    }
+
+    /// [up-perf-ios] 给自带定时器的工作用(例如 iCloud 近期拉取定时器:进程从挂起恢复时它立刻补触发,
+    /// 正好撞在回前台那一帧上)。不在回前台窗口里、或已经在后台:直接返回。
+    /// `resumeGrace`:从挂起恢复时定时器会比 willEnterForeground 先到主线程(真机日志里
+    /// `recentFetchTimer fired` 排在 `→ Inactive` 前面),这时还认不出是在回前台;不在 active 就先等这么久再判断。
+    @MainActor static func waitForForegroundSettle(resumeGrace: TimeInterval = 0) async {
+        if resumeGrace > 0, UIApplication.shared.applicationState != .active {
+            try? await Task.sleep(nanoseconds: UInt64(resumeGrace * 1_000_000_000))
+        }
+        while true {
+            lock.lock(); let anchor = settleAnchor; lock.unlock()
+            let decision = ForegroundSettlePolicy.decide(sinceAnchor: anchor.map { CACurrentMediaTime() - $0 },
+                                                         scrolling: ScrollHitchMeter.shared.isScrolling,
+                                                         inForeground: UIApplication.shared.applicationState != .background)
+            guard case .wait(let seconds) = decision else { return }
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        }
+    }
 
     // MARK: - 后台拉起判定
 
@@ -421,6 +487,51 @@ private final class FirstFrameProbe: NSObject {
     }
 }
 
+// MARK: - 回前台帧时间线
+
+/// [up-perf-ios] willEnterForeground 起每帧记一次(见 `ForegroundFrameTimeline`),`fg.frame` 记录时收尾。
+/// 只在主线程用;最多跑 10 s,回后台即停,不会留下一个常驻的 display link。
+private final class ForegroundFrameMeter: NSObject {
+    static let shared = ForegroundFrameMeter()
+
+    private var link: CADisplayLink?
+    private var timeline: ForegroundFrameTimeline?
+    private var deadline: CFTimeInterval = 0
+
+    func begin(at start: CFTimeInterval) {
+        stop()
+        timeline = ForegroundFrameTimeline(start: start)
+        deadline = start + 10
+        let l = CADisplayLink(target: self, selector: #selector(tick))
+        l.add(to: .main, forMode: .common)
+        link = l
+    }
+
+    func markActive(at t: CFTimeInterval) {
+        timeline?.markActive(t)
+    }
+
+    /// 取字段并停表;没在量时返回空。
+    func finish() -> [String: Any] {
+        let fields = timeline?.fields ?? [:]
+        stop()
+        return fields
+    }
+
+    func stop() {
+        link?.invalidate()
+        link = nil
+        timeline = nil
+    }
+
+    // 用回调真正跑起来的时刻,而不是 vsync 时刻:要量的是主线程什么时候空出来。
+    @objc private func tick() {
+        let now = CACurrentMediaTime()
+        timeline?.tick(now)
+        if now > deadline { stop() }
+    }
+}
+
 // MARK: - 滚动 hitch
 
 /// 手指拖动到减速停下之间,统计超出帧间隔的时间;hitch ratio = hitch 毫秒 / 滚动秒数。
@@ -432,6 +543,9 @@ final class ScrollHitchMeter: NSObject {
     private var began: CFTimeInterval = 0
     private var hitchSeconds: Double = 0
     private var frames = 0
+
+    /// 手指拖动到减速停下之间为 true(主线程读)。回前台的非界面工作据此让开用户的滑动。
+    var isScrolling: Bool { link != nil }
 
     func begin() {
         guard link == nil else { return }

@@ -30,6 +30,38 @@ enum ForegroundWorkPolicy {
     }
 }
 
+/// [up-perf-ios] 回前台之后的非界面工作(同步拉取 / 入站 apply、角标对账、小组件与 Spotlight、技能重载……)
+/// 什么时候跑。
+///
+/// 真机 perf.jsonl:回前台(或冷启动)5 s 内开始的滚动 hitch 均值 36.5 ms/s、p90 81.6(n=47),
+/// 其余时段均值 12–17、p90 34–52;同一份日志里回前台 1 s 内就有 75 条入站记录在主 actor 上 apply。
+/// 这些工作首帧不需要,用户回来的第一下滑动也不需要:首帧之后再等 `settleDelay`,
+/// 用户正在滑就继续等(最多 `maxScrollWait`),然后照常跑。只推迟,不丢:回到后台就立刻跑。
+enum ForegroundSettlePolicy {
+    static let settleDelay: TimeInterval = 1.5
+    static let maxScrollWait: TimeInterval = 3
+    static let pollInterval: TimeInterval = 0.25
+    /// 兜底:首帧回调没来(首帧之前又回了后台,display link 不会再触发)也一定跑。
+    static var fallbackDelay: TimeInterval { settleDelay + maxScrollWait + 0.5 }
+
+    enum Decision: Equatable {
+        case run
+        case wait(TimeInterval)
+    }
+
+    /// - Parameters:
+    ///   - sinceAnchor: 距首帧(或回前台)过了多少秒;nil = 不在回前台的窗口里。
+    ///   - scrolling: 用户正在拖动 / 列表在减速。
+    ///   - inForeground: App 还在前台。
+    static func decide(sinceAnchor: TimeInterval?, scrolling: Bool, inForeground: Bool) -> Decision {
+        guard inForeground, let since = sinceAnchor, since >= 0 else { return .run }
+        if since < settleDelay { return .wait(settleDelay - since) }
+        let deadline = settleDelay + maxScrollWait
+        if scrolling, since < deadline { return .wait(min(pollInterval, deadline - since)) }
+        return .run
+    }
+}
+
 /// Admits an action at most once per `interval`.
 struct IntervalGate {
     let interval: TimeInterval

@@ -68,3 +68,44 @@ final class FgStepLedger: @unchecked Sendable {
         sink(frame, Dictionary(uniqueKeysWithValues: slowest.map { ($0.key, ($0.value * 10).rounded() / 10) }))
     }
 }
+
+/// [up-perf-ios] 回前台这一段的帧时间线,给 `fg.frame` 补三个字段(`ms` 本身的定义不变)。
+///
+/// 真机日志(1.77.6,10-22 的三次回前台)里,willEnterForeground 里用 `afterNextFrame` 排的回调
+/// (`retracted orphaned … caller=foreground`)都打在 `→ Active` 之前:App 的第一帧在 didBecomeActive
+/// 之前就已经上屏了。`fg.frame` 量的是 willEnterForeground → didBecomeActive 之后的那一帧,
+/// 它把系统转场(解锁 / 切换器动画,App 管不了)和 App 自己占着主线程的时间混在一起;
+/// 8 条慢样本的 `fg.steps` 里所有前台步骤加起来都不到 4 ms,光靠它分不出是哪一种。
+/// - `first`:willEnterForeground → 第一帧(用户真正看到画面)
+/// - `active`:willEnterForeground → didBecomeActive(系统转场 + 主线程排队)
+/// - `stall`:这一段里主线程最长的一次空档(开始到第一帧,或两帧之间);主线程空闲时约等于一帧
+struct ForegroundFrameTimeline {
+    let start: Double
+    private(set) var firstFrameAt: Double?
+    private(set) var activeAt: Double?
+    private(set) var maxGap: Double = 0
+    private var lastTick: Double?
+
+    init(start: Double) { self.start = start }
+
+    mutating func tick(_ t: Double) {
+        let gap = t - (lastTick ?? start)
+        if gap > maxGap { maxGap = gap }
+        if firstFrameAt == nil { firstFrameAt = t }
+        lastTick = t
+    }
+
+    mutating func markActive(_ t: Double) {
+        if activeAt == nil { activeAt = t }
+    }
+
+    /// 毫秒,保留一位小数;没量到的字段不写。
+    var fields: [String: Double] {
+        func ms(_ seconds: Double) -> Double { (seconds * 10_000).rounded() / 10 }
+        var out: [String: Double] = [:]
+        if let firstFrameAt { out["first"] = ms(firstFrameAt - start) }
+        if let activeAt { out["active"] = ms(activeAt - start) }
+        if lastTick != nil { out["stall"] = ms(maxGap) }
+        return out
+    }
+}
