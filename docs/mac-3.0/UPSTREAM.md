@@ -307,3 +307,5 @@ Peekaboo(`leo/bin`)/ leo-speech / 菜单栏模板图标三类 extraResources;`le
 | 根 `package.json` `leo:bundle:mac` | `ZCODE_AUTO_UPDATE=0`:自动更新轮询关闭(机队改由 `scripts/leo-deploy-mac.sh` 推送;`leo:finalize:mac` 生成 manifest / latest-mac.yml 不受影响) |
 | `packages/desktop/src/main/autoUpdater.ts` | `refreshAutoUpdaterReleaseChannel`、`requestAutoUpdateCheckWithoutWindow` 在构建期关闭自动更新时直接返回(上游这两处不看 `autoUpdaterDisabledForProductFlavor`,设置同步切通道会拿未配置的 updater 发请求) |
 | `packages/services/src/zcode-agent/zcodeAgentService.ts` | `getClient` / `getReadOnlyClient` 拆出 `*Unnoted` 内层,外层与 `prepareStorage`、`resolveAccountRequestAuth` 拿到 client 时调 `leoMainLaneIdleRecycler.noteClientAcquired`(拿到 client 到首个请求之间不被空闲回收) |
+| `packages/desktop/electron-builder.config.js` | extraResources 去掉 `leo/treasury-mcp.mjs`、`leo/brain-mcp.mjs`(两个 stdio 脚本已删,藏宝阁 / 第二大脑改为 Host 本机 HTTP MCP 端点 `/api/leo/{treasury,brain}/mcp`,见 `docs/specs/leo-brain-mcp.md`) |
+| `packages/services/src/runtime-tools/agentProxyEnv.ts`、`services/test/agentProxyEnv.test.ts` | `buildAgentRuntimeEnv`:设了代理时 `NO_PROXY` / `ZCODE_NO_PROXY` 自动补 `localhost,127.0.0.1,::1`(CLI http 层只按 ZCODE_NO_PROXY 绕过,不会自己放过回环;Host 的 MCP 端点与订阅模型代理都在 127.0.0.1) |

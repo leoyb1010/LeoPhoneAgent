@@ -81,9 +81,10 @@ describe("buildAgentRuntimeEnv", () => {
       HTTPS_PROXY: "http://127.0.0.1:7890",
       ALL_PROXY: "http://127.0.0.1:7890",
       ZCODE_HTTP_PROXY: "http://127.0.0.1:7890",
-      NO_PROXY: "localhost,127.0.0.1",
-      no_proxy: "localhost,127.0.0.1",
-      ZCODE_NO_PROXY: "localhost,127.0.0.1",
+      // [leo] 设了代理时自动补上回环地址(已有的不重复)。
+      NO_PROXY: "localhost,127.0.0.1,::1",
+      no_proxy: "localhost,127.0.0.1,::1",
+      ZCODE_NO_PROXY: "localhost,127.0.0.1,::1",
       NODE_EXTRA_CA_CERTS: "/tmp/root-ca.pem",
       ZCODE_AGENT_CA_CERT: "/tmp/root-ca.pem",
     });
@@ -95,7 +96,22 @@ describe("buildAgentRuntimeEnv", () => {
       HTTPS_PROXY: "http://127.0.0.1:7890",
       ALL_PROXY: "http://127.0.0.1:7890",
       ZCODE_HTTP_PROXY: "http://127.0.0.1:7890",
+      // [leo] 回环地址恒直连(Host 本机 MCP / 模型代理)。
+      NO_PROXY: "localhost,127.0.0.1,::1",
+      no_proxy: "localhost,127.0.0.1,::1",
+      ZCODE_NO_PROXY: "localhost,127.0.0.1,::1",
     });
+  });
+
+  it("[leo] keeps the user's bypass rules first and adds no loopback rule without a proxy", () => {
+    expect(
+      buildAgentRuntimeEnv({ httpProxy: "http://proxy:8080", noProxy: ".corp, LOCALHOST" })
+        .ZCODE_NO_PROXY,
+    ).toBe(".corp,LOCALHOST,127.0.0.1,::1");
+    expect(buildAgentRuntimeEnv({ httpProxy: undefined, noProxy: ".corp" }).ZCODE_NO_PROXY).toBe(
+      ".corp",
+    );
+    expect(buildAgentRuntimeEnv({ httpProxy: undefined }).ZCODE_NO_PROXY).toBeUndefined();
   });
 
   it("injects the configured CA even without a proxy", () => {

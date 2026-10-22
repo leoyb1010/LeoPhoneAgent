@@ -39,6 +39,7 @@ import {
   screenSettingsBody,
   updateScreenSettings,
 } from "./link/screen/hostCapture.js";
+import { handleMcpHttpRequest, leoMcpEndpoints, type McpHttpServer } from "./mcpHttpEndpoint.js";
 import { executeTreasuryTool, TREASURY_TOOLS } from "./treasuryTools.js";
 import type { TreasuryStore } from "./treasuryStore.js";
 
@@ -137,7 +138,7 @@ export function readJsonBody(
 /**
  * [leo] 本机接口。只监听 127.0.0.1。三把钥匙,各管一段:
  * - 主钥匙 `~/.leoagent/key`:订阅模型代理、连接状态、藏宝阁(桌面设置页、本机 Agent 用);
- * - 藏宝阁钥匙 `~/.leoagent/treasury.key`:只能调藏宝阁,写进 `~/.agents/mcp.json` 的是它;
+ * - 藏宝阁钥匙 `~/.leoagent/treasury.key`:只能调藏宝阁与第二大脑的 MCP 端点,写进 CLI MCP 配置的是它;
  * - 出配对码口令:只在主进程与 Host 的内存里,每次启动都换。
  */
 export function startLeoHttpApi(deps: {
@@ -153,12 +154,16 @@ export function startLeoHttpApi(deps: {
   quick?: LeoQuickEntry;
   /** [WP-27] 并行任务组(worktree 隔离、对比、采纳、清理);同样只有主进程能调。 */
   groups?: LeoTaskGroups;
+  /** 测试注入;默认读 `~/.config/leo-brain/leobot-mac.key`、连默认网关。 */
+  brainMcp?: McpHttpServer;
 }): Server {
   const isMainKey = secretMatcher(`Bearer ${leoLocalKey()}`);
   const isTreasuryKey = secretMatcher(`Bearer ${leoTreasuryKey()}`);
   const isPairSecret = secretMatcher(leoPairSecret());
   // 口令为空(不是主进程拉起的 Host)时 secretMatcher 一律不认:登录页接口整体关闭。
   const isUiSecret = secretMatcher(leoUiSecret());
+  // [up-d-mac] 藏宝阁 / 第二大脑的共享 MCP 端点:所有 workspace 的 CLI 连这里,不再各起 stdio 子进程。
+  const mcpEndpoints = leoMcpEndpoints(deps.store, deps.brainMcp);
 
   const json = (res: ServerResponse, status: number, payload: unknown): void => {
     if (res.headersSent) {
@@ -277,11 +282,14 @@ export function startLeoHttpApi(deps: {
       );
       return;
     }
-    const treasuryPath = url.pathname.startsWith("/api/leo/treasury/");
-    if (!isMainKey(authorization) && !(treasuryPath && isTreasuryKey(authorization))) {
+    // 藏宝阁钥匙(写在 CLI MCP 配置里,所有 agent 都读得到)只开藏宝阁与第二大脑 MCP 这两段。
+    const mcp = mcpEndpoints.get(url.pathname);
+    const treasuryKeyPath = url.pathname.startsWith("/api/leo/treasury/") || mcp !== undefined;
+    if (!isMainKey(authorization) && !(treasuryKeyPath && isTreasuryKey(authorization))) {
       json(res, 401, { error: "unauthorized" });
       return;
     }
+    if (mcp) return handleMcpHttpRequest(mcp, req, res);
 
     if (url.pathname === "/api/leo/treasury/tools" && req.method === "GET") {
       json(res, 200, { tools: TREASURY_TOOLS });

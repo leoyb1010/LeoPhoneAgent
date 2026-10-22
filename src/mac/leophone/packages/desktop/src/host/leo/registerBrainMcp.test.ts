@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
-import { registerBrainMcpServer, resolveBrainScriptPath } from "./registerBrainMcp.js";
+import { leoTreasuryKey, LEO_HTTP_PORT } from "./leoPaths.js";
+import { registerBrainMcpServer } from "./registerBrainMcp.js";
 
-const desktop = resolve(fileURLToPath(import.meta.url), "../../../..");
-const script = resolve(desktop, "leo/brain-mcp.mjs");
 const logger = { info: () => {}, warn: () => {} };
+const endpoint = {
+  type: "http",
+  url: `http://127.0.0.1:${LEO_HTTP_PORT}/api/leo/brain/mcp`,
+  headers: { Authorization: `Bearer ${leoTreasuryKey()}` },
+};
 
 function withKeyFile(run: (keyFile: string) => Promise<void>) {
   return async () => {
@@ -41,17 +44,11 @@ function fakeSync(servers: unknown[]) {
   return { sync, saved };
 }
 
-test("brain MCP script is found from both the source tree and the bundled out/host", () => {
-  assert.ok(existsSync(script));
-  assert.equal(resolveBrainScriptPath(resolve(desktop, "src/host/leo")), script);
-  assert.equal(resolveBrainScriptPath(resolve(desktop, "out/host")), script);
-});
-
 test(
-  "leo-brain is registered in the CLI user config with the key file path, never the key",
+  "leo-brain is registered as the host HTTP endpoint; the brain key never enters the config",
   withKeyFile(async (keyFile) => {
     const { sync, saved } = fakeSync([]);
-    assert.equal(await registerBrainMcpServer(sync, logger, { script, keyFile }), "registered");
+    assert.equal(await registerBrainMcpServer(sync, logger, { keyFile }), "registered");
     assert.deepEqual(
       saved.map((payload) => payload.action),
       ["upsert"],
@@ -59,15 +56,13 @@ test(
     const upsert = saved[0]!;
     assert.equal(upsert.source, "zcodeagentmcp");
     assert.equal(upsert.name, "leo-brain");
-    assert.equal(upsert.config.command, process.execPath);
-    assert.deepEqual(upsert.config.args, [script]);
-    assert.deepEqual(upsert.config.env, { ELECTRON_RUN_AS_NODE: "1", LEO_BRAIN_KEY_FILE: keyFile });
+    assert.deepEqual(upsert.config, endpoint);
     assert.ok(!JSON.stringify(upsert).includes("test-key"));
   }),
 );
 
 test(
-  "leo-brain is left alone when already registered with the same command, args and env",
+  "leo-brain is left alone when already on the HTTP endpoint",
   withKeyFile(async (keyFile) => {
     const { sync, saved } = fakeSync([
       {
@@ -76,14 +71,10 @@ test(
         location: { source: "zcode", scope: "user", directoryPath: "/h/.leophoneagent/cli" },
         name: "leo-brain",
         enabled: true,
-        config: {
-          command: process.execPath,
-          args: [script],
-          env: { ELECTRON_RUN_AS_NODE: "1", LEO_BRAIN_KEY_FILE: keyFile },
-        },
+        config: endpoint,
       },
     ]);
-    assert.equal(await registerBrainMcpServer(sync, logger, { script, keyFile }), "unchanged");
+    assert.equal(await registerBrainMcpServer(sync, logger, { keyFile }), "unchanged");
     assert.equal(saved.length, 0);
   }),
 );
@@ -91,12 +82,12 @@ test(
 test("leo-brain is skipped on a Mac without a provisioned key file", async () => {
   const { sync, saved } = fakeSync([]);
   const keyFile = resolve(tmpdir(), "leo-brain-missing", "leobot-mac.key");
-  assert.equal(await registerBrainMcpServer(sync, logger, { script, keyFile }), "no-key");
+  assert.equal(await registerBrainMcpServer(sync, logger, { keyFile }), "no-key");
   assert.equal(saved.length, 0);
 });
 
 test(
-  "leo-brain keeps a user's disable and extra env when the app path changes",
+  "[up-d-mac] an old stdio leo-brain entry is migrated and a user's disable is kept",
   withKeyFile(async (keyFile) => {
     const { sync, saved } = fakeSync([
       {
@@ -108,20 +99,17 @@ test(
         config: {
           command: "/old/LeoBot",
           args: ["/old/brain-mcp.mjs"],
-          env: { LEO_BRAIN_URL: "https://example.test" },
+          env: { LEO_BRAIN_KEY_FILE: keyFile },
+          enabled: false,
         },
       },
     ]);
-    assert.equal(await registerBrainMcpServer(sync, logger, { script, keyFile }), "registered");
+    assert.equal(await registerBrainMcpServer(sync, logger, { keyFile }), "registered");
     assert.deepEqual(
       saved.map((payload) => payload.action),
       ["upsert", "set-enabled"],
     );
+    assert.deepEqual(saved[0]!.config, endpoint);
     assert.equal(saved[1]!.enabled, false);
-    assert.deepEqual(saved[0]!.config.env, {
-      LEO_BRAIN_URL: "https://example.test",
-      ELECTRON_RUN_AS_NODE: "1",
-      LEO_BRAIN_KEY_FILE: keyFile,
-    });
   }),
 );

@@ -1,53 +1,72 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import test from "node:test";
 
-import { resolveScriptPath } from "./registerTreasuryMcp.js";
+import { leoTreasuryKey, LEO_HTTP_PORT } from "./leoPaths.js";
+import { registerTreasuryMcpServer } from "./registerTreasuryMcp.js";
 
-const desktop = resolve(fileURLToPath(import.meta.url), "../../../..");
+const logger = { info: () => {}, warn: () => {} };
 
-test("treasury MCP script is found from both the source tree and the bundled out/host", () => {
-  const expected = resolve(desktop, "leo/treasury-mcp.mjs");
-  assert.ok(existsSync(expected));
-  assert.equal(resolveScriptPath(resolve(desktop, "src/host/leo")), expected);
-  // tsup 把 host 打成 out/host/index.js:以前从这里解析到 packages/leo/…,藏宝阁 MCP 在开发态从不登记。
-  assert.equal(resolveScriptPath(resolve(desktop, "out/host")), expected);
-});
-
-test("[wp-61] treasury MCP goes to the CLI user config (what 3.15.1 sessions read), keeps a user's disable", async () => {
-  const { registerTreasuryMcpServer } = await import("./registerTreasuryMcp.js");
-  const saved: unknown[] = [];
-  const logger = { info: () => {}, warn: () => {} };
-  const script = resolve(desktop, "leo/treasury-mcp.mjs");
+function fakeSync(servers: unknown[]) {
+  const saved: Array<{ action: string; source?: string; name?: string; config?: any; enabled?: boolean }> = [];
   const sync = {
-    loadMcpFromUserDirectory: async () => ({
-      servers: [
-        {
-          source: "zcodeagentmcp",
-          scope: "user",
-          location: { source: "zcode", scope: "user", directoryPath: "/h/.leophoneagent/cli" },
-          name: "leo-treasury",
-          enabled: false,
-          config: { command: "/old/electron", args: ["/old/treasury-mcp.mjs"] },
-        },
-      ],
-    }),
+    loadMcpFromUserDirectory: async () => ({ servers }),
     saveMcpToUserDirectory: async (payload: unknown) => {
-      saved.push(payload);
+      saved.push(payload as (typeof saved)[number]);
     },
   } as never;
-  assert.equal(await registerTreasuryMcpServer(sync, logger, script), "registered");
+  return { sync, saved };
+}
+
+test("[up-d-mac] an old stdio leo-treasury entry is replaced by the shared host HTTP endpoint; a user's disable survives", async () => {
+  const { sync, saved } = fakeSync([
+    {
+      source: "zcodeagentmcp",
+      scope: "user",
+      location: { source: "zcode", scope: "user", directoryPath: "/h/.leophoneagent/cli" },
+      name: "leo-treasury",
+      enabled: false,
+      config: {
+        command: "/old/electron",
+        args: ["/old/treasury-mcp.mjs"],
+        env: { ELECTRON_RUN_AS_NODE: "1", LEOAGENT_KEY: "k" },
+        enabled: false,
+      },
+    },
+  ]);
+  assert.equal(await registerTreasuryMcpServer(sync, logger), "registered");
   assert.deepEqual(
-    saved.map((payload) => (payload as { action: string }).action),
+    saved.map((payload) => payload.action),
     ["upsert", "set-enabled"],
   );
-  const upsert = saved[0] as { source: string; name: string; config: { args: string[]; env: Record<string, string> } };
+  const upsert = saved[0]!;
   assert.equal(upsert.source, "zcodeagentmcp");
   assert.equal(upsert.name, "leo-treasury");
-  assert.deepEqual(upsert.config.args, [script]);
-  assert.equal(upsert.config.env["ELECTRON_RUN_AS_NODE"], "1");
+  // strict schema:http 条目不能夹带 command / args / env。
+  assert.deepEqual(upsert.config, {
+    type: "http",
+    url: `http://127.0.0.1:${LEO_HTTP_PORT}/api/leo/treasury/mcp`,
+    headers: { Authorization: `Bearer ${leoTreasuryKey()}` },
+  });
+  assert.equal(saved[1]!.enabled, false);
+});
+
+test("[up-d-mac] leo-treasury already on the HTTP endpoint is left alone", async () => {
+  const { sync, saved } = fakeSync([
+    {
+      source: "zcodeagentmcp",
+      scope: "user",
+      name: "leo-treasury",
+      enabled: true,
+      config: {
+        type: "http",
+        url: `http://127.0.0.1:${LEO_HTTP_PORT}/api/leo/treasury/mcp`,
+        headers: { Authorization: `Bearer ${leoTreasuryKey()}` },
+      },
+    },
+  ]);
+  assert.equal(await registerTreasuryMcpServer(sync, logger), "unchanged");
+  assert.equal(saved.length, 0);
 });
 
 test("[wp-61] legacy ~/.agents entry is removed only when it is ours", async () => {

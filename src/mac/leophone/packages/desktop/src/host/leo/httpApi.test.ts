@@ -166,6 +166,18 @@ test("treasury key only opens the treasury, and is what mcp.json gets", async ()
   assert.equal(readFileSync(path.join(home, "treasury.key"), "utf8").trim(), leoTreasuryKey());
 });
 
+test("[up-d-mac] the treasury key opens the shared treasury / brain MCP endpoints and nothing else", async () => {
+  const treasury = { authorization: `Bearer ${leoTreasuryKey()}`, "content-type": "application/json" };
+  const ping = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" });
+  for (const endpoint of ["/api/leo/treasury/mcp", "/api/leo/brain/mcp"]) {
+    const res = await call("POST", endpoint, treasury, ping);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { jsonrpc: "2.0", id: 1, result: {} });
+    assert.equal((await call("POST", endpoint, { "content-type": "application/json" }, ping)).status, 401);
+  }
+  assert.equal((await call("POST", "/api/leo/brain/other", treasury, ping)).status, 401);
+});
+
 test("unknown treasury tools are a 404, not a 200 with an error inside", async () => {
   const res = await call("POST", "/api/leo/treasury/call/nope", { authorization: `Bearer ${leoLocalKey()}` }, "{}");
   assert.equal(res.status, 404);
