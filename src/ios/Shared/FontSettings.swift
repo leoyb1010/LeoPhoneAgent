@@ -126,8 +126,26 @@ final class FontSettings: ObservableObject {
     }
 
     /// Scale a font size by the message-base multiplier.
+    /// [output-render] Also follows the system text size (Settings › Display › Text Size and
+    /// the Accessibility larger sizes), which the chat body used to ignore. Capped at 2× so a
+    /// table or a code line stays usable at the largest accessibility sizes.
     func scaledMessage(_ size: CGFloat) -> CGFloat {
-        size * messageBaseScale.multiplier
+        (size * messageBaseScale.multiplier * systemTextScale).rounded(toPlaces: 2)
+    }
+
+    /// System Dynamic Type relative to the default (Large) size, clamped to [0.82, 2]. Read
+    /// from the app-wide setting, not a window's trait override (the in-app "app base"
+    /// slider overrides window traits for UI text; message text has its own slider above).
+    private(set) var systemTextScale: CGFloat = FontSettings.currentSystemTextScale()
+
+    nonisolated static func systemTextScale(for category: UIContentSizeCategory) -> CGFloat {
+        let traits = UITraitCollection(preferredContentSizeCategory: category)
+        let scaled = UIFontMetrics(forTextStyle: .body).scaledValue(for: 17, compatibleWith: traits)
+        return min(2, max(0.82, scaled / 17))
+    }
+
+    private static func currentSystemTextScale() -> CGFloat {
+        systemTextScale(for: UIApplication.shared.preferredContentSizeCategory)
     }
 
     /// Scale a font size by the app-base multiplier.
@@ -144,6 +162,19 @@ final class FontSettings: ObservableObject {
         appBaseScale = FontScaleLevel(rawValue: ud.integer(forKey: Keys.appBase)) ?? .default
         // Defer to after first window is available
         DispatchQueue.main.async { [weak self] in self?.applyAppScaleToAllWindows() }
+        // [output-render] Re-render chat text when the system text size changes.
+        NotificationCenter.default.addObserver(
+            forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let scale = Self.currentSystemTextScale()
+                guard scale != self.systemTextScale else { return }
+                self.objectWillChange.send()
+                self.systemTextScale = scale
+                NotificationCenter.default.post(name: .fontSettingsMessageBaseChanged, object: nil)
+            }
+        }
     }
 
     // MARK: - UIKit global application
@@ -211,5 +242,13 @@ extension View {
     /// Applies the user's App Base font scale to this view hierarchy.
     func appFontScale() -> some View {
         modifier(AppFontScaleModifier())
+    }
+}
+
+private extension CGFloat {
+    /// Keeps scaled font sizes stable as cache keys (no 16.499999 vs 16.5 misses).
+    func rounded(toPlaces places: Int) -> CGFloat {
+        let factor = pow(10, CGFloat(places))
+        return (self * factor).rounded() / factor
     }
 }

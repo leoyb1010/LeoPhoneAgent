@@ -637,6 +637,7 @@
 		E5M000002 /* cmark-gfm-extensions in Frameworks */ = {isa = PBXBuildFile; productRef = E5M000022 /* cmark-gfm-extensions */; };
 		E5M000003 /* MinisMarkdownParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5M000013 /* MinisMarkdownParser.swift */; };
 		LF938B8B4EA3 /* CodeSyntaxFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFBF8A190CA0 /* CodeSyntaxFence.swift */; };
+		LF794F457C55 /* MarkdownStreamPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE45F18789F /* MarkdownStreamPresentation.swift */; };
 		LF9D15E016A3 /* CodeSyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF39422438F /* CodeSyntaxHighlighter.swift */; };
 		LF4958C08C1F /* CodeSyntaxPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFC8E7338DE4 /* CodeSyntaxPalette.swift */; };
 		LF37A50F5EA8 /* CodeSyntaxLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF44566BC585 /* CodeSyntaxLanguages.swift */; };
@@ -951,6 +952,7 @@
 		E5R3HX005T /* MarkdownHardening.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX005F /* MarkdownHardening.swift */; };
 		E5R3HX101T /* MinisMarkdownParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5M000013 /* MinisMarkdownParser.swift */; };
 		LFFDD0926C38 /* CodeSyntaxFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFBF8A190CA0 /* CodeSyntaxFence.swift */; };
+		LF99BAC7EEA7 /* MarkdownStreamPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE45F18789F /* MarkdownStreamPresentation.swift */; };
 		LFBABDF3B87E /* CodeSyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF39422438F /* CodeSyntaxHighlighter.swift */; };
 		LF31A95CD0A6 /* CodeSyntaxPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFC8E7338DE4 /* CodeSyntaxPalette.swift */; };
 		LF0D626BA509 /* CodeSyntaxLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF44566BC585 /* CodeSyntaxLanguages.swift */; };
@@ -1729,6 +1731,7 @@
 		E5LOCK103 /* AppLockOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLockOverlay.swift; sourceTree = "<group>"; };
 		E5M000013 /* MinisMarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinisMarkdownParser.swift; sourceTree = "<group>"; };
 		LFBF8A190CA0 /* CodeSyntaxFence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxFence.swift; sourceTree = "<group>"; };
+		LFE45F18789F /* MarkdownStreamPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownStreamPresentation.swift; sourceTree = "<group>"; };
 		LFF39422438F /* CodeSyntaxHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxHighlighter.swift; sourceTree = "<group>"; };
 		LFC8E7338DE4 /* CodeSyntaxPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxPalette.swift; sourceTree = "<group>"; };
 		LF44566BC585 /* CodeSyntaxLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxLanguages.swift; sourceTree = "<group>"; };
@@ -3108,6 +3111,7 @@
 			children = (
 				E5M000013 /* MinisMarkdownParser.swift */,
 				LFBF8A190CA0 /* CodeSyntaxFence.swift */,
+				LFE45F18789F /* MarkdownStreamPresentation.swift */,
 				LFF39422438F /* CodeSyntaxHighlighter.swift */,
 				LFC8E7338DE4 /* CodeSyntaxPalette.swift */,
 				LF44566BC585 /* CodeSyntaxLanguages.swift */,
@@ -4097,6 +4101,7 @@
 				E5R3HX005T /* MarkdownHardening.swift in Sources */,
 				E5R3HX101T /* MinisMarkdownParser.swift in Sources */,
 				LFFDD0926C38 /* CodeSyntaxFence.swift in Sources */,
+				LF99BAC7EEA7 /* MarkdownStreamPresentation.swift in Sources */,
 				LFBABDF3B87E /* CodeSyntaxHighlighter.swift in Sources */,
 				LF31A95CD0A6 /* CodeSyntaxPalette.swift in Sources */,
 				LF0D626BA509 /* CodeSyntaxLanguages.swift in Sources */,
@@ -4696,6 +4701,7 @@
 				E5K000002 /* ChatTurnScreenshot.swift in Sources */,
 				E5M000003 /* MinisMarkdownParser.swift in Sources */,
 				LF938B8B4EA3 /* CodeSyntaxFence.swift in Sources */,
+				LF794F457C55 /* MarkdownStreamPresentation.swift in Sources */,
 				LF9D15E016A3 /* CodeSyntaxHighlighter.swift in Sources */,
 				LF4958C08C1F /* CodeSyntaxPalette.swift in Sources */,
 				LF37A50F5EA8 /* CodeSyntaxLanguages.swift in Sources */,

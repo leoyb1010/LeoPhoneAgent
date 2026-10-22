@@ -44,15 +44,6 @@ final class TextFadeAnimator {
     /// contributes its trailing-gap unit (~2× the count for the same text).
     private static let maxAnimatedWords = 160
 
-    /// Total stagger window for ONE batch, divided across its words — the key
-    /// to a steady reveal regardless of bursty token arrival (this is exactly
-    /// Microsoft SwiftStreamingMarkdown's `0.1 / wordCount`). A 2-word batch
-    /// staggers 0.05s apart; a 30-word burst staggers ~0.003s apart, so every
-    /// batch finishes in ~`window + duration` (~0.55s) no matter its size. The
-    /// per-batch baseStart is simply `now`, so consecutive batches overlap
-    /// naturally rather than queueing into an ever-growing tail.
-    private static let staggerWindow: CFTimeInterval = 0.10
-
     /// Whether a streamed append should fade at all. Reduce Motion means a
     /// plain cut (not a shorter animation); on iOS 27 the system can also ask
     /// apps to go easy on resources, and a per-frame display link is the first
@@ -61,11 +52,6 @@ final class TextFadeAnimator {
         if UIAccessibility.isReduceMotionEnabled { return false }
         if UIApplication.shared.systemPrefersReducedResourceUsage { return false }
         return true
-    }
-
-    private static func stagger(forWordCount count: Int) -> CFTimeInterval {
-        guard count > 0 else { return 0 }
-        return staggerWindow / CFTimeInterval(count)
     }
 
     // MARK: - State
@@ -87,6 +73,8 @@ final class TextFadeAnimator {
 
     private var words: [FadeWord] = []
     private var displayLink: CADisplayLink?
+    /// [output-render] Spreads each batch over the gap until the next flush (see StreamRevealPacer).
+    private var pacer = StreamRevealPacer()
 
     // MARK: - Init
 
@@ -142,13 +130,14 @@ final class TextFadeAnimator {
         guard !wordRanges.isEmpty, wordRanges.count <= Self.maxAnimatedWords else { return }
 
         let now = CACurrentMediaTime()
-        let step = Self.stagger(forWordCount: wordRanges.count)
-        // Each batch starts its ripple at `now` and overlaps any still-fading
-        // earlier batch — this is what makes the reveal read as a steady,
-        // natural flow rather than a queue that grows a longer and longer tail
-        // the faster tokens arrive (Microsoft SwiftStreamingMarkdown does the
-        // same: baseStartTime = CACurrentMediaTime() per batch).
-        let baseStart = now
+        // [output-render] The batch's ripple is spread over ~85% of the gap since the previous
+        // flush (0.1–0.42 s) rather than a fixed 0.1 s, so a 300–500 ms flush reads as a steady
+        // flow instead of a sentence popping in and then sitting still. Each batch starts after
+        // the previous batch's last word (reading order) but never more than 0.2 s past now,
+        // so a burst cannot queue up a growing tail.
+        let plan = pacer.plan(unitCount: wordRanges.count, now: now)
+        let step = plan.step
+        let baseStart = plan.base
 
         // Batch all alpha-0 writes inside one begin/endEditing so TextKit only
         // posts a single processEditing pass for the whole appended tail.
@@ -180,6 +169,7 @@ final class TextFadeAnimator {
     /// ranges we hold are no longer valid against the rebuilt storage.
     func cancelAll() {
         stopDisplayLink()
+        pacer.reset()
         // Snap any partially-faded words to their final color so nothing is
         // left stuck translucent. Only safe while `storage` still holds the
         // ranges we recorded; on a full replace the caller has already swapped

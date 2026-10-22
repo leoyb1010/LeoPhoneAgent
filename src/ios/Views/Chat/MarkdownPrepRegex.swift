@@ -338,7 +338,19 @@ func strictifyStrikethrough(_ markdown: String) -> String {
 /// As soon as the row completes (`\n` arrives) or the trailing line stops
 /// looking like a table row, this returns `(markdown, "")` and cmark sees
 /// the whole buffer.
+///
+/// [output-render] A line inside a still-open code fence is code, never a table row
+/// (`cat log | grep err`, `a | b` in a TS union, a Rust closure). Splitting it used to pull
+/// the half-written code line OUT of the code box and print it as body text under it, then
+/// snap it back in when the newline arrived — a visible flicker on every piped line. Callers
+/// that already know the fence state pass it in; the convenience overload scans for it.
 func splitStreamingTableTail(_ markdown: String) -> (prefix: String, plainSuffix: String) {
+    guard markdown.contains("|") else { return (markdown, "") }
+    return splitStreamingTableTail(markdown, endsInsideOpenFence: MarkdownFenceTracker.endsInsideOpenFence(markdown))
+}
+
+func splitStreamingTableTail(_ markdown: String, endsInsideOpenFence: Bool) -> (prefix: String, plainSuffix: String) {
+    guard !endsInsideOpenFence else { return (markdown, "") }
     guard markdown.contains("|") else { return (markdown, "") }
     // Only the *last* line is in flight (not yet terminated by `\n`).
     // Earlier rows that have already been terminated stay in `prefix`,

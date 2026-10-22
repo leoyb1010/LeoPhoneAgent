@@ -72,7 +72,17 @@ enum SwiftMathRenderer {
             cgCtx.restoreGState()
         }
 
-        let result = SwiftMathRenderResult(image: image, size: pixelSize)
+        // [output-render] Where the formula's baseline sits in the image, so inline math can sit
+        // ON the text baseline (it was centred on the cap height, which floated `r ≈ 3.2` above
+        // the line and sank fractions). Mirrors MTMathUILabel's own vertical placement:
+        // the display list is centred in the frame, its baseline `descent` above its bottom.
+        label.layoutIfNeeded()
+        var baseline: CGFloat?
+        if let display = label.displayList {
+            let height = max(display.ascent + display.descent, fontSize / 2)
+            baseline = (pixelSize.height - height) / 2 + display.descent
+        }
+        let result = SwiftMathRenderResult(image: image, size: pixelSize, baselineFromBottom: baseline)
         cache.setObject(result, forKey: key)
         return result
     }
@@ -142,7 +152,9 @@ enum SwiftMathRenderer {
         let image = renderer.image { _ in
             attributed.draw(in: CGRect(origin: CGPoint(x: 2, y: 1), size: boundingRect.size))
         }
-        let result = SwiftMathRenderResult(image: image, size: pixelSize)
+        // Single-line fallback: drawn 1 pt from the bottom, baseline one descender above that.
+        let fallbackBaseline: CGFloat? = displayMode ? nil : 1 - textFont.descender
+        let result = SwiftMathRenderResult(image: image, size: pixelSize, baselineFromBottom: fallbackBaseline)
         cache.setObject(result, forKey: key)
         return result
     }
@@ -233,9 +245,12 @@ enum SwiftMathRenderer {
 final class SwiftMathRenderResult: NSObject {
     let image: UIImage
     let size: CGSize
+    /// Distance from the image's bottom edge up to the formula's baseline; nil when unknown.
+    let baselineFromBottom: CGFloat?
 
-    init(image: UIImage, size: CGSize) {
+    init(image: UIImage, size: CGSize, baselineFromBottom: CGFloat? = nil) {
         self.image = image
         self.size = size
+        self.baselineFromBottom = baselineFromBottom
     }
 }
