@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.84.0",
+            date: "2026-10-23",
+            title: "iPad 好用多了，灵动岛不再挡着",
+            highlights: [
+                "灵动岛 / 实时活动只在任务进行中、你切到别的地方时才出现；还在对话里时不显示，回到 App 立刻收起，iPad 顶部不再被挡。",
+                "iPad 对话页：标题居中、不再贴左边或压到右栏；你的消息和回答对齐在同一列；深色模式下公式不再看不见；「+」「/」按钮更好点；Mac 控制台在 iPad 上不再铺满整屏，支持 ⌘↩ 发送。",
+                "iPad 侧栏：顶部固定 5 个按钮，藏宝阁、Mac 控制台、iCloud 同步收进「⋯」；会话预览能多看一行字；「进行中」标题不再被挤。",
+                "iPad 首页选模型改成从按钮弹出的小窗；设置里的确认框从对应按钮弹出，不再盖住侧栏；设置页标题样式统一。"
+            ]
+        ),
+        LeoRelease(
             version: "1.83.0",
             date: "2026-10-22",
             title: "回答更好看，界面不再挤",
