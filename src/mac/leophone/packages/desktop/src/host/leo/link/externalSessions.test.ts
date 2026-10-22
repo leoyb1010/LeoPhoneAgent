@@ -165,7 +165,8 @@ test("takeover routes: list, uuid / agent validation, ACP resume seeded, history
       bridge.handle(req("POST", "/harness/sessions", { resume_external: { agent, session_id } }));
     assert.equal((await bad("../../etc/passwd")).status, 400);
     assert.equal((await bad(A.toUpperCase().replace("1", "Z"))).status, 400);
-    assert.equal((await bad(A, "codex")).status, 501);
+    assert.equal((await bad(A, "gemini")).status, 501);
+    assert.equal((await bad(A, "codex")).status, 409, "这台 Mac 上 Codex 用不了");
     assert.equal((await bad(SDK)).status, 404, "SDK 会话不能接管");
     assert.equal((await bad("55555555-5555-4555-8555-555555555555")).status, 404);
     assert.equal(tasks.calls.filter(([name]) => name === "createTask").length, 0);
@@ -312,7 +313,7 @@ test("takeover: when ACP could not session/load (CLI started a new session) the 
     const failed = await notes(lost, (events) => events.some((e) => e["kind"] === "resume_failed"));
     assert.equal(failed.length, 1);
     assert.equal(failed[0]?.event, "session.note");
-    assert.match(String(failed[0]?.["text"]), /没能接上终端里的那个会话/);
+    assert.match(String(failed[0]?.["text"]), /没能接上终端里的那个会话.*Claude Code 看不到/);
     assert.equal((await summary(lost))?.["resume_failed"], true);
   } finally {
     await bridge.close();

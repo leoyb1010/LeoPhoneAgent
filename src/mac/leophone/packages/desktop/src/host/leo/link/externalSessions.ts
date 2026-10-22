@@ -4,20 +4,24 @@ import { promises as fsp } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { ACP_SESSIONS_FILE } from "@zcode/shared/acp";
+import { ACP_SESSIONS_FILE, type AcpAgentId } from "@zcode/shared/acp";
 
 import { toolInputField, toolOutputField, toolOutputText, toolTarget } from "./eventMap.js";
 import type { HarnessEvent } from "./journal.js";
 
 export type ExternalSession = {
   id: string;
-  agent: "claude";
+  agent: "claude" | "codex";
   cwd: string;
   title: string;
   updated_at: string;
   running: boolean;
-  /** JSONL 的绝对路径(不发给手机)。 */
+  /** [codex-sessions] Codex 这一轮正在跑(最后一个 task_started 之后还没完成);Claude 不报。 */
+  busy?: boolean;
+  /** JSONL 的绝对路径(不发给手机)。Codex 是最新的那一段。 */
   file: string;
+  /** [codex-sessions] Codex 的一个会话可能分好几段文件(按时间从旧到新;不发给手机)。 */
+  files?: string[];
 };
 
 /** Claude Code 的会话 id 就是 JSONL 文件名:只认 uuid 形状,挡掉路径花样。 */
@@ -30,9 +34,9 @@ const TAIL_BYTES = 64 * 1024;
 /** 解析的候选上限:跳过 SDK 会话、没有 cwd 的之后,通常远不到这个数就凑够 20 个。 */
 const CANDIDATE_LIMIT = 60;
 /** 接管时回放的历史:只读文件尾部这么多,最多这么多条(日志待写队列约 2000 条 / 6MB)。 */
-const HISTORY_BYTES = 2 * 1024 * 1024;
+export const HISTORY_BYTES = 2 * 1024 * 1024;
 const HISTORY_EVENTS = 600;
-const TITLE_CHARS = 60;
+export const TITLE_CHARS = 60;
 
 /** 用户消息里不是人话的那些:斜杠命令包装、命令输出、系统提醒、中断提示。 */
 const NOT_SPEECH = /^\s*(<command-(name|message|args)>|<local-command-(stdout|stderr|caveat)>|<bash-(input|stdout|stderr)>|<user-prompt-submit-hook>|Caveat: |\[Request interrupted)/;
@@ -50,11 +54,11 @@ export function defaultAcpSessionsPath(env: NodeJS.ProcessEnv = process.env): st
   return path.join(env["ZCODE_HOME"]?.trim() || path.join(os.homedir(), ".leophoneagent"), "cli", ACP_SESSIONS_FILE);
 }
 
-function record(value: unknown): Record<string, unknown> {
+export function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-function parseLines(text: string, { dropFirst, dropLast }: { dropFirst: boolean; dropLast: boolean }): Line[] {
+export function parseLines(text: string, { dropFirst, dropLast }: { dropFirst: boolean; dropLast: boolean }): Line[] {
   const raw = text.split("\n");
   // 读的是一段字节:首行 / 末行可能被截断,直接丢掉;坏行跳过。
   if (dropFirst) raw.shift();
@@ -72,7 +76,7 @@ function parseLines(text: string, { dropFirst, dropLast }: { dropFirst: boolean;
   return out;
 }
 
-async function readRange(file: string, start: number, length: number): Promise<string> {
+export async function readRange(file: string, start: number, length: number): Promise<string> {
   const handle = await fsp.open(file, "r");
   try {
     const buffer = Buffer.alloc(length);
@@ -101,7 +105,7 @@ function userSpeech(line: Line): string {
   return NOT_SPEECH.test(cleaned) ? "" : cleaned;
 }
 
-function oneLine(text: string, limit: number): string {
+export function oneLine(text: string, limit: number): string {
   return text.replace(/\s+/g, " ").trim().slice(0, limit);
 }
 
@@ -246,8 +250,12 @@ export async function readClaudeHistory(file: string): Promise<{ events: Harness
     }
   }
   close();
-  const truncated = start > 0 || events.length > HISTORY_EVENTS;
-  // 从一条用户消息开始截,别让手机上第一轮只剩半截回答。
+  return trimHistory(events, start > 0);
+}
+
+/** 只留最近 HISTORY_EVENTS 条,从一条用户消息开始截,别让手机上第一轮只剩半截回答。 */
+export function trimHistory(events: HarnessEvent[], cut: boolean): { events: HarnessEvent[]; truncated: boolean } {
+  const truncated = cut || events.length > HISTORY_EVENTS;
   let kept = events.slice(-HISTORY_EVENTS);
   if (kept.length < events.length) {
     const firstUser = kept.findIndex((event) => event.event === "user.message");
@@ -257,11 +265,11 @@ export async function readClaudeHistory(file: string): Promise<{ events: Harness
 }
 
 /**
- * 让 LeoBot 任务的 ACP claude 用 session/load 续上这个 Claude 会话:在 CLI 的会话映射里预置
- * 「任务 id → Claude 会话 id」(CLI 第一次给这个任务拉起 agent 时读,见 adapters/acp/manager.ts)。
+ * 让 LeoBot 任务的 ACP agent(claude-code / codex)用 session/load 续上这个会话:在 CLI 的会话映射里预置
+ * 「任务 id → 外部会话 id」(CLI 第一次给这个任务拉起 agent 时读,见 adapters/acp/manager.ts)。
  * CLI 写映射是同步整文件覆盖,读到半截的 JSON 时稍等重试,绝不拿空表覆盖掉别的任务的映射。
  */
-export async function seedAcpResume(statePath: string, taskId: string, acpSessionId: string): Promise<void> {
+export async function seedAcpResume(statePath: string, taskId: string, acpSessionId: string, agentId: AcpAgentId = "claude-code"): Promise<void> {
   let state: Record<string, unknown> = {};
   for (let attempt = 0; ; attempt += 1) {
     let text: string;
@@ -279,7 +287,7 @@ export async function seedAcpResume(statePath: string, taskId: string, acpSessio
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
-  state[taskId] = { agentId: "claude-code", acpSessionId };
+  state[taskId] = { agentId, acpSessionId };
   await fsp.mkdir(path.dirname(statePath), { recursive: true });
   const temp = `${statePath}.${process.pid}.tmp`;
   await fsp.writeFile(temp, JSON.stringify(state, null, 2));
