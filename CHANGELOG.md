@@ -1,6 +1,6 @@
 # LeoPhoneAgent 更新记录
 
-## Mac 1.16.0 · 中继 0.2.4 · 第三轮审计修复 - 2026-10-22
+## Mac 1.16.0 · iOS 1.81.0 (187) · 中继 0.2.4 · 第三轮审计修复 - 2026-10-22
 
 多智能体审计（8 个维度、109 个智能体、每条发现独立对抗验证）确认 46 条，按文件归属分 5 批并行修复、逐批独立复审后合入。
 
@@ -10,6 +10,7 @@
 - **提示词**：去掉「调工具前先说一句」，一两步能答的直接答，跟随用户语言；第二大脑路由只针对用户自己的知识，不碰工作区代码；turn.completed 不再重发工具前的话。
 - **第二大脑 / 画像**：每个大脑工具在 tools/list `_meta.timeoutMs` 声明预算（上传 330 s）；上传相对路径按工作区解析；`brain_save_card` 拒绝保留标题「Leo 画像」；画像只认 confirmed/reference + 用户画像，每轮重新查找更新的卡，key 缺失或连续 401/403 清理本机缓存，注入时用 `<user_profile>` 隔离。
 - **兼容 / 稳定**：重新随包提供 `Resources/leo/treasury-mcp.mjs`（stdio→Host HTTP MCP 代理），外部 Agent 的藏宝阁恢复；桌面会话事件 schema 补齐 CLI 实际发出的字段（Studio 4 天丢了 99 条）；`ps` 进程表只读 pid/ppid/pgid/lstart，ENOBUFS 不再让清理失效；恢复的手机会话不再启动即订阅（每台每天数十到上百次重试）。
+- **iOS 1.81.0**：快捷动作观察者的 willSet 旧值问题（照片/文件/语音卡在 waitingForChatMount）；定时任务带 mode、显示失败原因并可打开那次运行；通知 id 与中继同一公式；「Leo 画像」先找已有卡再更新；收进大脑提示只在本次完成的回复下、44 pt 关闭；首页「+」本地化。计划审批卡的专门样式（整段计划、两按钮）留到下一轮，现在走通用审批卡。
 - **中继 0.2.4**（mini 已部署）：APNs collapse id = `relay-automation-` + sha256(key)[:40]（与 iOS 同一公式）；审批事件保护限 24 h / 50 条；Live Activity 随 `automation.run.completed/failed` 收起、随 `approval.responded` 回到运行中；SIGTERM 优雅退出（1012 关 socket、落盘队列/状态，`shutdown_timeout=3`，plist `ExitTimeOut=15`），日志带时间戳。实测重启 exit code 0、4 台 Mac 7 秒内全部重连。
 - **发版与运维**：部署改增量（远端 APFS 克隆当基准，只 rsync 变化文件，codesign --deep --strict + Gatekeeper 校验后替换；旧版存档只留 3 份；回滚还原 CLI 配置）；`LeoCIStatus --gate` 能在真实发版路径上拦红（看在跑运行里已失败的 job、按 first-parent 回溯）；vitest 棘轮能数到未处理错误；native-model-audit 补 Homebrew PATH。
 
