@@ -52,7 +52,10 @@ def check_backup(max_age_h):
         return False, "restic 60 秒没响应(外接盘未挂载或无访问授权?)"
     if out.returncode != 0:
         return False, f"restic 读不出快照:{out.stderr.strip()[:160]}"
-    snaps = json.loads(out.stdout or "[]")
+    try:
+        snaps = json.loads(out.stdout or "[]")
+    except ValueError:
+        return False, "restic 输出解析不了(非 JSON)"
     if not snaps:
         return False, "没有 ~/.leoagent 的备份快照"
     # restic 给纳秒;老 Python 的 fromisoformat 只认到微秒
@@ -60,6 +63,27 @@ def check_backup(max_age_h):
     taken = datetime.fromisoformat(stamp)
     age_h = (datetime.now(timezone.utc) - taken).total_seconds() / 3600
     return age_h <= max_age_h, f"最近备份 {age_h:.1f} 小时前"
+
+
+CI_REPO = os.environ.get("LEO_CI_REPO", "leoyb1010/LeoPhoneAgent")
+
+
+def check_ci():
+    """main 上最近一次已结束的 CI(GitHub 公开 API,不需要 token)。连不上 = 跳过,不算坏。"""
+    url = f"https://api.github.com/repos/{CI_REPO}/actions/runs?branch=main&per_page=5"
+    req = urllib.request.Request(url, headers={"User-Agent": "LeoFleetDoctor", "Accept": "application/vnd.github+json"})
+    try:
+        runs = json.loads(urllib.request.urlopen(req, timeout=15).read()).get("workflow_runs", [])
+    except Exception as e:  # noqa: BLE001
+        return True, f"CI 状态查不到(跳过):{type(e).__name__}"
+    done = [r for r in runs if r.get("status") == "completed" and r.get("name") != "Running Copilot Code Review"]
+    if not done:
+        return True, "CI 还没有结束的运行"
+    r = done[0]
+    title = (r.get("display_title") or "")[:40]
+    if r.get("conclusion") == "success":
+        return True, f"CI 绿 · {r.get('head_sha', '')[:7]} {title}"
+    return False, f"CI {r.get('conclusion')} · {r.get('head_sha', '')[:7]} {title} · {r.get('html_url', '')}"
 
 
 def check_disk(min_free_pct):
@@ -97,6 +121,9 @@ def monitor(a):
     results["relay"] = check_relay()
     status = relay_status() or {}
     online = {m["name"]: m for m in status.get("machines", [])}
+    if results["relay"][0] and not status:
+        # 中继活着却读不到在线快照(0.2.2 起启动即写):判为未知,不能当「都在线」。
+        results["relay"] = (False, "中继在跑,但 relay-status.json 读不到")
     misses = prev.get("misses", {})
     for name in [n for n in a.expect.split(",") if n]:
         if name in online:
@@ -109,6 +136,7 @@ def monitor(a):
     queued = sum((status.get("queued") or {}).values())
     results["queue"] = (queued < 50, f"中继排队 {queued} 条")
     results["backup"] = check_backup(a.backup_max_age_h)
+    results["ci"] = check_ci()
     results["disk"] = check_disk(10)
 
     bad_now = sorted(k for k, (ok, _) in results.items() if not ok)
