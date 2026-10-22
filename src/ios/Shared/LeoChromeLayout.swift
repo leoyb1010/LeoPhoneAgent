@@ -77,23 +77,63 @@ enum ModelNameCompaction {
 
 enum ChatHeaderLayout {
     static let barItemWidth: CGFloat = 44
-    static let barItemSpacing: CGFloat = 8
+    /// [ipad-chat] iOS 26 draws neighbouring bar items as ONE glass capsule;
+    /// measured on iPad: "…" + inspector toggle = 113 pt wide (2 × 44 + 25).
+    /// The old 8 pt let a long title run under the right-hand group, so UIKit
+    /// shoved the principal against the leading edge instead of centering it.
+    static let barItemSpacing: CGFloat = 24
+    /// Breathing room between the principal and the nearest bar item.
+    static let titleGap: CGFloat = 8
     static let edgeMargin: CGFloat = 16
     static let minimumCap: CGFloat = 96
     /// A title wider than this reads as a sentence, not a label (iPad full width).
     static let maximumCap: CGFloat = 520
 
+    /// Width of one side's bar items, from the bar edge to where the title may start.
+    static func reservedSide(items n: Int) -> CGFloat {
+        guard n > 0 else { return edgeMargin }
+        return edgeMargin + CGFloat(n) * barItemWidth + CGFloat(n - 1) * barItemSpacing + titleGap
+    }
+
     /// Width the centered principal item (title + model pill) may use without
     /// running into the leading or trailing bar items. The principal stays
     /// centered, so the wider side is reserved on both sides.
-    static func principalCap(columnWidth: CGFloat, leadingItems: Int, trailingItems: Int) -> CGFloat {
+    ///
+    /// `coveredTrailing`: points of the bar's trailing end hidden behind a
+    /// column floating over the chat (the iPad portrait inspector). The bar
+    /// still spans the whole detail, so a title centered in it must stop
+    /// short of that column on both sides.
+    static func principalCap(columnWidth: CGFloat, leadingItems: Int, trailingItems: Int,
+                             coveredTrailing: CGFloat = 0) -> CGFloat {
         guard columnWidth > 0 else { return minimumCap }
-        func side(_ n: Int) -> CGFloat {
-            guard n > 0 else { return edgeMargin }
-            return edgeMargin + CGFloat(n) * barItemWidth + CGFloat(n - 1) * barItemSpacing + barItemSpacing
+        let reserved = 2 * max(reservedSide(items: leadingItems), reservedSide(items: trailingItems))
+        var cap = columnWidth - reserved
+        if coveredTrailing > 0 {
+            cap = min(cap, columnWidth - 2 * (coveredTrailing + titleGap + edgeMargin))
         }
-        let reserved = 2 * max(side(leadingItems), side(trailingItems))
-        return min(maximumCap, max(minimumCap, columnWidth - reserved))
+        return min(maximumCap, max(minimumCap, cap))
+    }
+}
+
+/// [ipad-chat] The message column on iPad. Assistant rows cap their CONTENT at
+/// the readable width and add the row gutter outside the cap; whole-message
+/// rows (user bubble, dividers) carry the gutter inside their own padding, so
+/// their cap has to include it or the bubble's trailing edge sits one gutter
+/// inside the column the answers line up on.
+enum ChatColumnLayout {
+    /// Horizontal padding every list row puts outside its content.
+    static let rowGutter: CGFloat = 16
+
+    /// `.frame(maxWidth:)` for a row that pads itself by `rowGutter`.
+    static func selfPaddedRowCap(contentCap: CGFloat) -> CGFloat? {
+        contentCap > 0 ? contentCap + 2 * rowGutter : nil
+    }
+
+    /// Width a self-padded row actually lays out at (height estimates must
+    /// wrap at this width, not the list width).
+    static func selfPaddedRowWidth(listWidth: CGFloat, contentCap: CGFloat) -> CGFloat {
+        guard let cap = selfPaddedRowCap(contentCap: contentCap) else { return listWidth }
+        return min(listWidth, cap)
     }
 }
 

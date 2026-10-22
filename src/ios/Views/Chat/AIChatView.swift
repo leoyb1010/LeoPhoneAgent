@@ -355,6 +355,8 @@ struct AIChatView: View {
     @State private var showSessionMemory = false
     /// [F8] Set on iPad (ChatDetailContainer): 用量 / 记忆 open in the inspector column.
     @Environment(\.chatInspectorRoute) private var inspectorRoute
+    /// [ipad-chat] Bar width + inspector overlap, for the header title cap.
+    @Environment(\.chatHeaderBar) private var headerBar
     @State private var showEnhancedCacheAlert = false
     @State private var showTokenUsage = false
     // [T-ios-json-open-provider-import-prompt] A shared/opened JSON file that
@@ -1938,11 +1940,17 @@ struct AIChatView: View {
 
     /// [chat-chrome] Width the centered title + model pill may use.
     private var headerPrincipalCap: CGFloat {
-        let column = chatColumnWidth > 0 ? chatColumnWidth : LeoWindowMetrics.bounds.width
-        let trailing = (artifactCount > 0 && !titleIsVisuallyLocked) ? 2 : 1
+        // [ipad-chat] The bar spans the whole detail column (ChatDetailContainer
+        // reports it), even when the portrait inspector covers its trailing end.
+        let column = headerBar.width > 0 ? headerBar.width
+            : (chatColumnWidth > 0 ? chatColumnWidth : LeoWindowMetrics.bounds.width)
+        // "…" always; the iPad split adds the inspector toggle beside it.
+        var trailing = inspectorRoute != nil ? 2 : 1
+        if artifactCount > 0 && !titleIsVisuallyLocked { trailing += 1 }
         let cap = ChatHeaderLayout.principalCap(columnWidth: column,
                                                 leadingItems: hSizeClass == .regular ? 2 : 1,
-                                                trailingItems: trailing)
+                                                trailingItems: trailing,
+                                                coveredTrailing: headerBar.coveredTrailing)
         return cap.rounded(.down)
     }
 
@@ -3204,6 +3212,9 @@ struct AIChatView: View {
             .background(ChatColors.inputIconBg)
             .clipShape(Circle())
             .overlay(Circle().stroke(ChatColors.inputIconBorder, lineWidth: 0.5))
+            // [ipad-chat] 34 pt disc, 44 pt target (same as the mic beside it).
+            .frame(width: LeoChromeMetrics.hitTarget, height: LeoChromeMetrics.hitTarget)
+            .contentShape(Circle())
 
         return Menu {
             Button { showCamera = true } label: { Label("Take Photo", systemImage: "camera") }
@@ -3310,6 +3321,8 @@ struct AIChatView: View {
                 .background(ChatColors.inputIconBg)
                 .clipShape(Circle())
                 .overlay(Circle().stroke(ChatColors.inputIconBorder, lineWidth: 0.5))
+                .frame(width: LeoChromeMetrics.hitTarget, height: LeoChromeMetrics.hitTarget)
+                .contentShape(Circle())
         }
         .hoverEffect(.highlight)
         .accessibilityLabel("Commands")
@@ -3951,7 +3964,9 @@ struct AIChatView: View {
                 inputFieldOrWaveform
 
                 inputBottomRow
-                    .padding(.horizontal, 12)
+                    // The "+" disc sits centered in a 44 pt target: 7 + 5 keeps it 12 pt in.
+                    .padding(.leading, 7)
+                    .padding(.trailing, 12)
                     .padding(.bottom, 10)
             }
             .contentShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous))

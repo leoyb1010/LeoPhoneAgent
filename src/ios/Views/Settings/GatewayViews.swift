@@ -1657,6 +1657,19 @@ private extension View {
     }
 }
 
+/// [ipad-chat] The console's transcript, cards and composer share the chat's
+/// readable column on iPad (they ran edge to edge across a 13" screen); bars
+/// and backgrounds stay full width. Compact width is untouched.
+private struct HarnessReadableColumn: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: sizeClass == .regular ? LeoWorkspaceLayoutPolicy.contentMaxWidth : .infinity)
+            .frame(maxWidth: .infinity)
+    }
+}
+
 /// Live view of one coding CLI working on the Mac.
 struct HarnessConsoleView: View {
     @StateObject var driver: HarnessSessionDriver
@@ -1703,12 +1716,14 @@ struct HarnessConsoleView: View {
                 GatewayApprovalCard(approval: approval) { choice in
                     driver.respond(to: approval, choice: choice)
                 }
+                .modifier(HarnessReadableColumn())
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             } else if let question = driver.pendingQuestion {
                 // [remote-ctl-ios] 模型在问(AskUserQuestion):选项 + 补充文字,提交或跳过。
                 HarnessQuestionCard(request: question,
                                     onSubmit: { driver.answer(question, answers: $0) },
                                     onDecline: { driver.decline(question) })
+                    .modifier(HarnessReadableColumn())
                     .id(question.questionId)
                     .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
@@ -1720,6 +1735,7 @@ struct HarnessConsoleView: View {
                     .foregroundStyle(Color.orange)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14).padding(.vertical, 4)
+                    .modifier(HarnessReadableColumn())
                     .accessibilityValue("已保存 \(driver.journalStatus.durableSeq)，已收到 \(driver.journalStatus.latestSeq)，缺口 \(driver.journalStatus.missingRanges)")
             }
 
@@ -1732,6 +1748,7 @@ struct HarnessConsoleView: View {
                 .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14).padding(.vertical, 4)
+                .modifier(HarnessReadableColumn())
                 .accessibilityIdentifier("harness.retryFullAuto")
             }
 
@@ -1744,6 +1761,7 @@ struct HarnessConsoleView: View {
                 .buttonStyle(.borderedProminent)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14).padding(.vertical, 4)
+                .modifier(HarnessReadableColumn())
                 .sheet(isPresented: $showAgentLogin) {
                     AgentLoginSheet(client: driver.macScreenClient, kind: driver.harness) { ok in
                         if ok { driver.clearAgentLoginSuggestion() }
@@ -1761,6 +1779,7 @@ struct HarnessConsoleView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14).padding(.vertical, 4)
+                .modifier(HarnessReadableColumn())
             } else if let problem = driver.problem {
                 // [T-link-problem] 是谁的问题 + 一个主按钮。要用户处理的问题(密钥被拒、Mac 撤销授权…)
                 // 已经停了自动重连,点按钮才恢复;可重试的问题点「重试」立刻重连。
@@ -1778,17 +1797,21 @@ struct HarnessConsoleView: View {
                     onActed: (problem.pausesAutoReconnect || problem.primaryAction == .retry)
                         ? nil : { driver.resumeAfterProblem() })
                     .padding(.horizontal, 14).padding(.vertical, 4)
+                    .modifier(HarnessReadableColumn())
             } else if let err = driver.lastError {
                 Text(err)
                     .font(.caption).foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14).padding(.vertical, 4)
+                    .modifier(HarnessReadableColumn())
             }
 
             HarnessQuickActions(driver: driver, inputIsEmpty: input.isEmpty)
+                .modifier(HarnessReadableColumn())
 
             if !images.isEmpty {
                 HarnessAttachmentStrip(images: $images)
+                    .modifier(HarnessReadableColumn())
                     .background(.bar)
             }
             HStack(alignment: .bottom, spacing: 8) {
@@ -1820,10 +1843,18 @@ struct HarnessConsoleView: View {
                     }
                 } label: {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 30))
+                        // [ipad-chat] 30 pt glyph, 44 pt target.
+                        .frame(width: LeoChromeMetrics.hitTarget, height: LeoChromeMetrics.hitTarget)
+                        .contentShape(Circle())
                 }
                 .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                // [ipad-chat] The field is multi-line (Return adds a line), so a
+                // hardware keyboard sends with ⌘↩ like the chat composer.
+                .keyboardShortcut(.return, modifiers: .command)
+                .hoverEffect(.highlight)
                 .accessibilityLabel(Text("发送"))
             }
+            .modifier(HarnessReadableColumn())
             .padding(.horizontal, 12).padding(.vertical, 10)
             .background(.bar)
             .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: driver.showsModePicker)
@@ -1959,6 +1990,7 @@ private struct HarnessTranscript: View {
                     }
                     Color.clear.frame(height: 1).id(Self.bottomId)
                 }
+                .modifier(HarnessReadableColumn())
                 .padding(16)
             }
             .scrollDismissesKeyboard(.interactively)

@@ -15,6 +15,9 @@ struct ChatScreenshotPreviewSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var toast: String?
+    /// [ipad-chat] Window frame of the share button: the iPad share popover
+    /// points at it (it pointed at the sheet's top center).
+    @State private var shareButtonFrame: CGRect = .zero
 
     private let logger = AppLogger(category: "ScreenshotPreview")
 
@@ -50,6 +53,9 @@ struct ChatScreenshotPreviewSheet: View {
                             shareImage(image)
                         } label: {
                             Image(systemName: "square.and.arrow.up")
+                                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                                    shareButtonFrame = $0
+                                }
                         }
                         Button {
                             saveImageToPhotos(image)
@@ -146,6 +152,7 @@ struct ChatScreenshotPreviewSheet: View {
         // main only to present the sheet. `flashToast` gives immediate feedback
         // so the tap doesn't feel dead while encoding runs.
         flashToast(AppLocalized("Preparing…"))
+        let anchor = shareButtonFrame
         DispatchQueue.global(qos: .userInitiated).async {
             // [T-mac-share-save-race] Sweep old share screenshots instead of
             // deleting in completionWithItemsHandler. On Mac (Designed for iPad)
@@ -186,7 +193,10 @@ struct ChatScreenshotPreviewSheet: View {
                 var presenter = root
                 while let p = presenter.presentedViewController { presenter = p }
                 avc.popoverPresentationController?.sourceView = presenter.view
-                avc.popoverPresentationController?.sourceRect = CGRect(x: presenter.view.bounds.midX, y: 60, width: 0, height: 0)
+                // [ipad-chat] Point at the share button (.global = window space).
+                avc.popoverPresentationController?.sourceRect = anchor.isEmpty
+                    ? CGRect(x: presenter.view.bounds.midX, y: 60, width: 0, height: 0)
+                    : presenter.view.convert(anchor, from: nil)
                 presenter.present(avc, animated: true)
             }
         }

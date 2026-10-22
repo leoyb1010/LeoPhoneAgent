@@ -3566,7 +3566,14 @@ final class MathAttachment: NSTextAttachment {
     }
 
     private func applyResult(_ result: SwiftMathRenderResult) {
-        renderedImage = result.image
+        // [ipad-chat] The formula is drawn once in the label color of the
+        // moment; switching Light ↔ Dark with the chat open left black math on
+        // a black background (invisible until relaunch). The overlay image view
+        // (`makeView`) tints a template image live with the dynamic label color.
+        // \color formulas keep their colors; the TextKit-drawn copy in table
+        // cells (`inlineDrawable`) stays as rendered.
+        renderedImage = latex.contains("\\color") ? result.image
+            : result.image.withRenderingMode(.alwaysTemplate)
         renderedSize = result.size
         renderedBaseline = isBlock ? nil : result.baselineFromBottom
         if inlineDrawable {
@@ -3591,6 +3598,7 @@ final class MathAttachment: NSTextAttachment {
             let imgH = img.size.height
             let imgView = UIImageView(image: img)
             imgView.contentMode = .scaleAspectFit
+            imgView.tintColor = theme.labelColor   // dynamic: follows Light / Dark live
             if isBlock {
                 let clampedW = min(imgW, width)
                 let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: imgH))

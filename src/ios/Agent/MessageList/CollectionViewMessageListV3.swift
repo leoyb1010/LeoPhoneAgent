@@ -918,7 +918,10 @@ private struct BridgedWholeMessageV3: View {
             toolSnapshots: [],
             onDeleteFromHere: bridge.onDeleteFromHere
         )
-        .frame(maxWidth: maxWidth > 0 ? maxWidth : nil)
+        // [ipad-chat] ChatMessageRow pads itself by the row gutter, so its cap
+        // includes the gutter: the user bubble ends on the same trailing edge
+        // as the answers (it sat 16 pt inside it on iPad).
+        .frame(maxWidth: ChatColumnLayout.selfPaddedRowCap(contentCap: maxWidth))
         .frame(maxWidth: .infinity)
         .accessibilityIdentifier(message.role == .user ? "userMessage" : "wholeMessage")
         }
@@ -2882,7 +2885,8 @@ extension CollectionViewMessageListV3 {
                             // .frame(maxWidth:) on BridgedWholeMessageV3); using
                             // the wider cvWidth would under-wrap → under-estimate
                             // on iPad. Use the effective width.
-                            let effWidth = maxContentWidth > 0 ? min(cvWidth, maxContentWidth) : cvWidth
+                            let effWidth = ChatColumnLayout.selfPaddedRowWidth(listWidth: cvWidth,
+                                                                               contentCap: maxContentWidth)
                             let h = Self.measureUserBubbleHeight(for: msg, cvWidth: effWidth,
                                                                  cache: &userBubbleHeightCache)
                             if let h {
@@ -3439,7 +3443,8 @@ extension CollectionViewMessageListV3 {
                     // measurement makes the offscreen height already 3 lines, so the
                     // Text never truncates and there is nothing to expand.
                     var throwaway: [String: CGFloat] = [:]
-                    if let h = Self.measureUserBubbleHeight(for: msg, cvWidth: width, cache: &throwaway) {
+                    let rowWidth = ChatColumnLayout.selfPaddedRowWidth(listWidth: width, contentCap: maxContentWidth)
+                    if let h = Self.measureUserBubbleHeight(for: msg, cvWidth: rowWidth, cache: &throwaway) {
                         return h
                     }
                     // Fallback (empty/attachment-only): coarse heuristic.
