@@ -194,6 +194,7 @@
 		AA26CCB72F31067900AECF2D /* alpine-rootfs.zip in Resources */ = {isa = PBXBuildFile; fileRef = AA26CCB62F31067900AECF2D /* alpine-rootfs.zip */; };
 		AA26CCB92F31070A00AECF2D /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = AA26CCB82F31070A00AECF2D /* libsqlite3.tbd */; };
 		AA26CCBA2F31080100AECF2D /* ISHKernel.m in Sources */ = {isa = PBXBuildFile; fileRef = AA26CCBB2F31080100AECF2D /* ISHKernel.m */; };
+		LF4BD6F8E4C5 /* ISHSimulatorStubs.m in Sources */ = {isa = PBXBuildFile; fileRef = LF2BDB10171B /* ISHSimulatorStubs.m */; };
 		AA26CCBC2F31080100AECF2D /* ISHTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA26CCBD2F31080100AECF2D /* ISHTerminalView.swift */; };
 		E5SSHV0001 /* SSHTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SSHV0002 /* SSHTerminalView.swift */; };
 		LF977F04E42B /* SSHTerminalSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB80E49EC08 /* SSHTerminalSession.swift */; };
@@ -1304,6 +1305,7 @@
 		AA26CCB62F31067900AECF2D /* alpine-rootfs.zip */ = {isa = PBXFileReference; lastKnownFileType = archive.zip; name = "alpine-rootfs.zip"; path = "../../deps/resources/alpine-rootfs.zip"; sourceTree = SOURCE_ROOT; };
 		AA26CCB82F31070A00AECF2D /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		AA26CCBB2F31080100AECF2D /* ISHKernel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ISHKernel.m; sourceTree = "<group>"; };
+		LF2BDB10171B /* ISHSimulatorStubs.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ISHSimulatorStubs.m; sourceTree = "<group>"; };
 		AA26CCBB2F324FE400AECF2D /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
 		AA26CCBD2F31080100AECF2D /* ISHTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISHTerminalView.swift; sourceTree = "<group>"; };
 		E5SSHV0002 /* SSHTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHTerminalView.swift; sourceTree = "<group>"; };
@@ -2491,6 +2493,7 @@
 			children = (
 				AA26CCC02F31080100AECF2D /* ISHKernel.h */,
 				AA26CCBB2F31080100AECF2D /* ISHKernel.m */,
+				LF2BDB10171B /* ISHSimulatorStubs.m */,
 				AA0838D42F3B941A00049557 /* CurrentRoot.h */,
 				AA0838D12F3B941A00049557 /* CurrentRoot.m */,
 				E55000011 /* ISHShellExecutor.h */,
@@ -4195,6 +4198,7 @@
 				E5C800001 /* AppearanceSettingsSupport.swift in Sources */,
 				E5C800002 /* HomeStatusIndicators.swift in Sources */,
 				AA26CCBA2F31080100AECF2D /* ISHKernel.m in Sources */,
+				LF4BD6F8E4C5 /* ISHSimulatorStubs.m in Sources */,
 				E5JB00001 /* JiebaWrapper.mm in Sources */,
 				E5JB00002 /* TextSegmenter.swift in Sources */,
 				LF63BDFAF750 /* MacScreenSession.swift in Sources */,
@@ -5215,7 +5219,21 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
 				MARKETING_VERSION = 1.81.0;
-				OTHER_LDFLAGS = (
+				EXCLUDED_SOURCE_FILE_NAMES = ISHSimulatorStubs.m;
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = (
+					ISHKernel.m,
+					ISHShellExecutor.m,
+					CurrentRoot.m,
+					FFmpegOffload.m,
+					FFmpeg.framework,
+					libavcodec.framework,
+					libavfilter.framework,
+					libavformat.framework,
+					libavutil.framework,
+					libswresample.framework,
+					libswscale.framework,
+				);
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
 					"-lish_emu",
 					"-lish",
 					"-lfakefs",
@@ -5270,7 +5288,21 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
 				MARKETING_VERSION = 1.81.0;
-				OTHER_LDFLAGS = (
+				EXCLUDED_SOURCE_FILE_NAMES = ISHSimulatorStubs.m;
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = (
+					ISHKernel.m,
+					ISHShellExecutor.m,
+					CurrentRoot.m,
+					FFmpegOffload.m,
+					FFmpeg.framework,
+					libavcodec.framework,
+					libavfilter.framework,
+					libavformat.framework,
+					libavutil.framework,
+					libswresample.framework,
+					libswscale.framework,
+				);
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
 					"-lish_emu",
 					"-lish",
 					"-lfakefs",
