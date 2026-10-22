@@ -17,11 +17,11 @@ final class CrossFeatureFlowTests: XCTestCase {
 
     // MARK: E1 下一步菜单
 
-    /// 1.72 下架服务器任务后,「下一步」固定 4 项。
-    @MainActor func testNextStepMenuHasFourItemsInFixedOrder() {
-        XCTAssertEqual(ReplyNextStep.menu, [.collect, .quickTask, .schedule, .mac])
+    /// 1.72 下架服务器任务后固定 4 项;1.78 加「收进大脑」(连了资料库才显示)。
+    @MainActor func testNextStepMenuHasFiveItemsInFixedOrder() {
+        XCTAssertEqual(ReplyNextStep.menu, [.collect, .brain, .quickTask, .schedule, .mac])
         XCTAssertEqual(ReplyNextStep.menu.map(\.title),
-                       ["收进藏宝阁", "存为快捷任务", "设为定时任务", "发到 Mac"])
+                       ["收进藏宝阁", "收进大脑", "存为快捷任务", "设为定时任务", "发到 Mac"])
         XCTAssertFalse(ReplyNextStep.Action.allCases.map(\.rawValue).contains("paperclip"))
     }
 
@@ -40,8 +40,21 @@ final class CrossFeatureFlowTests: XCTestCase {
     /// [F] Mac 舰队关闭时「下一步」里没有「发到 Mac」;打开后恢复原样,顺序不变。
     @MainActor func testNextStepHidesMacUntilFleetEnabled() {
         XCTAssertEqual(ReplyNextStep.visibleMenu(macFleetEnabled: false), [.collect, .quickTask, .schedule])
-        XCTAssertEqual(ReplyNextStep.visibleMenu(macFleetEnabled: true), ReplyNextStep.menu)
+        XCTAssertEqual(ReplyNextStep.visibleMenu(macFleetEnabled: true, brainConnected: true), ReplyNextStep.menu)
         XCTAssertFalse(ReplyNextStep.visibleMenu(macFleetEnabled: false).contains(.mac))
+        XCTAssertEqual(ReplyNextStep.visibleMenu(macFleetEnabled: false, brainConnected: true),
+                       [.collect, .brain, .quickTask, .schedule])
+    }
+
+    /// [P2] 收进大脑:草稿知识卡,正文带提问、回复与出处说明。
+    func testBrainCardContentCarriesPromptReplyAndProvenance() {
+        let now = Date(timeIntervalSince1970: 1_792_600_000)
+        let card = ReplyNextStep.brainCardContent(prompt: "怎么处理线索造假\n要具体", reply: "先核对来源。", now: now)
+        XCTAssertEqual(card.title, "怎么处理线索造假")
+        XCTAssertEqual(card.category, "LeoBot 对话")
+        XCTAssertTrue(card.body.hasPrefix("> 怎么处理线索造假\n> 要具体\n\n先核对来源。"))
+        XCTAssertTrue(card.body.contains("— 来自 LeoBot 对话,"))
+        XCTAssertEqual(ReplyNextStep.brainCardContent(prompt: "", reply: "", now: now).body, "")
     }
 
     @MainActor func testSaveQuickTaskAppearsInQuickTaskList() throws {

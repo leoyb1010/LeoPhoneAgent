@@ -3,7 +3,7 @@
 //  MinisApp
 //
 //  [E1] 回复的「下一步」:一条 Agent 回复可以一步流到别的功能。
-//  菜单固定 4 项、顺序固定。这里只放与界面无关的部分(编进 MinisTests);
+//  菜单最多 5 项、顺序固定。这里只放与界面无关的部分(编进 MinisTests);
 //  菜单在回复底部的操作条里,表单与跳转在 AIChatView。
 //
 
@@ -17,13 +17,14 @@ extension Notification.Name {
 
 enum ReplyNextStep {
     enum Action: String, CaseIterable, Identifiable {
-        case collect, quickTask, schedule, mac
+        case collect, brain, quickTask, schedule, mac
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .collect: return "收进藏宝阁"
+            case .brain: return "收进大脑"
             case .quickTask: return "存为快捷任务"
             case .schedule: return "设为定时任务"
             case .mac: return "发到 Mac"
@@ -33,6 +34,7 @@ enum ReplyNextStep {
         var symbolName: String {
             switch self {
             case .collect: return "archivebox"
+            case .brain: return "brain.head.profile"
             case .quickTask: return "bolt"
             case .schedule: return "clock.arrow.circlepath"
             case .mac: return "macbook.and.iphone"
@@ -40,14 +42,15 @@ enum ReplyNextStep {
         }
     }
 
-    /// 菜单项最多 4 个,顺序固定。
-    static let menu: [Action] = [.collect, .quickTask, .schedule, .mac]
+    /// 菜单项最多 5 个,顺序固定。
+    static let menu: [Action] = [.collect, .brain, .quickTask, .schedule, .mac]
 
-    /// 实际显示的菜单:Mac 舰队没打开时不出现「发到 Mac」。
-    static func visibleMenu(macFleetEnabled: Bool) -> [Action] {
+    /// 实际显示的菜单:Mac 舰队没打开时不出现「发到 Mac」;没连资料库时不出现「收进大脑」。
+    static func visibleMenu(macFleetEnabled: Bool, brainConnected: Bool = false) -> [Action] {
         menu.filter { action in
             switch action {
             case .mac: return macFleetEnabled
+            case .brain: return brainConnected
             default: return true
             }
         }
@@ -119,6 +122,17 @@ enum ReplyNextStep {
         let answer = reply.trimmingCharacters(in: .whitespacesAndNewlines)
         let body = ask.isEmpty ? answer : "> " + ask.replacingOccurrences(of: "\n", with: "\n> ") + "\n\n" + answer
         return (title.isEmpty ? firstLine(answer, limit: 30) : title, body)
+    }
+
+    /// [P2] 「收进大脑」:这一轮存成资料库的草稿知识卡(Leo 在资料库审阅队列里确认)。
+    /// 标题同藏宝阁笔记;正文末尾注明来自哪次对话,知识卡日后能追溯。
+    static func brainCardContent(prompt: String, reply: String, now: Date = Date()) -> (title: String, body: String, category: String) {
+        let note = noteContent(prompt: prompt, reply: reply)
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd HH:mm"
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        let body = note.body.isEmpty ? "" : note.body + "\n\n— 来自 LeoBot 对话,\(fmt.string(from: now))"
+        return (note.title.isEmpty ? "LeoBot 对话" : note.title, body, "LeoBot 对话")
     }
 
     // MARK: 写入

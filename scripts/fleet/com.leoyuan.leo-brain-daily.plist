@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- 只装在 mini:每天 08:05 推「大脑每日一页」(一张知识卡 + 相关资料),走机群巡检同一条 ntfy。 -->
+  <key>Label</key><string>com.leoyuan.leo-brain-daily</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/python3</string>
+    <string>-I</string>
+    <string>__HOME__/Library/Application Support/LeoBot-fleet/LeoBrainDaily.py</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NTFY_URL</key><string>http://127.0.0.1:8095/bubu-ops</string>
+    <key>NTFY_TOKEN_FILE</key><string>__HOME__/.config/bubu/ntfy-token</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>5</integer></dict>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>__HOME__/Library/Application Support/LeoBot-fleet/brain-daily.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Application Support/LeoBot-fleet/brain-daily.log</string>
+</dict>
+</plist>

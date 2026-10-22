@@ -3625,6 +3625,22 @@ struct AIChatView: View {
                 LeoHaptics.notification(ok ? .success : .error)
                 vm.appendSystemInfo(ok ? "已收进藏宝阁" : "没能收进藏宝阁,请重试。", icon: "archivebox")
             }
+        case .brain:
+            // [P2] 存成草稿知识卡;失败原因(没连上 / 没写卡权限)直接说出来。
+            let content = ReplyNextStep.brainCardContent(prompt: request.prompt,
+                                                         reply: WatchTextSanitizer.plain(request.reply))
+            Task {
+                do {
+                    let client = try BrainStore.shared.requireClient()
+                    _ = try await client.saveCard(BrainCardDraft(title: content.title, body: content.body,
+                                                                 category: content.category))
+                    LeoHaptics.notification(.success)
+                    vm.appendSystemInfo("已收进大脑(草稿知识卡,在资料库审阅后确认)", icon: "brain.head.profile")
+                } catch {
+                    LeoHaptics.notification(.error)
+                    vm.appendSystemInfo("没能收进大脑:\(error.localizedDescription)", icon: "brain.head.profile")
+                }
+            }
         case .quickTask, .schedule:
             nextStepForm = request
         case .mac:

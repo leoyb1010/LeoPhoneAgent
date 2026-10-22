@@ -465,10 +465,11 @@ private struct ReplyActionBarV3: View {
                 .accessibilityLabel(Text("Read aloud"))
             }
 
-            // [E1] 下一步:这条回复流到别的功能。4 项,顺序固定。
+            // [E1] 下一步:这条回复流到别的功能。最多 5 项,顺序固定。
             if bridge.onNextStep != nil {
                 Menu {
-                    ForEach(ReplyNextStep.visibleMenu(macFleetEnabled: MacFleetFeature.isEnabled())) { action in
+                    ForEach(ReplyNextStep.visibleMenu(macFleetEnabled: MacFleetFeature.isEnabled(),
+                                                      brainConnected: BrainStore.shared.isConfigured)) { action in
                         Button {
                             bridge.onNextStep?(action)
                         } label: { Label(action.title, systemImage: action.symbolName) }
