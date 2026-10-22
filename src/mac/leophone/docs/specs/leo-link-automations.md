@@ -81,7 +81,7 @@
 - `GET /automations` → `200 {"automations":[automation…]}`（这台 Mac 上全部工作区的，按创建时间新→旧）。
 - `GET /automations/<id>` → `200 {"automation":{…}}`。
 - `POST /automations`（**必须带操作编号**：中继帧 `request_id` / 直连 `X-Request-Id`；缺了 400）
-  `{"name"?:"日报","prompt":"…","schedule":…,"workspace"?:"/Users/me/app","harness"?:"zcode","mode"?:"build","full_auto"?:false}`
+  `{"name"?:"日报","prompt":"…","schedule":…,"workspace"?:"/Users/me/app","harness"?:"zcode","mode"?:"build","full_auto"?:false,"template_id"?:"leo-daily-brief"}`
   → `201 {"automation":{…}}`
   - `prompt` 必填（≤20000 字）；`name` 缺省取 prompt 前 30 字（≤100 字）。
   - `workspace`（也认 `cwd`）缺省或 `"~"`：和手机开任务同一规则（手机最近在这台 Mac 用过的项目，没有就主目录）；
@@ -89,6 +89,9 @@
   - agent / 模型：`harness` 缺省 `zcode` → 与手机开 LeoBot 任务同一个模型（用户默认或第一个非 acp 模型；一个都没配 409）；
     给外部 agent（`claude` / `codex`…，`/v1/capabilities` 里可用的）→ 用该 ACP agent；不可用 400。
   - 权限：`mode` 缺省 `build`（逐项确认）；`full_auto:true` 等价 `yolo`；显式 `mode` 优先。
+    带 `template_id`（`GET /automations/templates` 里的 `id`）且没给 `mode` / `full_auto` 时，用该模板建议的模式
+    （早报、回顾 `plan`，跑测试 `guarded`）；认不出的 `template_id` 按没给处理（不报错）。Mac 自动化页「从模板开始」
+    同样把模板的 `mode` 预填进新建页（`materializeScheduledTemplateDraft`）。
   - 自动化总数到上限（20）→ 409 `{"error":{"code":"automation_limit",…}}`。
 - `PATCH /automations/<id>` `{"name"?,"prompt"?,"schedule"?,"enabled"?,"mode"?}`（至少一项）→ `200 {"automation":{…}}`
   - `enabled` 走 `setAutomationEnabled`，其余走 `updateAutomation`（作用域 = 该自动化自己的工作区）。改计划会同时清掉桌面的自定义规则。
@@ -98,7 +101,8 @@
 - `GET /automations/templates` → `200 {"templates":[{"id","name","description","prompt","schedule","mode"}…]}`：
   Mac 自带模板（和 Mac 自动化页「从模板开始」同一份 `LEO_AUTOMATION_TEMPLATES`，中文）。`schedule` 与自动化视图同形，
   整份原样放回 `POST /automations` 的 `schedule` 也认（按其中的 `cron`）；`mode` 是建议的权限模式（见下文「模式」）。
-  iOS 依赖 `id` / `name` / `prompt` / `schedule` 四个字段，用模板建 = `POST /automations` 带该模板的 `prompt` + `schedule`（+ `name`）；
+  iOS 依赖 `id` / `name` / `prompt` / `schedule` 四个字段，用模板建 = `POST /automations` 带该模板的 `prompt` + `schedule`（+ `name`，
+  并带 `mode` 或 `template_id`，否则按 `build` 建）；
   `description` / `mode` 是附加字段，旧手机忽略。其它方法 405。目前三条：`leo-daily-brief` 每日早报（`0 9 * * *`，`plan`）、`leo-repo-health` 下班前跑一遍测试
   （`0 18 * * 1-5`，`guarded`）、`leo-weekly-review` 每周回顾（`0 20 * * 0`，`plan`）。
 - 不存在的 id 一律 404；id 只允许 `[A-Za-z0-9_.:-]{1,200}`；畸形的 `%` 转义（`decodeURIComponent` 抛 URIError）400。
@@ -191,20 +195,28 @@
    中继（APNs、`recent_events`）→ 手机 / 手表；手机用 `POST /harness/sessions/<session_id>/approval` 照常答。
    手机已接管的任务（会话内建的自动化投递回原会话）直接进入无人值守。
    以前：只有手机发起的一轮才推审批，自动化任务的审批从不到手机。
+   **提问也接管**（`elicitation_request`，见下文「计划审批与提问」）：计划审批（`ExitPlanMode`）和普通审批一样推卡、
+   30 分钟计时；`AskUserQuestion` 没人能答，立刻 `decline` + `stopGeneration`，运行改判
+   `"需要人工回答问题，无人值守已跳过"`。以前提问不接管，运行永远挂着，手动运行的占位（manual claim）也一直不放。
 2. **30 分钟自动拒绝**：每条推出去的审批起一个内存计时（`UNATTENDED_APPROVAL_MS`）。到点没人答（手机、手表、Mac 上答都算）：
-   先 `failAutomationRun(runId, "审批 30 分钟无人处理,已自动拒绝")`，再回内核 `deny`、`stopGeneration` 停掉这一轮。
+   记下改判 `failAutomationRun(runId, "审批 30 分钟无人处理,已自动拒绝")`（计划审批是 `"计划未获批准"`），回内核 `deny`
+   （计划审批回 `decline`），送到了再 `stopGeneration` 停掉这一轮。**拒绝没送进内核就撤销改判**（`takeAutomationRunFailure`）
+   并重新计时：之后有人批了、运行跑成功，不会被记成审批超时（以前先改判后送，没送到也留着改判）。改判在送出之前记下，
+   是因为拒绝可能让这一轮立刻结束（计划被拒内核自己停），Host 收终态时改判必须已经在。
    内核随后报的终态是 `stopped`，Host 的 `trackCronRunOutcome` 取走改判，按 `failed` + 该原因回写运行记录并发
    `automation.run.completed`（`status:"failed"`，`summary` 即该原因）。运行记录仍只有 Host 一个写入方。
 3. **计时清除**：审批被答（手机 / Mac）、这一轮结束（`run.completed / failed / cancelled`）、`automation.run.completed`、
    会话或桥接关闭时清掉。答复没送到内核（卡片还在）时重新计时。不持久化：Mac 重启后挂着的审批不再自动拒绝。
+4. **手机拒绝计划**：无人值守运行里手机对计划卡点「拒绝」→ `decline`，运行改判 `"计划未获批准"`（内核随后自己结束这一轮）。
 
 ```
 dispatchCronRun ─sendPrompt ACK─► publishAutomationRunStarted ─► LinkBridge 盯任务流
-                                                                    │ permission_request
+                                                                    │ permission_request / elicitation_request
                                                                     ▼
                                          adopt → LinkSession(unattended) ─approval.request─► journal ─► push ─► 中继 ─► 手机/手表
-           手机 POST …/approval ───────────────► respondPermission（计时清掉）
-           30 分钟无人答 ──► failAutomationRun ─► deny ─► stopGeneration
+           手机 POST …/approval ───────────────► respondPermission / respondElicitation（计时清掉）
+           30 分钟无人答 ──► failAutomationRun ─► deny / decline ─送到─► stopGeneration（没送到 → 撤销改判、重新计时）
+           AskUserQuestion ─► failAutomationRun ─► decline ─► stopGeneration
 内核终态(stopped) ─► trackCronRunOutcome: takeAutomationRunFailure → failed + 原因 ─► settle（回写） ─► publishAutomationRunCompleted ─► 推送
 ```
 
@@ -222,12 +234,35 @@ dispatchCronRun ─sendPrompt ACK─► publishAutomationRunStarted ─► LinkB
 没有「只读且保证从不问」的模式：`plan` 是最接近的，上面的例外不改（不为无人值守另造放行规则）。只读的定时任务
 （早报、回顾）建议 `plan`；要跑命令的（测试）建议 `guarded`。
 
+## 计划审批与提问（elicitation）
+
+内核的「退出计划」（`ExitPlanMode`）和「向用户提问」（`AskUserQuestion`）不走权限审批，而是 `elicitation_request`。
+手机发起的一轮和无人值守的自动化运行里（Mac 桌面上自己发起的轮次仍留给 Mac 上的人答）：
+
+- **计划审批卡**（`schema.interaction === "plan_approval"`）：发 `approval.request`，`approval_id` = 内核的 `requestId`，
+  `tool:"ExitPlanMode"`、`command:"批准计划并开始执行"`、`description` 与 `plan` = 计划正文（`schema.plan`，截到 4000 字），
+  `choices:["once","deny"]`（没有「本任务都允许」，手机发 `session` 按 `once`）。和普通审批同一张卡、同一条推送 /
+  计时 / 一轮结束收卡逻辑；`pending_approvals[].choices` 同样给 `["once","deny"]`。
+  - 批准：`respondElicitation({action:"accept", content:{answer:"approve"}})`（内核 interaction-broker 认的答案）；
+    会话报告的模式回到进计划之前的权限模式（多半是 `build`）。
+  - 拒绝：`respondElicitation({action:"decline"})`，留在计划模式，内核结束这一轮。
+  - Mac 上答了：流里的 `elicitation_response` 让手机收卡（`approval.responded`）。
+  - 以前：手机那一轮的计划审批被自动 `cancel`，内核记成被拒，这一轮直接结束，计划从没到过手机。
+- **其它提问**（`AskUserQuestion`）：手机还答不了。回 `decline`，发 `session.note` 带上问题和选项原文（用户可以直接发消息回答）；
+  内核按同一 `requestId` 重发时不再答第二次。手机那一轮不停（agent 按没得到回答继续）；无人值守见上文（改判 + 停）。
+
+**计划模式的上报**：内核的计划模式是 `planEnabled` 开关，设置快照里的 `mode.current` 仍是底下的权限模式（多半是 `build`），
+换模型 / 思考档位的设置更新都会带着它来。会话处于 `plan` 时，收到的 `mode_update` 若等于「底下那个模式」（或还不知道底下是什么）
+就只记下，不把手机上的模式改成 `build`；换成别的模式才算真切了（内核切到非 plan 模式会关掉 `planEnabled`）。
+手机 `POST …/mode` 一律送进内核（不再因为「本地记的已是这个模式」跳过）；发消息时 `full_auto:true` 而任务已是全自动则不再切。
+
 ## 链路追踪号
 
 请求带追踪号时（中继帧 `trace_id`；中继若原样转发请求头，也认 `headers` 里的 `X-Leo-Trace-Id`；直连读请求头
 `X-Leo-Trace-Id`），`LinkBridge.handle` 为这次请求记一行 info：`[leo/link] request {trace_id, method, path, transport,
 status, duration_ms}`（`path` 不含查询串，不记正文；出错记 warn）。`/e2e` 信封和解开后的内层请求各记一行，同一个号。
-只认 `[A-Za-z0-9_.:-]{1,128}`，其它当没带；追踪号只是标签，不参与任何判断。中继目前还不转发它（需中继侧配合）。
+只认 `[A-Za-z0-9_.:-]{1,128}`，其它当没带；追踪号只是标签，不参与任何判断。中继（0.2.3 起）把手机请求头
+`X-Leo-Trace-Id` 截到 64 字放进转发帧的 `trace_id`，慢请求（≥5 秒）和超时各记一行带同一个号，三端日志能对上。
 
 ## 已知限制
 
@@ -236,7 +271,8 @@ status, duration_ms}`（`path` 不含查询串，不记正文；出错记 warn�
 - Mac 必须开着 App 才会触发（调度器在 Electron 里）；关着的时间里错过的触发按调度器的补跑 / 跳过规则处理。
 - 多窗口时，定时触发由 main 分给某个 Window Host；Leo Link 只在抢到本地端口的那个 Host 里。触发落到别的 Host 时
   这次运行不推送（运行记录照常，`GET /automations` 看得到）。单窗口（常态）不受影响。
-- 无人值守的审批只覆盖权限审批；任务里的提问（elicitation）仍留在 Mac 上等人。
+- 手机还不能直接回答 `AskUserQuestion`：手机那一轮里拒绝并把问题告诉手机，无人值守时跳过并让运行失败。
+- Mac 桌面上切换计划模式（v4 `switchCollaborationMode` 不发 `state.updated`）手机不一定马上知道；手机自己切、计划获批时准确。
 - 「开跑」只在 `dispatchCronRun` 的 `sendPrompt` ACK 后发出：之前就已出现的审批（实际上至少隔一次模型往返）不会被接管；
   多窗口时开跑落到没有 Leo Link 的 Host 上同样不接管。
 - 自动拒绝计时只在内存里：Mac / App 重启后挂着的审批不再自动拒绝。
@@ -254,7 +290,10 @@ status, duration_ms}`（`path` 不含查询串，不记正文；出错记 warn�
 - `bridge.test.ts` 的 `automations:` 用例：假自动化服务走完整路由（白名单、列表、建（默认工作区 / 模型 / 模式）、
   同编号重试不重复建、缺编号 400、yolo 需认得出设备、改 / 停 / 删 / 立即运行、运行结束推送与可接管）；
   成功运行推最终回复摘要且 `last_run.summary` 一致、`session_id` 可打开事件流；无人值守审批（不出审批不接管、出了审批推
-  `approval.request`、手机能答、超时自动拒绝 + 停止 + 改判、运行结束清计时、普通手机任务不计时）；模板端点、畸形转义 400；
+  `approval.request`、手机能答、超时自动拒绝 + 停止 + 改判、运行结束清计时、普通手机任务不计时）；无人值守的计划审批 / 提问
+  （计划卡推手机、超时 decline + 停 + 「计划未获批准」、手机拒绝改判 / 批准不改判、提问立刻 decline + 停 + 改判、重发不重答）；
+  没送进内核的自动拒绝不改判；手机那一轮的计划审批卡（批准 accept+approve、拒绝 decline、Mac 上答了收卡、4000 字截断）、
+  提问 decline + 问题原文；切模式总送内核、过期的设置更新不把 plan 报成 build；模板端点、畸形转义 400；
   追踪号（中继帧 / 请求头取法、带号请求记一行）。
 - `directServer.test.ts`：直连 `PATCH` 带正文、`X-Leo-Trace-Id` 往下传。
 - `packages/desktop/test/cronHostSessionCreateTelemetry.test.ts`（vitest，装载生产 `dispatchCronRun`）：「已开跑」只在 `sendPrompt` accepted 后发、首发被拒不发。

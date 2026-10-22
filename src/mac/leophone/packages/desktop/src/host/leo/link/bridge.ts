@@ -17,6 +17,7 @@ import {
   failAutomationRun,
   onAutomationRunCompleted,
   onAutomationRunStarted,
+  takeAutomationRunFailure,
   type AutomationRunCompleted,
   type AutomationRunStarted,
 } from "./automationEvents.js";
@@ -144,8 +145,8 @@ export type LinkBridgeDeps = {
   unattendedApprovalMs?: number;
 };
 
-/** [up-c-mac] 无人值守的自动化运行:没人答的审批自动拒绝时,运行记录里的失败原因。 */
-export const UNATTENDED_APPROVAL_REASON = "审批 30 分钟无人处理,已自动拒绝";
+/** [up-c-mac] 无人值守运行的失败原因(审批超时 / 计划未获批准 / 要人回答问题);由会话改判,这里转出给 Host 与测试。 */
+export { UNATTENDED_APPROVAL_REASON, UNATTENDED_PLAN_REASON, UNATTENDED_QUESTION_REASON } from "./session.js";
 const UNATTENDED_APPROVAL_MS = 30 * 60 * 1000;
 /** 链路追踪号:只认普通字符,免得日志里混进换行之类。 */
 const TRACE_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -153,11 +154,12 @@ const TRACE_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 /**
  * [up-c-mac] 盯着一次自动化运行的任务流,等第一条审批。没审批的运行不接管(不进手机任务列表、不写日志);
  * 出了审批才接管成会话,之后由会话自己订阅、推审批卡、计时。
+ * [leo] 提问(计划审批 ExitPlanMode / AskUserQuestion)也算:不接管的话没人答,运行永远挂着。
  */
 type AutomationWatch = {
   run: AutomationRunStarted;
   dispose: () => void;
-  queue: ZCodePermissionRequest[];
+  queue: Array<ZCodePermissionRequest | Extract<ZCodeStreamEvent, { type: "elicitation_request" }>>;
   adopting: boolean;
 };
 const FINISHED_RUN_LIMIT = 100;
@@ -815,7 +817,7 @@ export class LinkBridge {
       taskId: run.taskId,
       deliveryKind: "bot-channel-continuous",
     })((event: ZCodeStreamEvent) => {
-      if (event.type !== "permission_request") return;
+      if (event.type !== "permission_request" && event.type !== "elicitation_request") return;
       watch.queue.push(event);
       if (!watch.adopting) void this.adoptAutomationRun(watch);
     });
@@ -848,7 +850,7 @@ export class LinkBridge {
       this.automationWatches.delete(run.runId);
       if (this.finishedRuns.has(run.runId)) return;
       this.armUnattended(session, run);
-      for (const request of watch.queue.splice(0)) session.ingestPermissionRequest(request);
+      for (const request of watch.queue.splice(0)) session.ingest(request);
     } catch (cause) {
       watch.adopting = false;
       this.deps.logger.warn("[leo/link] adopting automation run failed", { error: String(cause) });
@@ -859,7 +861,11 @@ export class LinkBridge {
     session.setUnattended({
       automationId: run.automationId,
       timeoutMs: this.deps.unattendedApprovalMs ?? UNATTENDED_APPROVAL_MS,
-      onTimeout: () => failAutomationRun(run.runId, UNATTENDED_APPROVAL_REASON),
+      // 改判交给 Host 收终态时取走;null = 撤销(拒绝没送进内核,运行还在跑)。
+      markFailed: (reason) => {
+        if (reason) failAutomationRun(run.runId, reason);
+        else takeAutomationRunFailure(run.runId);
+      },
     });
   }
 
@@ -1304,7 +1310,8 @@ export class LinkBridge {
       if (wanted && !mayUseFullAuto(caller))
         return deviceNotRecognized("认不出是哪台设备发来的，不能开全自动；按步骤在 Mac 上处理后再试");
       // "关"只把全自动任务切回先问我;计划、编辑这类别的模式不动(手机每条消息都会带开关状态)。
-      const target = wanted ? "yolo" : session.isFullAuto ? "build" : null;
+      // [leo] 已经是全自动就不再切:会话的 setMode 不再跳过同一模式,每条消息都切一次是白跑内核。
+      const target = wanted ? (session.isFullAuto ? null : "yolo") : session.isFullAuto ? "build" : null;
       if (target) {
         try {
           await session.setMode(target);
