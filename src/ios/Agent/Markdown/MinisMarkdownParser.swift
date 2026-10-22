@@ -399,6 +399,10 @@ enum MarkdownMathExtractor {
         for ch in content {
             if mathChars.contains(ch) { return true }
         }
+        // [output-render] A lone variable — `$r$`, `$n$`, `$xy$` — is the most common inline
+        // formula in an explanation and used to print with its dollar signs. Letters only, so
+        // currency (`$5`) and table artifacts never qualify.
+        if content.count <= 2, content.allSatisfy({ $0.isASCII && $0.isLetter }) { return true }
         // Length > 2 also qualifies (e.g., "x+y")
         return content.count > 2
     }

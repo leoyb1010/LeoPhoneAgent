@@ -919,6 +919,15 @@ enum DebugMethodRegistry {
             example: ["sessionId": "6D0F…"]
         ),
         MethodSpec(
+            name: "chat.session.open",
+            description: "Open a session in the chat UI (same path as Spotlight / deep links, no system prompt). For render fixtures and screenshots.",
+            params: [
+                ParamSpec(name: "sessionId", type: "string", required: true, default: nil, description: "Target session ID."),
+            ],
+            returns: "{sessionId, posted}",
+            example: ["sessionId": "6D0F…"]
+        ),
+        MethodSpec(
             name: "chat.session.delete",
             description: "Permanently delete a session and its messages. Irreversible.",
             params: [

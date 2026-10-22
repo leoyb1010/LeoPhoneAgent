@@ -56,7 +56,13 @@ struct SelectableMarkdownTheme {
     var secondaryLabelColor: UIColor { .secondaryLabel }
     /// [T-codeblock-leo-theme] 原来是 systemOrange，与 LeoTheme 的青绿强调色脱节。
     var accentColor: UIColor { leoAccentUIColor }
-    var linkColor: UIColor { .systemBlue }
+    /// [output-render] Links take the app's single accent (teal), with a soft underline in the
+    /// same hue, instead of system blue + a full-strength underline that read as a second brand
+    /// color in every reply.
+    var linkColor: UIColor { leoAccentUIColor }
+    var linkUnderlineColor: UIColor { leoAccentUIColor.withAlphaComponent(0.4) }
+    /// List bullets and open task boxes: decoration, so secondary (numbers stay label).
+    var listMarkerColor: UIColor { .secondaryLabel }
     /// [T-codeblock-leo-theme] 中性代码块：浅 #F4F4F5 / 深 #1C1C1E，不再是浅色模式下也纯黑的底。
     var codeBlockBackground: UIColor { leoCodeBlockBackgroundColor }
     /// 代码默认文字（没有被词法高亮着色的部分）：label，浅色黑、深色白。
@@ -73,7 +79,11 @@ struct SelectableMarkdownTheme {
 
     /// [T-codeblock-leo-theme] 词法高亮的 token 颜色（明暗各一套，同明度、靠色相区分，对比度 ≥ 4.5:1）。
     func syntaxColor(for token: LeoSyntaxToken) -> UIColor { leoSyntaxColors[token.rawValue] }
-    var tableBorderColor: UIColor { UIColor.label.withAlphaComponent(0.25) }
+    /// [output-render] Hairlines between rows and around the table: the system separator
+    /// (adapts to light/dark) rather than 25 % label, which drew a heavy grid.
+    var tableBorderColor: UIColor { .separator }
+    /// Header row fill — the one cue (with semibold) that separates header from body.
+    var tableHeaderBackground: UIColor { .tertiarySystemFill }
 
     func headingFont(level: Int) -> UIFont {
         let size: CGFloat
@@ -101,7 +111,9 @@ struct SelectableMarkdownTheme {
     }
 
     var codeBlockFont: UIFont {
-        let size = baseFontSize * 0.85
+        // [output-render] Capped at 22 pt: at the largest accessibility text sizes a code line
+        // at 0.85× body (28 pt) showed ~15 characters before scrolling.
+        let size = min(baseFontSize * 0.85, 22)
         if let menlo = UIFont(name: "Menlo", size: size) {
             let descriptor = menlo.fontDescriptor.addingAttributes([
                 .cascadeList: [UIFontDescriptor(fontAttributes: [.name: "PingFang SC"])]

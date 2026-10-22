@@ -393,6 +393,19 @@ final class DebugJSONRPC: @unchecked Sendable {
             return try await DebugRPCChat.compactRevert(params: params)
         case "chat.simulateLongMessage":
             return try await DebugRPCChat.simulateLongMessage(params: params)
+        case "chat.session.open":
+            // [output-render] Open a session in the UI (render fixtures / screenshots) through the
+            // same pending-store + notification path Spotlight and deep links use, without the
+            // system "Open in …?" prompt that `simctl openurl` raises.
+            guard let sid = params["sessionId"] as? String, !sid.isEmpty else {
+                throw DebugRPCErr(-32602, "sessionId required")
+            }
+            await MainActor.run {
+                NotificationNavigationStore.shared.setPending(sid)
+                NotificationCenter.default.post(name: .openSessionFromIntent, object: nil,
+                                                userInfo: ["sessionId": sid])
+            }
+            return ["sessionId": sid, "posted": true]
         #if DEBUG
         // MARK: Voice correction (design §10) — DEBUG-only, like the rest of this block.
         case "debug.voiceCorrection.confusionList":

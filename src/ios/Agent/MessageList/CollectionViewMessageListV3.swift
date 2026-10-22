@@ -361,6 +361,16 @@ private struct ReplyActionBarV3: View {
     @ObservedObject var message: ChatMessage
     @ObservedObject var bridge: CellStateBridgeV2
     @State private var copied = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// [output-render] The row eases in once, right after a reply finishes on screen. Replies
+    /// loaded from history, re-shown by scrolling, or seen with Reduce Motion appear as-is.
+    @State private var entranceShown = false
+    @MainActor private static var entrancePlayed: Set<UUID> = []
+
+    private var playsEntrance: Bool {
+        !reduceMotion && bridge.finishedWhileVisible && bridge.isLastReply
+            && !Self.entrancePlayed.contains(message.id)
+    }
 
     /// [T-smart-copy-memo] All parses (markdown join, tables, code blocks,
     /// lone-block detection) come from the per-message memo -- Menu content
@@ -577,6 +587,16 @@ private struct ReplyActionBarV3: View {
         .foregroundStyle(.secondary)
         .buttonStyle(.plain)
         .padding(.top, 2)
+        .opacity(entranceShown || !playsEntrance ? 1 : 0)
+        .offset(y: entranceShown || !playsEntrance ? 0 : 4)
+        .onAppear {
+            guard playsEntrance, !entranceShown else { return }
+            Self.entrancePlayed.insert(message.id)
+            if Self.entrancePlayed.count > 64 { Self.entrancePlayed = [message.id] }
+            withAnimation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: 0.32)?.delay(0.12)) {
+                entranceShown = true
+            }
+        }
     }
 }
 

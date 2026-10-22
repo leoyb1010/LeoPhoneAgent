@@ -469,9 +469,14 @@ fileprivate final class MarkdownNSRenderer {
     private var bodyLineSpacing: CGFloat { theme.baseFontSize * 0.25 }
     /// minisChat list item: .em(0.25) top margin
     private var listItemTopMargin: CGFloat { theme.baseFontSize * 0.25 }
-    /// minisChat headings: .em(1) top and bottom
-    private var headingTopMargin: CGFloat { theme.baseFontSize }
-    private var headingBottomMargin: CGFloat { theme.baseFontSize }
+    /// [output-render] Headings bind to what follows them: more air above (1.4 em for h1/h2,
+    /// 1.1 em below that) than below (0.5 em). Equal 1 em margins made a heading float halfway
+    /// between two sections. The first block of a reply never gets its top margin.
+    private func headingTopMargin(level: Int) -> CGFloat { theme.baseFontSize * (level <= 2 ? 1.4 : 1.1) }
+    private var headingBottomMargin: CGFloat { theme.baseFontSize * 0.5 }
+    /// Space after a paragraph / after a whole list (a list ends with a touch more air).
+    static let paragraphBottomMargin: CGFloat = 12
+    static let listBottomMargin: CGFloat = 14
 
     /// Reuse existing media attachments across re-renders to avoid reload flicker during streaming.
     var imageAttachmentCache: [String: ImageAttachment] = [:]
@@ -565,6 +570,7 @@ fileprivate final class MarkdownNSRenderer {
         codeBlockIndex = 0
         tableIndex = 0
         inlineImageCount = 0
+        listContentBase = 0
         let t0 = CFAbsoluteTimeGetCurrent()
         let tableCountBefore = tableAttachmentCache.count
 
@@ -724,7 +730,7 @@ fileprivate final class MarkdownNSRenderer {
         return RenderedBlock(
             attributed: renderInlines(inlines, baseAttributes: baseAttrs),
             topMargin: 0,
-            bottomMargin: 12
+            bottomMargin: Self.paragraphBottomMargin
         )
     }
 
@@ -743,7 +749,7 @@ fileprivate final class MarkdownNSRenderer {
         attrs[.paragraphStyle] = style
         return RenderedBlock(
             attributed: renderInlines(content, baseAttributes: attrs),
-            topMargin: headingTopMargin,
+            topMargin: headingTopMargin(level: level),
             bottomMargin: headingBottomMargin
         )
     }
@@ -799,7 +805,16 @@ fileprivate final class MarkdownNSRenderer {
         // Mark the entire range with blockquote depth for bar drawing
         let fullRange = NSRange(location: 0, length: result.length)
         if fullRange.length > 0 {
-            result.addAttribute(.blockquoteDepth, value: newDepth, range: fullRange)
+            // [output-render] Mark only what a nested quote has not already marked deeper: the
+            // outer quote used to overwrite the inner depth with its own, so `> >` drew a single
+            // bar and the nested quote read as an indented paragraph.
+            var unmarked: [NSRange] = []
+            result.enumerateAttribute(.blockquoteDepth, in: fullRange, options: []) { value, range, _ in
+                if value == nil { unmarked.append(range) }
+            }
+            for range in unmarked {
+                result.addAttribute(.blockquoteDepth, value: newDepth, range: range)
+            }
             // minisChat blockquote uses secondaryText color
             result.addAttribute(.foregroundColor, value: theme.secondaryLabelColor, range: fullRange)
         }
@@ -811,146 +826,144 @@ fileprivate final class MarkdownNSRenderer {
         )
     }
 
-    // MARK: Bulleted List
+    // MARK: Lists
+
+    // [output-render] Every list item is `marker \t content`. The marker sits at the item's start
+    // indent; one tab stop carries the first line to the content column, and wrapped lines hang
+    // at that same column. The column is sized per list from its widest marker, so `9.` and `10.`
+    // start their text at the same x and a wrapped line lines up under the first word (before,
+    // the text followed "1. " at whatever width it had while wraps hung at a fixed 24 pt — a
+    // visible jog on every wrapped item and every list past 9).
+    //
+    // Nested lists start at the enclosing item's content column (`listContentBase`), not at a
+    // fixed 24 pt per level, so they stay aligned under a wide `10.` parent too.
+    //
+    // HangFix(2026-05-13/14, see the .ips notes in history): markers MUST be plain characters,
+    // never NSTextAttachments — attachment runs make TextKit 1's fillLayoutHole
+    // O(glyphs × runs). They are also drawn at the body size: the old 1.25× bold bullet made
+    // every bulleted line taller than a numbered or plain one and turned the depth-2 square
+    // into a heavy black box.
+
+    /// Content column of the list item being rendered, excluding quote indent (0 outside
+    /// lists). Saved and restored around each item's children; reset by every `render`.
+    private var listContentBase: CGFloat = 0
+    private static let listMarkerGap: CGFloat = 8
+
+    private func listMarkerAttributes(quoteDepth: Int, font: UIFont, color: UIColor) -> [NSAttributedString.Key: Any] {
+        var attrs = baseAttributes(quoteDepth: quoteDepth)
+        attrs[.font] = font
+        attrs[.foregroundColor] = color
+        return attrs
+    }
+
+    /// Renders one list. `marker(i)` is item i's marker; the content column is sized from
+    /// `widestMarker` (one measurement per list, not per item — a streaming list re-renders on
+    /// every flush). `contentAttributes(i)` is laid over the item's content (task done state).
+    private func renderListItems(
+        count: Int,
+        isTight: Bool,
+        listDepth: Int,
+        quoteDepth: Int,
+        widestMarker: NSAttributedString,
+        marker: (Int) -> NSAttributedString,
+        rightAlignMarkers: Bool = false,
+        children: (Int) -> [BlockNode],
+        contentAttributes: (Int) -> [NSAttributedString.Key: Any]?
+    ) -> RenderedBlock {
+        let widest = widestMarker.size().width
+        let quoteIndent = CGFloat(quoteDepth) * Self.quoteIndentPerLevel
+        let start = quoteIndent + listContentBase
+        let column = MarkdownListMarkers.markerColumn(widestMarkerWidth: widest,
+                                                      minimum: Self.listIndentPerLevel,
+                                                      gap: Self.listMarkerGap)
+        let contentIndent = start + column
+        let savedBase = listContentBase
+        defer { listContentBase = savedBase }
+
+        var renderedItems: [RenderedBlock] = []
+        renderedItems.reserveCapacity(count)
+        // Ordered lists right-align their numbers on the widest one (`9.` under `10.`): a leading
+        // tab to a right tab stop, then the content tab.
+        let markerEnd: CGFloat? = rightAlignMarkers ? start + ceil(widest) : nil
+        for i in 0..<count {
+            let itemResult = NSMutableAttributedString()
+            if markerEnd != nil {
+                itemResult.append(NSAttributedString(string: "\t", attributes: baseAttributes(quoteDepth: quoteDepth)))
+            }
+            itemResult.append(marker(i))
+            itemResult.append(NSAttributedString(string: "\t", attributes: baseAttributes(quoteDepth: quoteDepth)))
+            listContentBase = contentIndent - quoteIndent
+            let child = renderListItemChildren(children(i), listDepth: listDepth + 1, quoteDepth: quoteDepth, isTight: isTight)
+            listContentBase = savedBase
+            if let extra = contentAttributes(i), child.attributed.length > 0 {
+                let childText = NSMutableAttributedString(attributedString: child.attributed)
+                childText.addAttributes(extra, range: NSRange(location: 0, length: childText.length))
+                itemResult.append(childText)
+            } else {
+                itemResult.append(child.attributed)
+            }
+            applyListIndent(to: itemResult, firstLineIndent: start, continuationIndent: contentIndent, markerEnd: markerEnd)
+            renderedItems.append(RenderedBlock(attributed: itemResult,
+                                               topMargin: listItemTopMargin,
+                                               bottomMargin: child.bottomMargin))
+        }
+        let merged = mergeRenderedBlocks(renderedItems, tightSpacing: isTight)
+        return RenderedBlock(attributed: merged.attributed,
+                             topMargin: merged.topMargin,
+                             bottomMargin: max(merged.bottomMargin ?? 0, Self.listBottomMargin))
+    }
 
     private func renderBulletedList(isTight: Bool, items: [RawListItem], listDepth: Int, quoteDepth: Int) -> RenderedBlock {
-        var renderedItems: [RenderedBlock] = []
-        let itemStartIndent = CGFloat(quoteDepth) * Self.quoteIndentPerLevel + CGFloat(listDepth) * Self.listIndentPerLevel
-        let itemContentIndent = itemStartIndent + Self.listIndentPerLevel
-
-        // HangFix(2026-05-13, re-restored 2026-05-14 with .ips evidence) —
-        // Bullet glyphs MUST be Unicode characters, NOT NSTextAttachments.
-        // Build 13 reverted bullets to SF-symbol NSTextAttachments per
-        // user request to restore visual size — within 90s of install the
-        // device hit a fresh 0x8BADF00D watchdog (ips LeoPhoneAgent-2026-05-14-
-        // 163330). Main-thread frame #1: `NSConcreteTextStorage
-        // attribute:atIndex:effectiveRange:` — fillLayoutHole scanning
-        // attribute runs. A 6-item list produces 6 image-attachment runs;
-        // typesetter cost is O(glyphs × runs) and explodes whenever
-        // setSize: forces a full re-layout.
-        //
-        // To keep bullets visually prominent (the original complaint about
-        // "list got smaller") without paying the attachment-run tax, render the
-        // Unicode glyph at 1.25× baseFont with bold weight + a small
-        // baseline offset so it reads as an emphasized punctuation mark.
-        // Depth → glyph:
-        //   0  filled circle   "•"  U+2022
-        //   1  hollow circle   "◦"  U+25E6
-        //   2+ filled square   "▪"  U+25AA
-        let bulletGlyph: String
-        switch listDepth {
-        case 0: bulletGlyph = "\u{2022}"   // •
-        case 1: bulletGlyph = "\u{25E6}"   // ◦
-        default: bulletGlyph = "\u{25AA}"  // ▪
-        }
-        let bulletColor = quoteDepth > 0 ? theme.secondaryLabelColor : theme.labelColor
-        var bulletAttrs = baseAttributes(quoteDepth: quoteDepth)
-        bulletAttrs[.foregroundColor] = bulletColor
-        // 1.25× bold makes the Unicode bullet read at roughly the same
-        // visual weight as the prior SF-symbol filled circle.
-        bulletAttrs[.font] = UIFont.systemFont(ofSize: theme.baseFontSize * 1.25, weight: .bold)
-        // Small negative baseline offset so the bullet sits near the
-        // body text's x-height rather than its cap-height.
-        bulletAttrs[.baselineOffset] = -theme.baseFontSize * 0.05
-
-        for item in items {
-            let itemResult = NSMutableAttributedString()
-            itemResult.append(NSAttributedString(string: bulletGlyph, attributes: bulletAttrs))
-            itemResult.append(NSAttributedString(string: "  ", attributes: baseAttributes(quoteDepth: quoteDepth)))
-            let child = renderListItemChildren(item.children, listDepth: listDepth + 1, quoteDepth: quoteDepth, isTight: isTight)
-            itemResult.append(child.attributed)
-            applyListIndent(
-                to: itemResult,
-                firstLineIndent: itemStartIndent,
-                continuationIndent: itemContentIndent
-            )
-            renderedItems.append(
-                RenderedBlock(
-                    attributed: itemResult,
-                    topMargin: listItemTopMargin,
-                    bottomMargin: child.bottomMargin
-                )
-            )
-        }
-        let merged = mergeRenderedBlocks(renderedItems, tightSpacing: isTight)
-        return RenderedBlock(
-            attributed: merged.attributed,
-            topMargin: merged.topMargin,
-            bottomMargin: max(merged.bottomMargin ?? 0, 16)
-        )
+        // Bullets are decoration: secondary color, body size. The heavier weight keeps the
+        // top-level dot as visible as the old enlarged one without raising the line height.
+        let weight: UIFont.Weight = listDepth == 0 ? .heavy : .bold
+        let font = UIFont.systemFont(ofSize: theme.baseFontSize, weight: weight)
+        let attrs = listMarkerAttributes(quoteDepth: quoteDepth, font: font, color: theme.listMarkerColor)
+        let bullet = NSAttributedString(string: MarkdownListMarkers.bullet(depth: listDepth), attributes: attrs)
+        return renderListItems(count: items.count, isTight: isTight, listDepth: listDepth, quoteDepth: quoteDepth,
+                               widestMarker: bullet,
+                               marker: { _ in bullet },
+                               children: { items[$0].children },
+                               contentAttributes: { _ in nil })
     }
-
-    // MARK: Numbered List
 
     private func renderNumberedList(isTight: Bool, start: Int, items: [RawListItem], listDepth: Int, quoteDepth: Int) -> RenderedBlock {
-        var renderedItems: [RenderedBlock] = []
-        let itemStartIndent = CGFloat(quoteDepth) * Self.quoteIndentPerLevel + CGFloat(listDepth) * Self.listIndentPerLevel
-        let itemContentIndent = itemStartIndent + Self.listIndentPerLevel
-
-        for (i, item) in items.enumerated() {
-            let number = "\(start + i). "
-            let itemResult = NSMutableAttributedString(string: number, attributes: baseAttributes(quoteDepth: quoteDepth))
-            let child = renderListItemChildren(item.children, listDepth: listDepth + 1, quoteDepth: quoteDepth, isTight: isTight)
-            itemResult.append(child.attributed)
-            applyListIndent(
-                to: itemResult,
-                firstLineIndent: itemStartIndent,
-                continuationIndent: itemContentIndent
-            )
-            renderedItems.append(
-                RenderedBlock(
-                    attributed: itemResult,
-                    topMargin: listItemTopMargin,
-                    bottomMargin: child.bottomMargin
-                )
-            )
-        }
-        let merged = mergeRenderedBlocks(renderedItems, tightSpacing: isTight)
-        return RenderedBlock(
-            attributed: merged.attributed,
-            topMargin: merged.topMargin,
-            bottomMargin: max(merged.bottomMargin ?? 0, 16)
-        )
+        // Tabular digits keep a column of numbers even (`8.` / `18.`).
+        let font = UIFont.monospacedDigitSystemFont(ofSize: theme.baseFontSize, weight: .regular)
+        let color = quoteDepth > 0 ? theme.secondaryLabelColor : theme.labelColor
+        let attrs = listMarkerAttributes(quoteDepth: quoteDepth, font: font, color: color)
+        // Tabular digits: the last (largest) number is the widest.
+        let widest = NSAttributedString(string: MarkdownListMarkers.widestOrdinal(start: start, count: items.count), attributes: attrs)
+        return renderListItems(count: items.count, isTight: isTight, listDepth: listDepth, quoteDepth: quoteDepth,
+                               widestMarker: widest,
+                               marker: { NSAttributedString(string: MarkdownListMarkers.ordinal(start + $0), attributes: attrs) },
+                               rightAlignMarkers: true,
+                               children: { items[$0].children },
+                               contentAttributes: { _ in nil })
     }
 
-    // MARK: Task List
-
     private func renderTaskList(isTight: Bool, items: [RawTaskListItem], listDepth: Int, quoteDepth: Int) -> RenderedBlock {
-        var renderedItems: [RenderedBlock] = []
-        let itemStartIndent = CGFloat(quoteDepth) * Self.quoteIndentPerLevel + CGFloat(listDepth) * Self.listIndentPerLevel
-        let itemContentIndent = itemStartIndent + Self.listIndentPerLevel
-
-        for item in items {
-            let checkbox = item.isCompleted ? "☑ " : "☐ "
-            let itemResult = NSMutableAttributedString(string: checkbox, attributes: baseAttributes(quoteDepth: quoteDepth))
-            let child = renderListItemChildren(item.children, listDepth: listDepth + 1, quoteDepth: quoteDepth, isTight: isTight)
-            itemResult.append(child.attributed)
-            applyListIndent(
-                to: itemResult,
-                firstLineIndent: itemStartIndent,
-                continuationIndent: itemContentIndent
-            )
-            renderedItems.append(
-                RenderedBlock(
-                    attributed: itemResult,
-                    topMargin: listItemTopMargin,
-                    bottomMargin: child.bottomMargin
-                )
-            )
-        }
-        let merged = mergeRenderedBlocks(renderedItems, tightSpacing: isTight)
-        return RenderedBlock(
-            attributed: merged.attributed,
-            topMargin: merged.topMargin,
-            bottomMargin: max(merged.bottomMargin ?? 0, 16)
-        )
+        // Done items: accent check box and secondary text, so what is left stands out.
+        let font = UIFont.systemFont(ofSize: theme.baseFontSize, weight: .medium)
+        let doneAttrs = listMarkerAttributes(quoteDepth: quoteDepth, font: font, color: theme.accentColor)
+        let openAttrs = listMarkerAttributes(quoteDepth: quoteDepth, font: font, color: theme.listMarkerColor)
+        let doneText: [NSAttributedString.Key: Any] = [.foregroundColor: theme.secondaryLabelColor]
+        return renderListItems(count: items.count, isTight: isTight, listDepth: listDepth, quoteDepth: quoteDepth,
+                               widestMarker: NSAttributedString(string: MarkdownListMarkers.taskBox(completed: true), attributes: doneAttrs),
+                               marker: { i in
+                                   let done = items[i].isCompleted
+                                   return NSAttributedString(string: MarkdownListMarkers.taskBox(completed: done),
+                                                             attributes: done ? doneAttrs : openAttrs)
+                               },
+                               children: { items[$0].children },
+                               contentAttributes: { items[$0].isCompleted ? doneText : nil })
     }
 
     private func renderListItemChildren(_ children: [BlockNode], listDepth: Int, quoteDepth: Int, isTight: Bool) -> RenderedBlock {
         renderBlockSequence(children, listDepth: listDepth, quoteDepth: quoteDepth, tightSpacing: isTight)
     }
 
-    private func applyListIndent(to attributed: NSMutableAttributedString, firstLineIndent: CGFloat, continuationIndent: CGFloat) {
+    private func applyListIndent(to attributed: NSMutableAttributedString, firstLineIndent: CGFloat, continuationIndent: CGFloat, markerEnd: CGFloat? = nil) {
         guard attributed.length > 0 else { return }
 
         let text = attributed.string as NSString
@@ -972,7 +985,15 @@ fileprivate final class MarkdownNSRenderer {
             style.lineSpacing = max(style.lineSpacing, bodyLineSpacing)
             style.headIndent = max(style.headIndent, continuationIndent)
             if isFirstParagraph {
-                style.firstLineHeadIndent = max(style.firstLineHeadIndent, firstLineIndent)
+                // The marker paragraph: marker at the start (or right-aligned on `markerEnd`),
+                // then one tab stop at the content column.
+                style.firstLineHeadIndent = firstLineIndent
+                var stops = [NSTextTab(textAlignment: .natural, location: continuationIndent)]
+                if let markerEnd {
+                    stops.insert(NSTextTab(textAlignment: .right, location: markerEnd), at: 0)
+                }
+                style.tabStops = stops
+                style.defaultTabInterval = 0
                 isFirstParagraph = false
             } else {
                 style.firstLineHeadIndent = max(style.firstLineHeadIndent, continuationIndent)
@@ -1317,6 +1338,7 @@ fileprivate final class MarkdownNSRenderer {
             }
             linkAttrs[.foregroundColor] = theme.linkColor
             linkAttrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
+            linkAttrs[.underlineColor] = theme.linkUnderlineColor
             return renderInlines(children, baseAttributes: linkAttrs)
 
         case .image(let source, let children):
@@ -1497,6 +1519,25 @@ final class CodeBlockAttachment: NSTextAttachment {
     static let topMargin: CGFloat = 6
     static let bottomMargin: CGFloat = 4
 
+    // [output-render] Header row + insets. The language label and the code share one left edge
+    // (they were 12 vs 8 pt apart), the copy control is a labelled button centred in the header
+    // instead of a 9 pt icon hanging over the first code line, and the code keeps a right
+    // inset so a long line does not run into the rounded edge.
+    static let headerHeight: CGFloat = 34
+    static let codeInsetH: CGFloat = 14
+    static let codeBottomPadding: CGFloat = 12
+    static let maxBlockHeight: CGFloat = 400
+    private static let languageLabelTag = 0xC0DE
+
+    /// The header label. Blank while the fence is open and no code has arrived: the info line
+    /// may still be mid-word (`swi`), and a label that changes under the reader is a flicker.
+    /// Once a code line exists the info line ended with a newline, so the word is final.
+    private var languageLabelText: String {
+        if isFenceOpen && code.isEmpty { return "" }
+        return (language ?? "text").lowercased()
+    }
+    private static let copyButtonTag = 0xC0DF
+
     /// Cached content height from sizeThatFits, keyed by code hash + width.
     private var cachedContentHeight: (hash: Int, height: CGFloat)?
 
@@ -1512,6 +1553,12 @@ final class CodeBlockAttachment: NSTextAttachment {
         ]
     }
 
+    private static func configureCodeTextView(_ tv: UITextView) {
+        tv.textContainerInset = UIEdgeInsets(top: 0, left: codeInsetH, bottom: 0, right: codeInsetH)
+        tv.textContainer.lineFragmentPadding = 0
+        tv.textContainer.lineBreakMode = .byClipping
+    }
+
     /// Measure actual code text height using the same approach as makeView.
     private func measureCodeHeight() -> CGFloat {
         let codeHash = code.hashValue
@@ -1521,23 +1568,22 @@ final class CodeBlockAttachment: NSTextAttachment {
         let attrStr = NSAttributedString(string: code, attributes: Self.codeTextAttributes(theme: theme))
         let tv = UITextView()
         tv.isScrollEnabled = false
-        tv.textContainerInset = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
-        tv.textContainer.lineFragmentPadding = 0
-        tv.textContainer.lineBreakMode = .byClipping
+        Self.configureCodeTextView(tv)
         tv.attributedText = attrStr
         let h = tv.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)).height
         cachedContentHeight = (hash: codeHash, height: h)
         return h
     }
 
+    /// Visible code height (capped) for a given content height.
+    private static func scrollHeight(forContent contentHeight: CGFloat) -> CGFloat {
+        min(contentHeight, maxBlockHeight - headerHeight - codeBottomPadding)
+    }
+
     override func attachmentBounds(for textContainer: NSTextContainer?, proposedLineFragment lineFrag: CGRect, glyphPosition position: CGPoint, characterIndex charIndex: Int) -> CGRect {
         let width = lineFrag.width
-        let topOffset: CGFloat = (language != nil && !language!.isEmpty) ? 28 : 12
-        let contentHeight = measureCodeHeight()
-        let bottomPadding: CGFloat = 12
-        let maxCodeHeight: CGFloat = 400 - topOffset - bottomPadding
-        let scrollHeight = min(contentHeight, maxCodeHeight)
-        let totalHeight = topOffset + scrollHeight + bottomPadding
+        let scrollHeight = Self.scrollHeight(forContent: measureCodeHeight())
+        let totalHeight = Self.headerHeight + scrollHeight + Self.codeBottomPadding
         let height = totalHeight + Self.topMargin + Self.bottomMargin
         return CGRect(x: 0, y: 0, width: width, height: height)
     }
@@ -1564,6 +1610,40 @@ final class CodeBlockAttachment: NSTextAttachment {
         if offset != scrollView.contentOffset { scrollView.contentOffset = offset }
     }
 
+    private func makeCopyButton(contentWidth: CGFloat, source codeTextView: UITextView) -> UIButton {
+        let chromeColor = theme.codeBlockChromeColor
+        let iconConfig = UIImage.SymbolConfiguration(pointSize: 11, weight: .medium)
+        func configuration(copied: Bool) -> UIButton.Configuration {
+            var config = UIButton.Configuration.plain()
+            config.image = UIImage(systemName: copied ? "checkmark" : "doc.on.doc", withConfiguration: iconConfig)
+            config.imagePadding = 4
+            config.baseForegroundColor = copied ? .systemGreen : chromeColor
+            var title = AttributedString(copied ? AppLocalized("Copied") : AppLocalized("Copy"))
+            title.font = .systemFont(ofSize: 12, weight: .medium)
+            config.attributedTitle = title
+            config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 10, bottom: 0, trailing: Self.codeInsetH - 2)
+            return config
+        }
+        let copyButton = UIButton(configuration: configuration(copied: false))
+        copyButton.tag = Self.copyButtonTag
+        copyButton.accessibilityLabel = AppLocalized("Copy")
+        let size = copyButton.sizeThatFits(CGSize(width: 200, height: Self.headerHeight))
+        let width = max(44, ceil(size.width))
+        copyButton.frame = CGRect(x: contentWidth - width, y: 0, width: width, height: Self.headerHeight)
+        copyButton.autoresizingMask = [.flexibleLeftMargin]
+        copyButton.addAction(UIAction { [weak codeTextView, weak copyButton] _ in
+            guard let copyButton else { return }
+            // Read the text view, not this attachment: the view outlives the attachment that
+            // built it, and updateExistingView keeps the text current while streaming.
+            UIPasteboard.general.string = codeTextView?.text
+            copyButton.configuration = configuration(copied: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak copyButton] in
+                copyButton?.configuration = configuration(copied: false)
+            }
+        }, for: .touchUpInside)
+        return copyButton
+    }
+
     func makeView(width: CGFloat) -> UIView {
         let wrapper = UIView()
         wrapper.backgroundColor = .clear
@@ -1577,22 +1657,20 @@ final class CodeBlockAttachment: NSTextAttachment {
         container.layer.cornerCurve = .continuous
         container.clipsToBounds = true
 
-        var topOffset: CGFloat = 12
+        let topOffset = Self.headerHeight
 
-        // Language label
-        if let language, !language.isEmpty {
-            let langLabel = UILabel()
-            langLabel.text = language.lowercased()
-            langLabel.font = .systemFont(ofSize: 11, weight: .medium)
-            // [T-codeblock-leo-theme] 原来是写死的半透明白（为旧的纯黑底做的），放到浅色中性底上会看不见。
-            langLabel.textColor = theme.codeBlockChromeColor
-            langLabel.frame = CGRect(x: 12, y: 8, width: contentWidth - 60, height: 16)
-            container.addSubview(langLabel)
-            topOffset = 28
-        }
+        // Language label — always present (a bare fence reads "text"), vertically centred in the header.
+        let langLabel = UILabel()
+        langLabel.tag = Self.languageLabelTag
+        langLabel.text = languageLabelText
+        langLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        // [T-codeblock-leo-theme] 原来是写死的半透明白（为旧的纯黑底做的），放到浅色中性底上会看不见。
+        langLabel.textColor = theme.codeBlockChromeColor
+        langLabel.frame = CGRect(x: Self.codeInsetH, y: 0, width: max(0, contentWidth - 120), height: Self.headerHeight)
+        container.addSubview(langLabel)
 
         // Scrollable code area (own the pan gesture here for reliable horizontal scroll)
-        let scrollView = UIScrollView()
+        let scrollView = EdgeHintScrollView()
         scrollView.showsHorizontalScrollIndicator = true
         scrollView.showsVerticalScrollIndicator = true
         scrollView.alwaysBounceHorizontal = true
@@ -1604,9 +1682,7 @@ final class CodeBlockAttachment: NSTextAttachment {
         codeTextView.isSelectable = true
         codeTextView.isScrollEnabled = false // scrollView handles scrolling
         codeTextView.backgroundColor = .clear
-        codeTextView.textContainerInset = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
-        codeTextView.textContainer.lineFragmentPadding = 0
-        codeTextView.textContainer.lineBreakMode = .byClipping
+        Self.configureCodeTextView(codeTextView)
 
         // [T-codeblock-syntax] 缓存里已有着色就当场带着颜色（第一帧之前，不闪）；否则先显示纯文本，
         // 结果好了由着色器回填——只动 `.foregroundColor`，所以下面测出来的尺寸不会变。
@@ -1626,9 +1702,8 @@ final class CodeBlockAttachment: NSTextAttachment {
         let fittingWidth = fitting.width
         codeTextView.frame = CGRect(x: 0, y: 0, width: fittingWidth, height: contentHeight)
 
-        let maxCodeHeight: CGFloat = 400 - topOffset - 12
-        let scrollHeight = min(contentHeight, maxCodeHeight)
-        let bottomPadding: CGFloat = 12
+        let scrollHeight = Self.scrollHeight(forContent: contentHeight)
+        let bottomPadding = Self.codeBottomPadding
         scrollView.frame = CGRect(x: 0, y: topOffset, width: contentWidth, height: scrollHeight + bottomPadding)
         scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: bottomPadding, right: 0)
         scrollView.scrollIndicatorInsets = .zero
@@ -1637,38 +1712,22 @@ final class CodeBlockAttachment: NSTextAttachment {
         Self.syncScrollability(scrollView, contentSize: scrollView.contentSize,
                                visibleWidth: contentWidth, scrollHeight: scrollHeight)
 
-        // Auto-scroll to bottom during streaming
+        // Auto-scroll to bottom during streaming — only while the fence is still open.
+        // [output-render] A finished block taller than the 400 pt cap used to open scrolled to its
+        // END (every code block over ~16 lines, on every session reopen), hiding where it starts.
         let bottomY = scrollView.contentSize.height - scrollView.bounds.height
-        if bottomY > 0 {
+        if isFenceOpen, bottomY > 0 {
             scrollView.contentOffset = CGPoint(x: 0, y: bottomY)
         }
 
         container.addSubview(scrollView)
+        // [output-render] A soft edge on the right while more code is off-screen to the right.
+        scrollView.installTrailingHint(in: container)
 
         let totalHeight = topOffset + scrollHeight + bottomPadding
         container.frame = CGRect(x: inset, y: 0, width: contentWidth, height: totalHeight)
 
-        // Copy button — 44x44 hit area per Apple HIG, icon stays small visually
-        let iconConfig = UIImage.SymbolConfiguration(pointSize: 9, weight: .medium)
-        let copyButton = UIButton(type: .system)
-        copyButton.setImage(UIImage(systemName: "doc.on.doc", withConfiguration: iconConfig), for: .normal)
-        // [T-codeblock-leo-theme] 用主题的次要色，不再写死半透明白。
-        let chromeColor = theme.codeBlockChromeColor
-        copyButton.tintColor = chromeColor
-        copyButton.frame = CGRect(x: contentWidth - 44, y: 0, width: 44, height: 44)
-        let performCopy: () -> Void = { [weak codeTextView, weak copyButton] in
-            // Read directly from the UITextView so we always copy the latest
-            // content, even after updateExistingView replaced the attributed text.
-            UIPasteboard.general.string = codeTextView?.text
-            copyButton?.setImage(UIImage(systemName: "checkmark", withConfiguration: iconConfig), for: .normal)
-            copyButton?.tintColor = .systemGreen
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                copyButton?.setImage(UIImage(systemName: "doc.on.doc", withConfiguration: iconConfig), for: .normal)
-                copyButton?.tintColor = chromeColor
-            }
-        }
-        copyButton.addAction(UIAction { _ in performCopy() }, for: .touchUpInside)
-        container.addSubview(copyButton)
+        container.addSubview(makeCopyButton(contentWidth: contentWidth, source: codeTextView))
 
         container.frame.origin.y = Self.topMargin
         wrapper.addSubview(container)
@@ -1682,6 +1741,14 @@ final class CodeBlockAttachment: NSTextAttachment {
         guard let container = wrapper.subviews.first else { return }
         guard let scrollView = container.subviews.first(where: { $0 is UIScrollView }) as? UIScrollView else { return }
         guard let codeTextView = scrollView.subviews.first(where: { $0 is CodeSyntaxTextView }) as? CodeSyntaxTextView else { return }
+
+        // [output-render] The view outlives the attachment that built it. While streaming, the
+        // fence's info line can arrive in pieces (`swi` → `swift`), so refresh the label from the
+        // current attachment — it used to stay at the first partial word for the whole block.
+        if let label = container.viewWithTag(Self.languageLabelTag) as? UILabel {
+            let text = languageLabelText
+            if label.text != text { label.text = text }
+        }
 
         // [T-codeblock-syntax] 流式时每次 flush 都会重建文本。着色器把上一轮的着色原样套到变长后的文本上
         // （整块不会闪回单色），并控制下一次后台高亮的节奏：围栏没闭合时最多每 700ms 一次，
@@ -1701,10 +1768,9 @@ final class CodeBlockAttachment: NSTextAttachment {
         scrollView.contentSize = fitting
 
         // Recalculate heights to match attachmentBounds logic
-        let topOffset: CGFloat = (language != nil && !language!.isEmpty) ? 28 : 12
-        let maxCodeHeight: CGFloat = 400 - topOffset - 12
-        let scrollHeight = min(fitting.height, maxCodeHeight)
-        let bottomPadding: CGFloat = 12
+        let topOffset = Self.headerHeight
+        let scrollHeight = Self.scrollHeight(forContent: fitting.height)
+        let bottomPadding = Self.codeBottomPadding
         let newScrollFrame = CGRect(x: 0, y: topOffset, width: container.frame.width, height: scrollHeight + bottomPadding)
         let totalHeight = topOffset + scrollHeight + bottomPadding
         // [T-codeblock-hide-idle-scrollbars] Re-evaluate on every update: a
@@ -1720,13 +1786,14 @@ final class CodeBlockAttachment: NSTextAttachment {
         // desync the code frame from the text flow. Only the wrapper's visible
         // children (the rounded background container + its scroll view) animate
         // their height, so the box smoothly extends while layout stays exact.
+        // [output-render] Reduce Motion: the box takes its new height without the glide.
         let heightGrew = totalHeight > container.frame.size.height + 0.5
         wrapper.frame.size.height = totalHeight + Self.topMargin + Self.bottomMargin
         let applyChildFrames = {
             scrollView.frame = newScrollFrame
             container.frame.size.height = totalHeight
         }
-        if heightGrew {
+        if heightGrew, !UIAccessibility.isReduceMotionEnabled {
             UIView.animate(withDuration: 0.20,
                            delay: 0,
                            options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState],
@@ -1735,11 +1802,12 @@ final class CodeBlockAttachment: NSTextAttachment {
             applyChildFrames()
         }
 
-        // Auto-scroll to bottom during streaming
+        // Auto-scroll to bottom while the block is still streaming (follow the newest line).
         let bottomY = scrollView.contentSize.height - scrollView.bounds.height
-        if bottomY > 0 {
+        if isFenceOpen, bottomY > 0 {
             scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: bottomY)
         }
+        (scrollView as? EdgeHintScrollView)?.updateTrailingHint()
     }
 }
 
@@ -1909,9 +1977,18 @@ final class TableAttachment: NSTextAttachment {
 
     /// Spacing controlled by RenderedBlock margins; no extra padding inside attachment
     static let verticalMargin: CGFloat = 0
-    static let minRowHeight: CGFloat = 36
-    static let cellPaddingH: CGFloat = 16
+    // [output-render] Tighter cells (12 pt sides, was 16) and a slightly smaller face than body
+    // (0.94×) so a 4–5 column table shows more of itself on a phone before scrolling.
+    static let minRowHeight: CGFloat = 34
+    static let cellPaddingH: CGFloat = 12
     static let cellPaddingV: CGFloat = 8
+    static let cornerRadius: CGFloat = LeoTheme.Radius.field
+
+    /// Cell font: semibold for the header row, regular for the body.
+    private func cellFont(header: Bool) -> UIFont {
+        let size = (theme.baseFontSize * 0.94).rounded(.toNearestOrAwayFromZero)
+        return header ? .systemFont(ofSize: size, weight: .semibold) : .systemFont(ofSize: size)
+    }
 
     /// Narrowest real (non-probe) attachment width observed process-wide, used as
     /// the height-measurement fallback for a first-appearance probe that races
@@ -2075,11 +2152,9 @@ final class TableAttachment: NSTextAttachment {
         for (rowIdx, row) in rows.enumerated() {
             for (colIdx, cell) in row.cells.enumerated() where colIdx < colCount {
                 let text = cell.content.plainText
-                let font: UIFont = rowIdx == 0
-                    ? .systemFont(ofSize: theme.baseFontSize, weight: .semibold)
-                    : .systemFont(ofSize: theme.baseFontSize)
+                let font = cellFont(header: rowIdx == 0)
                 let size = (text as NSString).size(withAttributes: [.font: font])
-                let requested = ceil(size.width) + Self.cellPaddingH * 2 + 12
+                let requested = ceil(size.width) + Self.cellPaddingH * 2 + 4
                 columnWidths[colIdx] = min(width * 5, max(columnWidths[colIdx], requested))
             }
         }
@@ -2094,9 +2169,7 @@ final class TableAttachment: NSTextAttachment {
         var rowHeights = [CGFloat](repeating: Self.minRowHeight, count: rows.count)
         for (rowIdx, row) in rows.enumerated() {
             for (colIdx, cell) in row.cells.enumerated() where colIdx < colCount {
-                let font: UIFont = rowIdx == 0
-                    ? .systemFont(ofSize: theme.baseFontSize, weight: .semibold)
-                    : .systemFont(ofSize: theme.baseFontSize)
+                let font = cellFont(header: rowIdx == 0)
                 let cellWidth = columnWidths[colIdx] - Self.cellPaddingH * 2
                 let attrStr = renderCellInlines(cell.content, baseFont: font)
                 let boundingRect = attrStr.boundingRect(
@@ -2518,7 +2591,7 @@ final class TableAttachment: NSTextAttachment {
                 // Draw the table content (rows, cells, separators).
                 stack.layer.render(in: ctx.cgContext)
                 // Rounded outer border as visual chrome.
-                let path = UIBezierPath(roundedRect: bounds.insetBy(dx: 0.25, dy: 0.25), cornerRadius: 8)
+                let path = UIBezierPath(roundedRect: bounds.insetBy(dx: 0.25, dy: 0.25), cornerRadius: Self.cornerRadius)
                 border.setStroke()
                 path.lineWidth = 0.5
                 path.stroke()
@@ -2546,9 +2619,7 @@ final class TableAttachment: NSTextAttachment {
                 default: alignment = .left
                 }
 
-                let baseFont: UIFont = rowIdx == 0
-                    ? .systemFont(ofSize: theme.baseFontSize, weight: .semibold)
-                    : .systemFont(ofSize: theme.baseFontSize)
+                let baseFont = cellFont(header: rowIdx == 0)
 
                 let attrStr = NSMutableAttributedString(attributedString: renderCellInlines(cell.content, baseFont: baseFont))
                 let paraStyle = NSMutableParagraphStyle()
@@ -2651,13 +2722,8 @@ final class TableAttachment: NSTextAttachment {
                     }
                 }
 
-                // Vertical separator — full height to connect across rows
-                if colIdx < colCount - 1 {
-                    let sep = UIView()
-                    sep.backgroundColor = theme.tableBorderColor
-                    sep.frame = CGRect(x: x + columnWidths[colIdx] - 0.25, y: 0, width: 0.5, height: rowHeight)
-                    rowView.addSubview(sep)
-                }
+                // [output-render] No vertical rules: row hairlines + cell padding + alignment
+                // carry the columns, and the grid no longer dominates the numbers.
                 x += columnWidths[colIdx]
             }
 
@@ -2669,6 +2735,9 @@ final class TableAttachment: NSTextAttachment {
                 rowView.addSubview(hSep)
             }
 
+            if rowIdx == 0 {
+                rowView.backgroundColor = theme.tableHeaderBackground
+            }
             rowView.frame = CGRect(x: 0, y: yOffset, width: tableWidth, height: rowHeight)
             stack.addArrangedSubview(rowView)
             NSLayoutConstraint.activate([
@@ -2688,12 +2757,15 @@ final class TableAttachment: NSTextAttachment {
         // traitCollectionDidChange via `borderColorProvider`, so dark-mode
         // hosts always get the right resolved color even when the view was
         // initially created off-window.
-        scrollView.layer.cornerRadius = 8
+        scrollView.layer.cornerRadius = Self.cornerRadius
+        scrollView.layer.cornerCurve = .continuous
         scrollView.layer.borderWidth = 0.5
         scrollView.applyBorderColorForCurrentTraits()
         scrollView.clipsToBounds = true
 
         wrapper.addSubview(scrollView)
+        // [output-render] Soft right edge while columns are hidden off to the right.
+        scrollView.installTrailingHint(in: wrapper)
         wrapper.frame = CGRect(x: 0, y: 0, width: width, height: stackHeight + Self.verticalMargin * 2)
 
         // [T-ios-table-hscroll-offset-lost] Keep the attachment's persistent
@@ -2724,13 +2796,82 @@ final class TableAttachment: NSTextAttachment {
 
 }
 
+/// [output-render] A horizontally scrollable code block or table shows a soft shadow on its
+/// right edge while more content is hidden there, and drops it at the end. It is a translucent
+/// `label` tint (no mask, no offscreen pass), so it reads on any background — the chat, a code
+/// block's fill, the Mac session view — and costs one CAGradientLayer per scrollable block.
+final class ScrollEdgeHintView: UIView {
+    static let width: CGFloat = 16
+    private let gradient = CAGradientLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        gradient.startPoint = CGPoint(x: 0, y: 0.5)
+        gradient.endPoint = CGPoint(x: 1, y: 0.5)
+        layer.addSublayer(gradient)
+        applyColors()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: ScrollEdgeHintView, _) in
+            view.applyColors()
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func applyColors() {
+        let tint = UIColor.label.resolvedColor(with: traitCollection)
+        let peak: CGFloat = traitCollection.userInterfaceStyle == .dark ? 0.16 : 0.07
+        gradient.colors = [tint.withAlphaComponent(0).cgColor, tint.withAlphaComponent(peak).cgColor]
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradient.frame = bounds
+        CATransaction.commit()
+    }
+}
+
+/// Scroll view that keeps a `ScrollEdgeHintView` (a sibling, so it does not scroll with the
+/// content) in step with its horizontal position. `layoutSubviews` runs on every scroll tick;
+/// the update is two comparisons and a frame write.
+class EdgeHintScrollView: UIScrollView {
+    private weak var trailingHint: ScrollEdgeHintView?
+
+    /// Adds the hint to `host` (the scroll view's superview or an ancestor sharing its frame space).
+    func installTrailingHint(in host: UIView) {
+        let hint = ScrollEdgeHintView()
+        host.addSubview(hint)
+        trailingHint = hint
+        updateTrailingHint()
+    }
+
+    func updateTrailingHint() {
+        guard let hint = trailingHint, let host = hint.superview else { return }
+        let frameInHost = superview === host ? frame : convert(bounds, to: host)
+        let target = CGRect(x: frameInHost.maxX - ScrollEdgeHintView.width, y: frameInHost.minY,
+                            width: ScrollEdgeHintView.width, height: frameInHost.height)
+        if hint.frame != target { hint.frame = target }
+        let hidden = contentSize.width <= bounds.width + 0.5
+            || contentOffset.x + bounds.width >= contentSize.width - 1
+        if hint.isHidden != hidden { hint.isHidden = hidden }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateTrailingHint()
+    }
+}
+
 /// UIScrollView subclass that re-resolves its `layer.borderColor` whenever
 /// the active trait collection changes. CGColor values frozen from a
 /// dynamic UIColor at view-creation time would otherwise lock in whichever
 /// appearance was active when the attachment was first laid out — typically
 /// before the view enters the window, so light-mode `UIColor.label`
 /// resolves and renders nearly invisible against a dark message background.
-final class TableScrollView: UIScrollView, UIScrollViewDelegate {
+final class TableScrollView: EdgeHintScrollView, UIScrollViewDelegate {
     /// Closure called every time the trait collection changes; should
     /// return a CGColor resolved for the supplied trait collection.
     var borderColorProvider: ((UITraitCollection) -> CGColor)?
@@ -3326,6 +3467,8 @@ final class MathAttachment: NSTextAttachment {
     let theme: SelectableMarkdownTheme
     private(set) var renderedImage: UIImage?
     private(set) var renderedSize: CGSize = .zero
+    /// [output-render] Baseline of the rendered formula, measured up from the image bottom.
+    private(set) var renderedBaseline: CGFloat?
     private var didAttemptRender = false
     /// SwiftMath failed — show raw LaTeX fallback.
     private(set) var renderFailed = false
@@ -3356,11 +3499,14 @@ final class MathAttachment: NSTextAttachment {
             if isBlock {
                 return CGRect(x: 0, y: 0, width: lineFrag.width, height: imgH)
             } else {
-                // Center the formula vertically on the text baseline.
-                // y offset = -(imgH - capHeight) / 2 positions the image so its
-                // vertical center aligns roughly with the cap-height center.
-                let baseFont = theme.baseFont
-                let yOffset = -(imgH - baseFont.capHeight) / 2
+                // [output-render] Sit the formula's baseline on the text baseline when the
+                // renderer reports it; otherwise centre it on the cap height as before.
+                let yOffset: CGFloat
+                if let baseline = renderedBaseline {
+                    yOffset = -baseline
+                } else {
+                    yOffset = -(imgH - theme.baseFont.capHeight) / 2
+                }
                 return CGRect(x: 0, y: yOffset, width: imgW, height: imgH)
             }
         }
@@ -3422,6 +3568,7 @@ final class MathAttachment: NSTextAttachment {
     private func applyResult(_ result: SwiftMathRenderResult) {
         renderedImage = result.image
         renderedSize = result.size
+        renderedBaseline = isBlock ? nil : result.baselineFromBottom
         if inlineDrawable {
             self.image = result.image
         }
@@ -4875,6 +5022,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         linkTextAttributes = [
             .foregroundColor: SelectableMarkdownTheme().linkColor,
             .underlineStyle: NSUnderlineStyle.single.rawValue,
+            .underlineColor: SelectableMarkdownTheme().linkUnderlineColor,
         ]
 
         // Tap gesture for inline code copy
@@ -5303,6 +5451,22 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
     }
 
     /// [T-codeblock-hide-idle-scrollbars] The code block's own UIScrollView.
+    /// [output-render] Where an attachment's overlay view goes. For inline math, TextKit's
+    /// bounding rect starts at the line top, which floated short formulas (`r`, `r ≈ 3.2`) above
+    /// the text. The attachment glyph's location is its bottom edge (TextKit has already applied
+    /// `attachmentBounds`, whose y now puts the formula's baseline on the text baseline), so the
+    /// overlay goes there. Everything else keeps the bounding rect.
+    private func attachmentViewOrigin(for attachment: NSTextAttachment, glyphRange: NSRange,
+                                      boundingRect: CGRect, layoutManager: NSLayoutManager) -> CGPoint {
+        guard let math = attachment as? MathAttachment, !math.isBlock,
+              math.renderedBaseline != nil, let image = math.renderedImage,
+              glyphRange.length > 0 else { return boundingRect.origin }
+        let fragment = layoutManager.lineFragmentRect(forGlyphAt: glyphRange.location, effectiveRange: nil)
+        guard fragment.height > 0 else { return boundingRect.origin }
+        let location = layoutManager.location(forGlyphAt: glyphRange.location)
+        return CGPoint(x: boundingRect.origin.x, y: fragment.minY + location.y - image.size.height)
+    }
+
     private func findCodeScrollView(in view: UIView) -> UIScrollView? {
         for sub in view.subviews {
             if let sv = sub as? UIScrollView { return sv }
@@ -5987,6 +6151,8 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                     view = existingView
                 }
                 reusedIds.insert(attachId)
+                boundingRect.origin = attachmentViewOrigin(for: attachment, glyphRange: glyphRange,
+                                                           boundingRect: boundingRect, layoutManager: layoutManager)
                 view.frame = CGRect(origin: boundingRect.origin, size: view.frame.size)
             } else if let codeBlock = attachment as? CodeBlockAttachment {
                 // New attachment object (content changed or first time).
@@ -6075,6 +6241,8 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                     boundingRect = retry
                 }
             }
+            boundingRect.origin = attachmentViewOrigin(for: attachment, glyphRange: glyphRange,
+                                                       boundingRect: boundingRect, layoutManager: layoutManager)
             view.frame.origin = boundingRect.origin
             if view.superview !== self {
                 self.addSubview(view)
@@ -6397,8 +6565,10 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
             // Only reposition if boundingRect has a valid origin (non-zero rect).
             // A zero rect means layout hasn't been computed yet — keep current position.
             if boundingRect.origin != .zero || view.frame.origin == .zero {
-                if view.frame.origin != boundingRect.origin {
-                    view.frame.origin = boundingRect.origin
+                let origin = attachmentViewOrigin(for: attachment, glyphRange: glyphRange,
+                                                  boundingRect: boundingRect, layoutManager: layoutManager)
+                if view.frame.origin != origin {
+                    view.frame.origin = origin
                 }
             }
         }
@@ -6730,50 +6900,54 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         // attachment's visual area, causing bars to overlap tables/images.
         let excludeRects = attachmentViews.map { $0.frame }
 
-        // Draw one bar per merged span, splitting around attachment views
-        for span in spans {
-            // Build list of bar segments by subtracting attachment view regions
-            var segments: [(minY: CGFloat, maxY: CGFloat)] = [(span.rect.minY, span.rect.maxY)]
-            for exRect in excludeRects {
-                // Only exclude if the attachment overlaps this bar's vertical range
-                guard exRect.minY < span.rect.maxY && exRect.maxY > span.rect.minY else { continue }
-                var newSegments: [(minY: CGFloat, maxY: CGFloat)] = []
-                for seg in segments {
-                    if exRect.minY <= seg.minY && exRect.maxY >= seg.maxY {
-                        // Attachment fully covers this segment — remove it
-                        continue
-                    } else if exRect.minY > seg.minY && exRect.maxY < seg.maxY {
-                        // Attachment splits segment into two
-                        newSegments.append((seg.minY, exRect.minY))
-                        newSegments.append((exRect.maxY, seg.maxY))
-                    } else if exRect.minY <= seg.minY && exRect.maxY > seg.minY {
-                        // Attachment trims top of segment
-                        newSegments.append((exRect.maxY, seg.maxY))
-                    } else if exRect.minY < seg.maxY && exRect.maxY >= seg.maxY {
-                        // Attachment trims bottom of segment
-                        newSegments.append((seg.minY, exRect.minY))
-                    } else {
-                        newSegments.append(seg)
-                    }
+        // [output-render] One bar per nesting level, drawn over every run of spans at that level
+        // or deeper. A nested quote (`> >`) now keeps its own depth, so the outer bar has to
+        // bridge from the outer paragraph into the nested one; runs closer than one paragraph gap
+        // join, a real paragraph between two quotes keeps them apart.
+        let maxDepth = spans.map(\.depth).max() ?? 0
+        guard maxDepth > 0 else { return }
+        let bridgeGap: CGFloat = 24
+        context.saveGState()
+        context.setFillColor(theme.blockquoteBarColor.cgColor)
+        for level in 1...maxDepth {
+            var runs: [CGRect] = []
+            for span in spans where span.depth >= level {
+                if let last = runs.last, span.rect.minY - last.maxY <= bridgeGap {
+                    runs[runs.count - 1] = last.union(span.rect)
+                } else {
+                    runs.append(span.rect)
                 }
-                segments = newSegments
             }
-
-            for seg in segments {
-                let segHeight = seg.maxY - seg.minY
-                guard segHeight > 1 else { continue }
-                context.saveGState()
-                context.setFillColor(theme.blockquoteBarColor.cgColor)
-                for d in 1...span.depth {
-                    let x = CGFloat(d - 1) * 13 + 1
-                    let barRect = CGRect(x: x, y: seg.minY, width: 3, height: segHeight)
-                    let barPath = UIBezierPath(roundedRect: barRect, cornerRadius: 2)
-                    context.addPath(barPath.cgPath)
+            for run in runs {
+                // Split the bar around attachment views (tables / images inside a quote).
+                var segments: [(minY: CGFloat, maxY: CGFloat)] = [(run.minY, run.maxY)]
+                for exRect in excludeRects where exRect.minY < run.maxY && exRect.maxY > run.minY {
+                    var newSegments: [(minY: CGFloat, maxY: CGFloat)] = []
+                    for seg in segments {
+                        if exRect.minY <= seg.minY && exRect.maxY >= seg.maxY {
+                            continue
+                        } else if exRect.minY > seg.minY && exRect.maxY < seg.maxY {
+                            newSegments.append((seg.minY, exRect.minY))
+                            newSegments.append((exRect.maxY, seg.maxY))
+                        } else if exRect.minY <= seg.minY && exRect.maxY > seg.minY {
+                            newSegments.append((exRect.maxY, seg.maxY))
+                        } else if exRect.minY < seg.maxY && exRect.maxY >= seg.maxY {
+                            newSegments.append((seg.minY, exRect.minY))
+                        } else {
+                            newSegments.append(seg)
+                        }
+                    }
+                    segments = newSegments
                 }
-                context.fillPath()
-                context.restoreGState()
+                let x = CGFloat(level - 1) * 13 + 1
+                for seg in segments where seg.maxY - seg.minY > 1 {
+                    let barRect = CGRect(x: x, y: seg.minY, width: 3, height: seg.maxY - seg.minY)
+                    context.addPath(UIBezierPath(roundedRect: barRect, cornerRadius: 2).cgPath)
+                }
             }
         }
+        context.fillPath()
+        context.restoreGState()
     }
 }
 
@@ -7129,7 +7303,11 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // streaming-table split.
         let renderCap = MarkdownRenderCap.split(markdown)
         let renderSource = renderCap?.head ?? markdown
-        let _splitForUpdate = _isFinalised ? (prefix: renderSource, plainSuffix: "") : splitStreamingTableTail(renderSource)
+        // [output-render] One fence scan per streaming update, shared by the table-tail split
+        // (never split a code line out of its box) and the syntax-highlight cadence below.
+        let _tailFenceOpen = !_isFinalised && MarkdownFenceTracker.endsInsideOpenFence(renderSource)
+        let _splitForUpdate = _isFinalised ? (prefix: renderSource, plainSuffix: "")
+            : splitStreamingTableTail(renderSource, endsInsideOpenFence: _tailFenceOpen)
         let _hasPlainSuffix = !_splitForUpdate.plainSuffix.isEmpty
         if context.coordinator.lastHadPlainSuffix != _hasPlainSuffix {
             // Same text length, different layout: the height cache is stale.
@@ -7230,7 +7408,9 @@ struct SelectableMarkdownView: UIViewRepresentable {
             renderer.blockId = blockId
             // [T-codeblock-syntax] 最后一个围栏是否还开着（决定流式着色的节奏；
             // cmark 不给这个标志，见 CodeSyntaxFence.swift）
-            renderer.streamingTailFenceOpen = isStreaming && MarkdownFenceTracker.endsInsideOpenFence(_splitForUpdate.prefix)
+            // A split only happens outside an open fence, and the split-off tail is not a fence
+            // line, so the prefix's fence state equals the whole source's.
+            renderer.streamingTailFenceOpen = isStreaming && _tailFenceOpen
             let renderedBody = autoreleasepool {
                 renderer.render(blocks: content.blocks, reusingStableBlocks: isStreaming)
             }
