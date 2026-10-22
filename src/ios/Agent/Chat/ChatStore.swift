@@ -384,6 +384,14 @@ struct RawMessage: Identifiable, Codable, Hashable {
 actor ChatStore {
     static let shared = ChatStore()
 
+    /// [fix-launch-deadlock] init 里一次性迁移的「已完成」标记不能在这里同步写 UserDefaults:
+    /// init 跑在后台,主线程正卡在等 `ChatStore.shared`;写入会同步投递 didChangeNotification 给
+    /// 主队列上的观察者(SessionLockStore、ChatLifecycleSupport),两边互等 → 首次启动黑屏卡死
+    /// (Studio 模拟器全新安装实测采样确认)。迁移本身幂等,晚一步记账、万一没记上下次再跑一遍即可。
+    private static func markMigrationDoneLater(_ key: String) {
+        DispatchQueue.main.async { UserDefaults.standard.set(true, forKey: key) }
+    }
+
     private var syncMutationFailures: [Bool] = []
     /// [T-replica-seed] Destination a history seed is filling right now. Set and
     /// cleared inside one non-suspending actor call, so an ordinary edit can
@@ -618,7 +626,7 @@ actor ChatStore {
             if sqlite3_exec(db, delSQL, nil, nil, nil) == SQLITE_OK {
                 deletedCount = Int32(sqlite3_changes(db))
             }
-            UserDefaults.standard.set(true, forKey: zombieCleanupKey)
+            Self.markMigrationDoneLater(zombieCleanupKey)
             iCloudLogger.info("[iCloudTrace] v1 dirty-row zombie cleanup: deleted=\(deletedCount) types=\(v1Types.joined(separator: ","))")
         }
 
@@ -666,7 +674,7 @@ actor ChatStore {
             """
             if sqlite3_exec(db, backfillSQL, nil, nil, nil) == SQLITE_OK {
                 let changed = Int(sqlite3_changes(db))
-                UserDefaults.standard.set(true, forKey: partFlagsBackfillKey)
+                Self.markMigrationDoneLater(partFlagsBackfillKey)
                 iCloudLogger.info("[part_flags] backfill done: updated \(changed) row(s)")
             } else {
                 let err = String(cString: sqlite3_errmsg(db))
