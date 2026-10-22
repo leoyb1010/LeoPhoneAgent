@@ -759,6 +759,9 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         t.setEventHandler { [weak self] in
             logger.info("[iCloudTrace] recentFetchTimer fired")
             Task { @MainActor [weak self] in
+                // [up-perf-ios] 进程从挂起恢复时这个定时器立刻补触发,撞在回前台那一帧和用户第一下滑动上
+                // (真机日志里它总是和 willEnterForeground 同一秒)。回前台窗口里先让一让,后台照常立刻拉。
+                await LeoPerf.waitForForegroundSettle(resumeGrace: 0.3)
                 await self?.fetchRecentV2()
             }
         }

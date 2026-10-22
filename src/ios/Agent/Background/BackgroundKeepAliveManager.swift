@@ -515,15 +515,21 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
                     guard self.pendingForegroundTransition else { return }
                     self.pendingForegroundTransition = false
                     self.appIsInBackground = false
-                    ISHKernel.shared.endBackgroundCPUGovernor()
-                    logger.info("[BKA] iSH background CPU governor STOPPED (foreground)")
-                    self.logLifecycleSnapshot("Foreground")
-                    // [T-ios-bg-location-arm-delay] Unified location-state
-                    // cleanup on every foreground return — disarms, tears down
-                    // our own session/timer, and retracts any orphaned session
-                    // left pinned in the Dynamic Island (force-kill / crash).
-                    self.cleanupLocationStateOnForeground()
-                    self.evaluateSilentAudio(caller: "willEnterForeground")
+                    // [up-perf-ios] 下面这些(调速器、定位清理、Live Activity / 小组件 / 手表推送、静音音频)
+                    // 以前排在回前台那一帧之前:真机日志里它们全部打在第一帧回调之前。首帧不需要它们,
+                    // 推到首帧之后;那时又回了后台就不跑(进后台的路径会自己重新评估)。
+                    LeoPerf.afterNextFrame {   // `.shared` 单例,强引用无妨
+                        guard !self.appIsInBackground else { return }
+                        ISHKernel.shared.endBackgroundCPUGovernor()
+                        logger.info("[BKA] iSH background CPU governor STOPPED (foreground)")
+                        self.logLifecycleSnapshot("Foreground")
+                        // [T-ios-bg-location-arm-delay] Unified location-state
+                        // cleanup on every foreground return — disarms, tears down
+                        // our own session/timer, and retracts any orphaned session
+                        // left pinned in the Dynamic Island (force-kill / crash).
+                        self.cleanupLocationStateOnForeground()
+                        self.evaluateSilentAudio(caller: "willEnterForeground")
+                    }
                 }
             }
             .store(in: &cancellables)

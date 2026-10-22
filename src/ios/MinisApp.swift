@@ -385,6 +385,33 @@ struct MinisApp: App {
         fgSteps.next("fg.step.liveActivityDismiss")
         AgentLiveActivityManager.shared.dismissFinishedActivityOnForeground()
 
+        fgSteps.next("fg.step.interruptionCheck")
+        BackgroundInterruptionTracker.shared.checkOnForeground()
+        // [T-shortcuts-diag-and-pending] Scan for AppIntent runs that
+        // were marked pending but never cleared (i.e. the process was
+        // suspended before the completion path ran). Records where the
+        // user hadn't enabled Background Keep-Alive at the time get a
+        // one-shot guidance notification with the setting to turn on;
+        // stale (>24h) records are dropped silently.
+        fgSteps.next("fg.step.shortcutPendingCheck")
+        ShortcutRunTracker.checkPendingOnForeground()
+
+        // [up-perf-ios] 角标对账、技能重载、小组件 / 定时任务 / Spotlight、挂载可写性、凭据诊断:
+        // 首帧之后同一秒里一起起跑的 main-actor Task,撞上用户回来的第一下滑动(回前台 5 s 内的滑动
+        // hitch 均值是平时的 2–3 倍)。等首帧后 1.5 s、且用户没在滑时再跑(ForegroundSettlePolicy)。
+        fgSteps.next("fg.step.settleKick")
+        LeoPerf.afterForegroundSettles {
+            Self.runAfterForegroundSettled()
+        }
+    }
+
+    /// [up-perf-ios] Foreground-return work that neither the returning frame
+    /// nor the user's first scroll needs. Runs via `LeoPerf.afterForegroundSettles`.
+    @MainActor
+    private static func runAfterForegroundSettled() {
+        var fgSteps = FgStepChain()
+        defer { fgSteps.finish() }
+
         fgSteps.next("fg.step.badgeKick")
         Task { @MainActor in
             let badgeStoreInit = FgStep.begin("fg.step.badgeStoreInit")
@@ -420,16 +447,6 @@ struct MinisApp: App {
 
             try? await UNUserNotificationCenter.current().setBadgeCount(0)
         }
-        fgSteps.next("fg.step.interruptionCheck")
-        BackgroundInterruptionTracker.shared.checkOnForeground()
-        // [T-shortcuts-diag-and-pending] Scan for AppIntent runs that
-        // were marked pending but never cleared (i.e. the process was
-        // suspended before the completion path ran). Records where the
-        // user hadn't enabled Background Keep-Alive at the time get a
-        // one-shot guidance notification with the setting to turn on;
-        // stale (>24h) records are dropped silently.
-        fgSteps.next("fg.step.shortcutPendingCheck")
-        ShortcutRunTracker.checkPendingOnForeground()
         // [S6] Skills: at most every 5 min, and only if an off-main mtime
         // fingerprint of the skills directory changed (was: every SKILL.md
         // re-read on the main thread on every return).
@@ -667,17 +684,22 @@ struct MinisApp: App {
             // active tick, observed as endless `[iCloud] mergeRemoteMessage
             // SKIP (local newer)` log spam plus continuous v1-side dirty
             // drain that competes with v2's send pipeline.
+            // [up-perf-ios] 以前这个 Task 在 .active 回调里直接起跑,排在回前台那一帧前面;拉回来的入站记录
+            // 随后在主 actor 上逐条 apply(真机 08:24:59 一秒内 75 条),正好压在用户回来的第一下滑动上。
+            // 拉取是幂等的,晚 1.5 s 不丢任何东西。
             fgSteps.next("fg.step.syncKick")
-            Task { @MainActor in
-                // 墙钟区间:await 期间主线程是空的,和主线程耗时分开看。
-                let syncKick = FgStep.begin("fg.step.syncKick.async")
-                defer { syncKick.end() }
-                if SyncV2Bootstrap.shouldPauseV1() {
-                    await SyncCore.shared.fetchNow(trigger: .foregroundTimer)
-                    await SyncCore.shared.sendNow(trigger: .foregroundTimer)
-                } else {
-                    await CloudSyncEngine.shared.triggerFetch()
-                    await CloudSyncEngine.shared.triggerSend()
+            LeoPerf.afterForegroundSettles {
+                Task { @MainActor in
+                    // 墙钟区间:await 期间主线程是空的,和主线程耗时分开看。
+                    let syncKick = FgStep.begin("fg.step.syncKick.async")
+                    defer { syncKick.end() }
+                    if SyncV2Bootstrap.shouldPauseV1() {
+                        await SyncCore.shared.fetchNow(trigger: .foregroundTimer)
+                        await SyncCore.shared.sendNow(trigger: .foregroundTimer)
+                    } else {
+                        await CloudSyncEngine.shared.triggerFetch()
+                        await CloudSyncEngine.shared.triggerSend()
+                    }
                 }
             }
 
