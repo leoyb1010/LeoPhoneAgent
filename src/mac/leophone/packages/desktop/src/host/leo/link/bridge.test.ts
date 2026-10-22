@@ -2364,17 +2364,18 @@ test("automations: unattended plan approvals and questions never leave the run h
       const elicitations = (requestId: string) =>
         zcode.named("respondElicitation").filter((call) => call["requestId"] === requestId);
 
-      // 1) 计划审批也让桥接接管:卡片推给手机(带 automation_id);没人批 → decline + 停 + 改判「计划未获批准」。
+      // 1) 计划模式每轮都以 ExitPlanMode 收尾:无人值守时立刻 decline(内核随后结束这一轮),
+      //    不推卡、不停、不改判 —— 只读运行的产出照常算成功。
       bridge.automationRunStarted({ ...run, runId: `${id}:1`, taskId: "task-p1" });
       zcode.fire("task-p1", planApproval("plan-1"));
-      await eventually(() => pushed.some((e) => e["approval_id"] === "plan-1"), "计划审批推给手机");
-      const card = pushed.find((e) => e["approval_id"] === "plan-1")!;
-      assert.equal(card["tool"], "ExitPlanMode");
-      assert.equal(card["automation_id"], id);
-      await eventually(() => elicitations("plan-1").length === 1, "计划超时自动拒绝");
+      await eventually(() => elicitations("plan-1").length === 1, "计划立刻被 decline");
       assert.deepEqual(elicitations("plan-1")[0], { taskId: "task-p1", workspacePath: dir, requestId: "plan-1", action: "decline" });
-      await eventually(() => zcode.named("stopGeneration").length === 1, "拒绝后停掉这一轮(手动运行的占位随终态释放)");
-      assert.equal(takeAutomationRunFailure(`${id}:1`), UNATTENDED_PLAN_REASON);
+      zcode.fire("task-p1", planApproval("plan-1"));
+      await sleep(100);
+      assert.equal(elicitations("plan-1").length, 1, "重发不再答第二次");
+      assert.ok(!pushed.some((e) => e["approval_id"] === "plan-1"), "不推计划卡");
+      assert.equal(zcode.named("stopGeneration").length, 0);
+      assert.equal(takeAutomationRunFailure(`${id}:1`), undefined, "以 ExitPlanMode 收尾的无人值守计划运行不算失败");
 
       // 2) AskUserQuestion:没人能答,立刻 decline + 停 + 改判;重发不再答第二次。
       bridge.automationRunStarted({ ...run, runId: `${id}:2`, taskId: "task-q2" });
@@ -2388,7 +2389,7 @@ test("automations: unattended plan approvals and questions never leave the run h
       zcode.fire("task-q2", ask);
       await eventually(() => elicitations("ask-1").length === 1, "提问被拒绝");
       assert.equal(elicitations("ask-1")[0]?.["action"], "decline");
-      await eventually(() => zcode.named("stopGeneration").length === 2, "提问跳过后停掉这一轮");
+      await eventually(() => zcode.named("stopGeneration").length === 1, "提问跳过后停掉这一轮");
       assert.equal(takeAutomationRunFailure(`${id}:2`), UNATTENDED_QUESTION_REASON);
       zcode.fire("task-q2", ask);
       await sleep(50);
@@ -2401,10 +2402,32 @@ test("automations: unattended plan approvals and questions never leave the run h
   );
 });
 
-test("automations: a phone answer to an unattended plan decides the run; an undelivered auto-deny is not a failure", async () => {
+test("automations: a plan card pushed before an unattended run took over, declined on the Mac, fails the run", async () => {
   const automations = fakeAutomations();
   await withBridge(
     async ({ bridge, dir, pushed, zcode }) => {
+      const created = await bridge.handle(
+        req("POST", "/automations", { name: "早报", prompt: "p", schedule: "0 9 * * *", workspace: dir, mode: "plan" }, iphone, "op-a"),
+      );
+      const automationId = (created.body as AutomationBody).automation.id;
+      const id = await createSession(bridge, dir, { prompt: "先出计划", mode: "plan" }, iphone);
+      zcode.fire(id, { type: "task_run_started" });
+      zcode.fire(id, planApproval("plan-pre"));
+      await eventually(() => pushed.some((e) => e["approval_id"] === "plan-pre"), "接管前的计划卡");
+      bridge.automationRunStarted({ automationId, trigger: "schedule", workspacePath: dir, runId: `${automationId}:1`, taskId: id });
+      zcode.fire(id, { type: "elicitation_response", requestId: "plan-pre", action: "decline" });
+      const responded = (e: HarnessEvent) => e.event === "approval.responded" && e["approval_id"] === "plan-pre";
+      assert.equal((await collect(bridge, id, 0, (all) => all.some(responded))).find(responded)?.["choice"], "deny");
+      assert.equal(takeAutomationRunFailure(`${automationId}:1`), UNATTENDED_PLAN_REASON);
+    },
+    { automations: automations.service, zcodeModelSelection: async () => sonnet, unattendedApprovalMs: 60_000 },
+  );
+});
+
+test("automations: an undelivered unattended auto-deny is not a failure", async () => {
+  const automations = fakeAutomations();
+  await withBridge(
+    async ({ bridge, dir, zcode }) => {
       const created = await bridge.handle(
         req("POST", "/automations", { name: "测试", prompt: "p", schedule: "0 9 * * *", workspace: dir }, iphone, "op-a"),
       );
@@ -2412,22 +2435,6 @@ test("automations: a phone answer to an unattended plan decides the run; an unde
       const run = { automationId: id, trigger: "schedule" as const, workspacePath: dir };
       const answer = (taskId: string, approvalId: string, choice: string) =>
         bridge.handle(req("POST", `/harness/sessions/${taskId}/approval`, { approval_id: approvalId, choice }, iphone));
-
-      // 手机拒绝计划:decline,运行改判「计划未获批准」(内核自己结束这一轮)。
-      bridge.automationRunStarted({ ...run, runId: `${id}:1`, taskId: "task-d1" });
-      zcode.fire("task-d1", planApproval("plan-d"));
-      await eventually(() => pushed.some((e) => e["approval_id"] === "plan-d"), "计划卡推给手机");
-      assert.equal((await answer("task-d1", "plan-d", "deny")).status, 200);
-      assert.equal(zcode.named("respondElicitation").at(-1)?.["action"], "decline");
-      assert.equal(takeAutomationRunFailure(`${id}:1`), UNATTENDED_PLAN_REASON);
-
-      // 手机批准计划:accept,不算失败。
-      bridge.automationRunStarted({ ...run, runId: `${id}:2`, taskId: "task-d2" });
-      zcode.fire("task-d2", planApproval("plan-ok"));
-      await eventually(() => pushed.some((e) => e["approval_id"] === "plan-ok"), "第二张计划卡");
-      assert.equal((await answer("task-d2", "plan-ok", "once")).status, 200);
-      assert.deepEqual(zcode.named("respondElicitation").at(-1)?.["content"], { answer: "approve" });
-      assert.equal(takeAutomationRunFailure(`${id}:2`), undefined);
 
       // 自动拒绝没送进内核:不改判、重新计时;之后手机批了,运行不能被记成审批超时。
       const service = zcode.service as unknown as { respondPermission: (params: Record<string, unknown>) => Promise<boolean> };
@@ -2449,7 +2456,7 @@ test("automations: a phone answer to an unattended plan decides the run; an unde
       assert.equal(zcode.named("stopGeneration").length, 0);
       assert.equal(takeAutomationRunFailure(`${id}:3`), undefined);
     },
-    // 手机来得及先答(推送要等日志落盘);第三段等第一次自动拒绝,不超过 eventually 的 1.5 秒。
+    // 等第一次自动拒绝,不超过 eventually 的 1.5 秒。
     { automations: automations.service, zcodeModelSelection: async () => sonnet, unattendedApprovalMs: 400 },
   );
 });
