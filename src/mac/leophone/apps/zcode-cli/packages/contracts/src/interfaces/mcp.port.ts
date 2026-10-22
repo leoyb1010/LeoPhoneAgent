@@ -21,6 +21,11 @@ export interface McpServerConfigBase {
   /** 仅限宿主生成，公共配置 schema 会拒绝该字段。 */
   source?: McpServerRuntimeSource;
   timeoutMs?: number;
+  /**
+   * [leo] 仅限宿主生成（stdio）：连上列完工具后先停进程，首次工具调用时再拉起。
+   * 用于常驻内存大、多数会话用不到的内置 server（node_repl）。
+   */
+  leoLazyStart?: boolean;
 }
 
 export interface McpClientCredentialsOAuthConfig {

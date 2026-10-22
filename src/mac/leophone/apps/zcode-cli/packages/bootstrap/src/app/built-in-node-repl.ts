@@ -46,6 +46,8 @@ export function resolveBuiltInNodeReplMcpServers(input: {
     [BUILT_IN_NODE_REPL_SERVER_NAME]: {
       ...nodeRepl,
       isolation: "workspace",
+      // [leo] 按需启动：每个 workspace 常驻约 200 MB，多数会话不用浏览器 / 电脑操作。
+      leoLazyStart: true,
       protocolVersion: "2026-07-28",
     },
   };

@@ -177,6 +177,8 @@ interface McpServerRecord {
   /** 收到 tools/list_changed 后置位，下一次 listTools 重拉。 */
   toolsStale?: boolean;
   transport?: McpTransport;
+  /** [leo] 按需启动的 server 已列完工具、进程已停：工具照常可见，首次调用时再拉起。 */
+  leoParked?: boolean;
 }
 
 /** resources/list 项：只透传标准字段（含 _meta），丢掉 SDK 附加的运行时字段。 */
@@ -274,6 +276,10 @@ class NodeMcpAdapter implements McpPort {
     Pick<McpServerStatus, "failureKind" | "serverRequestId">
   >();
   private readonly records = new Map<string, McpServerRecord>();
+  /** [leo] 已被工具调用唤醒的按需启动 server：之后的重连不再停进程。 */
+  private readonly leoWokenServers = new Set<string>();
+  /** [leo] 正在唤醒的按需启动 server（并发调用共用一次拉起）。 */
+  private readonly leoWaking = new Map<string, Promise<void>>();
   private readonly workingDirectory?: string;
   private readonly elicitation?: McpElicitationPort;
   private readonly notifications?: McpNotificationPort;
@@ -430,7 +436,51 @@ class NodeMcpAdapter implements McpPort {
     // 15 秒后连同 callback listener 一起关掉，真人根本来不及在浏览器里完成授权（现场证据：
     // 一次成功授权耗时约 74 秒）。现在它只作为**本 caller 的等待预算**：到点返回当时的
     // snapshot（含授权 URL），后台连接与 300 秒授权事务继续存活。
-    return await this.waitForSharedConnection(name, record, options);
+    const status = await this.waitForSharedConnection(name, record, options);
+    // [leo] 按需启动：工具已列出（会话照常注册），进程先停掉，首次工具调用再拉起。
+    if (config.leoLazyStart && config.type === "stdio" && !this.leoWokenServers.has(name)) {
+      await this.leoParkServer(name);
+    }
+    return status;
+  }
+
+  /**
+   * [leo] 停掉按需启动 server 的进程，保留 connected 状态与工具表。node_repl（Browser Use /
+   * Computer Use 的宿主）每个 workspace 常驻约 200 MB，绝大多数会话一次都不调用它。
+   */
+  private async leoParkServer(name: string): Promise<void> {
+    const record = this.records.get(name);
+    if (!record?.client || record.status.status !== "connected") return;
+    const { client, transport } = record;
+    record.client = undefined;
+    record.transport = undefined;
+    record.leoParked = true;
+    await this.closeClientAndTransport(name, client, transport);
+    this.logger?.info("MCP server parked until first tool call", {
+      event: "mcp.server.leo_parked",
+      mcpServerName: name,
+      toolCount: record.tools.length,
+    });
+  }
+
+  /** [leo] 首次调用时拉起已停的按需启动 server；失败时恢复停放状态，下一次调用再试。 */
+  private leoWakeServer(name: string, parked: McpServerRecord): Promise<void> {
+    const pending = this.leoWaking.get(name);
+    if (pending) return pending;
+    this.leoWokenServers.add(name);
+    this.logger?.info("MCP server waking for first tool call", {
+      event: "mcp.server.leo_wake",
+      mcpServerName: name,
+    });
+    const waking = this.connectServer(name, parked.config)
+      .then((status) => {
+        if (status.status === "connected") return;
+        this.leoWokenServers.delete(name);
+        this.records.set(name, { ...parked, abortController: undefined, connecting: undefined });
+      })
+      .finally(() => this.leoWaking.delete(name));
+    this.leoWaking.set(name, waking);
+    return waking;
   }
 
   async disconnectServer(name: string): Promise<McpServerStatus | undefined> {
@@ -459,6 +509,8 @@ class NodeMcpAdapter implements McpPort {
   // ping 是 MCP 基础协议方法，用它把 transport 存活性显式化。
   async pingServer(name: string, options: { timeoutMs?: number } = {}): Promise<boolean> {
     const record = this.records.get(name);
+    // [leo] 停放中的按需启动 server 没有进程可 ping；它是「可用」的，别让存活校验把它拉起来。
+    if (record?.leoParked) return true;
     if (!record?.client || record.status.status !== "connected") {
       return false;
     }
@@ -911,6 +963,17 @@ class NodeMcpAdapter implements McpPort {
       // tool caller 的 timeout/abort 完全失效；但直接 abort 底层任务又会关闭其他 caller 共用的
       // callback listener。这里只限制当前 waiter，共享任务继续由 record 生命周期持有。
       await waitWithinMcpDeadline(pending, deadline, timeoutMessage, signal);
+    }
+
+    // [leo] 按需启动的 server 停放中：本次调用把它拉起来（并发调用共用一次）。
+    const parked = this.records.get(serverName);
+    if (parked?.leoParked) {
+      await waitWithinMcpDeadline(
+        this.leoWakeServer(serverName, parked),
+        deadline,
+        timeoutMessage,
+        signal,
+      );
     }
 
     // Bugfix：stdio MCP 子进程死亡后（如 node_repl 被异步错误击穿），此前没有任何恢复路径：
