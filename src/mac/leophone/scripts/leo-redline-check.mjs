@@ -72,6 +72,7 @@ export const ZCODE_HOME_PATH_PATTERN =
 const ZCODE_PATH_ALLOWLIST = new Map([
   ["scripts/leo-redline-check.mjs", "红线闸门自身"],
   ["packages/ui/src/leo/leoReleaseNotes.ts", "更新说明里向用户解释「不再读取 ~/.zcode」"],
+  ["packages/ui/src/leo/leoReleaseNotesArchive.ts", "1.9.0 及更早的更新说明(从 leoReleaseNotes.ts 挪出)里向用户解释「不再读取 ~/.zcode」"],
 ]);
 
 /** 只在开发机上跑、不进安装包的脚本与上游调试工具。 */
