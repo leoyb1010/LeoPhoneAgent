@@ -40,9 +40,14 @@ const capture = async (name) => {
   await writeFile(resolve(output, name + "-aria.txt"), await page.locator("body").ariaSnapshot());
   steps.push(name);
 };
+// [up-ci-green] 每次读回都是一个新 node + tsx 冷启动子进程:托管 macos-15(3 核)上光启动到加载
+// node:sqlite 就要 3.7–5.5s(CI 日志里 seed 子进程的 SQLite 警告时间),再加上与正在写同一批 WAL 库的
+// Electron Host 争锁时,TaskIndexRepo 和 CLI 会话库各自最多等 5s(busy_timeout)。原来的 3s 比托管机的
+// 冷启动还短,每次在第一次读回就 ETIMEDOUT。30s 覆盖最坏情况且仍有界;锁真的卡住会以 SQLITE_BUSY 报错而不是超时。
+const READ_TASK_TIMEOUT_MS = 30000;
 const readTask = () => JSON.parse(execFileSync(process.execPath,
   ["--import", "tsx", "scripts/audit-full-renderer/seed-task.ts", home, workspace, "--read"],
-  { env, encoding: "utf8", timeout: 3000 }).trim().split("\n").at(-1));
+  { env, encoding: "utf8", timeout: READ_TASK_TIMEOUT_MS }).trim().split("\n").at(-1));
 try {
   app = await electron.launch({ executablePath, args: [resolve("packages/desktop")],
     env, chromiumSandbox: true, timeout: 60000 });
@@ -102,7 +107,8 @@ try {
   await failed.click();
   await page.getByText("Synthetic preserved history", { exact: true }).waitFor({ timeout: 30000 });
   await capture("04-native-open-task-history");
-  const observations = [], deadline = Date.now() + 10000;
+  // 单次读回在托管机上就要数秒,轮询窗口按读回上限放宽,否则只来得及读一两次。
+  const observations = [], deadline = Date.now() + READ_TASK_TIMEOUT_MS;
   let state;
   do {
     state = readTask(); observations.push(state);
