@@ -30,6 +30,9 @@ private let logger = AppLogger(category: "QuickAction")
 enum ChatLaunchAction: Equatable {
     case startVoice
     case openCamera
+    /// [fix-home-plus] 首页「+」→ 照片与视频 / 文件:开一个新对话并直接弹出对应的选择器,选中的东西作为附件。
+    case pickPhotos
+    case pickFiles
     case prefillQuickTask(id: String)
     /// Opens a fresh conversation with the prompt ready for editing.
     case prefillPrompt(String)

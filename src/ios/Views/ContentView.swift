@@ -706,7 +706,10 @@ struct ContentView: View {
                 // because we were already home, or after markHome fired
                 // from a navigation change). Open the new session now.
                 if case .pendingDispatch = newState, WindowRegistry.shared.isPrimary(windowId) {
-                    openSessionForPendingQuickAction()
+                    // `$state` 在 willSet 时发出:此刻 shared.state 还是旧值(ensuringHome),
+                    // 直接调用会被里面的 guard 挡掉、静默返回 —— 真机 10-22 14:45 拍照识别连点三次都卡在
+                    // pendingDispatch 就是这个。等这一轮赋值落定再开对话。
+                    DispatchQueue.main.async { openSessionForPendingQuickAction() }
                 }
             }
             .onAppear {
@@ -2872,7 +2875,10 @@ struct ContentView: View {
     /// can match.
     fileprivate func openSessionForPendingQuickAction() {
         defer { quickActionStartedAtHome = false }
-        guard case .pendingDispatch = QuickActionWorkflow.shared.state else { return }
+        guard case .pendingDispatch = QuickActionWorkflow.shared.state else {
+            draftLog.info("[QuickAction] openSessionForPendingQuickAction skipped — state moved on")
+            return
+        }
         // [T-home-model-pick] The capsule's pick is for this one chat; the capsule goes back to the default.
         let newId = Self.makeNewSessionId(homeChoice: homeModelChoice)
         homeModelChoice = nil
@@ -3529,11 +3535,16 @@ struct ContentView: View {
 
     @ViewBuilder
     private var homePlusMenuContent: some View {
+        // [fix-home-plus] 以前只有「拍照识别 / 本机文件 / 录音」:选不了照片视频,「本机文件」直接进文件管理而不是当附件。
+        // 现在和对话里的「+」一致:拍照、照片与视频、文件都开一个新对话并把选中的东西作为附件;文件管理留在「/」面板。
         Button { startHomeChatAction(.openCamera) } label: {
-            Label("拍照识别", systemImage: "camera")
+            Label("拍照", systemImage: "camera")
         }
-        Button { activeToolSheet = .rootfsManagement } label: {
-            Label("本机文件", systemImage: "folder")
+        Button { startHomeChatAction(.pickPhotos) } label: {
+            Label("照片与视频", systemImage: "photo.on.rectangle")
+        }
+        Button { startHomeChatAction(.pickFiles) } label: {
+            Label("文件", systemImage: "doc")
         }
         // [V-rec] 录音 → 转写 → 纪要。
         Button { RecordingPresenter.present(.recorder) } label: {

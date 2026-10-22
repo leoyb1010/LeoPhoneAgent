@@ -1542,6 +1542,12 @@ struct AIChatView: View {
             inputFocused = false
             showCamera = true
             minisLogger.info("[QuickAction] openCamera — showCamera=true")
+        case .pickPhotos, .pickFiles:
+            // 系统选择器不走 fullScreenCover,没有「封面出现」回调:弹出后立即收尾,免得重试计时器再弹一次。
+            inputFocused = false
+            if action == .pickPhotos { showPhotoPicker = true } else { showDocumentPicker = true }
+            minisLogger.info("[QuickAction] \(String(describing: action)) — picker shown")
+            QuickActionWorkflow.shared.markCoverPresented()
         case .prefillQuickTask(let id):
             if let task = quickTaskStore.definition(for: id) {
                 prepareComposer(with: task)
