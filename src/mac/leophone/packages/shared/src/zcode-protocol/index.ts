@@ -41,6 +41,7 @@ import { modelSelectionSchema } from "../model-selection.js";
 import { APP_USAGE_RANGES, appUsageSnapshotSchema } from "../usage-stats.js";
 import { DYNAMIC_WORKFLOW_MODES } from "../dynamic-workflow-feature.js";
 import { errorAttributionSchema } from "../zcode-protocol-v4/snapshot.js";
+import { workflowLaunchMetaSchema } from "../zcode-protocol-v4/workflow-row-meta.js";
 // 后台详情共享精简的只读响应 schema，不携带命令或计时元数据。
 export * from "../background-bash-output.js";
 export * from "../process-diagnostic.js";
@@ -332,8 +333,11 @@ export const zcodeCreateWorkflowToolResultDisplaySchema = z
   })
   .strict();
 
-const zcodeToolResultObjectSchema = jsonObjectSchema.superRefine((result, context) => {
-  const display = result.display;
+function addToolResultDisplayIssues(
+  display: unknown,
+  context: z.RefinementCtx,
+  path: readonly (string | number)[],
+): void {
   if (typeof display !== "object" || display === null || Array.isArray(display)) {
     return;
   }
@@ -348,9 +352,19 @@ const zcodeToolResultObjectSchema = jsonObjectSchema.superRefine((result, contex
   const parsed = schema.safeParse(display);
   if (parsed.success) return;
   for (const issue of parsed.error.issues) {
-    context.addIssue({ ...issue, path: ["display", ...issue.path] });
+    context.addIssue({ ...issue, path: [...path, ...issue.path] });
   }
-});
+}
+
+const zcodeToolResultObjectSchema = jsonObjectSchema.superRefine((result, context) =>
+  addToolResultDisplayIssues(result.display, context, ["display"]),
+);
+
+// [up3-runtime] CLI 在 tool.updated(scheduled / started)与 permission.requested 上也带同一份
+// ToolResultDisplayPayload;与结果通道走同一组按 kind 的限长校验。
+const zcodeToolDisplayPayloadSchema = jsonObjectSchema.superRefine((display, context) =>
+  addToolResultDisplayIssues(display, context, []),
+);
 
 export const zcodeProtocolRequestIdSchema = z.union([z.string(), z.number().int()]);
 export type ZCodeProtocolRequestId = z.infer<typeof zcodeProtocolRequestIdSchema>;
@@ -1533,8 +1547,19 @@ export const zcodeTurnStartedEventPayloadSchema = z
     intent: jsonObjectSchema.optional(),
     originMeta: jsonObjectSchema.optional(),
     // runtime 会透传后台唤醒来源，strict schema 必须同步声明以免丢弃整条事件。
-    backgroundSource: z.enum(["bash", "subagent"]).optional(),
+    // [up3-runtime] CLI 的 BackgroundResultOriginMeta 还有 workflow(dynamic-workflow 通知轮)。
+    backgroundSource: z.enum(["bash", "subagent", "workflow"]).optional(),
     attachments: z.array(jsonObjectSchema).optional(),
+    // [up3-runtime] 以下字段 CLI 的 TurnStartedPayload 都会发,漏声明时 strict 校验整条丢弃
+    // (实测每次自动化运行都报 Unrecognized key: "automationId")。
+    // 自动化 / 闲时任务的派发归属(TurnBackgroundAttribution,三者互斥)。
+    automationId: nonEmptyString.optional(),
+    offPeakTaskId: nonEmptyString.optional(),
+    offPeakRunType: z.enum(["init", "resume"]).optional(),
+    // input 从此下标起是引擎附加文本(dwf ask 尾注 / nudge)。
+    epilogueStart: z.number().int().nonnegative().optional(),
+    // 中枢直接启动工作流的 controlOnly 轮元数据;与 v4 行同一 schema(冷热同形)。
+    workflowLaunch: workflowLaunchMetaSchema.optional(),
   })
   .strict();
 const zcodeTurnSteerSourceSchema = z.enum(["plan_approval_feedback", "workflow_refine_feedback"]);
@@ -1655,6 +1680,24 @@ export const zcodeMessagePartRemovedEventPayloadSchema = z
     reason: z.string().optional(),
   })
   .strict();
+// [up3-runtime] CLI contracts 的 ToolSideEffectScope。
+const zcodeToolSideEffectScopeSchema = z.enum([
+  "none",
+  "workspace",
+  "git",
+  "network",
+  "system",
+  "session",
+  "userInteraction",
+]);
+// [up3-runtime] CLI contracts 的 SkillTelemetryMetadata:Skill 工具结果 / 错误只带这几个遥测字段。
+const zcodeSkillTelemetryMetadataSchema = z
+  .object({
+    qualifiedName: z.string().optional(),
+    pluginId: z.string().optional(),
+    source: z.enum(["agents", "zcode", "bundled", "plugin", "remote"]).optional(),
+  })
+  .strict();
 const zcodeToolCallBasePayloadSchema = z
   .object({
     toolCallId: nonEmptyString,
@@ -1686,17 +1729,27 @@ export const zcodeToolUpdatedEventPayloadSchema = z.discriminatedUnion("kind", [
       parallelGroupIndex: z.number().int().nonnegative().optional(),
       canRunParallel: z.boolean().optional(),
       schedule: jsonObjectSchema.optional(),
+      // [up3-runtime] MCP 工具的展示投影在 scheduled 阶段就随事件下发。
+      display: zcodeToolDisplayPayloadSchema.optional(),
     })
     .strict(),
   zcodeToolCallBasePayloadSchema
     .extend({
       kind: z.literal("started"),
       startedAt: protocolInstantSchema,
+      // [up3-runtime] CLI ToolCallStartedPayload:展示投影 + 解析后的副作用能力。
+      display: zcodeToolDisplayPayloadSchema.optional(),
+      readOnly: z.boolean().optional(),
+      sideEffectScope: zcodeToolSideEffectScopeSchema.optional(),
     })
     .strict(),
   zcodeToolCallBasePayloadSchema
     .extend({
       kind: z.literal("progress"),
+      // [up3-runtime] MCP notifications/progress 原样转发的 progress / total / message。
+      progress: z.number().optional(),
+      total: z.number().optional(),
+      message: z.string().optional(),
       elapsedMs: z.number().nonnegative().optional(),
       pid: z.number().int().optional(),
       stdoutBytes: z.number().int().nonnegative().optional(),
@@ -1712,12 +1765,14 @@ export const zcodeToolUpdatedEventPayloadSchema = z.discriminatedUnion("kind", [
       kind: z.literal("result"),
       result: zcodeToolResultObjectSchema,
       duration: z.number().nonnegative(),
+      skillMetadata: zcodeSkillTelemetryMetadataSchema.optional(),
     })
     .strict(),
   zcodeToolCallBasePayloadSchema
     .extend({
       kind: z.literal("error"),
       error: zcodeProtocolErrorDetailSchema,
+      skillMetadata: zcodeSkillTelemetryMetadataSchema.optional(),
     })
     .strict(),
   z
@@ -1749,6 +1804,12 @@ export const zcodePermissionRequestedEventPayloadSchema = z
     options: z.array(zcodePermissionOptionSchema).min(1),
     childSessionId: nonEmptyString.optional(),
     background: z.boolean().optional(),
+    // [up3-runtime] CLI PermissionRequestedPayload 的其余可选字段。fullAccessSupported 实测会到
+    // (Unrecognized key 丢整条确认事件);display / optionsPolicy 当前 CLI mapper 会剥,但旧 / 新
+    // 内核偏斜时也可能出现,接收端照样认。
+    display: zcodeToolDisplayPayloadSchema.optional(),
+    fullAccessSupported: z.boolean().optional(),
+    optionsPolicy: z.enum(["no-always-allow", "session-always-allow"]).optional(),
   })
   .strict();
 export const zcodePermissionResolvedEventPayloadSchema = z
