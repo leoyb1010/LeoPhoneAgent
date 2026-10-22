@@ -55,6 +55,7 @@
     "leo:build-input": "node packages/desktop/scripts/build-leo-input.mjs",
     "leo:bundle:mac": "node scripts/leo-verify-release-notes.mjs && node scripts/leo-redline-check.mjs --source-only && node ../../../design/gen-tokens.mjs --check && node scripts/leo-fetch-peekaboo.mjs && node packages/desktop/scripts/build-leo-speech.mjs && node packages/desktop/scripts/build-leo-input.mjs && ZCODE_AUTO_UPDATE=1 ZCODE_ARMS_RUM_ENDPOINT= ZCODE_TELEMETRY_REPORT_ENDPOINT= ZCODE_ENV=production ZCODE_PRODUCT_IDENTITY=leo ZCODE_ENABLE_MAC_SIGN=1 APPLE_SIGNING_IDENTITY=\"${APPLE_SIGNING_IDENTITY:-leo yuan (48H5Y3LNUK)}\" pnpm --filter @zcode/desktop run bundle -- --os mac --arch arm64 && node scripts/leo-redline-check.mjs --artifacts-only --require-artifacts",
     "leo:finalize:mac": "node scripts/leo-finalize-mac-artifacts.mjs",
+    "leo:test:vitest-ratchet": "node scripts/leo-vitest-ratchet.mjs",
     "leo:test:agent": "node --import ./scripts/test-isolation/home.mjs --import tsx --test \"apps/zcode-cli/packages/*/test/leo/*.test.ts\"",
     "leo:eval": "node scripts/leo-eval/run-eval.mjs",
     "fmt": "oxfmt",

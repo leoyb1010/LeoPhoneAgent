@@ -1,0 +1,12 @@
+{
+  "_comment": "vitest 已知失败基线(scripts/leo-vitest-ratchet.mjs)。只许变短:修好一个就跑 --update 删掉;新失败不许直接加进来(除非 --update --accept-new 并在提交里说明原因)。",
+  "total": 2,
+  "byPackage": {
+    "packages/desktop": 1,
+    "packages/ui": 1
+  },
+  "failures": [
+    "packages/desktop/test/desktopProductIdentity.test.ts > desktop product identity 根锁文件的发布版本与构建版本一致",
+    "packages/ui/test/foldRepeatedTasks.test.ts > (file)"
+  ]
+}
