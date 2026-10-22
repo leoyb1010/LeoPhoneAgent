@@ -260,7 +260,12 @@ test(
       await waitFor(async () => revoked.includes(exchanged.deviceId));
     } finally {
       link.stop();
-      relay.kill();
+      // 中继 0.2.4 起收到 SIGTERM 会优雅退出(落盘队列/状态文件),先等它退干净再删临时目录
+      if (relay.exitCode === null && relay.signalCode === null) {
+        const exited = new Promise((resolve) => relay.once("exit", resolve));
+        relay.kill();
+        await exited;
+      }
       await rm(dir, { recursive: true, force: true });
     }
   },
