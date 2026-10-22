@@ -3688,11 +3688,6 @@
 				Base,
 				"zh-Hans",
 				"zh-Hant",
-				ja,
-				ko,
-				fr,
-				de,
-				ru,
 			);
 			mainGroup = E51000030;
 			packageReferences = (
