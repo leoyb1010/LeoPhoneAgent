@@ -3,6 +3,7 @@
 //  MinisApp
 //
 //  [takeover] 「终端里的会话」:Mac 终端里用 claude 干到一半出门,手机上点一下接着干。
+//  [codex-sessions] 也列 Mac 上 Codex(桌面版 / 终端 codex)的会话:图标、名字、「正在干活 / 还开着」按 agent 区分。
 //  入口在首页「进行中」标题行(看屏 / 登录旁)和 设置 → 远程机器 的每台 Mac 上;
 //  打开会话复用 HarnessConsoleView(历史由 Mac 回放进事件流)。
 //
@@ -43,7 +44,7 @@ struct MacTerminalSessionsButton: View {
                 }
                 .buttonStyle(.borderless)
                 .accessibilityIdentifier("takeover.entry")
-                .accessibilityHint(Text("列出 Mac 终端里的 Claude Code 会话，点一下在手机上接着干"))
+                .accessibilityHint(Text("列出 Mac 上的 Claude Code / Codex 会话，点一下在手机上接着干"))
                 .fullScreenCover(isPresented: $showList) {
                     MacTerminalSessionsView(hostIds: hostIds) { showList = false }
                 }
@@ -79,7 +80,7 @@ struct MacTerminalSessionsView: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle(Text("终端里的会话"))
+                .navigationTitle(Text("Mac 上的会话"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -118,9 +119,9 @@ struct MacTerminalSessionsView: View {
                 }
             case .loaded:
                 ContentUnavailableView {
-                    Label("终端里没有 Claude Code 会话", systemImage: "apple.terminal")
+                    Label("还没有 Claude Code / Codex 会话", systemImage: "apple.terminal")
                 } description: {
-                    Text("在 Mac 终端里用 claude 开的会话会出现在这里，点一下就能在手机上看到之前的对话、接着发消息。")
+                    Text("在 Mac 终端里用 claude、或在 Codex 里开的会话会出现在这里，点一下就能在手机上看到之前的对话、接着发消息。")
                 } actions: {
                     Button("刷新") { Task { await store.refresh(force: true) } }
                 }
@@ -131,7 +132,7 @@ struct MacTerminalSessionsView: View {
                     if !group.sessions.isEmpty {
                         Section {
                             ForEach(group.sessions) { session in
-                                row(session, host: group.host)
+                                row(session, host: group.host, busy: group.busy.contains(session.id))
                             }
                         } header: {
                             if groups.count > 1 { Text(group.host.name) }
@@ -140,23 +141,29 @@ struct MacTerminalSessionsView: View {
                 }
                 Section {
                 } footer: {
-                    Text("接管后就是 Mac 上的一个 Claude Code 任务：历史从终端同步过来，之后的消息在原会话上继续。终端里还开着的，最好先在终端退出 claude，免得两边同时发消息。")
+                    Text("接管后就是 Mac 上的一个 Claude Code / Codex 任务：历史从 Mac 同步过来，之后的消息在原会话上继续。终端里还开着的，最好先在终端退出 claude；Codex 的会话要先在 Mac 上退出 Codex 才能接上。")
                 }
             }
             .refreshable { await store.refresh(force: true) }
         }
     }
 
-    private func row(_ session: MacExternalSession, host: GatewayHost) -> some View {
+    /// [codex-sessions] Claude 橙色、Codex 青色,一眼分得清是哪个 agent 的会话。
+    private func tint(_ session: MacExternalSession) -> Color {
+        session.agent == "codex" ? Color.teal : Color.orange
+    }
+
+    private func row(_ session: MacExternalSession, host: GatewayHost, busy: Bool) -> some View {
         Button {
             Task { await takeOver(session, on: host) }
         } label: {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: HarnessCatalog.symbol(key: session.agent))
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.orange)
+                    .foregroundStyle(tint(session))
                     .frame(width: 32, height: 32)
-                    .background(Color.orange.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .background(tint(session).opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .accessibilityLabel(Text(verbatim: HarnessCatalog.displayName(key: session.agent, fallback: session.agent)))
                 VStack(alignment: .leading, spacing: 4) {
                     Text(session.displayTitle)
                         .font(.system(size: 15, weight: .medium))
@@ -164,6 +171,10 @@ struct MacTerminalSessionsView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     HStack(spacing: 6) {
+                        Text(verbatim: HarnessCatalog.displayName(key: session.agent, fallback: session.agent))
+                            .foregroundStyle(tint(session))
+                            .lineLimit(1)
+                        Text("·")
                         Label(session.folderName, systemImage: "folder")
                             .labelStyle(.titleAndIcon)
                             .lineLimit(1)
@@ -185,7 +196,7 @@ struct MacTerminalSessionsView: View {
                                         .font(.system(size: 6))
                                         .foregroundStyle(.green)
                                         .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
-                                    Text("终端里还开着")
+                                    Text(openLabel(session, busy: busy))
                                 }
                                 .foregroundStyle(.green)
                             }
@@ -216,6 +227,12 @@ struct MacTerminalSessionsView: View {
         .disabled(takingOver != nil)
         .accessibilityElement(children: .combine)
         .accessibilityHint(Text("在手机上接着这个会话"))
+    }
+
+    /// 「还开着」的说法:Claude 是终端;Codex 分「这一轮还在跑」和「Codex 里开着这个会话」(开着时 Mac 会拒绝接管)。
+    private func openLabel(_ session: MacExternalSession, busy: Bool) -> LocalizedStringKey {
+        guard session.agent == "codex" else { return "终端里还开着" }
+        return busy ? "Codex 正在干活" : "Codex 里还开着"
     }
 
     private func takeOver(_ session: MacExternalSession, on host: GatewayHost) async {
