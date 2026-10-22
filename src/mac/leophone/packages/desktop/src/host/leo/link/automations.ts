@@ -17,6 +17,7 @@ import {
   parsePatch,
   patchNeedsFullAuto,
 } from "./automationPayload.js";
+import { AutomationNotify } from "./automationNotify.js";
 import { AutomationResults, runSummary } from "./automationResults.js";
 import type { LinkRequest, LinkResponse } from "./bridge.js";
 import type { HarnessEvent } from "./journal.js";
@@ -79,6 +80,9 @@ export type LinkAutomationsDeps = {
   finalReply?: (run: AutomationRunCompleted) => Promise<string | null>;
   /** [up-c-mac] 运行摘要落盘的文件;没有就只记在内存里。 */
   resultsFile?: string;
+  /** [remote-ctl-mac] notify 落盘的文件与操作回执目录(认出升级前手机建的定时任务);没有就只记在内存里。 */
+  notifyFile?: string;
+  receiptsDir?: string;
 };
 
 const FULL_AUTO_REFUSED =
@@ -99,9 +103,21 @@ function templatesView() {
 
 export class LinkAutomations {
   private readonly results: AutomationResults;
+  private readonly notify: AutomationNotify;
 
   constructor(private readonly deps: LinkAutomationsDeps) {
     this.results = new AutomationResults(deps.resultsFile ?? null);
+    this.notify = new AutomationNotify(deps.notifyFile ?? null, deps.receiptsDir ?? null);
+  }
+
+  /** [remote-ctl-mac] 读进 notify 记录;之后 notifyFor 可同步读。 */
+  ready(): Promise<void> {
+    return this.notify.load();
+  }
+
+  /** [remote-ctl-mac] 这条定时任务跑完 / 无人值守审批要不要推送(没记过 = false)。 */
+  notifyFor(automationId: string): boolean {
+    return this.notify.get(automationId);
   }
 
   private now(): Date {
@@ -109,6 +125,7 @@ export class LinkAutomations {
   }
 
   async handle(method: string, pathname: string, req: LinkRequest): Promise<LinkResponse> {
+    await this.notify.load();
     if (pathname === "/automations") {
       if (method === "GET") return this.list();
       if (method === "POST") return this.create(req);
@@ -221,7 +238,7 @@ export class LinkAutomations {
       });
     const last = latestRun(runs);
     const recorded = last ? await this.results.get(last.runId).catch(() => undefined) : undefined;
-    return automationView(automation, runs, recorded);
+    return automationView(automation, runs, recorded, this.notify.get(automation.automationId));
   }
 
   private scope(automation: ZCodeAutomation) {
@@ -271,6 +288,9 @@ export class LinkAutomations {
     } catch (cause) {
       return serviceError(cause);
     }
+    await this.notify.set(created.automationId, input.notify).catch((cause: unknown) => {
+      this.deps.logger.warn("[leo/link] saving automation notify failed", { error: String(cause) });
+    });
     await this.deps.checkpoint(req, {
       stage: "automation_created",
       automationId: created.automationId,
@@ -304,6 +324,7 @@ export class LinkAutomations {
         });
         if (!updated) return this.missing();
       }
+      if (patch.notify !== undefined) await this.notify.set(existing.automationId, patch.notify);
       if (patch.enabled !== undefined) {
         await this.deps.service.setAutomationEnabled({
           ...this.scope(existing),
@@ -327,6 +348,7 @@ export class LinkAutomations {
     } catch (cause) {
       return serviceError(cause);
     }
+    await this.notify.remove(existing.automationId).catch(() => undefined);
     return { status: 200, body: { ok: true, deleted: true } };
   }
 

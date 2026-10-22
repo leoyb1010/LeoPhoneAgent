@@ -512,7 +512,8 @@ test("stop ends the phone's stream; an idle task is cancelled at once", async ()
   });
 });
 
-test("questions the phone cannot answer are declined (question shown to the phone) instead of hanging the task", async () => {
+// [remote-ctl-mac] 以前手机答不了提问就替它拒绝;现在交给手机作答(question.request),一轮结束时作废。
+test("phone-turn questions go to the phone as question.request (once) and expire with the turn", async () => {
   await withBridge(async ({ bridge, zcode, dir }) => {
     const id = await createSession(bridge, dir, { prompt: "问我" });
     const question = {
@@ -528,16 +529,24 @@ test("questions the phone cannot answer are declined (question shown to the phon
     zcode.fire(id, question); // 内核按同一 requestId 重发:只答一次
     zcode.fire(id, { type: "task_complete", stopReason: "success" });
     await tick();
-    assert.deepEqual(zcode.named("respondElicitation"), [
-      { taskId: id, workspacePath: dir, requestId: "q1", action: "decline" },
-    ]);
-    assert.equal(zcode.named("stopGeneration").length, 0, "手机那一轮不停,agent 按没得到回答继续");
+    assert.deepEqual(zcode.named("respondElicitation"), [], "不再替手机拒绝");
+    assert.equal(zcode.named("stopGeneration").length, 0);
     const events = await collect(bridge, id, 0, (all) =>
       all.some((e) => e.event === "run.completed"),
     );
+    const asked = events.filter((e) => e.event === "question.request");
+    assert.equal(asked.length, 1);
+    assert.deepEqual(asked[0]?.["questions"], [
+      { question: "选哪个方案?", options: [{ label: "方案 A" }, { label: "方案 B" }], multi_select: false },
+    ]);
+    // 旧版手机认不出 question.request:同时留一条带原文的提示(kind 让新版手机可以隐藏)。
     const notes = events.filter((e) => e.event === "session.note");
     assert.equal(notes.length, 1);
+    assert.equal(notes[0]?.["kind"], "question_pending");
     assert.match(String(notes[0]?.["text"]), /选哪个方案\?（方案 A \/ 方案 B）/);
+    const expired = events.find((e) => e.event === "question.responded");
+    assert.equal(expired?.["question_id"], "q1");
+    assert.equal(expired?.["expired"], true);
   });
 });
 
@@ -851,7 +860,8 @@ test("tasks opened on the Mac desktop show up on the phone and are adopted on fi
       );
       assert.deepEqual(
         events.map((e) => e.event),
-        ["session.note", "user.message", "message.delta", "run.completed"],
+        // [remote-ctl-mac] 手机发消息 ⇒ 自动关注(follow 事件);接管时(session.note)还没关注。
+        ["session.note", "follow", "user.message", "message.delta", "run.completed"],
       );
 
       // 接过来之后,列表里只出现一次(作为手机侧会话)
@@ -1085,7 +1095,8 @@ test("a send the Mac can't take ends the turn instead of leaving it running", as
   });
 });
 
-test("turns started on the Mac keep their questions and don't push the phone", async () => {
+// [remote-ctl-mac] 推送看 following,不再看「这一轮是谁发起的」:取消关注后 Mac 上的一轮不推。
+test("turns started on the Mac keep their questions and don't push an unfollowed session", async () => {
   await withBridge(async ({ bridge, zcode, dir, pushed }) => {
     const id = await createSession(bridge, dir, { prompt: "手机发的" });
     zcode.fire(id, { type: "task_complete", stopReason: "success" });
@@ -1097,7 +1108,9 @@ test("turns started on the Mac keep their questions and don't push the phone", a
       "手机发起的一轮照常推",
     );
 
-    // 之后在 Mac 桌面上接着聊:提问留给 Mac,审批与完成不推手机
+    // 手机取消关注,之后在 Mac 桌面上接着聊:提问留给 Mac,审批与完成不推手机
+    const unfollow = await bridge.handle(req("POST", `/harness/sessions/${id}/follow`, { following: false }));
+    assert.equal(unfollow.status, 200);
     zcode.fire(id, { type: "task_run_started" });
     zcode.fire(id, {
       type: "elicitation_request",
@@ -2178,7 +2191,7 @@ test("automations: a finished run is pushed to the phone and its task becomes ad
       assert.equal(stop.status, 200, JSON.stringify(stop.body));
       assert.equal(zcode.subscriptionCount(), 1);
 
-      // 自动化已删:名字用占位,照样推。
+      // 自动化已删:没有 notify 记录(= false)且任务没被关注 → [remote-ctl-mac] 不推。
       await bridge.automationRunCompleted({
         automationId: "automation-gone",
         runId: "automation-gone:manual:1",
@@ -2187,8 +2200,7 @@ test("automations: a finished run is pushed to the phone and its task becomes ad
         taskId: "task-auto-2",
         workspacePath: dir,
       });
-      assert.equal(pushed[1]?.["name"], "定时任务");
-      assert.equal(pushed[1]?.["summary"], "已在 Mac 上跑完");
+      assert.equal(pushed.length, 1);
     },
     { automations: automations.service, zcodeModelSelection: async () => sonnet },
   );

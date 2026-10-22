@@ -5,6 +5,7 @@ import type { IZCodeTaskService } from "@zcode/services";
 import {
   generateTraceId,
   type ZCodePermissionOption,
+  type ZCodePromptAttachment,
   type ZCodePermissionRequest,
   type ZCodeStreamEvent,
   type ZCodeTaskMode,
@@ -13,6 +14,8 @@ import {
 import { createCheckpoint } from "./changes.js";
 import { describePermission, ZCodeEventMapper } from "./eventMap.js";
 import { HarnessJournal, type HarnessEvent, type JournalHealth } from "./journal.js";
+import { modelFromPicker, sameModel, type SessionModel } from "./remoteModels.js";
+import { normalizeQuestions, questionRequestEvent, type PendingQuestion } from "./remoteQuestions.js";
 
 /**
  * 发请求的是谁。中继 0.2 转发时附上;0.1 不附,记成 unknown。
@@ -76,7 +79,15 @@ export const UNATTENDED_QUESTION_REASON = "需要人工回答问题，无人值�
  * 并用 markFailed 让桥接把这次运行改判为失败。计时只在内存里,答复 / 一轮结束 / 关闭时清掉。
  * markFailed(null) 撤销改判:拒绝没送进内核时运行还会接着跑,之后有人批了就不能记成失败。
  */
-type UnattendedRun = { automationId: string; timeoutMs: number; markFailed: (reason: string | null) => void };
+type UnattendedRun = {
+  automationId: string;
+  timeoutMs: number;
+  markFailed: (reason: string | null) => void;
+  /** [remote-ctl-mac] 这条自动化要不要推送(定时任务的 notify);会话被关注时不看它也推。 */
+  notify?: () => boolean;
+};
+/** [remote-ctl-mac] 会话从哪来:手机建的 / 桌面上的 / 定时任务的 / 接管的终端会话。 */
+export type SessionSource = "phone" | "desktop" | "automation" | "takeover";
 
 export type LinkSessionDeps = {
   taskService: IZCodeTaskService;
@@ -123,6 +134,16 @@ export class LinkSession {
   resumeFailed = false;
   /** Mac 重启后从任务表里认回来的:下一次发消息前先让内核恢复这条会话。 */
   needsResume = false;
+  /**
+   * [remote-ctl-mac] 关注(省电):只有关注的会话把 approval.request / run.* 交给中继推送。
+   * 手机新建 / 接管 / 发消息自动关注;只是打开看看桌面任务不关注。持久化在 sessions.json。
+   */
+  following = false;
+  source: SessionSource = "phone";
+  /** [remote-ctl-mac] 当前模型与推理强度;不知道就是 null(外部 agent、还没读到)。 */
+  model: SessionModel | null = null;
+  /** [remote-ctl-mac] 手机那一轮里等着手机回答的提问(AskUserQuestion),按 requestId。 */
+  readonly pendingQuestions = new Map<string, PendingQuestion[]>();
   readonly pendingApprovals = new Map<string, Pending>();
   /** [up-c-mac] 正在无人值守地跑一次自动化;null = 普通任务。 */
   private unattended: UnattendedRun | null = null;
@@ -142,7 +163,7 @@ export class LinkSession {
   private subscriptionToken: symbol | null = null;
   private closed = false;
   private stopTimer: NodeJS.Timeout | null = null;
-  /** 这一轮是手机发起的。Mac 桌面上自己发起的轮次:提问不代答,审批和完成不推手机。 */
+  /** 这一轮是手机发起的。Mac 桌面上自己发起的轮次:提问留给 Mac 上的人答。推送看 following,不看它。 */
   private phoneTurn = false;
   private recordedOperations: Set<string> | null = null;
   /** 发出时就定好要推的事件;落盘回调来得晚,那时 phoneTurn 可能已经清掉。 */
@@ -246,11 +267,15 @@ export class LinkSession {
 
   // -- 手机发来的动作 -------------------------------------------------------
 
-  async send(text: string, caller: Caller, operationId?: string): Promise<void> {
+  async send(text: string, caller: Caller, operationId?: string, attachments: ZCodePromptAttachment[] = []): Promise<void> {
     // 正在跑时再发是插话(steer),不是新的一轮。
     const newTurn = this.status !== "running" && this.status !== "waiting_for_approval";
     this.lastCaller = caller;
     this.phoneTurn = true;
+    this.setFollowing(true);
+    // [remote-ctl-mac] 还挂着手机没答的提问时又发了消息(旧版手机只能这样回答):先替它跳过提问,消息照常送进去。
+    await this.declinePendingQuestions();
+    const attached = attachments.map((item) => ({ name: item.filename, mime: item.mimeType }));
     if (operationId) {
       if (!this.recordedOperations) {
         this.recordedOperations = new Set();
@@ -259,12 +284,12 @@ export class LinkSession {
         }
       }
       if (!this.recordedOperations.has(operationId)) {
-        this.emit({ event: "user.message", text, operation_id: operationId });
+        this.emit({ event: "user.message", text, operation_id: operationId, ...(attached.length ? { attachments: attached } : {}) });
         const health = await this.journal.flush();
         if (health.durable_seq < this.seq) throw new Error("Input journal is not durable; command not submitted");
         this.recordedOperations.add(operationId);
       }
-    } else this.emit({ event: "user.message", text });
+    } else this.emit({ event: "user.message", text, ...(attached.length ? { attachments: attached } : {}) });
     // 检查点必须在这一轮交给内核之前拍好,否则 agent 的第一笔改动可能已经进了「改动之前」。
     if (newTurn) {
       this.turnCheckpointed = false;
@@ -272,23 +297,74 @@ export class LinkSession {
     }
     this.status = "running";
     try {
-      if (this.needsResume) {
-        await this.deps.taskService.resumeTask({ taskId: this.sessionId, workspacePath: this.cwd });
-        this.needsResume = false;
-        // [up3-link2] 认回来的任务推迟到这里订阅:会话已常驻,订阅一次就成;先订再发,这一轮的事件不漏。
-        this.attachStream(true);
-      }
+      await this.ensureResumed();
       // sendPrompt 在远端 ACK 后就返回,不等这一轮跑完。
       await this.deps.taskService.sendPrompt({
         taskId: this.sessionId,
         traceId: operationId ?? generateTraceId(this.sessionId),
         content: text,
+        ...(attachments.length ? { attachments } : {}),
         clientLabel: "leo-link",
       });
     } catch (cause) {
       // 没送进内核:写个终态,不然首页和手机上一直显示「运行中」。
       this.emit({ event: "run.failed", error: `发送失败：${cause instanceof Error ? cause.message : String(cause)}` });
       throw cause;
+    }
+  }
+
+  /** 认回来还没在内核里恢复的会话:先恢复再操作(发消息、换模型、压缩都要会话常驻)。 */
+  async ensureResumed(): Promise<void> {
+    if (!this.needsResume) return;
+    await this.deps.taskService.resumeTask({ taskId: this.sessionId, workspacePath: this.cwd });
+    this.needsResume = false;
+    // [up3-link2] 认回来的任务推迟到这里订阅:会话已常驻,订阅一次就成;先订再发,这一轮的事件不漏。
+    this.attachStream(true);
+  }
+
+  /** [remote-ctl-mac] 关注 / 取消关注;变了才发 follow 事件并写回任务表。 */
+  setFollowing(following: boolean): void {
+    if (this.following === following) return;
+    this.following = following;
+    this.deps.onModeChanged?.();
+    this.emit({ event: "follow", following });
+  }
+
+  /** [remote-ctl-mac] 模型或强度变了(手机换的、Mac 上换的、内核报的):记下并告诉手机。 */
+  updateModel(model: SessionModel | null): void {
+    if (sameModel(this.model, model)) return;
+    this.model = model;
+    this.deps.onModeChanged?.();
+    if (model) this.emit({ event: "model", model });
+  }
+
+  /** [remote-ctl-mac] 手机回答提问;content = null 表示跳过(decline)。没这个提问返回 "missing"。 */
+  async answerQuestion(questionId: string, content: Record<string, unknown> | null): Promise<"ok" | "missing"> {
+    const questions = this.pendingQuestions.get(questionId);
+    if (!questions) return "missing";
+    // 先摘掉:内核回来的 elicitation_response 不再重复发回执。
+    this.pendingQuestions.delete(questionId);
+    try {
+      await this.deps.taskService.respondElicitation({
+        taskId: this.sessionId,
+        workspacePath: this.cwd,
+        requestId: questionId,
+        ...(content ? { action: "accept" as const, content } : { action: "decline" as const }),
+      });
+    } catch (cause) {
+      // 没送进内核,提问还在:手机可以重答。
+      this.pendingQuestions.set(questionId, questions);
+      throw cause;
+    }
+    this.emit({ event: "question.responded", question_id: questionId, ...(content ? {} : { declined: true }) });
+    return "ok";
+  }
+
+  private async declinePendingQuestions(): Promise<void> {
+    for (const questionId of Array.from(this.pendingQuestions.keys())) {
+      await this.answerQuestion(questionId, null).catch((error: unknown) =>
+        this.deps.logger.warn("[leo/link] declining pending question failed", { error: String(error) }),
+      );
     }
   }
 
@@ -393,7 +469,16 @@ export class LinkSession {
         if (!this.phoneTurn && !this.unattended) return;
         this.onElicitation(event);
         return;
+      case "glm_agent_model_state_update":
+        // [remote-ctl-mac] 模型 / 思考档位变了(含 Mac 桌面上换的):手机据此刷新。
+        this.updateModel(modelFromPicker(event.model.currentValue, event.thoughtLevel.currentValue) ?? this.model);
+        return;
       case "elicitation_response": {
+        // [remote-ctl-mac] Mac 上答了手机那边挂着的提问:手机收卡。
+        if (this.pendingQuestions.delete(event.requestId)) {
+          this.emit({ event: "question.responded", question_id: event.requestId });
+          return;
+        }
         // [leo] Mac 上答了计划审批:手机收卡(手机自己答的在 answer() 里已经发过回执)。
         const pending = this.pendingApprovals.get(event.requestId);
         if (pending?.kind !== "plan") return;
@@ -439,8 +524,8 @@ export class LinkSession {
 
   /**
    * [leo] 手机那一轮 / 无人值守运行里内核发来的提问。
-   * 计划审批(ExitPlanMode)变成审批卡(无人值守时直接 decline,见 onPlanApproval);其它提问(AskUserQuestion)手机还答不了:拒绝并把问题原文告诉手机,
-   * 无人值守时还要把这次运行记成失败并停掉,不然它永远挂着(手动运行的占位也一直不放)。
+   * 计划审批(ExitPlanMode)变成审批卡(无人值守时直接 decline,见 onPlanApproval);其它提问(AskUserQuestion)交给手机作答(question.request),
+   * 无人值守时没人能答:拒绝、把这次运行记成失败并停掉,不然它永远挂着(手动运行的占位也一直不放)。
    */
   private onElicitation(request: ElicitationRequest): void {
     const schema = asRecord(request.schema);
@@ -451,13 +536,22 @@ export class LinkSession {
     if (this.handledQuestions.has(request.requestId)) return;
     this.handledQuestions.add(request.requestId);
     const run = this.unattended;
-    run?.markFailed(UNATTENDED_QUESTION_REASON);
+    if (!run) {
+      // [remote-ctl-mac] 手机那一轮:把提问交给手机作答(question.request)。旧版手机认不出这个事件,
+      // 同时留一条 kind=question_pending 的提示(新版手机可隐藏);旧版手机直接发消息,send 会先替它跳过提问。
+      const questions = normalizeQuestions(request);
+      this.pendingQuestions.set(request.requestId, questions);
+      this.emit(questionRequestEvent(request.requestId, questions));
+      this.emit({ event: "session.note", kind: "question_pending", text: questionNote(request, false) });
+      return;
+    }
+    run.markFailed(UNATTENDED_QUESTION_REASON);
     void this.deps.taskService
       .respondElicitation({ taskId: this.sessionId, workspacePath: this.cwd, requestId: request.requestId, action: "decline" })
       .catch((error: unknown) => this.deps.logger.warn("[leo/link] elicitation decline failed", { error: String(error) }))
-      .then(() => (run ? this.stop() : undefined))
+      .then(() => this.stop())
       .catch((error: unknown) => this.deps.logger.warn("[leo/link] stopping after skipped question failed", { error: String(error) }));
-    this.emit({ event: "session.note", text: questionNote(request, Boolean(run)) });
+    this.emit({ event: "session.note", text: questionNote(request, true) });
   }
 
   /** [leo] 计划审批卡:批准 = 退出计划模式、开始执行;拒绝 = 留在计划模式(内核随后结束这一轮)。 */
@@ -620,6 +714,12 @@ export class LinkSession {
     if (event.event !== "message.delta" && event.event !== "reasoning.available") {
       for (const flushed of this.mapper.flushPending()) this.emit(flushed);
     }
+    if (RUN_END.has(event.event) && this.pendingQuestions.size) {
+      // [remote-ctl-mac] 这一轮结束,没答的提问也作废:手机收卡。
+      const stale = [...this.pendingQuestions.keys()];
+      this.pendingQuestions.clear();
+      for (const questionId of stale) this.emit({ event: "question.responded", question_id: questionId, expired: true });
+    }
     if (RUN_END.has(event.event) && this.pendingApprovals.size) {
       // 这一轮结束了,还挂着的审批随之作废:发回执让手机收卡,不然重放日志时卡片又冒出来。
       const stale = [...this.pendingApprovals];
@@ -644,12 +744,14 @@ export class LinkSession {
       this.stopTimer = null;
     }
     if (PUSHABLE.has(name) && this.phoneSessionId) enriched["phone_session_id"] = this.phoneSessionId;
-    if (PUSHABLE.has(name) && this.phoneTurn) this.pushSeqs.add(this.seq);
+    // [remote-ctl-mac] 推送只给关注的会话(以前看「这一轮是不是手机发起的」)。不关注的照常记日志、手机打开照常看到。
+    if (PUSHABLE.has(name) && this.following) this.pushSeqs.add(this.seq);
     // [up-c-mac] 无人值守的自动化:审批卡照样推(终态由 automation.run.completed 单独推,这里不重复)。
-    else if (name === "approval.request" && this.unattended) this.pushSeqs.add(this.seq);
+    // [remote-ctl-mac] 只在这条自动化 notify 打开(或会话被关注)时推;30 分钟自动拒绝不受影响。
+    else if (name === "approval.request" && this.unattendedPushes()) this.pushSeqs.add(this.seq);
     // [up3-link2] 无人值守时审批答完(手机 / Mac 答的、超时自动拒绝的)也推:中继据此把审批拉起的灵动岛
     // 改回「运行中」。中继对 approval.responded 不发 APNs 提醒、灵动岛更新不带 alert,不会再响一次。
-    else if (name === "approval.responded" && this.unattended) this.pushSeqs.add(this.seq);
+    else if (name === "approval.responded" && this.unattendedPushes()) this.pushSeqs.add(this.seq);
     if (RUN_END.has(name)) {
       // 这一轮(含无人值守的自动化运行)结束:自动拒绝计时一并作废。
       if (this.unattended) this.setUnattended(null);
@@ -680,6 +782,10 @@ export class LinkSession {
       sub.queue.push(enriched);
       sub.wake?.();
     }
+  }
+
+  private unattendedPushes(): boolean {
+    return Boolean(this.unattended) && (this.following || (this.unattended?.notify?.() ?? false));
   }
 
   /** 有产出说明 agent 已连上,这时 CLI 已写好映射:对不上就是 load 失败。只核对一次;读不到映射不报。 */
@@ -774,7 +880,7 @@ export class LinkSession {
   harnessName = "LeoBot";
 
   indexEntry(): Record<string, unknown> {
-    return { task_id: this.sessionId, cwd: this.cwd, title: this.title, mode: this.mode, created_at: this.createdAt, phone_session_id: this.phoneSessionId ?? undefined, harness: this.harness, harness_name: this.harnessName, external_session_id: this.externalSessionId ?? undefined, resume_failed: this.resumeFailed || undefined };
+    return { task_id: this.sessionId, cwd: this.cwd, title: this.title, mode: this.mode, created_at: this.createdAt, phone_session_id: this.phoneSessionId ?? undefined, harness: this.harness, harness_name: this.harnessName, external_session_id: this.externalSessionId ?? undefined, resume_failed: this.resumeFailed || undefined, following: this.following, source: this.source, model: this.model ?? undefined };
   }
 
   /**
@@ -803,6 +909,9 @@ export class LinkSession {
       seq: this.seq,
       journal: this.journal.health(),
       ...(this.resumeFailed ? { resume_failed: true } : {}),
+      following: this.following,
+      source: this.source,
+      model: this.model,
       waiting_for_approval: this.pendingApprovals.size > 0,
       pending_approvals: [...this.pendingApprovals.entries()].map(([id, pending]) => ({
         approval_id: id,
@@ -837,7 +946,7 @@ function questionNote(request: ElicitationRequest, unattended: boolean): string 
     .join("；");
   const head = unattended
     ? "无人值守的定时任务要人回答问题，没人在场，已跳过并停掉这次运行"
-    : "Mac 上的任务问了一个问题，手机端还不能直接作答，已替你跳过（agent 会按没得到回答继续）；需要的话直接发消息告诉它";
+    : "Mac 上的任务在等你回答问题；旧版手机答不了，直接发消息告诉它即可（会先跳过这个问题）";
   const text = `${head}：${asked}`;
   return text.length > 600 ? `${text.slice(0, 599)}…` : text;
 }

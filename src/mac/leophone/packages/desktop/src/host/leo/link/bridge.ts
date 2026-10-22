@@ -3,7 +3,7 @@ import { promises as fsp } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type { IZCodeTaskService } from "@zcode/services";
+import type { IZCodeTaskService, ModelSelectionView } from "@zcode/services";
 import { setLeoMainLanePinnedWorkspacesProvider } from "@zcode/services/leo-main-lane-idle-recycle";
 import type {
   ModelSelection,
@@ -56,7 +56,17 @@ import {
   validSessionId,
 } from "./linkPolicy.js";
 import { resumeEnvelope } from "./resumeEnvelope.js";
-import { APPROVAL_CHOICES, LinkSession, type ApprovalChoice, type Caller } from "./session.js";
+import { parseAttachments, type HeicConverter } from "./remoteAttachments.js";
+import { parseSessionModel, sessionModel } from "./remoteModels.js";
+import {
+  chooseCreateModel,
+  listModels,
+  REMOTE_SESSION_ACTIONS,
+  sessionControl,
+  type RemoteControlDeps,
+  type RemoteSessionAction,
+} from "./remoteRoutes.js";
+import { APPROVAL_CHOICES, LinkSession, type ApprovalChoice, type Caller, type SessionSource } from "./session.js";
 import type { ScreenRequest } from "./screen/snapshot.js";
 import type { ScreenSessionRequest } from "./screen/session.js";
 import type { RelayE2E } from "./relayE2E.js";
@@ -143,7 +153,12 @@ export type LinkBridgeDeps = {
   automations?: LinkAutomationService;
   /** [up-c-mac] 无人值守的自动化审批多久没人答就自动拒绝;默认 30 分钟(测试注入短的)。 */
   unattendedApprovalMs?: number;
+  /** [remote-ctl-mac] 桌面模型选择器的视图(IModelSelectionService.getView):/harness/models 与换模型;没有就 404。 */
+  modelView?: () => Promise<ModelSelectionView>;
+  /** [remote-ctl-mac] HEIC → JPEG(默认 macOS sips);测试注入。 */
+  convertHeic?: HeicConverter;
 };
+const SOURCES: SessionSource[] = ["phone", "desktop", "automation", "takeover"];
 
 /** [up-c-mac] 无人值守运行的失败原因(审批超时 / 计划未获批准 / 要人回答问题);由会话改判,这里转出给 Host 与测试。 */
 export { UNATTENDED_APPROVAL_REASON, UNATTENDED_PLAN_REASON, UNATTENDED_QUESTION_REASON } from "./session.js";
@@ -249,6 +264,8 @@ export class LinkBridge {
           logger: deps.logger,
           finalReply: (run) => this.automationReply(run),
           resultsFile: path.join(deps.journalDir, "automation-results.json"),
+          notifyFile: path.join(deps.journalDir, "automation-notify.json"),
+          receiptsDir: path.join(deps.journalDir, "operations"),
         })
       : null;
     // [up-p3-mac] 自动化跑完(Host 已先回写运行记录)→ 推给手机;桥接关掉时退订。
@@ -272,6 +289,7 @@ export class LinkBridge {
   async restore(): Promise<void> {
     this.restoring = true;
     try {
+      await this.automations?.ready();
       await this.restoreFromIndex();
     } finally {
       this.restoring = false;
@@ -307,6 +325,14 @@ export class LinkBridge {
       if (typeof entry["phone_session_id"] === "string") session.phoneSessionId = entry["phone_session_id"];
       if (typeof entry["external_session_id"] === "string") session.externalSessionId = entry["external_session_id"];
       session.resumeFailed = entry["resume_failed"] === true;
+      // [remote-ctl-mac] 升级前的任务表没有这几项:不关注(手机再发消息会自动关注),来源按有无终端会话推断。
+      session.following = entry["following"] === true;
+      session.source = SOURCES.includes(entry["source"] as SessionSource)
+        ? (entry["source"] as SessionSource)
+        : session.externalSessionId
+          ? "takeover"
+          : "phone";
+      session.model = parseSessionModel(entry["model"]);
       if (session.externalSessionId && !session.resumeFailed) this.armResumeCheck(session);
       if (typeof entry["created_at"] === "number") session.createdAt = entry["created_at"];
       // 最后活动时间从创建时间起算,open() 再按日志最后一条事件往后推。以前这里取的是「现在」:
@@ -582,6 +608,20 @@ export class LinkBridge {
       if (method !== "GET") return error(405, "Method not allowed");
       return this.externalSessions();
     }
+    if (pathname === "/harness/models") {
+      if (method !== "GET") return error(405, "Method not allowed");
+      return listModels(this.remoteDeps());
+    }
+    const control = /^\/harness\/sessions\/([^/]+)\/([a-z]+)$/.exec(pathname);
+    if (control && REMOTE_SESSION_ACTIONS.includes(control[2] as RemoteSessionAction)) {
+      if (method !== "POST") return error(405, "Method not allowed");
+      const sessionId = decodeURIComponent(control[1]!);
+      if (!validSessionId(sessionId)) return error(400, "会话 id 不合法");
+      // 关注 / 换模型等对没接过来的桌面任务也一样:先接管(和发消息一样)。
+      const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
+      if (!session) return error(404, "这台 Mac 上没有这个任务");
+      return sessionControl(control[2] as RemoteSessionAction, session, record(req.body), this.remoteDeps());
+    }
     const panel = /^\/harness\/sessions\/([^/]+)\/(mode|changes|diff|revert)$/.exec(pathname);
     if (panel) return this.sessionPanel(method, panel[2]!, decodeURIComponent(panel[1]!), url, req);
     const match = /^\/harness\/sessions\/([^/]+)\/(send|approval|stop|archive)$/.exec(pathname);
@@ -605,6 +645,16 @@ export class LinkBridge {
         await session.stop();
         return { status: 200, body: { ok: true, status: session.status } };
     }
+  }
+
+  private remoteDeps(): RemoteControlDeps {
+    return {
+      taskService: this.deps.taskService,
+      logger: this.deps.logger,
+      ...(this.deps.modelView ? { modelView: this.deps.modelView } : {}),
+      defaultModel: () => this.zcodeModel(),
+      saveIndex: () => void this.saveIndex().catch(() => undefined),
+    };
   }
 
   /** 权限模式与改动面板(docs/specs/leo-link-changes.md):只对这台 Mac 上的 LeoBot 任务,不转发旧 leoagent。 */
@@ -700,10 +750,13 @@ export class LinkBridge {
   }
 
   private async adopt(taskId: string): Promise<LinkSession | null> {
+    const fromAutomation = !this.desktopTasks.has(taskId) && this.automationTasks.has(taskId);
     const task = this.desktopTasks.get(taskId) ?? this.automationTasks.get(taskId);
     if (!task) return null;
     this.automationTasks.delete(taskId);
     const session = this.newSession(task.taskId, task.cwd, task.mode);
+    // [remote-ctl-mac] 只是打开看看:不关注(following 默认 false),来源记下来。
+    session.source = fromAutomation ? "automation" : "desktop";
     session.title = task.title;
     session.createdAt = task.createdAt / 1000;
     session.needsResume = true;
@@ -773,6 +826,7 @@ export class LinkBridge {
     this.finishedRuns.add(run.runId);
     while (this.finishedRuns.size > FINISHED_RUN_LIMIT) this.finishedRuns.delete(this.finishedRuns.keys().next().value!);
     this.sessions.get(run.taskId)?.setUnattended(null);
+    await this.automations.ready();
     const { event, name, mode } = await this.automations.completedEvent(run);
     if (!this.sessions.has(run.taskId)) {
       const now = Date.now();
@@ -789,7 +843,8 @@ export class LinkBridge {
       while (this.automationTasks.size > AUTOMATION_TASK_LIMIT)
         this.automationTasks.delete(this.automationTasks.keys().next().value!);
     }
-    this.deps.push(event);
+    // [remote-ctl-mac] 只在这条定时任务 notify 打开、或目标会话被关注时推送(省电)。
+    if (this.automations.notifyFor(run.automationId) || this.sessions.get(run.taskId)?.following === true) this.deps.push(event);
   }
 
   /** [up-c-mac] 这次运行的最终助手回复;会话刚跑完还活着,读快照不会冷恢复。 */
@@ -808,6 +863,7 @@ export class LinkBridge {
    */
   automationRunStarted(run: AutomationRunStarted): void {
     if (!this.automations || this.finishedRuns.has(run.runId) || this.automationWatches.has(run.runId)) return;
+    void this.automations.ready().catch(() => undefined);
     const existing = this.sessions.get(run.taskId);
     if (existing) {
       // [up3-link2] 开跑说明会话已常驻:认回来还没恢复过的会话(订阅推迟或已因 session-unavailable 放弃)
@@ -834,6 +890,7 @@ export class LinkBridge {
     watch.adopting = true;
     const { run } = watch;
     try {
+      await this.automations!.ready();
       const { name, mode } = await this.automations!.describe(run.automationId);
       if (this.automationWatches.get(run.runId) !== watch) return; // 等名字期间运行已结束
       if (!this.sessions.has(run.taskId)) {
@@ -866,6 +923,7 @@ export class LinkBridge {
     session.setUnattended({
       automationId: run.automationId,
       timeoutMs: this.deps.unattendedApprovalMs ?? UNATTENDED_APPROVAL_MS,
+      notify: () => this.automations?.notifyFor(run.automationId) ?? false,
       // 改判交给 Host 收终态时取走;null = 撤销(拒绝没送进内核,运行还在跑)。
       markFailed: (reason) => {
         if (reason) failAutomationRun(run.runId, reason);
@@ -1016,6 +1074,15 @@ export class LinkBridge {
           automations: Boolean(this.automations),
           // [up-c-mac] GET /automations/templates(Mac 自带模板,手机可一键建)。
           automation_templates: Boolean(this.automations),
+          // [remote-ctl-mac] docs/specs/leo-link-remote-controls.md:为 true 才显示对应控件。
+          models: Boolean(this.deps.modelView),
+          model_switch: Boolean(this.deps.modelView),
+          effort: Boolean(this.deps.modelView),
+          compact: true,
+          rename: true,
+          attachments: true,
+          ask_user_question: true,
+          follow: true,
         },
         harnesses: [
           {
@@ -1045,6 +1112,8 @@ export class LinkBridge {
       status: task.status,
       title: task.title,
       source: "desktop",
+      following: false,
+      model: null,
       created_at: task.createdAt / 1000,
       updated_at: task.updatedAt / 1000,
       seq: 0,
@@ -1110,7 +1179,10 @@ export class LinkBridge {
     if (!acpAgent && needsCreate) {
       const selected = await this.zcodeModel();
       if (selected === null) return error(409, LEOBOT_NO_MODEL_MESSAGE);
-      modelSelection = selected;
+      // [remote-ctl-mac] 手机指定的模型 / 强度(旧字段 thinking 视作强度);都不带 = 自动选择。
+      const chosen = await chooseCreateModel(this.remoteDeps(), body, selected);
+      if (chosen && "error" in chosen) return error(400, chosen.error);
+      modelSelection = chosen?.selection ?? selected;
     }
     const phoneSessionId = phoneSessionIdOf(body);
     const cwd =
@@ -1161,6 +1233,10 @@ export class LinkBridge {
         session.harnessName = acpAgent.name;
       }
       session.lastCaller = req.caller;
+      // [remote-ctl-mac] 手机新建 / 接管 ⇒ 关注;模型按这次建任务用的记下(外部 agent 不报)。
+      session.following = true;
+      session.source = takeover ? "takeover" : "phone";
+      if (!acpAgent && modelSelection) session.model = sessionModel(modelSelection);
       if (takeover) {
         session.externalSessionId = takeover.id;
         session.title = takeover.title || path.basename(cwd);
@@ -1250,6 +1326,7 @@ export class LinkBridge {
     if (typeof id !== "string" || !SESSION_UUID.test(id)) return error(400, "session_id 必须是 Claude Code 的会话 id（uuid）");
     const existing = [...this.sessions.values()].find((session) => session.externalSessionId === id);
     if (existing) {
+      existing.setFollowing(true);
       return {
         status: 202,
         body: {
@@ -1309,7 +1386,10 @@ export class LinkBridge {
     req?: LinkRequest,
   ): Promise<LinkResponse> {
     const text = String(body["text"] ?? "");
-    if (!text) return error(400, "text is required");
+    // [remote-ctl-mac] 图片附件(仅图片,每张 ≤ 5 MB、最多 4 张);有图时正文可以为空。
+    const attachments = await parseAttachments(body["attachments"], this.deps.convertHeic);
+    if (!Array.isArray(attachments)) return attachments;
+    if (!text && !attachments.length) return error(400, "text is required");
     if (typeof body["full_auto"] === "boolean") {
       const wanted = body["full_auto"];
       if (wanted && !mayUseFullAuto(caller))
@@ -1348,6 +1428,7 @@ export class LinkBridge {
         text,
         caller,
         req?.requestId ? this.receipts.operationId(req, "send") : undefined,
+        attachments,
       );
     } catch (cause) {
       if (req?.requestId) throw cause;

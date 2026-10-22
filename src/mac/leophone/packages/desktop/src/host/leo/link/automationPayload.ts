@@ -234,6 +234,7 @@ export function automationView(
   automation: ZCodeAutomation,
   runs: ZCodeAutomationRun[],
   recordedSummary?: string | null,
+  notify = false,
 ) {
   const last = latestRun(runs);
   return {
@@ -248,6 +249,8 @@ export function automationView(
     workspace: automation.workspacePath,
     mode: automation.mode ?? null,
     target_task_id: automation.targetTaskId ?? null,
+    // [remote-ctl-mac] 跑完 / 无人值守审批要不要推给手机。
+    notify,
     run_count: automation.runCount,
     last_run: last
       ? {
@@ -274,6 +277,8 @@ export type CreateInput = {
   workspace: string;
   harness: string;
   mode: LinkMode;
+  /** [remote-ctl-mac] 手机建的默认推送。 */
+  notify: boolean;
 };
 
 function text(value: unknown, max: number, field: string): string | { error: string } | undefined {
@@ -307,6 +312,7 @@ export function parseCreate(body: unknown, now: Date): CreateInput | { error: st
   if (input["mode"] != null && !mode) return { error: `mode 只能是 ${LINK_MODES.join(" / ")}` };
   // [leo] 从模板建的(带 template_id)没给 mode 时用模板建议的模式:早报这类只读模板是 plan,不然每次运行都要人批。
   // 认不出的 template_id 不报错,按没给处理(旧手机 / 服务端模板)。
+  if (input["notify"] != null && typeof input["notify"] !== "boolean") return { error: "notify 必须是 true / false" };
   const template = LEO_AUTOMATION_TEMPLATES.find(
     (candidate) => candidate.id === input["template_id"],
   );
@@ -317,6 +323,7 @@ export function parseCreate(body: unknown, now: Date): CreateInput | { error: st
     workspace: typeof workspace === "string" ? workspace.trim() : "",
     harness: (typeof harness === "string" && harness.trim()) || "zcode",
     mode: mode ?? (input["full_auto"] === true ? "yolo" : (template?.mode ?? "build")),
+    notify: input["notify"] !== false,
   };
 }
 
@@ -326,6 +333,7 @@ export type PatchInput = {
   schedule?: ScheduleSpec;
   enabled?: boolean;
   mode?: LinkMode;
+  notify?: boolean;
 };
 
 export function parsePatch(body: unknown, now: Date): PatchInput | { error: string } {
@@ -346,6 +354,10 @@ export function parsePatch(body: unknown, now: Date): PatchInput | { error: stri
     if (typeof input["enabled"] !== "boolean") return { error: "enabled 必须是 true / false" };
     patch.enabled = input["enabled"];
   }
+  if (input["notify"] !== undefined) {
+    if (typeof input["notify"] !== "boolean") return { error: "notify 必须是 true / false" };
+    patch.notify = input["notify"];
+  }
   if (input["mode"] !== undefined) {
     const mode = linkMode(input["mode"]);
     if (!mode) return { error: `mode 只能是 ${LINK_MODES.join(" / ")}` };
@@ -353,7 +365,7 @@ export function parsePatch(body: unknown, now: Date): PatchInput | { error: stri
   }
   return Object.keys(patch).length
     ? patch
-    : { error: "至少改一项：name / prompt / schedule / enabled / mode" };
+    : { error: "至少改一项：name / prompt / schedule / enabled / mode / notify" };
 }
 
 /**
