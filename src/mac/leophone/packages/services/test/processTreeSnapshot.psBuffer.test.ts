@@ -101,7 +101,7 @@ describe.skipIf(originalPlatform === "win32")("processTreeSnapshot ps buffering 
   });
 
   it("logs ENOBUFS as an error and still uses the complete lines that were read", () => {
-    const log = { warn: vi.fn() };
+    const log = { warn: vi.fn(), error: vi.fn() };
     const enobufs = Object.assign(new Error("spawnSync ps ENOBUFS"), { code: "ENOBUFS" });
     // 截断发生在最后一行中间:那一行必须丢掉,前面的完整行照常用。
     routePs(() =>
@@ -111,11 +111,54 @@ describe.skipIf(originalPlatform === "win32")("processTreeSnapshot ps buffering 
     const snapshot = captureProcessTreeSnapshot({ pid: 500 } as ChildProcess, { log });
 
     expect(snapshot?.descendantPids).toEqual([501, 502]);
-    expect(log.warn).toHaveBeenCalledWith(
+    expect(log.error).toHaveBeenCalledWith(
       undefined,
       expect.stringContaining("ENOBUFS"),
       enobufs,
     );
+    expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  it("falls back to warn for ENOBUFS when the logger has no error method", () => {
+    const log = { warn: vi.fn() };
+    const enobufs = Object.assign(new Error("spawnSync ps ENOBUFS"), { code: "ENOBUFS" });
+    routePs(() => psResult(FULL_SCAN, { error: enobufs, status: null, signal: "SIGTERM" }));
+    captureProcessTreeSnapshot({ pid: 500 } as ChildProcess, { log });
+    expect(log.warn).toHaveBeenCalledWith(undefined, expect.stringContaining("ENOBUFS"), enobufs);
+  });
+
+  it("keeps a reparented descendant when the root exits between the scan and the command read", () => {
+    // root(500) 在全表扫描后退出:501 被 reparent 到 launchd,root 不在 -p 补读结果里。
+    spawnSyncMock.mockImplementation((_command: string, args: readonly string[]) =>
+      args.includes("-p")
+        ? psResult(
+            [
+              `  501     1   500 ${LSTART} node mcp-server.js --stdio`,
+              `  502   501   500 ${LSTART} /bin/zsh -c sleep 100`,
+            ].join("\n"),
+          )
+        : psResult(FULL_SCAN),
+    );
+    const snapshot = captureProcessTreeSnapshot({ pid: 500 } as ChildProcess);
+    expect(snapshot?.rootPid).toBe(500);
+    expect(snapshot?.descendantPids).toEqual([501, 502]);
+    const byPid = new Map(snapshot?.identities.map((identity) => [identity.pid, identity]));
+    // ppid 沿用全表扫描,复核过的后代带 command 熵。
+    expect(byPid.get(501)).toEqual({
+      parentPid: 500,
+      pid: 501,
+      processGroupId: 500,
+      startTime: `${LSTART}|command:node mcp-server.js --stdio`,
+    });
+    // 已退出 root 的记录不带复核熵,不可能再与任何活进程匹配。
+    expect(byPid.get(500)?.startTime).toBe(LSTART);
+  });
+
+  it("returns no snapshot when neither the root nor any descendant survives the command read", () => {
+    spawnSyncMock.mockImplementation((_command: string, args: readonly string[]) =>
+      args.includes("-p") ? psResult("", { status: 1 }) : psResult(FULL_SCAN),
+    );
+    expect(captureProcessTreeSnapshot({ pid: 500 } as ChildProcess)).toBeUndefined();
   });
 
   it("still returns no snapshot when ps itself fails", () => {

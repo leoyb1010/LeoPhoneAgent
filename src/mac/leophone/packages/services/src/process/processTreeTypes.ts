@@ -3,6 +3,7 @@ import type { TraceId } from "@zcode/shared";
 export interface ProcessTreeTerminatorLogger {
   debug?: (traceId: TraceId | undefined, ...args: unknown[]) => void;
   warn: (traceId: TraceId | undefined, ...args: unknown[]) => void;
+  error?: (traceId: TraceId | undefined, ...args: unknown[]) => void;
 }
 
 export interface WindowsTaskkillRequest {

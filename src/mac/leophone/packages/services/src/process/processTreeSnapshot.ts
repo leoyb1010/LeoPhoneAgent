@@ -21,6 +21,15 @@ function warn(options: ProcessTreeTerminatorOptions, message: string, ...args: u
   options.log?.warn(options.traceId, message, ...args);
 }
 
+function logError(options: ProcessTreeTerminatorOptions, message: string, ...args: unknown[]): void {
+  const log = options.log;
+  if (log?.error) {
+    log.error(options.traceId, message, ...args);
+    return;
+  }
+  log?.warn(options.traceId, message, ...args);
+}
+
 function parsePositiveInteger(value: string | undefined): number | undefined {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
@@ -92,7 +101,7 @@ function runPosixPs(
     timeout: PROCESS_LOOKUP_TIMEOUT_MS,
   });
   if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOBUFS") {
-    warn(
+    logError(
       options,
       `查询 runtime 后代进程失败（进程表超过 ${PROCESS_LIST_MAX_BUFFER_BYTES} 字节缓冲，ENOBUFS），只使用已读到的完整行:`,
       result.error,
@@ -132,8 +141,9 @@ function readPosixProcessList(options: ProcessTreeTerminatorOptions): ProcessIde
 
 /**
  * Darwin 的 lstart 只有秒级精度，身份里还要追加完整 command 作为 PID 复用校验熵。
- * 只对候选 PID 补读一次（带 command=）；两次读取之间 PID 被复用 / reparent 时
- * 不能拼出混合身份，ppid / pgid / lstart 对不上的直接丢弃，与 Linux 的 /proc 复核同一原则。
+ * 只对候选 PID 补读一次（带 command=）；PID 复用按 pid + pgid + lstart(+command) 判定，
+ * 对不上的直接丢弃。ppid 不参与判定：root 在两次读取之间退出时后代会被 reparent 到 launchd，
+ * 身份并未改变，ppid 一律沿用全表扫描时的值，进程树结构保持一致。
  */
 function refineDarwinProcessIdentities(
   identities: readonly ProcessIdentity[],
@@ -157,13 +167,12 @@ function refineDarwinProcessIdentities(
     const withCommand = withCommandByPid.get(identity.pid);
     if (
       !withCommand ||
-      withCommand.parentPid !== identity.parentPid ||
       withCommand.processGroupId !== identity.processGroupId ||
       !withCommand.startTime.startsWith(`${identity.startTime}|command:`)
     ) {
       return [];
     }
-    return [withCommand];
+    return [{ ...withCommand, parentPid: identity.parentPid }];
   });
 }
 
@@ -345,8 +354,17 @@ export function captureProcessTreeSnapshot(
       identity,
     ]),
   );
-  const identities = refineProcessIdentities([...snapshotCandidates.values()], options);
-  if (!identities.some((identity) => identity.pid === child.pid)) {
+  const refinedIdentities = refineProcessIdentities([...snapshotCandidates.values()], options);
+  // root 在全表扫描后、身份复核前退出时（Darwin 按候选 PID 补读 command 有一次 spawnSync 的间隙），
+  // 复核结果里没有 root，但全表扫描已证明它是本次快照的拥有者。保留扫描时的 root 记录：
+  // 它的 startTime 不带复核熵，永远不会与之后读到的任何活进程匹配，只作「已退出 root」标记，
+  // 同组后代仍按复核过的身份回收，不会因此认领复用 PID。没有任何复核过的后代时仍返回 undefined。
+  const identities = refinedIdentities.some((identity) => identity.pid === child.pid)
+    ? refinedIdentities
+    : process.platform === "win32" || refinedIdentities.length === 0
+      ? []
+      : [rootIdentity, ...refinedIdentities];
+  if (identities.length === 0) {
     return undefined;
   }
   return {

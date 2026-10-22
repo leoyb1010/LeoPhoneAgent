@@ -44,6 +44,8 @@ function key() {
 }
 
 const write = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
+// 客户端先关掉自己那端时 stdout 会 EPIPE;对方已经不在,安静退出,不往 stderr 甩堆栈。
+process.stdout.on("error", () => process.exit(0));
 const log = (text) => process.stderr.write(`[leo-treasury shim] ${text}\n`);
 const replyError = (id, code, message) => write({ jsonrpc: "2.0", id, error: { code, message } });
 
@@ -97,7 +99,7 @@ function parseSse(text) {
 
 function failureMessage(status, text) {
   if (status === 401 || status === 403) {
-    return "LeoBot 拒绝了藏宝阁钥匙(401)。打开一次新版 LeoBot 让它重新登记,或检查配置里的 LEOAGENT_KEY 是否等于 ~/.leoagent/treasury.key。";
+    return `LeoBot 拒绝了藏宝阁钥匙(${status})。打开一次新版 LeoBot 让它重新登记,或检查配置里的 LEOAGENT_KEY 是否等于 ~/.leoagent/treasury.key。`;
   }
   if (status === 404) {
     return "这个 LeoBot 没有藏宝阁 MCP 端点(/api/leo/treasury/mcp),请升级到 1.15 及以上。";
