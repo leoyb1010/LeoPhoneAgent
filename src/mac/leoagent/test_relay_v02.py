@@ -265,6 +265,20 @@ class RelayV02Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status["status"], "delivered")
         self.assertEqual(status["response"], {"session_id": "s1"})
 
+    async def test_patch_body_is_forwarded_to_the_mac(self):
+        # /automations/<id> 的改名 / 暂停走 PATCH;以前中继只给 POST / PUT 带正文,Mac 收到空正文回 400。
+        ws, machine_key = await self.pinned_mac("MacBook")
+        exchanged = await (await self.client.post("/relay/api/device/exchange", json={"name": "iPhone"},
+                                                  headers=self.auth(MASTER))).json()
+        pending = asyncio.ensure_future(self.client.patch(
+            "/relay/api/m/MacBook/automations/a1", json={"enabled": False},
+            headers=self.auth(exchanged["accessKey"])))
+        frame = json.loads((await ws.receive(timeout=3)).data)
+        self.assertEqual((frame["method"], frame["path"], frame["body"]), ("PATCH", "/automations/a1", {"enabled": False}))
+        await ws.send_json({"type": "resp", "id": frame["id"], "status": 200, "body": {"ok": True}})
+        r = await pending
+        self.assertEqual(r.status, 200)
+
     async def test_queued_requests_read_queued_while_the_first_is_delivered(self):
         exchanged = await (await self.client.post("/relay/api/device/exchange", json={"name": "iPhone"},
                                                   headers=self.auth(MASTER))).json()

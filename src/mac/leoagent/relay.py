@@ -1974,7 +1974,8 @@ class Relay:
             return await self._forward_stream(request, machine, tail, caller)
 
         body: Optional[Any] = None
-        if request.method in ("POST", "PUT"):
+        # PATCH 也带正文:/automations/<id> 改名 / 暂停 / 改时间走 PATCH(10-22 实测缺它时 Mac 收到空正文)。
+        if request.method in ("POST", "PUT", "PATCH"):
             try:
                 body = await request.json()
             except Exception:  # noqa: BLE001
