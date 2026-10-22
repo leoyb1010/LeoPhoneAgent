@@ -17,12 +17,16 @@ import type {
   ProjectType,
   ResolvedUserInstructionSource,
   ResolvedUserInstructions,
+  ResolvedUserProfile,
   UserInstructionsOptions,
 } from "@zcode/contracts";
 import { resolveGitSnapshot } from "./git-snapshot.js";
 
 const DEFAULT_PRIORITY_FILES = ["AGENTS.md"];
 const DEFAULT_MAX_BYTES = 100 * 1024;
+/** [leo] Host 写入时已截到 2KB；这里再兜一道，手改大了也不会撑爆上下文。 */
+const USER_PROFILE_MAX_BYTES = 4 * 1024;
+const USER_PROFILE_FILE_NAME = "leo-profile.md";
 
 export interface NodeContextSourceAdapterOptions {
   env?: NodeJS.ProcessEnv;
@@ -54,6 +58,8 @@ export class NodeContextSourceAdapter implements ContextSourcePort {
           this.env,
         )
       : undefined;
+    // [leo] 用户画像跟着用户指令走：只有主会话会请求用户指令。
+    const userProfile = request.userInstructions ? await readUserProfile(this.env) : undefined;
     const projectContext =
       request.projectContext ?? (projectRoot ? await detectProjectContext(projectRoot) : undefined);
 
@@ -62,6 +68,7 @@ export class NodeContextSourceAdapter implements ContextSourcePort {
       envInfo,
       currentDate: request.currentDate ?? formatLocalIsoDate(new Date()),
       userInstructions,
+      ...(userProfile ? { userProfile } : {}),
       projectContext,
       diagnostics,
     };
@@ -240,6 +247,25 @@ async function findDefaultUserInstructionFile(
   }
 
   return undefined;
+}
+
+/**
+ * [leo] `~/.leophoneagent/leo-profile.md`：桌面 Host 从第二大脑卡片「Leo 画像」同步来的用户画像
+ * （docs/specs/leo-profile-card.md）。文件开头的 HTML 注释是 Host 的同步标记，不进上下文；
+ * 没有文件或正文为空就不注入。
+ */
+export async function readUserProfile(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<ResolvedUserProfile | undefined> {
+  const filePath = join(resolveUserHomeDir(env), ".leophoneagent", USER_PROFILE_FILE_NAME);
+  if (!(await isFile(filePath))) return undefined;
+  try {
+    const raw = await readFirstTextBytes(filePath, USER_PROFILE_MAX_BYTES);
+    const content = raw.replace(/^(?:\s*<!--[\s\S]*?-->)+/u, "").trim();
+    return content ? { filePath, content } : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function resolveUserHomeDir(env: NodeJS.ProcessEnv): string {

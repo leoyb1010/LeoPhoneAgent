@@ -9,6 +9,7 @@ import type {
   ModelInputMessage,
   ProjectContext,
   ResolvedUserInstructions,
+  ResolvedUserProfile,
   SkillLoadOutcome,
   UserInstructionsOptions,
 } from "@zcode/contracts";
@@ -22,6 +23,7 @@ export type {
   ProjectType,
   ResolvedUserInstructionSource,
   ResolvedUserInstructions,
+  ResolvedUserProfile,
   UserInstructionsOptions,
 } from "@zcode/contracts";
 
@@ -109,6 +111,8 @@ export interface ContextBuilderConfig {
   genUiOutputDirectory?: string;
   currentDate?: string;
   userInstructions?: ResolvedUserInstructions;
+  /** [leo] 从 iPhone 同步来的用户画像（背景信息，不是指令）。 */
+  userProfile?: ResolvedUserProfile;
   projectContext?: ProjectContext;
   memoryRoot?: string;
   memoryIndexContent?: string;

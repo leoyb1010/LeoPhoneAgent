@@ -75,11 +75,22 @@ export interface ContextSourceDiagnostic {
   path?: string;
 }
 
+/**
+ * [leo] 用户画像：桌面 Host 从第二大脑卡片「Leo 画像」同步到 `~/.leophoneagent/leo-profile.md`
+ * （见 docs/specs/leo-profile-card.md）。只作背景信息注入，不是指令。
+ */
+export interface ResolvedUserProfile {
+  filePath: string;
+  content: string;
+}
+
 export interface ContextSourceSnapshot {
   workingDirectory: string;
   envInfo: EnvInfo;
   currentDate?: string;
   userInstructions?: ResolvedUserInstructions;
+  /** [leo] 只在解析了用户指令的主会话里带上（子代理沿用自己的指令快照）。 */
+  userProfile?: ResolvedUserProfile;
   projectContext?: ProjectContext;
   diagnostics: ContextSourceDiagnostic[];
 }

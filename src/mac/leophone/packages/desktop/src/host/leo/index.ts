@@ -16,6 +16,7 @@ import { createLeoQuickEntry, resolveQuickWorkspaces } from "./quickEntry.js";
 import { createLeoTaskGroups } from "./taskGroups/service.js";
 import { resolveLeoBotModelSelection } from "./leobotModelSelection.js";
 import { linkEnabled, relayConfigSignature, startLeoLink } from "./link/index.js";
+import { startProfileCardSync, stopProfileCardSync } from "./profileCard.js";
 import { registerBrainMcpServer } from "./registerBrainMcp.js";
 import { registerPeekabooMcpServer } from "./registerPeekabooMcp.js";
 import { registerTreasuryMcpServer } from "./registerTreasuryMcp.js";
@@ -108,6 +109,8 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
           if (mcpSync) void registerTreasuryMcpServer(mcpSync, deps.logger);
           // 第二大脑 leo-brain:同一路径;本机没有 key 文件就不登记。
           if (mcpSync) void registerBrainMcpServer(mcpSync, deps.logger);
+          // [E1] 手机写的「Leo 画像」卡 → ~/.leophoneagent/leo-profile.md(新会话的背景上下文);没 key 跳过。
+          startProfileCardSync(deps.logger);
           if (process.platform === "darwin" && mcpSync) {
             void registerPeekabooMcpServer(mcpSync, deps.logger);
           }
@@ -184,6 +187,7 @@ export function stopLeoHostServices(): void {
   retryTimer = null;
   if (linkTimer) clearInterval(linkTimer);
   linkTimer = null;
+  stopProfileCardSync();
   void link?.then((started) => started?.stop()).catch(() => undefined);
   link = null;
   httpServer?.close();
