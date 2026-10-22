@@ -24,6 +24,8 @@ import {
 export const LEO_LINK_STATUS_CHANNEL = "leo:link:status";
 export const LEO_LINK_PAIR_CHANNEL = "leo:link:pair";
 export const LEO_LINK_REVOKE_CHANNEL = "leo:link:revoke";
+/** [G3] 首页「大脑」卡片:Host 代问第二大脑网关(key 只在 Host,界面拿不到)。 */
+export const LEO_BRAIN_STATUS_CHANNEL = "leo:brain:status";
 
 export type { LeoLinkIpcResult } from "./leoLinkHttp.js";
 
@@ -178,6 +180,11 @@ export function registerLeoLinkIpc(): void {
   ipcMain.handle(LEO_LINK_STATUS_CHANNEL, (event) =>
     isTrustedLeoSender(event)
       ? callLeo("/api/leo/link/status", "GET")
+      : { ok: false, error: "forbidden" },
+  );
+  ipcMain.handle(LEO_BRAIN_STATUS_CHANNEL, (event) =>
+    isTrustedLeoSender(event)
+      ? callLeo("/api/leo/brain/status", "GET")
       : { ok: false, error: "forbidden" },
   );
   ipcMain.handle(LEO_LINK_PAIR_CHANNEL, async (event) => {

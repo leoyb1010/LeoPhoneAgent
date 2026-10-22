@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("leoLink", {
   direct: (action: "pair" | "configure" | "revoke", body?: unknown) =>
     ipcRenderer.invoke("leo:link:direct", action, body),
   status: () => ipcRenderer.invoke("leo:link:status"),
+  /** [G3] 第二大脑状态(卡片 / 文件数);本机没 key 时 data.enabled=false。 */
+  brainStatus: () => ipcRenderer.invoke("leo:brain:status"),
   pair: () => ipcRenderer.invoke("leo:link:pair"),
   revoke: (payload: string) => ipcRenderer.invoke("leo:link:revoke", payload),
   /** 在系统浏览器里打开订阅账号登录页(主进程带上本次启动的口令与实际端口)。 */

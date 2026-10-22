@@ -17,6 +17,7 @@ import {
 
 import { callLeoQuick, isTrustedLeoSender } from "../leoLinkIpc.js";
 import { afterFirstScreenIdle } from "./firstScreenIdle.js";
+import { onLeoQuickPanelAppTheme } from "./quickPanelTheme.js";
 import {
   buildQuickTrayMenu,
   computeQuickPanelBounds,
@@ -289,6 +290,7 @@ export function startLeoQuickEntry(deps: LeoQuickEntryDeps): void {
   const pushPanelState = (window: BrowserWindow) => {
     const workspaces = summary?.workspaces ?? [];
     window.webContents.send(PANEL_STATE_CHANNEL, {
+      theme: settings.appTheme,
       workspaces,
       selected: lastWorkspace && workspaces.includes(lastWorkspace) ? lastWorkspace : (workspaces[0] ?? null),
       error: workspaces.length === 0 ? (summaryError ?? null) : null,
@@ -456,6 +458,13 @@ export function startLeoQuickEntry(deps: LeoQuickEntryDeps): void {
     } catch {
       settings = { ...DEFAULT_QUICK_ENTRY_SETTINGS };
     }
+    // [G3] 浮窗跟 App 外观走(见 quickPanelTheme.ts);落盘,下次启动主窗口同步前也是对的。
+    onLeoQuickPanelAppTheme((theme) => {
+      if (settings.appTheme === theme) return;
+      settings = { ...settings, appTheme: theme };
+      void persist();
+      if (panel && !panel.isDestroyed()) pushPanelState(panel);
+    });
     shortcutError = registerShortcut(settings.accelerator);
     if (shortcutError) logger.warn(`[leo-quick] ${shortcutError}`);
     syncTray();

@@ -6,7 +6,9 @@
     <!-- brand / attention / dur / ease 来自 LeoBot Design token(design/tokens.json 生成) -->
     <link rel="stylesheet" href="../../../ui/src/leo/skin/leo-tokens.css" />
     <style>
-      /* 浮窗自用的前景 / 边框 / 阴影;共享 token 见上面的 leo-tokens.css */
+      /* 浮窗自用的前景 / 边框 / 阴影;共享 token 见上面的 leo-tokens.css。
+         [G3] 跟 App 外观走:主进程推来 theme-zai-light / theme-zai-dark 类(和主窗口同名)时按类取色,
+         App 设成「跟随系统」才看 prefers-color-scheme。 */
       :root {
         color-scheme: light dark;
         --leo-destructive: #d92d20;
@@ -19,7 +21,7 @@
           0 18px 40px -12px rgba(0, 0, 0, 0.22);
       }
       @media (prefers-color-scheme: dark) {
-        :root {
+        :root:not(.theme-zai-light) {
           --leo-destructive: #f97066;
           --leo-panel: #18181b;
           --leo-card: #1f1f22;
@@ -29,6 +31,16 @@
           --leo-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 32px -16px rgba(0, 0, 0, 0.7),
             0 18px 40px -12px rgba(0, 0, 0, 0.55);
         }
+      }
+      :root.theme-zai-dark {
+        --leo-destructive: #f97066;
+        --leo-panel: #18181b;
+        --leo-card: #1f1f22;
+        --leo-fg: #f4f4f5;
+        --leo-fg-subtle: #a1a1aa;
+        --leo-border: rgba(255, 255, 255, 0.08);
+        --leo-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 32px -16px rgba(0, 0, 0, 0.7),
+          0 18px 40px -12px rgba(0, 0, 0, 0.55);
       }
       html,
       body {

@@ -146,6 +146,7 @@ export function createContextBuilderFromSnapshot(
     genUiOutputDirectory: resolveGenUiOutputDirectory(this),
     currentDate: snapshot.currentDate,
     userInstructions: snapshot.userInstructions,
+    userProfile: snapshot.userProfile, // [leo]
     projectContext: snapshot.projectContext,
     memoryIndexContent: options.memoryIndexContent,
     memoryRoot,

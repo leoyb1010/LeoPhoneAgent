@@ -100,6 +100,7 @@ import { LeoHomeSetupCard } from "@/leo/LeoHomeSetupCard.js";
 import { ConversationDraftEmptyState } from "@/v4/ConversationDraftEmptyState.js";
 import { LeoDraftStatusList } from "@/leo/LeoDraftStatusList.js";
 import { LeoRecentWorkspaces } from "@/leo/LeoRecentWorkspaces.js";
+import { LeoHomeBrainCard } from "@/leo/LeoHomeBrainCard.js";
 import { ConversationDraftSuggestedPromptsContainer } from "@/v4/ConversationDraftSuggestedPromptsContainer.js";
 import { ConversationHeader, type PaneWorkspaceBadge } from "@/v4/ConversationHeader.js";
 import { ConversationQueuePanel } from "@/v4/ConversationQueuePanel.js";
@@ -3713,6 +3714,8 @@ export function SessionPane({
           独立条件槽位,不改变 composerNode 在 fragment 里的位置,草稿 → 会话时输入框不重挂。 */}
       {isDraft && !compactForRemoteControl ? <LeoHomeSetupCard className="mb-3" /> : null}
       {isDraft ? <LeoRecentWorkspaces className="mb-4" /> : null}
+      {/* [leo][G3] 首页「大脑」小卡:第二大脑的卡片 / 文件数;本机没 key 不出现。 */}
+      {isDraft && !compactForRemoteControl ? <LeoHomeBrainCard className="mb-4" /> : null}
       {composerNode}
       {/* [leo] 首页输入框下方:等你确认 / 在跑 / 做完待看,没有就不占位。 */}
       {isDraft ? <LeoDraftStatusList className="mt-7" /> : null}

@@ -38,6 +38,7 @@ import {
   setResourceUsageSamplingActive,
 } from "./resourceManagerWindow.js";
 import { registerResourceManagerStorageIpc } from "./resourceManagerStorage.js";
+import { setLeoQuickPanelAppTheme } from "./leo/quickPanelTheme.js"; // [leo][G3]
 import { registerResourceManagerNetworkIpc } from "./resourceManagerNetwork.js";
 import { applyWindowsTitleBarTheme, getWindowOverlayTheme } from "./desktopWindowChrome.js";
 import { syncWindowControlsOverlayForZoomLevel } from "./desktopWindowButtonPosition.js";
@@ -268,6 +269,8 @@ export function registerPlatformIpcHandlers(options: {
     }
 
     nativeTheme.themeSource = theme;
+    // [leo][G3] ⌥Space 浮窗跟 App 外观走(见 leo/quickPanelTheme.ts)。
+    setLeoQuickPanelAppTheme(theme);
     applyWindowsTitleBarTheme(senderWindow, theme === "system" ? getWindowOverlayTheme() : theme);
   });
 

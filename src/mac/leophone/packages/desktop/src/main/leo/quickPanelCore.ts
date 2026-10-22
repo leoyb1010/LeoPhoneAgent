@@ -7,17 +7,30 @@ export const DEFAULT_QUICK_ACCELERATOR = "Alt+Space";
 
 export const QUICK_PANEL_SIZE = { width: 640, height: 128 } as const;
 
+/** App 的外观选择(设置 → 外观):浅色 / 深色 / 跟随系统。 */
+export type QuickPanelAppTheme = "light" | "dark" | "system";
+
 export interface QuickEntrySettings {
   menuBarEnabled: boolean;
   quickPanelEnabled: boolean;
   accelerator: string;
+  /**
+   * [G3] 浮窗跟 App 外观走,不跟系统外观走。主窗口每次同步原生主题时记下来、落盘,
+   * 下次启动主窗口还没同步之前呼出的浮窗也是对的。
+   */
+  appTheme: QuickPanelAppTheme;
 }
 
 export const DEFAULT_QUICK_ENTRY_SETTINGS: QuickEntrySettings = {
   menuBarEnabled: true,
   quickPanelEnabled: true,
   accelerator: DEFAULT_QUICK_ACCELERATOR,
+  appTheme: "system",
 };
+
+export function parseQuickPanelAppTheme(raw: unknown): QuickPanelAppTheme | null {
+  return raw === "light" || raw === "dark" || raw === "system" ? raw : null;
+}
 
 // ── 快捷键 ────────────────────────────────────────────────────────────────
 
@@ -146,6 +159,7 @@ export function parseQuickEntrySettings(raw: unknown): QuickEntrySettings {
     menuBarEnabled: value["menuBarEnabled"] !== false,
     quickPanelEnabled: value["quickPanelEnabled"] !== false,
     accelerator: accelerator.ok ? accelerator.accelerator : DEFAULT_QUICK_ACCELERATOR,
+    appTheme: parseQuickPanelAppTheme(value["appTheme"]) ?? "system",
   };
 }
 

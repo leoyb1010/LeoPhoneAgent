@@ -5,6 +5,7 @@
  */
 
 interface LeoQuickPanelState {
+  theme?: "light" | "dark" | "system";
   workspaces: string[];
   selected: string | null;
   error: string | null;
@@ -42,6 +43,17 @@ function leaf(path: string): string {
   return path.split("/").filter(Boolean).pop() ?? path;
 }
 
+/**
+ * [G3] 跟 App 外观走:浅色 / 深色时挂上和主窗口同名的 theme-zai-* 类(leo-tokens.css 与本页样式
+ * 都按它取色);跟随系统时去掉类,回到 prefers-color-scheme。
+ */
+export function applyPanelTheme(root: HTMLElement, theme: LeoQuickPanelState["theme"]) {
+  const explicit = theme === "light" || theme === "dark" ? theme : null;
+  root.classList.toggle("theme-zai-light", explicit === "light");
+  root.classList.toggle("theme-zai-dark", explicit === "dark");
+  root.style.colorScheme = explicit ?? "light dark";
+}
+
 function renderWorkspaces(state: LeoQuickPanelState) {
   const current = select.value || state.selected;
   select.replaceChildren(
@@ -70,6 +82,7 @@ bridge?.onState((state) => {
     window.clearTimeout(hideTimer);
     hideTimer = null;
   }
+  applyPanelTheme(document.documentElement, state.theme);
   renderWorkspaces(state);
   if (!busy) {
     if (state.error) setStatus(`读不到工作区：${state.error}`, "error");

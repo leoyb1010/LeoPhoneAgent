@@ -45,6 +45,12 @@ switching windows.
 - Hides on blur, Esc, or 600 ms after a successful dispatch ("已派发"). ⌘↩ dispatches and
   opens the new task in the main window.
 - Pre-created hidden a few seconds after launch so the shortcut shows it immediately.
+- Appearance follows the app's theme setting (light / dark / system), not the system appearance:
+  the main window's `SetTitleBarTheme` sync calls `setLeoQuickPanelAppTheme`, the value is persisted
+  as `appTheme` in `leo-quick-entry.json` (so it is right before the main window syncs after a
+  relaunch) and sent with every panel state push. The panel sets `theme-zai-light` /
+  `theme-zai-dark` on `<html>` (same classes as the main window, read by `leo-tokens.css` and the
+  panel's own styles); "system" removes them and falls back to `prefers-color-scheme`.
 
 ## Settings
 

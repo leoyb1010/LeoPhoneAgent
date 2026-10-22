@@ -5,6 +5,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 export interface LeoQuickPanelState {
+  /** [G3] App 的外观(浅色 / 深色 / 跟随系统),浮窗据此换主题,不只看系统外观。 */
+  theme?: "light" | "dark" | "system";
   workspaces: string[];
   selected: string | null;
   error: string | null;
