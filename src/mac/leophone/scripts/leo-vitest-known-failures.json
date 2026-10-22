@@ -6,7 +6,6 @@
     "packages/ui": 1
   },
   "failures": [
-    "packages/desktop/test/desktopProductIdentity.test.ts > desktop product identity 根锁文件的发布版本与构建版本一致",
     "packages/ui/test/foldRepeatedTasks.test.ts > (file)"
   ]
 }
