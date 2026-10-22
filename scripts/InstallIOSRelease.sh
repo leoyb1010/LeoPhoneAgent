@@ -125,10 +125,16 @@ for u in $udids; do
     target="$watch_app"
   fi
   if [ -n "$device_host" ]; then target="$remote_app${target#"$app"}"; fi
-  if dc device install app --device "$u" "$target" >/tmp/ios-install-$u.log 2>&1; then
+  # 无线 / 经 Studio 装机偶发 "Connection interrupted"(CoreDevice 3002),重试最多 3 次再算失败
+  ok=0
+  for attempt in 1 2 3; do
+    if dc device install app --device "$u" "$target" >/tmp/ios-install-$u.log 2>&1; then ok=1; break; fi
+    [ "$attempt" -lt 3 ] && sleep 10
+  done
+  if [ "$ok" = 1 ]; then
     echo "OK"
   else
-    echo "失败(见 /tmp/ios-install-$u.log)"; rc=1
+    echo "失败(重试 3 次,见 /tmp/ios-install-$u.log)"; rc=1
   fi
 done
 exit $rc
