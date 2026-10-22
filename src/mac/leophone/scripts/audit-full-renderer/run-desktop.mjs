@@ -65,17 +65,9 @@ try {
   });
   page = await app.firstWindow({ timeout: 60000 });
   page.on("pageerror", error => errors.push(error.message));
-  await page.locator(".pc-workspace").waitFor({ timeout: 30000 });
-  assert.notEqual(new URL(page.url()).searchParams.get("workspaceMode"), "local-recovery");
-  await capture("00-native-default-server-workspace");
-  // The shipping default is the server workspace. Enter the explicit recovery
-  // flow through its real control before auditing the legacy Local Host UI.
-  const recovery = page.getByRole("button", { name: "本地历史恢复", exact: true });
-  if (!(await recovery.isVisible())) {
-    await page.getByRole("button", { name: "打开工作台导航", exact: true }).click();
-  }
-  await recovery.click();
-  await page.waitForURL(url => url.searchParams.get("workspaceMode") === "local-recovery");
+  // [up-b-ci] 服务器工作区(Paperclip,.pc-workspace / 「本地历史恢复」入口)已在 10-15 退役、
+  // packages/server 在 wp-11 删除:现在本地 Host 是唯一模式,空 provider 首启直接落到 Welcome。
+  // 旧前缀等一个已不存在的 .pc-workspace,CI 每次 30s 超时。改为直接从真实首启页开始,后续断言不变。
   const welcome = page.getByRole("button", { name: "用 API Key 添加模型供应商", exact: true });
   await welcome.waitFor({ timeout: 90000 });
   const releaseNotes = page.getByRole("button", { name: "知道了", exact: true });

@@ -26,22 +26,19 @@ on:
 permissions:
   contents: read
 jobs:
-  ios-unit-tests:
-    # 项目 deployment target 自 WP-40(iOS 1.75.0)起是 iOS/watchOS 27.0,必须用 Xcode 27
-    # + iOS 27 Simulator;Xcode 26.x 解析 target 就会失败。本机验证矩阵是 Xcode 27.1。
-    # 【待核实】runner 镜像里 Xcode 27 的确切路径,不一致时改这里和下方 OS=。
+  ios-static-audits:
+    # [up-b-ci] 不需要 Xcode 的 iOS 审计留在 GitHub 托管机,PR 也跑(公开仓库,PR 不能碰自托管机)。
+    # 这几项在托管机上一直是绿的(只用 shell/rg/node/python);坏的是需要 Xcode 27 的那半,见下一个 job。
     runs-on: macos-26
-    timeout-minutes: 30
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Install iOS audit tooling
         run: command -v rg >/dev/null 2>&1 || brew install ripgrep
-      - name: Audit iOS release, motion and visible controls
+      - name: Audit iOS release, motion, visible controls, tokens and perf gate
         run: |
           set -euo pipefail
-          # Independent fixtures must all run so one SDK failure cannot hide
+          # Independent fixtures must all run so one failure cannot hide
           # another. Keep the step red if any command fails.
           failed=0
           run_check() {
@@ -61,6 +58,55 @@ jobs:
           # LeoBot Design token 单一来源(WP-30):生成文件与 design/tokens.json 不一致就红。
           run_check node design/gen-tokens.mjs --check
           run_check python3 scripts/RepositoryEntryPointAudit.py
+          run_check python3 scripts/IOSPerfBudgetGateTests.py
+          exit "$failed"
+
+  ios-unit-tests:
+    # 项目 deployment target 自 WP-40(iOS 1.75.0)起是 iOS/watchOS 27.0,必须用 Xcode 27
+    # + iOS 27 Simulator;Xcode 26.x 解析 target 就会失败。
+    # [up-b-ci] GitHub 托管 macOS 镜像没有 Xcode 27:旧配置硬写
+    # DEVELOPER_DIR=/Applications/Xcode_27.1.app,托管机上不存在,xcrun 报
+    # "missing DEVELOPER_DIR path",每次 push 都红。改到用户 Mac Studio 上的自托管 runner
+    # (leomac-studio);Xcode 用 runner 自己的 xcode-select(Studio 上是 /Applications/Xcode.app),不再硬写路径。
+    #
+    # 安全:仓库是公开的。fork 的 PR 一旦落到自托管机,就是在用户的 Studio 上执行陌生代码。
+    # 所以这个 job 永远不在 pull_request 上跑(只 push 到 main / 手动 dispatch,二者都要写权限)。
+    # 不要去掉这个 if,也不要改用 pull_request_target。
+    if: github.event_name != 'pull_request'
+    runs-on: [self-hosted, macOS, leobot-studio, xcode27]
+    # 只有一台 Studio runner,job 天然串行排队,不会并行抢模拟器。不加 concurrency 组:
+    # 它会把排队中的旧运行标成 cancelled,LeoCIStatus 会把那些提交判成 FAIL。
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Show toolchain (must be Xcode 27)
+        run: |
+          set -euo pipefail
+          xcode-select -p
+          xcodebuild -version
+          major=$(xcodebuild -version | awk '/^Xcode/ {split($2, v, "."); print v[1]}')
+          if [ "${major:-0}" -lt 27 ]; then
+            echo "::error::self-hosted runner has Xcode ${major:-?}, need 27+ (deployment target iOS 27.0)"; exit 1
+          fi
+      - name: Swift and SDK core tests
+        run: |
+          set -euo pipefail
+          # Independent fixtures must all run so one SDK failure cannot hide
+          # another. Keep the step red if any command fails.
+          failed=0
+          run_check() {
+            echo "::group::$*"
+            if "$@"; then
+              echo "Check passed: $*"
+            else
+              result=$?
+              echo "::error::Check failed (exit $result): $*"
+              failed=1
+            fi
+            echo "::endgroup::"
+          }
           run_check ./scripts/RunCoreSecurityTests.sh
           run_check python3 scripts/CoreExecutionSmoke.py -v
           run_check python3 scripts/CloudKitInboundDurabilityTests.py -v
@@ -72,27 +118,37 @@ jobs:
           run_check python3 scripts/SessionFileDeletionPendingTests.py
           run_check python3 scripts/CloudKitUnknownRecordRetentionTests.py
           run_check python3 scripts/SyncSQLiteDurabilityTests.py
-          run_check python3 scripts/IOSPerfBudgetGateTests.py
           exit "$failed"
       - name: Run MinisTests
         if: ${{ !cancelled() }}
         run: |
           set -euo pipefail        # 管道里任一命令失败即失败,不被 tail 掩盖
+          # 只复用现有模拟器(有本机策略脚本就用白名单,否则挑 iOS 27 的 iPhone),绝不创建设备。
+          udid=$(python3 scripts/CISelectIOSSimulator.py)
+          # 专用 DerivedData 放在 runner 的 _temp 下,每次清空;不碰 ~/Library/Developer/Xcode/DerivedData。
+          derived="$RUNNER_TEMP/leobot-minis-derived-data"
+          log="$RUNNER_TEMP/xcodebuild-minis.log"
+          rm -rf "$derived"
           cd src/ios
           # 逻辑测试必须真正独立于 App/Watch/iSH:这样 CI 既不被缺失的
           # watchOS runtime 卡死，也不依赖尚未发布的本地 iSH submodule commit。
           # 完整 App + 原生依赖另走 release gate，不能拿来替代快速单测。
           xcodebuild test -project LeoPhoneAgent.xcodeproj -scheme MinisLogicTests \
             -onlyUsePackageVersionsFromResolvedFile \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            -destination "platform=iOS Simulator,id=$udid" \
+            -derivedDataPath "$derived" \
+            -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 \
             -only-testing:MinisTests CODE_SIGNING_ALLOWED=NO 2>&1 \
-            | tee /tmp/xcodebuild.log \
-            || { echo "::error::xcodebuild test failed"; tail -60 /tmp/xcodebuild.log; exit 1; }
+            | tee "$log" \
+            || { echo "::error::xcodebuild test failed"; tail -60 "$log"; exit 1; }
           # 双保险:日志里出现测试失败标记也判红(某些配置下 xcodebuild
           # 退出码不可靠)。
-          if grep -qE "Testing failed|\*\* TEST FAILED \*\*|\*\* BUILD FAILED \*\*" /tmp/xcodebuild.log; then
+          if grep -qE "Testing failed|\*\* TEST FAILED \*\*|\*\* BUILD FAILED \*\*" "$log"; then
             echo "::error::found failure markers in xcodebuild log"; exit 1
           fi
+      - name: Clean DerivedData
+        if: ${{ always() }}
+        run: rm -rf "$RUNNER_TEMP/leobot-minis-derived-data"
 
   native-model-audit:
     name: Native model UI (${{ matrix.label }}, ${{ matrix.device }})
@@ -227,9 +283,10 @@ jobs:
         # 否则红。放在构建之后:部分用例依赖 @zcode/e2e-report、@zcode/adapters 的 dist。
         run: pnpm leo:test:vitest-ratchet
 
-      - name: Actual full Web renderer on isolated local services
-        timeout-minutes: 8
-        run: node scripts/audit-full-renderer/run-journeys.mjs
+      # [up-b-ci] 原来这里还有一步 "Actual full Web renderer on isolated local services"
+      # (scripts/audit-full-renderer/run-journeys.mjs:起 packages/server 的 HTTP 服务 + packages/web)。
+      # wp-11(d166d86c)删掉了 packages/server、packages/web 和这个脚本,工作流这一步没跟着删,
+      # 之后每次都是 MODULE_NOT_FOUND。被测对象已不存在,所以删步骤;桌面端的真实旅程见下一步。
       - name: Actual unpackaged Mac desktop and WindowController journeys
         if: ${{ !cancelled() }}
         timeout-minutes: 8
