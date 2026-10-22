@@ -312,3 +312,12 @@ Peekaboo(`leo/bin`)/ leo-speech / 菜单栏模板图标三类 extraResources;`le
 | `apps/zcode-cli/packages/contracts/src/interfaces/mcp.port.ts` | `McpServerConfigBase.leoLazyStart`(仅宿主生成,公共配置 schema 不收) |
 | `apps/zcode-cli/packages/adapters/src/mcp/index.ts` | 按需启动:`connectServer` 连上列完工具后对 `leoLazyStart` 的 stdio server 调 `leoParkServer`(停进程、保留 connected 与工具表);`resolveConnectedRecord` 遇停放记录走 `leoWakeServer`(并发单飞,失败恢复停放);`pingServer` 对停放记录回 true(设置页存活校验不拉起) |
 | `apps/zcode-cli/packages/bootstrap/src/app/built-in-node-repl.ts` | 内置 node_repl 带 `leoLazyStart: true`:每个 workspace 常驻约 200 MB 的 node_repl 只在首次 Browser Use / Computer Use 调用时拉起;测试 `adapters/test/leo/mcp-lazy-start.test.ts`、`bootstrap/test/leo/node-repl-lazy-start.test.ts` |
+
+## 内核提示词 / 第二大脑 / 凭据补丁(up3-mac-kernel,同步上游时复查,改动处标 `[leo]`)
+| 文件 | 内容 |
+|---|---|
+| `apps/zcode-cli/packages/core/src/context/dynamic-sections.ts` | 「Communicating with the user」段:不在工具调用前叙述(一两个工具能答就直接答,长任务最多一句状态)、工具之间的文字会显示、始终跟随用户最新消息的语言;`buildSessionGuidanceSection` 在有 `mcp__leo-brain__brain_search` 时加第二大脑路由一行(何时先 `brain_search`、不读 key 文件、不手调端点),见 `docs/specs/leo-brain-mcp.md`。测试 `core/test/leo/session-guidance.test.ts`、`core/tests/context-builder.test.ts` 期望文案同步改 |
+| `apps/zcode-cli/packages/core/src/context/sections/request-user-context.ts` | 用户画像段(`# userProfile`,在 `# agentsMd` 之后)正文围进 `<user_profile>`、逐行 `> ` 引用,反复剥掉正文里的 `<user_profile>` 标签;见 `docs/specs/leo-profile-card.md`,测试 `core/test/leo/user-profile.test.ts` |
+| `apps/zcode-cli/packages/core/src/tool/handlers/read.ts` | 读文件前调 `assertLeoReadAllowed`(新文件 `core/src/tool/leo/secret-paths.ts`):`~/.config/leo-brain/*`、`~/.leoagent/key`、`~/.leoagent/treasury.key` 一律拒读,大小写不敏感、按 realpath 挡符号链接;只兜 Read,Bash 不在此列。测试 `core/test/leo/read-secret-deny.test.ts` |
+| `apps/zcode-cli/packages/adapters/src/mcp/index.ts` | `leoWakeServer` 拉起失败:仍恢复停放(工具照常列出,下次调用再试),但记录状态写成这次的失败(设置页可见),并把启动错误抛给本次调用(工具结果里看得到原因)。测试 `adapters/test/leo/mcp-lazy-start.test.ts` |
+| `packages/services/src/zcode-agent/zcodeTaskServiceAdapter.ts` | 工具 `scheduled` 时不再删掉已流出的前言,而是标 `closedByTool`;之后的正文从头累计;`turn.completed` 的 response 就是那段已显示的前言时不再补发(修「模型复读」)。测试 `services/test/zcodeLegacyTaskCompatTaskIndex.test.ts` |

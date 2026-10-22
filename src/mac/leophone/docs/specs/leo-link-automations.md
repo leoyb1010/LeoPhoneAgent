@@ -167,7 +167,14 @@
 
 - 先回写运行记录再推送：手机收到通知后 `GET /automations` 看到的 `last_run` 已是终态。
 - 摘要先记下再推送：`last_run.summary` 与推送里的 `summary` 是同一句。
-- 每条 `automation.run.completed` 都带 `run_id`：iOS 用 `relay-automation-<run_id>` 作通知 id 去重。
+- 每条 `automation.run.completed` 都带 `run_id`。中继的 APNs collapse id 与 iOS 补拉的本地通知 id 是同一个：
+  `'relay-automation-' + sha256(key)[:40]`（key = `run_id`，老事件退到 `automation_id-timestamp`；APNs 限 64 字节，
+  原样拼 `run_id` 会被截断而把同一任务的多次运行折成一条）。中继 `automation_run_collapse_id`（`relay.py`）、
+  iOS `MacAutomationLogic.runNotificationId` 同一公式，APNs 和补拉只留一条。
+- 灵动岛（中继 `live_activity.py`）：无人值守运行只推审批和 `automation.run.completed`，不推 `run.*`，所以
+  `automation.run.completed` / `automation.run.failed` 按 `status` 折成对应终态（`succeeded`→完成、`stopped`→已停、其它→需处理）
+  收掉审批拉起的「等你审批」卡；`approval.responded`（与 `approval.resolved` 一样）把卡改回「运行中…」。这两类只改已有的卡，
+  不为它新拉一张。
 - 只推真正开跑了的运行；派发失败（没模型、Host 未就绪，调度器会重试）不推，看 `last_run.status = dispatch_failed`。
 - 推送的任务记进桥接的「可接管任务」（≤50 条，进程内）：手机点通知打开 `task_id`，即使该工作区不在 Mac 最近项目里也能接管查看。
 - 中继断线时进 `RelayLink` outbox（超限丢最旧），重连补发；直连（Tailscale）没有推送通道，靠 `GET /automations`。
@@ -297,4 +304,5 @@ status, duration_ms}`（`path` 不含查询串，不记正文；出错记 warn�
   追踪号（中继帧 / 请求头取法、带号请求记一行）。
 - `directServer.test.ts`：直连 `PATCH` 带正文、`X-Leo-Trace-Id` 往下传。
 - `packages/desktop/test/cronHostSessionCreateTelemetry.test.ts`（vitest，装载生产 `dispatchCronRun`）：「已开跑」只在 `sendPrompt` accepted 后发、首发被拒不发。
-- `src/mac/leoagent/test_relay_security.py` 的 `RelayAutomationPushTests`：中继对 `automation.run.completed` 发 APNs。
+- `src/mac/leoagent/test_relay_security.py` 的 `RelayAutomationPushTests`：中继对 `automation.run.completed` 发 APNs，
+  collapse id 是定长哈希且与 iOS 同一公式；`test_live_activity.py`：运行结束收掉无人值守审批卡、结束 / 回执不新拉卡。
