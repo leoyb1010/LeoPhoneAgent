@@ -53,7 +53,7 @@ from .apns import build_pusher
 from .live_activity import LiveActivityPlanner
 from .relay_identity import valid_registry
 
-VERSION = "0.2.4"
+VERSION = "0.2.5"
 DEFAULT_PORT = 8650
 REQUEST_TIMEOUT_S = 60
 # 同一条事件流里的 message.delta 最多每 60 ms 合成一条发给手机:逐 token 转发的话,
@@ -2364,7 +2364,7 @@ class Relay:
     # -- wiring ---------------------------------------------------------------
 
     def build_app(self) -> web.Application:
-        app = web.Application()
+        app = web.Application(client_max_size=4 * 1024 * 1024)  # 手机经中继发图片附件:整个正文上限 4 MB(默认 1 MB)
 
         async def write_status_on_start(_app: web.Application) -> None:
             # 重启后先写一份「没人在线」的快照:否则巡检读到的是重启前的旧在线表,会误判通过。
