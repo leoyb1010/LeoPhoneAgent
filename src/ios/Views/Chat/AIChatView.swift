@@ -6587,7 +6587,9 @@ private struct ComposerWorkingIndicator: View {
                     .foregroundStyle(.secondary)
                 Spacer()
             }
-            .padding(.horizontal, 14)
+            // 输入框卡片是大圆角:14pt 贴着圆角边太挤(用户反馈),往里收到 20pt、顶上再留 6pt。
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
             .transition(.opacity)
         }
     }
