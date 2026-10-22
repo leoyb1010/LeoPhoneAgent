@@ -250,6 +250,19 @@ enum BrainProfileCard {
         return Array(ordered.map(\.id).prefix(limit))
     }
 
+    /// [up3-ios] 最近更新的一页卡片里可能是画像卡的(刚发的卡还没进搜索索引时用;和 Mac 端 findCard 的兜底一致),
+    /// 同样的标题 / 分类 / 状态筛法,分类对的、更新晚的排前面。
+    static func candidateIds(_ items: [BrainCardSummary], excluding: String? = nil, limit: Int = 3) -> [String] {
+        let matches = items.filter { item in
+            item.id != excluding && !item.id.isEmpty
+                && item.title.trimmingCharacters(in: .whitespacesAndNewlines) == title
+                && (item.category.map { $0.isEmpty || $0 == category } ?? true)
+                && (item.status.map { $0.isEmpty || acceptedStatuses.contains($0) } ?? true)
+        }.sorted { ($0.updatedAt ?? "") > ($1.updatedAt ?? "") }
+        let ordered = matches.filter { $0.category == category } + matches.filter { $0.category != category }
+        return Array(ordered.map(\.id).prefix(limit))
+    }
+
     /// 取回来的整张卡:标题、分类、状态都对才接着更新它。
     static func isAdoptable(_ card: BrainCard) -> Bool {
         card.title.trimmingCharacters(in: .whitespacesAndNewlines) == title && card.category == category
@@ -259,17 +272,33 @@ enum BrainProfileCard {
     /// 本机没有记录(重装 / 换手机 / 记录里那张被删了)时,先找网关上已有的「Leo 画像」:Mac 认准第一张卡的 id,
     /// 再建一张新的 Mac 就读不到之后的更新。同名多张取最近更新的(和 Mac 端 pickCardRef 一致)。
     /// 搜索出错往外抛(这次不发,下次再试),不能当成「没有」去建新卡;搜索接口 404 才当没有。
+    /// [up3-ios] 搜不到再看最近更新的一页卡片(刚从别的设备发的卡可能还没进索引)。令牌没有 read(403)时读不到已有的卡,
+    /// 只能照旧新建 —— 和加认领之前一样,只有 write:cards 的令牌也能建出画像卡。
     static func findExisting(excluding: String? = nil,
                              search: () async throws -> [BrainSearchItem],
+                             recent: () async throws -> [BrainCardSummary] = { [] },
                              fetch: (String) async throws -> BrainCard) async throws -> BrainCard? {
-        let items: [BrainSearchItem]
-        do { items = try await search() } catch BrainError.notFound { return nil }
+        var ids: [String]
+        do {
+            ids = candidateIds(try await search(), excluding: excluding)
+        } catch BrainError.notFound {
+            ids = []
+        } catch BrainError.forbidden {
+            return nil
+        }
+        if ids.isEmpty {
+            do { ids = candidateIds(try await recent(), excluding: excluding) }
+            catch BrainError.notFound { return nil }
+            catch BrainError.forbidden { return nil }
+        }
         var found: [BrainCard] = []
-        for id in candidateIds(items, excluding: excluding) {
+        for id in ids {
             do {
                 let card = try await fetch(id)
                 if isAdoptable(card) { found.append(card) }
             } catch BrainError.notFound {
+                continue
+            } catch BrainError.forbidden {
                 continue
             }
         }
