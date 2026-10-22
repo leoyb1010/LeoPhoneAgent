@@ -227,7 +227,6 @@ test(
                 title: PROFILE_CARD_TITLE,
                 category: "用户画像",
                 status: "draft",
-                updated_at: "2026-10-22T12:00:00+08:00",
               },
               {
                 type: "card",
@@ -235,7 +234,6 @@ test(
                 title: PROFILE_CARD_TITLE,
                 category: "个人知识",
                 status: "confirmed",
-                updated_at: "2026-10-22T12:00:00+08:00",
               },
               {
                 type: "card",
@@ -243,7 +241,6 @@ test(
                 title: PROFILE_CARD_TITLE,
                 category: "用户画像",
                 status: "confirmed",
-                updated_at: "2026-10-22T10:00:00+08:00",
               },
             ],
           },
@@ -267,16 +264,16 @@ test(
 test(
   "a newer accepted profile card replaces the pinned one; an older one does not",
   sandbox(async ({ keyFile, filePath }) => {
-    let searchItems: unknown[] = [
-      {
-        type: "card",
-        id: "card-1",
-        title: PROFILE_CARD_TITLE,
-        category: "用户画像",
-        status: "confirmed",
-        updated_at: "2026-10-22T10:00:00+08:00",
-      },
-    ];
+    // 真实 /v1/search 的卡片条目不带 updated_at,新旧只能按取回来的全文比。
+    const hit = (id: string, status = "confirmed") => ({
+      type: "card",
+      id,
+      title: PROFILE_CARD_TITLE,
+      category: "用户画像",
+      status,
+    });
+    // 首次同步:搜索按相关度把旧卡排在前面,仍然要选最新的那张。
+    let searchItems: unknown[] = [hit("card-old"), hit("card-1")];
     const { fetch } = fakeFetch((url) => {
       if (url.pathname === "/v1/search") return { status: 200, body: { items: searchItems } };
       if (url.pathname === "/v1/cards/card-1") return { status: 200, body: card() };
@@ -299,29 +296,12 @@ test(
       return { status: 404 };
     });
     assert.equal(await syncProfileCardOnce({ logger, filePath, keyFile, fetch }), "written");
-    searchItems = [
-      {
-        type: "card",
-        id: "card-old",
-        title: PROFILE_CARD_TITLE,
-        category: "用户画像",
-        status: "confirmed",
-        updated_at: "2026-10-01T10:00:00+08:00",
-      },
-    ];
+    assert.equal(parseProfileMeta(readFileSync(filePath, "utf8"))!.id, "card-1");
+    searchItems = [hit("card-old")];
     assert.equal(await syncProfileCardOnce({ logger, filePath, keyFile, fetch }), "unchanged");
     assert.equal(parseProfileMeta(readFileSync(filePath, "utf8"))!.id, "card-1");
     // 03:00Z = 11:00+08:00,比 card-1 的 10:00+08:00 新(按时间比,不按字符串比)。
-    searchItems = [
-      {
-        type: "card",
-        id: "card-2",
-        title: PROFILE_CARD_TITLE,
-        category: "用户画像",
-        status: "reference",
-        updated_at: "2026-10-22T03:00:00Z",
-      },
-    ];
+    searchItems = [hit("card-2", "reference")];
     assert.equal(await syncProfileCardOnce({ logger, filePath, keyFile, fetch }), "written");
     const text = readFileSync(filePath, "utf8");
     assert.equal(parseProfileMeta(text)!.id, "card-2");

@@ -122,8 +122,8 @@ interface CardRef {
   updatedAt: string;
 }
 
-function pickCardRef(items: unknown): CardRef | null {
-  if (!Array.isArray(items)) return null;
+function pickCardRefs(items: unknown): CardRef[] {
+  if (!Array.isArray(items)) return [];
   const refs = items
     .map((item): CardRef | null => {
       if (!item || typeof item !== "object") return null;
@@ -144,9 +144,9 @@ function pickCardRef(items: unknown): CardRef | null {
       };
     })
     .filter((ref): ref is CardRef => ref !== null);
-  // 同名卡不止一张时取最新。
+  // 列表带 updated_at 时先按新旧排;搜索结果通常不带,真正的新旧在 resolveCard 里按全文比。
   refs.sort((a, b) => compareUpdatedAt(b.updatedAt, a.updatedAt));
-  return refs[0] ?? null;
+  return refs;
 }
 
 /** ISO 时间可能带不同时区偏移,能解析就按时间比,不能再按字符串比。 */
@@ -162,31 +162,41 @@ async function fetchCard(gateway: BrainGateway, id: string): Promise<ProfileCard
 }
 
 /** 先按标题搜,搜不到再看最近更新的一页卡片(刚发的卡还没进搜索索引时)。 */
-async function findCardRef(gateway: BrainGateway): Promise<CardRef | null> {
+async function findCardRefs(gateway: BrainGateway): Promise<CardRef[]> {
   const search = (await gateway.getJson("/v1/search", {
     q: PROFILE_CARD_TITLE,
     scope: "cards",
     mode: "keyword",
     limit: 20,
   })) as { items?: unknown } | null;
-  const ref = pickCardRef(search?.items);
-  if (ref) return ref;
+  const refs = pickCardRefs(search?.items);
+  if (refs.length > 0) return refs;
   const recent = (await gateway.getJson("/v1/cards", { offset: 0, limit: 50 })) as {
     items?: unknown;
   } | null;
-  return pickCardRef(recent?.items);
+  return pickCardRefs(recent?.items);
 }
 
-/** 已同步的那张卡还有效就留着;搜到另一张更新的就换过去。 */
+/** 同名候选卡最多取回几张全文来比新旧。 */
+const MAX_CANDIDATES = 5;
+
+/**
+ * 已同步的那张卡还有效就留着;另有更新的同名卡就换过去。
+ * 搜索结果不带 updated_at,所以新旧一律按取回来的全文比。
+ */
 async function resolveCard(
   gateway: BrainGateway,
   pinnedId: string | null,
 ): Promise<ProfileCard | null> {
-  const ref = await findCardRef(gateway);
-  const pinned = pinnedId ? await fetchCard(gateway, pinnedId) : null;
-  if (!ref || ref.id === pinnedId) return pinned;
-  if (pinned && compareUpdatedAt(ref.updatedAt, pinned.updatedAt) <= 0) return pinned;
-  return (await fetchCard(gateway, ref.id)) ?? pinned;
+  const refs = await findCardRefs(gateway);
+  let best = pinnedId ? await fetchCard(gateway, pinnedId) : null;
+  for (const ref of refs.filter((r) => r.id !== pinnedId).slice(0, MAX_CANDIDATES)) {
+    const candidate = await fetchCard(gateway, ref.id);
+    if (candidate && (!best || compareUpdatedAt(candidate.updatedAt, best.updatedAt) > 0)) {
+      best = candidate;
+    }
+  }
+  return best;
 }
 
 async function readText(path: string): Promise<string | null> {
