@@ -130,7 +130,9 @@ final class BrainProfilePublisher {
         func adoptOrCreate(excluding: String?) async throws -> BrainCard {
             let existing = try await BrainProfileCard.findExisting(
                 excluding: excluding,
-                search: { try await client.search(BrainProfileCard.title, scope: .cards, includePrivate: false).items },
+                search: { try await client.search(BrainProfileCard.title, scope: .cards, mode: "keyword",
+                                                  includePrivate: false).items },
+                recent: { try await client.cards(offset: 0, limit: 50).0.items },
                 fetch: { try await client.card($0).0 })
             guard let existing else { return try await attempt(draft(id: nil, version: nil)) }
             if let adopted = existing.status { status = adopted }

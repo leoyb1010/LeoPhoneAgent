@@ -234,6 +234,46 @@ final class BrainProfileCardTests: XCTestCase {
         XCTAssertNil(noSearchRoute)
     }
 
+    private func summary(_ id: String, title: String = "Leo 画像", category: String? = "用户画像",
+                         status: String? = "confirmed", updatedAt: String) throws -> BrainCardSummary {
+        var obj: [String: Any] = ["id": id, "title": title, "version": 1, "updated_at": updatedAt]
+        if let category { obj["category"] = category }
+        if let status { obj["status"] = status }
+        return try BrainJSON.decode(BrainCardSummary.self, from: JSONSerialization.data(withJSONObject: obj))
+    }
+
+    func testFindExistingFallsBackToRecentCardsWhenNotIndexed() async throws {
+        let recentItems = [
+            try summary("note", title: "别的卡", updatedAt: "2026-10-22T09:00:00Z"),
+            try summary("older", updatedAt: "2026-10-20T00:00:00Z"),
+            try summary("fresh", updatedAt: "2026-10-22T08:00:00Z"),
+            try summary("draft", status: "draft", updatedAt: "2026-10-22T10:00:00Z"),
+        ]
+        XCTAssertEqual(BrainProfileCard.candidateIds(recentItems), ["fresh", "older"])
+        let fresh = try card("fresh", updatedAt: "2026-10-22T08:00:00Z")
+        let older = try card("older", updatedAt: "2026-10-20T00:00:00Z")
+        let found = try await BrainProfileCard.findExisting(
+            search: { [] },
+            recent: { recentItems },
+            fetch: { $0 == "fresh" ? fresh : older })
+        XCTAssertEqual(found?.id, "fresh", "刚从别的设备发的卡还没进索引:看最近一页卡片,不再建一张")
+    }
+
+    func testFindExistingWithoutReadScopeCreatesNew() async throws {
+        var recentCalled = false
+        let found = try await BrainProfileCard.findExisting(
+            search: { throw BrainError.forbidden("read") },
+            recent: { recentCalled = true; return [] },
+            fetch: { _ in throw BrainError.forbidden("read") })
+        XCTAssertNil(found, "只有 write:cards 的令牌读不到已有的卡,照旧新建,不能被 403 挡住")
+        XCTAssertFalse(recentCalled)
+        let recentForbidden = try await BrainProfileCard.findExisting(
+            search: { [] },
+            recent: { throw BrainError.forbidden(nil) },
+            fetch: { _ in throw BrainError.notFound })
+        XCTAssertNil(recentForbidden)
+    }
+
     func testFindExistingPropagatesSearchFailure() async {
         do {
             _ = try await BrainProfileCard.findExisting(search: { throw BrainError.offline },

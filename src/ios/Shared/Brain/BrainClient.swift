@@ -90,9 +90,9 @@ final class BrainClient: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
 
     func health() async throws -> (BrainHealth, Data) { try await getDecoded(endpoint.health()) }
 
-    func search(_ query: String, scope: BrainSearchScope, limit: Int = 20, offset: Int = 0,
+    func search(_ query: String, scope: BrainSearchScope, mode: String = "hybrid", limit: Int = 20, offset: Int = 0,
                 includePrivate: Bool) async throws -> BrainSearchResponse {
-        try await getDecoded(endpoint.search(query: query, scope: scope, limit: limit, offset: offset,
+        try await getDecoded(endpoint.search(query: query, scope: scope, mode: mode, limit: limit, offset: offset,
                                              includePrivate: includePrivate)).0
     }
 
