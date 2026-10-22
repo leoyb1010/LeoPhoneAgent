@@ -129,7 +129,8 @@ for r in runs:
         latest[s] = r
 for s in sys.argv[1].split():
     r = latest.get(s)
-    if not r or r.get("conclusion") in ("neutral", "skipped"):
+    # 祖先被取消的运行不是结论(被新 push 顶掉、手动取消),接着往前找。
+    if not r or r.get("conclusion") in ("neutral", "skipped", "cancelled"):
         continue
     where = "祖先 %s 的 run %s %s" % (s[:8], r.get("id"), r.get("html_url") or "")
     if r.get("conclusion") == "success":

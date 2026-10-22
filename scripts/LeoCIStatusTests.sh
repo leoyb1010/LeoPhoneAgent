@@ -66,6 +66,10 @@ expect 0 "HEAD 没运行,父提交红,LEO_CI_GATE=warn 放行" LEO_CI_GATE=warn
 setup "$none" "$nojobs" "{\"workflow_runs\":[$(run 1 "$grand" completed '"success"' 2026-01-01T00:00:00Z)]}"
 expect 0 "HEAD 没运行,最近有结论的祖先绿"
 
+# 父提交的运行被取消(不是结论),祖父红 → 挡。
+setup "$none" "$nojobs" "{\"workflow_runs\":[$(run 2 "$parent" completed '"cancelled"' 2026-01-02T00:00:00Z),$(run 1 "$grand" completed '"failure"' 2026-01-01T00:00:00Z)]}"
+expect 1 "父提交取消,祖父红"
+
 # 父提交同一 sha 先红后重跑绿:取最新那次 → 放行。
 setup "$none" "$nojobs" "{\"workflow_runs\":[$(run 3 "$parent" completed '"success"' 2026-01-03T00:00:00Z),$(run 2 "$parent" completed '"failure"' 2026-01-02T00:00:00Z)]}"
 expect 0 "父提交重跑后转绿"
