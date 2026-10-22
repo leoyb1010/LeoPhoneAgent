@@ -131,6 +131,11 @@ struct ProviderInstancesView: View {
                 } message: {
                     Text("文件里包含全部服务商的 API Key。只隔空投送给你自己的 Mac，在 LeoBot Mac「设置 → 模型供应商 → 从 iPhone 导入」里打开。已登录的账号（ChatGPT、xAI、Kimi）不会导出，需要在 Mac 上单独登录。")
                 }
+                // [ipad-anchors] iPad: popover from the same「+」; iPhone: same sheet as before.
+                .leoShareSheet(item: $sendToMacFile, onDismiss: removeSendToMacFile) { file in
+                    ProviderBundleShareSheet(url: file.url)
+                        .presentationDetents([.medium, .large])
+                }
             }
         }
         .sheet(isPresented: $showAddProvider) {
@@ -162,10 +167,6 @@ struct ProviderInstancesView: View {
             case .failure:
                 break
             }
-        }
-        .sheet(item: $sendToMacFile, onDismiss: removeSendToMacFile) { file in
-            ProviderBundleShareSheet(url: file.url)
-                .presentationDetents([.medium, .large])
         }
         .alert(AppLocalized("Import"), isPresented: $showImportResult) {
             Button("OK") {}

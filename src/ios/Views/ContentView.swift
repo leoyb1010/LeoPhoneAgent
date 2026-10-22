@@ -532,14 +532,10 @@ struct ContentView: View {
                 homeDraft.text = prompt
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { homePromptFocused = true }
             }))
-            // Home "/" panel and brightness picker: shared by both layouts (they
-            // used to hang off the iPhone list only, so "/" was dead on iPad).
+            // Home "/" panel: shared by both layouts (it used to hang off the
+            // iPhone list only, so "/" was dead on iPad). The brightness picker it
+            // opens hangs off the composer's "/" button ([ipad-anchors]).
             .sheet(isPresented: $showHomeActions, onDismiss: runPendingHomeAction) { homeActionSheet }
-            .confirmationDialog("屏幕亮度", isPresented: $showBrightnessOptions, titleVisibility: .visible) {
-                ForEach([("25%", 0.25), ("50%", 0.5), ("75%", 0.75), ("100%", 1.0)], id: \.0) { item in
-                    Button(item.0) { setBrightness(item.1) }
-                }
-            }
             .overlay(alignment: .top) {
                 if let toast = forceSyncToast {
                     ForceSyncToastBanner(text: toast)
@@ -3526,6 +3522,8 @@ struct ContentView: View {
                 onChooseModel: homeTargetIsIPhone ? { showHomeModelPicker = true } : nil,
                 modelPopover: isWideLayout ? HomeModelPopover(isPresented: $showHomeModelPicker,
                                                               content: AnyView(homeModelPickerContent)) : nil,
+                brightnessDialog: HomeBrightnessDialog(isPresented: $showBrightnessOptions,
+                                                       onPick: { setBrightness($0) }),
                 plusMenu: AnyView(homePlusMenuContent),
                 isBusy: homeRoutingInProgress,
                 onSubmit: { runHomePrompt() },
@@ -5464,6 +5462,12 @@ private struct ExportPreviewSheet: View {
                     actionButton(icon: "square.and.arrow.up", label: AppLocalized("Share")) {
                         showShareSheet = true
                     }
+                    // [ipad-anchors] iPad: popover from this button; iPhone: same sheet as before.
+                    .leoShareSheet(isPresented: $showShareSheet) {
+                        if let url = fileURL {
+                            ShareSheet(url: url)
+                        }
+                    }
                     actionButton(icon: "folder", label: AppLocalized("Save to Files")) {
                         showFilePicker = true
                     }
@@ -5476,11 +5480,6 @@ private struct ExportPreviewSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(AppLocalized("Done")) { dismiss() }
-                }
-            }
-            .sheet(isPresented: $showShareSheet) {
-                if let url = fileURL {
-                    ShareSheet(url: url)
                 }
             }
             .sheet(isPresented: $showFilePicker) {

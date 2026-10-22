@@ -83,15 +83,16 @@ struct SyncLogView: View {
                     Image(systemName: "square.and.arrow.up")
                 }
                 .disabled(store.entries.isEmpty)
+                // [ipad-anchors] iPad: popover from this button; iPhone: same sheet as before.
+                .leoShareSheet(item: $shareItem) { item in
+                    SyncLogShareSheet(url: item.url)
+                }
 
                 Button("Clear") {
                     confirmClear = true
                 }
                 .disabled(store.entries.isEmpty)
             }
-        }
-        .sheet(item: $shareItem) { item in
-            SyncLogShareSheet(url: item.url)
         }
         .alert("Clear the sync log?", isPresented: $confirmClear) {
             Button("Clear", role: .destructive) { store.clear() }

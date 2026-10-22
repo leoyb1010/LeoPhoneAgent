@@ -93,6 +93,25 @@ struct QuickTaskSettingsView: View {
                             }
                         }
                     }
+                    // [ipad-anchors] 挂在这一行上:iPad 上确认框从被删的那一行弹出,不再从右栏左边缘冒出来盖住设置侧栏。
+                    .confirmationDialog(
+                        "Delete Quick Task?",
+                        isPresented: Binding(
+                            get: { taskPendingDeletion?.id == task.id },
+                            set: { if !$0 { taskPendingDeletion = nil } }
+                        ),
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete", role: .destructive) {
+                            store.delete(id: task.id)
+                            taskPendingDeletion = nil
+                        }
+                        Button("Cancel", role: .cancel) {
+                            taskPendingDeletion = nil
+                        }
+                    } message: {
+                        Text("Shortcuts that use this custom task will need another task selected.")
+                    }
                 }
                 .onMove(perform: store.move)
             } header: {
@@ -104,6 +123,19 @@ struct QuickTaskSettingsView: View {
             Section {
                 Button("Restore Built-in Tasks") {
                     showResetConfirmation = true
+                }
+                // [ipad-anchors] 挂在按钮上:iPad 上确认框从这个按钮弹出。
+                .confirmationDialog(
+                    "Restore Built-in Tasks?",
+                    isPresented: $showResetConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Restore", role: .destructive) {
+                        store.resetBuiltIns()
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Your custom tasks will not be deleted.")
                 }
             } footer: {
                 Text("Restoring resets the built-in tasks' names, prompts, icons, and order. Custom tasks are kept.")
@@ -131,38 +163,6 @@ struct QuickTaskSettingsView: View {
             NavigationStack {
                 QuickTaskEditorView(mode: .create)
             }
-        }
-        .confirmationDialog(
-            "Delete Quick Task?",
-            isPresented: Binding(
-                get: { taskPendingDeletion != nil },
-                set: { if !$0 { taskPendingDeletion = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                if let task = taskPendingDeletion {
-                    store.delete(id: task.id)
-                }
-                taskPendingDeletion = nil
-            }
-            Button("Cancel", role: .cancel) {
-                taskPendingDeletion = nil
-            }
-        } message: {
-            Text("Shortcuts that use this custom task will need another task selected.")
-        }
-        .confirmationDialog(
-            "Restore Built-in Tasks?",
-            isPresented: $showResetConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Restore", role: .destructive) {
-                store.resetBuiltIns()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Your custom tasks will not be deleted.")
         }
         .sheet(item: $shareURL) { url in
             MinisShareSheet(url: url)

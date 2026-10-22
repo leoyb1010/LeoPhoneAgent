@@ -59,22 +59,6 @@ struct ConfigAuditView: View {
         } message: {
             Text("Cleared entries can no longer be reverted.")
         }
-        .confirmationDialog(
-            "Revert this change?",
-            isPresented: Binding(
-                get: { revertCandidate != nil },
-                set: { if !$0 { revertCandidate = nil } }
-            ),
-            titleVisibility: .visible,
-            presenting: revertCandidate
-        ) { entry in
-            Button("Revert", role: .destructive) {
-                performRevert(entry)
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: { entry in
-            Text("\(entry.key)\n\(displayJSON(entry.newValueJSON)) → \(displayJSON(entry.oldValueJSON))")
-        }
     }
 
     private func reload() {
@@ -136,6 +120,22 @@ struct ConfigAuditView: View {
                 .buttonStyle(.glass)
                 .controlSize(.small)
                 .disabled(revertingId == entry.id)
+                // [ipad-anchors] 挂在这一行的 Revert 按钮上:iPad 上确认框从被点的按钮弹出,不再从页面边缘冒出来。
+                .confirmationDialog(
+                    "Revert this change?",
+                    isPresented: Binding(
+                        get: { revertCandidate?.id == entry.id },
+                        set: { if !$0 { revertCandidate = nil } }
+                    ),
+                    titleVisibility: .visible
+                ) {
+                    Button("Revert", role: .destructive) {
+                        performRevert(entry)
+                    }
+                    Button("Cancel", role: .cancel) { }
+                } message: {
+                    Text("\(entry.key)\n\(displayJSON(entry.newValueJSON)) → \(displayJSON(entry.oldValueJSON))")
+                }
                 .padding(.top, 2)
             } else if entry.status == .reverted {
                 Label("Reverted", systemImage: "arrow.uturn.backward.circle.fill")

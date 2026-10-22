@@ -114,6 +114,8 @@ struct HomeComposerHost: View {
     var onChooseModel: (() -> Void)? = nil
     /// [ipad-shell] Regular width: the model picker is a popover on the model chip.
     var modelPopover: HomeModelPopover? = nil
+    /// [ipad-anchors] "/" 面板里选「亮度」后弹的选项,挂在「/」按钮上。
+    var brightnessDialog: HomeBrightnessDialog? = nil
     let plusMenu: AnyView
     let isBusy: Bool
     let onSubmit: () -> Void
@@ -130,6 +132,7 @@ struct HomeComposerHost: View {
             capsuleMenu: capsuleMenu,
             onChooseModel: onChooseModel,
             modelPopover: modelPopover,
+            brightnessDialog: brightnessDialog,
             plusMenu: plusMenu,
             isBusy: isBusy,
             canSend: !isBusy && !draft.trimmed.isEmpty,
@@ -150,6 +153,7 @@ struct HomeComposerBar: View {
     let capsuleMenu: AnyView
     var onChooseModel: (() -> Void)? = nil
     var modelPopover: HomeModelPopover? = nil
+    var brightnessDialog: HomeBrightnessDialog? = nil
     /// "+" 菜单内容。
     let plusMenu: AnyView
     let isBusy: Bool
@@ -213,6 +217,8 @@ struct HomeComposerBar: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("动作、技能和 MCP"))
                 .accessibilityIdentifier("home.actions")
+                // [ipad-anchors] 亮度选项从「/」按钮弹出:iPad 上不再从页面边缘冒出来。
+                .modifier(HomeBrightnessDialogModifier(dialog: brightnessDialog))
 
                 trailingButton
             }
@@ -608,6 +614,28 @@ private struct HomeModelPopoverModifier: ViewModifier {
             content.popover(isPresented: popover.isPresented) {
                 popover.content
                     .frame(minWidth: 360, idealWidth: 420, minHeight: 360, idealHeight: 520)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// [ipad-anchors] 「/」面板里的「亮度」:面板收起后从「/」按钮弹出亮度档位。
+struct HomeBrightnessDialog {
+    let isPresented: Binding<Bool>
+    let onPick: (Double) -> Void
+}
+
+private struct HomeBrightnessDialogModifier: ViewModifier {
+    let dialog: HomeBrightnessDialog?
+
+    func body(content: Content) -> some View {
+        if let dialog {
+            content.confirmationDialog("屏幕亮度", isPresented: dialog.isPresented, titleVisibility: .visible) {
+                ForEach([("25%", 0.25), ("50%", 0.5), ("75%", 0.75), ("100%", 1.0)], id: \.0) { item in
+                    Button(item.0) { dialog.onPick(item.1) }
+                }
             }
         } else {
             content
