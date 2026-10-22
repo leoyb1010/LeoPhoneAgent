@@ -46,6 +46,18 @@ restore_keepalive() {
   return 0
 }
 trap restore_keepalive EXIT
+# 绝不能在 ssh 会话里直接 open:那样起来的 LeoBot 读不到系统语言(界面变英文),
+# 也不在登录会话里,够不着登录钥匙串(弹「找不到用于存储…的钥匙串」)。2026-10-22 实际踩过。
+# 改为让登录会话(gui 域)里的 launchd 任务去拉起:宿主机用常驻守护,MBP 用登录项任务。
+launch_gui() {
+  restore_keepalive
+  for l in com.leoyuan.leobot-keepalive com.leoyuan.leophoneagent-app; do
+    if launchctl print gui/$uid/$l >/dev/null 2>&1; then
+      launchctl kickstart gui/$uid/$l && return 0
+    fi
+  done
+  echo "warn-no-gui-agent"; open -g -a /Applications/LeoBot.app
+}
 osascript -e 'tell application "LeoBot" to quit' 2>/dev/null
 for i in {1..30}; do pgrep -xq LeoBot || break; sleep 1; done
 pgrep -xq LeoBot && pkill -x LeoBot && sleep 2
@@ -58,14 +70,14 @@ spctl -a --type exec /Applications/LeoBot.app 2>/dev/null || { echo "gatekeeper-
 new=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" /Applications/LeoBot.app/Contents/Info.plist 2>/dev/null)
 [ "$new" = "$V" ] || { echo "version-mismatch $new"; ok=0; }
 if [ $ok = 1 ]; then
-  open -g -a /Applications/LeoBot.app
+  launch_gui
   for i in {1..45}; do pgrep -xq LeoBot && break; sleep 2; done
   pgrep -xq LeoBot || { echo "not-running"; ok=0; }
 fi
 if [ $ok = 0 ]; then
   if [ -n "$archived" ]; then
     pkill -x LeoBot 2>/dev/null; sleep 2; rm -rf /Applications/LeoBot.app; mv "$archived" /Applications/LeoBot.app
-    open -g -a /Applications/LeoBot.app; echo "RESULT rolled-back-to $old"
+    launch_gui; echo "RESULT rolled-back-to $old"
   else
     # 全新机器没有可回滚的旧版:装坏了就是失败,不能报「installed」。
     echo "RESULT failed-no-archive"
@@ -87,7 +99,7 @@ REMOTE
       echo "  ✗ 90 秒内没以 $V 连上中继,回滚"
       archived=$(echo "$out" | sed -n 's/.*archived=\(.*\)$/\1/p')
       # 先卸常驻守护:不然 pkill 到 rm 之间它会把新版又拉起来,回滚后跑的还是新版。
-      [[ -n $archived ]] && ssh -o BatchMode=yes "$h" "uid=\$(id -u); p=~/Library/LaunchAgents/com.leoyuan.leobot-keepalive.plist; launchctl bootout gui/\$uid/com.leoyuan.leobot-keepalive 2>/dev/null; pkill -x LeoBot; for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -xq LeoBot || break; sleep 1; done; rm -rf /Applications/LeoBot.app; mv '$archived' /Applications/LeoBot.app; open -g -a /Applications/LeoBot.app; [ -f \$p ] && launchctl bootstrap gui/\$uid \$p 2>/dev/null; true" && echo "  已回滚"
+      [[ -n $archived ]] && ssh -o BatchMode=yes "$h" "uid=\$(id -u); p=~/Library/LaunchAgents/com.leoyuan.leobot-keepalive.plist; launchctl bootout gui/\$uid/com.leoyuan.leobot-keepalive 2>/dev/null; pkill -x LeoBot; for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -xq LeoBot || break; sleep 1; done; rm -rf /Applications/LeoBot.app; mv '$archived' /Applications/LeoBot.app; [ -f \$p ] && launchctl bootstrap gui/\$uid \$p 2>/dev/null; for l in com.leoyuan.leobot-keepalive com.leoyuan.leophoneagent-app; do launchctl print gui/\$uid/\$l >/dev/null 2>&1 && launchctl kickstart gui/\$uid/\$l && break; done; true" && echo "  已回滚"
       fail+=$h
     fi
   fi
