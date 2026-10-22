@@ -161,6 +161,49 @@ describe("createLeoMainLaneIdleRecycler", () => {
       expect(recycled).toEqual([]);
       await tickMinutes(2);
       expect(recycled).toEqual(["/tmp/leo-ws"]);
+      expect(recycler.recycleCount).toBe(1);
+      recycler.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("拿到 client 即算活动：刚 getClient 的调用方不会在首个请求前被回收；回收计数可读", async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = fakeClient();
+      const other = fakeClient();
+      const recycled: string[] = [];
+      const managed = { workspacePath: "/tmp/leo-ws", client: fake.client };
+      const recycler = createLeoMainLaneIdleRecycler({
+        processManager: {
+          onRuntimeLifecycle: () => ({ dispose: () => undefined }),
+          getExistingClient: () => undefined,
+          listManagedProcesses: () => (recycled.length > 0 ? [] : [managed]),
+        } as never,
+        countConversationSubscriptions: () => 0,
+        isStartupWaiting: () => false,
+        countRunningAutomationRuns: async () => 0,
+        recycle: async (workspace) => {
+          recycled.push(workspace.workspacePath);
+        },
+        log: () => undefined,
+      });
+      const tickMinutes = async (minutes: number) => {
+        for (let minute = 0; minute < minutes; minute += 1) {
+          fake.emit("process/resourceSample", { residentSessionCount: 0 });
+          await vi.advanceTimersByTimeAsync(60_000);
+        }
+      };
+      await tickMinutes(20); // 首次扫描在第 1 分钟登记，此时空闲 19 分钟
+      recycler.noteClientAcquired(fake.client as never); // 调用方刚拿到 client，还没发请求
+      recycler.noteClientAcquired(other.client as never); // 不相干的 client 不影响计时
+      await tickMinutes(19);
+      expect(recycled).toEqual([]);
+      expect(recycler.recycleCount).toBe(0);
+      await tickMinutes(2);
+      expect(recycled).toEqual(["/tmp/leo-ws"]);
+      expect(recycler.recycleCount).toBe(1);
       recycler.dispose();
     } finally {
       vi.useRealTimers();

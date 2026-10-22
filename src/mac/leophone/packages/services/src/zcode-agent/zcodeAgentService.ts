@@ -3243,6 +3243,7 @@ export function createZCodeAgentService(
     }
 
     const client = await processManager.getClient(params);
+    leoMainLaneIdleRecycler.noteClientAcquired(client); // [leo]
     wireClient(client, params, "chat");
 
     // processManager 会按 workspaceKey 对并发启动 single-flight。await 期间若另一条
@@ -3325,7 +3326,14 @@ export function createZCodeAgentService(
     return entry;
   }
 
+  // [leo] 拿到 client 即记一次活动：拿到到首个请求之间不能被空闲回收（见 leoMainLaneIdleRecycle.ts）。
   async function getClient(params: ZCodeAgentWorkspaceTarget) {
+    const client = await getClientUnnoted(params);
+    leoMainLaneIdleRecycler.noteClientAcquired(client);
+    return client;
+  }
+
+  async function getClientUnnoted(params: ZCodeAgentWorkspaceTarget) {
     const workspaceKey = resolveWorkspaceKey(params);
     const active = activeClientsByWorkspaceKey.get(workspaceKey);
     if (active?.modelExecutionEnabled && isReusableActiveClientEntry(params, active)) {
@@ -3402,9 +3410,19 @@ export function createZCodeAgentService(
     return entry.client;
   }
 
+  // [leo] 同 getClient：只读 / existing-only 拿到的 client 也记一次活动。
   async function getReadOnlyClient(
     params: ZCodeAgentWorkspaceTarget,
     runtimePolicy: "start-if-needed" | "existing-only" = "start-if-needed",
+  ) {
+    const client = await getReadOnlyClientUnnoted(params, runtimePolicy);
+    leoMainLaneIdleRecycler.noteClientAcquired(client);
+    return client;
+  }
+
+  async function getReadOnlyClientUnnoted(
+    params: ZCodeAgentWorkspaceTarget,
+    runtimePolicy: "start-if-needed" | "existing-only",
   ) {
     if (runtimePolicy === "existing-only") {
       const workspaceKey = resolveWorkspaceKey(params);
@@ -3725,6 +3743,7 @@ export function createZCodeAgentService(
   return {
     async prepareStorage(params) {
       const client = await processManager.getClient(params);
+      leoMainLaneIdleRecycler.noteClientAcquired(client); // [leo]
       wireClient(client, params, "chat");
       await client.storageStartup.wait();
     },

@@ -10,6 +10,7 @@
 import { resolve } from "node:path";
 import { resolveWorkspaceKey } from "@zcode/shared";
 import type { IDisposable } from "@zcode/rpc";
+import { registerMemoryDiagnosticsProvider } from "#src/memoryDiagnostics.js";
 import type { ZCodeProtocolClient } from "./zcodeProtocolClient.js";
 
 export const LEO_MAIN_LANE_IDLE_RECYCLE_MS = 20 * 60_000;
@@ -149,12 +150,29 @@ export interface LeoMainLaneIdleRecyclerOptions {
   now?: () => number;
 }
 
+export interface LeoMainLaneIdleRecycler extends IDisposable {
+  /**
+   * 调用方刚拿到（新拉起或复用）这个 client：记一次活动。拿到 client 到发出第一个请求之间
+   * 没有任何在途请求，扫描若恰好在这段空档里判定空闲，会把调用方手里的 client 回收掉。
+   */
+  noteClientAcquired(client: ZCodeProtocolClient): void;
+  /** 本 Host 启动以来回收过的主泳道进程数（日志与内存诊断计数器里都有）。 */
+  readonly recycleCount: number;
+}
+
 export function createLeoMainLaneIdleRecycler(
   options: LeoMainLaneIdleRecyclerOptions,
-): IDisposable {
-  if (process.env.LEO_MAIN_LANE_IDLE_RECYCLE === "0") return { dispose: () => undefined };
+): LeoMainLaneIdleRecycler {
+  if (process.env.LEO_MAIN_LANE_IDLE_RECYCLE === "0") {
+    return { dispose: () => undefined, noteClientAcquired: () => undefined, recycleCount: 0 };
+  }
   const now = options.now ?? Date.now;
   const tracked = new Map<string, TrackedRuntime>();
+  let recycleCount = 0;
+  const diagnostics = registerMemoryDiagnosticsProvider("leoMainLaneIdleRecycle", () => ({
+    tracked: tracked.size,
+    recycled: recycleCount,
+  }));
 
   const untrack = (workspaceKey: string) => {
     const entry = tracked.get(workspaceKey);
@@ -247,9 +265,11 @@ export function createLeoMainLaneIdleRecycler(
       facts.startupWaiting = options.isStartupWaiting(workspaceKey);
       if (!decideLeoMainLaneIdleRecycle(facts).recycle) continue;
       entry.recycling = true;
+      recycleCount += 1;
       options.log("主泳道 CLI 空闲回收", {
         workspaceKey,
         idleMs: facts.nowMs - facts.lastActivityAtMs,
+        recycleCount,
       });
       await options.recycle(workspace).catch((error: unknown) => {
         options.log("主泳道 CLI 空闲回收失败", {
@@ -281,7 +301,16 @@ export function createLeoMainLaneIdleRecycler(
     dispose: () => {
       clearInterval(timer);
       lifecycle.dispose();
+      diagnostics.dispose();
       for (const workspaceKey of [...tracked.keys()]) untrack(workspaceKey);
+    },
+    noteClientAcquired: (client) => {
+      for (const entry of tracked.values()) {
+        if (entry.client === client) entry.lastActivityAtMs = now();
+      }
+    },
+    get recycleCount() {
+      return recycleCount;
     },
   };
 }
