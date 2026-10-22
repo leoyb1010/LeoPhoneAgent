@@ -490,11 +490,8 @@ export class LinkSession {
       ...(capped ? { plan: capped } : {}),
       choices: PLAN_CHOICES,
     };
+    // 无人值守的计划审批在上面已直接收下计划并返回,走到这里的只有手机发起的回合。
     this.pendingApprovals.set(request.requestId, { kind: "plan", event, tool: "ExitPlanMode", target: "", announced: true });
-    if (this.unattended) {
-      event["automation_id"] = this.unattended.automationId;
-      this.armApprovalTimer(request.requestId, this.unattended);
-    }
     this.emit(event);
   }
 
