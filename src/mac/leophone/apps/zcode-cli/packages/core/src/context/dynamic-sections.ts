@@ -48,7 +48,7 @@ const CONTEXT_MANAGEMENT_PROMPTS = {
 // [leo] leo-brain 是 Host 登记的用户级 MCP（packages/desktop/src/host/leo/brainTools.ts）。
 const LEO_BRAIN_SEARCH_TOOL = "mcp__leo-brain__brain_search";
 const LEO_BRAIN_GUIDANCE =
-  "- Leo's second brain (mcp__leo-brain__*) holds Leo's own documents, knowledge cards, daily pages, project reports, past decisions, photos and videos. When the question is about Leo, his projects, earlier work or decisions, people in his life, or uses 我的/之前/上次/记得/笔记/资料/大脑, call mcp__leo-brain__brain_search first (brain_brief is not needed), use brain_read for details, and cite the title. If the leo-brain tools are missing or fail, tell the user; never read ~/.config/leo-brain/*, ~/.leoagent/key or ~/.leoagent/treasury.key, and never call the brain endpoint by hand.";
+  "- Leo's second brain (mcp__leo-brain__*) holds Leo's own documents, knowledge cards, daily pages, project reports, past decisions, photos and videos. When the user asks about Leo's own knowledge — his projects, earlier work or decisions, people in his life, his notes or materials (e.g. 我的笔记/之前定的/上次说的/记得吗/资料/大脑) — call mcp__leo-brain__brain_search first (brain_brief is not needed), use brain_read for details, and cite the title. Don't use it for code or files in the current workspace; use the normal file and search tools for those. If the leo-brain tools are missing or fail, tell the user; never read ~/.config/leo-brain/*, ~/.leoagent/key or ~/.leoagent/treasury.key, and never call the brain endpoint by hand.";
 
 export function buildSessionGuidanceSection(toolNames: readonly string[], hasSkills = false): ContextSection | null {
   const tools = new Set(toolNames);
