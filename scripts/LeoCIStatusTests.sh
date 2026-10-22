@@ -92,6 +92,12 @@ setup "{\"workflow_runs\":[$(run 9 "$head" in_progress null 2026-01-04T00:00:00Z
   "{\"workflow_runs\":[$(run 1 "$parent" completed '"success"' 2026-01-01T00:00:00Z)]}"
 expect 0 "HEAD 在跑没红 job,父提交绿"
 
+# HEAD 最新一次在跑没红 job,但它较早一次已完成的运行是红的,父提交绿 → 挡(HEAD 自己的结论先于祖先)。
+setup "{\"workflow_runs\":[$(run 9 "$head" in_progress null 2026-01-04T00:00:00Z),$(run 8 "$head" completed '"failure"' 2026-01-03T00:00:00Z)]}" \
+  '{"jobs":[{"name":"a","status":"completed","conclusion":"success"}]}' \
+  "{\"workflow_runs\":[$(run 8 "$head" completed '"failure"' 2026-01-03T00:00:00Z),$(run 1 "$parent" completed '"success"' 2026-01-01T00:00:00Z)]}"
+expect 1 "HEAD 在跑没红 job,HEAD 较早一次红,父提交绿"
+
 # HEAD 自己有结论:直接按它判(祖先红也不影响)。
 setup "{\"workflow_runs\":[$(run 9 "$head" completed '"success"' 2026-01-04T00:00:00Z)]}" "$nojobs" \
   "{\"workflow_runs\":[$(run 1 "$parent" completed '"failure"' 2026-01-01T00:00:00Z)]}"

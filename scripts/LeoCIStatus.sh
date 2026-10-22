@@ -11,7 +11,7 @@
 # startup_failure / action_required → FAIL;没网 / 没 gh 也没 curl → UNKNOWN。
 # [up3-relay-scripts] 真实发版链里发版提交还没 push(或 CI 还在跑),只看它自己永远判不出红:
 #   - 运行未完成:再查它的 job,已结束的 job 里有不是 success / skipped 的 → FAIL;
-#   - 自己没有已完成的运行:沿 git rev-list --first-parent 找最近一个有结论的祖先,
+#   - 自己最新一次没结论:沿 git rev-list --first-parent(含 HEAD 自己较早的运行)找最近一个有结论的,
 #     红 → FAIL,绿 → PASS(注明是祖先的结论);找不到才 PENDING / UNKNOWN 放行;
 #   - 工作区有未提交改动时警告(包里有 CI 没见过的代码)。
 # 先走 gh(带登录态,不吃匿名限流),失败再走匿名 REST(仓库是公开的)。
@@ -112,7 +112,8 @@ fi
 
 # 自己没有结论:看它所基于的代码 —— first-parent 上最近一个有结论的祖先。
 if { [ "$status" = PENDING ] || [ "$status" = NORUNS ]; } && [ "$have_py" -eq 1 ]; then
-  ancestors=$(git -C "$repo_root" rev-list --first-parent --max-count=200 "$sha" 2>/dev/null | sed 1d)
+  # 从 HEAD 自己开始:它可能有较早一次已完成的运行(比如手动重跑在跑),那次结论先于祖先。
+  ancestors=$(git -C "$repo_root" rev-list --first-parent --max-count=200 "$sha" 2>/dev/null)
   if [ -n "$ancestors" ]; then
     completed=$(api "repos/$repo/actions/workflows/$workflow/runs?status=completed&per_page=100")
     if [ -n "$completed" ]; then
@@ -132,7 +133,8 @@ for s in sys.argv[1].split():
     # 祖先被取消的运行不是结论(被新 push 顶掉、手动取消),接着往前找。
     if not r or r.get("conclusion") in ("neutral", "skipped", "cancelled"):
         continue
-    where = "祖先 %s 的 run %s %s" % (s[:8], r.get("id"), r.get("html_url") or "")
+    who = "HEAD 较早" if s == sys.argv[1].split()[0] else "祖先 %s 的" % s[:8]
+    where = "%s run %s %s" % (who, r.get("id"), r.get("html_url") or "")
     if r.get("conclusion") == "success":
         print("PASS\t%s 是绿的" % where)
     else:
