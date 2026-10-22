@@ -19,6 +19,8 @@ interface AutomationTemplateBase {
 export interface ScheduledAutomationTemplate extends AutomationTemplateBase {
   cronExpr: string;
   icon: AutomationScheduledTemplateIconName;
+  /** [leo] 建议的权限模式(Leo 本地模板才有;服务端模板没有就用编辑器默认)。 */
+  mode?: string;
 }
 
 export interface AutomationTemplateCatalog {
@@ -128,12 +130,14 @@ export function resolveAutomationTemplateText(
 export function materializeScheduledTemplateDraft(
   template: ScheduledAutomationTemplate,
   locale: string,
-): { templateId: string; title: string; cronExpr: string; prompt: string } {
+): { templateId: string; title: string; cronExpr: string; prompt: string; mode?: string } {
   return {
     templateId: template.id,
     title: resolveAutomationTemplateText(template.title, locale),
     cronExpr: template.cronExpr,
     prompt: resolveAutomationTemplateText(template.prompt, locale),
+    // [leo] 模板的模式带进新建页,否则早报这类只读模板会按默认的 build 建出来。
+    ...(template.mode ? { mode: template.mode } : {}),
   };
 }
 
@@ -143,10 +147,11 @@ export function materializeScheduledTemplateDraft(
  * 模板内容和手机 `GET /automations/templates` 共用 `@zcode/shared/leo-automation-templates`。
  */
 export const LEO_LOCAL_SCHEDULED_TEMPLATES: readonly ScheduledAutomationTemplate[] =
-  LEO_AUTOMATION_TEMPLATES.map(({ id, icon, cronExpr, title, description, prompt }) => ({
+  LEO_AUTOMATION_TEMPLATES.map(({ id, icon, cronExpr, mode, title, description, prompt }) => ({
     id,
     icon,
     cronExpr,
+    mode,
     title,
     description,
     prompt,

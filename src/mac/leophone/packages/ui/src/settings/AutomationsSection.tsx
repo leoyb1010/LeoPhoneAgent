@@ -152,6 +152,8 @@ export interface AutomationDraft {
   title: string;
   cronExpr: string;
   prompt: string;
+  /** [leo] 模板建议的权限模式(Leo 本地模板才有)。 */
+  mode?: string;
 }
 
 /** 主视图内部路由:列表 / 新建 / 编辑。 */

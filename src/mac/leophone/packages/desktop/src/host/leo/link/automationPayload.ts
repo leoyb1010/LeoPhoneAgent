@@ -3,6 +3,7 @@ import type {
   ZCodeAutomationRun,
   ZCodeAutomationScheduleRule,
 } from "@zcode/shared";
+import { LEO_AUTOMATION_TEMPLATES } from "@zcode/shared/leo-automation-templates";
 
 import { runSummary } from "./automationResults.js";
 import { LINK_MODES, linkMode, macTimeZone, record, type LinkMode } from "./linkPolicy.js";
@@ -304,13 +305,18 @@ export function parseCreate(body: unknown, now: Date): CreateInput | { error: st
     return { error: "harness 必须是字符串" };
   const mode = input["mode"] == null ? undefined : linkMode(input["mode"]);
   if (input["mode"] != null && !mode) return { error: `mode 只能是 ${LINK_MODES.join(" / ")}` };
+  // [leo] 从模板建的(带 template_id)没给 mode 时用模板建议的模式:早报这类只读模板是 plan,不然每次运行都要人批。
+  // 认不出的 template_id 不报错,按没给处理(旧手机 / 服务端模板)。
+  const template = LEO_AUTOMATION_TEMPLATES.find(
+    (candidate) => candidate.id === input["template_id"],
+  );
   return {
     name: name ?? prompt.replace(/\s+/g, " ").slice(0, DEFAULT_NAME_CHARS),
     prompt,
     schedule,
     workspace: typeof workspace === "string" ? workspace.trim() : "",
     harness: (typeof harness === "string" && harness.trim()) || "zcode",
-    mode: mode ?? (input["full_auto"] === true ? "yolo" : "build"),
+    mode: mode ?? (input["full_auto"] === true ? "yolo" : (template?.mode ?? "build")),
   };
 }
 
