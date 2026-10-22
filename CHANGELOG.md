@@ -1,5 +1,17 @@
 # LeoPhoneAgent 更新记录
 
+## Mac 1.17.0 · iOS 1.82.0 (188) · 中继 0.2.5 · 手机远控补全 + 省电 - 2026-10-22
+
+契约：`src/mac/leophone/docs/specs/leo-link-remote-controls.md`（字段都是可选新增，新旧两端互相兼容，iOS 按 `/v1/capabilities.features` 显示控件）。
+
+- **远控补全**：`GET /harness/models`、`POST …/model`（换模型 / 只改强度）、新建时带 `model` / `effort`（旧字段 `thinking` 按强度处理）、`POST …/compact`（走内核）、`POST …/rename`、`send` 带图片 `attachments`（iOS 压到 1600 px / 合计 base64 ≤ 1.8 MB）、`question.request` + `POST …/answer`（手机回答 AskUserQuestion）、计划审批卡显示整段计划且只给 `once`/`deny`。iOS 会话页新增设置面板（模型、强度、压缩、改名、关注），新建任务可选模型与强度。
+- **省电（关注）**：会话有持久化的 `following`（Mac 重启不丢）；手机新建 / 接管 / 发消息自动关注，只是打开看桌面任务不关注；推送闸门改为只推关注的会话；定时任务加 `notify`（手机建默认 true，桌面建默认 false）。iOS「进行中」只列关注的，其余折成一行可一键关注；首页轮询有关注任务在跑才 20 s，否则 60 s；实时活动与 push-to-start 只给关注的会话、且跟随开关；补拉通知与 APNs 同 id，不再重复；手表显示标题、等审批的行可点、手机没开那个任务也能在手表上批。
+- **修复**：模式菜单探测竞态（打开桌面任务会永久隐藏整台 Mac 的模式菜单）；全新安装首启黑屏卡死（`ChatStore.init` 同步写 UserDefaults 与主线程等 `ChatStore.shared` 互锁）；`/mac` 交接默认目录。
+- **模拟器**：iSH / FFmpeg 只在真机链接，模拟器用桩，Studio 上的 iPhone / iPad / Watch 模拟器能装能跑（本地 Linux shell 与 ffmpeg 在模拟器里不可用）。
+- **测试数据事故**：`treasuryStore.test.ts` 以前没隔离数据目录，往本机真实藏宝阁写进 8404 条测试笔记；已备份后清理（备份在 `~/LeoBot-archives/treasury-backup/`），测试改为先把 `LEOAGENT_HOME` 指到临时目录。
+- **中继 0.2.5**：请求正文上限 1 MB → 4 MB（手机经中继发图片）。
+- 更新说明主文件超过 400 行，1.9.0 及更早挪到 `leoReleaseNotesArchive.ts`。
+
 ## Mac 1.16.0 · iOS 1.81.0 (187) · 中继 0.2.4 · 第三轮审计修复 - 2026-10-22
 
 多智能体审计（8 个维度、109 个智能体、每条发现独立对抗验证）确认 46 条，按文件归属分 5 批并行修复、逐批独立复审后合入。
