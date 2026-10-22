@@ -749,5 +749,34 @@ class RelayCompletionPushTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("phoneSessionId", second)
 
 
+class RelayAutomationPushTests(unittest.IsolatedAsyncioTestCase):
+    """[up-p3-mac] Mac 定时任务跑完:成功、失败都发 APNs,带自动化 id 与任务 id。"""
+
+    async def test_automation_run_completed_pushes_success_and_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            relay = Relay("server-key-0123456789",
+                          device_keys_path=os.path.join(tmp, "device-keys.json"))
+            sent = []
+
+            async def send_alert(**kwargs):
+                sent.append(kwargs)
+                return 200
+
+            relay.apns = types.SimpleNamespace(enabled=True, send_alert=send_alert)
+            base = {"event": "automation.run.completed", "automation_id": "automation-1",
+                    "name": "日报", "session_id": "task-1", "run_id": "automation-1:1"}
+            await relay._push_apns("Mac Studio", {**base, "status": "succeeded",
+                                                  "summary": "已在 Mac 上跑完"})
+            await relay._push_apns("Mac Studio", {**base, "status": "failed", "run_id": "automation-1:2",
+                                                  "summary": "模型额度用完了"})
+            ok, failed = sent
+            self.assertEqual(ok["title"], "⏰ Mac Studio 定时任务完成")
+            self.assertEqual(ok["body"], "日报 · 已在 Mac 上跑完")
+            self.assertEqual(ok["user_info"]["automationId"], "automation-1")
+            self.assertEqual(ok["user_info"]["harnessSessionId"], "task-1")
+            self.assertEqual(failed["title"], "⏰ Mac Studio 定时任务没跑成")
+            self.assertNotEqual(ok["collapse_id"], failed["collapse_id"])
+
+
 if __name__ == "__main__":
     unittest.main()

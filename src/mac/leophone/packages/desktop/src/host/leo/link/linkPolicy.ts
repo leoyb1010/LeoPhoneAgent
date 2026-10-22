@@ -29,7 +29,9 @@ export function isLinkPath(pathname: string): boolean {
     // 权限模式 / 改动面板(changes、diff、revert)见 docs/specs/leo-link-changes.md。
     /^\/harness\/sessions\/[^/]+\/(events|send|approval|stop|archive|mode|changes|diff|revert)$/.test(pathname) ||
     // [fix-remote] 外部 agent 的远程登录：/agents/<key>/auth、/agents/<key>/login[/<flow>[/code|/cancel]]。
-    /^\/agents\/[^/]+\/(auth|login(\/[^/]+(\/(code|cancel))?)?)$/.test(pathname)
+    /^\/agents\/[^/]+\/(auth|login(\/[^/]+(\/(code|cancel))?)?)$/.test(pathname) ||
+    // [up-p3-mac] Mac 上的定时任务:/automations、/automations/<id>、/automations/<id>/run(docs/specs/leo-link-automations.md)。
+    /^\/automations(\/[^/]+(\/run)?)?$/.test(pathname)
   );
 }
 

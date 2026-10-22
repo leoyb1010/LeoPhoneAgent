@@ -16,6 +16,7 @@ import "@zcode/shared/leo-network-guard";
  */
 import { createHostDatabaseStartup } from "./hostDatabaseStartup.js";
 import { startLeoHostServices } from "./leo/index.js";
+import { publishAutomationRunCompleted } from "./leo/link/automationEvents.js";
 import { createHostNetworkCapture } from "./hostNetworkCapture.js";
 import { randomUUID } from "node:crypto";
 import { createPluginSandboxRegistrationBridge } from "./pluginSandbox/index.js";
@@ -664,7 +665,19 @@ function trackCronRunOutcome(params: {
         error: result.error,
         repo: cronAutomationRepo,
         logWarn: (message, error) => logger.warn(message, error),
-      });
+      }).then(() =>
+        // [up-p3-mac] 运行记录回写之后再通知手机(docs/specs/leo-link-automations.md):
+        // 自动化跑出来的是桌面任务，会话里的 run.completed 不会推给手机。
+        publishAutomationRunCompleted({
+          automationId: params.automationId,
+          runId: params.runId,
+          trigger: params.trigger,
+          outcome: result.outcome,
+          ...(result.error ? { error: result.error } : {}),
+          taskId: params.taskId,
+          workspacePath: params.workspacePath,
+        }),
+      );
       // 定时任务在后台完成后统一置为未读，真正打开 task 时再由导航链路清除。
       void params.zcodeTaskService.setTaskUnread({
         taskId: params.taskId,

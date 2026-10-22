@@ -1488,6 +1488,23 @@ class Relay:
 
                     collapse_id=f"{kind}-{event.get('session_id', '')}",
                 )
+            # [up-p3-mac] Mac 上的定时任务跑完(成功和失败都推:无人值守,失败也得让人知道)。
+            # 见 src/mac/leophone/docs/specs/leo-link-automations.md。
+            elif kind == "automation.run.completed":
+                ok = event.get("status") == "succeeded"
+                name = str(event.get("name") or "定时任务")[:60]
+                summary = str(event.get("summary") or "")[:120]
+                await self.apns.send_alert(
+                    title=f"⏰ {machine_name} 定时任务{'完成' if ok else '没跑成'}",
+                    body=f"{name} · {summary}" if summary else name,
+                    user_info={
+                        "automationId": str(event.get("automation_id") or ""),
+                        "harnessSessionId": str(event.get("session_id") or ""),
+                        "machine": machine_name,
+                        "sent_at": time.time(),
+                    },
+                    collapse_id=f"{kind}-{event.get('run_id') or event.get('session_id', '')}",
+                )
         except Exception as exc:  # noqa: BLE001
             print(f"[relay] apns push failed: {exc}", flush=True)
         await self._push_live_activity(machine_name, event)
