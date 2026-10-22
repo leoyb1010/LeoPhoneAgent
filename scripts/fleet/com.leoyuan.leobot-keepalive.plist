@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- 宿主 Mac(Studio / mini / Air)上让 LeoBot 常驻:每 2 分钟看一眼,没在跑就后台拉起并记一笔。
+       MBP 是随身机,不装。部署脚本安装前会先 bootout 它,避免装到一半被拉起。 -->
+  <key>Label</key><string>com.leoyuan.leobot-keepalive</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>pgrep -xq LeoBot &amp;&amp; exit 0; L="$HOME/Library/Logs/leobot-keepalive.log"; C=$(ls -t "$HOME/Library/Logs/DiagnosticReports" 2&gt;/dev/null | grep -m1 -i leobot); echo "$(date '+%F %T') LeoBot 不在运行,重新拉起;最近崩溃报告:${C:-无}" &gt;&gt; "$L"; [ -d /Applications/LeoBot.app ] &amp;&amp; open -g -a /Applications/LeoBot.app</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>StartInterval</key><integer>120</integer>
+  <key>LimitLoadToSessionType</key><string>Aqua</string>
+  <key>ProcessType</key><string>Background</string>
+</dict>
+</plist>

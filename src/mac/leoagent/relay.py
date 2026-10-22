@@ -52,7 +52,7 @@ from .apns import build_pusher
 from .live_activity import LiveActivityPlanner
 from .relay_identity import valid_registry
 
-VERSION = "0.2.1"
+VERSION = "0.2.2"
 DEFAULT_PORT = 8650
 REQUEST_TIMEOUT_S = 60
 # 同一条事件流里的 message.delta 最多每 60 ms 合成一条发给手机:逐 token 转发的话,
@@ -170,8 +170,16 @@ class Relay:
         self.join_failures: Dict[str, List[float]] = {}
         self.offline_queue: Dict[str, List[Dict[str, Any]]] = {}
         self.queue_results: Dict[str, Dict[str, Any]] = {}
+        # [P0] 离线排队落盘:中继重启(launchd 拉起、mini 重启)不再丢手机排的任务。
+        # 投递中的条目单独记着,崩在投递途中时放回队首重投(Mac 桥按 request id 去重)。
+        self.queue_inflight: Dict[str, List[Dict[str, Any]]] = {}
+        state_dir = os.path.dirname(self.state_path)
+        self.queue_path = os.path.join(state_dir, "relay-queue.json")
+        # [P0] 在线机器快照,给 mini 上的 LeoFleetDoctor 读(文件而非接口:不对公网暴露机器名)。
+        self.status_path = os.path.join(state_dir, "relay-status.json")
         self._last_touch_persist = 0.0
         self._load_state()
+        self._load_queue()
         # 被拒的钥匙落盘(0600,仅本机可读),便于把它收编进 RELAY_KEYS。
         self.rejected_log = rejected_log
         self._last_rejected_log_at = float("-inf")
@@ -458,6 +466,8 @@ class Relay:
                     "items": self.treasury_items,
                     "asset_requests": self.treasury_asset_requests,
                 }, stream, ensure_ascii=False, separators=(",", ":"))
+                stream.flush()
+                os.fsync(stream.fileno())
             os.replace(tmp, self.treasury_sync_path)
         except BaseException:
             try:
@@ -895,6 +905,82 @@ class Relay:
         return caller if caller is not None and caller.is_admin else None
 
     # -- 身份状态 -------------------------------------------------------------
+
+    # -- 排队与在线快照落盘 ----------------------------------------------------
+
+    def _load_queue(self) -> None:
+        try:
+            with open(self.queue_path, encoding="utf-8") as f:
+                saved = json.load(f)
+            queue = saved.get("offline_queue") or {}
+            inflight = saved.get("inflight") or {}
+            results = saved.get("queue_results") or {}
+            if not all(isinstance(x, dict) for x in (queue, inflight, results)):
+                raise ValueError("bad queue file")
+        except FileNotFoundError:
+            return
+        except (OSError, ValueError, AttributeError) as cause:
+            # 排队不是身份数据:坏了留证据、从空开始,不能因此拒绝启动。
+            backup = f"{self.queue_path}.corrupt-{int(time.time())}"
+            try:
+                os.replace(self.queue_path, backup)
+            except OSError:
+                pass
+            print(f"[relay] queue file unreadable ({cause}); kept as {backup}", flush=True)
+            return
+        now = time.time()
+        for name in set(queue) | set(inflight):
+            # 崩在投递途中的放回队首;已过期的丢掉,结果查询照常答 expired。
+            items = list(inflight.get(name) or []) + list(queue.get(name) or [])
+            seen, kept = set(), []
+            for item in items:
+                if not isinstance(item, dict) or item.get("request_id") in seen:
+                    continue
+                seen.add(item.get("request_id"))
+                if now - float(item.get("queued_at") or 0) < QUEUE_TTL_S:
+                    kept.append(item)
+                else:
+                    results[item.get("request_id")] = {"status": "expired", "at": now}
+            if kept:
+                self.offline_queue[name] = kept
+        cutoff = now - QUEUE_TTL_S
+        self.queue_results = {rid: r for rid, r in results.items()
+                              if isinstance(r, dict) and r.get("at", 0) >= cutoff}
+
+    def _persist_queue(self) -> None:
+        payload = {"version": 1, "offline_queue": self.offline_queue,
+                   "inflight": self.queue_inflight, "queue_results": self.queue_results}
+        tmp = self.queue_path + ".tmp"
+        try:
+            os.makedirs(os.path.dirname(self.queue_path), mode=0o700, exist_ok=True)
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                os.fchmod(f.fileno(), 0o600)
+                json.dump(payload, f, ensure_ascii=False, separators=(",", ":"), default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, self.queue_path)
+        except (OSError, TypeError, ValueError) as cause:
+            print(f"[relay] queue persist failed: {cause}", flush=True)
+
+    def _write_status(self) -> None:
+        payload = {
+            "version": VERSION,
+            "updated_at": time.time(),
+            "machines": [{"name": m.name, "connected_at": m.connected_at,
+                          "app_version": m.info.get("version"), "server": m.info.get("server")}
+                         for m in self.machines.values()],
+            "queued": {name: len(items) for name, items in self.offline_queue.items() if items},
+        }
+        tmp = self.status_path + ".tmp"
+        try:
+            os.makedirs(os.path.dirname(self.status_path), mode=0o700, exist_ok=True)
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False)
+            os.replace(tmp, self.status_path)
+        except (OSError, TypeError, ValueError):
+            pass
 
     def _load_state(self) -> None:
         try:
@@ -1349,6 +1435,7 @@ class Relay:
                     machine = Machine(name, ws, dict(frame.get("info") or {}))
                     self.machines[name] = machine
                     print(f"[relay] {name} online", flush=True)
+                    self._write_status()
                     ack: Dict[str, Any] = {"type": "registered", "version": VERSION,
                                             "revokedDeviceIds": sorted(self.revoked_devices)}
                     if machine_key is not None:
@@ -1409,6 +1496,7 @@ class Relay:
                 if self.machines.get(machine.name) is machine:
                     del self.machines[machine.name]
                     print(f"[relay] {machine.name} offline", flush=True)
+                    self._write_status()
                 # 请求和流跟着这条连接走,被同名重连顶掉时也一样(Mac 换网、睡醒:
                 # 新连接先到,旧的这时才断)。新连接不认识它们,这里不了结,手机就
                 # 一直挂着——生产环境 aiohttp 不会替断开的手机取消处理协程。
@@ -2073,11 +2161,17 @@ class Relay:
             items.append({"request_id": request_id, "method": request.method, "path": tail,
                           "body": body, "caller": caller.public(), "queued_at": now})
         self.offline_queue[name] = items
+        self._persist_queue()
+        self._write_status()
         return web.json_response({"queued": True, "request_id": request_id}, status=202)
 
     async def _flush_queue(self, machine: Machine) -> None:
         """Mac 上线后按顺序投递排队的请求,结果留 24 小时供手机查询。"""
         items = self.offline_queue.pop(machine.name, [])
+        if not items:
+            return
+        self.queue_inflight[machine.name] = list(items)
+        self._persist_queue()
         now = time.time()
         for item in items:
             # 取走的每一条都还在等:这时来查的手机要看到 queued,而不是 404(它会当作遗忘)。
@@ -2118,9 +2212,15 @@ class Relay:
                 machine.pending.pop(frame_id, None)
                 self._requeue(machine, items[index:])
                 return
+            # 每投完一条就落盘:崩在中途,重启后只重投还没确认的。
+            self.queue_inflight[machine.name] = items[index + 1:]
+            self._persist_queue()
+        self.queue_inflight.pop(machine.name, None)
         cutoff = time.time() - QUEUE_TTL_S
         for rid in [rid for rid, r in self.queue_results.items() if r.get("at", 0) < cutoff]:
             self.queue_results.pop(rid, None)
+        self._persist_queue()
+        self._write_status()
 
     def _requeue(self, machine: Machine, rest: List[Dict[str, Any]]) -> None:
         """Back to the front of the queue. A connection that registered while this
@@ -2128,7 +2228,9 @@ class Relay:
         own run now; otherwise the rest waited for the next reconnect."""
         for item in rest:
             self.queue_results.pop(item["request_id"], None)   # the queue lookup answers "queued"
+        self.queue_inflight.pop(machine.name, None)
         self.offline_queue[machine.name] = rest + self.offline_queue.get(machine.name, [])
+        self._persist_queue()
         current = self.machines.get(machine.name)
         if current is not None and current is not machine:
             task = asyncio.get_running_loop().create_task(self._flush_queue(current))

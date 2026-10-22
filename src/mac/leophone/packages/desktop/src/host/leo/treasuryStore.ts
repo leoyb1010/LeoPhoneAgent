@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 
@@ -73,6 +73,14 @@ export class TreasuryStore {
     mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
     const db = new DatabaseSync(file);
     db.exec("PRAGMA journal_mode = WAL");
+    // [P0] 收藏是私人数据:库和 WAL/SHM 只给本人读写(sqlite 默认按 umask 建成 0644)。
+    for (const f of [file, `${file}-wal`, `${file}-shm`]) {
+      try {
+        if (existsSync(f)) chmodSync(f, 0o600);
+      } catch {
+        /* 权限收紧失败不挡收藏功能 */
+      }
+    }
     db.exec(`CREATE TABLE IF NOT EXISTS items (
       id TEXT PRIMARY KEY,
       kind TEXT NOT NULL,

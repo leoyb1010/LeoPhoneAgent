@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- 只装在 mini:每天 04:20 用 restic 备份 ~/.leoagent(中继身份、排队、藏宝阁同步)。 -->
+  <key>Label</key><string>com.leoyuan.leo-relay-backup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <!-- 经 Homebrew python3 起 zsh:外接盘的 TCC 授权挂在它身上(资料库网关同理) -->
+    <string>/opt/homebrew/bin/python3</string>
+    <string>-c</string>
+    <string>import subprocess, sys; sys.exit(subprocess.call(["/bin/zsh", sys.argv[1]]))</string>
+    <string>__HOME__/Library/Application Support/LeoBot-fleet/LeoRelayBackup.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>4</integer><key>Minute</key><integer>20</integer></dict>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>__HOME__/Library/Application Support/LeoBot-fleet/backup.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Application Support/LeoBot-fleet/backup.log</string>
+</dict>
+</plist>
