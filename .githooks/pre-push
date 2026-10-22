@@ -1,0 +1,110 @@
+#!/bin/sh
+# Tracked pre-push hook (core.hooksPath=.githooks). 只跑推送范围里真正改到的部分:
+#   src/mac/leophone/**                  -> vitest 已知失败棘轮(scripts/leo-vitest-ratchet.mjs)
+#   src/mac/leoagent/**                  -> relay / harness python unittest
+#   scripts/IOSPerfBudgetGate*, fixtures -> IOSPerfBudgetGateTests.py
+# 工具链不可用时打印 "pre-push: SKIPPED ..." 并说明原因,绝不静默放行。
+# 明知故犯时用 git push --no-verify。
+#
+# src/mac/leophone/.husky/pre-push 在 core.hooksPath=.githooks 下不会被 git 调用,真正生效的是这个文件。
+
+repo_root=$(git rev-parse --show-toplevel) || exit 1
+cd "$repo_root" || exit 1
+# Git 注入的 GIT_DIR 等变量会让测试里的临时仓库误命中本仓库。
+# shellcheck disable=SC2046
+unset $(git rev-parse --local-env-vars)
+
+zero=0000000000000000000000000000000000000000
+changed=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -n "$local_sha" ] || continue
+  [ "$local_sha" = "$zero" ] && continue            # 删除远端分支,没有要检查的内容
+  if [ "$remote_sha" = "$zero" ] || ! git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+    base=$(git merge-base "$local_sha" origin/main 2>/dev/null || true)
+  else
+    base="$remote_sha"
+  fi
+  if [ -n "$base" ]; then
+    changed="$changed
+$(git diff --name-only "$base" "$local_sha")"
+  else
+    changed="$changed
+$(git show --name-only --format= "$local_sha")"
+  fi
+done
+
+touches() { printf '%s\n' "$changed" | grep -qE "$1"; }
+
+failed=0
+ran=0
+fail() { echo "pre-push: FAIL $1" >&2; failed=1; }
+skip() { echo "pre-push: SKIPPED $1" >&2; }
+
+# Node >= 24:优先 nvm 里最新的,其次 PATH。
+node_bin=""
+for bin in $(ls -1d "$HOME"/.nvm/versions/node/v2[4-9]*/bin 2>/dev/null | sort -rV 2>/dev/null); do
+  if [ -x "$bin/node" ]; then node_bin="$bin/node"; break; fi
+done
+if [ -z "$node_bin" ] && command -v node >/dev/null 2>&1; then
+  node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)' 2>/dev/null && node_bin=$(command -v node)
+fi
+
+if touches '^src/mac/leophone/'; then
+  ran=1
+  if [ -z "$node_bin" ]; then
+    skip "vitest ratchet: 没有 Node >= 24"
+  elif [ ! -x src/mac/leophone/node_modules/.bin/vitest ]; then
+    skip "vitest ratchet: src/mac/leophone/node_modules 未安装(先 pnpm install)"
+  else
+    # 测试配置 / 依赖 / 棘轮本身变了 -> 全量(约 5 分钟);否则只跑 import 了改动文件的用例。
+    if touches '^src/mac/leophone/(vitest\.(config|setup)\.ts|package\.json|pnpm-lock\.yaml|scripts/leo-vitest-|scripts/test-isolation/)'; then
+      echo "pre-push: Mac 测试配置/依赖有改动 -> 全量 vitest 已知失败棘轮"
+      (cd src/mac/leophone && "$node_bin" scripts/leo-vitest-ratchet.mjs) || fail "vitest ratchet(有基线之外的新失败)"
+    else
+      mac_files=$(printf '%s\n' "$changed" | sed -n 's|^src/mac/leophone/||p' | grep -E '\.(c|m)?(t|j)sx?$' | sort -u \
+        | while read -r f; do [ -f "src/mac/leophone/$f" ] && printf '%s\n' "$f"; done)
+      if [ -z "$mac_files" ]; then
+        echo "pre-push: src/mac/leophone 改动里没有 TS/JS 文件 -> vitest 棘轮无需运行"
+      else
+        echo "pre-push: src/mac/leophone 有改动 -> vitest 已知失败棘轮(related,$(printf '%s\n' "$mac_files" | wc -l | tr -d ' ') 个文件)"
+        # shellcheck disable=SC2086
+        (cd src/mac/leophone && "$node_bin" scripts/leo-vitest-ratchet.mjs --related $mac_files) \
+          || fail "vitest ratchet(有基线之外的新失败)"
+      fi
+    fi
+  fi
+fi
+
+if touches '^src/mac/leoagent/'; then
+  ran=1
+  if ! command -v python3 >/dev/null 2>&1; then
+    skip "leoagent unittest: 没有 python3"
+  else
+    echo "pre-push: src/mac/leoagent 有改动 -> harness unittest"
+    (cd src/mac && python3 -m unittest discover -s leoagent -t . -p 'test_harness*.py') || fail "leoagent harness unittest"
+    if python3 -c 'import aiohttp' 2>/dev/null; then
+      echo "pre-push: -> relay / live_activity unittest(与 CI relay-tests 同口径)"
+      (cd src/mac && python3 -m unittest discover -s leoagent -t . -p 'test_relay*.py' \
+        && python3 -m unittest discover -s leoagent -t . -p 'test_live_activity.py') || fail "leoagent relay unittest"
+    else
+      skip "leoagent relay/live_activity unittest: python3 缺 aiohttp(pip3 install aiohttp 后即可本地跑)"
+    fi
+  fi
+fi
+
+if touches '^scripts/(IOSPerfBudgetGate|fixtures/perf-budget/)'; then
+  ran=1
+  if command -v python3 >/dev/null 2>&1; then
+    echo "pre-push: 性能预算闸门有改动 -> IOSPerfBudgetGateTests"
+    python3 scripts/IOSPerfBudgetGateTests.py >/dev/null 2>&1 || fail "IOSPerfBudgetGateTests(python3 scripts/IOSPerfBudgetGateTests.py 看详情)"
+  else
+    skip "IOSPerfBudgetGateTests: 没有 python3"
+  fi
+fi
+
+[ "$ran" -eq 1 ] || echo "pre-push: 推送范围没有改到 Mac / relay / 性能闸门,无需检查"
+if [ "$failed" -ne 0 ]; then
+  echo "pre-push: 推送被拦下。修好再推;确需跳过用 git push --no-verify。" >&2
+  exit 1
+fi
+exit 0
