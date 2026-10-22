@@ -77,6 +77,15 @@ jobs:
     # 只有一台 Studio runner,job 天然串行排队,不会并行抢模拟器。不加 concurrency 组:
     # 它会把排队中的旧运行标成 cancelled,LeoCIStatus 会把那些提交判成 FAIL。
     timeout-minutes: 40
+    env:
+      # [up-ci-green] Xcode 27 的 Swift Build(swift test 的 swift-package 与 xcodebuild 的
+      # SWBBuildService 都是)启动时就探测 Android SDK:先 $ANDROID_HOME,再默认 ~/Library/Android/sdk,
+      # 并 listdir 其中的 ndk/。Studio 上 runner .env 设了 ANDROID_HOME=~/Library/Android/sdk,它是指向
+      # 外置 USB 盘 /Volumes/Leo System Data 的软链;runner(launchd 后台进程)没有该卷的 TCC 授权,
+      # open() 卡在 sandboxd 的授权请求上永不返回 —— RunCoreSecurityTests.sh 静默挂满 40 分钟被取消。
+      # 指向一个不存在的路径:Swift Build 对显式 ANDROID_HOME 走严格模式,路径不存在就抛错并被 try? 吞掉,
+      # 连默认位置都不再探测(同一条软链,unset 不够)。这两个 iOS job 都不需要 Android。
+      ANDROID_HOME: /nonexistent/leobot-ci-no-android-sdk
     steps:
       - uses: actions/checkout@v4
         with:
@@ -91,6 +100,8 @@ jobs:
             echo "::error::self-hosted runner has Xcode ${major:-?}, need 27+ (deployment target iOS 27.0)"; exit 1
           fi
       - name: Swift and SDK core tests
+        # 11 项本机实测 41s。单独设上限:再有挂死就在这里红,而不是吃光整个 job 让 MinisTests 被跳过。
+        timeout-minutes: 10
         run: |
           set -euo pipefail
           # Independent fixtures must all run so one SDK failure cannot hide
@@ -164,6 +175,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, macOS, leobot-studio, xcode27]
     timeout-minutes: ${{ matrix.timeout }}
+    env:
+      # 同 ios-unit-tests:不让 Xcode 27 的 Swift Build 去探测 Studio 上 TCC 拦住的外置盘 Android SDK。
+      ANDROID_HOME: /nonexistent/leobot-ci-no-android-sdk
     strategy:
       fail-fast: false
       matrix:
