@@ -56,11 +56,8 @@ final class AgentLiveActivityManager {
     private var pendingState: Any?
     private var pendingPushWorkItem: DispatchWorkItem?
 
-    private var lastRenewDate: Date = .distantPast
-    private static let minRenewInterval: TimeInterval = 5.0
-
     /// [WP-41] 这张卡要不要带 update token(Mac 任务卡要,中继据此在 App 不在时远程更新)。
-    /// 由 `startActivity(sessions:remotePush:)` 设定;renew / 前台补启沿用。
+    /// 由 `startActivity(sessions:remotePush:)` 设定;后台补启沿用。
     private var remotePush = false
     private var pushTokenTask: Task<Void, Never>?
     private var currentPushToken: String?
@@ -71,17 +68,11 @@ final class AgentLiveActivityManager {
     private var requestPushType: PushType? { remotePush ? .token : nil }
 
     /// `Activity.request` 在 app 刚滑到后台的瞬间会以「Target is not foreground」失败。这是已知且有补救的
-    /// 预期情况(renew 路径存 `pendingStartState`、回前台重启),不是故障,不该占 ERROR 位
+    /// 预期情况([la-foreground] 下一次离开前台时会重新起卡),不是故障,不该占 ERROR 位
     /// (真机 4 天 20 条 ERROR;ERROR 不受日志限流,看日志时还会被当成真问题)。
     nonisolated static func isNotForegroundFailure(_ error: Error) -> Bool {
         "\(error.localizedDescription) \(error)".lowercased().contains("not foreground")
     }
-
-    /// [T-ios-liveactivity-renew-bg-race] When a renew ends the old activity but
-    /// the restart fails because the app slipped to the background mid-renew
-    /// ("Target is not foreground"), we stash the state here and re-`start` it on
-    /// the next foreground return so the Live Activity isn't left missing.
-    private var pendingStartState: Any?
 
     /// [T-ios-live-activity-soft-finish] True after `finishActivity()` flips the
     /// Live Activity to its completed resting state but leaves it on screen. The
@@ -160,13 +151,32 @@ final class AgentLiveActivityManager {
     ///   (Mac 任务卡)。聊天任务卡保持纯本地。
     func startActivity(sessions: [LiveSessionSnapshot], remotePush: Bool = false) {
         guard Self.isActivityKitAvailable, Self.isUserEnabled else { return }
+        // [la-foreground] In the app: no card. `leaveForeground` starts it when
+        // the user switches away (a task started in the conversation lands here).
+        guard !isAppInForeground else {
+            logger.info("[LiveActivity][start] held: app in foreground — starts when it leaves")
+            return
+        }
         self.remotePush = remotePush
         _startActivity(sessions: sessions)
     }
 
     func updateActivity(sessions: [LiveSessionSnapshot]) {
-        guard Self.isActivityKitAvailable, Self.isUserEnabled else { return }
-        _updateActivity(sessions: sessions)
+        guard Self.isActivityKitAvailable else { return }
+        let action = LiveActivityPresencePolicy.decide(
+            appActive: isAppInForeground, taskRunning: !sessions.isEmpty || Self.isAudioActive(),
+            followed: true, enabled: Self.isUserEnabled, existingActivity: currentActivity != nil)
+        switch action {
+        case .none:
+            return
+        case .endImmediately:
+            // Foreground (or switched off) with a card up: take it down now.
+            endAll(reason: "update")
+        case .start, .keep, .endWithFinalState:
+            // A finished run is ended by `finishActivity`; here only the running
+            // state is pushed (or the card restarted while the app is away).
+            _updateActivity(sessions: sessions)
+        }
     }
 
     func endActivity() {
@@ -189,11 +199,17 @@ final class AgentLiveActivityManager {
     /// the Lock Screen / Dynamic Island. It's dismissed later — when the user taps
     /// it and LeoPhoneAgent comes to the foreground (see `dismissFinishedActivityOnForeground`).
     /// Falls back to a hard end if there's no prior running snapshot to complete.
+    /// [la-foreground] Now the completed state is the activity's END content
+    /// (default dismissal); only while the reply is still read aloud does it stay
+    /// live as before. In the foreground there is no card, so this is a hard end.
     func finishActivity(lastMessages: [String: String] = [:]) async {
         guard Self.isActivityKitAvailable else { return }
         // Disabled → no soft-finish card; fall through to a hard end so any
         // activity left over from before the switch was flipped is removed.
-        guard Self.isUserEnabled else {
+        // [la-foreground] Finished while the user is in the app: nothing to rest.
+        guard LiveActivityPresencePolicy.decide(
+            appActive: isAppInForeground, taskRunning: false, followed: true,
+            enabled: Self.isUserEnabled, existingActivity: true) == .endWithFinalState else {
             _endActivity()
             return
         }
@@ -210,19 +226,126 @@ final class AgentLiveActivityManager {
         _handleSessionDeleted(sessionId)
     }
 
-    /// Called on foreground return. If a soft-finished ("completed") activity is
-    /// lingering, end it now that the user is back in the app.
+    /// Called on foreground return (after the first frame). [la-foreground] The
+    /// scene-activation hook already ended every card; this is the backstop. It
+    /// no longer restarts a card for sessions still running — in the app there
+    /// is none; `leaveForeground` brings it back when the user switches away.
     func dismissFinishedActivityOnForeground() {
-        guard Self.isActivityKitAvailable else { return }
-        let completedState = (lastPushedState as? AgentActivityAttributes.ContentState)?.allCompleted == true
-        guard awaitingDismissal || completedState else { return }
-        logger.info("[LiveActivity][finish] foreground return — dismissing completed activity (awaitingDismissal=\(awaitingDismissal) completedState=\(completedState))")
-        _endActivity()
-        let remaining = SessionActivityTracker.shared.activeSessions
-        if !remaining.isEmpty {
-            logger.info("[LiveActivity][finish] \(remaining.count) session(s) still active after dismiss — restarting activity")
-            BackgroundKeepAliveManager.shared.updateLiveActivityIfNeeded(source: "postDismissRecovery")
+        guard Self.isActivityKitAvailable, isAppInForeground else { return }
+        endAll(reason: "foregroundFrame")
+    }
+
+    // MARK: - [la-foreground] Foreground gate
+    //
+    // The card shows only while work is running AND no LeoBot scene is
+    // foreground-active (`LiveActivityPresencePolicy`). ActivityKit only lets an
+    // app START an activity while it is foreground, so the start happens in the
+    // resign-active transition; updates and the final end work from the background.
+
+    /// True from "the last LeoBot scene resigned active" until "a LeoBot scene
+    /// became active". Kept from the scene notifications rather than read from
+    /// `activationState` at decision time: inside `willDeactivate` the leaving
+    /// scene can still report `.foregroundActive`.
+    private var leftForeground = false
+    private var presenceObserversInstalled = false
+    private var presenceBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    /// Cards ended with their final state and the default dismissal (still on the
+    /// Lock Screen). Ended `.immediate` when the user comes back.
+    /// `Any`, like `currentActivity`: no ActivityKit generic metadata in stored
+    /// state ([T-ipad16-activitykit-crash]).
+    private var finalStateActivities: [Any] = []
+
+    /// Some LeoBot scene is foreground-active: the user is in the app (on iPad,
+    /// any window counts). A process launched straight into the background
+    /// never saw a scene activate and reads as not foreground.
+    var isAppInForeground: Bool {
+        !leftForeground && UIApplication.shared.applicationState != .background
+    }
+
+    /// Idempotent; called from `BackgroundKeepAliveManager.setup()`.
+    func installPresenceObservers() {
+        guard !presenceObserversInstalled else { return }
+        presenceObserversInstalled = true
+        let center = NotificationCenter.default
+        center.addObserver(forName: UIScene.didActivateNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.sceneDidActivate() }
         }
+        // Handled synchronously on purpose: a Task hop could land after
+        // didEnterBackground, when `Activity.request` fails ("Target is not foreground").
+        center.addObserver(forName: UIScene.willDeactivateNotification, object: nil, queue: .main) { [weak self] note in
+            let scene = note.object as? UIScene
+            MainActor.assumeIsolated { self?.sceneWillDeactivate(scene) }
+        }
+    }
+
+    private func sceneDidActivate() {
+        leftForeground = false
+        guard Self.isActivityKitAvailable else { return }
+        endAll(reason: "sceneDidActivate")
+    }
+
+    private func sceneWillDeactivate(_ scene: UIScene?) {
+        let others = UIApplication.shared.connectedScenes.filter { $0 !== scene }
+        let departure = LiveActivityPresencePolicy.departure(
+            otherActive: others.contains { $0.activationState == .foregroundActive },
+            otherVisible: others.contains { $0.activationState == .foregroundInactive })
+        switch departure {
+        case .stayForeground:
+            return
+        case .leaveNow:
+            leaveForeground(reason: "sceneWillDeactivate")
+        case .recheckNextTurn:
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !UIApplication.shared.leoIsInUse else { return }
+                self.leaveForeground(reason: "sceneWillDeactivate+recheck")
+            }
+        }
+    }
+
+    /// The user switched away (home, app switcher, lock, another app, Control
+    /// Center): start the card now for whatever is still running.
+    private func leaveForeground(reason: String) {
+        guard !leftForeground else { return }
+        leftForeground = true
+        guard Self.isActivityKitAvailable, Self.isUserEnabled else { return }
+        let app = UIApplication.shared
+        if presenceBackgroundTask == .invalid {
+            presenceBackgroundTask = app.beginBackgroundTask(withName: "LiveActivityStart") { [weak self] in
+                MainActor.assumeIsolated { self?.endPresenceBackgroundTask() }
+            }
+        }
+        let bka = BackgroundKeepAliveManager.shared
+        let local = LiveActivityPresencePolicy.decide(
+            appActive: false, taskRunning: bka.isActive || Self.isAudioActive(), followed: true,
+            enabled: Self.isUserEnabled, existingActivity: currentActivity != nil)
+        logger.info("[LiveActivity][presence] leaving foreground (\(reason)) local=\(String(describing: local)) appState=\(app.applicationState.rawValue)")
+        if local == .start {
+            remotePush = false
+            _startActivity(sessions: bka.buildLiveSessionSnapshots())
+        }
+        // Followed, running Mac sessions (the bridge yields to a local card).
+        HarnessLiveActivityBridge.shared.refresh()
+        // Room for the request and the push-token registration to go out.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in self?.endPresenceBackgroundTask() }
+    }
+
+    private func endPresenceBackgroundTask() {
+        guard presenceBackgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(presenceBackgroundTask)
+        presenceBackgroundTask = .invalid
+    }
+
+    /// End every agent card now — ours, the relay's push-to-start ones and
+    /// final-state ones still on the Lock Screen — with `.immediate`.
+    private func endAll(reason: String) {
+        let system = Activity<AgentActivityAttributes>.activities
+        guard currentActivity != nil || !system.isEmpty || !finalStateActivities.isEmpty else { return }
+        logger.info("[LiveActivity][presence] ending all (\(reason)): current=\(self.currentActivity != nil) system=\(system.count) final=\(self.finalStateActivities.count)")
+        for case let activity as Activity<AgentActivityAttributes> in finalStateActivities {
+            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+        }
+        finalStateActivities = []
+        _endActivity()
     }
 
     // MARK: - Audio state (T-ios-live-activity-audio-toggle)
@@ -270,6 +393,11 @@ final class AgentLiveActivityManager {
 
     func audioStateChanged(source: String) {
         guard Self.isActivityKitAvailable else { return }
+        // [la-foreground] Read-aloud in the app needs no card (the capsule is on screen).
+        if isAppInForeground {
+            endAll(reason: "audio")
+            return
+        }
         _audioStateChanged(source: source)
     }
 
@@ -338,12 +466,14 @@ final class AgentLiveActivityManager {
 
     @available(iOS 16.2, *)
     private func _cleanupStaleActivities(source: String = "?") {
-        // [T-ios-liveactivity-renew-bg-race] On any foreground-return cleanup,
-        // first recover a Live Activity that a prior renew ended but couldn't
-        // restart in the background. Runs before the renew branch below so the
-        // recovered activity is the one we then (optionally) refresh.
+        // [la-foreground] Foreground return: no card while the user is in the
+        // app, stale or not — end them all (relay push-to-start ones included).
+        // This replaces the foreground "renew" (end + re-request to reset the
+        // update budget) and the renew-race recovery: every trip to the
+        // background now starts a fresh activity, which resets the budget anyway.
         if source.contains("scenePhase.active") {
-            resumePendingStartIfNeeded()
+            if isAppInForeground { endAll(reason: source) }
+            return
         }
         let enabled = ActivityAuthorizationInfo().areActivitiesEnabled
         let currentId = (currentActivity as? Activity<AgentActivityAttributes>)?.id ?? "nil"
@@ -352,62 +482,7 @@ final class AgentLiveActivityManager {
         logger.info("[LiveActivity][cleanup src=\(source)] enabled=\(enabled) currentActivity.id=\(currentId) systemActivities.count=\(stale.count) systemIds=[\(staleIds)]")
 
         if currentActivity != nil {
-            if awaitingDismissal {
-                logger.info("[LiveActivity][cleanup src=\(source)] skip renew: awaitingDismissal — will be dismissed momentarily")
-                return
-            }
-            let sinceLastRenew = Date().timeIntervalSince(lastRenewDate)
-            // [T-ios-liveactivity-renew-kills-unregistered] Only renew an
-            // activity the system has actually registered (present in
-            // `Activity.activities`). ActivityKit registers + renders a freshly
-            // requested activity ASYNCHRONOUSLY — for several seconds after
-            // `Activity.request` returns, `systemActivities` is still empty
-            // even though `currentActivity != nil`. The old condition renewed
-            // purely on a 5s timer, so normal foreground/background toggling
-            // while a task ran would end the just-created (not-yet-rendered)
-            // activity and request a new one, which was itself killed on the
-            // next foreground return — an endless churn that meant the Dynamic
-            // Island NEVER appeared even though the task was active and pushes
-            // "returned". Gate renew on the system having registered it first;
-            // an unregistered activity has no budget to refresh anyway.
-            if source.contains("scenePhase.active"),
-               !stale.isEmpty,
-               let prev = lastPushedState as? AgentActivityAttributes.ContentState,
-               !prev.sessions.isEmpty,
-               sinceLastRenew >= Self.minRenewInterval {
-                // [T-ios-live-activity-task-count] Foreground-return renew must
-                // reflect the CURRENT truth of who's running, not a stale copy of
-                // `prev.sessions`. Filter to sessions the tracker still says are
-                // active, plus explicitly-completed cards we chose to keep on
-                // screen (`completedSessionSnapshots`). Anything else is stale
-                // (task finished while backgrounded, VM torn down, session
-                // deleted) and would otherwise inflate the count — e.g. showing
-                // "8" when only 2 are really running.
-                let liveIds = SessionActivityTracker.shared.activeSessions
-                for sid in completedSessionSnapshots.keys where !liveIds.contains(sid) {
-                    completedSessionSnapshots.removeValue(forKey: sid)
-                }
-                let filteredSessions = prev.sessions.filter { s in
-                    liveIds.contains(s.sessionId) || completedSessionSnapshots[s.sessionId] != nil
-                }
-                guard !filteredSessions.isEmpty else {
-                    logger.info("[LiveActivity][cleanup src=\(source)] skip renew: all \(prev.sessions.count) prev session(s) stale vs tracker (liveIds=\(liveIds.count), completed=\(self.completedSessionSnapshots.count))")
-                    return
-                }
-                let liveCount = filteredSessions.reduce(0) { $0 + ($1.isCompleted ? 0 : 1) }
-                logger.info("[LiveActivity][cleanup src=\(source)] renewing on foreground return to refresh budget (last renew \(Int(sinceLastRenew))s ago, systemActivities=\(stale.count), sessions \(prev.sessions.count)→\(filteredSessions.count) live=\(liveCount))")
-                let state = AgentActivityAttributes.ContentState(
-                    activeSessionCount: liveCount,
-                    sessions: filteredSessions,
-                    carouselIndex: carouselIndex < filteredSessions.count ? carouselIndex : 0,
-                    soulName: Self.currentSoulName(),
-                    latestToolIcon: prev.latestToolIcon,
-                    minimalShowsTool: prev.minimalShowsTool
-                )
-                renewActivity(with: state)
-            } else {
-                logger.info("[LiveActivity][cleanup src=\(source)] skip: currentActivity is not nil — assuming this process owns it")
-            }
+            logger.info("[LiveActivity][cleanup src=\(source)] skip: currentActivity is not nil — assuming this process owns it")
             return
         }
         // [WP-41] 中继 push-to-start 拉起的卡不是「上一个进程留下的」:App 被杀时它正显示
@@ -477,7 +552,6 @@ final class AgentLiveActivityManager {
         pendingPushWorkItem?.cancel()
         pendingPushWorkItem = nil
         pendingState = nil
-        lastRenewDate = Date()
         let now = Date()
         minimalShowsTool = false
 
@@ -1011,107 +1085,6 @@ final class AgentLiveActivityManager {
     }
 
     @available(iOS 16.2, *)
-    private func renewActivity(with state: AgentActivityAttributes.ContentState, isRetry: Bool = false) {
-        guard let oldActivity = currentActivity as? Activity<AgentActivityAttributes> else { return }
-
-        guard UIApplication.shared.applicationState == .active else {
-            pendingStartState = state
-            if !isRetry {
-                logger.info("[LiveActivity][renew] skip: app not foreground (state=\(UIApplication.shared.applicationState.rawValue)) — keeping old id=\(oldActivity.id), scheduling retry")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                    guard let self else { return }
-                    guard UIApplication.shared.applicationState == .active else { return }
-                    guard self.currentActivity != nil else { return }
-                    guard !self.awaitingDismissal else { return }
-                    guard self.pendingStartState != nil else { return }
-                    self.renewActivity(with: state, isRetry: true)
-                }
-            } else {
-                logger.info("[LiveActivity][renew] retry also skipped (state=\(UIApplication.shared.applicationState.rawValue)) — pendingStartState set for foreground recovery")
-            }
-            return
-        }
-
-        // A rebuilt card is a live state like any other: same privacy and
-        // audio decoration, or it comes back unredacted until the next update.
-        let state = withAudioState(state)
-        let oldId = oldActivity.id
-        let sinceLastRenew = Int(Date().timeIntervalSince(lastRenewDate))
-        logger.info("[LiveActivity][renew] ending old id=\(oldId) after \(sinceLastRenew)s to reset budget")
-
-        currentActivity = nil
-        let finalContent = ActivityContent(state: state, staleDate: nil)
-
-        Task {
-            await oldActivity.end(finalContent, dismissalPolicy: .immediate)
-            logger.info("[LiveActivity][renew] old id=\(oldId) ended")
-
-            let attributes = AgentActivityAttributes(startDate: self.startTime ?? Date())
-            let content = ActivityContent(state: state, staleDate: Self.staleDate(for: state))
-            do {
-                let newActivity = try Activity.request(
-                    attributes: attributes,
-                    content: content,
-                    pushType: self.requestPushType
-                )
-                self.currentActivity = newActivity
-                self.observePushToken(of: newActivity)
-                self.lastRenewDate = Date()
-                self.lastPushedState = state
-                self.lastPushDate = Date()
-                self.updateCount += 1
-                self.pendingStartState = nil
-                logger.info("[LiveActivity][renew] new id=\(newActivity.id) budget reset OK")
-            } catch {
-                // [T-ios-liveactivity-renew-bg-race] Plan B fallback: the foreground
-                // guard above races with the async end (the app can background in the
-                // ~27ms gap). If the restart still fails, stash the state and re-start
-                // on the next foreground return so we recover instead of going dark.
-                self.pendingStartState = state
-                if Self.isNotForegroundFailure(error) {
-                    logger.info("[LiveActivity][renew] restart deferred: app not foreground — pendingStart set for foreground recovery")
-                } else {
-                    logger.error("[LiveActivity][renew] Failed to restart: \(error.localizedDescription) — pendingStart set for foreground recovery")
-                }
-            }
-        }
-    }
-
-    /// [T-ios-liveactivity-renew-bg-race] Re-start a Live Activity that a renew
-    /// ended but couldn't restart (background race). Called on foreground return.
-    @available(iOS 16.2, *)
-    private func resumePendingStartIfNeeded() {
-        guard let pending = pendingStartState as? AgentActivityAttributes.ContentState else { return }
-        let state = withAudioState(pending)
-        guard UIApplication.shared.applicationState == .active else { return }
-        guard Self.isActivityKitAvailable, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        // If something else already re-created an activity, just clear the flag.
-        guard currentActivity == nil, !state.sessions.isEmpty else {
-            pendingStartState = nil
-            return
-        }
-        let attributes = AgentActivityAttributes(startDate: startTime ?? Date())
-        let content = ActivityContent(state: state, staleDate: Self.staleDate(for: state))
-        do {
-            let activity = try Activity.request(attributes: attributes, content: content, pushType: requestPushType)
-            currentActivity = activity
-            observePushToken(of: activity)
-            lastRenewDate = Date()
-            lastPushedState = state
-            lastPushDate = Date()
-            updateCount += 1
-            pendingStartState = nil
-            logger.info("[LiveActivity][renew] pendingStart recovered on foreground — new id=\(activity.id)")
-        } catch {
-            if Self.isNotForegroundFailure(error) {
-                logger.info("[LiveActivity][renew] pendingStart recovery still deferred: app not foreground — will retry on the next foreground return")
-            } else {
-                logger.error("[LiveActivity][renew] pendingStart recovery still failed: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    @available(iOS 16.2, *)
     private func _finishActivity(lastMessages provided: [String: String] = [:]) async {
         guard !isFinishing else {
             logger.info("[LiveActivity][finish] already finishing — skip duplicate call")
@@ -1191,10 +1164,29 @@ final class AgentLiveActivityManager {
         let content = ActivityContent(state: finished, staleDate: nil)
         // Behind any running-state update still in flight, never ahead of it.
         await updateCoalescer.waitUntilIdle()
-        await activity.update(content)
-        self.lastPushedState = finished
-        self.lastPushDate = Date()
-        logger.info("[LiveActivity][finish] activity id=\(activity.id) flipped to completed (\(completedSessions.count) session(s)) — awaiting foreground dismissal")
+        // The user may have come back meanwhile: the foreground hook ended it.
+        guard self.awaitingDismissal,
+              (self.currentActivity as? Activity<AgentActivityAttributes>)?.id == activity.id else {
+            logger.info("[LiveActivity][finish] dropped completed state — activity ended while finishing")
+            return
+        }
+        if Self.isAudioActive() {
+            // The finished reply is still being read aloud: keep the card (and its
+            // pause control) as the completed resting state until the user is back.
+            await activity.update(content)
+            self.lastPushedState = finished
+            self.lastPushDate = Date()
+            logger.info("[LiveActivity][finish] activity id=\(activity.id) flipped to completed (\(completedSessions.count) session(s)), read-aloud still on — awaiting foreground dismissal")
+            return
+        }
+        // [la-foreground] The work is over: END the activity with its final state
+        // (the system's default dismissal — off the Dynamic Island now, on the
+        // Lock Screen for a while) instead of leaving a live card up until the
+        // app is opened. Coming back to the app removes it at once (`endAll`).
+        clearActivityState(keepStartTime: true)
+        finalStateActivities.append(activity)
+        await activity.end(content, dismissalPolicy: .default)
+        logger.info("[LiveActivity][finish] activity id=\(activity.id) ended with final state (\(completedSessions.count) session(s)), default dismissal")
     }
 
     /// Rest a snapshot according to how its run actually ended.
@@ -1236,18 +1228,14 @@ final class AgentLiveActivityManager {
 
     @available(iOS 16.2, *)
     private func _endActivity() {
-        awaitingDismissal = false
         isFinishing = false
-        lastPushedState = nil
-        pendingPushWorkItem?.cancel()
-        pendingPushWorkItem = nil
-        pendingState = nil
-        completedSessionSnapshots = [:]
-        pushTokenTask?.cancel()
-        pushTokenTask = nil
-        currentPushToken = nil
-        registeredTokenSessions = []
-        let currentId = (currentActivity as? Activity<AgentActivityAttributes>)?.id ?? "nil"
+        let current = currentActivity as? Activity<AgentActivityAttributes>
+        clearActivityState(keepStartTime: false)
+        // [la-foreground] Relay-started cards end below too: tell the relay their
+        // update tokens are dead, so its next event push-to-starts a card instead
+        // of updating one that is gone.
+        PushRegistrar.shared.forgetRelayActivityTokens()
+        let currentId = current?.id ?? "nil"
         let finalState = AgentActivityAttributes.ContentState(
             activeSessionCount: 0,
             sessions: [],
@@ -1269,8 +1257,7 @@ final class AgentLiveActivityManager {
             }
         }
 
-        if let current = currentActivity as? Activity<AgentActivityAttributes>,
-           !all.contains(where: { $0.id == current.id }) {
+        if let current, !all.contains(where: { $0.id == current.id }) {
             let id = current.id
             logger.warning("[LiveActivity][end] currentActivity id=\(id) missing from systemActivities — ending directly")
             Task {
@@ -1280,9 +1267,31 @@ final class AgentLiveActivityManager {
                 }
             }
         }
+    }
 
+    /// Forget the card this process owns (it was ended, or is being ended).
+    /// [la-foreground] Its update token is unregistered from the relay: a card
+    /// ended on foreground return must not keep receiving relay updates, or the
+    /// relay never push-to-starts a new one for that session.
+    @available(iOS 16.2, *)
+    private func clearActivityState(keepStartTime: Bool) {
+        awaitingDismissal = false
+        lastPushedState = nil
+        pendingPushWorkItem?.cancel()
+        pendingPushWorkItem = nil
+        pendingState = nil
+        completedSessionSnapshots = [:]
+        pushTokenTask?.cancel()
+        pushTokenTask = nil
+        if let token = currentPushToken {
+            Task { await PushRegistrar.shared.unregisterActivityUpdateToken(token) }
+        }
+        currentPushToken = nil
+        registeredTokenSessions = []
+        registeringTokenSessions = nil
         currentActivity = nil
-        startTime = nil
+        // The finish path keeps it: the completion notification reports the run time.
+        if !keepStartTime { startTime = nil }
         carouselIndex = 0
     }
 }

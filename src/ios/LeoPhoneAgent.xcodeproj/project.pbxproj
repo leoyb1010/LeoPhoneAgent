@@ -482,6 +482,8 @@
 		E5FP00200 /* FPSyncTraceLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FP00201 /* FPSyncTraceLog.swift */; };
 		E5G000001 /* BackgroundKeepAliveManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000011 /* BackgroundKeepAliveManager.swift */; };
 		E5G000002 /* AgentLiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000012 /* AgentLiveActivityManager.swift */; };
+		LAFG00000002 /* LiveActivityPresencePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LAFG00000001 /* LiveActivityPresencePolicy.swift */; };
+		LAFG00000003 /* LiveActivityPresencePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LAFG00000001 /* LiveActivityPresencePolicy.swift */; };
 		E5G000003 /* EnhancedBackgroundSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000013 /* EnhancedBackgroundSettingsView.swift */; };
 		E5G000004 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000014 /* AgentActivityAttributes.swift */; };
 		E5G000005 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000014 /* AgentActivityAttributes.swift */; };
@@ -1586,6 +1588,7 @@
 		E5FP00201 /* FPSyncTraceLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FPSyncTraceLog.swift; sourceTree = "<group>"; };
 		E5G000011 /* BackgroundKeepAliveManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundKeepAliveManager.swift; sourceTree = "<group>"; };
 		E5G000012 /* AgentLiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivityManager.swift; sourceTree = "<group>"; };
+		LAFG00000001 /* LiveActivityPresencePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityPresencePolicy.swift; sourceTree = "<group>"; };
 		E5G000013 /* EnhancedBackgroundSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnhancedBackgroundSettingsView.swift; sourceTree = "<group>"; };
 		E5G000014 /* AgentActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityAttributes.swift; sourceTree = "<group>"; };
 		24B74F300D94BD261002831C /* CommandRisk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRisk.swift; sourceTree = "<group>"; };
@@ -3138,6 +3141,7 @@
 			isa = PBXGroup;
 			children = (
 				E5G000012 /* AgentLiveActivityManager.swift */,
+				LAFG00000001 /* LiveActivityPresencePolicy.swift */,
 				E5G000011 /* BackgroundKeepAliveManager.swift */,
 				E5D604F /* QuietTaskScheduler.swift */,
 				E53000016 /* CacheKeepAliveManager.swift */,
@@ -3888,6 +3892,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				LAFG00000003 /* LiveActivityPresencePolicy.swift in Sources */,
 				F1R3MODT /* MCPOAuthDiscovery.swift in Sources */,
 				F1R3PRTT /* ProviderResponseTimeout.swift in Sources */,
 				LFEBC80D3602 /* OpenAIModelLimits.swift in Sources */,
@@ -4132,6 +4137,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				LAFG00000002 /* LiveActivityPresencePolicy.swift in Sources */,
 				F1R3FUPA /* AIChatViewModel+FollowUps.swift in Sources */,
 				F1R3MODA /* MCPOAuthDiscovery.swift in Sources */,
 				F1R3PBSA /* ProviderBalanceStore.swift in Sources */,

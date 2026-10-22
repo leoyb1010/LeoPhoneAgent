@@ -425,6 +425,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         guard !didSetup else { return }
         didSetup = true
         logger.info("[BackgroundKeepAlive] Setup: enabled=\(self.enhancedBackgroundEnabled), locationTracking=\(self.locationTrackingEnabled)")
+        // [la-foreground] The Live Activity shows only while the app is away:
+        // ended when a LeoBot scene activates, started when the last one resigns.
+        AgentLiveActivityManager.shared.installPresenceObservers()
 
         // [T-bg-launched-into-background] `appIsInBackground` was only ever
         // set by didEnterBackgroundNotification, which is delivered on a
@@ -872,6 +875,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         if shouldBeActive && !isActive {
             logger.info("[BackgroundKeepAlive] Activating keep-alive (sessions=\(sessions.count))")
             isActive = true
+            // [la-foreground] A no-op while the user is in the app; the card
+            // starts when the app leaves the foreground (AgentLiveActivityManager).
             AgentLiveActivityManager.shared.startActivity(sessions: buildSessionSnapshots())
             startUpdateTimer()
             evaluateLocationUpdates()
@@ -892,9 +897,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             evaluateBackgroundActivitySession()
             retractOrphanedLocationSession(caller: "deactivate", force: true)
             evaluateSilentAudio(caller: "reevaluate-deactivate")
-            // THEN soft-finish the Live Activity: flip to a completed state
-            // (checkmark + last message) and leave it on screen; it's dismissed
-            // when the user taps it and LeoPhoneAgent foregrounds.
+            // THEN finish the Live Activity: in the background it ends showing
+            // the completed state (checkmark + last message, default dismissal);
+            // in the foreground there is no card to finish. [la-foreground]
             Task { await AgentLiveActivityManager.shared.finishActivity() }
         }
     }
