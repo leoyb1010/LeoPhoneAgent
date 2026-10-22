@@ -1393,7 +1393,12 @@ struct HarnessLauncherView: View {
     @State private var modelChoice: String?
     @State private var effortChoice: String?
 
-    private var chosenModel: HarnessModelOption? { catalog?.models.first { $0.id == modelChoice } }
+    /// 模型 / 强度只对 LeoBot 会话(外部 agent 的会话 Mac 不认)。
+    private var modelsApply: Bool { HarnessModelControlPolicy.applies(harnessKey: selected?.key ?? "") }
+    private var chosenModel: HarnessModelOption? {
+        guard modelsApply else { return nil }
+        return catalog?.models.first { $0.id == modelChoice }
+    }
 
     /// 选了模型用它的强度;没选用 Mac 默认模型的。
     private var effortOptions: [String] {
@@ -1526,7 +1531,7 @@ struct HarnessLauncherView: View {
                 Text("第一条指令")
             }
 
-            if features?.listsModels == true, let catalog, !catalog.models.isEmpty {
+            if modelsApply, features?.listsModels == true, let catalog, !catalog.models.isEmpty {
                 Section {
                     Picker(selection: $modelChoice) {
                         Text("自动（Mac 决定）").tag(String?.none)
@@ -1567,7 +1572,7 @@ struct HarnessLauncherView: View {
                             driver: HarnessSessionDriver(client: client, harness: selected, cwd: cwd),
                             firstPrompt: prompt,
                             createModel: chosenModel?.ref,
-                            createEffort: effortChoice)
+                            createEffort: modelsApply ? effortChoice : nil)
                     } label: {
                         Label("开始干活", systemImage: "play.circle")
                     }
@@ -1671,6 +1676,7 @@ struct HarnessConsoleView: View {
     @State private var showSettings = false
     /// [remote-ctl-ios] 待发的图片(已压成 JPEG ≤ 5 MB,最多 4 张)。
     @State private var images: [HarnessComposerImage] = []
+    @State private var attachmentError: String?
     @State private var started = false
     @State private var pairMessage: String?
     @State private var showAgentLogin = false
@@ -1803,6 +1809,11 @@ struct HarnessConsoleView: View {
                     // Clear only after the driver accepted it; steering during
                     // the starting window used to eat the text silently.
                     let attachments = driver.acceptsAttachments ? images.map(\.attachment) : []
+                    // 整个请求体按路有上限(中继 / 直连 / 加密信封):附件合计超预算就不发,说明原因。
+                    guard HarnessAttachmentBudget.fits(attachments.map(\.data.count)) else {
+                        attachmentError = HarnessAttachmentBudget.tooLargeMessage
+                        return
+                    }
                     if driver.steer(input, attachments: attachments) {
                         input = ""
                         images = []
@@ -1860,6 +1871,12 @@ struct HarnessConsoleView: View {
             HarnessSessionSettingsSheet(driver: driver)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .alert(Text("图片没有发出"), isPresented: Binding(get: { attachmentError != nil },
+                                                    set: { if !$0 { attachmentError = nil } })) {
+            Button("好", role: .cancel) { attachmentError = nil }
+        } message: {
+            Text(attachmentError ?? "")
         }
         .onAppear {
             screen.client = driver.macScreenClient

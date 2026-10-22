@@ -128,7 +128,8 @@ extension LeoAgentClient {
                                                     thinking: thinking, fullAuto: fullAuto,
                                                     phoneSessionId: phoneSessionId)
         if let mode { payload["mode"] = mode.rawValue }
-        if thinking != nil || model != nil || effort != nil {
+        // 模型 / 强度只对 LeoBot 会话;外部 agent 照旧只带 thinking。
+        if HarnessModelControlPolicy.applies(harnessKey: harness), thinking != nil || model != nil || effort != nil {
             HarnessRemoteRequests.applyCreateChoices(to: &payload, model: model, effort: effort, thinking: thinking,
                                                      features: await knownHarnessFeatures())
         }
@@ -363,7 +364,13 @@ final class HarnessSessionDriver: ObservableObject {
     @Published private(set) var pendingQuestions: [HarnessQuestionRequest] = []
     var pendingQuestion: HarnessQuestionRequest? { pendingQuestions.first }
 
-    var showsSessionSettings: Bool { sessionId != nil && features?.hasSessionSettings == true }
+    /// 模型 / 强度只对 LeoBot 会话(外部 agent 的会话 Mac 回 400)。
+    var controlsModel: Bool { HarnessModelControlPolicy.applies(harnessKey: harness.key) }
+    var showsSessionSettings: Bool {
+        guard sessionId != nil, let features else { return false }
+        return (controlsModel && (features.switchesModel || features.switchesEffort))
+            || features.compacts || features.renames || features.follows
+    }
     var acceptsAttachments: Bool { sessionId != nil && features?.acceptsAttachments == true }
 
     func loadModels() async throws -> HarnessModelCatalog {
@@ -388,7 +395,8 @@ final class HarnessSessionDriver: ObservableObject {
 
     @discardableResult
     func setEffort(_ effort: String) async -> Bool {
-        guard let sessionId else { return false }
+        // 会话还没有模型时只改强度 Mac 回 409;界面此时不给强度选项。
+        guard let sessionId, HarnessModelControlPolicy.canChangeEffortOnly(current: model) else { return false }
         do {
             if let applied = try await client.setHarnessEffort(sessionId: sessionId, effort: effort) {
                 model = applied
@@ -409,8 +417,12 @@ final class HarnessSessionDriver: ObservableObject {
         guard let sessionId else { return false }
         do {
             try await client.compactHarness(sessionId: sessionId)
+            // 结果由 Mac 的 session.note(compacted / compact_failed)报回时间线。
             note(AppLocalized("已请 Mac 压缩上下文。"))
             return true
+        } catch GatewayError.http(status: 409, _) {
+            note(AppLocalized("这一轮还在跑，等它停下再压缩上下文。"))
+            return false
         } catch {
             note(AppLocalized("压缩上下文没成功：") + LeoAgentClient.describeHarnessFeatureError(error))
             return false
@@ -483,12 +495,13 @@ final class HarnessSessionDriver: ObservableObject {
         case .question(let request):
             guard !pendingQuestions.contains(where: { $0.questionId == request.questionId }) else { return }
             pendingQuestions.append(request)
-        case .questionResponded(let questionId):
+        case .questionResponded(let questionId, _, let expired):
             if let questionId {
                 pendingQuestions.removeAll { $0.questionId == questionId }
             } else if !pendingQuestions.isEmpty {
                 pendingQuestions.removeFirst()
             }
+            if expired { note(AppLocalized("这个提问没人回答，已过期。")) }
         case .model(let ref):
             model = ref
         case .follow(let value):
@@ -1568,6 +1581,8 @@ final class HarnessSessionDriver: ObservableObject {
             }
             // Mac 端给人看的说明(例如"手机暂时答不了的提问已跳过"):只显示文字,不带事件名。
             if name == "session.note" {
+                // [remote-ctl-ios] 「有提问在等」是给旧版 iPhone 的文字版;这里直接显示提问卡。
+                if HarnessNotePolicy.hides(kind: payload["kind"]) { return }
                 let text = payload["text"] ?? ""
                 // [takeover] 没接上终端里的那个会话(已新开对话):显示成醒目的一行说明,而不是灰色小字。
                 if !text.isEmpty, MacExternalSessionsWire.isProminentNote(payload) {

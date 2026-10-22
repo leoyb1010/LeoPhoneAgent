@@ -284,6 +284,7 @@ struct HarnessAttachment: Sendable, Equatable, Identifiable {
     }
 
     static let maxCount = 4
+    /// 契约里每张的上限;实际受下面的整次发送预算约束,远比这个紧。
     static let maxBytes = 5 * 1024 * 1024
     static let allowedMimes: Set<String> = ["image/jpeg", "image/png", "image/heic", "image/webp"]
 
@@ -291,6 +292,42 @@ struct HarnessAttachment: Sendable, Equatable, Identifiable {
 
     /// 还能再加几张。
     static func remainingSlots(current: Int) -> Int { max(0, maxCount - current) }
+}
+
+/// 一次发送里所有附件的体积预算。整个请求体的上限按路走:中继约 1 MB(在提到 4 MB)、直连 2 MB、
+/// 加密信封 4 MB,所以 iOS 把一次发送里全部附件的 base64 合计压在 1.8 MB 以内(+ 文字与 JSON 外壳)。
+enum HarnessAttachmentBudget {
+    static let maxTotalBase64 = 1_800_000
+
+    /// 压缩档位:先长边 1600、质量 0.7;总量超了逐档压得更狠。
+    struct Step: Equatable, Sendable {
+        let maxSide: Double
+        let quality: Double
+    }
+
+    static let steps: [Step] = [
+        Step(maxSide: 1600, quality: 0.7),
+        Step(maxSide: 1280, quality: 0.6),
+        Step(maxSide: 1024, quality: 0.5),
+        Step(maxSide: 800, quality: 0.45),
+        Step(maxSide: 640, quality: 0.4),
+    ]
+
+    static func base64Size(_ bytes: Int) -> Int { (bytes + 2) / 3 * 4 }
+
+    static func totalBase64(_ byteCounts: [Int]) -> Int { byteCounts.reduce(0) { $0 + base64Size($1) } }
+
+    static func fits(_ byteCounts: [Int]) -> Bool { totalBase64(byteCounts) <= maxTotalBase64 }
+
+    /// 第一个让全部图片合计放得下的档位;`sizesAt(i)` 返回第 i 档下每张的 JPEG 字节数(编不出来为 nil)。
+    /// 全都放不下返回 nil(界面据此拒绝并说明)。
+    static func firstFittingStep(_ sizesAt: (Int) -> [Int]?) -> Int? {
+        steps.indices.first { index in sizesAt(index).map(fits) ?? false }
+    }
+
+    static var tooLargeMessage: String {
+        AppLocalized("图片太大：一次发送的图片合计要在 1.8 MB 以内，压缩到最小仍超出。请少选几张再试。")
+    }
 }
 
 // MARK: - 控制事件(值是嵌套对象,GatewayEvent 的扁平 payload 装不下,单独解析)
@@ -321,7 +358,8 @@ struct HarnessQuestionAnswer: Sendable, Hashable {
 
 enum HarnessControlEvent: Sendable, Equatable {
     case question(HarnessQuestionRequest)
-    case questionResponded(questionId: String?)
+    /// `declined`:跳过了;`expired`:没人答,Mac 那边已过期。
+    case questionResponded(questionId: String?, declined: Bool = false, expired: Bool = false)
     /// nil = Mac 说回到了自动选择(或没给模型)。
     case model(HarnessModelRef?)
     case follow(Bool)
@@ -346,7 +384,9 @@ enum HarnessControlEvent: Sendable, Equatable {
             guard !questions.isEmpty else { return nil }
             return .question(HarnessQuestionRequest(questionId: id, questions: questions))
         case "question.responded":
-            return .questionResponded(questionId: obj["question_id"] as? String)
+            return .questionResponded(questionId: obj["question_id"] as? String,
+                                      declined: obj["declined"] as? Bool ?? false,
+                                      expired: obj["expired"] as? Bool ?? false)
         case "model":
             return .model(HarnessModelRef.parse(obj["model"]))
         case "follow":
@@ -425,6 +465,23 @@ enum HarnessLaunchDefaults {
         if let saved, saved.hostId == hostId, let cwd = saved.cwd, !cwd.isEmpty { return cwd }
         return HomeMacDispatchTarget.recentDirectories(recentCwds, limit: 1).first ?? "~"
     }
+}
+
+// MARK: - session.note 的过滤
+
+enum HarnessNotePolicy {
+    /// Mac 给旧版 iPhone 的「有个提问在等」文字说明:新版直接显示提问卡,这条不进时间线。
+    static func hides(kind: String?) -> Bool { kind == "question_pending" }
+}
+
+// MARK: - 模型控制只对 LeoBot 会话
+
+enum HarnessModelControlPolicy {
+    /// Mac 只给 LeoBot(zcode)会话换模型 / 强度,外部 agent 的会话回 400。
+    static func applies(harnessKey: String) -> Bool { harnessKey == "zcode" }
+
+    /// 只改强度要求会话已经有模型(没有时 Mac 回 409)。
+    static func canChangeEffortOnly(current: HarnessModelRef?) -> Bool { current != nil }
 }
 
 // MARK: - 关注

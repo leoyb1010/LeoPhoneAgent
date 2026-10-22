@@ -65,20 +65,25 @@ struct HarnessSessionSettingsSheet: View {
 
     private var features: HarnessFeatures { driver.features ?? HarnessFeatures(server: nil, flags: []) }
 
-    /// 当前模型可选的强度:列表里找到当前模型用它的,找不到用 Mac 的自动选择那一项。
+    private var showsModels: Bool { driver.controlsModel && features.switchesModel }
+
+    /// 当前模型可选的强度。会话还没有模型时不给(只改强度 Mac 回 409)。
     private var efforts: [String] {
-        guard let catalog else { return [] }
-        let option = catalog.option(for: driver.model) ?? catalog.option(for: catalog.defaultModel)
-        return option?.efforts ?? []
+        guard driver.controlsModel, features.switchesEffort,
+              HarnessModelControlPolicy.canChangeEffortOnly(current: driver.model), let catalog else { return [] }
+        return catalog.option(for: driver.model)?.efforts ?? []
     }
+
+    /// 一轮还在跑时 Mac 不压缩(409)。
+    private var turnInFlight: Bool { ["running", "starting", "waiting_for_approval"].contains(driver.status) }
 
     var body: some View {
         NavigationStack {
             List {
-                if features.switchesModel {
+                if showsModels {
                     modelSection
                 }
-                if features.switchesEffort, !efforts.isEmpty {
+                if !efforts.isEmpty {
                     Section {
                         ForEach(efforts, id: \.self) { effort in
                             Button {
@@ -130,10 +135,14 @@ struct HarnessSessionSettingsSheet: View {
                             } label: {
                                 Label("压缩上下文", systemImage: "arrow.down.right.and.arrow.up.left")
                             }
-                            .disabled(working)
+                            .disabled(working || turnInFlight)
                         }
                     } header: {
                         Text("会话")
+                    } footer: {
+                        if features.compacts, turnInFlight {
+                            Text("这一轮跑完才能压缩上下文。")
+                        }
                     }
                 }
             }
@@ -145,7 +154,7 @@ struct HarnessSessionSettingsSheet: View {
                 }
             }
             .task {
-                guard features.switchesModel || features.switchesEffort, catalog == nil else { return }
+                guard driver.controlsModel, features.switchesModel || features.switchesEffort, catalog == nil else { return }
                 do { catalog = try await driver.loadModels() }
                 catch { loadError = LeoAgentClient.describeHarnessFeatureError(error) }
             }

@@ -78156,6 +78156,160 @@
           }
         }
       }
+    },
+    "图片太大：一次发送的图片合计要在 1.8 MB 以内，压缩到最小仍超出。请少选几张再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Images too large: all images in one message must total under 1.8 MB, and they are still over at the smallest size. Choose fewer images and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片太大：一次发送的图片合计要在 1.8 MB 以内，压缩到最小仍超出。请少选几张再试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖片太大：一次傳送的圖片合計要在 1.8 MB 以內，壓縮到最小仍超出。請少選幾張再試。"
+          }
+        }
+      }
+    },
+    "这个提问没人回答，已过期。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No one answered this question; it has expired."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个提问没人回答，已过期。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個提問沒人回答，已過期。"
+          }
+        }
+      }
+    },
+    "这一轮还在跑，等它停下再压缩上下文。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This turn is still running. Compact the context after it stops."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这一轮还在跑，等它停下再压缩上下文。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這一輪還在跑，等它停下再壓縮上下文。"
+          }
+        }
+      }
+    },
+    "这一轮跑完才能压缩上下文。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can compact the context after this turn finishes."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这一轮跑完才能压缩上下文。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這一輪跑完才能壓縮上下文。"
+          }
+        }
+      }
+    },
+    "图片没有加上": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Images Not Added"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片没有加上"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖片沒有加上"
+          }
+        }
+      }
+    },
+    "图片没有发出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Images Not Sent"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片没有发出"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖片沒有送出"
+          }
+        }
+      }
+    },
+    "有 %lld 张图片读不出来，已跳过。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld image(s) couldn't be read and were skipped."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有 %lld 张图片读不出来，已跳过。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有 %lld 張圖片讀不出來，已跳過。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

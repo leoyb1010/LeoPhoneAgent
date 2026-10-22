@@ -306,6 +306,54 @@ final class HarnessRemoteControlsTests: XCTestCase {
         XCTAssertEqual(HarnessLaunchDefaults.cwd(hostId: "mac-1", saved: home, recentCwds: []), "~")
     }
 
+    // MARK: Mac 实现后的补充约束
+
+    func testAttachmentBudgetIsTotalBase64AcrossOneSend() {
+        XCTAssertEqual(HarnessAttachmentBudget.base64Size(0), 0)
+        XCTAssertEqual(HarnessAttachmentBudget.base64Size(1), 4)
+        XCTAssertEqual(HarnessAttachmentBudget.base64Size(3), 4)
+        XCTAssertEqual(HarnessAttachmentBudget.base64Size(4), 8)
+        XCTAssertEqual(HarnessAttachmentBudget.steps.first, .init(maxSide: 1600, quality: 0.7))
+        // 1.8 MB 是所有图片合计的 base64,不是每张。
+        XCTAssertTrue(HarnessAttachmentBudget.fits([1_350_000]))           // base64 1,800,000
+        XCTAssertFalse(HarnessAttachmentBudget.fits([1_350_001]))
+        XCTAssertFalse(HarnessAttachmentBudget.fits([500_000, 500_000, 500_000]), "单张都小,合计超了也不行")
+        XCTAssertTrue(HarnessAttachmentBudget.fits([]))
+    }
+
+    func testAttachmentBudgetPicksFirstFittingStepOrRefuses() {
+        // 第 0、1 档合计超,第 2 档放得下:用第 2 档。
+        let sizes: [[Int]] = [[900_000, 900_000], [700_000, 700_000], [600_000, 600_000], [300_000, 300_000], [100_000, 100_000]]
+        var asked: [Int] = []
+        let step = HarnessAttachmentBudget.firstFittingStep { index in asked.append(index); return sizes[index] }
+        XCTAssertEqual(step, 2)
+        XCTAssertEqual(asked, [0, 1, 2], "放得下就停,不多压")
+        XCTAssertEqual(HarnessAttachmentBudget.firstFittingStep { _ in [2_000_000] }, nil, "最狠一档也超:拒绝")
+        XCTAssertEqual(HarnessAttachmentBudget.firstFittingStep { $0 == 0 ? nil : [10] }, 1, "某档编不出来就试下一档")
+        XCTAssertFalse(HarnessAttachmentBudget.tooLargeMessage.isEmpty)
+    }
+
+    func testQuestionRespondedCarriesDeclinedAndExpired() {
+        XCTAssertEqual(HarnessControlEvent.parse(["event": "question.responded", "question_id": "q", "expired": true]),
+                       .questionResponded(questionId: "q", declined: false, expired: true))
+        XCTAssertEqual(HarnessControlEvent.parse(["event": "question.responded", "question_id": "q", "declined": true]),
+                       .questionResponded(questionId: "q", declined: true, expired: false))
+    }
+
+    func testQuestionPendingNoteIsHiddenBecauseTheCardShows() {
+        XCTAssertTrue(HarnessNotePolicy.hides(kind: "question_pending"))
+        XCTAssertFalse(HarnessNotePolicy.hides(kind: "compacted"), "压缩结果照常进时间线")
+        XCTAssertFalse(HarnessNotePolicy.hides(kind: "compact_failed"))
+        XCTAssertFalse(HarnessNotePolicy.hides(kind: nil))
+    }
+
+    func testModelControlsOnlyForLeoBotSessionsWithAModel() {
+        XCTAssertTrue(HarnessModelControlPolicy.applies(harnessKey: "zcode"))
+        XCTAssertFalse(HarnessModelControlPolicy.applies(harnessKey: "claude"), "外部 agent 会话 Mac 回 400")
+        XCTAssertFalse(HarnessModelControlPolicy.canChangeEffortOnly(current: nil), "没有模型时只改强度 Mac 回 409")
+        XCTAssertTrue(HarnessModelControlPolicy.canChangeEffortOnly(current: HarnessModelRef(provider: "p", model: "m")))
+    }
+
     func testEffortTitles() {
         XCTAssertFalse(HarnessEffort.title("high").isEmpty)
         XCTAssertEqual(HarnessEffort.title("ultra-custom"), "ultra-custom")

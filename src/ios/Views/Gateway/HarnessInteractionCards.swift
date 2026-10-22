@@ -130,30 +130,45 @@ struct HarnessPlanBody: View {
 // MARK: - 图片附件
 
 /// 输入框里待发的一张图:附件本体 + 预先解好的缩略图(每次重绘都解一遍 JPEG 太费)。
+/// `source` 是解码后先缩到长边 1600 的图:总量超预算时从它重压,不留原始大图在内存里。
 struct HarnessComposerImage: Identifiable {
     let attachment: HarnessAttachment
     let thumbnail: UIImage
+    let source: UIImage
     var id: UUID { attachment.id }
 }
 
 enum HarnessImageEncoder {
-    /// 解码 → 长边不超过 2048 → JPEG;超过 5 MB 就降质量 / 缩小重来。解不了返回 nil。
-    static func encode(_ data: Data, index: Int) -> HarnessComposerImage? {
+    /// 解码并缩到第一档的长边(1600)。HEIC / PNG 等一律之后压成 JPEG(更小,Mac 也认)。解不了返回 nil。
+    static func decode(_ data: Data) -> UIImage? {
         guard let image = UIImage(data: data) else { return nil }
-        var side: CGFloat = 2048
-        var quality: CGFloat = 0.8
-        for _ in 0..<8 {
-            let scaled = downscale(image, maxSide: side)
-            if let jpeg = scaled.jpegData(compressionQuality: quality), jpeg.count <= HarnessAttachment.maxBytes {
-                let attachment = HarnessAttachment(name: "photo-\(index).jpg", mime: "image/jpeg", data: jpeg)
-                return HarnessComposerImage(attachment: attachment, thumbnail: downscale(scaled, maxSide: 160))
-            }
-            if quality > 0.5 { quality -= 0.15 } else { side *= 0.75 }
-        }
-        return nil
+        return downscale(image, maxSide: HarnessAttachmentBudget.steps[0].maxSide)
     }
 
-    private static func downscale(_ image: UIImage, maxSide: CGFloat) -> UIImage {
+    /// 按预算把这一组图压好:从第一档(1600 / 0.7)起,合计 base64 超过 1.8 MB 就整组降一档重压。
+    /// 最狠一档仍超出返回 nil(调用方拒绝并说明)。
+    static func fitToBudget(_ sources: [(id: UUID, image: UIImage)]) -> [HarnessComposerImage]? {
+        var cache: [Int: [HarnessComposerImage]] = [:]
+        func encoded(_ step: Int) -> [HarnessComposerImage]? {
+            if let hit = cache[step] { return hit }
+            let setting = HarnessAttachmentBudget.steps[step]
+            var out: [HarnessComposerImage] = []
+            for (offset, source) in sources.enumerated() {
+                let scaled = downscale(source.image, maxSide: setting.maxSide)
+                guard let jpeg = scaled.jpegData(compressionQuality: setting.quality) else { return nil }
+                let attachment = HarnessAttachment(id: source.id, name: "photo-\(offset + 1).jpg", mime: "image/jpeg", data: jpeg)
+                out.append(HarnessComposerImage(attachment: attachment, thumbnail: downscale(scaled, maxSide: 160),
+                                                source: source.image))
+            }
+            cache[step] = out
+            return out
+        }
+        guard let step = HarnessAttachmentBudget.firstFittingStep({ encoded($0)?.map(\.attachment.data.count) })
+        else { return nil }
+        return encoded(step)
+    }
+
+    private static func downscale(_ image: UIImage, maxSide: Double) -> UIImage {
         let size = image.size
         let longest = max(size.width, size.height)
         guard longest > maxSide, longest > 0 else { return image }
@@ -201,11 +216,13 @@ struct HarnessAttachmentStrip: View {
     }
 }
 
-/// 输入框左边的相册按钮。选好的图压成 JPEG(≤ 5 MB)追加进 `images`,最多 4 张。
+/// 输入框左边的相册按钮。选好的图压成 JPEG 追加进 `images`,最多 4 张,
+/// 整组合计 base64 不超过 1.8 MB(超了整组降档重压,再不行就不加并说明)。
 struct HarnessPhotoButton: View {
     @Binding var images: [HarnessComposerImage]
     @State private var selection: [PhotosPickerItem] = []
     @State private var loading = false
+    @State private var message: String?
 
     var body: some View {
         PhotosPicker(selection: $selection,
@@ -228,23 +245,34 @@ struct HarnessPhotoButton: View {
             selection = []
             load(items)
         }
+        .alert(Text("图片没有加上"), isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+            Button("好", role: .cancel) { message = nil }
+        } message: {
+            Text(message ?? "")
+        }
     }
 
     private func load(_ items: [PhotosPickerItem]) {
         loading = true
         Task {
-            var added: [HarnessComposerImage] = []
-            let base = images.count
-            for item in items.prefix(HarnessAttachment.remainingSlots(current: base)) {
-                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-                let index = base + added.count + 1
-                if let encoded = await Task.detached(priority: .userInitiated, operation: {
-                    HarnessImageEncoder.encode(data, index: index)
-                }).value {
-                    added.append(encoded)
-                }
+            var decoded: [(id: UUID, image: UIImage)] = []
+            var unreadable = 0
+            for item in items.prefix(HarnessAttachment.remainingSlots(current: images.count)) {
+                guard let data = try? await item.loadTransferable(type: Data.self),
+                      let image = await Task.detached(priority: .userInitiated, operation: {
+                          HarnessImageEncoder.decode(data)
+                      }).value
+                else { unreadable += 1; continue }
+                decoded.append((UUID(), image))
             }
-            images.append(contentsOf: added.prefix(HarnessAttachment.remainingSlots(current: images.count)))
+            let all: [(id: UUID, image: UIImage)] = images.map { (id: $0.id, image: $0.source) } + decoded
+            let fitted = await Task.detached(priority: .userInitiated) { HarnessImageEncoder.fitToBudget(all) }.value
+            if let fitted {
+                images = Array(fitted.prefix(HarnessAttachment.maxCount))
+                if unreadable > 0 { message = AppLocalized("有 \(unreadable) 张图片读不出来，已跳过。") }
+            } else {
+                message = HarnessAttachmentBudget.tooLargeMessage
+            }
             loading = false
         }
     }
