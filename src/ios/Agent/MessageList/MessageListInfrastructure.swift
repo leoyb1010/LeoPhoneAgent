@@ -1123,6 +1123,9 @@ final class CellStateBridgeV2: ObservableObject {
     @Published var onNextStep: ((ReplyNextStep.Action) -> Void)?
     /// [E2] 这条是对话里最后一条消息且是回复:「值得收进大脑？」只挂在刚完成的那条下面。
     @Published var isLastReply: Bool = false
+    /// [up3-ios] 这条回复是在列表显示期间跑完的(见过 isActiveMessage true → false)。
+    /// 旧对话的最后一条回复不算,「值得收进大脑？」只挂在刚跑完的那条下面。
+    @Published var finishedWhileVisible: Bool = false
     /// [E2] 页脚内容在 cell 内部变了(建议被关掉):让列表丢掉旧高度重新量。
     var onFooterLayoutChanged: (() -> Void)?
     /// True while this reply is still streaming — disables "Read from Start".

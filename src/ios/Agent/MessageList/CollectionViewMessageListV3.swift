@@ -590,7 +590,8 @@ private struct BridgedAssistantFooterV3: View {
 
     /// [E2] 刚完成、看起来值得留的回复下面出一行建议;资料库没连、点过或关过都不出。
     private var showBrainSuggestion: Bool {
-        guard showActionBar, bridge.isLastReply, bridge.onNextStep != nil, brainSuggestionHandledId != message.id,
+        guard showActionBar, bridge.isLastReply, bridge.finishedWhileVisible,
+              bridge.onNextStep != nil, brainSuggestionHandledId != message.id,
               BrainStore.shared.isConfigured,
               !ReplyNextStep.BrainSuggestionLedger().isHandled(message.id) else { return false }
         return ReplyNextStep.suggestsBrain(reply: ReplyContentMemo.shared.entry(for: message).markdown,
@@ -1627,6 +1628,9 @@ extension CollectionViewMessageListV3 {
             // Compared against the shape recorded by the PREVIOUS call: the
             // edges that matter happen between calls.
             let beforeShape = lastFooterShapeByMessage[message.id] ?? FooterHeightShape(bridge)
+            let finished = ReplyNextStep.finishedWhileVisible(wasActive: bridge.isActiveMessage, isActive: isActive,
+                                                              alreadyFinished: bridge.finishedWhileVisible)
+            if finished != bridge.finishedWhileVisible { bridge.finishedWhileVisible = finished }
             bridge.isActiveMessage = isActive
             bridge.isLastReply = isLast && message.role == .assistant
             bridge.onFooterLayoutChanged = { [weak self] in self?.invalidateFooterHeight(messageId: message.id) }

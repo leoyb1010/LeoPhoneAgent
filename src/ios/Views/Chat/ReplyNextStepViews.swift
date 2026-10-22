@@ -120,10 +120,11 @@ struct BrainKeepSuggestionChip: View {
             .accessibilityIdentifier("reply.brainSuggestion")
 
             Button(action: onDismiss) {
+                // [up3-ios] 图标保持小,点按区域至少 44 pt。
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(LeoTheme.ColorToken.tertiaryText)
-                    .frame(width: 28, height: 28)
+                    .frame(minWidth: LeoTheme.TouchTarget.minimum, minHeight: LeoTheme.TouchTarget.minimum)
                     .contentShape(Rectangle())
             }
             .accessibilityLabel(Text("不用了"))

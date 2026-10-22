@@ -3537,14 +3537,15 @@ struct ContentView: View {
     private var homePlusMenuContent: some View {
         // [fix-home-plus] 以前只有「拍照识别 / 本机文件 / 录音」:选不了照片视频,「本机文件」直接进文件管理而不是当附件。
         // 现在和对话里的「+」一致:拍照、照片与视频、文件都开一个新对话并把选中的东西作为附件;文件管理留在「/」面板。
+        // [up3-ios] 文案直接用对话「+」的同一组键(Localizable.xcstrings 里有 en / zh-Hans / zh-Hant)。
         Button { startHomeChatAction(.openCamera) } label: {
-            Label("拍照", systemImage: "camera")
+            Label("Take Photo", systemImage: "camera")
         }
         Button { startHomeChatAction(.pickPhotos) } label: {
-            Label("照片与视频", systemImage: "photo.on.rectangle")
+            Label("Choose Photos & Videos", systemImage: "photo.on.rectangle")
         }
         Button { startHomeChatAction(.pickFiles) } label: {
-            Label("文件", systemImage: "doc")
+            Label("Add File", systemImage: "doc")
         }
         // [V-rec] 录音 → 转写 → 纪要。
         Button { RecordingPresenter.present(.recorder) } label: {

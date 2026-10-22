@@ -213,6 +213,12 @@ extension ReplyNextStep {
         return hasHeading || listItems >= 2 || hasTable
     }
 
+    /// [up3-ios] 建议只挂在「打开这个对话之后才跑完」的回复下面:看到它从进行中变成完成(true → false)
+    /// 才记下;翻开旧对话时最后一条回复一开始就是完成的,不出建议。记下后一直算数,直到列表销毁。
+    static func finishedWhileVisible(wasActive: Bool, isActive: Bool, alreadyFinished: Bool) -> Bool {
+        alreadyFinished || (wasActive && !isActive)
+    }
+
     /// 每条回复最多出一次:点过「收进大脑」或关掉后记下,不再出现。只留最近 200 条。
     struct BrainSuggestionLedger {
         static let key = "leo.reply.brainSuggestion.handled"
