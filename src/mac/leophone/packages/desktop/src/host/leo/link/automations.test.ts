@@ -255,6 +255,19 @@ test("automations: create payload validation and defaults", () => {
     now,
   );
   assert.ok(!("error" in explicit) && explicit.mode === "plan");
+  // [leo] 从模板建、没给 mode:用模板建议的模式;显式 mode / full_auto 仍优先;认不出的模板按没给。
+  const fromTemplate = (extra: Record<string, unknown>) =>
+    parseCreate({ prompt: "x", schedule: "0 9 * * *", ...extra }, now);
+  const brief = fromTemplate({ template_id: "leo-daily-brief" });
+  assert.ok(!("error" in brief) && brief.mode === "plan");
+  const tests = fromTemplate({ template_id: "leo-repo-health" });
+  assert.ok(!("error" in tests) && tests.mode === "guarded");
+  const overridden = fromTemplate({ template_id: "leo-daily-brief", mode: "build" });
+  assert.ok(!("error" in overridden) && overridden.mode === "build");
+  const fullAuto = fromTemplate({ template_id: "leo-daily-brief", full_auto: true });
+  assert.ok(!("error" in fullAuto) && fullAuto.mode === "yolo");
+  const unknownTemplate = fromTemplate({ template_id: "server-standup" });
+  assert.ok(!("error" in unknownTemplate) && unknownTemplate.mode === "build");
   for (const body of [
     { schedule: "0 9 * * *" },
     { prompt: "   ", schedule: "0 9 * * *" },

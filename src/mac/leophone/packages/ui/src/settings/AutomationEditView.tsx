@@ -1067,8 +1067,8 @@ export interface AutomationEditSubmit {
 export interface AutomationEditViewProps {
   /** null = 新建；否则编辑。 */
   editing: ZCodeAutomation | null;
-  /** 新建预填(来自 More ideas 模板)。 */
-  initialDraft?: { title: string; cronExpr: string; prompt: string } | null;
+  /** 新建预填(来自 More ideas 模板)。[leo] mode:模板建议的权限模式(早报 = plan),没有就用默认。 */
+  initialDraft?: { title: string; cronExpr: string; prompt: string; mode?: string } | null;
   /** 当前列表所在项目,作为新建的默认目标项目。 */
   defaultWorkspacePath: string;
   defaultWorkspaceIdentity?: string;
@@ -1330,9 +1330,11 @@ export function AutomationEditView({
       setPrompt(initialDraft?.prompt ?? "");
       modelSelection.current = "";
       setModel("");
-      modeRef.current = AUTOMATION_DEFAULT_MODE;
+      // [leo] 模板带的模式一起预填(以前一律 build,只读的早报每次运行都要人批)。
+      const draftMode = initialDraft?.mode?.trim() || AUTOMATION_DEFAULT_MODE;
+      modeRef.current = draftMode;
       thoughtLevelRef.current = "";
-      setMode(AUTOMATION_DEFAULT_MODE);
+      setMode(draftMode);
       setThoughtLevel("");
       setBuilder(initialBuilder(editing, initialDraft));
       setEndAt(undefined);

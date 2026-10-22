@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ClientSceneConfig } from "@zcode/services";
 import {
+  LEO_LOCAL_SCHEDULED_TEMPLATES,
   materializeScheduledTemplateDraft,
   mapClientScenesToAutomationTemplates,
   resolveAutomationTemplateText,
@@ -170,6 +171,13 @@ describe("Client Scenes automation template catalog", () => {
       cronExpr: "0 9 * * 1-5",
       prompt: "中文定时指令",
     });
+  });
+
+  // [leo] 本地模板的权限模式带进新建页:只读的早报是 plan,否则按默认 build 建出来,每次运行都要人批。
+  it("carries the Leo template mode into the creation draft", () => {
+    const [brief, tests] = LEO_LOCAL_SCHEDULED_TEMPLATES;
+    expect(materializeScheduledTemplateDraft(brief!, "zh-CN").mode).toBe("plan");
+    expect(materializeScheduledTemplateDraft(tests!, "en-US").mode).toBe("guarded");
   });
 
   it("resolves the active locale with a deterministic opposite-language fallback", () => {

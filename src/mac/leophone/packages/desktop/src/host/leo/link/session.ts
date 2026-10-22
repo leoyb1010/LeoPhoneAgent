@@ -46,16 +46,37 @@ const IDLE_STALE_S = 30 * 60;
 const SUBSCRIBER_QUEUE_LIMIT = 512;
 
 type Subscriber = { queue: HarnessEvent[]; wake: (() => void) | null; closed: boolean };
-/** announced:审批卡是否已经发给手机;自动放行的没发过,也就不用发回执。 */
-type Pending = { request: ZCodePermissionRequest; event: HarnessEvent; tool: string; target: string; announced: boolean };
+type ElicitationRequest = Extract<ZCodeStreamEvent, { type: "elicitation_request" }>;
+/**
+ * announced:审批卡是否已经发给手机;自动放行的没发过,也就不用发回执。
+ * [leo] kind "plan":计划审批(ExitPlanMode 走的是 elicitation),答复走 respondElicitation,只有批准 / 拒绝。
+ */
+type Pending =
+  | { kind: "permission"; request: ZCodePermissionRequest; event: HarnessEvent; tool: string; target: string; announced: boolean }
+  | { kind: "plan"; event: HarnessEvent; tool: string; target: string; announced: true };
 type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
+
+/** [leo] 计划审批卡:批准 = 退出计划模式开始执行;没有「本任务都允许」。 */
+const PLAN_CHOICES: ApprovalChoice[] = ["once", "deny"];
+/** 计划正文放进审批卡的上限(普通审批的命令摘要只给 500 字,计划要长得多)。 */
+const PLAN_TEXT_MAX = 4_000;
+/** 内核 interaction-broker 认的「批准计划」答案(EXIT_PLAN_MODE_APPROVAL_APPROVE)。 */
+const EXIT_PLAN_MODE_APPROVE = "approve";
+
+/** [up-c-mac] 无人值守的自动化运行:没人答的审批自动拒绝时,运行记录里的失败原因。 */
+export const UNATTENDED_APPROVAL_REASON = "审批 30 分钟无人处理,已自动拒绝";
+/** [leo] 无人值守时计划被拒(手机上拒绝,或 30 分钟没人批)。 */
+export const UNATTENDED_PLAN_REASON = "计划未获批准";
+/** [leo] 无人值守时 agent 要人回答问题(AskUserQuestion):没人能答,跳过并停掉这次运行。 */
+export const UNATTENDED_QUESTION_REASON = "需要人工回答问题，无人值守已跳过";
 
 /**
  * [up-c-mac] 无人值守的自动化运行(docs/specs/leo-link-automations.md「无人值守的审批」):
- * 审批卡像手机那一轮一样推给手机 / 手表;timeoutMs 内没人答(手机、Mac 都算)就自动拒绝、停掉这一轮,
- * 并先调 onTimeout 让桥接把这次运行改判为失败。计时只在内存里,答复 / 一轮结束 / 关闭时清掉。
+ * 审批卡(含计划审批)像手机那一轮一样推给手机 / 手表;timeoutMs 内没人答(手机、Mac 都算)就自动拒绝、停掉这一轮,
+ * 并用 markFailed 让桥接把这次运行改判为失败。计时只在内存里,答复 / 一轮结束 / 关闭时清掉。
+ * markFailed(null) 撤销改判:拒绝没送进内核时运行还会接着跑,之后有人批了就不能记成失败。
  */
-type UnattendedRun = { automationId: string; timeoutMs: number; onTimeout: (approvalId: string) => void };
+type UnattendedRun = { automationId: string; timeoutMs: number; markFailed: (reason: string | null) => void };
 
 export type LinkSessionDeps = {
   taskService: IZCodeTaskService;
@@ -106,6 +127,10 @@ export class LinkSession {
   /** [up-c-mac] 正在无人值守地跑一次自动化;null = 普通任务。 */
   private unattended: UnattendedRun | null = null;
   private readonly approvalTimers = new Map<string, NodeJS.Timeout>();
+  /** [leo] 已经答掉(拒绝)的提问:内核会按同一 requestId 重发还没答的提问,桥接补交也可能重复。一轮结束时清空。 */
+  private readonly handledQuestions = new Set<string>();
+  /** [leo] 进计划模式之前的权限模式:计划获批(内核关掉 planEnabled)后回到它。 */
+  private planBaseMode: string | null = null;
   private readonly grants = new Set<string>();
   private readonly subscribers = new Set<Subscriber>();
   private readonly mapper = new ZCodeEventMapper(Date.now, (events) => {
@@ -239,14 +264,16 @@ export class LinkSession {
   }
 
   async setMode(mode: ZCodeTaskMode): Promise<void> {
-    if (this.mode === mode) return;
+    // [leo] 不再因为「本地记的已经是这个模式」就跳过:内核的计划模式是 planEnabled 开关,mode_update 里看不到,
+    // 本地记的模式可能是旧的(计划模式下曾被报成 build,手机再切 build 就什么都不发)。切到同一模式内核是幂等的。
     await this.deps.taskService.setMode({ taskId: this.sessionId, mode });
+    if (mode === "plan" && this.mode !== "plan") this.planBaseMode = this.mode;
     this.mode = mode;
     this.emit({ event: "mode", type: "mode", mode });
     if (this.isFullAuto) {
-      // 刚切到全自动:已经挂着的审批一并放行,别让它卡在手机上。
+      // 刚切到全自动:已经挂着的审批一并放行,别让它卡在手机上(计划审批留给人拍板)。
       for (const [approvalId, pending] of [...this.pendingApprovals]) {
-        void this.answer(approvalId, pending, "allow_once", "once");
+        if (pending.kind === "permission") void this.answer(approvalId, pending, "allow_once", "once");
       }
     }
   }
@@ -256,8 +283,12 @@ export class LinkSession {
     const pending = this.pendingApprovals.get(approvalId);
     if (!pending) return "missing";
     if (choice !== "deny" && !this.callerMayAllow(caller)) return "forbidden";
-    if (choice === "session") this.grants.add(grantKey(pending.tool, pending.target));
-    const delivered = await this.answer(approvalId, pending, choice === "deny" ? "deny" : "allow_once", choice);
+    // 计划审批没有「本任务都允许」:手机发来 session 也只当这一次批准。
+    const answered: ApprovalChoice = pending.kind === "plan" && choice === "session" ? "once" : choice;
+    if (answered === "session") this.grants.add(grantKey(pending.tool, pending.target));
+    // [leo] 无人值守时手机拒绝了计划:这次运行算失败(内核随后自己结束这一轮)。
+    const failReason = pending.kind === "plan" && answered === "deny" && this.unattended ? UNATTENDED_PLAN_REASON : undefined;
+    const delivered = await this.answer(approvalId, pending, answered === "deny" ? "deny" : "allow_once", answered, failReason);
     return delivered ? "ok" : "undelivered";
   }
 
@@ -295,12 +326,16 @@ export class LinkSession {
   private onZCode(event: ZCodeStreamEvent): void {
     switch (event.type) {
       case "mode_update":
-        if (this.mode !== event.currentModeId) {
-          this.mode = event.currentModeId;
-          this.deps.onModeChanged?.();
-          // 事件流告诉手机模式变了(含 Mac 桌面上切的);`event` 与 `type` 同值,两种解析都认得。
-          this.emit({ event: "mode", type: "mode", mode: event.currentModeId });
+        // [leo] 内核的计划模式是 planEnabled 开关,设置快照里的 mode.current 仍是底下的权限模式(多半是 build),
+        // 换模型 / 思考档位的设置更新都会带着它来。计划模式期间收到的「底下那个模式」不代表退出了计划:只记下,
+        // 计划获批后回到它。换成别的模式才是真切了(内核切到非 plan 模式会关掉 planEnabled)。
+        if (this.mode === "plan" && event.currentModeId !== "plan") {
+          if (this.planBaseMode === null || this.planBaseMode === event.currentModeId) {
+            this.planBaseMode = event.currentModeId;
+            return;
+          }
         }
+        this.reportMode(event.currentModeId);
         return;
       case "task_run_started":
         if (this.status !== "waiting_for_approval") this.status = "running";
@@ -325,14 +360,21 @@ export class LinkSession {
         return;
       case "elicitation_request":
         for (const flushed of this.mapper.flushPending()) this.emit(flushed);
-        // Mac 上自己发起的轮次,提问留给 Mac 上的人答。
-        if (!this.phoneTurn) return;
-        // 手机端还不会答提问和计划审批;挂着会把任务卡死,先自动取消并说一声。
-        void this.deps.taskService
-          .respondElicitation({ taskId: this.sessionId, workspacePath: this.cwd, requestId: event.requestId, action: "cancel" })
-          .catch((error: unknown) => this.deps.logger.warn("[leo/link] elicitation cancel failed", { error: String(error) }));
-        this.emit({ event: "session.note", text: `Mac 上的任务问了一个问题，手机端暂时答不了，已跳过：${event.message.slice(0, 120)}` });
+        // Mac 上自己发起的轮次,提问留给 Mac 上的人答;无人值守的自动化没人在 Mac 前,照样要处理。
+        if (!this.phoneTurn && !this.unattended) return;
+        this.onElicitation(event);
         return;
+      case "elicitation_response": {
+        // [leo] Mac 上答了计划审批:手机收卡(手机自己答的在 answer() 里已经发过回执)。
+        const pending = this.pendingApprovals.get(event.requestId);
+        if (pending?.kind !== "plan") return;
+        this.pendingApprovals.delete(event.requestId);
+        this.clearApprovalTimer(event.requestId);
+        const approved = event.action === "accept";
+        this.emit({ event: "approval.responded", approval_id: event.requestId, choice: approved ? "once" : "deny" });
+        if (approved) this.leavePlanMode();
+        return;
+      }
       default:
         for (const mapped of this.mapper.map(event)) this.emit(mapped);
     }
@@ -350,7 +392,7 @@ export class LinkSession {
       description: described.description,
       choices: APPROVAL_CHOICES,
     };
-    const pending: Pending = { request, event, tool: described.tool, target: described.target, announced: false };
+    const pending: Pending = { kind: "permission", request, event, tool: described.tool, target: described.target, announced: false };
     this.pendingApprovals.set(request.requestId, pending);
     if (this.isFullAuto || this.grants.has(grantKey(described.tool, described.target))) {
       void this.answer(request.requestId, pending, "allow_once", "once");
@@ -364,9 +406,70 @@ export class LinkSession {
     this.emit(event);
   }
 
-  /** [up-c-mac] 桥接接管自动化任务之前就已到的审批请求,接管后补交(按 requestId 去重)。 */
-  ingestPermissionRequest(request: ZCodePermissionRequest): void {
-    this.onPermissionRequest(request);
+  /**
+   * [leo] 手机那一轮 / 无人值守运行里内核发来的提问。
+   * 计划审批(ExitPlanMode)变成审批卡;其它提问(AskUserQuestion)手机还答不了:拒绝并把问题原文告诉手机,
+   * 无人值守时还要把这次运行记成失败并停掉,不然它永远挂着(手动运行的占位也一直不放)。
+   */
+  private onElicitation(request: ElicitationRequest): void {
+    const schema = asRecord(request.schema);
+    if (schema["interaction"] === "plan_approval") {
+      this.onPlanApproval(request, typeof schema["plan"] === "string" ? schema["plan"] : "");
+      return;
+    }
+    if (this.handledQuestions.has(request.requestId)) return;
+    this.handledQuestions.add(request.requestId);
+    const run = this.unattended;
+    run?.markFailed(UNATTENDED_QUESTION_REASON);
+    void this.deps.taskService
+      .respondElicitation({ taskId: this.sessionId, workspacePath: this.cwd, requestId: request.requestId, action: "decline" })
+      .catch((error: unknown) => this.deps.logger.warn("[leo/link] elicitation decline failed", { error: String(error) }))
+      .then(() => (run ? this.stop() : undefined))
+      .catch((error: unknown) => this.deps.logger.warn("[leo/link] stopping after skipped question failed", { error: String(error) }));
+    this.emit({ event: "session.note", text: questionNote(request, Boolean(run)) });
+  }
+
+  /** [leo] 计划审批卡:批准 = 退出计划模式、开始执行;拒绝 = 留在计划模式(内核随后结束这一轮)。 */
+  private onPlanApproval(request: ElicitationRequest, plan: string): void {
+    if (this.pendingApprovals.has(request.requestId)) return;
+    const text = plan.trim();
+    const capped = text.length > PLAN_TEXT_MAX ? `${text.slice(0, PLAN_TEXT_MAX - 1)}…` : text;
+    const event: HarnessEvent = {
+      event: "approval.request",
+      approval_id: request.requestId,
+      run_id: request.traceId,
+      command: "批准计划并开始执行",
+      tool: "ExitPlanMode",
+      description: capped || "计划正文没有传过来，请到 Mac 上查看",
+      ...(capped ? { plan: capped } : {}),
+      choices: PLAN_CHOICES,
+    };
+    this.pendingApprovals.set(request.requestId, { kind: "plan", event, tool: "ExitPlanMode", target: "", announced: true });
+    if (this.unattended) {
+      event["automation_id"] = this.unattended.automationId;
+      this.armApprovalTimer(request.requestId, this.unattended);
+    }
+    this.emit(event);
+  }
+
+  /** [up-c-mac] 桥接接管自动化任务之前就已到的审批 / 提问,接管后补交(审批按 requestId 去重)。 */
+  ingest(request: ZCodePermissionRequest | ElicitationRequest): void {
+    if (request.type === "permission_request") this.onPermissionRequest(request);
+    else if (this.phoneTurn || this.unattended) this.onElicitation(request);
+  }
+
+  /** [leo] 计划获批:内核关掉 planEnabled,回到进计划之前的权限模式。 */
+  private leavePlanMode(): void {
+    if (this.mode === "plan") this.reportMode(this.planBaseMode ?? "build");
+  }
+
+  /** 内核报来的模式(含 Mac 桌面上切的)写回任务表并告诉手机;`event` 与 `type` 同值,两种解析都认得。 */
+  private reportMode(mode: string): void {
+    if (this.mode === mode) return;
+    if (mode === "plan") this.planBaseMode = this.mode;
+    this.mode = mode;
+    this.deps.onModeChanged?.();
+    this.emit({ event: "mode", type: "mode", mode });
   }
 
   /** [up-c-mac] 开始 / 结束一次无人值守的自动化运行;结束时清掉所有自动拒绝计时。 */
@@ -395,38 +498,46 @@ export class LinkSession {
     this.approvalTimers.delete(approvalId);
   }
 
-  /** 没人答:先让桥接改判运行失败(内核随后报的终态是 stopped),再拒绝这条审批、停掉这一轮。 */
+  /** 没人答:拒绝这条审批(同时改判运行失败,内核随后报的终态是 stopped)、停掉这一轮。 */
   private async autoDeny(approvalId: string): Promise<void> {
     this.approvalTimers.delete(approvalId);
     const pending = this.pendingApprovals.get(approvalId);
     const run = this.unattended;
     if (!pending || !run) return;
-    run.onTimeout(approvalId);
+    const reason = pending.kind === "plan" ? UNATTENDED_PLAN_REASON : UNATTENDED_APPROVAL_REASON;
+    // [leo] 拒绝没送进内核时 answer 会撤销改判并重新计时:之后有人批了、运行跑成功,不能被记成审批超时。
+    if (!(await this.answer(approvalId, pending, "deny", "deny", reason))) return;
     this.deps.logger.info("[leo/link] unattended approval timed out; denied", {
       taskId: this.sessionId,
       automationId: run.automationId,
     });
-    await this.answer(approvalId, pending, "deny", "deny");
     await this.stop().catch((error: unknown) =>
       this.deps.logger.warn("[leo/link] stopping after auto-deny failed", { error: String(error) }),
     );
   }
 
-  /** 把答复送进内核。先摘掉待批,流里回来的 permission_response 就不会重复发回执。 */
-  private async answer(approvalId: string, pending: Pending, kind: "allow_once" | "deny", choice: ApprovalChoice): Promise<boolean> {
-    const option = pickOption(pending.request.options, kind);
-    if (!option) return false;
+  /**
+   * 把答复送进内核。先摘掉待批,流里回来的 permission_response / elicitation_response 就不会重复发回执。
+   * failReason:这次拒绝要把无人值守的运行改判为失败。改判在送出之前记下(拒绝可能让这一轮立刻结束,
+   * Host 收终态时改判得已经在),没送到就撤销 —— 只有真送进内核的拒绝才算数。
+   */
+  private async answer(
+    approvalId: string,
+    pending: Pending,
+    kind: "allow_once" | "deny",
+    choice: ApprovalChoice,
+    failReason?: string,
+  ): Promise<boolean> {
+    const deliver = this.delivery(approvalId, pending, kind);
+    if (!deliver) return false;
     this.pendingApprovals.delete(approvalId);
     this.clearApprovalTimer(approvalId);
+    const run = failReason ? this.unattended : null;
+    if (run && failReason) run.markFailed(failReason);
     try {
-      await this.deps.taskService.respondPermission({
-        taskId: this.sessionId,
-        workspacePath: this.cwd,
-        requestId: approvalId,
-        optionId: option.optionId,
-        response: option.response,
-      });
+      await deliver();
     } catch (error) {
+      run?.markFailed(null);
       this.pendingApprovals.set(approvalId, pending);
       // 没送到内核,卡片还在:无人值守时重新计时,不能就此永远挂着。
       if (this.unattended && pending.announced) this.armApprovalTimer(approvalId, this.unattended);
@@ -434,7 +545,24 @@ export class LinkSession {
       return false;
     }
     if (pending.announced) this.emit({ event: "approval.responded", approval_id: approvalId, choice });
+    if (pending.kind === "plan" && kind === "allow_once") this.leavePlanMode();
     return true;
+  }
+
+  /** 普通审批回所选选项;计划审批回 elicitation(批准 = accept + approve,拒绝 = decline)。 */
+  private delivery(approvalId: string, pending: Pending, kind: "allow_once" | "deny"): (() => Promise<unknown>) | null {
+    const target = { taskId: this.sessionId, workspacePath: this.cwd, requestId: approvalId };
+    if (pending.kind === "plan") {
+      return () =>
+        this.deps.taskService.respondElicitation(
+          kind === "deny"
+            ? { ...target, action: "decline" }
+            : { ...target, action: "accept", content: { answer: EXIT_PLAN_MODE_APPROVE } },
+        );
+    }
+    const option = pickOption(pending.request.options, kind);
+    if (!option) return null;
+    return () => this.deps.taskService.respondPermission({ ...target, optionId: option.optionId, response: option.response });
   }
 
   /** 认得出是哪台设备就能批;只有中继 0.2 下认不出身份的请求只能拒绝。 */
@@ -479,6 +607,7 @@ export class LinkSession {
     if (RUN_END.has(name)) {
       // 这一轮(含无人值守的自动化运行)结束:自动拒绝计时一并作废。
       if (this.unattended) this.setUnattended(null);
+      this.handledQuestions.clear();
       this.phoneTurn = false;
       this.runAnnounced = false;
       this.turnCheckpointed = false;
@@ -629,7 +758,7 @@ export class LinkSession {
       pending_approvals: [...this.pendingApprovals.entries()].map(([id, pending]) => ({
         approval_id: id,
         command: pending.event["command"] ?? "",
-        choices: APPROVAL_CHOICES,
+        choices: pending.event["choices"] ?? APPROVAL_CHOICES,
       })),
     };
   }
@@ -638,6 +767,30 @@ export class LinkSession {
 function pickOption(options: ZCodePermissionOption[], kind: "allow_once" | "deny"): ZCodePermissionOption | undefined {
   // 按 kind 找,不按显示名;永不落到 allow_always(项目级持久规则)或自定义选项上。
   return options.find((option) => option.kind === kind) ?? options.find((option) => option.optionId === kind);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+/** [leo] 手机还答不了的提问:把问题和选项原文带给手机,用户可以直接发消息回答。 */
+function questionNote(request: ElicitationRequest, unattended: boolean): string {
+  const questions = request.questions?.length ? request.questions : [{ question: request.message, options: request.options }];
+  const asked = questions
+    .slice(0, 3)
+    .map(({ question, options }) => {
+      const labels = options
+        .map((option) => option.label)
+        .filter(Boolean)
+        .slice(0, 6);
+      return labels.length ? `${question}（${labels.join(" / ")}）` : question;
+    })
+    .join("；");
+  const head = unattended
+    ? "无人值守的定时任务要人回答问题，没人在场，已跳过并停掉这次运行"
+    : "Mac 上的任务问了一个问题，手机端还不能直接作答，已替你跳过（agent 会按没得到回答继续）；需要的话直接发消息告诉它";
+  const text = `${head}：${asked}`;
+  return text.length > 600 ? `${text.slice(0, 599)}…` : text;
 }
 
 function choiceOf(optionId: string): ApprovalChoice {
