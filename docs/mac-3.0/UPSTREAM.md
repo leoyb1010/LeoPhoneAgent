@@ -293,3 +293,10 @@ Peekaboo(`leo/bin`)/ leo-speech / 菜单栏模板图标三类 extraResources;`le
 | `apps/zcode-cli/packages/bootstrap/src/zcode-protocol/resource-sampler.ts` | 60s 资源样本附带进程内常驻 session 数 |
 | `packages/services/src/zcode-agent/zcodeAgentService.ts` | 挂 `createLeoMainLaneIdleRecycler`(新文件 `leoMainLaneIdleRecycle.ts`):主泳道 20 分钟空闲回收,回收动作同 `disposeWorkspace` |
 | `packages/services/package.json` | 导出 `./leo-main-lane-idle-recycle`(手机桥接登记默认工作区不回收) |
+
+## 同步策略决定(2026-10-22,升级计划 P6)
+
+- **冻结在 ZCode v3.15.1 整体同步点,此后只做定点摘取**(先例:v3.16.1 摘了 4 组修复)。原因:3.15.1 那次合并 126 处内容冲突 + 132 处 modify/delete、3 处静默失效;3.16.1 上游加回远程 server / relay v2,与我们的删除面正面冲突,已无法整体合入。
+- 摘取标准:安全修复、崩溃 / 数据丢失修复、与 Leo 自有功能直接相关的修复。新功能(如 tool-search 牵动 57 个核心文件)不摘,除非单独立项评估。
+- 每季度看一次上游 changelog,按上面的标准列摘取清单;每次摘取在本文件追加一节(摘了什么、没摘什么、为什么)。
+- Leo 自有改动继续收在 `host/leo`、`main/leo`、`ui/src/leo`、`*/leo` 与带 `[leo]` 标记的上游文件里,不扩散。
