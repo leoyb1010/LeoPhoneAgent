@@ -591,6 +591,69 @@ extension LeoAgentClient {
         return HarnessMode.parse(obj["mode"]) ?? mode
     }
 
+    // MARK: [remote-ctl-ios] 模型 / 强度 / 会话操作 / 关注(契约 leo-link-remote-controls.md)
+
+    /// 重新问一次能力开关并记下。
+    @discardableResult
+    func harnessFeatures() async throws -> HarnessFeatures {
+        let features = HarnessFeatures.parse(try await getJSON("/v1/capabilities", service: .harness))
+        HarnessFeatureCache.shared.record(features, for: hostId)
+        return features
+    }
+
+    /// 记住的能力;从没问过就问一次(失败 = nil,按旧 Mac 处理)。
+    func knownHarnessFeatures() async -> HarnessFeatures? {
+        if let cached = HarnessFeatureCache.shared.features(for: hostId) { return cached }
+        return try? await harnessFeatures()
+    }
+
+    func harnessModels() async throws -> HarnessModelCatalog {
+        HarnessModelCatalog.parse(try await getJSON("/harness/models", service: .harness))
+    }
+
+    /// 换模型(可同时给强度);返回 Mac 实际生效的模型。
+    func setHarnessModel(sessionId: String, provider: String, model: String, effort: String?) async throws -> HarnessModelRef? {
+        let obj = try await postJSON("/harness/sessions/\(sessionId)/model",
+                                     body: HarnessRemoteRequests.modelBody(provider: provider, model: model, effort: effort),
+                                     service: .harness)
+        return HarnessModelRef.parse(obj["model"])
+    }
+
+    /// 只改推理强度。
+    func setHarnessEffort(sessionId: String, effort: String) async throws -> HarnessModelRef? {
+        let obj = try await postJSON("/harness/sessions/\(sessionId)/model",
+                                     body: HarnessRemoteRequests.effortBody(effort), service: .harness)
+        return HarnessModelRef.parse(obj["model"])
+    }
+
+    func compactHarness(sessionId: String) async throws {
+        _ = try await postJSON("/harness/sessions/\(sessionId)/compact", body: [:], service: .harness)
+    }
+
+    /// 返回 Mac 存下的标题。
+    func renameHarness(sessionId: String, title: String) async throws -> String {
+        guard let body = HarnessRemoteRequests.renameBody(title) else { throw GatewayError.badURL }
+        let obj = try await postJSON("/harness/sessions/\(sessionId)/rename", body: body, service: .harness)
+        return obj["title"] as? String ?? (body["title"] as? String ?? title)
+    }
+
+    func followHarness(sessionId: String, following: Bool) async throws -> Bool {
+        let obj = try await postJSON("/harness/sessions/\(sessionId)/follow",
+                                     body: HarnessRemoteRequests.followBody(following), service: .harness)
+        return obj["following"] as? Bool ?? following
+    }
+
+    func answerHarnessQuestion(sessionId: String, questionId: String, answers: [HarnessQuestionAnswer]) async throws {
+        _ = try await postJSON("/harness/sessions/\(sessionId)/answer",
+                               body: HarnessRemoteRequests.answerBody(questionId: questionId, answers: answers),
+                               service: .harness)
+    }
+
+    func declineHarnessQuestion(sessionId: String, questionId: String) async throws {
+        _ = try await postJSON("/harness/sessions/\(sessionId)/answer",
+                               body: HarnessRemoteRequests.declineBody(questionId: questionId), service: .harness)
+    }
+
     /// 工作区相对 HEAD 的改动 + 每轮开始时的检查点。
     /// [P3] Mac 定时任务(/automations,Leo Link)。返回 Mac 的原始 JSON 文本;
     /// 404 时由调用方提示"这台 Mac 的 LeoBot 太旧"。

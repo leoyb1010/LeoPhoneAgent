@@ -47,24 +47,7 @@ struct HarnessSessionSummary: Sendable, Identifiable, Hashable {
     }
 }
 
-/// [remote-ctl] 会话当前用的模型(Mac 的 provider / model id)与推理强度。
-struct HarnessModelRef: Sendable, Hashable {
-    let provider: String
-    let model: String
-    var name: String? = nil
-    var effort: String? = nil
-
-    var displayName: String { (name?.isEmpty == false ? name : nil) ?? model }
-
-    static func parse(_ value: Any?) -> HarnessModelRef? {
-        guard let obj = value as? [String: Any],
-              let provider = obj["provider"] as? String, !provider.isEmpty,
-              let model = obj["model"] as? String, !model.isEmpty else { return nil }
-        return HarnessModelRef(provider: provider, model: model,
-                               name: obj["name"] as? String,
-                               effort: (obj["effort"] as? String).flatMap { $0.isEmpty ? nil : $0 })
-    }
-}
+// HarnessModelRef 在 HarnessRemoteControls.swift(逻辑测试也编它)。
 
 /// One event from a harness session. Same vocabulary as a gateway run, plus a
 /// sequence number — the thing that makes the stream resumable.
@@ -73,6 +56,8 @@ struct HarnessEvent: Sendable {
     let event: GatewayEvent
     var journal: HarnessJournalStatus? = nil
     var durability: String? = nil
+    /// [remote-ctl-ios] 提问 / 换模型 / 关注:值是嵌套对象,单独解析(event 此时是占位)。
+    var control: HarnessControlEvent? = nil
 }
 
 extension LeoAgentClient {
@@ -85,6 +70,8 @@ extension LeoAgentClient {
     /// has not installed never appears as a choice that would fail on use.
     func harnessKinds() async throws -> [HarnessKind] {
         let obj = try await getJSON("/v1/capabilities", service: .harness)
+        // [remote-ctl-ios] 同一份响应里的能力开关也记下来,控制台 / 新建页按它显示新控件。
+        HarnessFeatureCache.shared.record(HarnessFeatures.parse(obj), for: hostId)
         // [fix-remote] 以 Mac 为准，不过滤；记到主机上，对话框的「指挥 Mac」菜单也用这份。
         let kinds = HarnessCatalog.parse(obj["harnesses"] as? [[String: Any]] ?? [])
         if let hostId {
@@ -132,13 +119,20 @@ extension LeoAgentClient {
     /// `fullAuto`:让 Mac 用全自动(免审批)跑这个任务。[A2] 对所有 CLI 生效(Claude Code / Codex /
     /// Grok / LeoPhoneAgent);Mac 只接受认得出的 iPhone 发来的,不接受时返回 403 和原因与修复步骤。
     /// `mode`:新版 Mac 按它定权限模式(优先于 full_auto);旧版 Mac 不认这个字段,照 full_auto 走。
+    /// [remote-ctl-ios] `model` / `effort`:报了对应能力的 Mac 才带;`thinking` 在报了 effort 的 Mac 上改发成 effort。
     func createHarnessSession(harness: String, cwd: String, prompt: String?, thinking: String? = nil,
                               fullAuto: Bool = false, mode: HarnessMode? = nil,
-                              phoneSessionId: String? = nil) async throws -> String {
+                              phoneSessionId: String? = nil,
+                              model: HarnessModelRef? = nil, effort: String? = nil) async throws -> String {
         var payload = HarnessFullAuto.createPayload(harness: harness, cwd: cwd, prompt: prompt,
                                                     thinking: thinking, fullAuto: fullAuto,
                                                     phoneSessionId: phoneSessionId)
         if let mode { payload["mode"] = mode.rawValue }
+        // 模型 / 强度只对 LeoBot 会话;外部 agent 照旧只带 thinking。
+        if HarnessModelControlPolicy.applies(harnessKey: harness), thinking != nil || model != nil || effort != nil {
+            HarnessRemoteRequests.applyCreateChoices(to: &payload, model: model, effort: effort, thinking: thinking,
+                                                     features: await knownHarnessFeatures())
+        }
         let sentAt = CACurrentMediaTime()
         let obj = try await postJSON("/harness/sessions", body: payload, service: .harness)
         guard let id = obj["session_id"] as? String else {
@@ -155,9 +149,11 @@ extension LeoAgentClient {
     /// `X-Leo-Request-Id` 让重试不会投递两次。返回 true = 已排队、还没到 Mac。
     @discardableResult
     func steerHarness(sessionId: String, text: String, fullAuto: Bool? = nil,
-                      requestId: String = UUID().uuidString, phoneSessionId: String? = nil) async throws -> Bool {
+                      requestId: String = UUID().uuidString, phoneSessionId: String? = nil,
+                      attachments: [HarnessAttachment] = []) async throws -> Bool {
         LeoPerf.macSendBegan(sessionId)
         var body: [String: Any] = ["text": text]
+        if !attachments.isEmpty { body["attachments"] = HarnessRemoteRequests.attachmentsValue(attachments) }
         if let fullAuto { body["full_auto"] = fullAuto }
         if let phone = HarnessFullAuto.phoneSessionValue(phoneSessionId) { body["phone_session_id"] = phone }
         let obj = try await postJSON("/harness/sessions/\(sessionId)/send", body: body, service: .harness,
@@ -255,6 +251,12 @@ extension LeoAgentClient {
                         journal: HarnessJournalStatus.parse(obj) ?? HarnessJournalStatus()))
                     continue
                 }
+                if let control = HarnessControlEvent.parse(obj) {
+                    continuation.yield(HarnessEvent(seq: obj["seq"] as? Int ?? 0,
+                                                    event: .unknown(name: obj["event"] as? String ?? "", payload: [:]),
+                                                    durability: obj["durability"] as? String, control: control))
+                    continue
+                }
                 if obj["event"] as? String == "message.delta" { LeoPerf.macDelta(sessionId) }
                 continuation.yield(HarnessEvent(
                     seq: obj["seq"] as? Int ?? 0,
@@ -344,6 +346,174 @@ final class HarnessSessionDriver: ObservableObject {
         mode = HarnessMode.fallback(fullAutoOn: FullAutoGate.isOn)
         modeSupport = Self.cachedSupport(Self.modeSupportKey, hostId: client.hostId)
         changesSupport = Self.cachedSupport(Self.changesSupportKey, hostId: client.hostId)
+        features = HarnessFeatureCache.shared.features(for: client.hostId)
+        if let support = features?.sessionModeSupport { modeSupport = support }
+    }
+
+    // MARK: [remote-ctl-ios] 模型 / 强度 / 会话操作 / 关注 / 提问
+
+    /// 这台 Mac 报的能力;nil = 还没问到(新控件先不显示)。
+    @Published private(set) var features: HarnessFeatures?
+    /// 会话当前的模型与强度(摘要 / `model` 事件 / 换模型的回包)。
+    @Published private(set) var model: HarnessModelRef?
+    /// 关注;nil = 旧 Mac 不报(按关注处理)。
+    @Published private(set) var following: Bool?
+    /// Mac 上的任务标题(改名后更新)。
+    @Published private(set) var sessionTitle: String?
+    /// 模型提问(AskUserQuestion);一次显示一张,其余排队。
+    @Published private(set) var pendingQuestions: [HarnessQuestionRequest] = []
+    var pendingQuestion: HarnessQuestionRequest? { pendingQuestions.first }
+
+    /// 模型 / 强度只对 LeoBot 会话(外部 agent 的会话 Mac 回 400)。
+    var controlsModel: Bool { HarnessModelControlPolicy.applies(harnessKey: harness.key) }
+    var showsSessionSettings: Bool {
+        guard sessionId != nil, let features else { return false }
+        return (controlsModel && (features.switchesModel || features.switchesEffort))
+            || features.compacts || features.renames || features.follows
+    }
+    var acceptsAttachments: Bool { sessionId != nil && features?.acceptsAttachments == true }
+
+    func loadModels() async throws -> HarnessModelCatalog {
+        try await client.harnessModels()
+    }
+
+    /// 换模型(可同时改强度)。返回是否生效;失败在时间线说明原因。
+    @discardableResult
+    func setModel(_ option: HarnessModelOption, effort: String? = nil) async -> Bool {
+        guard let sessionId else { return false }
+        do {
+            let applied = try await client.setHarnessModel(sessionId: sessionId, provider: option.provider,
+                                                           model: option.model, effort: effort)
+            model = applied ?? HarnessModelRef(provider: option.provider, model: option.model, name: option.name,
+                                               effort: effort ?? model?.effort)
+            return true
+        } catch {
+            note(AppLocalized("换模型没成功：") + LeoAgentClient.describeHarnessFeatureError(error))
+            return false
+        }
+    }
+
+    @discardableResult
+    func setEffort(_ effort: String) async -> Bool {
+        // 会话还没有模型时只改强度 Mac 回 409;界面此时不给强度选项。
+        guard let sessionId, HarnessModelControlPolicy.canChangeEffortOnly(current: model) else { return false }
+        do {
+            if let applied = try await client.setHarnessEffort(sessionId: sessionId, effort: effort) {
+                model = applied
+            } else if let current = model {
+                var next = current
+                next.effort = effort
+                model = next
+            }
+            return true
+        } catch {
+            note(AppLocalized("改推理强度没成功：") + LeoAgentClient.describeHarnessFeatureError(error))
+            return false
+        }
+    }
+
+    @discardableResult
+    func compact() async -> Bool {
+        guard let sessionId else { return false }
+        do {
+            try await client.compactHarness(sessionId: sessionId)
+            // 结果由 Mac 的 session.note(compacted / compact_failed)报回时间线。
+            note(AppLocalized("已请 Mac 压缩上下文。"))
+            return true
+        } catch GatewayError.http(status: 409, _) {
+            note(AppLocalized("这一轮还在跑，等它停下再压缩上下文。"))
+            return false
+        } catch {
+            note(AppLocalized("压缩上下文没成功：") + LeoAgentClient.describeHarnessFeatureError(error))
+            return false
+        }
+    }
+
+    @discardableResult
+    func rename(_ title: String) async -> Bool {
+        guard let sessionId, HarnessRemoteRequests.renameBody(title) != nil else { return false }
+        do {
+            sessionTitle = try await client.renameHarness(sessionId: sessionId, title: title)
+            return true
+        } catch {
+            note(AppLocalized("重命名没成功：") + LeoAgentClient.describeHarnessFeatureError(error))
+            return false
+        }
+    }
+
+    @discardableResult
+    func setFollowing(_ value: Bool) async -> Bool {
+        guard let sessionId else { return false }
+        let previous = following
+        following = value
+        do {
+            following = try await client.followHarness(sessionId: sessionId, following: value)
+            return true
+        } catch {
+            following = previous
+            note(AppLocalized("关注设置没成功：") + LeoAgentClient.describeHarnessFeatureError(error))
+            return false
+        }
+    }
+
+    func answer(_ question: HarnessQuestionRequest, answers: [HarnessQuestionAnswer]) {
+        respondToQuestion(question) { client, sessionId in
+            try await client.answerHarnessQuestion(sessionId: sessionId, questionId: question.questionId, answers: answers)
+        }
+    }
+
+    func decline(_ question: HarnessQuestionRequest) {
+        respondToQuestion(question) { client, sessionId in
+            try await client.declineHarnessQuestion(sessionId: sessionId, questionId: question.questionId)
+        }
+    }
+
+    /// 先收起卡片;Mac 没收下就放回队首并说明(409 = 已在别处回答 / 这一轮结束了,不放回)。
+    private func respondToQuestion(_ question: HarnessQuestionRequest,
+                                   _ send: @escaping @Sendable (LeoAgentClient, String) async throws -> Void) {
+        guard let sessionId else { return }
+        pendingQuestions.removeAll { $0.questionId == question.questionId }
+        Task { [weak self, client] in
+            do {
+                try await send(client, sessionId)
+            } catch GatewayError.http(status: 409, _) {
+            } catch {
+                await MainActor.run {
+                    guard let self else { return }
+                    if !self.pendingQuestions.contains(where: { $0.questionId == question.questionId }) {
+                        self.pendingQuestions.insert(question, at: 0)
+                    }
+                    self.lastError = LeoAgentClient.describeHarnessFeatureError(error)
+                }
+            }
+        }
+    }
+
+    private func applyControl(_ control: HarnessControlEvent) {
+        flushDeltas()
+        switch control {
+        case .question(let request):
+            guard !pendingQuestions.contains(where: { $0.questionId == request.questionId }) else { return }
+            pendingQuestions.append(request)
+        case .questionResponded(let questionId, _, let expired):
+            if let questionId {
+                pendingQuestions.removeAll { $0.questionId == questionId }
+            } else if !pendingQuestions.isEmpty {
+                pendingQuestions.removeFirst()
+            }
+            if expired { note(AppLocalized("这个提问没人回答，已过期。")) }
+        case .model(let ref):
+            model = ref
+        case .follow(let value):
+            following = value
+        }
+    }
+
+    /// 会话摘要里的新字段(模型、关注、标题)。
+    private func adoptSummary(_ summary: HarnessSessionSummary) {
+        if let ref = summary.model { model = ref }
+        if let value = summary.following { following = value }
+        if let title = summary.title { sessionTitle = title }
     }
 
     /// [T-composer-send-dead] 会话建立期间(经中继 1~3 秒)用户就开始发送;SSH 兜底一轮在跑时也一样。
@@ -453,13 +623,20 @@ final class HarnessSessionDriver: ObservableObject {
         await refreshChanges()
     }
 
-    /// 会话建好 / 接上之后问一次:模式支不支持(摘要里有没有 mode)、改动有多少。
+    /// 会话建好 / 接上之后问一次:能力开关、会话摘要(模式 / 模型 / 关注)、改动有多少。
+    /// [remote-ctl-ios] 模式支持按能力判断;摘要里没有 mode 不再把整台 Mac 记成「不支持」——
+    /// 桌面任务行本来就不带 mode,以前点开一个桌面任务就把模式胶囊永久藏掉。
     private func probeSessionFeatures(_ id: String) {
         Task { [weak self] in
             guard let self else { return }
-            if let summary = try? await self.client.harnessSessions().first(where: { $0.id == id }) {
-                self.recordSupport(Self.modeSupportKey, summary.mode != nil)
+            if let fresh = try? await self.client.harnessFeatures() { self.features = fresh }
+            let summary = try? await self.client.harnessSessions().first(where: { $0.id == id })
+            if let support = HarnessModeSupport.resolve(features: self.features, summaryMode: summary?.mode) {
+                self.recordSupport(Self.modeSupportKey, support)
+            }
+            if let summary {
                 if let mode = summary.mode { self.mode = mode }
+                self.adoptSummary(summary)
             }
             await self.refreshChanges()
         }
@@ -529,7 +706,7 @@ final class HarnessSessionDriver: ObservableObject {
     /// 这个控制台跑过 SSH 兜底(首页据此在兜底跑完一轮后也清掉草稿)。
     @Published private(set) var viaSSH = false
 
-    func start(prompt: String, thinking: String? = nil) {
+    func start(prompt: String, thinking: String? = nil, model createModel: HarnessModelRef? = nil, effort createEffort: String? = nil) {
         guard sessionId == nil, !isRunning else { return }
         problem = nil
         firstPrompt = prompt
@@ -547,7 +724,8 @@ final class HarnessSessionDriver: ObservableObject {
                 do {
                     id = try await self.client.createHarnessSession(
                         harness: self.harness.key, cwd: self.cwd, prompt: prompt,
-                        thinking: thinking, fullAuto: fullAuto, mode: createMode, phoneSessionId: self.phoneSessionId)
+                        thinking: thinking, fullAuto: fullAuto, mode: createMode, phoneSessionId: self.phoneSessionId,
+                        model: createModel, effort: createEffort)
                 } catch GatewayError.http(let status, let message)
                             where HarnessFullAuto.isRefusal(status: status, harnessKey: self.harness.key,
                                                             requestedFullAuto: fullAuto || createMode == .yolo) {
@@ -560,7 +738,7 @@ final class HarnessSessionDriver: ObservableObject {
                     id = try await self.client.createHarnessSession(
                         harness: self.harness.key, cwd: self.cwd, prompt: prompt, thinking: thinking,
                         mode: createMode == .yolo ? .guarded : createMode,
-                        phoneSessionId: self.phoneSessionId)
+                        phoneSessionId: self.phoneSessionId, model: createModel, effort: createEffort)
                 }
                 // 建任务的路上你关掉了全自动:建好后立刻让 Mac 把它切回先问我。
                 if fullAuto, !FullAutoGate.isOn {
@@ -714,7 +892,7 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     /// 发一条后续消息,顺带告诉 Mac 全自动开关的当前状态(所有 CLI 都带)。
-    private func sendSteer(sessionId: String, text: String) async {
+    private func sendSteer(sessionId: String, text: String, attachments: [HarnessAttachment] = []) async {
         // 支持模式切换的 Mac 由模式决定审批;再带 full_auto 会把用户选的模式顶掉。
         let fullAuto = modeSupport == true ? nil
             : HarnessFullAuto.steerValue(harnessKey: harness.key, gateOn: FullAutoGate.isOn, refused: fullAutoRefused)
@@ -736,8 +914,10 @@ final class HarnessSessionDriver: ObservableObject {
         inFlightOutbox.insert(entry.id)
         defer { inFlightOutbox.remove(entry.id) }
         do {
+            // 附件只在内存里随这次请求走(本机待发记录只存文字):进程被杀后补发的只有文字。
             if try await client.steerHarness(sessionId: sessionId, text: entry.text,
-                    fullAuto: entry.fullAuto, requestId: entry.id, phoneSessionId: phoneSessionId) {
+                    fullAuto: entry.fullAuto, requestId: entry.id, phoneSessionId: phoneSessionId,
+                    attachments: attachments) {
                 try await Task.detached { try HarnessOutbox.shared.markQueued(entry) }.value
                 var queued = entry
                 queued.state = .queued
@@ -757,7 +937,7 @@ final class HarnessSessionDriver: ObservableObject {
             guard finishRejectedOutbox(entry) == true else { return }
             fullAutoRefused = true
             note(HarnessFullAuto.refusedNote(serverMessage: message, status: status))
-            await sendSteer(sessionId: sessionId, text: text)
+            await sendSteer(sessionId: sessionId, text: text, attachments: attachments)
         } catch GatewayError.http(let status, let message) where (400..<500).contains(status) && status != 409 && status != 408 {
             guard finishRejectedOutbox(entry) == true else { return }
             steerFailed(text, message ?? "HTTP \(status)",
@@ -975,8 +1155,9 @@ final class HarnessSessionDriver: ObservableObject {
     /// Send a follow-up. Never a dead tap: with no session yet the text is
     /// queued (create in flight) or becomes the first prompt of a fresh
     /// create (previous create failed). Returns false only for empty text.
+    /// `attachments`:只在已有 Mac 会话、且 Mac 报了 attachments 能力时由控制台带上。
     @discardableResult
-    func steer(_ text: String) -> Bool {
+    func steer(_ text: String, attachments: [HarnessAttachment] = []) -> Bool {
         guard !text.isEmpty else { return false }
         lastUserText = text
         guard let sessionId else {
@@ -1003,8 +1184,9 @@ final class HarnessSessionDriver: ObservableObject {
             streamTask?.cancel()
             streamTask = Task { [weak self] in await self?.follow(sessionId: sessionId) }
         }
+        if !attachments.isEmpty { note(AppLocalized("已附 \(attachments.count) 张图片")) }
         // 每条后续消息都带上全自动开关的当前状态(LeoPhoneAgent 任务):开关关着时 Mac 会把全自动任务切回先问我。
-        Task { await self.sendSteer(sessionId: sessionId, text: text) }
+        Task { await self.sendSteer(sessionId: sessionId, text: text, attachments: attachments) }
         return true
     }
 
@@ -1178,7 +1360,7 @@ final class HarnessSessionDriver: ObservableObject {
                         // 属于纯防御,不改变已知实现的行为。
                         if item.seq > 0, item.seq <= self.lastSeq { return }
                         if item.seq > 0 { self.lastSeq = item.seq }
-                        self.apply(item.event)
+                        if let control = item.control { self.applyControl(control) } else { self.apply(item.event) }
                     }
                     // run.* are all TURN boundaries: after a stop the Mac desktop
                     // app still takes follow-ups. A session that really ended
@@ -1308,7 +1490,8 @@ final class HarnessSessionDriver: ObservableObject {
             if pendingApprovals.count == 1 { armWatch(for: approval) }
             // [T-siri-approval-notify] app 在后台时,审批必须走通知触达,
             // 否则任务静默挂住直到用户想起来打开 app。
-            if let sid = sessionId {
+            // [remote-ctl-ios] 不关注的会话不发这条限时本地通知(Mac 也不推送);nil = 旧 Mac,按关注处理。
+            if let sid = sessionId, HarnessFollowPolicy.notifiesApproval(following: following) {
                 HarnessApprovalNotifier.post(hostId: client.hostId, hostName: client.hostName,
                                              sessionId: sid, approval: approval)
             }
@@ -1398,6 +1581,8 @@ final class HarnessSessionDriver: ObservableObject {
             }
             // Mac 端给人看的说明(例如"手机暂时答不了的提问已跳过"):只显示文字,不带事件名。
             if name == "session.note" {
+                // [remote-ctl-ios] 「有提问在等」是给旧版 iPhone 的文字版;这里直接显示提问卡。
+                if HarnessNotePolicy.hides(kind: payload["kind"]) { return }
                 let text = payload["text"] ?? ""
                 // [takeover] 没接上终端里的那个会话(已新开对话):显示成醒目的一行说明,而不是灰色小字。
                 if !text.isEmpty, MacExternalSessionsWire.isProminentNote(payload) {
@@ -1420,6 +1605,8 @@ final class HarnessSessionDriver: ObservableObject {
     /// A finished turn waits on nothing: drop its cards everywhere (the Mac
     /// clears its own without always saying so, and a replay would bring them back).
     private func clearApprovals() {
+        // 这一轮结束了,模型的提问也没人等了。
+        pendingQuestions = []
         for approval in pendingApprovals {
             WatchBridge.shared.clearApprovalRequest(approvalId: approval.approvalId)
             if let sessionId { HarnessApprovalNotifier.clear(sessionId: sessionId, approvalId: approval.approvalId) }
