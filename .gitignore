@@ -152,3 +152,4 @@ dist/
 # iOS 本机私有中继配置（真实 tailnet 主机名），由 src/ios/Configs/LeoPhoneAgent.xcconfig 可选引入。
 src/ios/Configs/LocalRelay.xcconfig
 src/ios/LeoPhoneAgent.xcodeproj/project.pbxproj.lock
+.turbo/
