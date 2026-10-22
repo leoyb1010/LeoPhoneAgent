@@ -11,6 +11,13 @@ set -eu
 # 路上,于是"版本 bump 了但弹不出更新"能一路溜到用户手机上。
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+# [ios-remote-install] 真机插在另一台 Mac 上(如 Studio)时:LEO_IOS_DEVICE_HOST=studio。
+# 构建与签名仍在本机,设备查询与安装经 ssh 在那台 Mac 上做(先把签好的 .app 同步过去)。
+device_host=${LEO_IOS_DEVICE_HOST:-}
+dc() {
+  if [ -n "$device_host" ]; then ssh -o BatchMode=yes "$device_host" xcrun devicectl "$@"; else xcrun devicectl "$@"; fi
+}
 project="$repo_root/src/ios/LeoPhoneAgent.xcodeproj"
 
 echo "==> [1/4] 发版闸门"
@@ -29,7 +36,7 @@ else
   # 按 UDID 格式提取(新机型是 8-16 位:00008160-00084DCE3C200036;旧的是 8-4-4-4-12):设备名里含空格(如 "iPad Pro 13-inch"),按列取字段会
   # 抓到型号词而不是 UDID。另外 "unavailable" 里含 "available" 子串 ——
   # 不先排掉,离线的 Apple Watch 会被当成可装机目标。在线状态可能显示为 available (paired) 或 connected,两种都算。
-  udids=$(xcrun devicectl list devices 2>/dev/null \
+  udids=$(dc list devices 2>/dev/null \
     | grep -i physical | grep -vi unavailable | grep -iE 'available|connected' \
     | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{16}|[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})')
 fi
@@ -39,12 +46,17 @@ fi
 # 和最新日志跑 IOSPerfBudgetGate。超预算就挡住(本次是性能修复时用 LEO_PERF_GATE=warn 显式放行);
 # 拉不到数据会打印 "SKIPPED: no perf data",不会静默通过。
 echo "==> [2/4] 性能预算闸门"
-devices_now=$(xcrun devicectl list devices 2>/dev/null || true)
+devices_now=$(dc list devices 2>/dev/null || true)
 perf_udid=""
 for u in $udids; do
   if ! printf '%s\n' "$devices_now" | grep "$u" | grep -qi 'Watch'; then perf_udid="$u"; break; fi
 done
-"$repo_root/scripts/IOSPerfGateFromDevice.sh" $perf_udid
+if [ -n "$device_host" ]; then
+  # 性能数据要从设备拷到本机,跨机暂不支持:明确打印跳过,不算通过。
+  echo "    SKIPPED: 设备在 $device_host 上,本次未跑性能预算闸门(不是通过)"
+else
+  "$repo_root/scripts/IOSPerfGateFromDevice.sh" $perf_udid
+fi
 
 # 指定一台新设备时，让 Xcode 为实际设备更新描述文件；generic 目标不会注册新机。
 build_destination='generic/platform=iOS'
@@ -78,7 +90,7 @@ fi
 # Apple Watch 装内嵌的手表 App(只装 iPhone 不会可靠地带上手表)。
 # 在线的配对手表总是一起装;它们不在命令行参数里也会补上。
 watch_app=$(ls -d "$app"/Watch/*.app 2>/dev/null | head -1 || true)
-devices=$(xcrun devicectl list devices 2>/dev/null || true)
+devices=$(dc list devices 2>/dev/null || true)
 # 手表那一行 Reality 列是空的(不写 physical),按 physical 过滤会把在线手表漏掉;改为排除模拟器。
 watch_udids=$(printf '%s\n' "$devices" | grep -vi simulated | grep -vi unavailable | grep -iE 'available|connected' | grep -i 'Watch' \
   | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{16}|[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})' || true)
@@ -88,8 +100,23 @@ if [ -n "$watch_app" ]; then
   done
 fi
 
+# 去重(发现阶段的 UDID 是换行分隔,上面按空格判重会漏)并把手表排到最后:
+# 手表 App 要等配对 iPhone 上的主 App 先装好,先装手表会失败一次。
+ordered=""; watches=""
+for u in $udids; do
+  case " $ordered $watches " in *" $u "*) continue ;; esac
+  if printf '%s\n' "$devices" | grep "$u" | grep -qi 'Watch'; then watches="$watches $u"; else ordered="$ordered $u"; fi
+done
+udids="$ordered $watches"
+
 echo "==> [4/4] 安装"
 rc=0
+if [ -n "$device_host" ]; then
+  remote_dir=/tmp/leobot-ios-install
+  ssh -o BatchMode=yes "$device_host" "mkdir -p $remote_dir"
+  rsync -a --delete "$app/" "$device_host:$remote_dir/LeoPhoneAgent.app/" || { echo "同步到 $device_host 失败" >&2; exit 1; }
+  remote_app="$remote_dir/LeoPhoneAgent.app"
+fi
 for u in $udids; do
   printf '    %s ... ' "$u"
   target="$app"
@@ -97,7 +124,8 @@ for u in $udids; do
     [ -n "$watch_app" ] || { echo "跳过(构建里没有手表 App)"; continue; }
     target="$watch_app"
   fi
-  if xcrun devicectl device install app --device "$u" "$target" >/tmp/ios-install-$u.log 2>&1; then
+  if [ -n "$device_host" ]; then target="$remote_app${target#"$app"}"; fi
+  if dc device install app --device "$u" "$target" >/tmp/ios-install-$u.log 2>&1; then
     echo "OK"
   else
     echo "失败(见 /tmp/ios-install-$u.log)"; rc=1
