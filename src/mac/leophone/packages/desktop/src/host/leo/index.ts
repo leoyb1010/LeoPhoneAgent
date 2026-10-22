@@ -106,14 +106,18 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
           // [leo][WP-22] 随包 Peekaboo 登记为 MCP leo-screen(只 macOS 有)。
           const mcpSync = deps.services.getOptional(IMcpSyncService);
           // [wp-61] 藏宝阁 MCP 也走同步服务的 CLI 用户配置(会话真正读的地方)。
-          if (mcpSync) void registerTreasuryMcpServer(mcpSync, deps.logger);
           // 第二大脑 leo-brain:同一路径;本机没有 key 文件就不登记。
-          if (mcpSync) void registerBrainMcpServer(mcpSync, deps.logger);
+          // [fix-mcp-race] 三个登记都是对同一个 config.json 读-改-写,并发时后写的覆盖先写的
+          // (1.15.0 实机:藏宝阁迁 HTTP 被大脑那次写回成已删除的 stdio 脚本)。必须一个接一个。
+          if (mcpSync) {
+            void (async () => {
+              await registerTreasuryMcpServer(mcpSync, deps.logger);
+              await registerBrainMcpServer(mcpSync, deps.logger);
+              if (process.platform === "darwin") await registerPeekabooMcpServer(mcpSync, deps.logger);
+            })().catch((error) => deps.logger.warn("[leo] MCP registration chain failed", { error: String(error) }));
+          }
           // [E1] 手机写的「Leo 画像」卡 → ~/.leophoneagent/leo-profile.md(新会话的背景上下文);没 key 跳过。
           startProfileCardSync(deps.logger);
-          if (process.platform === "darwin" && mcpSync) {
-            void registerPeekabooMcpServer(mcpSync, deps.logger);
-          }
           // 手机经中继连回这台 Mac:只在抢到端口的这个 Host 里跑一份。
           // 跟着开关文件走:回滚时必须立刻让出机器名,否则和恢复注册的 leoagent 在中继上互踢。
           const stopLink = (reason: string) => {

@@ -13,6 +13,13 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.15.1",
+    date: "2026-10-22",
+    items: [
+      "修复：升级到 1.15.0 后藏宝阁工具不可用 —— 启动时藏宝阁、第二大脑、屏幕三个工具的登记同时改写同一份配置，藏宝阁那次被覆盖回旧的已删除脚本；现在一个接一个登记，藏宝阁恢复为整台 Mac 共享的一份。",
+    ],
+  },
+  {
     version: "1.15.0",
     date: "2026-10-22",
     items: [
