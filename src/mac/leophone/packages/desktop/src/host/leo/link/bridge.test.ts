@@ -10,7 +10,15 @@ import type { IZCodeTaskService } from "@zcode/services";
 import { acpModelSelection } from "@zcode/shared/acp";
 import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 
-import { LinkBridge, readSSHHostKeys, type LinkBridgeDeps, type LinkRequest } from "./bridge.js";
+import { takeAutomationRunFailure } from "./automationEvents.js";
+import {
+  LinkBridge,
+  readSSHHostKeys,
+  UNATTENDED_APPROVAL_REASON,
+  type LinkBridgeDeps,
+  type LinkRequest,
+} from "./bridge.js";
+import { traceIdOf } from "./relayLink.js";
 import type { HarnessEvent } from "./journal.js";
 import type { Caller } from "./session.js";
 
@@ -18,7 +26,8 @@ type Call = [string, Record<string, unknown>];
 
 /** 只实现桥接用到的那几个方法;流事件由测试手动 fire。 */
 function fakeZCode() {
-  const listeners = new Map<string, (event: unknown) => void>();
+  // 同一任务可以有多个订阅(桥接盯自动化运行 + 接管后的会话),和真服务一样各自退订。
+  const listeners = new Map<string, Set<(event: unknown) => void>>();
   const calls: Call[] = [];
   let next = 0;
   const record = (name: string) => async (params: Record<string, unknown>) => {
@@ -46,9 +55,18 @@ function fakeZCode() {
     onDynamicTaskEvent(params: { taskId: string }) {
       service.subscriptions += 1;
       return (listener: (event: unknown) => void) => {
-        listeners.set(params.taskId, listener);
-        return { dispose: () => listeners.delete(params.taskId) };
+        const set = listeners.get(params.taskId) ?? new Set();
+        set.add(listener);
+        listeners.set(params.taskId, set);
+        return { dispose: () => set.delete(listener) };
       };
+    },
+    /** 测试按任务塞进去的历史消息(最终回复摘要从这里读)。 */
+    snapshots: new Map<string, unknown[]>(),
+    async getTaskSnapshot(params: { taskId: string }) {
+      calls.push(["getTaskSnapshot", params]);
+      const messages = service.snapshots.get(params.taskId);
+      return messages ? { meta: {}, messages } : null;
     },
   };
   return {
@@ -57,11 +75,16 @@ function fakeZCode() {
       service.desktopTasks = items;
     },
     subscriptionCount: () => service.subscriptions,
-    captureListener: (taskId: string) => listeners.get(taskId),
+    captureListener: (taskId: string) => [...(listeners.get(taskId) ?? [])].at(-1),
+    listenerCount: (taskId: string) => listeners.get(taskId)?.size ?? 0,
+    setSnapshot: (taskId: string, messages: unknown[]) => service.snapshots.set(taskId, messages),
     calls,
     named: (name: string) => calls.filter(([n]) => n === name).map(([, p]) => p),
-    fire: (taskId: string, event: Record<string, unknown>) =>
-      listeners.get(taskId)?.({ taskId, traceId: "trace", ...event }),
+    fire: (taskId: string, event: Record<string, unknown>) => {
+      // 快照一份:回调里可能退订 / 新增订阅。
+      for (const listener of Array.from(listeners.get(taskId) ?? []))
+        listener({ taskId, traceId: "trace", ...event });
+    },
   };
 }
 
@@ -111,6 +134,8 @@ async function withBridge(
     zcodeModelSelection?: LinkBridgeDeps["zcodeModelSelection"];
     agentLogin?: LinkBridgeDeps["agentLogin"];
     automations?: LinkBridgeDeps["automations"];
+    unattendedApprovalMs?: number;
+    logger?: LinkBridgeDeps["logger"];
   } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(path.join(os.tmpdir(), "leo-link-")));
@@ -119,7 +144,7 @@ async function withBridge(
   const bridge = new LinkBridge({
     device: options.device,
     taskService: zcode.service,
-    logger: silent,
+    logger: options.logger ?? silent,
     push: (event) => pushed.push(event),
     appVersion: "test",
     journalDir: path.join(dir, "journals"),
@@ -138,6 +163,7 @@ async function withBridge(
     ...(options.zcodeModelSelection ? { zcodeModelSelection: options.zcodeModelSelection } : {}),
     ...(options.agentLogin ? { agentLogin: options.agentLogin } : {}),
     ...(options.automations ? { automations: options.automations } : {}),
+    ...(options.unattendedApprovalMs ? { unattendedApprovalMs: options.unattendedApprovalMs } : {}),
   });
   try {
     await run({ bridge, zcode, dir, pushed });
@@ -1937,8 +1963,10 @@ test("automations: list, patch, enable/disable, run now, delete through the auto
         status: "failed",
         at: 2,
         task_id: "task-x",
+        session_id: "task-x",
         trigger: "schedule",
         error: "boom",
+        summary: "boom",
       });
       assert.equal((await bridge.handle(req("GET", `/automations/${id}`))).status, 200);
 
@@ -2053,5 +2081,234 @@ test("automations: a finished run is pushed to the phone and its task becomes ad
       assert.equal(pushed[1]?.["summary"], "已在 Mac 上跑完");
     },
     { automations: automations.service, zcodeModelSelection: async () => sonnet },
+  );
+});
+
+// -- [up-c-mac] 运行结果摘要 / 无人值守的审批 / 模板 / 追踪号 -------------------------------------------
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+async function eventually(check: () => boolean, label: string) {
+  for (let i = 0; i < 60 && !check(); i += 1) await sleep(25);
+  assert.ok(check(), label);
+}
+
+test("automations: a successful run pushes and remembers the final reply as its summary; the task is openable", async () => {
+  const automations = fakeAutomations();
+  await withBridge(
+    async ({ bridge, dir, pushed, zcode }) => {
+      const created = await bridge.handle(
+        req("POST", "/automations", { name: "早报", prompt: "p", schedule: "0 9 * * *", workspace: dir }, iphone, "op-a"),
+      );
+      const id = (created.body as AutomationBody).automation.id;
+      const runId = `${id}:1761181200000`;
+      zcode.setSnapshot("task-brief", [
+        { role: "user", content: "p", timestamp: 1 },
+        {
+          role: "assistant",
+          content: "",
+          timestamp: 2,
+          parts: [
+            { type: "content", content: "我先查一下第二大脑" },
+            { type: "tool-call", toolIndex: 0 },
+            { type: "content", content: "## 今天要做\n- **修** 登录 bug\n- 回复 `PR #12`" },
+          ],
+          tools: [{ output: "TOKEN=abc" }],
+        },
+      ]);
+      await bridge.automationRunCompleted({
+        automationId: id,
+        runId,
+        trigger: "schedule",
+        outcome: "succeeded",
+        taskId: "task-brief",
+        workspacePath: dir,
+      });
+      assert.equal(pushed[0]?.["summary"], "今天要做 修 登录 bug 回复 PR #12");
+      assert.ok(!String(pushed[0]?.["summary"]).includes("TOKEN"), "不带工具输出");
+      assert.deepEqual(zcode.named("getTaskSnapshot")[0], { taskId: "task-brief", workspacePath: dir, messageLimit: 6 });
+
+      // GET 里的 last_run.summary 就是推送里那句(运行记录由自动化服务给,摘要由桥接记下)。
+      automations.runs.set(id, [
+        {
+          runId,
+          automationId: id,
+          workspaceKey: dir,
+          trigger: "schedule",
+          dispatchStatus: "dispatched",
+          outcome: "succeeded",
+          sessionId: "task-brief",
+          attempts: 1,
+          createdAt: 1_000,
+          updatedAt: 2_000,
+        },
+      ]);
+      const view = (await bridge.handle(req("GET", `/automations/${id}`))).body as AutomationBody;
+      const lastRun = view.automation["last_run"] as Record<string, unknown>;
+      assert.equal(lastRun["summary"], "今天要做 修 登录 bug 回复 PR #12");
+      assert.equal(lastRun["session_id"], "task-brief");
+
+      // session_id 能直接打开 /harness/sessions/<id>/events(接管成会话)。
+      const events = await collect(bridge, "task-brief", 0, (all) => all.some((e) => e.event === "session.note"));
+      assert.ok(events.some((e) => e.event === "session.note" && e["session_id"] === "task-brief"));
+    },
+    { automations: automations.service, zcodeModelSelection: async () => sonnet },
+  );
+});
+
+test("automations: unattended approvals reach the phone, are answerable, and auto-deny after the timeout", async () => {
+  const automations = fakeAutomations();
+  await withBridge(
+    async ({ bridge, dir, pushed, zcode }) => {
+      const created = await bridge.handle(
+        req("POST", "/automations", { name: "测试", prompt: "p", schedule: "0 9 * * *", workspace: dir }, iphone, "op-a"),
+      );
+      const id = (created.body as AutomationBody).automation.id;
+      const run = { automationId: id, trigger: "schedule" as const, workspacePath: dir };
+
+      // 1) 开跑:只盯任务流,没审批就不接管(手机任务列表里没有它)。
+      bridge.automationRunStarted({ ...run, runId: `${id}:1`, taskId: "task-a1" });
+      assert.equal(zcode.listenerCount("task-a1"), 1);
+      const before = (await bridge.handle(req("GET", "/harness/sessions"))).body as { sessions: unknown[] };
+      assert.equal(before.sessions.length, 0);
+
+      // 2) 出审批 → 接管成会话,审批卡带 session_id / approval_id / command 推给手机。
+      zcode.fire("task-a1", permission("p1", "Bash", { command: "npm test" }));
+      await eventually(() => pushed.some((e) => e["approval_id"] === "p1"), "审批推给手机");
+      const card = pushed.find((e) => e["approval_id"] === "p1")!;
+      assert.equal(card.event, "approval.request");
+      assert.equal(card["session_id"], "task-a1");
+      assert.equal(card["command"], "Bash: npm test");
+      assert.equal(card["automation_id"], id);
+      assert.equal(zcode.listenerCount("task-a1"), 1, "接管后只剩会话自己的订阅");
+
+      // 3) 手机批准:送进内核,计时作废(过了超时也不会再拒)。
+      const approved = await bridge.handle(
+        req("POST", "/harness/sessions/task-a1/approval", { approval_id: "p1", choice: "once" }, iphone),
+      );
+      assert.equal(approved.status, 200, JSON.stringify(approved.body));
+      await sleep(120);
+      assert.deepEqual(
+        zcode.named("respondPermission").map((call) => [call["requestId"], call["optionId"]]),
+        [["p1", "allow_once"]],
+      );
+
+      // 4) 下一条没人答:超时 → 自动拒绝 + 停掉这一轮,运行改判为失败(原因给 Host 回写)。
+      zcode.fire("task-a1", permission("p2", "Bash", { command: "rm -rf build" }));
+      await eventually(() => zcode.named("respondPermission").length === 2, "超时自动拒绝");
+      assert.deepEqual(zcode.named("respondPermission")[1], {
+        taskId: "task-a1",
+        workspacePath: dir,
+        requestId: "p2",
+        optionId: "deny",
+        response: { decision: "deny" },
+      });
+      await eventually(() => zcode.named("stopGeneration").length === 1, "拒绝后停掉这一轮");
+      assert.equal(takeAutomationRunFailure(`${id}:1`), UNATTENDED_APPROVAL_REASON);
+      await bridge.automationRunCompleted({
+        ...run,
+        runId: `${id}:1`,
+        outcome: "failed",
+        error: UNATTENDED_APPROVAL_REASON,
+        taskId: "task-a1",
+      });
+      const done = pushed.find((e) => e.event === "automation.run.completed")!;
+      assert.equal(done["summary"], UNATTENDED_APPROVAL_REASON);
+      assert.equal(done["session_id"], "task-a1");
+
+      // 5) 运行结束时还挂着的审批:计时作废,不会再去拒。
+      bridge.automationRunStarted({ ...run, runId: `${id}:2`, taskId: "task-a2" });
+      zcode.fire("task-a2", permission("q1", "Bash", { command: "ls" }));
+      await eventually(() => pushed.some((e) => e["approval_id"] === "q1"), "第二次运行的审批推给手机");
+      await bridge.automationRunCompleted({ ...run, runId: `${id}:2`, outcome: "stopped", taskId: "task-a2" });
+      await sleep(150);
+      assert.ok(!zcode.named("respondPermission").some((call) => call["requestId"] === "q1"));
+      assert.equal(takeAutomationRunFailure(`${id}:2`), undefined);
+
+      // 6) 没出审批就跑完:摘掉订阅;终态先到的「开跑」不再挂订阅。
+      bridge.automationRunStarted({ ...run, runId: `${id}:3`, taskId: "task-a3" });
+      await bridge.automationRunCompleted({ ...run, runId: `${id}:3`, outcome: "succeeded", taskId: "task-a3" });
+      assert.equal(zcode.listenerCount("task-a3"), 0);
+      bridge.automationRunStarted({ ...run, runId: `${id}:3`, taskId: "task-a3" });
+      assert.equal(zcode.listenerCount("task-a3"), 0);
+
+      // 7) 普通手机任务不受影响:不计时、不自动拒绝。
+      const session = await bridge.handle(req("POST", "/harness/sessions", { harness: "zcode", cwd: dir }, iphone));
+      const taskId = (session.body as { session_id: string }).session_id;
+      zcode.fire(taskId, permission("n1", "Bash", { command: "ls" }));
+      await sleep(150);
+      assert.ok(!zcode.named("respondPermission").some((call) => call["requestId"] === "n1"));
+    },
+    { automations: automations.service, zcodeModelSelection: async () => sonnet, unattendedApprovalMs: 60 },
+  );
+});
+
+test("automations: templates endpoint, malformed escapes are 400, and capabilities advertise templates", async () => {
+  await withBridge(
+    async ({ bridge, dir }) => {
+      const listed = await bridge.handle(req("GET", "/automations/templates"));
+      assert.equal(listed.status, 200);
+      const templates = (listed.body as { templates: Array<Record<string, unknown>> }).templates;
+      const brief = templates.find((template) => template["id"] === "leo-daily-brief")!;
+      assert.equal(brief["name"], "每日早报");
+      assert.equal(brief["mode"], "plan");
+      assert.match(String(brief["prompt"]), /brain_search/);
+      assert.deepEqual(brief["schedule"], {
+        cron: "0 9 * * *",
+        recurring: true,
+        kind: "daily",
+        human: "每天 09:00",
+        time: "09:00",
+      });
+      assert.equal((await bridge.handle(req("POST", "/automations/templates", {}))).status, 405);
+      // 模板原样拿来建(schedule 整份放回去也认)。
+      const created = await bridge.handle(
+        req(
+          "POST",
+          "/automations",
+          { name: brief["name"], prompt: brief["prompt"], schedule: brief["schedule"], mode: brief["mode"], workspace: dir },
+          iphone,
+          "op-template",
+        ),
+      );
+      assert.equal(created.status, 201, JSON.stringify(created.body));
+      assert.equal((created.body as AutomationBody).automation.mode, "plan");
+
+      for (const bad of ["/automations/%E0%A4%A", "/automations/%", "/automations/%zz/run"]) {
+        const response = await bridge.handle(req("GET", bad));
+        assert.equal(response.status, 400, bad);
+      }
+      const caps = await bridge.handle(req("GET", "/v1/capabilities"));
+      assert.equal((caps.body as { features: Record<string, unknown> }).features["automation_templates"], true);
+      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      assert.equal((caps.body as Record<string, unknown>)["time_zone"], zone);
+      assert.equal((created.body as AutomationBody).automation["time_zone"], zone);
+    },
+    { automations: fakeAutomations().service, zcodeModelSelection: async () => sonnet },
+  );
+});
+
+test("trace ids: relay frames and headers carry them; a traced request logs one line", async () => {
+  assert.equal(traceIdOf({ trace_id: "t-1" }), "t-1");
+  assert.equal(traceIdOf({ headers: { "X-Leo-Trace-Id": "t-2" } }), "t-2");
+  assert.equal(traceIdOf({ headers: "nope" }), undefined);
+  assert.equal(traceIdOf({}), undefined);
+  const lines: Array<[string, Record<string, unknown>]> = [];
+  const logger = {
+    info: (msg: string, meta?: unknown) => lines.push([msg, meta as Record<string, unknown>]),
+    warn() {},
+  };
+  await withBridge(
+    async ({ bridge }) => {
+      await bridge.handle({ ...req("GET", "/health?x=secret"), traceId: "trace-abc" });
+      await bridge.handle(req("GET", "/health"));
+      await bridge.handle({ ...req("GET", "/health"), traceId: "bad\nid" });
+      const traced = lines.filter(([msg]) => msg === "[leo/link] request");
+      assert.equal(traced.length, 1, "只有带合法追踪号的请求记一行");
+      assert.equal(traced[0]?.[1]["trace_id"], "trace-abc");
+      assert.equal(traced[0]?.[1]["path"], "/health", "不记查询串");
+      assert.equal(traced[0]?.[1]["status"], 200);
+      assert.equal(typeof traced[0]?.[1]["duration_ms"], "number");
+    },
+    { logger },
   );
 });

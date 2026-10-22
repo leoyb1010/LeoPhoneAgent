@@ -14,3 +14,15 @@ export function callerFrom(frame: Record<string, unknown>): Caller {
   };
 }
 
+/**
+ * [up-c-mac] 链路追踪号:中继帧的 trace_id;中继若改为原样转发请求头,也认 headers 里的 X-Leo-Trace-Id。
+ * 格式由 LinkBridge 再校验。
+ */
+export function traceIdOf(frame: Record<string, unknown>): string | undefined {
+  if (typeof frame["trace_id"] === "string" && frame["trace_id"]) return frame["trace_id"];
+  const headers = frame["headers"];
+  if (!headers || typeof headers !== "object") return undefined;
+  for (const [name, value] of Object.entries(headers as Record<string, unknown>))
+    if (name.toLowerCase() === "x-leo-trace-id" && typeof value === "string" && value) return value;
+  return undefined;
+}

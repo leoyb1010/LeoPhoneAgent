@@ -50,6 +50,13 @@ type Subscriber = { queue: HarnessEvent[]; wake: (() => void) | null; closed: bo
 type Pending = { request: ZCodePermissionRequest; event: HarnessEvent; tool: string; target: string; announced: boolean };
 type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
 
+/**
+ * [up-c-mac] 无人值守的自动化运行(docs/specs/leo-link-automations.md「无人值守的审批」):
+ * 审批卡像手机那一轮一样推给手机 / 手表;timeoutMs 内没人答(手机、Mac 都算)就自动拒绝、停掉这一轮,
+ * 并先调 onTimeout 让桥接把这次运行改判为失败。计时只在内存里,答复 / 一轮结束 / 关闭时清掉。
+ */
+type UnattendedRun = { automationId: string; timeoutMs: number; onTimeout: (approvalId: string) => void };
+
 export type LinkSessionDeps = {
   taskService: IZCodeTaskService;
   journalDir: string;
@@ -96,6 +103,9 @@ export class LinkSession {
   /** Mac 重启后从任务表里认回来的:下一次发消息前先让内核恢复这条会话。 */
   needsResume = false;
   readonly pendingApprovals = new Map<string, Pending>();
+  /** [up-c-mac] 正在无人值守地跑一次自动化;null = 普通任务。 */
+  private unattended: UnattendedRun | null = null;
+  private readonly approvalTimers = new Map<string, NodeJS.Timeout>();
   private readonly grants = new Set<string>();
   private readonly subscribers = new Set<Subscriber>();
   private readonly mapper = new ZCodeEventMapper(Date.now, (events) => {
@@ -174,6 +184,7 @@ export class LinkSession {
     this.subscription?.dispose();
     this.subscription = null;
     if (this.stopTimer) clearTimeout(this.stopTimer);
+    this.setUnattended(null);
     for (const sub of this.subscribers) {
       sub.closed = true;
       sub.wake?.();
@@ -308,6 +319,7 @@ export class LinkSession {
       case "permission_response":
         // Mac 桌面上答的也要让手机收卡;手机自己答的在 answer() 里已经发过。
         if (this.pendingApprovals.delete(event.requestId)) {
+          this.clearApprovalTimer(event.requestId);
           this.emit({ event: "approval.responded", approval_id: event.requestId, choice: choiceOf(event.optionId) });
         }
         return;
@@ -345,7 +357,59 @@ export class LinkSession {
       return;
     }
     pending.announced = true;
+    if (this.unattended) {
+      event["automation_id"] = this.unattended.automationId;
+      this.armApprovalTimer(request.requestId, this.unattended);
+    }
     this.emit(event);
+  }
+
+  /** [up-c-mac] 桥接接管自动化任务之前就已到的审批请求,接管后补交(按 requestId 去重)。 */
+  ingestPermissionRequest(request: ZCodePermissionRequest): void {
+    this.onPermissionRequest(request);
+  }
+
+  /** [up-c-mac] 开始 / 结束一次无人值守的自动化运行;结束时清掉所有自动拒绝计时。 */
+  setUnattended(run: UnattendedRun | null): void {
+    this.unattended = run;
+    if (run) {
+      // 接管前就挂着、已经发给手机的审批也要计时。
+      for (const [approvalId, pending] of this.pendingApprovals)
+        if (pending.announced) this.armApprovalTimer(approvalId, run);
+      return;
+    }
+    for (const timer of this.approvalTimers.values()) clearTimeout(timer);
+    this.approvalTimers.clear();
+  }
+
+  private armApprovalTimer(approvalId: string, run: UnattendedRun): void {
+    if (this.approvalTimers.has(approvalId)) return;
+    const timer = setTimeout(() => void this.autoDeny(approvalId), run.timeoutMs);
+    timer.unref();
+    this.approvalTimers.set(approvalId, timer);
+  }
+
+  private clearApprovalTimer(approvalId: string): void {
+    const timer = this.approvalTimers.get(approvalId);
+    if (timer) clearTimeout(timer);
+    this.approvalTimers.delete(approvalId);
+  }
+
+  /** 没人答:先让桥接改判运行失败(内核随后报的终态是 stopped),再拒绝这条审批、停掉这一轮。 */
+  private async autoDeny(approvalId: string): Promise<void> {
+    this.approvalTimers.delete(approvalId);
+    const pending = this.pendingApprovals.get(approvalId);
+    const run = this.unattended;
+    if (!pending || !run) return;
+    run.onTimeout(approvalId);
+    this.deps.logger.info("[leo/link] unattended approval timed out; denied", {
+      taskId: this.sessionId,
+      automationId: run.automationId,
+    });
+    await this.answer(approvalId, pending, "deny", "deny");
+    await this.stop().catch((error: unknown) =>
+      this.deps.logger.warn("[leo/link] stopping after auto-deny failed", { error: String(error) }),
+    );
   }
 
   /** 把答复送进内核。先摘掉待批,流里回来的 permission_response 就不会重复发回执。 */
@@ -353,6 +417,7 @@ export class LinkSession {
     const option = pickOption(pending.request.options, kind);
     if (!option) return false;
     this.pendingApprovals.delete(approvalId);
+    this.clearApprovalTimer(approvalId);
     try {
       await this.deps.taskService.respondPermission({
         taskId: this.sessionId,
@@ -363,6 +428,8 @@ export class LinkSession {
       });
     } catch (error) {
       this.pendingApprovals.set(approvalId, pending);
+      // 没送到内核,卡片还在:无人值守时重新计时,不能就此永远挂着。
+      if (this.unattended && pending.announced) this.armApprovalTimer(approvalId, this.unattended);
       this.deps.logger.warn("[leo/link] approval not delivered", { error: String(error) });
       return false;
     }
@@ -386,6 +453,7 @@ export class LinkSession {
       // 这一轮结束了,还挂着的审批随之作废:发回执让手机收卡,不然重放日志时卡片又冒出来。
       const stale = [...this.pendingApprovals];
       this.pendingApprovals.clear();
+      for (const [approvalId] of stale) this.clearApprovalTimer(approvalId);
       for (const [approvalId, pending] of stale) {
         if (pending.announced) this.emit({ event: "approval.responded", approval_id: approvalId, choice: "deny" });
       }
@@ -406,7 +474,11 @@ export class LinkSession {
     }
     if (PUSHABLE.has(name) && this.phoneSessionId) enriched["phone_session_id"] = this.phoneSessionId;
     if (PUSHABLE.has(name) && this.phoneTurn) this.pushSeqs.add(this.seq);
+    // [up-c-mac] 无人值守的自动化:审批卡照样推(终态由 automation.run.completed 单独推,这里不重复)。
+    else if (name === "approval.request" && this.unattended) this.pushSeqs.add(this.seq);
     if (RUN_END.has(name)) {
+      // 这一轮(含无人值守的自动化运行)结束:自动拒绝计时一并作废。
+      if (this.unattended) this.setUnattended(null);
       this.phoneTurn = false;
       this.runAnnounced = false;
       this.turnCheckpointed = false;

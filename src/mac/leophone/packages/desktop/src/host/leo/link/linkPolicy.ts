@@ -35,6 +35,14 @@ export function isLinkPath(pathname: string): boolean {
   );
 }
 
+/**
+ * [up-c-mac] Mac 的 IANA 时区(如 "Asia/Shanghai"):定时任务的计划按它解释,手机据此提示时区不一致。
+ * 每次现取:用户改了系统时区不用重启 App。
+ */
+export function macTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
 export function error(status: number, message: string): LinkResponse {
   return { status, body: { error: { message } } };
 }

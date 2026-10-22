@@ -10,8 +10,8 @@ import { probeAlive, tailnetLookup, watchSystemChanges } from "./relayNet.js";
 import type { Caller, CallerKind } from "./session.js";
 
 export { networkSignature, systemChangeDetector, tailnetLookup } from "./relayNet.js";
-export { callerFrom } from "./relayCaller.js";
-import { callerFrom } from "./relayCaller.js";
+export { callerFrom, traceIdOf } from "./relayCaller.js";
+import { callerFrom, traceIdOf } from "./relayCaller.js";
 
 type Logger = {
   info: (msg: string, meta?: unknown) => void;
@@ -369,12 +369,14 @@ export class RelayLink {
       typeof frame["request_id"] === "string" && frame["request_id"]
         ? frame["request_id"]
         : undefined;
+    const traceId = traceIdOf(frame);
     return {
       method: String(frame["method"] ?? "GET"),
       path: String(frame["path"] ?? "/"),
       body: frame["body"],
       caller: callerFrom(frame),
       ...(requestId ? { requestId } : {}),
+      ...(traceId ? { traceId } : {}),
     };
   }
 

@@ -4,7 +4,8 @@ import type {
   ZCodeAutomationScheduleRule,
 } from "@zcode/shared";
 
-import { LINK_MODES, linkMode, record, type LinkMode } from "./linkPolicy.js";
+import { runSummary } from "./automationResults.js";
+import { LINK_MODES, linkMode, macTimeZone, record, type LinkMode } from "./linkPolicy.js";
 
 /**
  * [up-p3-mac] /automations 的纯函数部分(docs/specs/leo-link-automations.md):
@@ -213,13 +214,34 @@ function lastRunStatus(run: ZCodeAutomationRun): string {
   return "pending";
 }
 
-export function automationView(automation: ZCodeAutomation, runs: ZCodeAutomationRun[]) {
-  const last = [...runs].sort((a, b) => b.createdAt - a.createdAt)[0];
+/** 最近一次运行(按创建时间)。 */
+export function latestRun(runs: readonly ZCodeAutomationRun[]): ZCodeAutomationRun | undefined {
+  return [...runs].sort((a, b) => b.createdAt - a.createdAt)[0];
+}
+
+/**
+ * last_run.summary:运行结束时记下的摘要(最终回复 / 改判后的失败原因)优先;
+ * 没记下的(别的窗口跑的、升级前跑的)失败 / 停止按运行记录现算,成功的给 null(不冷恢复会话去读)。
+ */
+function lastRunSummary(run: ZCodeAutomationRun, recorded: string | null | undefined): string | null {
+  if (recorded) return recorded;
+  if (run.outcome === "failed" || run.outcome === "stopped") return runSummary(run.outcome, run.error, null);
+  return null;
+}
+
+export function automationView(
+  automation: ZCodeAutomation,
+  runs: ZCodeAutomationRun[],
+  recordedSummary?: string | null,
+) {
+  const last = latestRun(runs);
   return {
     id: automation.automationId,
     name: automation.title,
     prompt: automation.prompt,
     schedule: describeSchedule(automation),
+    // 计划按这个时区解释(Mac 本机)。
+    time_zone: macTimeZone(),
     enabled: automation.enabled,
     state: automation.lifecycleStatus,
     workspace: automation.workspacePath,
@@ -231,8 +253,11 @@ export function automationView(automation: ZCodeAutomation, runs: ZCodeAutomatio
           status: lastRunStatus(last),
           at: seconds(last.updatedAt),
           task_id: last.sessionId ?? null,
+          // 同一个值:手机可直接打开 /harness/sessions/<session_id>/events。
+          session_id: last.sessionId ?? null,
           trigger: last.trigger,
           error: last.error ?? null,
+          summary: lastRunSummary(last, recordedSummary),
         }
       : null,
     next_run_at: automation.enabled ? seconds(automation.nextRunAt) : null,

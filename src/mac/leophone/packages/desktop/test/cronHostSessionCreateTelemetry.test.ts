@@ -32,6 +32,7 @@ function setup() {
     sendPrompt: vi.fn(async () => {}),
   };
   const report = vi.fn();
+  const started = vi.fn();
   const taskKey = Symbol(),
     modelKey = Symbol(),
     botsKey = Symbol();
@@ -54,6 +55,7 @@ function setup() {
     disposeCronRunSubscription: vi.fn(),
     markCronRunOutcome: vi.fn(),
     reportHostSessionCreate: report,
+    publishAutomationRunStarted: started,
     parentPort: {},
   });
   const request = {
@@ -63,7 +65,7 @@ function setup() {
     workspaceIdentity: "remote:ssh:host:/private",
     prompt: "prompt",
   };
-  return { service, report, dispatch, request };
+  return { service, report, started, dispatch, request };
 }
 describe("定时任务的 Session 创建口径", () => {
   it.each(["a1:1000", "a1:manual:1000"])("新建会话 %s 首发 accepted 后才报告", async (runId) => {
@@ -78,8 +80,17 @@ describe("定时任务的 Session 创建口径", () => {
     const dispatched = state.dispatch({ ...state.request, runId });
     await vi.waitFor(() => expect(state.service.sendPrompt).toHaveBeenCalledOnce());
     expect(state.report).not.toHaveBeenCalled();
+    // [up-c-mac] 「已开跑」也只在 accepted 之后发(Leo Link 据此盯审批)。
+    expect(state.started).not.toHaveBeenCalled();
     accept();
     await dispatched;
+    expect(state.started).toHaveBeenCalledExactlyOnceWith({
+      automationId: "a1",
+      runId,
+      trigger: runId.includes(":manual:") ? "manual" : "schedule",
+      taskId: "new-session",
+      workspacePath: "/private",
+    });
     expect(state.report).toHaveBeenCalledExactlyOnceWith(
       {},
       {
@@ -104,5 +115,6 @@ describe("定时任务的 Session 创建口径", () => {
     state.service.sendPrompt.mockRejectedValue(new Error("rejected"));
     await expect(state.dispatch(state.request)).rejects.toThrow("rejected");
     expect(state.report).not.toHaveBeenCalled();
+    expect(state.started).not.toHaveBeenCalled();
   });
 });

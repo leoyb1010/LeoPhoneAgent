@@ -1,4 +1,5 @@
 import type { ClientSceneConfig, ClientSceneItem } from "@zcode/services";
+import { LEO_AUTOMATION_TEMPLATES } from "@zcode/shared/leo-automation-templates";
 import type { AutomationScheduledTemplateIconName } from "@/settings/AutomationScheduledTemplateIcon.js";
 import { canVisualizeCronInAutomationEditor } from "@/settings/automationFormat.js";
 
@@ -139,48 +140,14 @@ export function materializeScheduledTemplateDraft(
 /**
  * [leo] 官方模板来自 ZCode 服务端，LeoBot 拿不到，自动化页因此一直没有「从模板开始」。
  * 服务端没给模板时用这三条本地模板兜底；点击只预填新建页，用户确认后才创建。
+ * 模板内容和手机 `GET /automations/templates` 共用 `@zcode/shared/leo-automation-templates`。
  */
-export const LEO_LOCAL_SCHEDULED_TEMPLATES: readonly ScheduledAutomationTemplate[] = [
-  {
-    id: "leo-daily-brief",
-    icon: "target",
-    cronExpr: "0 9 * * *",
-    title: { cn: "每日早报", en: "Daily brief" },
-    description: {
-      cn: "每天早上汇总昨天各项任务的结果和今天待办。",
-      en: "Every morning, summarize yesterday's task results and today's to-dos.",
-    },
-    prompt: {
-      cn: "回顾这个项目昨天的任务和会话：列出完成了什么、哪些失败或卡住（附原因），以及今天最该先做的三件事。结论先行，控制在 15 行以内。",
-      en: "Review yesterday's tasks and sessions in this project: list what finished, what failed or stalled (with the reason), and the three most important things to do today. Lead with the conclusion, 15 lines max.",
-    },
-  },
-  {
-    id: "leo-repo-health",
-    icon: "activity",
-    cronExpr: "0 18 * * 1-5",
-    title: { cn: "下班前跑一遍测试", en: "End-of-day test run" },
-    description: {
-      cn: "工作日 18:00 拉取最新代码并跑测试，失败时说明原因。",
-      en: "On weekdays at 18:00, pull the latest code and run the tests; explain any failure.",
-    },
-    prompt: {
-      cn: "拉取当前分支最新代码，运行项目的测试命令。全部通过就回复一句「测试全绿」；有失败时列出失败用例、错误原文和最可能的原因，不要改代码。",
-      en: "Pull the latest code on the current branch and run the project's tests. If everything passes, reply 'All green'. Otherwise list the failing tests, the exact errors and the most likely cause. Do not change code.",
-    },
-  },
-  {
-    id: "leo-weekly-review",
-    icon: "file",
-    cronExpr: "0 20 * * 0",
-    title: { cn: "每周回顾", en: "Weekly review" },
-    description: {
-      cn: "周日晚上把这周的改动整理成一页回顾。",
-      en: "Sunday evening, turn this week's changes into a one-page review.",
-    },
-    prompt: {
-      cn: "整理这个项目本周的提交和完成的任务，写一页回顾：做成了什么、还有什么没收尾、下周建议先做什么。用大白话，不超过 20 行。",
-      en: "Go through this week's commits and finished tasks in this project and write a one-page review: what shipped, what is still open, and what to do first next week. Plain language, 20 lines max.",
-    },
-  },
-];
+export const LEO_LOCAL_SCHEDULED_TEMPLATES: readonly ScheduledAutomationTemplate[] =
+  LEO_AUTOMATION_TEMPLATES.map(({ id, icon, cronExpr, title, description, prompt }) => ({
+    id,
+    icon,
+    cronExpr,
+    title,
+    description,
+    prompt,
+  }));
