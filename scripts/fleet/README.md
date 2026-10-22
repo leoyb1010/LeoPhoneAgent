@@ -17,7 +17,7 @@
 
 每天的 restic 备份会再 rsync 一份到 Studio `~/Backups/leo-relay-restic`(密码同 mini 的 `~/.config/leo-relay/restic-password`,另存一份在你的密码管理器)。切到 Studio:
 
-1. Studio 上恢复:`restic -r ~/Backups/leo-relay-restic --password-file <pw> restore latest --tag leo-relay --target /tmp/r && cp -R /tmp/r/Users/leo/.leoagent ~/.leoagent-relay`
+1. Studio 上恢复(restic 在 `~/bin/restic`,Studio 的 brew 连不上 GitHub,从 mini 拷的同版本二进制):`~/bin/restic -r ~/Backups/leo-relay-restic --password-file <pw> restore latest --tag leo-relay --target /tmp/r && cp -R /tmp/r/Users/leo/.leoagent ~/.leoagent-relay`
 2. 用仓库里的 `src/mac/leoagent` 起中继:`RELAY_KEY=… python3 -m leoagent.relay --port 8650`(依赖 aiohttp;state 路径指向恢复出的目录)
 3. 把 Cloudflare 隧道 `relay.leoyuan.top` 的 connector 换到 Studio(Cloudflare 后台或在 Studio 上用同一隧道凭据起 cloudflared)。
 4. mini 恢复后反向同步 `~/.leoagent` 再切回。手机端地址不变,无需重新配对(设备钥匙、钉扎都在备份里)。
