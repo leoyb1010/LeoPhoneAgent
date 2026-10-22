@@ -1,5 +1,16 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.78.0 (184) · 中继 0.2.2 · 跨轮缓存修正、收进大脑、机群地基 - 2026-10-22
+
+- 依据：`~/Desktop/LeoBot_深度分析与升级计划_20261022.html`（P0–P2）。
+- 跨轮缓存（根因）：system 易变尾段带 `HH:mm` 时钟且位于全部消息之前，跨一分钟即令对话历史缓存全部失效。尾段改为只写日期；分钟级时间以 `<system-reminder>Sent at …</system-reminder>` 随用户消息落盘（主发送与两条排队路径），历史字节从此固定。日程录入提示改读 Sent at。
+- 记忆注入：最近一天日志 16 KB，更早两天各 4 KB（memory_write 前插，开头即最新）。
+- 可观测：perf.jsonl 每次请求记 `llm.cache`（model / in / read / write / hit%）。
+- 回复「下一步」新增「收进大脑」（BrainStore 已连接才显示）：存为资料库草稿知识卡，分类「LeoBot 对话」。
+- 本地化：删除已下架 de/fr/ja/ko/ru 的 9395 条残留翻译与 knownRegions。
+- 中继 0.2.2（mini）：离线排队与投递中条目落盘 `relay-queue.json`（0600 + fsync，崩溃后重投、损坏另存不拒启动）；在线快照 `relay-status.json`；藏宝阁同步写入 fsync。新增 5 个测试（含反向验证），leoagent 99 项全绿。
+- 机群：Studio / mini / Air 装 `com.leoyuan.leobot-keepalive`（2 分钟拉起，实测 15 秒）；mini 装 LeoFleetDoctor（5 分钟巡检，状态翻转发 ntfy）、relay 每日 restic 备份（恢复演练通过）、「大脑每日一页」08:05；ntfy 服务端原生编译恢复（10-21 迁移中断后所有告警都发不出去）；退役 MBP / Studio / mini 上未使用、plist 明文带钥匙的旧 leoagent 宿主；`scripts/leo-deploy-mac.sh` 部署带 sha256 校验、中继在线健康检查与自动回滚。
+
 ## iOS 1.77.4 (181) · 中继优先，直连按实测择优 - 2026-10-21
 
 - 实测：1.77.3 打通直连后，经小火箭 Tailscale 的直连 1.8–5.7 秒，中继 0.2–1 秒。改为中继为默认路；直连探测耗时须低于中继轻量请求耗时的 0.9 倍（无中继对照时须 < 400ms）才用直连，否则 10 分钟内不再试直连。
