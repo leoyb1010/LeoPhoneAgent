@@ -383,7 +383,8 @@ export async function startLeoLink(deps: {
     acpAgentVersion: (cliPath) => readCliVersion(cliPath),
     // [fix-remote] 手机开 LeoBot 任务显式选非 acp 模型；没有就 409 提示去配置。
     ...(deps.modelSelectionService
-      ? { zcodeModelSelection: () => resolveLeoBotModelSelection(deps.modelSelectionService!) }
+      // [remote-ctl-mac] modelView:手机选模型 / 推理强度,与桌面模型选择器同源。
+      ? { zcodeModelSelection: () => resolveLeoBotModelSelection(deps.modelSelectionService!), modelView: () => deps.modelSelectionService!.getView({ selection: null }) }
       : {}),
     // [WP-23] 旧 leoagent harness 转发默认关(link.json {"harness":{"legacy":true}} 或 LEO_HARNESS_LEGACY=1 打开)。
     e2e: await loadRelayE2E(leoPath("link", "relay-e2e-key.json"), deps.logger), // [e2e] 经中继端到端加密

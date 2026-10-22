@@ -38,3 +38,37 @@
 - **推送只发给关注的会话**：`approval.request`、`run.*` 只有 `following==true` 才 push 到中继（中继才会发 APNs / 实时活动）。不关注的会话事件照常记日志、手机打开时照常看得到，只是不推送。
 - 定时任务新增 `notify` 布尔：手机建的默认 true，桌面建的默认 false，PATCH 可改；`automation.run.completed` 与无人值守审批只有 `notify==true`（或目标会话被关注）才推送。无人值守 30 分钟自动拒绝不受影响。
 - iOS：「进行中」只列关注的会话（其余只显示数量）；有关注的任务在跑才每 20 s 刷新，否则 60 s；只给关注的会话申请实时活动推送令牌；不关注的会话不发审批本地通知；补拉用与中继相同的通知 id 去重。
+
+## Mac 实现细节（[remote-ctl-mac]，契约之外的补充与取舍）
+
+以下是 Mac 端按上面契约实现时定下的细节，iOS 需要知道的都在这里；上面的字段一个没改。
+
+- **模型清单**：`name` 目前就是 `modelId`（注册表没有单独的模型显示名）；`provider_name` 无名时回落 `providerId`。
+  排除 acp 供应商和 `enabled:false` 的模型。`default_effort` = 该模型档位的最后一项（与自动选择同一规则），没有档位为 `null`。
+  这台 Mac 没有模型服务时 `GET /harness/models` 为 404，capabilities 的 `models` / `model_switch` / `effort` 为 false。
+- **换模型**：外部 agent（claude / codex …）的会话 400；只给 `effort` 但任务还没模型 409；只给 provider 不给 model 400。
+  换模型不带 `effort` 时内核用目标模型的默认档位，返回的 `model.effort` 以内核读回为准。
+  Mac 桌面上换模型 / 档位也会发 `model` 事件（来自内核的模型状态更新）。外部 agent 会话的 `model` 为 `null`。
+- **新建**：`model` 格式不对 / 不认识、`effort` 不在档位里 → 400；旧字段 `thinking` 只是尽力而为：不认识的值静默忽略（旧 iPhone 的取值不受本契约约束）。
+- **压缩**：任务在跑（running / waiting_for_approval）时 409。结果以会话提示告诉手机：
+  `{"event":"session.note","kind":"compacted"}` 或 `{"event":"session.note","kind":"compact_failed","text":"…"}`。
+- **改名**：`title` 去首尾空白、压空白，空 400，超过 200 字 400。
+- **附件**：类型不对 415（`image/jpg` 认作 jpeg，`image/heif` 认作 heic），base64 不合法 400；HEIC 在 Mac 上用 `sips` 转成 JPEG 再交给内核（内核不认 HEIC）。
+  有图时 `text` 可以为空。日志里的 `user.message` 带 `attachments:[{"name","mime"}]`（不含图片数据）。
+  **传输上限比 5 MB 小得多**：中继（relay.py，aiohttp 默认 `client_max_size`）整个请求正文 ≤ 1 MB，超了中继把正文丢成空（Mac 回 400 text is required）；
+  直连正文 ≤ 2 MB；经中继端到端加密的信封密文 ≤ 4 MB。iOS 发图前要压缩 / 缩放，让整个 JSON 正文（base64 后）落在所走链路的上限内；
+  Mac 端的 5 MB / 4 张只是最后一道校验。
+- **提问**：
+  - 同时发一条 `{"event":"session.note","kind":"question_pending","text":"…问题原文…"}` 给旧版手机看；新版手机可按 `kind` 隐藏。
+  - 旧版手机答不了，直接发消息即可：`send` 时还挂着的提问先替它跳过（decline），消息照常送进去。
+  - `selected` 填选项的 `label`（也认内核的 value）；某题没答就不提交（与桌面一致，agent 按最佳判断继续）。
+  - `question.responded` 可能带 `"declined":true`（手机跳过）或 `"expired":true`（这一轮结束了还没答）；Mac 上答掉的不带。
+  - 没有这个待答提问（已答 / 已过期）409。`question.request` 不交给中继推送（不在推送事件里），只在事件流里。
+- **关注**：手机自动关注（新建 / 接管 / 发消息）时也发 `follow` 事件。关注的会话里 Mac 桌面上发起的一轮也会推送
+  （推送只看 `following`，不再看是谁发起的这一轮）。`POST …/follow` 对还没接过来的桌面任务先接管（和发消息一样）；这台 Mac 上没有 404。
+  升级前的任务表行没有这几项：`following=false`（手机再发消息就会关注），`source` 有终端会话 id 记 `takeover`，否则记 `phone`。
+  桌面任务行：`"following":false,"source":"desktop","model":null`。
+- **notify**：`POST /automations` 也接受可选 `notify`（默认 true）；`PATCH` 可只改 `notify`；GET / 列表每条带 `notify`。
+  notify 存在 Link 自己的 `journals/automation-notify.json`（自动化服务没有这个字段）。没有记录的 = false（桌面建的）。
+  升级前手机建的定时任务没有记录：第一次读时从操作回执（手机经 Link 建定时任务必带操作编号，回执里有 201 响应的 automation.id）认出来记成 true，
+  保持它们升级前「跑完就推」的体验；只迁移一次。

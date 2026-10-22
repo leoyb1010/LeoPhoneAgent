@@ -23,11 +23,13 @@ export function isLinkPath(pathname: string): boolean {
     pathname === "/harness/sessions" ||
     // [takeover] Mac 终端里的 Claude Code 会话(接管见 docs/specs/leo-link-takeover.md)。
     pathname === "/harness/external-sessions" ||
+    // [remote-ctl-mac] 模型清单与会话操作(model/compact/rename/answer/follow),见 docs/specs/leo-link-remote-controls.md。
+    pathname === "/harness/models" ||
     pathname === "/screen/snapshot" ||
     // [WP-51] R1 视频信令:/screen/session、/screen/session/<id>、/screen/session/<id>/ice。
     /^\/screen\/session(\/[^/]+(\/ice)?)?$/.test(pathname) ||
     // 权限模式 / 改动面板(changes、diff、revert)见 docs/specs/leo-link-changes.md。
-    /^\/harness\/sessions\/[^/]+\/(events|send|approval|stop|archive|mode|changes|diff|revert)$/.test(pathname) ||
+    /^\/harness\/sessions\/[^/]+\/(events|send|approval|stop|archive|mode|changes|diff|revert|model|compact|rename|answer|follow)$/.test(pathname) ||
     // [fix-remote] 外部 agent 的远程登录：/agents/<key>/auth、/agents/<key>/login[/<flow>[/code|/cancel]]。
     /^\/agents\/[^/]+\/(auth|login(\/[^/]+(\/(code|cancel))?)?)$/.test(pathname) ||
     // [up-p3-mac] Mac 上的定时任务:/automations、/automations/<id>、/automations/<id>/run(docs/specs/leo-link-automations.md)。
