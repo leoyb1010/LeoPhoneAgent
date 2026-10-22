@@ -1219,19 +1219,37 @@ struct GatewayApprovalCard: View {
     let approval: GatewayApprovalRequest
     let onChoose: (String) -> Void
 
-    private func label(for choice: String) -> String { GatewayApprovalRequest.title(forChoice: choice) }
+    /// [remote-ctl-ios] 计划审批(ExitPlanMode):显示计划正文,按钮叫「批准计划并执行 / 不批准」。
+    private var isPlan: Bool { HarnessApprovalPresentation.isPlan(tool: approval.tool) }
+    /// 只渲染事件给出的选项。
+    private var choices: [String] { HarnessApprovalPresentation.visibleChoices(approval.choices, tool: approval.tool) }
+
+    private func label(for choice: String) -> String {
+        if isPlan {
+            if choice == "once" { return AppLocalized("批准计划并执行") }
+            if choice == "deny" { return AppLocalized("不批准") }
+        }
+        return GatewayApprovalRequest.title(forChoice: choice)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "hand.raised.fill").foregroundStyle(.orange)
-                Text("Approval needed").font(.system(size: 15, weight: .semibold))
+                Image(systemName: isPlan ? "list.bullet.clipboard.fill" : "hand.raised.fill").foregroundStyle(.orange)
+                if isPlan {
+                    Text("计划等你批准").font(.system(size: 15, weight: .semibold))
+                } else {
+                    Text("Approval needed").font(.system(size: 15, weight: .semibold))
+                }
                 Spacer()
             }
-            if let reason = approval.reason, !reason.isEmpty {
+            if isPlan {
+                let plan = HarnessApprovalPresentation.planText(plan: approval.extras["plan"], description: approval.reason)
+                if !plan.isEmpty { HarnessPlanBody(text: plan) }
+            } else if let reason = approval.reason, !reason.isEmpty {
                 Text(reason).font(.system(size: 13)).foregroundStyle(.secondary)
             }
-            if let command = approval.command, !command.isEmpty {
+            if !isPlan, let command = approval.command, !command.isEmpty {
                 Text(command)
                     .font(.system(size: 13, design: .monospaced))
                     .textSelection(.enabled)
@@ -1240,8 +1258,9 @@ struct GatewayApprovalCard: View {
                     .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6))
             }
             // 两行两列:四个按钮挤一行时「本次会话允许」会被截成「本次会…」。单数个时最后一个占满一行。
-            let rows = stride(from: 0, to: approval.choices.count, by: 2).map {
-                Array(approval.choices[$0..<min($0 + 2, approval.choices.count)])
+            let choices = self.choices
+            let rows = stride(from: 0, to: choices.count, by: 2).map {
+                Array(choices[$0..<min($0 + 2, choices.count)])
             }
             VStack(spacing: 8) {
                 ForEach(rows, id: \.self) { row in
@@ -1367,6 +1386,20 @@ struct HarnessLauncherView: View {
     @State private var isLoading = true
     @State private var liveSessions: [HarnessSessionSummary] = []
     @State private var loginTarget: HarnessKind?
+    /// [remote-ctl-ios] 这台 Mac 报的能力与模型列表;没报 models 的旧 Mac 不显示模型选择。
+    @State private var features: HarnessFeatures?
+    @State private var catalog: HarnessModelCatalog?
+    /// nil = Mac 自动选择。
+    @State private var modelChoice: String?
+    @State private var effortChoice: String?
+
+    private var chosenModel: HarnessModelOption? { catalog?.models.first { $0.id == modelChoice } }
+
+    /// 选了模型用它的强度;没选用 Mac 默认模型的。
+    private var effortOptions: [String] {
+        guard let catalog else { return [] }
+        return (chosenModel ?? catalog.option(for: catalog.defaultModel))?.efforts ?? []
+    }
 
     var body: some View {
         List {
@@ -1493,12 +1526,48 @@ struct HarnessLauncherView: View {
                 Text("第一条指令")
             }
 
+            if features?.listsModels == true, let catalog, !catalog.models.isEmpty {
+                Section {
+                    Picker(selection: $modelChoice) {
+                        Text("自动（Mac 决定）").tag(String?.none)
+                        ForEach(catalog.groups) { group in
+                            Section(group.providerName) {
+                                ForEach(group.models) { option in
+                                    Text(option.name).tag(Optional(option.id))
+                                }
+                            }
+                        }
+                    } label: {
+                        Text("模型")
+                    }
+                    if features?.has(HarnessFeatures.effort) == true, !effortOptions.isEmpty {
+                        Picker(selection: $effortChoice) {
+                            Text("自动").tag(String?.none)
+                            ForEach(effortOptions, id: \.self) { effort in
+                                Text(HarnessEffort.title(effort)).tag(Optional(effort))
+                            }
+                        } label: {
+                            Text("推理强度")
+                        }
+                    }
+                } header: {
+                    Text("模型（可选）")
+                } footer: {
+                    Text("不选就由 Mac 自动决定。")
+                }
+                .onChange(of: modelChoice) { _, _ in
+                    if let effortChoice, !effortOptions.contains(effortChoice) { self.effortChoice = nil }
+                }
+            }
+
             Section {
                 if let selected {
                     NavigationLink {
                         HarnessConsoleView(
                             driver: HarnessSessionDriver(client: client, harness: selected, cwd: cwd),
-                            firstPrompt: prompt)
+                            firstPrompt: prompt,
+                            createModel: chosenModel?.ref,
+                            createEffort: effortChoice)
                     } label: {
                         Label("开始干活", systemImage: "play.circle")
                     }
@@ -1550,10 +1619,20 @@ struct HarnessLauncherView: View {
             }
         }
         isLoading = false
+        // [remote-ctl-ios] harnessKinds 已顺手记下能力;报了 models 才去拿模型列表。
+        features = HarnessFeatureCache.shared.features(for: client.hostId ?? host.id)
+        if features?.listsModels == true, catalog == nil {
+            catalog = try? await client.harnessModels()
+        }
         // 进行中会话列表:失败不挡住新建流程,静默降级。
         if let sessions = try? await client.harnessSessions() {
             liveSessions = sessions.filter {
                 !["orphaned", "completed", "failed", "cancelled"].contains($0.status)
+            }
+            // 工作目录默认:这台 Mac 上次选的 / 最近用的(用户已经改过就不动)。
+            if cwd == "~" {
+                cwd = HarnessLaunchDefaults.cwd(hostId: host.id, saved: HomeMacDispatchTarget.load(),
+                                                recentCwds: sessions.sorted { $0.seq > $1.seq }.map(\.cwd))
             }
         }
     }
@@ -1582,10 +1661,16 @@ struct HarnessConsoleView: View {
     /// 接管时列表里看到的状态(idle / available 直接显示空闲)。
     var attachStatus: String? = nil
     var thinking: String? = nil
+    /// [remote-ctl-ios] 新建时选的模型 / 强度(nil = Mac 自动选择);只有报了对应能力的 Mac 才会收到。
+    var createModel: HarnessModelRef? = nil
+    var createEffort: String? = nil
     /// The Mac accepted the first prompt (a session exists): Home clears its draft
     /// only now, so a failed start closed right away doesn't lose the text.
     var onSessionCreated: (() -> Void)? = nil
     @State private var input = ""
+    @State private var showSettings = false
+    /// [remote-ctl-ios] 待发的图片(已压成 JPEG ≤ 5 MB,最多 4 张)。
+    @State private var images: [HarnessComposerImage] = []
     @State private var started = false
     @State private var pairMessage: String?
     @State private var showAgentLogin = false
@@ -1602,6 +1687,10 @@ struct HarnessConsoleView: View {
                     .padding(.horizontal, 12).padding(.top, 8)
                     .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
+            if driver.showsSessionSettings {
+                HarnessSessionHeader(driver: driver) { showSettings = true }
+                Divider()
+            }
             HarnessTranscript(driver: driver)
 
             if let approval = driver.pendingApproval {
@@ -1609,6 +1698,13 @@ struct HarnessConsoleView: View {
                     driver.respond(to: approval, choice: choice)
                 }
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+            } else if let question = driver.pendingQuestion {
+                // [remote-ctl-ios] 模型在问(AskUserQuestion):选项 + 补充文字,提交或跳过。
+                HarnessQuestionCard(request: question,
+                                    onSubmit: { driver.answer(question, answers: $0) },
+                                    onDecline: { driver.decline(question) })
+                    .id(question.questionId)
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
 
             // [up-console] 「日志已保存 / 状态未知」是给排障看的：一切正常时不占位，只在降级时提醒。
@@ -1685,9 +1781,17 @@ struct HarnessConsoleView: View {
 
             HarnessQuickActions(driver: driver, inputIsEmpty: input.isEmpty)
 
+            if !images.isEmpty {
+                HarnessAttachmentStrip(images: $images)
+                    .background(.bar)
+            }
             HStack(alignment: .bottom, spacing: 8) {
                 if driver.showsModePicker {
                     HarnessModeMenu(driver: driver)
+                        .transition(.opacity)
+                }
+                if driver.acceptsAttachments {
+                    HarnessPhotoButton(images: $images)
                         .transition(.opacity)
                 }
                 TextField("继续下指令…", text: $input, axis: .vertical)
@@ -1698,7 +1802,11 @@ struct HarnessConsoleView: View {
                 Button {
                     // Clear only after the driver accepted it; steering during
                     // the starting window used to eat the text silently.
-                    if driver.steer(input) { input = "" }
+                    let attachments = driver.acceptsAttachments ? images.map(\.attachment) : []
+                    if driver.steer(input, attachments: attachments) {
+                        input = ""
+                        images = []
+                    }
                 } label: {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 30))
                 }
@@ -1710,6 +1818,7 @@ struct HarnessConsoleView: View {
             .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: driver.showsModePicker)
         }
         .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: driver.pendingApproval?.approvalId)
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: driver.pendingQuestion?.questionId)
         .navigationTitle(Text(driver.harness.name))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -1747,6 +1856,11 @@ struct HarnessConsoleView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showSettings) {
+            HarnessSessionSettingsSheet(driver: driver)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         .onAppear {
             screen.client = driver.macScreenClient
             // Start once; coming back to this view resumes the stream at the
@@ -1756,7 +1870,7 @@ struct HarnessConsoleView: View {
                 if let attachSessionId {
                     driver.attach(existingSessionId: attachSessionId, knownStatus: attachStatus)
                 } else if !firstPrompt.isEmpty {
-                    driver.start(prompt: firstPrompt, thinking: thinking)
+                    driver.start(prompt: firstPrompt, thinking: thinking, model: createModel, effort: createEffort)
                 }
                 // No first prompt (/mac): the first message creates the session,
                 // so opening and closing leaves no empty session on the Mac.
@@ -2141,7 +2255,13 @@ struct ComposerMacChatCover: View {
                     driver: HarnessSessionDriver(
                         client: client,
                         harness: HarnessKind(key: target.cliKey, name: target.cliName),
-                        cwd: "~",
+                        // [remote-ctl-ios] 与新建页 / 首页同一个默认目录(这台 Mac 上次选的或最近用的),不再写死 ~。
+                        cwd: HarnessLaunchDefaults.cwd(
+                            hostId: target.host.id, saved: HomeMacDispatchTarget.load(),
+                            recentCwds: MacLiveSessionsStore.shared.rows
+                                .filter { $0.hostId == target.host.id }
+                                .sorted { $0.session.seq > $1.session.seq }
+                                .map(\.session.cwd)),
                         phoneSessionId: target.phoneSessionId),
                     firstPrompt: target.firstPrompt)
                 .navigationTitle("\(target.host.name) · \(target.cliName)")

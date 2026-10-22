@@ -765,6 +765,8 @@
 		E5GWH1001 /* LeoAgentHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH1002 /* LeoAgentHarness.swift */; };
 		E5GWV0001 /* GatewayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWV0002 /* GatewayViews.swift */; };
 		LF4569085442 /* HarnessChangesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF723511AE9 /* HarnessChangesView.swift */; };
+		LFBDF098208C /* HarnessSessionSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFC18772620A /* HarnessSessionSettingsSheet.swift */; };
+		LF5031199E59 /* HarnessInteractionCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF5972B44434 /* HarnessInteractionCards.swift */; };
 		LF391D1B7247 /* MacAutomationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFDF71F20429 /* MacAutomationsView.swift */; };
 		LFFF7A120AA9 /* MacScreenLiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF12689023D8 /* MacScreenLiveViews.swift */; };
 		LF0FA1A41C6D /* MacScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF26AE1ABDCE /* MacScreenViews.swift */; };
@@ -775,8 +777,10 @@
 		E5MSF0001 /* MacSSHFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MSF0002 /* MacSSHFallback.swift */; };
 		E5MRF0001 /* MacRouteFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MRF0002 /* MacRouteFallback.swift */; };
 		LFB44C59ED88 /* HarnessSessionLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF5B31AD8FD0 /* HarnessSessionLogic.swift */; };
+		LFA82543E9D6 /* HarnessRemoteControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFCED7AAF573 /* HarnessRemoteControls.swift */; };
 		E5MRF0003 /* MacRouteFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MRF0002 /* MacRouteFallback.swift */; };
 		LF16DFDC2618 /* HarnessSessionLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF5B31AD8FD0 /* HarnessSessionLogic.swift */; };
+		LF101677E1DD /* HarnessRemoteControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFCED7AAF573 /* HarnessRemoteControls.swift */; };
 		E5HCT0001 /* HarnessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HCT0002 /* HarnessCatalog.swift */; };
 		E5HCT0003 /* HarnessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HCT0002 /* HarnessCatalog.swift */; };
 		E5RRR0001 /* RelayRootRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RRR0002 /* RelayRootRouter.swift */; };
@@ -1824,6 +1828,8 @@
 		E5GWH1002 /* LeoAgentHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentHarness.swift; sourceTree = SOURCE_ROOT; };
 		E5GWV0002 /* GatewayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/GatewayViews.swift; sourceTree = SOURCE_ROOT; };
 		LFF723511AE9 /* HarnessChangesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Gateway/HarnessChangesView.swift; sourceTree = SOURCE_ROOT; };
+		LFC18772620A /* HarnessSessionSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Gateway/HarnessSessionSettingsSheet.swift; sourceTree = SOURCE_ROOT; };
+		LF5972B44434 /* HarnessInteractionCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Gateway/HarnessInteractionCards.swift; sourceTree = SOURCE_ROOT; };
 		LFDF71F20429 /* MacAutomationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Gateway/MacAutomationsView.swift; sourceTree = SOURCE_ROOT; };
 		LF12689023D8 /* MacScreenLiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/MacScreenLiveViews.swift; sourceTree = SOURCE_ROOT; };
 		LF26AE1ABDCE /* MacScreenViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/MacScreenViews.swift; sourceTree = SOURCE_ROOT; };
@@ -1834,6 +1840,7 @@
 		E5MSF0002 /* MacSSHFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/MacSSHFallback.swift; sourceTree = SOURCE_ROOT; };
 		E5MRF0002 /* MacRouteFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/MacRouteFallback.swift; sourceTree = SOURCE_ROOT; };
 		LF5B31AD8FD0 /* HarnessSessionLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/HarnessSessionLogic.swift; sourceTree = SOURCE_ROOT; };
+		LFCED7AAF573 /* HarnessRemoteControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/HarnessRemoteControls.swift; sourceTree = SOURCE_ROOT; };
 		E5HCT0002 /* HarnessCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/HarnessCatalog.swift; sourceTree = SOURCE_ROOT; };
 		E5RRR0002 /* RelayRootRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/RelayRootRouter.swift; sourceTree = SOURCE_ROOT; };
 		LFB557B4F4FD /* LeoLinkProblem+Errors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/LeoLinkProblem+Errors.swift"; sourceTree = SOURCE_ROOT; };
@@ -2913,6 +2920,8 @@
 				E5E15704F /* MacResultInbox.swift */,
 				E5GWV0002 /* GatewayViews.swift */,
 				LFF723511AE9 /* HarnessChangesView.swift */,
+				LFC18772620A /* HarnessSessionSettingsSheet.swift */,
+				LF5972B44434 /* HarnessInteractionCards.swift */,
 				LFDF71F20429 /* MacAutomationsView.swift */,
 				LF12689023D8 /* MacScreenLiveViews.swift */,
 				LF26AE1ABDCE /* MacScreenViews.swift */,
@@ -2923,6 +2932,7 @@
 				E5MSF0002 /* MacSSHFallback.swift */,
 				E5MRF0002 /* MacRouteFallback.swift */,
 				LF5B31AD8FD0 /* HarnessSessionLogic.swift */,
+				LFCED7AAF573 /* HarnessRemoteControls.swift */,
 				E5HCT0002 /* HarnessCatalog.swift */,
 				E5RRR0002 /* RelayRootRouter.swift */,
 				LFB557B4F4FD /* LeoLinkProblem+Errors.swift */,
@@ -3921,6 +3931,7 @@
 				E5RMC0003 /* RelayMachinesClient.swift in Sources */,
 				E5MRF0003 /* MacRouteFallback.swift in Sources */,
 				LF16DFDC2618 /* HarnessSessionLogic.swift in Sources */,
+				LF101677E1DD /* HarnessRemoteControls.swift in Sources */,
 				E5HCT0003 /* HarnessCatalog.swift in Sources */,
 				E5RRR0003 /* RelayRootRouter.swift in Sources */,
 				LFB90A6BC484 /* LeoLinkProblem+Errors.swift in Sources */,
@@ -4422,6 +4433,8 @@
 				E5GWH1001 /* LeoAgentHarness.swift in Sources */,
 				E5GWV0001 /* GatewayViews.swift in Sources */,
 				LF4569085442 /* HarnessChangesView.swift in Sources */,
+				LFBDF098208C /* HarnessSessionSettingsSheet.swift in Sources */,
+				LF5031199E59 /* HarnessInteractionCards.swift in Sources */,
 				LF391D1B7247 /* MacAutomationsView.swift in Sources */,
 				LFFF7A120AA9 /* MacScreenLiveViews.swift in Sources */,
 				LF0FA1A41C6D /* MacScreenViews.swift in Sources */,
@@ -4432,6 +4445,7 @@
 				E5MSF0001 /* MacSSHFallback.swift in Sources */,
 				E5MRF0001 /* MacRouteFallback.swift in Sources */,
 				LFB44C59ED88 /* HarnessSessionLogic.swift in Sources */,
+				LFA82543E9D6 /* HarnessRemoteControls.swift in Sources */,
 				E5HCT0001 /* HarnessCatalog.swift in Sources */,
 				E5RRR0001 /* RelayRootRouter.swift in Sources */,
 				LF3C05D63FF2 /* LeoLinkProblem+Errors.swift in Sources */,
