@@ -666,6 +666,12 @@ export const zcodeProcessResourceSampleSchema = z
       .string()
       .regex(/^[A-Za-z0-9_-]{8,64}$/)
       .optional(),
+    /**
+     * [leo] 该 CLI 进程内当前常驻的 session 数（含子 session）。CLI 自己的常驻池只在运行 / 排队 /
+     * 等待交互 / 被订阅 / 后台任务等保护事实全部消失后才回收 session，所以 0 表示进程内没有任何
+     * session 级工作。Host 据此决定主泳道是否可空闲回收（leoMainLaneIdleRecycle.ts）。可选：旧 CLI 不发。
+     */
+    residentSessionCount: z.number().int().nonnegative().max(1_000_000).optional(),
   })
   .strict();
 export type ZCodeProcessResourceSample = z.infer<typeof zcodeProcessResourceSampleSchema>;

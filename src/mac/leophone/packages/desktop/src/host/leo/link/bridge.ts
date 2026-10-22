@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 import type { IZCodeTaskService } from "@zcode/services";
+import { setLeoMainLanePinnedWorkspacesProvider } from "@zcode/services/leo-main-lane-idle-recycle";
 import type { ModelSelection, ZCodeTaskMode } from "@zcode/shared";
 import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 
@@ -191,6 +192,8 @@ export class LinkBridge {
       await this.restoreFromIndex();
     } finally {
       this.restoring = false;
+      // [up-p1] 手机默认工作区的主泳道 CLI 常驻，不参与空闲回收（手机首轮免冷启动）。
+      setLeoMainLanePinnedWorkspacesProvider(() => [this.defaultWorkspace()]);
       if (this.saveWanted) {
         this.saveWanted = false;
         void this.saveIndex().catch(() => undefined);
@@ -401,6 +404,7 @@ export class LinkBridge {
   }
 
   async close(): Promise<void> {
+    setLeoMainLanePinnedWorkspacesProvider(undefined);
     await Promise.allSettled([...this.sessions.values()].map((session) => session.close()));
     // mode_update/接管会排队写sessions.json；先排空索引再释放session，
     // 否则close返回后仍会创建文件，且晚到写入可能把已清空的Map保存成空索引。
@@ -600,6 +604,11 @@ export class LinkBridge {
     }
     void this.saveIndex().catch(() => undefined);
     return session;
+  }
+
+  /** [up-p1] 手机新任务默认落到的工作区;这个工作区的 CLI 不做空闲回收,手机首轮免冷启动。 */
+  defaultWorkspace(): string {
+    return this.resolveCwd("");
   }
 
   /** 手机没指定目录(空或 "~")时,默认手机上次在这台 Mac 用过的项目;都没有才用主目录。 */
