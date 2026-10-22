@@ -35,11 +35,13 @@ function LeoRecentWorkspacesBody({
 
   return (
     <section
-      aria-label="最近工作区"
+      aria-label={intl.formatMessage({ id: "leoHome.recentWorkspaces" })}
       data-testid="leo-home-recent"
       className={cn("leo-home-recent w-full max-w-2xl", className)}
     >
-      <div className="mb-1.5 px-1 text-ui-caption text-foreground-subtlest">最近工作区</div>
+      <div className="mb-1.5 px-1 text-ui-caption text-foreground-subtlest">
+        {intl.formatMessage({ id: "leoHome.recentWorkspaces" })}
+      </div>
       <ul className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
         {recent.map(({ key, workspacePath, workspaceIdentity, task, agentKind }) => {
           const title =

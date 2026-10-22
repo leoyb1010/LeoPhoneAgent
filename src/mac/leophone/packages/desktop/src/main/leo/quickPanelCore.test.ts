@@ -51,13 +51,22 @@ test("settings default on and fall back to ⌥Space when the stored accelerator 
     menuBarEnabled: true,
     quickPanelEnabled: true,
     accelerator: DEFAULT_QUICK_ACCELERATOR,
+    appTheme: "system",
   });
   assert.deepEqual(parseQuickEntrySettings({ menuBarEnabled: false, accelerator: "Shift+A" }), {
     menuBarEnabled: false,
     quickPanelEnabled: true,
     accelerator: DEFAULT_QUICK_ACCELERATOR,
+    appTheme: "system",
   });
   assert.equal(parseQuickEntrySettings({ accelerator: "ctrl+alt+l" }).accelerator, "Control+Alt+L");
+});
+
+test("[G3] the quick panel remembers the app's appearance, not the system's", () => {
+  assert.equal(parseQuickEntrySettings({ appTheme: "light" }).appTheme, "light");
+  assert.equal(parseQuickEntrySettings({ appTheme: "dark" }).appTheme, "dark");
+  // 主窗口内部的 zai-* 名字不会传到这里(SetTitleBarTheme 只收 light / dark / system);别的值回落跟随系统。
+  assert.equal(parseQuickEntrySettings({ appTheme: "zai-dark" }).appTheme, "system");
 });
 
 const primary = { bounds: { x: 0, y: 0, width: 1512, height: 982 }, workArea: { x: 0, y: 38, width: 1512, height: 944 } };
@@ -125,4 +134,14 @@ test("tray menu without host data shows one line, and hides 新任务 when the p
   const menu = buildQuickTrayMenu(null, { quickPanelEnabled: false, hostError: "本机 Leo 服务还没启动" });
   assert.deepEqual(menu[0], { kind: "info", label: "读不到任务：本机 Leo 服务还没启动" });
   assert.equal(menu.some((item) => item.kind === "new-task"), false);
+});
+
+test("[G3] the app theme reported before quick entry starts is delivered once it hooks in", async () => {
+  const { onLeoQuickPanelAppTheme, setLeoQuickPanelAppTheme } = await import("./quickPanelTheme.js");
+  const seen: string[] = [];
+  setLeoQuickPanelAppTheme("zai-dark"); // 不认的值忽略
+  setLeoQuickPanelAppTheme("dark");
+  onLeoQuickPanelAppTheme((theme) => seen.push(theme));
+  setLeoQuickPanelAppTheme("light");
+  assert.deepEqual(seen, ["dark", "light"]);
 });

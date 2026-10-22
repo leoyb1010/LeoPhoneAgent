@@ -31,6 +31,7 @@ import {
 } from "./oauthRuntime.js";
 import type { LeoQuickEntry } from "./quickEntry.js";
 import { handlePairedLeoRoute, isPairedLeoRoute } from "./pairedRoutes.js";
+import { readBrainStatus } from "./brainGateway.js";
 import type { LeoTaskGroups } from "./taskGroups/service.js";
 import {
   closeAllScreenSessions,
@@ -340,6 +341,11 @@ export function startLeoHttpApi(deps: {
     }
     if (url.pathname === "/api/leo/link/status" && req.method === "GET") {
       json(res, 200, leoLinkStatus());
+      return;
+    }
+    // [G3] 首页「大脑」卡片:第二大脑的卡片 / 文件数(网关 /v1/health,Host 缓存 5 分钟;没 key 时 enabled=false)。
+    if (url.pathname === "/api/leo/brain/status" && req.method === "GET") {
+      json(res, 200, await readBrainStatus());
       return;
     }
     if (url.pathname.startsWith("/api/leo/link/direct/") && req.method === "POST") {

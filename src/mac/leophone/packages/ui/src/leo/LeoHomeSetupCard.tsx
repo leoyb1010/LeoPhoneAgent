@@ -2,6 +2,8 @@ import { Smartphone, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/components/lib/utils.js";
+import { Button } from "@/components/ui/button.js";
+import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
 import { useOptionalTabStore } from "@/store/TabStoreProvider.js";
 
@@ -28,6 +30,7 @@ export function LeoHomeSetupCard({ className }: { className?: string }) {
   const [status, setStatus] = useState<LinkStatus | null>(null);
   const [dismissed, setDismissed] = useState(readDismissed);
   const openSettingsTab = useOptionalTabStore((state) => state.openSettingsTab);
+  const { intl } = useZCodeIntl();
 
   useEffect(() => {
     if (!bridge || dismissed) return;
@@ -61,44 +64,48 @@ export function LeoHomeSetupCard({ className }: { className?: string }) {
     }
   };
 
+  const title = intl.formatMessage({ id: "leoHome.phone.title" });
   return (
     <section
-      aria-label="连上你的 iPhone"
+      aria-label={title}
       data-testid="leo-home-setup-card"
       className={cn(
-        "leo-home-setup relative flex w-full max-w-2xl items-center gap-3 rounded-2xl border border-border bg-[var(--leo-card,var(--surface))] px-4 py-3",
+        // [G3] 只用设计 token:卡片 bg-card / rounded-xl,主操作用共享 Button(青绿 primary)。
+        "leo-home-setup relative flex w-full max-w-2xl items-center gap-3 rounded-xl border border-border bg-card px-4 py-3",
         className,
       )}
     >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[var(--leo-brand-soft)] text-[var(--leo-brand)]">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-brand">
         <Smartphone className="size-4" aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-ui-base font-medium text-foreground">连上你的 iPhone</div>
+        <div className="text-ui-base font-medium text-foreground">{title}</div>
         <div className="text-ui-sm text-foreground-subtle">
-          {status.connected
-            ? "扫一次码，就能在手机上给这台 Mac 派任务、批准操作、看屏幕；全程端到端加密。"
-            : "这台 Mac 还没连上中继。打开「连接手机」看看原因，连上后扫码即可。"}
+          {intl.formatMessage({
+            id: status.connected ? "leoHome.phone.connected" : "leoHome.phone.relayDown",
+          })}
         </div>
       </div>
-      <button
+      <Button
         type="button"
+        size="sm"
         onClick={() => {
           setPendingSettingsSectionIntent("phone");
           openSettingsTab?.();
         }}
-        className="shrink-0 rounded-full bg-[var(--leo-brand)] px-3 py-1.5 text-ui-sm font-medium text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--leo-brand)]"
       >
-        扫码连接
-      </button>
-      <button
+        {intl.formatMessage({ id: "leoHome.phone.scan" })}
+      </Button>
+      <Button
         type="button"
-        aria-label="不再提示"
+        variant="ghost"
+        size="icon-sm"
+        aria-label={intl.formatMessage({ id: "leoHome.phone.dismiss" })}
         onClick={dismiss}
-        className="shrink-0 rounded-full p-1 text-foreground-subtlest transition-colors hover:text-foreground"
+        className="text-foreground-subtlest hover:text-foreground"
       >
         <X className="size-3.5" />
-      </button>
+      </Button>
     </section>
   );
 }
