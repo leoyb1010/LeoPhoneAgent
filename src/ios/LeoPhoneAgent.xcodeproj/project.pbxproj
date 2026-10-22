@@ -241,10 +241,16 @@
 		E5UIF02A /* LeoEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF02F /* LeoEmptyState.swift */; };
 		E5UIF03A /* LeoInlineError.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF03F /* LeoInlineError.swift */; };
 		E5UIF05A /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
+		LFD1EBD99221 /* OnboardingStepPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF3500C03EBA /* OnboardingStepPage.swift */; };
+		LF5C3A50F061 /* OnboardingGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF89D32ACBA0 /* OnboardingGate.swift */; };
 		E5UIF06A /* HomeContextStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF06F /* HomeContextStrip.swift */; };
 		LFB413556CC1 /* HomeMacScreenCover.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF8ED340523B /* HomeMacScreenCover.swift */; };
 		LF3D0F50B05E /* MacTerminalSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF0503F2B2AA /* MacTerminalSessionsView.swift */; };
 		E5UIF05T /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
+		LFF7E2DFF1BF /* OnboardingStepPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF3500C03EBA /* OnboardingStepPage.swift */; };
+		LFEGIOST001 /* LeoDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0011 /* LeoDesignSystem.swift */; };
+		LFEGIOST002 /* LeoTokens.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFDC0CB32EBE /* LeoTokens.generated.swift */; };
+		LF964EADC933 /* OnboardingGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF89D32ACBA0 /* OnboardingGate.swift */; };
 		E5JV00001 /* Jev.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JV00002 /* Jev.swift */; };
 		E5CUR0021 /* PromptCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0022 /* PromptCacheKey.swift */; };
 		E5CUR0023 /* PromptCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0022 /* PromptCacheKey.swift */; };
@@ -412,6 +418,7 @@
 		E5D00025 /* SessionModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00035 /* SessionModelPicker.swift */; };
 		LF6BB8CB896E /* ThinkingRuleEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF67E084A31A /* ThinkingRuleEditorView.swift */; };
 		E5D00026 /* OnboardingModelSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00036 /* OnboardingModelSelectionView.swift */; };
+		LFAA0583ED2C /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF67D1503E32 /* OnboardingFlowView.swift */; };
 		E5D00037 /* AgentLoopModelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00038 /* AgentLoopModelsView.swift */; };
 		E5D00050 /* models-dev-api.json in Resources */ = {isa = PBXBuildFile; fileRef = E5D00060 /* models-dev-api.json */; };
 		E5D00099 /* ProviderConfigDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00199 /* ProviderConfigDB.swift */; };
@@ -729,11 +736,14 @@
 		E5COL0007 /* CollectionIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5COL0008 /* CollectionIntents.swift */; };
 		E5COL0005 /* CollectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5COL0006 /* CollectionsView.swift */; };
 		E5BRN01A /* BrainCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN01F /* BrainCore.swift */; };
+		LF342FB8DD6E /* BrainProfileCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2C4303FE10 /* BrainProfileCard.swift */; };
 		E5BRN01T /* BrainCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN01F /* BrainCore.swift */; };
+		LFA46343AEC9 /* BrainProfileCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2C4303FE10 /* BrainProfileCard.swift */; };
 		E5BRN02A /* BrainOfflineCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN02F /* BrainOfflineCache.swift */; };
 		E5BRN02T /* BrainOfflineCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN02F /* BrainOfflineCache.swift */; };
 		E5BRN03A /* BrainClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN03F /* BrainClient.swift */; };
 		E5BRN04A /* BrainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN04F /* BrainStore.swift */; };
+		LF845F05AB17 /* BrainProfilePublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF981C71B23B /* BrainProfilePublisher.swift */; };
 		E5BRN05A /* AIChatViewModel+Brain.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN05F /* AIChatViewModel+Brain.swift */; };
 		E5BRN06A /* BrainSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN06F /* BrainSettingsView.swift */; };
 		E5BRN07A /* BrainBrowseViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN07F /* BrainBrowseViews.swift */; };
@@ -1331,6 +1341,8 @@
 		E5UIF02F /* LeoEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoEmptyState.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF03F /* LeoInlineError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoInlineError.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF05F /* LeoUIPolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoUIPolicies.swift"; sourceTree = SOURCE_ROOT; };
+		LF3500C03EBA /* OnboardingStepPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Components/OnboardingStepPage.swift; sourceTree = SOURCE_ROOT; };
+		LF89D32ACBA0 /* OnboardingGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Components/OnboardingGate.swift; sourceTree = SOURCE_ROOT; };
 		E5UIF06F /* HomeContextStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Home/HomeContextStrip.swift"; sourceTree = SOURCE_ROOT; };
 		LF8ED340523B /* HomeMacScreenCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Home/HomeMacScreenCover.swift; sourceTree = SOURCE_ROOT; };
 		LF0503F2B2AA /* MacTerminalSessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Home/MacTerminalSessionsView.swift; sourceTree = SOURCE_ROOT; };
@@ -1507,6 +1519,7 @@
 		E5D00035 /* SessionModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionModelPicker.swift; sourceTree = "<group>"; };
 		LF67E084A31A /* ThinkingRuleEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingRuleEditorView.swift; sourceTree = "<group>"; };
 		E5D00036 /* OnboardingModelSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingModelSelectionView.swift; sourceTree = "<group>"; };
+		LF67D1503E32 /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		E5D00038 /* AgentLoopModelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLoopModelsView.swift; sourceTree = "<group>"; };
 		E5D00060 /* models-dev-api.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "models-dev-api.json"; path = "Resources/models-dev-api.json"; sourceTree = "<group>"; };
 		E5D00199 /* ProviderConfigDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderConfigDB.swift; sourceTree = "<group>"; };
@@ -1785,9 +1798,11 @@
 		E5COL0008 /* CollectionIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Intents/CollectionIntents.swift"; sourceTree = SOURCE_ROOT; };
 		E5COL0006 /* CollectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/CollectionsView.swift"; sourceTree = SOURCE_ROOT; };
 		E5BRN01F /* BrainCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Brain/BrainCore.swift"; sourceTree = SOURCE_ROOT; };
+		LF2C4303FE10 /* BrainProfileCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Brain/BrainProfileCard.swift; sourceTree = SOURCE_ROOT; };
 		E5BRN02F /* BrainOfflineCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Brain/BrainOfflineCache.swift"; sourceTree = SOURCE_ROOT; };
 		E5BRN03F /* BrainClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Brain/BrainClient.swift"; sourceTree = SOURCE_ROOT; };
 		E5BRN04F /* BrainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Brain/BrainStore.swift"; sourceTree = SOURCE_ROOT; };
+		LF981C71B23B /* BrainProfilePublisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Brain/BrainProfilePublisher.swift; sourceTree = SOURCE_ROOT; };
 		E5BRN05F /* AIChatViewModel+Brain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Chat/AIChatViewModel+Brain.swift"; sourceTree = SOURCE_ROOT; };
 		E5BRN06F /* BrainSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Brain/BrainSettingsView.swift"; sourceTree = SOURCE_ROOT; };
 		E5BRN07F /* BrainBrowseViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Brain/BrainBrowseViews.swift"; sourceTree = SOURCE_ROOT; };
@@ -2542,6 +2557,8 @@
 				E5UIF02F /* LeoEmptyState.swift */,
 				E5UIF03F /* LeoInlineError.swift */,
 				E5UIF05F /* LeoUIPolicies.swift */,
+				LF3500C03EBA /* OnboardingStepPage.swift */,
+				LF89D32ACBA0 /* OnboardingGate.swift */,
 				E5UIF06F /* HomeContextStrip.swift */,
 				LF8ED340523B /* HomeMacScreenCover.swift */,
 				LF0503F2B2AA /* MacTerminalSessionsView.swift */,
@@ -2869,9 +2886,11 @@
 				E5COL0008 /* CollectionIntents.swift */,
 				E5COL0006 /* CollectionsView.swift */,
 				E5BRN01F /* BrainCore.swift */,
+				LF2C4303FE10 /* BrainProfileCard.swift */,
 				E5BRN02F /* BrainOfflineCache.swift */,
 				E5BRN03F /* BrainClient.swift */,
 				E5BRN04F /* BrainStore.swift */,
+				LF981C71B23B /* BrainProfilePublisher.swift */,
 				E5BRN05F /* AIChatViewModel+Brain.swift */,
 				E5BRN06F /* BrainSettingsView.swift */,
 				E5BRN07F /* BrainBrowseViews.swift */,
@@ -3318,6 +3337,7 @@
 				E5D00033 /* ModelGroupsView.swift */,
 				E5QT00011 /* ModelQuickTestSheet.swift */,
 				E5D00036 /* OnboardingModelSelectionView.swift */,
+				LF67D1503E32 /* OnboardingFlowView.swift */,
 				E5D00031 /* ProviderInstanceDetailView.swift */,
 				E5D00030 /* ProviderInstancesView.swift */,
 				E5SVP0031 /* ShadowVoiceProviderDetailView.swift */,
@@ -3922,6 +3942,7 @@
 				E5SUB0101T /* SubAgentPolicy.swift in Sources */,
 				E5ASK0001T /* AskUserState.swift in Sources */,
 				E5BRN01T /* BrainCore.swift in Sources */,
+				LFA46343AEC9 /* BrainProfileCard.swift in Sources */,
 				E5BRN02T /* BrainOfflineCache.swift in Sources */,
 				E5ASK0004T /* ToolStepGrouping.swift in Sources */,
 				E5SUB0102T /* AgentCallback.swift in Sources */,
@@ -3965,6 +3986,10 @@
 				E5SHL0002 /* SyncHealth.swift in Sources */,
 				E5QTK0003 /* QuickTaskCatalog.swift in Sources */,
 				E5UIF05T /* LeoUIPolicies.swift in Sources */,
+				LFF7E2DFF1BF /* OnboardingStepPage.swift in Sources */,
+				LFEGIOST001 /* LeoDesignSystem.swift in Sources */,
+				LFEGIOST002 /* LeoTokens.generated.swift in Sources */,
+				LF964EADC933 /* OnboardingGate.swift in Sources */,
 				E5MDS0003T /* MarkdownStripper.swift in Sources */,
 				E5L3KMMT /* KeyedMemo.swift in Sources */,
 				E5L3FWPT /* ForegroundWorkPolicy.swift in Sources */,
@@ -4142,6 +4167,8 @@
 				E5UIF02A /* LeoEmptyState.swift in Sources */,
 				E5UIF03A /* LeoInlineError.swift in Sources */,
 				E5UIF05A /* LeoUIPolicies.swift in Sources */,
+				LFD1EBD99221 /* OnboardingStepPage.swift in Sources */,
+				LF5C3A50F061 /* OnboardingGate.swift in Sources */,
 				E5UIF06A /* HomeContextStrip.swift in Sources */,
 				LFB413556CC1 /* HomeMacScreenCover.swift in Sources */,
 				LF3D0F50B05E /* MacTerminalSessionsView.swift in Sources */,
@@ -4367,9 +4394,11 @@
 				E5COL0007 /* CollectionIntents.swift in Sources */,
 				E5COL0005 /* CollectionsView.swift in Sources */,
 				E5BRN01A /* BrainCore.swift in Sources */,
+				LF342FB8DD6E /* BrainProfileCard.swift in Sources */,
 				E5BRN02A /* BrainOfflineCache.swift in Sources */,
 				E5BRN03A /* BrainClient.swift in Sources */,
 				E5BRN04A /* BrainStore.swift in Sources */,
+				LF845F05AB17 /* BrainProfilePublisher.swift in Sources */,
 				E5BRN05A /* AIChatViewModel+Brain.swift in Sources */,
 				E5BRN06A /* BrainSettingsView.swift in Sources */,
 				E5BRN07A /* BrainBrowseViews.swift in Sources */,
@@ -4569,6 +4598,7 @@
 				E5UMP0001 /* UnifiedModelPicker.swift in Sources */,
 				E5MDT0001 /* ModelDisplayTraits.swift in Sources */,
 				E5D00026 /* OnboardingModelSelectionView.swift in Sources */,
+				LFAA0583ED2C /* OnboardingFlowView.swift in Sources */,
 				E5E000006 /* PendingShare.swift in Sources */,
 				E5E000007 /* SharedContainerStore.swift in Sources */,
 				E5E000008 /* ShareCoordinator.swift in Sources */,

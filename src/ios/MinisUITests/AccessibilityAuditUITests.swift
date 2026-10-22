@@ -21,6 +21,8 @@ final class AccessibilityAuditUITests: XCTestCase {
         app.launch()
         // A fresh install shows "本次更新" first.
         if app.buttons["完成"].waitForExistence(timeout: 4) { app.buttons["完成"].tap() }
+        // [G2] 没配模型的新装机,看完「本次更新」会出新手引导。
+        if app.buttons["onboarding.skip"].waitForExistence(timeout: 2) { app.buttons["onboarding.skip"].tap() }
 
         try app.performAccessibilityAudit(for: audited)
 

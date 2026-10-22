@@ -177,3 +177,58 @@ enum ReplyNextStep {
         return true
     }
 }
+
+// MARK: - [E2] 「值得收进大脑？」建议
+
+extension ReplyNextStep {
+    /// 便宜的本地判断:够长(≥ 400 字)且有结构(标题、两条以上列表、表格),
+    /// 不是报错 / 道歉,也不是出错的回合。只决定要不要出那一行建议,从不自动保存。
+    static func suggestsBrain(reply: String, hasError: Bool = false) -> Bool {
+        guard !hasError else { return false }
+        let text = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count >= 400 else { return false }
+        let head = firstLine(text, limit: 40).lowercased()
+        let errorPrefixes = ["error", "错误", "出错", "失败", "抱歉", "sorry", "⚠️"]
+        if errorPrefixes.contains(where: { head.hasPrefix($0) }) { return false }
+
+        var inFence = false
+        var listItems = 0
+        var hasHeading = false
+        var tableRows = 0
+        var hasTableSeparator = false
+        for raw in text.split(whereSeparator: \.isNewline) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("```") || line.hasPrefix("~~~") { inFence.toggle(); continue }
+            if inFence || line.isEmpty { continue }
+            if line.range(of: #"^#{1,6}\s+\S"#, options: .regularExpression) != nil { hasHeading = true }
+            let isRule = line.allSatisfy { "-*_ ".contains($0) }
+            if !isRule, line.range(of: #"^([-*+•]\s+\S|\d{1,3}[.)]\s+\S|\d{1,3}、\s*\S)"#,
+                                   options: .regularExpression) != nil { listItems += 1 }
+            if line.hasPrefix("|") && line.dropFirst().contains("|") {
+                tableRows += 1
+                if line.range(of: #"^\|?\s*:?-{3,}"#, options: .regularExpression) != nil { hasTableSeparator = true }
+            }
+        }
+        let hasTable = hasTableSeparator && tableRows >= 3
+        return hasHeading || listItems >= 2 || hasTable
+    }
+
+    /// 每条回复最多出一次:点过「收进大脑」或关掉后记下,不再出现。只留最近 200 条。
+    struct BrainSuggestionLedger {
+        static let key = "leo.reply.brainSuggestion.handled"
+        static let limit = 200
+        var defaults: UserDefaults = .standard
+
+        func isHandled(_ id: UUID) -> Bool {
+            (defaults.stringArray(forKey: Self.key) ?? []).contains(id.uuidString)
+        }
+
+        func markHandled(_ id: UUID) {
+            var ids = defaults.stringArray(forKey: Self.key) ?? []
+            guard !ids.contains(id.uuidString) else { return }
+            ids.append(id.uuidString)
+            if ids.count > Self.limit { ids.removeFirst(ids.count - Self.limit) }
+            defaults.set(ids, forKey: Self.key)
+        }
+    }
+}

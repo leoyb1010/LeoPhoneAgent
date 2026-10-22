@@ -21,6 +21,8 @@ final class KeyboardSwipeDismissUITests: XCTestCase {
             app.buttons[label].tap()
             break
         }
+        // [G2] 没配模型的新装机,看完「本次更新」会出新手引导。
+        if app.buttons["onboarding.skip"].waitForExistence(timeout: 2) { app.buttons["onboarding.skip"].tap() }
         settle(1.0)
         // 新对话
         let newChat = app.buttons["新对话"]

@@ -202,6 +202,15 @@ struct SettingsHomeView: View {
                               icon: "doc.text.fill", color: .gray) { LogManagementView() },
                 SettingsEntry("隐私与数据", keywords: "privacy 隐私",
                               icon: "lock.shield.fill", color: .blue) { LeoPrivacyView() },
+                SettingsEntry("新手引导", keywords: "onboarding 引导 新手 入门 帮助 help 连接模型 配对 mac 第一个任务",
+                              icon: "figure.wave", color: .blue,
+                              hint: "连接模型、配对 Mac、派第一个任务") {
+                    OnboardingFlowView(presentation: .pushed) { prefill in
+                        guard let prefill else { return }
+                        NotificationCenter.default.post(name: .onboardingPrefillRequested, object: nil,
+                                                        userInfo: ["prompt": prefill])
+                    }
+                },
                 SettingsEntry("关于", keywords: "about 版本 version",
                               icon: "info.circle.fill", color: .gray) { AboutView() },
             ]),

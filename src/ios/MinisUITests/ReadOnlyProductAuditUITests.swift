@@ -38,6 +38,8 @@ final class ReadOnlyProductAuditUITests: XCTestCase {
         if app.navigationBars["本次更新"].waitForExistence(timeout: 2) {
             app.navigationBars["本次更新"].buttons["完成"].tap()
         }
+        // [G2] 没配模型的新装机,看完「本次更新」会出新手引导。
+        if app.buttons["onboarding.skip"].waitForExistence(timeout: 2) { app.buttons["onboarding.skip"].tap() }
     }
 
     func test01CurrentHomeAndModelPicker() {
