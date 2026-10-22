@@ -18,7 +18,9 @@ test("brain routing line appears only when the leo-brain search tool is register
     section.content,
     /call mcp__leo-brain__brain_search first \(brain_brief is not needed\)/,
   );
-  assert.match(section.content, /我的\/之前\/上次\/记得\/笔记\/资料\/大脑/);
+  assert.match(section.content, /我的笔记\/之前定的\/上次说的\/记得吗\/资料\/大脑/);
+  // 当前工作区的代码/文件不走大脑:避免「我之前写的函数」这类编码请求误触发
+  assert.match(section.content, /Don't use it for code or files in the current workspace/);
   assert.match(
     section.content,
     /never read ~\/\.config\/leo-brain\/\*, ~\/\.leoagent\/key or ~\/\.leoagent\/treasury\.key/,
