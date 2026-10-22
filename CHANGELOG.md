@@ -1,5 +1,15 @@
 # LeoPhoneAgent 更新记录
 
+## Mac 1.15.0 · iOS 1.80.0 (186) · 中继 0.2.3 · 复审修复 + CI 恢复 + 定时任务补强 + 内存 + 画像 - 2026-10-22
+
+- 依据：`~/Desktop/LeoBot_复审与下一阶段计划_20261022.html`（A–G）。
+- A 复审修复：中继 flush 遇 RuntimeError/意外异常把投递中条目放回队首、同机 flush 串行、排队文件单条容错、落盘不存响应正文、启动即写在线快照、事件缓冲不先淘汰审批、定时任务推送锁屏只写任务名且 collapse id 与 iOS 一致、转发带 trace_id；部署脚本任何出口恢复常驻守护、全新机器装坏判失败、**不再在 ssh 会话里 open（ssh 里起的 App 读不到系统语言、够不着登录钥匙串）**；棘轮对「vitest 判失败但无失败用例」判红；巡检加 CI 状态。iOS：Sent at 不再进标题重生成与搜索、mac_automation once 带时区偏移与 404 区分、请求带 X-Leo-Trace-Id。
+- B CI：iOS 任务上 Mac Studio 自建 runner（PR 不跑）；删已退役的 Web 旅程步骤，桌面旅程从 Welcome 起；修 7 个过时的 iOS Swift fixture（顺带修复暂存消息被删后复活的同步 bug）；LeoCIStatus 接进 InstallIOSRelease 与 leo:bundle:mac。
+- C 定时任务：结果摘要（最终回复 ≤280 字）、无人值守审批推手机/手表且 30 分钟自动拒绝、早报模板接第二大脑、`GET /automations/templates`、`time_zone`；iOS 远程机器页「定时任务」管理。
+- D 内存：藏宝阁/第二大脑改宿主共享 HTTP MCP（CLI 连 127.0.0.1 加 NO_PROXY），node_repl 按需启动，回收计数，`ZCODE_AUTO_UPDATE=0`。
+- E 画像：iOS 把 GLOBAL/SOUL/CORRECTIONS 整理成「Leo 画像」知识卡（去密钥、2 KB、防抖）；Mac 每 30 分钟同步进 `~/.leophoneagent/leo-profile.md` 并作为 `# userProfile` 注入新会话；资料库网关支持 `supersedes`（旧卡标「已被取代」降为 reference，历史保留）。
+- G 体验：iOS 首启三步引导、「收进大脑」建议；Mac 首页大脑卡、⌥Space 浮窗跟随 App 主题。
+
 ## Mac 1.14.0 · iOS 1.79.0 (185) · Mac 当执行者、第二大脑进 Mac、首轮与内存 - 2026-10-22
 
 - P3：Leo Link 新增 `/automations`（列 / 建 / 改 / 删 / 立即跑，请求 id 幂等，yolo 需可识别设备），定时任务跑完推 `automation.run.completed`（中继发 APNs）；iOS 新增 `mac_automation` 工具（执行者：点名 > 上次 > Studio），补拉事件转通知，系统提示改为优先交给 Mac。契约：`src/mac/leophone/docs/specs/leo-link-automations.md`。
