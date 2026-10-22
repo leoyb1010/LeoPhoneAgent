@@ -16,6 +16,15 @@ struct KernelBootError: LocalizedError {
     var errorDescription: String? { String(localized: "Kernel boot failed: \(Int(code))") }
 }
 
+#if targetEnvironment(simulator)
+/// iSH 静态库只有真机架构,模拟器构建换成 `ISHSimulatorStubs.m`,内核永远起不来。
+struct SimulatorKernelUnavailableError: LocalizedError {
+    /// 用 `let` 而不是直接 return/throw,免得后面的真机代码被报 "will never be executed"。
+    static let applies = true
+    var errorDescription: String? { "Local Linux shell kernel (iSH) is not available in the iOS Simulator." }
+}
+#endif
+
 /// [T-kernel-lazy-boot] 内核生命周期的唯一入口。
 ///
 /// 以前:聊天页每次 onAppear 都调一遍,`Task {}` 继承 @MainActor,`ISHKernel.boot` + 默认挂载覆盖层
@@ -83,6 +92,9 @@ final class KernelBootManager: @unchecked Sendable {
             return was
         }
         guard !alreadyRequested else { return }
+        #if targetEnvironment(simulator)
+        if SimulatorKernelUnavailableError.applies { return }
+        #endif
         Self.installQueue.async {
             guard !RootfsManager.shared.isInstalled else { return }
             let start = CFAbsoluteTimeGetCurrent()
@@ -132,6 +144,9 @@ final class KernelBootManager: @unchecked Sendable {
     /// 在内核线程上跑完整个启动:rootfs → 内核 → 钩子 → 默认挂载覆盖层。
     /// 顺序和以前一致:fakefs 变更追踪、路径钩子必须在 boot 之后、任何会话任务之前装好。
     private static func bootOnKernelThread(startedAt: CFAbsoluteTime) throws -> Timing {
+        #if targetEnvironment(simulator)
+        if SimulatorKernelUnavailableError.applies { throw SimulatorKernelUnavailableError() }
+        #endif
         let installStart = CFAbsoluteTimeGetCurrent()
         try RootfsManager.shared.installIfNeeded()
         logger.info("[KernelBoot] installIfNeeded: \(String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - installStart) * 1000))ms")
