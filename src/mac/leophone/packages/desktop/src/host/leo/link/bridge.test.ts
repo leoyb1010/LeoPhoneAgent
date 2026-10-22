@@ -2531,3 +2531,147 @@ test("trace ids: relay frames and headers carry them; a traced request logs one 
     { logger },
   );
 });
+
+// -- [up3-link2] 认回来的任务推迟订阅 / 无人值守审批的回执推送 ----------------------------------------
+
+test("[up3-link2] restored tasks don't subscribe at startup; opening or sending to one brings live events back", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "leo-link-defer-"));
+  try {
+    const ids: string[] = [];
+    await withBridge(
+      async ({ bridge, zcode }) => {
+        for (const prompt of ["旧任务一", "旧任务二"]) {
+          const id = await createSession(bridge, dir, { prompt });
+          zcode.fire(id, { type: "task_complete", stopReason: "success" });
+          await collect(bridge, id, 0, (all) => all.some((e) => e.event === "run.completed"));
+          ids.push(id);
+        }
+        await sleep(50);
+      },
+      { dir },
+    );
+    await withBridge(
+      async ({ bridge, zcode }) => {
+        await bridge.restore();
+        assert.equal(zcode.subscriptionCount(), 0, "启动时不订阅认回来的任务(冷会话只会撞 session-unavailable)");
+        const [opened, sentTo] = ids as [string, string];
+
+        // 手机打开旧会话的事件流:当场接上实时流,Mac 上接着跑的一轮照样到手机。
+        const watching = collect(bridge, opened, 0, (all) => all.filter((e) => e.event === "run.completed").length === 2);
+        await eventually(() => zcode.listenerCount(opened) === 1, "打开事件流时订阅");
+        zcode.fire(opened, { type: "task_run_started" });
+        zcode.fire(opened, { type: "task_complete", stopReason: "success" });
+        assert.deepEqual(
+          (await watching).slice(-2).map((e) => e.event),
+          ["run.started", "run.completed"],
+        );
+
+        // 手机给没打开过的旧会话发消息:先恢复、再订阅、再发;这一轮的事件到手机且只到一次。
+        const service = zcode.service as unknown as { resumeTask: (params: unknown) => Promise<unknown> };
+        const resume = service.resumeTask;
+        let listenersAtResume = -1;
+        service.resumeTask = async (params) => {
+          listenersAtResume = zcode.listenerCount(sentTo);
+          return resume(params);
+        };
+        const sent = await bridge.handle(req("POST", `/harness/sessions/${sentTo}/send`, { text: "接着来" }));
+        assert.equal(sent.status, 200, JSON.stringify(sent.body));
+        assert.equal(listenersAtResume, 0, "恢复之前不订阅");
+        assert.equal(zcode.listenerCount(sentTo), 1, "恢复之后订阅上");
+        assert.deepEqual(
+          zcode.calls.map(([name]) => name),
+          ["resumeTask", "sendPrompt"],
+        );
+        zcode.fire(sentTo, { type: "agent_message_chunk", content: "好" });
+        zcode.fire(sentTo, { type: "task_complete", stopReason: "success" });
+        const events = await collect(bridge, sentTo, 0, (all) => all.filter((e) => e.event === "run.completed").length === 2);
+        assert.deepEqual(
+          events.map((e) => e.event),
+          ["session.created", "user.message", "run.completed", "user.message", "message.delta", "run.completed"],
+        );
+
+        // 打开过(订阅可能已因 session-unavailable 被放弃)的会话,发消息时恢复后重订一次,旧订阅退掉。
+        const before = zcode.subscriptionCount();
+        await bridge.handle(req("POST", `/harness/sessions/${opened}/send`, { text: "再来一轮" }));
+        assert.equal(zcode.subscriptionCount(), before + 1);
+        assert.equal(zcode.listenerCount(opened), 1, "重订后只剩一个订阅,事件不会进两次");
+      },
+      { dir },
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("[up3-link2] an automation run on a restored task subscribes it, so its unattended approvals still reach the phone", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "leo-link-defer-auto-"));
+  try {
+    let id = "";
+    await withBridge(
+      async ({ bridge, zcode }) => {
+        id = await createSession(bridge, dir, { prompt: "旧任务" });
+        zcode.fire(id, { type: "task_complete", stopReason: "success" });
+        await collect(bridge, id, 0, (all) => all.some((e) => e.event === "run.completed"));
+        await sleep(50);
+      },
+      { dir },
+    );
+    await withBridge(
+      async ({ bridge, zcode, pushed }) => {
+        await bridge.restore();
+        assert.equal(zcode.listenerCount(id), 0);
+        bridge.automationRunStarted({ automationId: "auto-1", runId: "auto-1:1", trigger: "schedule", taskId: id, workspacePath: dir });
+        assert.equal(zcode.listenerCount(id), 1, "开跑说明会话已常驻:当场订阅");
+        zcode.fire(id, permission("r1", "Bash", { command: "npm test" }));
+        await eventually(() => pushed.some((e) => e["approval_id"] === "r1"), "审批推给手机");
+        assert.equal(pushed.find((e) => e["approval_id"] === "r1")?.["automation_id"], "auto-1");
+      },
+      { dir, automations: fakeAutomations().service, unattendedApprovalMs: 5_000 },
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("[up3-link2] unattended approvals push their answer too (phone, Mac, auto-deny); ordinary tasks don't", async () => {
+  const automations = fakeAutomations();
+  await withBridge(
+    async ({ bridge, dir, pushed, zcode }) => {
+      const created = await bridge.handle(
+        req("POST", "/automations", { name: "测试", prompt: "p", schedule: "0 9 * * *", workspace: dir }, iphone, "op-a"),
+      );
+      const id = (created.body as AutomationBody).automation.id;
+      bridge.automationRunStarted({ automationId: id, runId: `${id}:1`, trigger: "schedule", taskId: "task-u1", workspacePath: dir });
+      const responded = (approvalId: string) =>
+        pushed.find((e) => e.event === "approval.responded" && e["approval_id"] === approvalId);
+
+      // 手机批准:推 approval.responded(中继据此把灵动岛改回「运行中」,不带提醒)。
+      zcode.fire("task-u1", permission("u1", "Bash", { command: "npm test" }));
+      await eventually(() => pushed.some((e) => e["approval_id"] === "u1"), "审批推给手机");
+      await bridge.handle(req("POST", "/harness/sessions/task-u1/approval", { approval_id: "u1", choice: "once" }, iphone));
+      await eventually(() => responded("u1") !== undefined, "手机答复推给中继");
+      assert.equal(responded("u1")?.["session_id"], "task-u1");
+      assert.equal(responded("u1")?.["choice"], "once");
+
+      // Mac 桌面上答的(流里回来的 permission_response)也推。
+      zcode.fire("task-u1", permission("u2", "Bash", { command: "ls" }));
+      await eventually(() => pushed.some((e) => e["approval_id"] === "u2"), "第二条审批推给手机");
+      zcode.fire("task-u1", { type: "permission_response", requestId: "u2", optionId: "allow_once" });
+      await eventually(() => responded("u2") !== undefined, "Mac 上的答复推给中继");
+
+      // 超时自动拒绝也推(choice = deny)。
+      zcode.fire("task-u1", permission("u3", "Bash", { command: "rm -rf build" }));
+      await eventually(() => responded("u3") !== undefined, "自动拒绝推给中继");
+      assert.equal(responded("u3")?.["choice"], "deny");
+
+      // 普通(非无人值守、Mac 上发起的)任务的审批回执不推。
+      const session = await bridge.handle(req("POST", "/harness/sessions", { harness: "zcode", cwd: dir }, iphone));
+      const taskId = (session.body as { session_id: string }).session_id;
+      zcode.fire(taskId, permission("n1", "Bash", { command: "ls" }));
+      zcode.fire(taskId, { type: "permission_response", requestId: "n1", optionId: "allow_once" });
+      await sleep(100);
+      assert.equal(responded("n1"), undefined);
+    },
+    { automations: automations.service, zcodeModelSelection: async () => sonnet, unattendedApprovalMs: 60 },
+  );
+});

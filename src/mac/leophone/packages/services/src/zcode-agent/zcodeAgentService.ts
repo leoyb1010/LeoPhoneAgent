@@ -107,6 +107,7 @@ import {
   zcodeOfficialMcpAuthHeadersRequestParamsSchema,
   summarizeOfficialMcpIdentityHeaders,
   zcodeProtocolEmptyResultSchema,
+  zcodeProtocolErrorCodes,
   zcodeProtocolMethods,
   zcodeProtocolNotifications,
   zcodeMcpTelemetryEventSchema,
@@ -502,6 +503,15 @@ function isProtocolMethodNotFoundError(error: unknown): boolean {
     error !== null &&
     "code" in error &&
     (error as { code?: unknown }).code === -32601
+  );
+}
+
+function isSessionUnavailableError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === zcodeProtocolErrorCodes.sessionUnavailable
   );
 }
 
@@ -5760,6 +5770,12 @@ export function createZCodeAgentService(
             releaseBufferedLiveEvents();
           } catch (error) {
             if (cancelled) {
+              return;
+            }
+            if (params.stopOnSessionUnavailable && isSessionUnavailableError(error)) {
+              // 修复:冷会话(没恢复)订阅必然 session-unavailable,重试 8 次只会刷日志(Leo Link 启动时
+              // 每条认回的会话各一轮)。调用方声明会在恢复后重订时,这里立即放弃;live 事件照旧放行。
+              releaseBufferedLiveEvents();
               return;
             }
             if (attempt >= SESSION_SUBSCRIBE_MAX_ATTEMPTS - 1) {

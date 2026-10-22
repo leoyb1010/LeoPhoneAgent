@@ -3286,6 +3286,8 @@ export function createZCodeTaskServiceAdapter(
           sessionId: params.taskId,
           deliveryKind: toZCodeDeliveryKind(params.deliveryKind),
           includeSnapshot: params.deliveryKind === "replayable",
+          // bot-channel-continuous 只有 Leo Link 在用,它在 resumeTask 后自己重订:冷会话不重试。
+          ...(params.deliveryKind === "bot-channel-continuous" ? { stopOnSessionUnavailable: true } : {}),
         })((event) => mapServiceEvent(target, event));
         return {
           dispose() {

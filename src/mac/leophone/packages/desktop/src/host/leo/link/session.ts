@@ -139,6 +139,8 @@ export class LinkSession {
   private readonly journal: HarnessJournal;
   private subscription: { dispose(): void } | null = null;
   private subscriptionEpoch = 0;
+  private subscriptionToken: symbol | null = null;
+  private closed = false;
   private stopTimer: NodeJS.Timeout | null = null;
   /** 这一轮是手机发起的。Mac 桌面上自己发起的轮次:提问不代答,审批和完成不推手机。 */
   private phoneTurn = false;
@@ -178,22 +180,46 @@ export class LinkSession {
     return this.mode === "yolo";
   }
 
-  /** 读回日志尾部(重启后接着编号),再订阅这条任务的流。完整索引在第一次读写时才建。 */
-  async open(): Promise<void> {
+  /**
+   * 读回日志尾部(重启后接着编号),再订阅这条任务的流。完整索引在第一次读写时才建。
+   *
+   * [up3-link2] deferStream:Mac 重启后认回来的任务先不订阅。它们在内核里多半没恢复(不常驻),
+   * 订阅只会撞上 session-unavailable:以前每台 Mac 启动时几十上百条会话各重试 8 次再放弃,
+   * 日志被刷满(Studio 133 条)。改成等到真要用时再订阅:send 里 resumeTask 之后、
+   * 手机打开这条会话的事件流时、或桥接得知它正在跑(自动化开跑)时,见 attachStream。
+   */
+  async open(options: { deferStream?: boolean } = {}): Promise<void> {
     const epoch = this.subscriptionEpoch;
     await this.journal.peekTail();
     if (epoch !== this.subscriptionEpoch) return;
     this.seq = Math.max(this.seq, this.journal.health().latest_seq);
     // 最后活动时间以日志里最后一条事件为准(认回来的任务在 restore 里先置成创建时间)。
     this.updatedAt = Math.max(this.updatedAt, this.journal.lastEventAt());
-    this.subscription ??= this.deps.taskService.onDynamicTaskEvent({
+    if (!options.deferStream) this.attachStream();
+  }
+
+  /**
+   * [up3-link2] 订阅这条任务的实时流;已订阅就不动。fresh = 先退掉旧订阅再订一次:
+   * 恢复(resumeTask)之前订的那次可能撞上 session-unavailable 已被放弃(该错误不重试,
+   * 见 zcodeAgentService.onDynamicSessionEvent 的 stopOnSessionUnavailable),恢复后必须重订,
+   * 否则这轮的事件到不了手机。关闭后不再订。
+   */
+  attachStream(fresh = false): void {
+    if (this.closed) return;
+    if (this.subscription && !fresh) return;
+    this.subscription?.dispose();
+    const epoch = this.subscriptionEpoch;
+    const token = Symbol("subscription");
+    this.subscriptionToken = token;
+    this.subscription = this.deps.taskService.onDynamicTaskEvent({
       workspacePath: this.cwd,
       taskId: this.sessionId,
       // 与上游机器人同一种订阅:直连的实时流。续传由我们自己的日志负责,不要上游的快照回放。
       deliveryKind: "bot-channel-continuous",
     })((event: ZCodeStreamEvent) => {
       // 退订不能撤销已排队的回调；关闭代次先退休，旧mode事件不得在索引drain后重排写入。
-      if (epoch !== this.subscriptionEpoch) return;
+      // 重订后旧订阅的回调同样作废,免得同一事件进两次。
+      if (epoch !== this.subscriptionEpoch || token !== this.subscriptionToken) return;
       try {
         this.onZCode(event);
       } catch (error) {
@@ -205,6 +231,7 @@ export class LinkSession {
   async close(): Promise<void> {
     // 合并窗口里攒着的正文先落盘,再关日志。
     for (const event of this.mapper.flushPending()) this.emit(event);
+    this.closed = true;
     this.subscriptionEpoch += 1;
     this.subscription?.dispose();
     this.subscription = null;
@@ -248,6 +275,8 @@ export class LinkSession {
       if (this.needsResume) {
         await this.deps.taskService.resumeTask({ taskId: this.sessionId, workspacePath: this.cwd });
         this.needsResume = false;
+        // [up3-link2] 认回来的任务推迟到这里订阅:会话已常驻,订阅一次就成;先订再发,这一轮的事件不漏。
+        this.attachStream(true);
       }
       // sendPrompt 在远端 ACK 后就返回,不等这一轮跑完。
       await this.deps.taskService.sendPrompt({
@@ -621,6 +650,9 @@ export class LinkSession {
     if (PUSHABLE.has(name) && this.phoneTurn) this.pushSeqs.add(this.seq);
     // [up-c-mac] 无人值守的自动化:审批卡照样推(终态由 automation.run.completed 单独推,这里不重复)。
     else if (name === "approval.request" && this.unattended) this.pushSeqs.add(this.seq);
+    // [up3-link2] 无人值守时审批答完(手机 / Mac 答的、超时自动拒绝的)也推:中继据此把审批拉起的灵动岛
+    // 改回「运行中」。中继对 approval.responded 不发 APNs 提醒、灵动岛更新不带 alert,不会再响一次。
+    else if (name === "approval.responded" && this.unattended) this.pushSeqs.add(this.seq);
     if (RUN_END.has(name)) {
       // 这一轮(含无人值守的自动化运行)结束:自动拒绝计时一并作废。
       if (this.unattended) this.setUnattended(null);
@@ -639,7 +671,7 @@ export class LinkSession {
       this.lastEvent = { event: name, text: String(summary).slice(0, 120), timestamp: enriched["timestamp"] };
     }
 
-    enriched["durability"] = this.journal.enqueue(enriched, PUSHABLE.has(name));
+    enriched["durability"] = this.journal.enqueue(enriched, PUSHABLE.has(name) || this.pushSeqs.has(this.seq));
     for (const sub of [...this.subscribers]) {
       if (sub.queue.length >= SUBSCRIBER_QUEUE_LIMIT) {
         // 卡住的订阅者摘掉,它可以按 seq 从日志追上。
@@ -677,6 +709,9 @@ export class LinkSession {
 
   /** 先登记再回放;回放前先拍下待落盘的事件,免得回放期间提交的漏掉。 */
   async *subscribe(afterSeq = 0, options: { signal?: AbortSignal; journalStatus?: boolean } = {}): AsyncGenerator<HarnessEvent> {
+    // [up3-link2] 手机打开认回来的旧会话:接上实时流。会话若正在 Mac 上跑(常驻),实时事件照常到手机;
+    // 没常驻则只试一次(session-unavailable 不重试),之后手机一发消息 send 会在恢复后重订。
+    this.attachStream();
     const sub: Subscriber = { queue: [], wake: null, closed: false };
     this.subscribers.add(sub);
     const pending = this.journal.pendingEvents(afterSeq);

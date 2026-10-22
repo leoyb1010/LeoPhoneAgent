@@ -318,7 +318,9 @@ export class LinkBridge {
     await Promise.all(
       pending.map(async (session) => {
         try {
-          await session.open();
+          // [up3-link2] 认回来的任务先不订阅实时流:它们大多没在内核里恢复,订阅只会撞 session-unavailable
+          // (以前每次启动每条重试 8 次)。等首次 send / 手机打开事件流 / 自动化开跑时再订,见 LinkSession.attachStream。
+          await session.open({ deferStream: true });
           this.sessions.set(session.sessionId, session);
         } catch (cause) {
           this.deps.logger.warn("[leo/link] restore failed", { taskId: session.sessionId, error: String(cause) });
@@ -808,6 +810,9 @@ export class LinkBridge {
     if (!this.automations || this.finishedRuns.has(run.runId) || this.automationWatches.has(run.runId)) return;
     const existing = this.sessions.get(run.taskId);
     if (existing) {
+      // [up3-link2] 开跑说明会话已常驻:认回来还没恢复过的会话(订阅推迟或已因 session-unavailable 放弃)
+      // 此刻重订,不然这次无人值守运行的审批收不到。
+      existing.attachStream(existing.needsResume);
       this.armUnattended(existing, run);
       return;
     }
