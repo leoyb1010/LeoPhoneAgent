@@ -62,9 +62,10 @@ enum HarnessApprovalNotifier {
     }
 
     /// app 非前台时为一条审批请求发通知。前台不发(app 内卡片已在最前)。
+    /// `identifier`:[remote-ctl-power] 补拉传中继 APNs 的 collapse id,同一条审批只留一张卡。
     @MainActor
     static func post(hostId: String?, hostName: String?, sessionId: String,
-                     approval: GatewayApprovalRequest) {
+                     approval: GatewayApprovalRequest, identifier customIdentifier: String? = nil) {
         guard UIApplication.shared.applicationState != .active else { return }
         let content = UNMutableNotificationContent()
         content.title = "🖥 \(hostName ?? "Mac") 等你审批"
@@ -78,7 +79,7 @@ enum HarnessApprovalNotifier {
             "harnessSessionId": sessionId,
             "approvalId": approval.approvalId,
         ]
-        let identifier = notificationId(sessionId: sessionId, approvalId: approval.approvalId)
+        let identifier = customIdentifier ?? notificationId(sessionId: sessionId, approvalId: approval.approvalId)
         Task {
             content.categoryIdentifier = await categoryIdentifier(for: approval)
             try? await UNUserNotificationCenter.current().add(

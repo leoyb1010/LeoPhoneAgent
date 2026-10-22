@@ -93,6 +93,9 @@ final class RelayEventCatchUp: ObservableObject {
         var approvals: [RelayEventItem] = []
         var finished: [RelayEventItem] = []
         var automationRuns: [RelayEventItem] = []
+        // [remote-ctl-power] 已知不关注的会话(首页列表上一轮拉到的):Mac 本不为它推送,补拉也不提示。
+        // 定时任务另有 notify 开关(Mac 端判),这里不按关注过滤。
+        let unfollowed = MacLiveSessionsStore.shared.unfollowedSessionIds
         for item in plan.items {
             let fingerprint = item.fingerprint
             guard !notifiedSet.contains(fingerprint) else { continue }
@@ -108,7 +111,9 @@ final class RelayEventCatchUp: ObservableObject {
             case "approval.request":
                 approvals.append(item)
             case "run.failed", "run.completed":
-                finished.append(item)
+                if !MacFollowLogic.skipsCatchUp(sessionId: item.sessionId, unfollowed: unfollowed) {
+                    finished.append(item)
+                }
             case "automation.run.completed":   // [P3] Mac 上的定时任务跑完
                 automationRuns.append(item)
             default:
@@ -135,7 +140,10 @@ final class RelayEventCatchUp: ObservableObject {
             // banner. A session the store doesn't know (Mac unreachable) stays.
             await MacLiveSessionsStore.shared.refresh()
             let live = MacLiveSessionsStore.shared.rows
+            let unfollowedNow = MacLiveSessionsStore.shared.unfollowedSessionIds
             approvals = approvals.filter { item in
+                // [remote-ctl-power] 不关注的会话不发审批本地通知(打开它的控制台照样能答)。
+                if MacFollowLogic.skipsCatchUp(sessionId: item.sessionId, unfollowed: unfollowedNow) { return false }
                 guard let row = live.first(where: { $0.session.id == item.sessionId }) else { return true }
                 return row.session.pendingApprovalId == item.approvalId
             }
@@ -151,17 +159,23 @@ final class RelayEventCatchUp: ObservableObject {
         guard !items.isEmpty else { return }
         if items.count <= RelayCatchUpPolicy.maxIndividualNotices {
             for item in items {
+                // [remote-ctl-power] 标识与中继 APNs 的 collapse id 相同(run.completed-<sid>):
+                // 推送到过的,补拉这条把它替换掉,而不是再来一条。
+                let id = MacFollowLogic.catchUpNotificationId(event: item.eventName, sessionId: item.sessionId,
+                                                              approvalId: nil)
                 if item.eventName == "run.failed" {
-                    postSimple(title: "🖥 \(item.machine) 任务失败", body: item.text ?? "")
+                    postSimple(title: "🖥 \(item.machine) 任务失败", body: item.text ?? "", identifier: id)
                 } else {
-                    postSimple(title: "✅ \(item.machine) 任务完成", body: item.text ?? "")
+                    postSimple(title: "✅ \(item.machine) 任务完成", body: item.text ?? "", identifier: id)
                 }
             }
             return
         }
         let failed = items.filter { $0.eventName == "run.failed" }.count
+        // 合并的那条用固定标识:下一次补拉的合并提示替换它,不越积越多。
         postSimple(title: AppLocalized("Mac 上有 \(items.count) 个任务结束"),
-                   body: AppLocalized("其中 \(failed) 个失败，打开 App 查看"))
+                   body: AppLocalized("其中 \(failed) 个失败，打开 App 查看"),
+                   identifier: "relay-run-summary")
     }
 
     private func remember(_ fingerprint: String) {
@@ -182,8 +196,11 @@ final class RelayEventCatchUp: ObservableObject {
             approvalId: approvalId, runId: sessionId,
             choices: ["once", "deny"], command: item.command,
             tool: nil, reason: nil, extras: [:])
+        // [remote-ctl-power] 与中继 APNs 同一个标识(approval.request-<approval_id>):不重复成两条。
         HarnessApprovalNotifier.post(hostId: hostId, hostName: hostName,
-                                     sessionId: sessionId, approval: approval)
+                                     sessionId: sessionId, approval: approval,
+                                     identifier: MacFollowLogic.catchUpNotificationId(
+                                        event: item.eventName, sessionId: sessionId, approvalId: approvalId))
     }
 
     private func postSimple(title: String, body: String, identifier: String? = nil,

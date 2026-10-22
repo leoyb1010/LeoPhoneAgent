@@ -266,6 +266,9 @@ struct ContentView: View {
     @AppStorage("home.history.month.expanded") private var monthExpanded = false
     @AppStorage("home.history.earlier.expanded") private var earlierExpanded = false
     @AppStorage("home.macLive.collapsed") private var macLiveCollapsed = false
+    /// [remote-ctl-power] 「Mac 上还有 N 个任务在跑（未关注）」点开后列出来。
+    @State private var macUnfollowedExpanded = false
+    @State private var macFollowInFlight: Set<String> = []
 
     enum SyncSubtitleState: Equatable {
         case paused
@@ -1954,9 +1957,12 @@ struct ContentView: View {
     /// 这是每天要看好几次的东西,不该埋那么深。没有在跑的就整节不出现。
     /// 1.46.1:标题点一下折叠;每行左滑(或长按)——在跑的「停止」,跑完的「清理」。
     /// [up-home] 有已配对的 Mac 时,没有任务也显示这一节的标题行(看屏 / 登录入口从这里进)。
+    /// [remote-ctl-power] 只列关注的会话(手机上发起的、点过「关注」的;旧版 Mac 全算关注);
+    /// 桌面上没关注、在跑的折成一行数量,点开再看,每行可「关注」。
     private var macLiveSectionVisible: Bool {
         macFleetEnabled && homeCardsEnabled && !isSelecting
-            && (!macLive.rows.isEmpty || !MacScreenHosts.candidates.isEmpty)
+            && (!macLive.followedRows.isEmpty || !macLive.unfollowedBusyRows.isEmpty
+                || !MacScreenHosts.candidates.isEmpty)
     }
 
     /// 能在手机上登录的外部 agent(各台 Mac 上次报的)。
@@ -1971,8 +1977,17 @@ struct ContentView: View {
         if macLiveSectionVisible {
             Section {
                 if !macLiveCollapsed {
-                    ForEach(macLive.rows) { row in
+                    ForEach(macLive.followedRows) { row in
                         macLiveRow(row)
+                    }
+                    let unfollowed = macLive.unfollowedBusyRows
+                    if !unfollowed.isEmpty {
+                        macUnfollowedSummaryRow(count: unfollowed.count)
+                        if macUnfollowedExpanded {
+                            ForEach(unfollowed) { row in
+                                macUnfollowedRow(row)
+                            }
+                        }
                     }
                 }
             } header: {
@@ -1982,8 +1997,9 @@ struct ContentView: View {
     }
 
     private var macLiveHeader: some View {
-        let waiting = macLive.rows.filter(\.isWaiting).count
-        let empty = macLive.rows.isEmpty
+        let followed = macLive.followedRows
+        let waiting = followed.filter(\.isWaiting).count
+        let empty = followed.isEmpty && macLive.unfollowedBusyRows.isEmpty
         return HStack(spacing: 10) {
             Button {
                 guard !empty else { return }
@@ -1997,7 +2013,7 @@ struct ContentView: View {
                     Text("进行中")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color(UIColor.secondaryLabel))
-                    Text("\(macLive.rows.count)")
+                    Text("\(followed.count)")
                         .font(.caption2.monospacedDigit().weight(.semibold))
                         .foregroundStyle(.tertiary)
                     // 折起来也要看得见有事等你拍板
@@ -2120,6 +2136,81 @@ struct ContentView: View {
                 }
             } else {
                 Button { dismissMacLive(row) } label: { Label("从进行中清理", systemImage: "checkmark.circle") }
+            }
+        }
+    }
+
+    /// [remote-ctl-power] 桌面上没关注、在跑的任务:一行灰字,点开再列。
+    private func macUnfollowedSummaryRow(count: Int) -> some View {
+        Button {
+            withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { macUnfollowedExpanded.toggle() }
+            LeoHaptics.selection()
+        } label: {
+            HStack(spacing: 8) {
+                Text("Mac 上还有 \(count) 个任务在跑（未关注）")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(macUnfollowedExpanded ? 90 : 0))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(macUnfollowedExpanded ? Text("已展开") : Text("已折叠"))
+    }
+
+    /// 没关注的任务:点开照样能看、能答;「关注」之后它进上面的列表,推送与实时活动照常。
+    private func macUnfollowedRow(_ row: MacLiveSessionsStore.Row) -> some View {
+        let following = macFollowInFlight.contains(row.id)
+        return HStack(spacing: 10) {
+            Button {
+                macAttachTarget = row
+            } label: {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(Color(UIColor.tertiaryLabel))
+                        .frame(width: 7, height: 7)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(row.hostName) · \(row.session.displayTitle)")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Text(row.statusText)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button {
+                followMacLive(row)
+            } label: {
+                if following {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Text("关注").font(.caption.weight(.semibold))
+                }
+            }
+            .buttonStyle(.borderless)
+            .disabled(following)
+        }
+    }
+
+    private func followMacLive(_ row: MacLiveSessionsStore.Row) {
+        macFollowInFlight.insert(row.id)
+        Task { @MainActor in
+            defer { macFollowInFlight.remove(row.id) }
+            do {
+                try await macLive.follow(row)
+                LeoHaptics.selection()
+            } catch {
+                homeRoutingError = AppLocalized("没能关注这个任务：\(error.localizedDescription)")
             }
         }
     }

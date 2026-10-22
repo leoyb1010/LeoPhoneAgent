@@ -15,6 +15,7 @@
 //  设备重装/换机不会留下幽灵 token(APNs 回 410 时中继自行清理)。
 //
 
+import Combine
 import Foundation
 import UIKit
 import UserNotifications
@@ -33,11 +34,38 @@ final class PushRegistrar {
     }
     private var lastPushToStartToken: String?
     private var lastAuthorizationRefresh: Date = .distantPast
+    private var liveActivityToggleWatch: AnyCancellable?
+
+    /// [remote-ctl-power] 设置里关了 Live Activity 就不把 push-to-start token 交给中继
+    /// (否则中继照样为每个任务远程拉起卡片、叫醒手机)。中继没有注销 push-to-start 的接口:
+    /// 关掉之后只是不再登记,已登记的那份仍留在中继上;它拉起的卡这边直接收掉(见 observePushToStart)。
+    private var pushToStartAllowed: Bool {
+        MacFollowLogic.shouldRegisterPushToStart(
+            liveActivityEnabled: MacFollowLogic.liveActivityEnabled(),
+            supported: AgentLiveActivityManager.isLiveActivitySupported)
+    }
 
     /// 启动时调用:请求通知权限并向 APNs 注册。
     func start() {
         refreshAuthorizationAndRegister()
         observePushToStart()
+        // 开关打开时补登记缓存的 token;关上时停掉还在退避重试的那一轮。
+        liveActivityToggleWatch = BackgroundKeepAliveManager.shared.$liveActivityEnabled
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] enabled in
+                // @Published 在赋值前发出:下一拍再读 UserDefaults。
+                Task { @MainActor in
+                    guard let self else { return }
+                    if enabled {
+                        if self.pushToStartAllowed, let token = self.lastPushToStartToken {
+                            await self.register(kind: "push_to_start", token: token)
+                        }
+                    } else {
+                        self.registerGenerations["push_to_start", default: 0] &+= 1
+                    }
+                }
+            }
     }
 
     /// Foreground / Settings-return: if the user granted notifications after
@@ -82,7 +110,7 @@ final class PushRegistrar {
         if let token = lastDeviceToken {
             Task { await register(kind: "device", token: token) }
         }
-        if let token = lastPushToStartToken {
+        if let token = lastPushToStartToken, pushToStartAllowed {
             Task { await register(kind: "push_to_start", token: token) }
         }
     }
@@ -97,7 +125,9 @@ final class PushRegistrar {
                 let token = data.map { String(format: "%02x", $0) }.joined()
                 await MainActor.run {
                     guard token != self.lastPushToStartToken else { return }
+                    // 先记下:开关之后打开时还要用它登记。
                     self.lastPushToStartToken = token
+                    guard self.pushToStartAllowed else { return }
                     Task { await self.register(kind: "push_to_start", token: token) }
                 }
             }
@@ -108,6 +138,12 @@ final class PushRegistrar {
             for await activity in Activity<AgentActivityAttributes>.activityUpdates
             where activity.attributes.origin == AgentActivityAttributes.relayOrigin {
                 Task { @MainActor in
+                    // [remote-ctl-power] 开关关着时中继还拿着旧的 push-to-start token(没有注销接口):
+                    // 它拉起的卡直接收掉,不登记 update token,中继也就不会再推更新叫醒手机。
+                    guard MacFollowLogic.liveActivityEnabled() else {
+                        await activity.end(nil, dismissalPolicy: .immediate)
+                        return
+                    }
                     for await data in activity.pushTokenUpdates {
                         let state = activity.content.state
                         let token = LiveActivityTokenRegistration.hex(data)

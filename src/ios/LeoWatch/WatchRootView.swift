@@ -245,22 +245,34 @@ private struct MacStatusPage: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(mac.rows) { row in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(row.title).font(.footnote.weight(.semibold)).lineLimit(1)
-                            Text(row.status)
-                                .font(.caption2)
-                                .foregroundStyle(row.waiting ? Color(red: 0xF0 / 255, green: 0xB8 / 255, blue: 0x6E / 255) : .secondary)
-                                .lineLimit(1)
+                        // [remote-ctl-power] A waiting row that carries its approval opens the card.
+                        if row.waiting, row.approvalId != nil {
+                            Button { client.reopenApproval(row) } label: { rowLabel(row) }
+                                .buttonStyle(.plain)
+                                .accessibilityHint(Text("打开审批"))
+                        } else {
+                            rowLabel(row)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
                     }
                 }
             }
             .padding(.horizontal, 4)
         }
         .navigationTitle("Mac")
+    }
+
+    private func rowLabel(_ row: WatchMacStatus.Row) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(row.title).font(.footnote.weight(.semibold)).lineLimit(1)
+            Text(row.status)
+                .font(.caption2)
+                .foregroundStyle(row.waiting ? Color(red: 0xF0 / 255, green: 0xB8 / 255, blue: 0x6E / 255) : .secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .contentShape(RoundedRectangle(cornerRadius: 10))
     }
 
     private func countRing(value: Int, label: String, color: Color) -> some View {
