@@ -107,7 +107,12 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
         // text line while the bar is present (floatingBarHeight > 0); keep
         // the historical +8 otherwise so we don't reintroduce the dead space
         // removed in [ClipFix 2026-05-16].
-        let bottomPad: CGFloat = inputBarHeight + floatingBarHeight + (floatingBarHeight > 0 ? 52 : 8)
+        // [chat-chrome] The activity strip is now measured in full (its expanded
+        // preview included, no part of it rises above its frame), so the
+        // extra 52pt reserve for the old overhanging thumbnail is gone: one
+        // rule, composer + strip + 8.
+        let bottomPad: CGFloat = ChatListInsets.bottom(inputBarHeight: inputBarHeight,
+                                                       activityStripHeight: floatingBarHeight)
         let baseChanged = abs(coord.baseBottomInset - bottomPad) > 0.5
         if baseChanged {
             let cv = vc.collectionView!

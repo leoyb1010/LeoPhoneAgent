@@ -216,7 +216,9 @@ struct FullAutoBadge: View {
             .padding(.vertical, 5)
             .background(Capsule().fill(mode == .ask ? Color.primary.opacity(0.06) : mode.tint.opacity(0.16)))
             .foregroundStyle(mode.tint)
-            .contentShape(Capsule())
+            // [chat-chrome] Chrome standard: 44pt hit area around the small capsule.
+            .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: LeoChromeMetrics.hitTarget)
+            .contentShape(Rectangle())
         }
         .menuStyle(.button)
         .buttonStyle(.plain)

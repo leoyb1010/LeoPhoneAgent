@@ -237,6 +237,8 @@ struct AgentCurrentStatusCard: View {
     let onResume: () -> Void
     let onReviewProvider: () -> Void
     let onRetryKernel: () -> Void
+    /// [chat-chrome] Shares the line with the tool strip: title only, no subtitle.
+    var compact = false
 
     @State private var showTimeline = false
 
@@ -294,40 +296,50 @@ struct AgentCurrentStatusCard: View {
                     LeoHaptics.selection()
                     showTimeline = true
                 } label: {
-                    HStack(spacing: LeoTheme.Spacing.sm) {
+                    // [chat-chrome] One 36pt line (was a two-line 44pt+ card with
+                    // its own outer padding): icon · title · subtitle · chevron.
+                    // The subtitle gives way first; in `compact` it is omitted so
+                    // the tool strip beside it keeps its room.
+                    HStack(spacing: 6) {
                         Image(systemName: symbol)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(tint)
-                            .frame(width: 30, height: 30)
+                            .frame(width: 22, height: 22)
                             .background(tint.opacity(0.12), in: Circle())
                             .accessibilityHidden(true)
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        LeoWidthCap(cap: compact ? 150 : .greatestFiniteMagnitude) {
                             Text(title)
-                                .font(.subheadline.weight(.semibold))
+                                .font(.footnote.weight(.semibold))
                                 .foregroundStyle(LeoTheme.ColorToken.primaryText)
+                                .lineLimit(1)
+                        }
+                        .layoutPriority(1)
+
+                        if !compact {
                             Text(subtitle)
                                 .font(.caption)
                                 .foregroundStyle(LeoTheme.ColorToken.secondaryText)
                                 .lineLimit(1)
                         }
 
-                        Spacer(minLength: LeoTheme.Spacing.xs)
+                        if !compact { Spacer(minLength: 0) }
 
                         Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
+                            .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(LeoTheme.ColorToken.tertiaryText)
                             .accessibilityHidden(true)
                     }
-                    .padding(.horizontal, LeoTheme.Spacing.sm)
-                    .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                    .padding(.leading, 7)
+                    .padding(.trailing, 10)
+                    .frame(maxWidth: compact ? nil : .infinity, minHeight: LeoChromeMetrics.activityRowHeight,
+                           alignment: .leading)
                     .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous)
                             .stroke(tint.opacity(0.18), lineWidth: 1)
                     }
-                    .padding(.horizontal, LeoTheme.Spacing.sm)
-                    .padding(.bottom, LeoTheme.Spacing.xs)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(title). \(subtitle)")

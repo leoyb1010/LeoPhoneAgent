@@ -239,6 +239,7 @@
 		E5SRS0002 /* SessionRefreshScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SRS0011 /* SessionRefreshScheduler.swift */; };
 		E5HC00001 /* HomeComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HC00002 /* HomeComposer.swift */; };
 		E5UIF01A /* LeoComposerChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF01F /* LeoComposerChrome.swift */; };
+		LFF77EBE5E62 /* LeoChromePill.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF97360445CF /* LeoChromePill.swift */; };
 		E5UIF02A /* LeoEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF02F /* LeoEmptyState.swift */; };
 		E5UIF03A /* LeoInlineError.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF03F /* LeoInlineError.swift */; };
 		E5UIF05A /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
@@ -250,6 +251,7 @@
 		E5UIF05T /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
 		LFF7E2DFF1BF /* OnboardingStepPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF3500C03EBA /* OnboardingStepPage.swift */; };
 		LFEGIOST001 /* LeoDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0011 /* LeoDesignSystem.swift */; };
+		LFABDDE4C916 /* LeoChromeLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFC92B96D6AA /* LeoChromeLayout.swift */; };
 		LFEGIOST002 /* LeoTokens.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFDC0CB32EBE /* LeoTokens.generated.swift */; };
 		LF964EADC933 /* OnboardingGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF89D32ACBA0 /* OnboardingGate.swift */; };
 		E5JV00001 /* Jev.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JV00002 /* Jev.swift */; };
@@ -677,6 +679,7 @@
 		LFFEBA266A95 /* PaperclipRetirement.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF312E7B01F2 /* PaperclipRetirement.swift */; };
 		E5Q000004 /* FontSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5Q000014 /* FontSettings.swift */; };
 		E5LEO0001 /* LeoDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0011 /* LeoDesignSystem.swift */; };
+		LF2B9B10C11C /* LeoChromeLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFC92B96D6AA /* LeoChromeLayout.swift */; };
 		LFA176E7B34F /* LeoTokens.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFDC0CB32EBE /* LeoTokens.generated.swift */; };
 		E5LEO0002 /* ChatColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0012 /* ChatColors.swift */; };
 		E5LEO0003 /* SelectableMarkdownTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0013 /* SelectableMarkdownTheme.swift */; };
@@ -1349,6 +1352,7 @@
 		E5SRS0011 /* SessionRefreshScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRefreshScheduler.swift; sourceTree = "<group>"; };
 		E5HC00002 /* HomeComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Home/HomeComposer.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF01F /* LeoComposerChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoComposerChrome.swift"; sourceTree = SOURCE_ROOT; };
+		LF97360445CF /* LeoChromePill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Components/LeoChromePill.swift; sourceTree = SOURCE_ROOT; };
 		E5UIF02F /* LeoEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoEmptyState.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF03F /* LeoInlineError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoInlineError.swift"; sourceTree = SOURCE_ROOT; };
 		E5UIF05F /* LeoUIPolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoUIPolicies.swift"; sourceTree = SOURCE_ROOT; };
@@ -1759,6 +1763,7 @@
 		LF312E7B01F2 /* PaperclipRetirement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperclipRetirement.swift; sourceTree = "<group>"; };
 		E5Q000014 /* FontSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontSettings.swift; sourceTree = "<group>"; };
 		E5LEO0011 /* LeoDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoDesignSystem.swift; sourceTree = "<group>"; };
+		LFC92B96D6AA /* LeoChromeLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoChromeLayout.swift; sourceTree = "<group>"; };
 		LFDC0CB32EBE /* LeoTokens.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoTokens.generated.swift; sourceTree = "<group>"; };
 		E5LEO0012 /* ChatColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatColors.swift; sourceTree = "<group>"; };
 		E5LEO0013 /* SelectableMarkdownTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableMarkdownTheme.swift; sourceTree = "<group>"; };
@@ -2571,6 +2576,7 @@
 				E5SRS0011 /* SessionRefreshScheduler.swift */,
 				E5HC00002 /* HomeComposer.swift */,
 				E5UIF01F /* LeoComposerChrome.swift */,
+				LF97360445CF /* LeoChromePill.swift */,
 				E5UIF02F /* LeoEmptyState.swift */,
 				E5UIF03F /* LeoInlineError.swift */,
 				E5UIF05F /* LeoUIPolicies.swift */,
@@ -2658,6 +2664,7 @@
 				E5PRIV12 /* EnvVarRedactor.swift */,
 				E5Q000014 /* FontSettings.swift */,
 				E5LEO0011 /* LeoDesignSystem.swift */,
+				LFC92B96D6AA /* LeoChromeLayout.swift */,
 				LFDC0CB32EBE /* LeoTokens.generated.swift */,
 				E5J000022 /* FileHandleSafeWrite.h */,
 				E5J000021 /* FileHandleSafeWrite.m */,
@@ -4014,6 +4021,7 @@
 				E5UIF05T /* LeoUIPolicies.swift in Sources */,
 				LFF7E2DFF1BF /* OnboardingStepPage.swift in Sources */,
 				LFEGIOST001 /* LeoDesignSystem.swift in Sources */,
+				LFABDDE4C916 /* LeoChromeLayout.swift in Sources */,
 				LFEGIOST002 /* LeoTokens.generated.swift in Sources */,
 				LF964EADC933 /* OnboardingGate.swift in Sources */,
 				E5MDS0003T /* MarkdownStripper.swift in Sources */,
@@ -4180,6 +4188,7 @@
 				AA0838A02F3B941A00049557 /* AboutView.swift in Sources */,
 				E5LEO0028 /* LeoReleaseNotesView.swift in Sources */,
 				E5LEO0001 /* LeoDesignSystem.swift in Sources */,
+				LF2B9B10C11C /* LeoChromeLayout.swift in Sources */,
 				LFA176E7B34F /* LeoTokens.generated.swift in Sources */,
 				BB1000100F700000000000AA /* ContextPolicy.swift in Sources */,
 				E5CSM0001 /* ContextSizeMeter.swift in Sources */,
@@ -4190,6 +4199,7 @@
 				E5SRS0001 /* SessionRefreshScheduler.swift in Sources */,
 				E5HC00001 /* HomeComposer.swift in Sources */,
 				E5UIF01A /* LeoComposerChrome.swift in Sources */,
+				LFF77EBE5E62 /* LeoChromePill.swift in Sources */,
 				E5UIF02A /* LeoEmptyState.swift in Sources */,
 				E5UIF03A /* LeoInlineError.swift in Sources */,
 				E5UIF05A /* LeoUIPolicies.swift in Sources */,

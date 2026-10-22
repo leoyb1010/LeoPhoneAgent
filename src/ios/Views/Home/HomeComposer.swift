@@ -159,6 +159,7 @@ struct HomeComposerBar: View {
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var hSizeClass
 
     private var trimmedEmpty: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -221,51 +222,33 @@ struct HomeComposerBar: View {
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: isBusy)
     }
 
+    // [chat-chrome] Both chips use the shared chrome pill (32pt capsule, 44pt hit
+    // area, width-capped, middle truncation) so a long model id or Mac name
+    // never pushes the approval badge off the row or overlaps it.
     private var executionTarget: some View {
-                Menu { capsuleMenu } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: capsule.icon)
-                            .font(.system(size: 12, weight: .semibold))
-                        Text(capsule.place)
-                            .font(.footnote.weight(.semibold))
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 10)
-                    .frame(minHeight: 44)
-                    .background(Color.primary.opacity(0.06), in: Capsule())
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text("执行位置:\(capsule.place)"))
-                .accessibilityHint(Text("选择在哪里执行"))
-                .accessibilityIdentifier("home.execution-target")
+        Menu { capsuleMenu } label: {
+            LeoChromePillLabel(capsule.place, systemImage: capsule.icon, maxWidth: 160)
+        }
+        .buttonStyle(.plain)
+        .layoutPriority(1)
+        .accessibilityLabel(Text("执行位置:\(capsule.place)"))
+        .accessibilityHint(Text("选择在哪里执行"))
+        .accessibilityIdentifier("home.execution-target")
     }
 
     @ViewBuilder
     private var modelControl: some View {
-                if let onChooseModel {
-                    Button(action: onChooseModel) {
-                        HStack(spacing: 5) {
-                            Text(capsule.model ?? AppLocalized("Choose Model"))
-                                .font(.footnote.weight(.semibold))
-                                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
-                                .multilineTextAlignment(.leading)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: 44)
-                        .background(Color.primary.opacity(0.06), in: Capsule())
-                        .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text("选择模型:\(capsule.model ?? AppLocalized("默认"))"))
-                    .accessibilityIdentifier("home.model-picker")
-                }
+        if let onChooseModel {
+            Button(action: onChooseModel) {
+                LeoChromePillLabel(capsule.model ?? AppLocalized("Choose Model"),
+                                   maxWidth: hSizeClass == .regular ? LeoChromeMetrics.modelPillMaxWidthRegular
+                                                                    : LeoChromeMetrics.modelPillMaxWidth,
+                                   minWidth: LeoChromeMetrics.modelPillMinWidth)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("选择模型:\(capsule.model ?? AppLocalized("默认"))"))
+            .accessibilityIdentifier("home.model-picker")
+        }
     }
 
     @ViewBuilder
