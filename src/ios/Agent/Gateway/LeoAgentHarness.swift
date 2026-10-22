@@ -33,11 +33,36 @@ struct HarnessSessionSummary: Sendable, Identifiable, Hashable {
     var title: String? = nil
     /// 权限模式;旧版 Mac 不报(nil),会话页据此隐藏模式胶囊。
     var mode: HarnessMode? = nil
+    /// [remote-ctl] 是否关注:关注的任务才推送 / 进「进行中」/ 起实时活动。旧版 Mac 不报(nil),按关注处理。
+    var following: Bool? = nil
+    /// [remote-ctl] 来源:phone / desktop / automation / takeover;旧版 Mac 不报。
+    var source: String? = nil
+    /// [remote-ctl] 当前模型与推理强度;旧版 Mac 不报。
+    var model: HarnessModelRef? = nil
 
     /// 列表里显示的名字:有标题用标题,没有就用会话类型名。
     var displayTitle: String {
         if let title, !title.isEmpty { return title }
         return name
+    }
+}
+
+/// [remote-ctl] 会话当前用的模型(Mac 的 provider / model id)与推理强度。
+struct HarnessModelRef: Sendable, Hashable {
+    let provider: String
+    let model: String
+    var name: String? = nil
+    var effort: String? = nil
+
+    var displayName: String { (name?.isEmpty == false ? name : nil) ?? model }
+
+    static func parse(_ value: Any?) -> HarnessModelRef? {
+        guard let obj = value as? [String: Any],
+              let provider = obj["provider"] as? String, !provider.isEmpty,
+              let model = obj["model"] as? String, !model.isEmpty else { return nil }
+        return HarnessModelRef(provider: provider, model: model,
+                               name: obj["name"] as? String,
+                               effort: (obj["effort"] as? String).flatMap { $0.isEmpty ? nil : $0 })
     }
 }
 
@@ -95,7 +120,10 @@ extension LeoAgentClient {
                     return parts.isEmpty ? nil : parts.joined(separator: " · ")
                 }(),
                 title: (row["title"] as? String).flatMap { $0.isEmpty ? nil : $0 },
-                mode: HarnessMode.parse(row["mode"]))
+                mode: HarnessMode.parse(row["mode"]),
+                following: row["following"] as? Bool,
+                source: (row["source"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                model: HarnessModelRef.parse(row["model"]))
         }
     }
 
