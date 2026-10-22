@@ -196,6 +196,25 @@ final class QuickActionWorkflow: ObservableObject {
     /// Convenience accessor for the modifier below.
     var statePublisher: Published<State>.Publisher { $state }
 
+    /// [up3-ios] `$state` 在 willSet 时发出:此刻 `state` 还是旧值,回调里调 markChatReady /
+    /// markCoverPresented 会被 guard 静默挡掉,流程卡在 waitingForChatMount(ContentView 在 173e52555
+    /// 修过同一个坑)。推到下一轮主队列再交给回调;那时状态已经变走(重试降级、被 reset)就不再投递。
+    func deliver(_ delivered: State, to sessionId: String?,
+                 onWaitingMatch: @escaping () -> Void,
+                 onChatReady: @escaping (ChatLaunchAction) -> Void) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.state == delivered else { return }
+            switch delivered {
+            case .waitingForChatMount(_, let target):
+                if sessionId == target { onWaitingMatch() }
+            case .chatReady(let action, let target):
+                if sessionId == target { onChatReady(action) }
+            default:
+                break
+            }
+        }
+    }
+
     // MARK: - Debug
 
     private var stateLabel: String {
@@ -244,14 +263,8 @@ struct QuickActionObserverModifier: ViewModifier {
         // struct closures may hold a stale snapshot from a previous
         // body evaluation. The view-side closures re-read the live
         // @State (`isChatViewVisible`) themselves before acting.
-        switch newState {
-        case .waitingForChatMount(_, let target):
-            if sessionId == target { onWaitingMatch() }
-        case .chatReady(let action, let target):
-            if sessionId == target { onChatReady(action) }
-        default:
-            break
-        }
+        QuickActionWorkflow.shared.deliver(newState, to: sessionId,
+                                           onWaitingMatch: onWaitingMatch, onChatReady: onChatReady)
     }
 }
 

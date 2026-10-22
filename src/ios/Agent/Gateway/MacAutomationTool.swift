@@ -38,9 +38,11 @@ enum MacAutomationTool {
                 "enabled": AgentToolParam(type: .boolean, description: "update only: false pauses, true resumes."),
                 "workspace": AgentToolParam(type: .string, description: "Optional absolute folder on the Mac to run in (default: the folder phone tasks use)."),
                 "agent": AgentToolParam(type: .string, description: "Optional agent on the Mac: zcode (default, LeoBot) or an installed CLI such as claude / codex."),
+                // [up3-ios] 不传就是 Mac 默认的 build,无人值守跑不合适。
+                "mode": AgentToolParam(type: .string, description: "Permission mode for create / update. Runs are unattended, so pick one: plan for read-only tasks (summaries, briefs, research, reading files), guarded for tasks that run commands or change files. build only when the user explicitly wants full edit access.", enumValues: MacAutomationLogic.modes),
             ],
             required: ["tool_title", "action"],
-            propertyOrdering: ["tool_title", "action", "mac", "id", "name", "prompt", "schedule", "enabled", "workspace", "agent"]
+            propertyOrdering: ["tool_title", "action", "mac", "id", "name", "prompt", "schedule", "enabled", "workspace", "agent", "mode"]
         )
     }
 

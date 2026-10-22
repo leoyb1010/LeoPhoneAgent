@@ -178,4 +178,69 @@ final class BrainProfileCardTests: XCTestCase {
         XCTAssertEqual(obj["status"] as? String, "confirmed")
         XCTAssertTrue(BrainCardDraft.allowedStatuses.contains(BrainProfileCard.fallbackStatus))
     }
+
+    // MARK: [up3-ios] 认领已有的卡
+
+    private func card(_ id: String, title: String = "Leo 画像", category: String? = "用户画像",
+                      status: String? = "confirmed", version: Int = 3, updatedAt: String = "2026-10-20T08:00:00Z") throws -> BrainCard {
+        var obj: [String: Any] = ["id": id, "title": title, "body": "b", "version": version, "updated_at": updatedAt]
+        if let category { obj["category"] = category }
+        if let status { obj["status"] = status }
+        return try BrainJSON.decode(BrainCard.self, from: JSONSerialization.data(withJSONObject: obj))
+    }
+
+    private func hit(_ id: String, title: String = "Leo 画像", category: String? = nil, type: String = "card") -> BrainSearchItem {
+        BrainSearchItem(type: type, id: id, title: title, category: category, privacy: nil)
+    }
+
+    func testCandidatesNeedExactTitleAndCardType() {
+        let ids = BrainProfileCard.candidateIds([
+            hit("other-cat", category: "笔记"),
+            hit("no-cat"),
+            hit("file", type: "file"),
+            hit("near", title: "Leo 画像(旧)"),
+            hit("right", category: "用户画像"),
+            hit("gone"),
+        ], excluding: "gone")
+        XCTAssertEqual(ids, ["right", "no-cat"], "分类对的排前面;别的分类、文件、近似标题、刚 404 的都不要")
+    }
+
+    func testFindExistingAdoptsNewestAcceptedCard() async throws {
+        let cards = [
+            "old": try card("old", updatedAt: "2026-10-01T00:00:00Z"),
+            "new": try card("new", status: "reference", version: 7, updatedAt: "2026-10-21T00:00:00Z"),
+            "draft": try card("draft", status: "draft", updatedAt: "2026-10-22T00:00:00Z"),
+        ]
+        var fetched: [String] = []
+        let found = try await BrainProfileCard.findExisting(
+            search: { ["old", "draft", "new"].map { self.hit($0, category: "用户画像") } },
+            fetch: { id in fetched.append(id); return try XCTUnwrap(cards[id]) })
+        XCTAssertEqual(found?.id, "new", "同名多张取最近更新的,草稿不认")
+        XCTAssertEqual(found?.version, 7)
+        XCTAssertEqual(fetched, ["old", "draft", "new"])
+    }
+
+    func testFindExistingIgnoresWrongCategoryAndMissingCards() async throws {
+        let wrong = try card("wrong", category: "笔记")
+        let found = try await BrainProfileCard.findExisting(
+            search: { [self.hit("wrong"), self.hit("deleted")] },
+            fetch: { id in
+                if id == "deleted" { throw BrainError.notFound }
+                return wrong
+            })
+        XCTAssertNil(found, "取回来分类不对、或已经删了:当没有,去新建")
+        let noSearchRoute = try await BrainProfileCard.findExisting(search: { throw BrainError.notFound },
+                                                                    fetch: { _ in throw BrainError.notFound })
+        XCTAssertNil(noSearchRoute)
+    }
+
+    func testFindExistingPropagatesSearchFailure() async {
+        do {
+            _ = try await BrainProfileCard.findExisting(search: { throw BrainError.offline },
+                                                        fetch: { _ in throw BrainError.notFound })
+            XCTFail("搜索失败不能当成没有卡(会再建一张)")
+        } catch {
+            XCTAssertEqual(error as? BrainError, .offline)
+        }
+    }
 }

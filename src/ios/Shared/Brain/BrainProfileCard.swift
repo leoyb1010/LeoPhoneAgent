@@ -233,6 +233,49 @@ enum BrainProfileCard {
         return current?.contentHash != contentHash(body)
     }
 
+    // MARK: - [up3-ios] 认领网关上已有的卡
+
+    /// 本机发过的卡只会是这两种状态;草稿不认(任何人都能往资料库存同名草稿)。
+    static let acceptedStatuses: Set<String> = [preferredStatus, fallbackStatus]
+
+    /// 搜索结果里可能是画像卡的(标题完全一致;搜索结果带了分类 / 状态就先按它们筛),分类对的排前面。
+    static func candidateIds(_ items: [BrainSearchItem], excluding: String? = nil, limit: Int = 3) -> [String] {
+        let matches = items.filter { item in
+            item.isCard && item.id != excluding && !item.id.isEmpty
+                && item.title.trimmingCharacters(in: .whitespacesAndNewlines) == title
+                && (item.category.map { $0.isEmpty || $0 == category } ?? true)
+                && (item.status.map { $0.isEmpty || acceptedStatuses.contains($0) } ?? true)
+        }
+        let ordered = matches.filter { $0.category == category } + matches.filter { $0.category != category }
+        return Array(ordered.map(\.id).prefix(limit))
+    }
+
+    /// 取回来的整张卡:标题、分类、状态都对才接着更新它。
+    static func isAdoptable(_ card: BrainCard) -> Bool {
+        card.title.trimmingCharacters(in: .whitespacesAndNewlines) == title && card.category == category
+            && card.status.map(acceptedStatuses.contains) == true
+    }
+
+    /// 本机没有记录(重装 / 换手机 / 记录里那张被删了)时,先找网关上已有的「Leo 画像」:Mac 认准第一张卡的 id,
+    /// 再建一张新的 Mac 就读不到之后的更新。同名多张取最近更新的(和 Mac 端 pickCardRef 一致)。
+    /// 搜索出错往外抛(这次不发,下次再试),不能当成「没有」去建新卡;搜索接口 404 才当没有。
+    static func findExisting(excluding: String? = nil,
+                             search: () async throws -> [BrainSearchItem],
+                             fetch: (String) async throws -> BrainCard) async throws -> BrainCard? {
+        let items: [BrainSearchItem]
+        do { items = try await search() } catch BrainError.notFound { return nil }
+        var found: [BrainCard] = []
+        for id in candidateIds(items, excluding: excluding) {
+            do {
+                let card = try await fetch(id)
+                if isAdoptable(card) { found.append(card) }
+            } catch BrainError.notFound {
+                continue
+            }
+        }
+        return found.max { ($0.updatedAt ?? "") < ($1.updatedAt ?? "") }
+    }
+
     /// 上次发布的结果,按网关地址区分(换了网关就当没发过)。
     struct State: Codable, Equatable {
         var gateway: String

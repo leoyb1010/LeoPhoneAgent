@@ -718,6 +718,8 @@
 		LF1E2D3E3F1C /* MacAutomationTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF21D11859DA /* MacAutomationTool.swift */; };
 		E5MFF9001 /* MacFleetFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MFF9002 /* MacFleetFeature.swift */; };
 		LF2F7C56DF69 /* MacAutomationLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1E4E763109 /* MacAutomationLogic.swift */; };
+		LFUP3QAW0001 /* QuickActionWorkflow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QA0103 /* QuickActionWorkflow.swift */; };
+		LFUP3QAR0001 /* QuickActionRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QA0101 /* QuickActionRouter.swift */; };
 		E5MFF9003 /* MacFleetFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MFF9002 /* MacFleetFeature.swift */; };
 		LFE74F3A79B2 /* MacAutomationLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1E4E763109 /* MacAutomationLogic.swift */; };
 		E5XTR9001 /* ArticleExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5XTR9002 /* ArticleExtractor.swift */; };
@@ -3882,6 +3884,8 @@
 				E5E15701T /* ReplyNextStep.swift in Sources */,
 				E5MFF9003 /* MacFleetFeature.swift in Sources */,
 				LFE74F3A79B2 /* MacAutomationLogic.swift in Sources */,
+				LFUP3QAW0001 /* QuickActionWorkflow.swift in Sources */,
+				LFUP3QAR0001 /* QuickActionRouter.swift in Sources */,
 				E5E15704T /* MacResultInbox.swift in Sources */,
 				E5E15705T /* WatchContinueOnPhone.swift in Sources */,
 				E5E15706T /* SessionHandoff.swift in Sources */,

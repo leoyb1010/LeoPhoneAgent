@@ -47,6 +47,31 @@ final class ReplyBrainSuggestionTests: XCTestCase {
         XCTAssertFalse(ReplyNextStep.suggestsBrain(reply: "错误：找不到文件\n" + structured))
     }
 
+    /// [up3-ios] 只挂在打开对话之后才跑完的回复下面。
+    func testOnlyRepliesThatFinishWhileVisibleQualify() {
+        // 翻开旧对话:最后一条回复一开始就是完成的。
+        XCTAssertFalse(ReplyNextStep.finishedWhileVisible(wasActive: false, isActive: false, alreadyFinished: false))
+        // 还在跑。
+        XCTAssertFalse(ReplyNextStep.finishedWhileVisible(wasActive: false, isActive: true, alreadyFinished: false))
+        XCTAssertFalse(ReplyNextStep.finishedWhileVisible(wasActive: true, isActive: true, alreadyFinished: false))
+        // 看着它跑完。
+        XCTAssertTrue(ReplyNextStep.finishedWhileVisible(wasActive: true, isActive: false, alreadyFinished: false))
+        // 记下后后续刷新不丢。
+        XCTAssertTrue(ReplyNextStep.finishedWhileVisible(wasActive: false, isActive: false, alreadyFinished: true))
+    }
+
+    func testChipWiringGatesOnFinishWhileVisibleAndHas44ptDismiss() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let list = try String(contentsOf: root.appendingPathComponent("Agent/MessageList/CollectionViewMessageListV3.swift"), encoding: .utf8)
+        XCTAssertTrue(list.contains("bridge.isLastReply, bridge.finishedWhileVisible,"))
+        XCTAssertTrue(list.contains("ReplyNextStep.finishedWhileVisible(wasActive: bridge.isActiveMessage, isActive: isActive,"))
+        let chip = try String(contentsOf: root.appendingPathComponent("Views/Chat/ReplyNextStepViews.swift"), encoding: .utf8)
+        let start = try XCTUnwrap(chip.range(of: "struct BrainKeepSuggestionChip"))
+        let body = chip[start.lowerBound...]
+        XCTAssertTrue(body.contains(".frame(minWidth: LeoTheme.TouchTarget.minimum, minHeight: LeoTheme.TouchTarget.minimum)"))
+        XCTAssertFalse(body.contains(".frame(width: 28, height: 28)"))
+    }
+
     func testLedgerMarksOncePerReplyAndIsBounded() {
         let defaults = UserDefaults(suiteName: "ReplyBrainSuggestionTests-\(UUID().uuidString)")!
         let ledger = ReplyNextStep.BrainSuggestionLedger(defaults: defaults)
