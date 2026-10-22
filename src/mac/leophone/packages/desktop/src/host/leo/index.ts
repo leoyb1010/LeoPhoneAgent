@@ -15,6 +15,7 @@ import { createLeoQuickEntry, resolveQuickWorkspaces } from "./quickEntry.js";
 import { createLeoTaskGroups } from "./taskGroups/service.js";
 import { resolveLeoBotModelSelection } from "./leobotModelSelection.js";
 import { linkEnabled, relayConfigSignature, startLeoLink } from "./link/index.js";
+import { registerBrainMcpServer } from "./registerBrainMcp.js";
 import { registerPeekabooMcpServer } from "./registerPeekabooMcp.js";
 import { registerTreasuryMcpServer } from "./registerTreasuryMcp.js";
 import { syncSubscriptionProvider } from "./subscriptionProvider.js";
@@ -104,6 +105,8 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
           const mcpSync = deps.services.getOptional(IMcpSyncService);
           // [wp-61] 藏宝阁 MCP 也走同步服务的 CLI 用户配置(会话真正读的地方)。
           if (mcpSync) void registerTreasuryMcpServer(mcpSync, deps.logger);
+          // 第二大脑 leo-brain:同一路径;本机没有 key 文件就不登记。
+          if (mcpSync) void registerBrainMcpServer(mcpSync, deps.logger);
           if (process.platform === "darwin" && mcpSync) {
             void registerPeekabooMcpServer(mcpSync, deps.logger);
           }
