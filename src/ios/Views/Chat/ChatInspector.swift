@@ -40,6 +40,14 @@ struct ChatDetailContainer<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var contentFrame: CGRect = .zero
     @State private var inspectorFrame: CGRect = .zero
+    /// [ipad-chat] Detail width including the inspector column (= nav bar width).
+    @State private var barWidth: CGFloat = 0
+
+    private var headerBarGeometry: ChatHeaderBarGeometry {
+        let width = max(barWidth, contentFrame.width)
+        let squeezed = inspectorVisible ? max(0, width - contentFrame.width) : 0
+        return ChatHeaderBarGeometry(width: width, coveredTrailing: max(coveredTrailing, squeezed))
+    }
 
     /// In a portrait split view the system floats the inspector OVER the
     /// detail instead of narrowing it, which hid the composer's send button.
@@ -87,6 +95,11 @@ struct ChatDetailContainer<Content: View>: View {
                 contextModeRaw = request.mode.rawValue
                 withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = true }
             }
+            // [ipad-chat] The nav bar spans the chat AND the inspector column
+            // (whether the column squeezes the chat or floats over it), and the
+            // principal is centered in that whole bar; the chat's title has to
+            // know how much of the bar's trailing end is not chat.
+            .environment(\.chatHeaderBar, headerBarGeometry)
             .modifier(ChatToolbarMinimization())
             .safeAreaPadding(.trailing, coveredTrailing)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { contentFrame = $0 }
@@ -96,6 +109,7 @@ struct ChatDetailContainer<Content: View>: View {
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { inspectorFrame = $0 }
                     .onDisappear { inspectorFrame = .zero }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -122,6 +136,14 @@ struct ChatInspectorRoute {
 
 extension EnvironmentValues {
     @Entry var chatInspectorRoute: ChatInspectorRoute? = nil
+    @Entry var chatHeaderBar = ChatHeaderBarGeometry()
+}
+
+/// [ipad-chat] Width of the navigation bar above the chat and how much of its
+/// trailing end the inspector covers. Zero outside ChatDetailContainer.
+struct ChatHeaderBarGeometry: Equatable {
+    var width: CGFloat = 0
+    var coveredTrailing: CGFloat = 0
 }
 
 /// [F8] Three fixed tabs: the tool timeline (every tool call, live), usage
