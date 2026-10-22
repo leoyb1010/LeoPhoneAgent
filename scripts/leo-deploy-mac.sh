@@ -37,6 +37,15 @@ ts=$(date +%Y%m%d%H%M)
 old=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" /Applications/LeoBot.app/Contents/Info.plist 2>/dev/null || echo none)
 uid=$(id -u); ka_plist=~/Library/LaunchAgents/com.leoyuan.leobot-keepalive.plist
 launchctl bootout gui/$uid/com.leoyuan.leobot-keepalive 2>/dev/null   # 装的时候别被它拉起旧版
+# 不管从哪条路退出(成功、回滚、出错),常驻守护都要装回去:以前回滚路径直接 exit,那台 Mac 就没人看着了。
+restore_keepalive() {
+  if [ "$KA" = 1 ] && [ -f /tmp/com.leoyuan.leobot-keepalive.plist ]; then
+    mv /tmp/com.leoyuan.leobot-keepalive.plist "$ka_plist"
+  fi
+  [ -f "$ka_plist" ] && launchctl bootstrap gui/$uid "$ka_plist" 2>/dev/null
+  return 0
+}
+trap restore_keepalive EXIT
 osascript -e 'tell application "LeoBot" to quit' 2>/dev/null
 for i in {1..30}; do pgrep -xq LeoBot || break; sleep 1; done
 pgrep -xq LeoBot && pkill -x LeoBot && sleep 2
@@ -53,14 +62,16 @@ if [ $ok = 1 ]; then
   for i in {1..45}; do pgrep -xq LeoBot && break; sleep 2; done
   pgrep -xq LeoBot || { echo "not-running"; ok=0; }
 fi
-if [ $ok = 0 ] && [ -n "$archived" ]; then
-  pkill -x LeoBot 2>/dev/null; sleep 2; rm -rf /Applications/LeoBot.app; mv "$archived" /Applications/LeoBot.app
-  open -g -a /Applications/LeoBot.app; echo "RESULT rolled-back-to $old"; exit 1
+if [ $ok = 0 ]; then
+  if [ -n "$archived" ]; then
+    pkill -x LeoBot 2>/dev/null; sleep 2; rm -rf /Applications/LeoBot.app; mv "$archived" /Applications/LeoBot.app
+    open -g -a /Applications/LeoBot.app; echo "RESULT rolled-back-to $old"
+  else
+    # 全新机器没有可回滚的旧版:装坏了就是失败,不能报「installed」。
+    echo "RESULT failed-no-archive"
+  fi
+  exit 1
 fi
-if [ "$KA" = 1 ] && [ -f /tmp/com.leoyuan.leobot-keepalive.plist ]; then
-  mv /tmp/com.leoyuan.leobot-keepalive.plist "$ka_plist"
-fi
-[ -f "$ka_plist" ] && launchctl bootstrap gui/$uid "$ka_plist" 2>/dev/null
 echo "RESULT installed $V (was $old) archived=$archived"
 REMOTE
 )
@@ -75,7 +86,8 @@ REMOTE
     else
       echo "  ✗ 90 秒内没以 $V 连上中继,回滚"
       archived=$(echo "$out" | sed -n 's/.*archived=\(.*\)$/\1/p')
-      [[ -n $archived ]] && ssh -o BatchMode=yes "$h" "pkill -x LeoBot; sleep 2; rm -rf /Applications/LeoBot.app; mv '$archived' /Applications/LeoBot.app; open -g -a /Applications/LeoBot.app" && echo "  已回滚"
+      # 先卸常驻守护:不然 pkill 到 rm 之间它会把新版又拉起来,回滚后跑的还是新版。
+      [[ -n $archived ]] && ssh -o BatchMode=yes "$h" "uid=\$(id -u); p=~/Library/LaunchAgents/com.leoyuan.leobot-keepalive.plist; launchctl bootout gui/\$uid/com.leoyuan.leobot-keepalive 2>/dev/null; pkill -x LeoBot; for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -xq LeoBot || break; sleep 1; done; rm -rf /Applications/LeoBot.app; mv '$archived' /Applications/LeoBot.app; open -g -a /Applications/LeoBot.app; [ -f \$p ] && launchctl bootstrap gui/\$uid \$p 2>/dev/null; true" && echo "  已回滚"
       fail+=$h
     fi
   fi
