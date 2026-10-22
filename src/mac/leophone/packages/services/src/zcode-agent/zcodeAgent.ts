@@ -384,6 +384,11 @@ export interface ZCodeAgentSessionSubscribeParams extends ZCodeAgentSessionTarge
     mode: "background-summary";
     intervalMs?: number;
   };
+  /**
+   * 订阅撞上 session-unavailable(会话没在 runtime 里常驻)时立即放弃、不做退避重试。
+   * Leo Link 用:它在 resumeTask 之后会自己重订;重试只会白刷 8 遍 require_missing。
+   */
+  stopOnSessionUnavailable?: boolean;
 }
 
 // ── v4 conversation 通道（竖切）──
