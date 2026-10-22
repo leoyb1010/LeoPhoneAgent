@@ -5,6 +5,7 @@ import { installLeoSessionGuard } from "./leoSessionGuard.js";
 import { registerLeoLinkIpc } from "./leoLinkIpc.js";
 import { installRequestSecurityDiagnostics } from "./request-security-edition/index.js";
 import { isLeoQuickPanelWindow, startLeoQuickEntry } from "./leo/quickEntry.js";
+import { clearLeoQuitIntent, markLeoQuitIntent } from "./leo/quitIntent.js";
 import { registerImcpIpc } from "./leo/imcp.js";
 import { registerAcpIpc } from "./leo/acp.js";
 import { registerTaskGroupsIpc } from "./leo/taskGroups.js";
@@ -1968,6 +1969,8 @@ app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
 });
 
 app.whenReady().then(async () => {
+  // [leo] 重新打开了:清掉上次的「主动退出」标记,常驻守护恢复看护。
+  clearLeoQuitIntent();
   // [leo] 窗口创建前装好:界面侧也不能连官方服务。
   installLeoSessionGuard();
   // [leo-link] 「连接手机」面板经主进程转发到本机 Leo 接口。
@@ -2497,6 +2500,10 @@ app.on("before-quit", (event) => {
     explicitQuitRef.current = false;
     return;
   }
+
+  // [leo] 确认要退出了:留标记,宿主 Mac 的常驻守护就不会把它拉回来(崩溃不经过这里,照样拉起)。
+  // 没拿到单实例锁的第二个实例也会走到这里退出,它不能替正在跑的那个写标记。
+  if (gotTheLock) markLeoQuitIntent("before-quit");
 
   if (!hasPreparedAppQuit) {
     localMediaPreviewPathRegistry.clear();

@@ -3,13 +3,15 @@
 <plist version="1.0">
 <dict>
   <!-- 宿主 Mac(Studio / mini / Air)上让 LeoBot 常驻:每 2 分钟看一眼,没在跑就后台拉起并记一笔。
+       用户自己退出时 LeoBot 会写 ~/.leoagent/leobot-user-quit(崩溃不会写),有它就不拉起 —— 以前用户
+       退出后 2 分钟内又被拉回来。LeoBot 下次启动会删掉它;部署脚本拉起前也会删。
        MBP 是随身机,不装。部署脚本安装前会先 bootout 它,避免装到一半被拉起。 -->
   <key>Label</key><string>com.leoyuan.leobot-keepalive</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/sh</string>
     <string>-c</string>
-    <string>pgrep -xq LeoBot &amp;&amp; exit 0; L="$HOME/Library/Logs/leobot-keepalive.log"; C=$(ls -t "$HOME/Library/Logs/DiagnosticReports" 2&gt;/dev/null | grep -m1 -i leobot); echo "$(date '+%F %T') LeoBot 不在运行,重新拉起;最近崩溃报告:${C:-无}" &gt;&gt; "$L"; [ -d /Applications/LeoBot.app ] &amp;&amp; open -g -a /Applications/LeoBot.app</string>
+    <string>pgrep -xq LeoBot &amp;&amp; exit 0; [ -f "$HOME/.leoagent/leobot-user-quit" ] &amp;&amp; exit 0; L="$HOME/Library/Logs/leobot-keepalive.log"; C=$(ls -t "$HOME/Library/Logs/DiagnosticReports" 2&gt;/dev/null | grep -m1 -i leobot); echo "$(date '+%F %T') LeoBot 不在运行,重新拉起;最近崩溃报告:${C:-无}" &gt;&gt; "$L"; [ -d /Applications/LeoBot.app ] &amp;&amp; open -g -a /Applications/LeoBot.app</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>StartInterval</key><integer>120</integer>

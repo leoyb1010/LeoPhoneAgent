@@ -82,6 +82,8 @@ trap restore_keepalive EXIT
 # 也不在登录会话里,够不着登录钥匙串(弹「找不到用于存储…的钥匙串」)。2026-10-22 实际踩过。
 # 改为让登录会话(gui 域)里的 launchd 任务去拉起:宿主机用常驻守护,MBP 用登录项任务。
 launch_gui() {
+  # 用户上次主动退出留下的标记会让常驻守护不拉起;部署就是要它跑起来,先清掉。
+  rm -f ~/.leoagent/leobot-user-quit
   restore_keepalive
   for l in com.leoyuan.leobot-keepalive com.leoyuan.leophoneagent-app; do
     if launchctl print gui/$uid/$l >/dev/null 2>&1; then
@@ -140,7 +142,7 @@ REMOTE
       archived=$(echo "$out" | sed -n 's/.*archived=\(.*\)$/\1/p')
       snap=${archived%.app}.cli-config.json   # 安装前存的 CLI 配置(远端脚本里同名),有就还原
       # 先卸常驻守护:不然 pkill 到 rm 之间它会把新版又拉起来,回滚后跑的还是新版。
-      [[ -n $archived ]] && ssh -o BatchMode=yes "$h" "uid=\$(id -u); p=~/Library/LaunchAgents/com.leoyuan.leobot-keepalive.plist; launchctl bootout gui/\$uid/com.leoyuan.leobot-keepalive 2>/dev/null; pkill -x LeoBot; for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -xq LeoBot || break; sleep 1; done; rm -rf /Applications/LeoBot.app; mv '$archived' /Applications/LeoBot.app; [ -f '$snap' ] && cp -p '$snap' ~/.leophoneagent/cli/config.json; [ -f \$p ] && launchctl bootstrap gui/\$uid \$p 2>/dev/null; for l in com.leoyuan.leobot-keepalive com.leoyuan.leophoneagent-app; do launchctl print gui/\$uid/\$l >/dev/null 2>&1 && launchctl kickstart gui/\$uid/\$l && break; done; true" && echo "  已回滚"
+      [[ -n $archived ]] && ssh -o BatchMode=yes "$h" "uid=\$(id -u); p=~/Library/LaunchAgents/com.leoyuan.leobot-keepalive.plist; launchctl bootout gui/\$uid/com.leoyuan.leobot-keepalive 2>/dev/null; pkill -x LeoBot; rm -f ~/.leoagent/leobot-user-quit; for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -xq LeoBot || break; sleep 1; done; rm -rf /Applications/LeoBot.app; mv '$archived' /Applications/LeoBot.app; [ -f '$snap' ] && cp -p '$snap' ~/.leophoneagent/cli/config.json; [ -f \$p ] && launchctl bootstrap gui/\$uid \$p 2>/dev/null; for l in com.leoyuan.leobot-keepalive com.leoyuan.leophoneagent-app; do launchctl print gui/\$uid/\$l >/dev/null 2>&1 && launchctl kickstart gui/\$uid/\$l && break; done; true" && echo "  已回滚"
       fail+=$h
     fi
   fi
