@@ -97,6 +97,8 @@ final class GatewayHostStore: ObservableObject {
     /// synchronous Keychain read and spins up a URLSession, and SwiftUI would
     /// re-run both on every redraw of the host list.
     private var clients: [String: LeoAgentClient] = [:]
+    /// [up-ac-ios] Mac 在 capabilities 里报的时区(IANA id),只在内存里;mac_automation 用来提示时区不一致。
+    private(set) var macTimeZones: [String: String] = [:]
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.storageKey),
@@ -350,7 +352,8 @@ final class GatewayHostStore: ObservableObject {
 
     /// [fix-remote] 记下 capabilities 里对手机有用的事实：可开的任务类型、SSH 兜底目标与 sshd 公钥。
     /// 公钥只认 ssh-ed25519（Citadel 只能固定这一种），来源是已配对、已鉴权的通道。
-    func recordCapabilities(id: String, kinds: [HarnessKind], ssh: MacSSHTarget?, hostKeys: [String]) {
+    func recordCapabilities(id: String, kinds: [HarnessKind], ssh: MacSSHTarget?, hostKeys: [String], timeZone: String? = nil) {
+        if let timeZone { macTimeZones[id] = timeZone }
         guard let index = hosts.firstIndex(where: { $0.id == id }) else { return }
         var host = hosts[index]
         if !kinds.isEmpty { host.harnesses = kinds }

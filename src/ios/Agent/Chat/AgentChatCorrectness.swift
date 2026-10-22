@@ -92,6 +92,27 @@ enum AgentChatCorrectness {
         "<system-reminder>Sent at \(promptClock(now, timeZone: timeZone)) (\(timeZone.identifier)).</system-reminder>"
     }
 
+    /// 给标题模型的正文：去掉 `<system-reminder>` / `<treasury_context>` 块（含「Sent at …」），
+    /// 丢掉剥完为空的段，再截断。否则重新生成标题时模型看到的是发送时刻和时区。
+    static func titleSourceText(_ textParts: [String], limit: Int) -> String {
+        let cleaned = textParts.compactMap { part -> String? in
+            let stripped = stripInjectedBlocks(part).trimmingCharacters(in: .whitespacesAndNewlines)
+            return stripped.isEmpty ? nil : stripped
+        }
+        return String(cleaned.joined(separator: "\n").prefix(limit))
+    }
+
+    static func stripInjectedBlocks(_ text: String) -> String {
+        guard text.contains("<system-reminder>") || text.contains("<treasury_context") else { return text }
+        let ns = text as NSString
+        return injectedBlockRegex?.stringByReplacingMatches(
+            in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "") ?? text
+    }
+
+    private static let injectedBlockRegex = try? NSRegularExpression(
+        pattern: "<system-reminder>[\\s\\S]*?</system-reminder>|<treasury_context\\b[^>]*>[\\s\\S]*?</treasury_context>"
+    )
+
     static func promptClock(_ now: Date, timeZone: TimeZone) -> String {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd HH:mm EEEE"

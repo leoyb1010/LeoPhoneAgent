@@ -75,8 +75,88 @@ enum MacAutomationLogic {
         return text
     }
 
+    /// once 交给 Mac 前换成带手机时区偏移的绝对时间 `at`:模型按手机时区(Sent at 里带)想时间,
+    /// Mac 按自己的时区解释 date/time,两边时区不同就会差几个小时。其它计划原样返回。
+    static func anchorOnce(_ schedule: Any, timeZone: TimeZone) throws -> Any {
+        guard let dict = schedule as? [String: Any], (dict["kind"] as? String)?.lowercased() == "once" else { return schedule }
+        let local = DateFormatter()
+        local.locale = Locale(identifier: "en_US_POSIX")
+        local.timeZone = timeZone
+        var date: Date?
+        if let at = (dict["at"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !at.isEmpty {
+            if hasExplicitOffset(at) { return ["kind": "once", "at": at] }
+            for format in ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm"] where date == nil {
+                local.dateFormat = format
+                date = local.date(from: at)
+            }
+        } else if let day = (dict["date"] as? String)?.trimmingCharacters(in: .whitespaces),
+                  let time = (dict["time"] as? String)?.trimmingCharacters(in: .whitespaces) {
+            local.dateFormat = "yyyy-MM-dd HH:mm"
+            date = local.date(from: "\(day) \(time)")
+        }
+        guard let date else {
+            throw ArgumentError.invalid("once 要写 {\"kind\":\"once\",\"date\":\"2026-10-23\",\"time\":\"08:00\"} 或带时区的 at")
+        }
+        let iso = ISO8601DateFormatter()
+        iso.timeZone = timeZone
+        iso.formatOptions = [.withInternetDateTime]
+        return ["kind": "once", "at": iso.string(from: date)]
+    }
+
+    /// `…Z` / `…+08:00` / `…-0500`:已经是绝对时间。
+    private static func hasExplicitOffset(_ at: String) -> Bool {
+        guard let t = at.firstIndex(of: "T") else { return false }
+        let tail = at[t...]
+        if tail.hasSuffix("Z") || tail.hasSuffix("z") { return true }
+        return tail.range(of: #"[+-]\d{2}:?\d{2}$"#, options: .regularExpression) != nil
+    }
+
+    /// Mac 报的时区(IANA id)。现在的 Mac 还不报;将来出现在 capabilities / 列表 / 单个任务里都认。
+    static func macTimeZone(from json: Any?) -> String? {
+        guard let obj = json as? [String: Any] else { return nil }
+        for key in ["time_zone", "timezone", "tz"] {
+            if let tz = obj[key] as? String, !tz.isEmpty { return tz }
+        }
+        for key in ["device", "automation", "schedule"] {
+            if let tz = macTimeZone(from: obj[key]) { return tz }
+        }
+        return macTimeZone(from: (obj["automations"] as? [Any])?.first)
+    }
+
+    /// 两边时区不同时的提醒;相同或不知道 Mac 时区时为 nil。
+    static func timeZoneWarning(phone: String, mac: String?) -> String? {
+        guard let mac, !mac.isEmpty, mac != phone else { return nil }
+        if let m = TimeZone(identifier: mac), let p = TimeZone(identifier: phone),
+           m.secondsFromGMT() == p.secondsFromGMT() { return nil }
+        return "Mac 的时区是 \(mac),手机是 \(phone):cron / hourly / daily / weekly 按 Mac 时区触发,告诉用户前先换算;once 已按手机时区换成绝对时间。"
+    }
+
+    enum NotFound: Equatable {
+        /// 整条 /automations 路由都没有:Mac 上的 LeoBot 太旧。
+        case routeMissing
+        /// 路由在,这个 id 不在这台 Mac 上。
+        case idMissing
+    }
+
+    /// 404 是哪一种。不带 id 的动作(list / create)只可能是路由缺失;带 id 的看 `GET /automations` 通不通。
+    static func classifyNotFound(action: Action, listReachable: Bool?) -> NotFound {
+        switch action {
+        case .list, .create: return .routeMissing
+        case .update, .delete, .run: return listReachable == false ? .routeMissing : .idMissing
+        }
+    }
+
+    static func notFoundMessage(_ kind: NotFound, mac: String) -> String {
+        switch kind {
+        case .routeMissing:
+            return "Error: \(mac) 上的 LeoBot 不支持定时任务接口(需要 Mac 1.14.0 或更新)"
+        case .idMissing:
+            return "Error: \(mac):这台 Mac 上没有这个任务（id 可能在另一台）；先用 list 查(可带 mac 指定哪台)"
+        }
+    }
+
     /// 只认已知的几个字段:未知字段不往 Mac 转,模型乱填的东西不会变成请求。
-    static func request(action: Action, args: [String: Any]) throws -> Request {
+    static func request(action: Action, args: [String: Any], timeZone: TimeZone = .current) throws -> Request {
         let id = (args["id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         func needId() throws -> String {
             guard !id.isEmpty, !id.contains("/"), !id.contains("..") else { throw ArgumentError.missing("id") }
@@ -88,7 +168,8 @@ enum MacAutomationLogic {
         case .create:
             guard let prompt = (args["prompt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !prompt.isEmpty else { throw ArgumentError.missing("prompt") }
-            var body: [String: Any] = ["prompt": prompt, "schedule": try schedule(args["schedule"])]
+            var body: [String: Any] = ["prompt": prompt,
+                                       "schedule": try anchorOnce(try schedule(args["schedule"]), timeZone: timeZone)]
             if let name = args["name"] as? String, !name.isEmpty { body["name"] = name }
             if let dir = args["workspace"] as? String, !dir.isEmpty { body["workspace"] = dir }
             if let agent = args["agent"] as? String, !agent.isEmpty { body["harness"] = agent }
@@ -97,7 +178,7 @@ enum MacAutomationLogic {
             var body: [String: Any] = [:]
             if let name = args["name"] as? String, !name.isEmpty { body["name"] = name }
             if let prompt = args["prompt"] as? String, !prompt.isEmpty { body["prompt"] = prompt }
-            if args["schedule"] != nil { body["schedule"] = try schedule(args["schedule"]) }
+            if args["schedule"] != nil { body["schedule"] = try anchorOnce(try schedule(args["schedule"]), timeZone: timeZone) }
             if let enabled = args["enabled"] as? Bool { body["enabled"] = enabled }
             guard !body.isEmpty else { throw ArgumentError.invalid("update 至少要改 name / prompt / schedule / enabled 之一") }
             return Request(method: "PATCH", path: "/automations/" + (try needId()), body: body)
@@ -106,6 +187,34 @@ enum MacAutomationLogic {
         case .run:
             return Request(method: "POST", path: "/automations/" + (try needId()) + "/run", body: [:])
         }
+    }
+
+    /// Mac 的结果摘要上限(Mac 端同一个数)。
+    static let summaryLimit = 280
+
+    /// 通知标识:按 run_id 固定(中继 APNs 的 collapse id 用同一个),补拉和推送是同一条、不叠两条。
+    /// 没 run_id 的旧事件退到 automation_id + 时间戳。
+    static func runNotificationId(event: [String: Any]) -> String {
+        if let run = event["run_id"] as? String, !run.isEmpty { return "relay-automation-\(run)" }
+        let automation = event["automation_id"] as? String ?? ""
+        let stamp = (event["timestamp"] as? Double).map { String(Int($0)) }
+            ?? (event["timestamp"] as? Int).map(String.init) ?? ""
+        return "relay-automation-\(automation)-\(stamp)"
+    }
+
+    /// 这次运行在 Mac 上的会话(点通知打开它)。
+    static func runSessionId(_ event: [String: Any]) -> String? {
+        for key in ["session_id", "task_id"] {
+            if let id = event[key] as? String, !id.isEmpty { return id }
+        }
+        return nil
+    }
+
+    /// 带隐私开关的版本:开着时正文不带结果,只说跑完了。
+    static func runNotice(machine: String, event: [String: Any], privacy: Bool) -> (title: String, body: String) {
+        let notice = runNotice(machine: machine, event: event)
+        if privacy { return (notice.title, AppLocalized("打开 App 查看结果")) }
+        return (notice.title, String(notice.body.prefix(summaryLimit)))
     }
 
     /// Mac 推来的 automation.run.completed → 通知标题与正文。
@@ -125,5 +234,93 @@ enum MacAutomationLogic {
     private static func jsonObject(_ dict: [String: Any]) throws -> [String: Any] {
         guard JSONSerialization.isValidJSONObject(dict) else { throw ArgumentError.invalid("schedule 不是合法的 JSON 对象") }
         return dict
+    }
+}
+
+// MARK: - 远程机器页的「定时任务」列表(C3)
+
+extension MacAutomationLogic {
+    /// `GET /automations` 里的一条,只取列表要显示的。
+    struct Summary: Identifiable, Equatable {
+        let id: String
+        let name: String
+        /// Mac 给的人话计划(「每天 09:00」);没有就退到 cron 原式。
+        let scheduleText: String
+        let enabled: Bool
+        /// active | paused | completed | failed
+        let state: String
+        let lastRunStatus: String?
+        let lastRunAt: Date?
+        let nextRunAt: Date?
+
+        /// 一次性任务跑完了:开关没意义。
+        var isFinished: Bool { state == "completed" }
+    }
+
+    static func summaries(fromList json: Any?) -> [Summary] {
+        guard let rows = (json as? [String: Any])?["automations"] as? [[String: Any]] else { return [] }
+        return rows.compactMap(summary)
+    }
+
+    static func summary(_ row: [String: Any]) -> Summary? {
+        guard let id = row["id"] as? String, !id.isEmpty else { return nil }
+        let schedule = row["schedule"] as? [String: Any]
+        let scheduleText = (schedule?["human"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            ?? (schedule?["cron"] as? String) ?? (row["schedule"] as? String) ?? ""
+        let lastRun = row["last_run"] as? [String: Any]
+        let name = (row["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            ?? String((row["prompt"] as? String ?? id).prefix(30))
+        return Summary(id: id, name: name, scheduleText: scheduleText,
+                       enabled: row["enabled"] as? Bool ?? true,
+                       state: row["state"] as? String ?? "active",
+                       lastRunStatus: lastRun?["status"] as? String,
+                       lastRunAt: seconds(lastRun?["at"]),
+                       nextRunAt: seconds(row["next_run_at"]))
+    }
+
+    /// `GET /automations/templates`(Mac 新加的接口)里的一条。字段名宽松:Mac 端还在定。
+    struct Template: Identifiable, Equatable {
+        let id: String
+        let name: String
+        let detail: String?
+        let scheduleText: String?
+        /// 建任务的请求:模板带了 prompt + schedule 就按已知字段建,否则只带模板 id。
+        let create: Request
+    }
+
+    static func templates(from json: Any?) -> [Template] {
+        let rows = ((json as? [String: Any])?["templates"] as? [[String: Any]]) ?? (json as? [[String: Any]]) ?? []
+        return rows.compactMap { row in
+            guard let id = (row["id"] as? String) ?? (row["key"] as? String), !id.isEmpty else { return nil }
+            let name = (row["name"] as? String) ?? (row["title"] as? String) ?? id
+            let schedule = row["schedule"]
+            let human = ((schedule as? [String: Any])?["human"] as? String)
+                ?? (row["schedule_human"] as? String) ?? (schedule as? String)
+            let body: [String: Any]
+            if let prompt = row["prompt"] as? String, !prompt.isEmpty, let schedule {
+                // 计划对象里 human / recurring 是 Mac 回给人看的,建的时候不往回送。
+                var sched: Any = schedule
+                if var dict = schedule as? [String: Any] {
+                    for key in ["human", "recurring"] { dict.removeValue(forKey: key) }
+                    sched = dict
+                }
+                body = ["name": name, "prompt": prompt, "schedule": sched]
+            } else {
+                body = ["template_id": id]
+            }
+            let create = Request(method: "POST", path: "/automations", body: body)
+            guard create.body != nil else { return nil }
+            return Template(id: id, name: name,
+                            detail: (row["description"] as? String) ?? (row["summary"] as? String),
+                            scheduleText: human, create: create)
+        }
+    }
+
+    static let templatesRequest = Request(method: "GET", path: "/automations/templates", body: nil)
+
+    private static func seconds(_ raw: Any?) -> Date? {
+        if let value = raw as? Double, value > 0 { return Date(timeIntervalSince1970: value) }
+        if let value = raw as? Int, value > 0 { return Date(timeIntervalSince1970: TimeInterval(value)) }
+        return nil
     }
 }

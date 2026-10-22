@@ -173,4 +173,13 @@ final class AgentChatCorrectnessTests: XCTestCase {
         let reminder = AgentChatCorrectness.sentAtReminder(morning, timeZone: shanghai)
         XCTAssertEqual(reminder, "<system-reminder>Sent at 2026-10-22 09:01 Thursday (Asia/Shanghai).</system-reminder>")
     }
+
+    func testTitleSourceTextDropsSentAtReminder() {
+        let stamp = AgentChatCorrectness.sentAtReminder(Date(timeIntervalSince1970: 0),
+                                                        timeZone: TimeZone(identifier: "Asia/Shanghai")!)
+        XCTAssertEqual(AgentChatCorrectness.titleSourceText(["帮我订周五的机票", stamp], limit: 200), "帮我订周五的机票")
+        XCTAssertEqual(AgentChatCorrectness.titleSourceText(["hi <system-reminder>x</system-reminder> there"], limit: 200), "hi  there")
+        XCTAssertEqual(AgentChatCorrectness.titleSourceText([stamp], limit: 200), "")
+        XCTAssertEqual(AgentChatCorrectness.titleSourceText(["abcdef", stamp], limit: 3), "abc")
+    }
 }

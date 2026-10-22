@@ -65,7 +65,8 @@ extension LeoAgentClient {
         if let hostId {
             await GatewayHostStore.shared.recordCapabilities(
                 id: hostId, kinds: kinds, ssh: MacSSHTarget.parse(obj["ssh"]),
-                hostKeys: (obj["ssh_host_keys"] as? [String] ?? []).compactMap(RemoteSSHTrust.normalizedPublicKey))
+                hostKeys: (obj["ssh_host_keys"] as? [String] ?? []).compactMap(RemoteSSHTrust.normalizedPublicKey),
+                timeZone: MacAutomationLogic.macTimeZone(from: obj))
         }
         return kinds
     }

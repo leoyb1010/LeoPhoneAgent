@@ -1495,13 +1495,15 @@ actor ChatStore {
         // Filter by keywords (AND: all keywords must match in title or message content)
         if let kws = keywords, !kws.isEmpty {
             // Keywords are literals: `%`/`_` escaped, length bounded.
+            // Text parts only (ChatSearchSQL): raw parts_json LIKE also hit the
+            // per-message「Sent at …」reminder, so "Sent" matched every session.
             for kw in kws.compactMap(ChatSearchSQL.normalizedQuery) {
-                let pattern = ChatSearchSQL.containsPattern(kw)
-                conditions.append("(s.title LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM messages m WHERE m.session_id = s.id AND m.parts_json LIKE ? ESCAPE '\\'))")
-                bindings.append((bindIndex, pattern))
-                bindIndex += 1
-                bindings.append((bindIndex, pattern))
-                bindIndex += 1
+                let match = ChatSearchSQL.textPartMatch(alias: "m", keyword: kw)
+                conditions.append("(s.title LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM messages m WHERE m.session_id = s.id AND \(match.sql)))")
+                for value in [ChatSearchSQL.containsPattern(kw)] + match.bindings {
+                    bindings.append((bindIndex, value))
+                    bindIndex += 1
+                }
             }
         }
 
@@ -1566,10 +1568,14 @@ actor ChatStore {
         var doubleBindings: [(Int32, Double)] = []
         var bindIndex: Int32 = 1
 
+        // Text parts only, so the hidden「Sent at …」reminder never matches.
         for kw in keywords {
-            conditions.append("m.parts_json LIKE ? ESCAPE '\\'")
-            bindings.append((bindIndex, ChatSearchSQL.containsPattern(kw)))
-            bindIndex += 1
+            let match = ChatSearchSQL.textPartMatch(alias: "m", keyword: kw)
+            conditions.append(match.sql)
+            for value in match.bindings {
+                bindings.append((bindIndex, value))
+                bindIndex += 1
+            }
         }
 
         if let ids = sessionIds, !ids.isEmpty {

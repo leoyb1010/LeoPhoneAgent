@@ -275,6 +275,10 @@ actor LeoAgentClient {
             let operation = UUID().uuidString.lowercased()
             req.setValue(operation, forHTTPHeaderField: "X-Leo-Request-Id")
             req.setValue(operation, forHTTPHeaderField: "X-Request-ID")
+            // [up-ac-ios] 写操作的追踪号就用操作编号,中继 / Mac 日志里本来就有它。
+            req.setValue(operation, forHTTPHeaderField: Self.traceHeader)
+        } else {
+            req.setValue(Self.newTraceId(), forHTTPHeaderField: Self.traceHeader)
         }
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -284,8 +288,36 @@ actor LeoAgentClient {
         return req
     }
 
+    /// [up-ac-ios] 每个请求一个追踪号,写进诊断日志:慢请求能和中继 / Mac 的日志对上。
+    nonisolated static let traceHeader = "X-Leo-Trace-Id"
+    nonisolated static func newTraceId() -> String {
+        String(UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(12))
+    }
+    private nonisolated static let traceLog = AppLogger(category: "LeoLinkTrace")
+    /// 超过这个时长的请求按 info 记(默认档就能看到);其余走 verbose。
+    private nonisolated static let slowRequestSeconds: TimeInterval = 3
+
     private func send(_ req: URLRequest) async throws -> Data {
-        let (data, response) = try await routedData(for: req)
+        let start = Date()
+        let trace = req.value(forHTTPHeaderField: Self.traceHeader) ?? "-"
+        // 只记方法和路径:query 里可能带文件路径之类的内容。
+        let label = "\(req.httpMethod ?? "GET") \(req.url?.path ?? "?")"
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await routedData(for: req)
+        } catch {
+            Self.traceLog.info("[trace \(trace)] \(label) → failed after \(Int(Date().timeIntervalSince(start) * 1000))ms: \(error.localizedDescription)")
+            throw error
+        }
+        let elapsed = Date().timeIntervalSince(start)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let line = "[trace \(trace)] \(label) → \(status) \(Int(elapsed * 1000))ms"
+        if elapsed >= Self.slowRequestSeconds || !(200..<300).contains(status) {
+            Self.traceLog.info(line)
+        } else {
+            Self.traceLog.verbose(line)
+        }
         try Self.validate(response: response, data: data)
         return data
     }
