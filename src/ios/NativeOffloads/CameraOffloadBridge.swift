@@ -87,6 +87,7 @@ import VisionKit
         if let observer = session.backgroundObserver { NotificationCenter.default.removeObserver(observer) }
         session.scanner?.stopScanning()
         session.scanner?.delegate = nil
+        (session.controller as? SpecificCameraController)?.stopCapture()
         (session.controller as? UIImagePickerController)?.delegate = nil
         (session.controller as? VNDocumentCameraViewController)?.delegate = nil
         session.controller?.dismiss(animated: false)
@@ -205,6 +206,10 @@ import VisionKit
         return request == .inner ? inner : outer
     }
 
+    /// Start/stop for the specific-camera session, in order, off the main thread.
+    private static let specificCaptureQueue = DispatchQueue(label: "LeoPhoneAgent.Camera.specificFront",
+                                                            qos: .userInitiated)
+
     /// Minimal user-operated capture (preview + shutter + cancel) for a camera the
     /// system picker can't be told to use. Never captures without the user's tap.
     private static func takeSpecificFrontPhoto(operation: CameraCaptureOperation, request: CameraFacingRequest,
@@ -215,13 +220,51 @@ import VisionKit
             return
         }
         ensureCameraAuth(operation) {
+            // Build the session before presenting anything: a failure ends the
+            // operation through finish() like every other path, instead of
+            // leaving a black full-screen controller whose Cancel does nothing.
+            let capture = AVCaptureSession()
+            let output = AVCapturePhotoOutput()
+            do {
+                let input = try AVCaptureDeviceInput(device: device)
+                capture.beginConfiguration()
+                if capture.canSetSessionPreset(.photo) { capture.sessionPreset = .photo }
+                let canAdd = capture.canAddInput(input) && capture.canAddOutput(output)
+                if canAdd {
+                    capture.addInput(input)
+                    capture.addOutput(output)
+                }
+                capture.commitConfiguration()
+                guard canAdd else {
+                    finish(operation, data: nil, error: failure("not_available", "The requested camera cannot be opened."))
+                    return
+                }
+            } catch {
+                finish(operation, data: nil, error: failure("not_available",
+                    "The requested camera cannot be opened: \(error.localizedDescription)"))
+                return
+            }
             withPresenter(operation) { top, session in
-                let controller = SpecificCameraController(operation: operation, device: device,
-                                                          hostDir: hostDir, guestDir: guestDir)
+                let controller = SpecificCameraController(operation: operation, device: device, capture: capture,
+                                                          output: output, hostDir: hostDir, guestDir: guestDir)
                 controller.modalPresentationStyle = .fullScreen
                 session.controller = controller
                 top.present(controller, animated: true)
             }
+        }
+    }
+
+    /// Redraws a photo whose orientation lives in metadata so its pixels are
+    /// upright; the reported width/height are then the oriented ones, and
+    /// readers that ignore EXIF orientation see it the right way up too.
+    nonisolated static func uprightImage(_ image: UIImage) -> UIImage {
+        guard image.imageOrientation != .up else { return image }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        format.opaque = true
+        format.preferredRange = .standard
+        return UIGraphicsImageRenderer(size: image.size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
         }
     }
 
@@ -231,13 +274,20 @@ import VisionKit
         let hostDir: String
         let guestDir: String
         private let device: AVCaptureDevice
-        private let capture = AVCaptureSession()
-        private let output = AVCapturePhotoOutput()
+        private let capture: AVCaptureSession
+        private let output: AVCapturePhotoOutput
         private let preview: AVCaptureVideoPreviewLayer
         private let shutter = UIButton(type: .system)
+        /// The inner display is landscape (951 × 669): the sensor's angle has to
+        /// follow the device, for the preview and for the saved photo.
+        private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+        private var rotationObservation: NSKeyValueObservation?
+        private var stopped = false
 
-        init(operation: CameraCaptureOperation, device: AVCaptureDevice, hostDir: String, guestDir: String) {
+        init(operation: CameraCaptureOperation, device: AVCaptureDevice, capture: AVCaptureSession,
+             output: AVCapturePhotoOutput, hostDir: String, guestDir: String) {
             self.operation = operation; self.device = device; self.hostDir = hostDir; self.guestDir = guestDir
+            self.capture = capture; self.output = output
             preview = AVCaptureVideoPreviewLayer(session: capture)
             super.init(nibName: nil, bundle: nil)
         }
@@ -269,25 +319,15 @@ import VisionKit
                 cancel.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
                 cancel.centerYAnchor.constraint(equalTo: shutter.centerYAnchor),
             ])
-            do {
-                let input = try AVCaptureDeviceInput(device: device)
-                capture.beginConfiguration()
-                capture.sessionPreset = .photo
-                guard capture.canAddInput(input), capture.canAddOutput(output) else {
-                    capture.commitConfiguration()
-                    throw failure("not_available", "The requested camera cannot be opened.")
-                }
-                capture.addInput(input)
-                capture.addOutput(output)
-                capture.commitConfiguration()
-            } catch {
-                finish(operation, data: nil, error: (error as NSError).domain == "LeoPhoneAgent.Camera"
-                    ? error as NSError
-                    : failure("not_available", "The requested camera cannot be opened: \(error.localizedDescription)"))
-                return
+            let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: preview)
+            rotationCoordinator = coordinator
+            rotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelPreview,
+                                                      options: [.initial, .new]) { [weak self] _, _ in
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.applyPreviewRotation() } }
             }
+            guard !stopped else { return }
             let session = capture
-            DispatchQueue.global(qos: .userInitiated).async { session.startRunning() }
+            specificCaptureQueue.async { session.startRunning() }
         }
 
         override func viewDidLayoutSubviews() {
@@ -297,15 +337,45 @@ import VisionKit
 
         override func viewDidDisappear(_ animated: Bool) {
             super.viewDidDisappear(animated)
-            let session = capture
-            DispatchQueue.global(qos: .userInitiated).async { session.stopRunning() }
+            stopCapture()
         }
 
-        @objc private func cancelTapped() { cancelOperation(operation) }
+        private func applyPreviewRotation() {
+            guard let coordinator = rotationCoordinator, let connection = preview.connection else { return }
+            let angle = coordinator.videoRotationAngleForHorizonLevelPreview
+            if connection.isVideoRotationAngleSupported(angle) { connection.videoRotationAngle = angle }
+        }
+
+        /// Idempotent; runs on every dismissal path (finish, disappear, orphaned cancel).
+        func stopCapture() {
+            guard !stopped else { return }
+            stopped = true
+            rotationObservation?.invalidate()
+            rotationObservation = nil
+            let session = capture
+            specificCaptureQueue.async { session.stopRunning() }
+        }
+
+        /// The operation already ended (cancelled elsewhere, timed out, superseded):
+        /// finish() has nothing to dismiss, so the controller closes itself.
+        private func closeIfOrphaned() {
+            stopCapture()
+            if presentingViewController != nil, !isBeingDismissed { dismiss(animated: true) }
+        }
+
+        @objc private func cancelTapped() {
+            let wasCurrent = isCurrent(operation)
+            cancelOperation(operation)
+            if !wasCurrent { closeIfOrphaned() }
+        }
 
         @objc private func shoot() {
             guard isCurrent(operation), capture.isRunning else { return }
             shutter.isEnabled = false
+            if let coordinator = rotationCoordinator, let connection = output.connection(with: .video) {
+                let angle = coordinator.videoRotationAngleForHorizonLevelCapture
+                if connection.isVideoRotationAngleSupported(angle) { connection.videoRotationAngle = angle }
+            }
             output.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
         }
 
@@ -317,11 +387,17 @@ import VisionKit
         }
 
         private func save(_ data: Data?, error: String?) {
-            guard isCurrent(operation) else { cancelOperation(operation); return }
-            guard let data, let image = UIImage(data: data), let jpeg = image.jpegData(compressionQuality: 0.9) else {
+            guard isCurrent(operation) else { cancelOperation(operation); closeIfOrphaned(); return }
+            guard let data, let decoded = UIImage(data: data) else {
                 finish(operation, data: nil, error: failure("capture_failed",
                     "Failed to read the captured photo\(error.map { ": \($0)" } ?? ".")")); return
             }
+            let image = uprightImage(decoded)
+            guard let jpeg = image.jpegData(compressionQuality: 0.9) else {
+                finish(operation, data: nil, error: failure("capture_failed", "Failed to encode the captured photo.")); return
+            }
+            let width = image.cgImage?.width ?? Int(image.size.width * image.scale)
+            let height = image.cgImage?.height ?? Int(image.size.height * image.scale)
             do {
                 let name = "camera-\(operation.operationID).jpg"
                 let file = URL(fileURLWithPath: hostDir).appendingPathComponent(name)
@@ -329,8 +405,7 @@ import VisionKit
                 try jpeg.write(to: file, options: .atomic)
                 active?.writtenFiles.append(file)
                 finish(operation, data: ["guest_path": "\(guestDir)/\(name)",
-                                        "width": Int(image.size.width * image.scale),
-                                        "height": Int(image.size.height * image.scale), "bytes": jpeg.count], error: nil)
+                                        "width": width, "height": height, "bytes": jpeg.count], error: nil)
             } catch {
                 finish(operation, data: nil, error: failure("capture_failed", "Failed to save photo: \(error.localizedDescription)"))
             }
