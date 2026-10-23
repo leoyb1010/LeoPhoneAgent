@@ -664,11 +664,11 @@ enum NotificationQuickReply {
         guard !text.isEmpty else { completion(); return true }
         Task { @MainActor in
             defer { completion() }
-            // Unlocking iPhone is not unlocking a Face ID–locked conversation.
+            // Unlocking iPhone is not unlocking a biometry-locked conversation.
             if SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId) {
                 let note = UNMutableNotificationContent()
                 note.title = AppLocalized("没有发送")
-                note.body = AppLocalized("这个会话已用 Face ID 锁定，请在 App 里打开后回复。")
+                note.body = BiometryLockText.lockedOpenToReply(BiometricAuth.biometryDisplayName)
                 try? await UNUserNotificationCenter.current().add(
                     UNNotificationRequest(identifier: "quick-reply-locked-\(sessionId)", content: note, trigger: nil))
                 return

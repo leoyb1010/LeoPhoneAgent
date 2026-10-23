@@ -160,6 +160,9 @@ struct MacScreenFullscreen: View {
     @State private var baseScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var baseOffset: CGSize = .zero
+    /// [duo-cap] Real safe-area insets: the video ignores the safe area, its overlays add them back
+    /// per edge (iPhone Duo's island stands on one side).
+    @State private var safeArea = EdgeInsets()
 
     private func reset() {
         withAnimation(reduceMotion ? nil : .smooth(duration: 0.28)) {
@@ -170,7 +173,11 @@ struct MacScreenFullscreen: View {
     var body: some View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
-            MacScreenLiveView(model: live, poller: poller) { zoomableSnapshot }
+            MacScreenLiveView(model: live, poller: poller,
+                              overlayInsets: .fullscreen(top: safeArea.top, leading: safeArea.leading,
+                                                         bottom: safeArea.bottom, trailing: safeArea.trailing)) {
+                zoomableSnapshot
+            }
                 .ignoresSafeArea()
             HStack {
                 MacScreenCaption(poller: poller, hostName: hostName)
@@ -188,6 +195,7 @@ struct MacScreenFullscreen: View {
             .glassEffect(.regular, in: .capsule)
             .padding(.horizontal, 12)
         }
+        .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { safeArea = $0 }
         .onAppear { live.client = poller.client }
         .statusBarHidden()
     }

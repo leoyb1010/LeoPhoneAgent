@@ -65,7 +65,8 @@ enum SessionLockedIntentError: Error, CustomLocalizedStringResourceConvertible {
     case locked
 
     var localizedStringResource: LocalizedStringResource {
-        "这个会话已用 Face ID 锁定，请在 App 里打开查看。"
+        // [duo-cap] The device's real sensor (iPhone Duo has Touch ID, not Face ID).
+        LocalizedStringResource(stringLiteral: BiometryLockText.lockedOpenToView(BiometricAuth.biometryDisplayName))
     }
 }
 

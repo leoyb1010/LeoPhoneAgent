@@ -5,6 +5,8 @@
 //  [WP-51 R1] 「Mac 画面」的视频模式(WebRTC),失败自动回退 R0 截图;画中画。
 //  [WP-52 R2] 操控:iPhone 触控板模式 + 底部工具条;iPad 指针绝对坐标 + 外接键盘原始按键 +
 //  被 iPadOS 截走的组合键替代按钮。
+//  [duo-cap] 按能力选择(MacScreenInputPolicy):iPad 不变;其他设备接了指针且宽度 regular
+//  用指针模式，接了硬件键盘就直通按键(iPhone Duo 内屏、接键盘的 iPhone)。
 //
 
 import Combine
@@ -126,6 +128,8 @@ struct MacScreenLiveView<Snapshot: View>: View {
     @ObservedObject var poller: MacScreenPoller
     /// false = 先别连(例如全屏盖在上面，由全屏那一处连)。
     var active: Bool = true
+    /// [duo-cap] Overlay paddings; the full-screen viewer passes its real safe-area insets.
+    var overlayInsets: MacScreenOverlayInsets = .inline
     /// R0 截图(视频不可用 / 失败 / 用户选了截图时)。
     @ViewBuilder let snapshot: () -> Snapshot
     @Environment(\.scenePhase) private var scenePhase
@@ -140,7 +144,7 @@ struct MacScreenLiveView<Snapshot: View>: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             if model.mode == .video, let peer = model.peer {
-                MacScreenVideoPane(model: model, peer: peer, poller: poller)
+                MacScreenVideoPane(model: model, peer: peer, poller: poller, insets: overlayInsets)
             } else {
                 snapshot()
                     .macScreenLive(poller, active: active)
@@ -150,7 +154,9 @@ struct MacScreenLiveView<Snapshot: View>: View {
                                 .font(.caption)
                                 .padding(.horizontal, 10).padding(.vertical, 6)
                                 .glassEffect(.regular, in: .capsule)
-                                .padding(.top, 52)
+                                .padding(.top, overlayInsets.badgeTop)
+                                .padding(.leading, overlayInsets.controlsLeading)
+                                .padding(.trailing, overlayInsets.controlsTrailing)
                         }
                     }
                     .overlay(alignment: .topTrailing) {
@@ -162,7 +168,7 @@ struct MacScreenLiveView<Snapshot: View>: View {
                             }
                             .buttonStyle(.plain)
                             .glassEffect(.regular.interactive(), in: .capsule)
-                            .padding(.top, 52).padding(.trailing, 12)
+                            .padding(.top, overlayInsets.badgeTop).padding(.trailing, overlayInsets.badgeTrailing)
                         }
                     }
             }
@@ -184,14 +190,24 @@ private struct MacScreenVideoPane: View {
     @ObservedObject var model: MacScreenLiveModel
     @ObservedObject var peer: ScreenPeerClient
     @ObservedObject var poller: MacScreenPoller
+    let insets: MacScreenOverlayInsets
     @State private var trackpad = ScreenTrackpad()
+    @StateObject private var hardware = MacScreenHardwareInputs()
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private let isPad = UIDevice.current.userInterfaceIdiom == .pad
+
+    /// [duo-cap] Pointer / keyboard capabilities, not the iPad idiom (iPad: unchanged).
+    private var input: MacScreenInputPolicy.Decision {
+        MacScreenInputPolicy.decide(isPadIdiom: isPad, hasPointer: hardware.hasPointer,
+                                    hasHardwareKeyboard: hardware.hasKeyboard,
+                                    isRegularWidth: horizontalSizeClass == .regular)
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.black
             ScreenVideoSurface(peer: peer, pip: model.pip,
-                               inputMode: peer.controlReady ? (isPad ? .pointer : .trackpad) : .none,
+                               inputMode: peer.controlReady ? (input.pointer == .pointer ? .pointer : .trackpad) : .none,
                                trackpad: $trackpad)
             if peer.state != .connected {
                 ProgressView("正在连接视频…").tint(.white).foregroundStyle(.white)
@@ -200,19 +216,31 @@ private struct MacScreenVideoPane: View {
             VStack(spacing: 6) {
                 notices
                 if peer.controlReady {
-                    if isPad { MacScreenPadKeys(peer: peer) } else { MacScreenControlBar(peer: peer) }
+                    if input.keys == .hardware { MacScreenPadKeys(peer: peer) } else { MacScreenControlBar(peer: peer) }
                 }
             }
-            .padding(.bottom, 8)
+            .padding(.leading, insets.controlsLeading)
+            .padding(.trailing, insets.controlsTrailing)
+            .padding(.bottom, insets.controlsBottom)
         }
-        .overlay(alignment: .topTrailing) { videoMenu.padding(.top, 52).padding(.trailing, 12) }
+        .overlay(alignment: .topTrailing) {
+            videoMenu.padding(.top, insets.badgeTop).padding(.trailing, insets.badgeTrailing)
+        }
         .onChange(of: peer.videoSize) { _, size in
             if size.height > 0 { trackpad.screenAspect = size.width / size.height }
         }
-        .onAppear { if isPad { MacScreenHardwareKeyboard.shared.attach(peer) } }
+        .onAppear { syncHardwareKeyboard() }
         .onDisappear { MacScreenHardwareKeyboard.shared.detach(peer) }
-        .onChange(of: peer.controlReady) { _, ready in
-            if ready, isPad { MacScreenHardwareKeyboard.shared.attach(peer) }
+        .onChange(of: peer.controlReady) { _, _ in syncHardwareKeyboard() }
+        .onChange(of: input.attachesHardwareKeyboard) { _, _ in syncHardwareKeyboard() }
+    }
+
+    /// A keyboard connected mid-session starts forwarding; one unplugged stops.
+    private func syncHardwareKeyboard() {
+        if input.attachesHardwareKeyboard {
+            MacScreenHardwareKeyboard.shared.attach(peer)
+        } else {
+            MacScreenHardwareKeyboard.shared.detach(peer)
         }
     }
 
@@ -553,7 +581,34 @@ private struct MacScreenPadKeys: View {
     }
 }
 
-/// iPad 外接键盘:GCKeyboard 的原始 HID 按键 → `key` down / up 事件(带当前按住的修饰键)。
+/// [duo-cap] Connected keyboard / pointing device, live (GameController notifications).
+@MainActor
+final class MacScreenHardwareInputs: ObservableObject {
+    @Published private(set) var hasKeyboard = GCKeyboard.coalesced != nil
+    @Published private(set) var hasPointer = !GCMouse.mice().isEmpty
+    nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
+
+    init() {
+        let names: [Notification.Name] = [.GCKeyboardDidConnect, .GCKeyboardDidDisconnect,
+                                          .GCMouseDidConnect, .GCMouseDidDisconnect]
+        observers = names.map { name in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refresh() }
+            }
+        }
+    }
+
+    deinit { observers.forEach(NotificationCenter.default.removeObserver) }
+
+    private func refresh() {
+        let keyboard = GCKeyboard.coalesced != nil
+        let pointer = !GCMouse.mice().isEmpty
+        if keyboard != hasKeyboard { hasKeyboard = keyboard }
+        if pointer != hasPointer { hasPointer = pointer }
+    }
+}
+
+/// 外接键盘(iPad,以及接了键盘的 iPhone / iPhone Duo):GCKeyboard 的原始 HID 按键 → `key` down / up 事件(带当前按住的修饰键)。
 @MainActor
 final class MacScreenHardwareKeyboard {
     static let shared = MacScreenHardwareKeyboard()

@@ -507,6 +507,7 @@
 		E5JB00001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB00002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
 		LF63BDFAF750 /* MacScreenSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFD48397A7A7 /* MacScreenSession.swift */; };
+		LFC4D458684D /* DeviceCapabilityLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF64F0E76DA8 /* DeviceCapabilityLayout.swift */; };
 		LF3E14F93A3B /* PinnedSessionOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF9E8272F01 /* PinnedSessionOrder.swift */; };
 		LF43FE8FE20C /* CommandPaletteCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF837AD530A8 /* CommandPaletteCatalog.swift */; };
 		LF64333B68E8 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
@@ -525,6 +526,7 @@
 		E5JB10001 /* JiebaWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00012 /* JiebaWrapper.mm */; };
 		E5JB10002 /* TextSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JB00013 /* TextSegmenter.swift */; };
 		LFB7E8E0547A /* MacScreenSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFD48397A7A7 /* MacScreenSession.swift */; };
+		LF02380D5FE2 /* DeviceCapabilityLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF64F0E76DA8 /* DeviceCapabilityLayout.swift */; };
 		LFA0A1B535C5 /* PinnedSessionOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF9E8272F01 /* PinnedSessionOrder.swift */; };
 		LFAB889B1927 /* CommandPaletteCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF837AD530A8 /* CommandPaletteCatalog.swift */; };
 		LF714387EFE1 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
@@ -1621,6 +1623,7 @@
 		E5JB00012 /* JiebaWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = JiebaWrapper.mm; sourceTree = "<group>"; };
 		E5JB00013 /* TextSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSegmenter.swift; sourceTree = "<group>"; };
 		LFD48397A7A7 /* MacScreenSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacScreenSession.swift; sourceTree = "<group>"; };
+		LF64F0E76DA8 /* DeviceCapabilityLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceCapabilityLayout.swift; sourceTree = "<group>"; };
 		LFF9E8272F01 /* PinnedSessionOrder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedSessionOrder.swift; sourceTree = "<group>"; };
 		LF837AD530A8 /* CommandPaletteCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPaletteCatalog.swift; sourceTree = "<group>"; };
 		LFB3AA038DDA /* ChatCompletionsWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCompletionsWire.swift; sourceTree = "<group>"; };
@@ -2680,6 +2683,7 @@
 				E5JB00012 /* JiebaWrapper.mm */,
 				E5JB00013 /* TextSegmenter.swift */,
 				LFD48397A7A7 /* MacScreenSession.swift */,
+				LF64F0E76DA8 /* DeviceCapabilityLayout.swift */,
 				LFF9E8272F01 /* PinnedSessionOrder.swift */,
 				LF837AD530A8 /* CommandPaletteCatalog.swift */,
 				LFB3AA038DDA /* ChatCompletionsWire.swift */,
@@ -4069,6 +4073,7 @@
 				E5R3R0003 /* NSTextContainerSetSizeGuard.m in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
 				LFB7E8E0547A /* MacScreenSession.swift in Sources */,
+				LF02380D5FE2 /* DeviceCapabilityLayout.swift in Sources */,
 				LFA0A1B535C5 /* PinnedSessionOrder.swift in Sources */,
 				LFAB889B1927 /* CommandPaletteCatalog.swift in Sources */,
 				LF714387EFE1 /* ChatCompletionsWire.swift in Sources */,
@@ -4242,6 +4247,7 @@
 				E5JB00001 /* JiebaWrapper.mm in Sources */,
 				E5JB00002 /* TextSegmenter.swift in Sources */,
 				LF63BDFAF750 /* MacScreenSession.swift in Sources */,
+				LFC4D458684D /* DeviceCapabilityLayout.swift in Sources */,
 				LF3E14F93A3B /* PinnedSessionOrder.swift in Sources */,
 				LF43FE8FE20C /* CommandPaletteCatalog.swift in Sources */,
 				LF64333B68E8 /* ChatCompletionsWire.swift in Sources */,
