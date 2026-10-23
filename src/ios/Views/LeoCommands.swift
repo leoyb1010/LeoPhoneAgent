@@ -186,7 +186,22 @@ enum ChatCommandTarget {
 enum SessionWindow {
     static let activityType = SessionHandoff.activityType
 
+    /// App-level: the app declares multiple scenes AND the device can show them.
     static var isSupported: Bool { UIApplication.shared.supportsMultipleScenes }
+
+    /// [duo-shell] Whether THIS window may offer "open in a new window". The
+    /// app-level flag is per app, but an iPhone Duo's outer display cannot
+    /// create new windows, so the per-scene SwiftUI `supportsMultipleWindows`
+    /// environment value has to agree as well. Where the system still refuses
+    /// a request, `open` reports it (see `openFailed`).
+    static func canOffer(appSupportsMultipleScenes: Bool = isSupported, sceneSupportsMultipleWindows: Bool) -> Bool {
+        appSupportsMultipleScenes && sceneSupportsMultipleWindows
+    }
+
+    /// Posted on the main queue when a new window could not be opened; userInfo
+    /// carries the session id so the frontmost window can fall back to opening
+    /// it in place and say so.
+    static let openFailed = Notification.Name("leo.sessionWindowOpenFailed")
 
     static func activity(for sessionId: String) -> NSUserActivity {
         let activity = NSUserActivity(activityType: activityType)
@@ -227,6 +242,11 @@ enum SessionWindow {
         request.userActivity = activity(for: sessionId)
         UIApplication.shared.activateSceneSession(for: request) { error in
             AppLogger(category: "Window").error("[Window] open session window failed: \(error.localizedDescription)")
+            // [duo-shell] Was log-only: on an iPhone Duo's outer display (or when
+            // the system refuses another window) the tap silently did nothing.
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: openFailed, object: nil, userInfo: ["sessionId": sessionId])
+            }
         }
     }
 
@@ -242,9 +262,12 @@ enum SessionWindow {
 struct SessionWindowDrag: ViewModifier {
     let sessionId: String?
     let enabled: Bool
+    /// [duo-shell] No drag-to-new-window where this window can't open one
+    /// (iPhone, iPhone Duo outer display): the payload is only a window request.
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
 
     func body(content: Content) -> some View {
-        if enabled {
+        if enabled, SessionWindow.canOffer(sceneSupportsMultipleWindows: supportsMultipleWindows) {
             content.onDrag { SessionWindow.itemProvider(for: sessionId) }
         } else {
             content

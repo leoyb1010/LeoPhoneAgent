@@ -24,6 +24,8 @@ struct ChatContextRequest: Equatable {
 struct ChatDetailContainer<Content: View>: View {
     let sessionId: String?
     /// [WP-43] The window's width: the column opens by itself at ≥ 1100 pt.
+    /// [duo-shell] …and, once the user pinned it, at ≥ 900 pt (iPhone Duo inner
+    /// landscape is 951 and never reaches 1100).
     var windowWidth: CGFloat = 0
     var contextRequest: ChatContextRequest? = nil
     @ViewBuilder let content: Content
@@ -35,6 +37,12 @@ struct ChatDetailContainer<Content: View>: View {
     /// session switch, so this keeps a hand-closed column closed until the
     /// window actually crosses the threshold.
     @SceneStorage("leo.ipad.contextRuleWidth") private var contextRuleWidth: Double = 0
+    /// [duo-shell] The user showed the column by hand (toolbar button, ⌥⌘I / ⇧⌘M)
+    /// in a window ≥ 900 pt: it then reopens whenever a window is that wide —
+    /// e.g. every time an iPhone Duo is unfolded — and survives shrinking from
+    /// ≥ 1100 to 900–1100. Hiding it by hand there unpins it. App-wide, so a
+    /// new window picks it up too.
+    @AppStorage("leo.ipad.inspectorPinned") private var inspectorPinned = false
     /// [F8] Shared with ChatInspectorPanel so the chat's "…" menu can open a tab.
     @AppStorage("leo.ipad.inspectorTab") private var inspectorTab = ChatInspectorPanel.Tab.run.rawValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -61,22 +69,29 @@ struct ChatDetailContainer<Content: View>: View {
     /// ⌥⌘I / ⇧⌘M: show the column in that mode, or hide it when it already shows it.
     private func toggleContext(_ mode: ChatContextColumnPolicy.Mode) {
         let current = ChatContextColumnPolicy.effective(contextModeRaw, macFleetEnabled: MacFleetFeature.isEnabled())
-        withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) {
-            if inspectorVisible && current == mode {
-                inspectorVisible = false
-            } else {
-                contextModeRaw = mode.rawValue
-                inspectorVisible = true
-            }
+        if inspectorVisible && current == mode {
+            setInspectorByHand(false)
+        } else {
+            contextModeRaw = mode.rawValue
+            setInspectorByHand(true)
         }
+    }
+
+    /// An explicit show/hide of the column. Wide enough to pin → it also pins
+    /// or unpins; narrower windows only show it for now.
+    private func setInspectorByHand(_ visible: Bool) {
+        if LeoWorkspaceLayoutPolicy.canPinContextColumn(width: windowWidth) { inspectorPinned = visible }
+        withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = visible }
     }
 
     private func applyWidthRule(_ width: CGFloat) {
         guard width > 0 else { return }
         let old = CGFloat(contextRuleWidth)
         contextRuleWidth = Double(width)
+        let pinned = inspectorPinned
         guard let show = LeoWorkspaceLayoutPolicy.crossing(
-            from: old, to: width, rule: LeoWorkspaceLayoutPolicy.showsContextColumn) else { return }
+            from: old, to: width,
+            rule: { LeoWorkspaceLayoutPolicy.opensContextColumn(width: $0, pinned: pinned) }) else { return }
         withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = show }
     }
 
@@ -113,7 +128,7 @@ struct ChatDetailContainer<Content: View>: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible.toggle() }
+                        setInspectorByHand(!inspectorVisible)
                     } label: {
                         Image(systemName: "sidebar.right")
                     }

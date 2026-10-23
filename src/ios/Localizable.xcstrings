@@ -78706,6 +78706,50 @@
           }
         }
       }
+    },
+    "这里不能新开窗口，已在当前窗口打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t open a new window here. Opened in this window instead."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这里不能新开窗口，已在当前窗口打开"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這裡不能開新視窗，已在目前視窗打開"
+          }
+        }
+      }
+    },
+    "这里不能新开窗口": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t open a new window here."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这里不能新开窗口"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這裡不能開新視窗"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -1139,9 +1139,6 @@ enum TreasuryShortcutPresentation {
     }
 }
 
-/// Available-width policy for the iPad Treasury workspace. Height is
-/// deliberately irrelevant: presenting the keyboard must not collapse the
-/// split view and rebuild an in-progress annotation or highlight editor.
 /// 藏宝阁「没有匹配的内容」时是否给「清除筛选」:视图不是「全部」、选了来源、或在看归档。
 enum TreasuryFilterReset {
     static func hasActiveFilters(view: String, source: String?, showArchived: Bool) -> Bool {
@@ -1158,9 +1155,18 @@ enum TreasuryFilePreviewPolicy {
     }
 }
 
+/// Available-width policy for the Treasury workspace (iPad, iPhone Duo inner
+/// display — the rule never asks for the device type). Height is
+/// deliberately irrelevant: presenting the keyboard must not collapse the
+/// split view and rebuild an in-progress annotation or highlight editor.
 enum TreasuryWorkspaceLayoutPolicy {
+    /// [duo-shell] Kept at 760 (list column + a reading column that still fits
+    /// a full card): Duo inner portrait (669) is 91 pt below it and stays one
+    /// column even if margins move ±20 pt; inner landscape (951) splits.
+    static let splitMinWidth: CGFloat = 760
+
     static func usesSplit(width: CGFloat, regularWidth: Bool) -> Bool {
-        regularWidth && width.isFinite && width >= 760
+        regularWidth && width.isFinite && width >= splitMinWidth
     }
 }
 
