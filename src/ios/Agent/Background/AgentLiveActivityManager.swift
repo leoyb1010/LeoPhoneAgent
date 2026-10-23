@@ -103,14 +103,10 @@ final class AgentLiveActivityManager {
         // session-restore task → cleanupStaleActivities): a framework binary
         // can be present in the dyld shared cache — dlopen returns a handle —
         // on a system where the Activity machinery itself is absent/broken.
-        // Two additional gates:
-        //  1. iPad requires iPadOS 17+ (Apple's actual Live Activity support
-        //     matrix; the feature never worked on iPad 16.x anyway).
-        //  2. The ActivityKit.Activity class descriptor symbol must actually
-        //     resolve — if it doesn't, instantiating
-        //     Activity<AgentActivityAttributes> metadata is what crashes.
-        if UIDevice.current.userInterfaceIdiom == .pad {
-        }
+        // The iPadOS 17+ requirement is now met by the deployment target
+        // (iOS 27), so the remaining gate is: the ActivityKit.Activity class
+        // descriptor symbol must actually resolve — if it doesn't,
+        // instantiating Activity<AgentActivityAttributes> metadata is what crashes.
         guard let handle = dlopen("/System/Library/Frameworks/ActivityKit.framework/ActivityKit", RTLD_LAZY) else {
             logger.info("[LiveActivity][probe] unavailable: dlopen failed")
             return false
@@ -267,8 +263,18 @@ final class AgentLiveActivityManager {
         guard !presenceObserversInstalled else { return }
         presenceObserversInstalled = true
         let center = NotificationCenter.default
-        center.addObserver(forName: UIScene.didActivateNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.sceneDidActivate() }
+        center.addObserver(forName: UIScene.didActivateNotification, object: nil, queue: .main) { [weak self] note in
+            let scene = note.object as? UIScene
+            MainActor.assumeIsolated { self?.sceneDidActivate(scene) }
+        }
+        // [duo-fold] A settling departure resolves at once when the app really goes away.
+        center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resolvePendingDeparture(trigger: "background") }
+        }
+        if #available(iOS 27.1, *) {
+            for case let windowScene as UIWindowScene in UIApplication.shared.connectedScenes {
+                observeHinge(in: windowScene)
+            }
         }
         // Handled synchronously on purpose: a Task hop could land after
         // didEnterBackground, when `Activity.request` fails ("Target is not foreground").
@@ -278,8 +284,19 @@ final class AgentLiveActivityManager {
         }
     }
 
-    private func sceneDidActivate() {
+    private func sceneDidActivate(_ scene: UIScene?) {
+        if let pending = pendingDeparture {
+            // [duo-fold] The scene came back (fold/unfold finished on the other
+            // display): the app never left, so no card was started.
+            pending.cancel()
+            pendingDeparture = nil
+            logger.info("[LiveActivity][presence] display move settled: still foreground, no card")
+            endPresenceBackgroundTask()
+        }
         leftForeground = false
+        if #available(iOS 27.1, *), let windowScene = scene as? UIWindowScene {
+            observeHinge(in: windowScene)
+        }
         guard Self.isActivityKitAvailable else { return }
         endAll(reason: "sceneDidActivate")
     }
@@ -293,12 +310,94 @@ final class AgentLiveActivityManager {
         case .stayForeground:
             return
         case .leaveNow:
-            leaveForeground(reason: "sceneWillDeactivate")
+            beginDeparture(reason: "sceneWillDeactivate")
         case .recheckNextTurn:
             DispatchQueue.main.async { [weak self] in
                 guard let self, !UIApplication.shared.leoIsInUse else { return }
-                self.leaveForeground(reason: "sceneWillDeactivate+recheck")
+                self.beginDeparture(reason: "sceneWillDeactivate+recheck")
             }
+        }
+    }
+
+    // MARK: [duo-fold] Display moves (see LiveActivityPresencePolicy.departureStart)
+
+    /// A departure right after hinge movement, waiting to see whether the scene
+    /// comes back on the other display. `leftForeground` stays false meanwhile,
+    /// so nothing else starts a card during the wait.
+    private var pendingDeparture: DispatchWorkItem?
+    /// Last hinge angle/status change (iPhone Duo; nil on every other device).
+    private var lastHingeMovement: Date?
+    private var lastHinge: (status: Int, angle: Double)?
+    private let hingeObservedWindows = NSHashTable<UIWindow>.weakObjects()
+    private var presenceTaskGeneration = 0
+
+    /// No LeoBot scene is left in the foreground. Start the card now, or — when
+    /// the hinge just moved — after the settle delay unless the scene comes back.
+    private func beginDeparture(reason: String) {
+        guard !leftForeground, pendingDeparture == nil else { return }
+        guard Self.isActivityKitAvailable, Self.isUserEnabled,
+              case .settle(let delay) = LiveActivityPresencePolicy.departureStart(
+                lastHingeMovement: lastHingeMovement, now: Date()) else {
+            leaveForeground(reason: reason)
+            return
+        }
+        // Hold the process while we wait (the assertion outlives the delay).
+        beginPresenceBackgroundTask()
+        logger.info("[LiveActivity][presence] hinge moved: settling \(delay)s before starting (\(reason)) \(DisplayContext.current)")
+        let item = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.resolvePendingDeparture(trigger: "timer") }
+        }
+        pendingDeparture = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+    }
+
+    private func resolvePendingDeparture(trigger: String) {
+        guard let item = pendingDeparture else { return }
+        item.cancel()
+        pendingDeparture = nil
+        switch LiveActivityPresencePolicy.settle(reactivated: UIApplication.shared.leoIsInUse) {
+        case .cancel:
+            logger.info("[LiveActivity][presence] display move settled (\(trigger)): still foreground, no card")
+            endPresenceBackgroundTask()
+        case .start:
+            leaveForeground(reason: "displayMove+\(trigger)")
+        }
+    }
+
+    @available(iOS 27.1, *)
+    private func observeHinge(in scene: UIWindowScene) {
+        guard let window = scene.windows.first(where: { $0.windowLevel == .normal }) ?? scene.windows.first,
+              !hingeObservedWindows.contains(window) else { return }
+        hingeObservedWindows.add(window)
+        window.addInteraction(UIHingeInteraction { [weak self] _, update in
+            guard let hinge = update.hinge else { return }
+            let status = hinge.status.rawValue, angle = Double(hinge.angle)
+            MainActor.assumeIsolated { self?.hingeUpdated(status: status, angle: angle) }
+        })
+    }
+
+    /// Records movement only (status change or > ~2°); the first reading is a baseline.
+    private func hingeUpdated(status: Int, angle: Double) {
+        defer { lastHinge = (status, angle) }
+        guard let last = lastHinge else { return }
+        if last.status != status || abs(last.angle - angle) > 0.035 {
+            lastHingeMovement = Date()
+        }
+    }
+
+    private func beginPresenceBackgroundTask() {
+        presenceTaskGeneration += 1
+        let generation = presenceTaskGeneration
+        if presenceBackgroundTask == .invalid {
+            presenceBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "LiveActivityStart") { [weak self] in
+                MainActor.assumeIsolated { self?.endPresenceBackgroundTask() }
+            }
+        }
+        // Room for the request and the push-token registration to go out. Only
+        // the latest departure's timer ends it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+            guard let self, self.presenceTaskGeneration == generation else { return }
+            self.endPresenceBackgroundTask()
         }
     }
 
@@ -309,24 +408,18 @@ final class AgentLiveActivityManager {
         leftForeground = true
         guard Self.isActivityKitAvailable, Self.isUserEnabled else { return }
         let app = UIApplication.shared
-        if presenceBackgroundTask == .invalid {
-            presenceBackgroundTask = app.beginBackgroundTask(withName: "LiveActivityStart") { [weak self] in
-                MainActor.assumeIsolated { self?.endPresenceBackgroundTask() }
-            }
-        }
+        beginPresenceBackgroundTask()
         let bka = BackgroundKeepAliveManager.shared
         let local = LiveActivityPresencePolicy.decide(
             appActive: false, taskRunning: bka.isActive || Self.isAudioActive(), followed: true,
             enabled: Self.isUserEnabled, existingActivity: currentActivity != nil)
-        logger.info("[LiveActivity][presence] leaving foreground (\(reason)) local=\(String(describing: local)) appState=\(app.applicationState.rawValue)")
+        logger.info("[LiveActivity][presence] leaving foreground (\(reason)) \(DisplayContext.current) local=\(String(describing: local)) appState=\(app.applicationState.rawValue)")
         if local == .start {
             remotePush = false
             _startActivity(sessions: bka.buildLiveSessionSnapshots())
         }
         // Followed, running Mac sessions (the bridge yields to a local card).
         HarnessLiveActivityBridge.shared.refresh()
-        // Room for the request and the push-token registration to go out.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in self?.endPresenceBackgroundTask() }
     }
 
     private func endPresenceBackgroundTask() {

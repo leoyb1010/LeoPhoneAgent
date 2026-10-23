@@ -97,6 +97,9 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
             writeLaunchMarker(phase: CrashMarkerPolicy.initialPhase(isBackgroundLaunch: isBackgroundLaunch))
         }
         MXMetricManager.shared.add(self)
+        // [duo-diag] Display / window size per scene (installs its own scene
+        // observers and catches scenes already connected).
+        DispatchQueue.main.async { MainActor.assumeIsolated { SceneDisplayLogger.shared.install() } }
         logger.info("CrashReporter initialized, signal handlers + MetricKit subscriber registered")
     }
 
@@ -133,6 +136,8 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         marker["activeSessionCount"] = SessionActivityTracker.shared.activeSessions.count
         marker["runningShellCommand"] = ShellCommandRingBuffer.hasRunningCommand
         marker["bgTaskActive"] = BackgroundKeepAliveManager.shared.isActive
+        // [duo-diag] Which display (iPhone Duo outer / inner) and window size.
+        marker["display"] = DisplayContext.current
 
         let remaining = UIApplication.shared.backgroundTimeRemaining
         marker["bgTaskRemaining"] = remaining > 99999 ? -1 : remaining
@@ -293,6 +298,7 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         let webViewTotalTabs = markerInfo?["webViewTotalTabs"] as? Int
         let webViewGlobalCap = markerInfo?["webViewGlobalCap"] as? Int
         let webViewTabs = markerInfo?["webViewTabs"] as? [[String: Any]]
+        let display = markerInfo?["display"] as? String
         let memPressure: String = {
             if let free = memoryFreeMB {
                 if free < 200 { return "critical" }
@@ -340,7 +346,8 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
             bkaAudioInterruption: bkaAudioInterruption,
             webViewTotalTabs: webViewTotalTabs,
             webViewGlobalCap: webViewGlobalCap,
-            webViewTabs: webViewTabs
+            webViewTabs: webViewTabs,
+            display: display
         )
     }
 
@@ -466,7 +473,8 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         bkaAudioInterruption: String? = nil,
         webViewTotalTabs: Int? = nil,
         webViewGlobalCap: Int? = nil,
-        webViewTabs: [[String: Any]]? = nil
+        webViewTabs: [[String: Any]]? = nil,
+        display: String? = nil
     ) {
         let fm = FileManager.default
         let dir = crashReportsDir
@@ -498,6 +506,8 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         deviceModel = withUnsafePointer(to: &sysinfo.machine) {
             $0.withMemoryRebound(to: CChar.self, capacity: 1) { String(cString: $0) }
         }
+        // [duo-diag] "iPhone19,4 (iPhone Duo)": identifier plus readable name.
+        deviceModel = DeviceIdentity.describe(identifier: DeviceIdentity.machineIdentifier(uname: deviceModel))
 
         df.dateFormat = "yyyy-MM-dd HH:mm:ss"
         let dateStr = df.string(from: crashDate)
@@ -510,6 +520,10 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         OS:      \(osVersion)
         Device:  \(deviceModel)
         """
+
+        if let display {
+            report += "\nDisplay: \(display)"
+        }
 
         if let phase = lastPhase {
             var phaseTime = ""

@@ -176,13 +176,17 @@ private struct AgentStatusWidgetView: View {
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(entry.snapshot.state.tint)
                 .widgetAccentable()
+            // [duo-widgets] Small differs in size between iPhone Duo's two home
+            // screens: shrink a little before truncating.
             Text(entry.snapshot.primaryText)
                 .font(.headline)
                 .lineLimit(2)
+                .minimumScaleFactor(0.85)
             Text(entry.snapshot.secondaryText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
     }
 
@@ -550,13 +554,14 @@ struct AgentSmallActivityView: View {
     let isStale: Bool
 
     private var waiting: LiveSessionSnapshot? { state.sessions.first(where: \.needsApproval) }
+    @Environment(\.isLuminanceReduced) private var dimmed
 
     var body: some View {
         let session = waiting ?? state.currentSession
         HStack(spacing: 8) {
             Image(systemName: symbol(session))
                 .font(.title3)
-                .foregroundStyle(tint(session))
+                .foregroundStyle(tint(session).aod(dimmed))
                 .contentTransition(.symbolEffect(.replace))
             VStack(alignment: .leading, spacing: 1) {
                 Text(title(session))
@@ -653,6 +658,8 @@ struct AudioTogglePill: View {
 /// sit together without looking bolted on.
 @available(iOSApplicationExtension 16.2, *)
 struct StopTasksPill: View {
+    @Environment(\.isLuminanceReduced) private var dimmed
+
     private var glyph: some View {
         Image(systemName: "stop.fill")
             .font(.caption2.bold())
@@ -660,7 +667,7 @@ struct StopTasksPill: View {
             .frame(width: 20, height: 16)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .background(.red.opacity(0.55), in: Capsule())
+            .background(.red.opacity(dimmed ? 0.3 : 0.55), in: Capsule())
     }
 
     var body: some View {
@@ -679,6 +686,9 @@ struct AgentLockScreenView: View {
     let attributes: AgentActivityAttributes
     let state: AgentActivityAttributes.ContentState
     var isStale = false
+    /// [duo-aod] Always-On (iPhone Duo outer display, Pro models): accents dim so
+    /// the card doesn't glow on a darkened Lock Screen.
+    @Environment(\.isLuminanceReduced) private var dimmed
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -706,7 +716,7 @@ struct AgentLockScreenView: View {
                     HStack(spacing: 3) {
                         Image(systemName: state.restingSymbol)
                             .font(.caption)
-                            .foregroundStyle(state.restingTint)
+                            .foregroundStyle(state.restingTint.aod(dimmed))
                         if state.anyNeedsAttention {
                             Text("Needs attention")
                                 .font(.caption.bold())
@@ -717,7 +727,7 @@ struct AgentLockScreenView: View {
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(state.restingTint.opacity(0.18), in: Capsule())
+                    .background(state.restingTint.opacity(dimmed ? 0.1 : 0.18), in: Capsule())
                 } else {
                     HStack(spacing: 3) {
                         Text("\(state.activeSessionCount)")
@@ -737,7 +747,7 @@ struct AgentLockScreenView: View {
                     HStack(spacing: 5) {
                         Image(systemName: "bubble.left.fill")
                             .font(.caption)
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(Color.blue.aod(dimmed))
                         Text(session.title)
                             .font(.subheadline.bold())
                             .lineLimit(1)
@@ -776,7 +786,7 @@ struct AgentLockScreenView: View {
                         HStack(alignment: .top, spacing: 5) {
                             Image(systemName: session.restingSymbol)
                                 .font(.caption)
-                                .foregroundStyle(session.restingTint)
+                                .foregroundStyle(session.restingTint.aod(dimmed))
                             if !session.lastMessage.isEmpty {
                                 Text(session.lastMessage)
                                     .font(.caption)
@@ -788,7 +798,7 @@ struct AgentLockScreenView: View {
                         HStack(spacing: 5) {
                             Image(systemName: isStale ? LiveActivityStale.symbol : session.toolIcon)
                                 .font(.caption)
-                                .foregroundStyle(isStale ? .gray : session.liveTint)
+                                .foregroundStyle(isStale ? .gray : session.liveTint.aod(dimmed))
                                 .id(session.toolIcon)
                                 .transition(.opacity.animation(.easeInOut(duration: 0.35)))
                             Text(isStale ? LiveActivityStale.text : session.toolStatus)
@@ -810,6 +820,19 @@ struct AgentLockScreenView: View {
         }
         .padding()
     }
+}
+
+/// [duo-widgets] How many list rows fit in `height` below a header: the family's
+/// cap, lowered when the system gives the widget less room. At least one row.
+func widgetRowBudget(height: CGFloat, header: CGFloat, row: CGFloat, cap: Int) -> Int {
+    guard row > 0, height > 0 else { return cap }
+    return max(1, min(cap, Int(((height - header) / row).rounded(.down))))
+}
+
+extension Color {
+    /// [duo-aod] Accent for an Always-On (luminance-reduced) Live Activity: dimmer,
+    /// same hue, so state still reads at a glance.
+    func aod(_ dimmed: Bool) -> Color { dimmed ? opacity(0.6) : self }
 }
 
 // MARK: - Minimal Icon (multi-Activity collapsed state)
@@ -1059,9 +1082,12 @@ private struct QuickTasksSmallView: View {
                 Text(first.name)
                     .font(.headline)
                     .lineLimit(2)
+                    .minimumScaleFactor(0.85)
                 Text(first.lastRunState == .running ? LeoWidgetLanguage.string("Running in background…") : LeoWidgetLanguage.string("Tap to run"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             } else {
                 Image(systemName: "plus.message.fill")
                     .font(.title2.weight(.semibold))
@@ -1234,12 +1260,22 @@ private struct RecentSessionsWidgetContainer: View {
 private struct RecentSessionsView: View {
     @Environment(\.widgetFamily) private var family
     let entry: RecentSessionsEntry
-
-    private var visibleSessions: [WidgetRecentSessionItem] {
-        Array(entry.sessions.prefix(family == .systemLarge ? 7 : 3))
-    }
+    /// One row (subheadline + its padding + stack spacing), scaled with Dynamic Type.
+    @ScaledMetric(relativeTo: .subheadline) private var rowHeight: CGFloat = 30
+    @ScaledMetric(relativeTo: .title3) private var headerHeight: CGFloat = 24
 
     var body: some View {
+        // [duo-widgets] The family cap (3 / 7) assumed one phone's widget size.
+        // iPhone Duo's two home screens size each family differently, so the row
+        // count also follows the height the system actually gives the widget.
+        GeometryReader { geo in
+            content(visibleSessions: Array(entry.sessions.prefix(widgetRowBudget(
+                height: geo.size.height, header: headerHeight, row: family == .systemLarge ? rowHeight + 4 : rowHeight,
+                cap: family == .systemLarge ? 7 : 3))))
+        }
+    }
+
+    private func content(visibleSessions: [WidgetRecentSessionItem]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
@@ -2138,18 +2174,27 @@ private struct ArtifactsWidgetContainer: View {
 private struct ArtifactsWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: ArtifactsEntry
+    @ScaledMetric(relativeTo: .caption) private var rowHeight: CGFloat = 23
+    @ScaledMetric(relativeTo: .caption) private var headerHeight: CGFloat = 16
 
-    private var visible: [WidgetArtifactItem] {
-        let cap: Int
+    private var familyCap: Int {
         switch family {
-        case .systemSmall: cap = 3
-        case .systemLarge: cap = 8
-        default: cap = 4
+        case .systemSmall: return 3
+        case .systemLarge: return 8
+        default: return 4
         }
-        return Array(entry.artifacts.prefix(cap))
     }
 
     var body: some View {
+        // [duo-widgets] Row count follows the height the system gives this family
+        // (it differs between iPhone Duo's outer and inner home screens).
+        GeometryReader { geo in
+            content(visible: Array(entry.artifacts.prefix(widgetRowBudget(
+                height: geo.size.height, header: headerHeight, row: rowHeight, cap: familyCap))))
+        }
+    }
+
+    private func content(visible: [WidgetArtifactItem]) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
                 Image(systemName: "shippingbox.fill")
