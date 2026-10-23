@@ -59,8 +59,10 @@ else
 fi
 
 # 指定一台新设备时，让 Xcode 为实际设备更新描述文件；generic 目标不会注册新机。
+# 本机 Xcode 没登开发者账号时注册不了新机:可在登了账号的 Mac(如 Studio)上先生成含新机的描述文件,
+# 拷到本机 ~/Library/Developer/Xcode/UserData/Provisioning Profiles/,再用 LEO_IOS_BUILD_GENERIC=1 按 generic 构建签名。
 build_destination='generic/platform=iOS'
-if [ "$#" -eq 1 ]; then
+if [ "$#" -eq 1 ] && [ "${LEO_IOS_BUILD_GENERIC:-0}" != 1 ]; then
   build_destination="id=$1"
 fi
 
