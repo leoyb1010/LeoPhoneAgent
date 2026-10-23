@@ -60,19 +60,20 @@ struct SettingsSheet: View {
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
     @State private var navPath = NavigationPath()
     @State private var showFeedbackDialog = false
-    /// [T-ipad-settings-split] 面板够宽(iPad 整页面板)时用双栏。量到宽度之前
-    /// 先按尺寸类别猜,免得第一帧先画单列再跳成双栏。
-    @State private var measuredWide: Bool?
-    @Environment(\.horizontalSizeClass) private var hSizeClass
+    /// [T-ipad-settings-split] 面板够宽(iPad 整页面板、iPhone Duo 内屏横向)时用双栏。
+    /// [duo-shell] 只看面板自己的实测宽度(≥ 720,见 LeoSettingsLayoutPolicy),不看尺寸类别、
+    /// 也不看设备类型:Duo 内屏竖握 669 是 regular 宽,以前第一帧按尺寸类别猜成双栏、
+    /// 量到 669 再跳回单列。GeometryReader 在布局时就给出宽度,没有猜的那一帧。
+    /// Which branch is on screen, for deep links (set by that branch's onAppear).
+    @State private var showsTwoColumns = false
     /// Opens on a real page (the most used one), never an empty detail column.
     @AppStorage("settings.split.selection") private var splitSelection = Self.defaultSplitSelection
     private static let defaultSplitSelection = "AI 服务商"
 
     var body: some View {
-        Group {
-            if measuredWide ?? (hSizeClass == .regular) { splitSettings } else { stackSettings }
+        GeometryReader { geo in
+            if LeoSettingsLayoutPolicy.usesTwoColumns(width: geo.size.width) { splitSettings } else { stackSettings }
         }
-        .onGeometryChange(for: Bool.self) { $0.size.width >= 700 } action: { measuredWide = $0 }
     }
 
     private var splitSettings: some View {
@@ -92,7 +93,9 @@ struct SettingsSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 380)
+            .navigationSplitViewColumnWidth(min: LeoSettingsLayoutPolicy.sidebarWidth.min,
+                                            ideal: LeoSettingsLayoutPolicy.sidebarWidth.ideal,
+                                            max: LeoSettingsLayoutPolicy.sidebarWidth.max)
         } detail: {
             NavigationStack(path: $navPath) {
                 Group {
@@ -115,7 +118,10 @@ struct SettingsSheet: View {
         .sheet(isPresented: $showFeedbackDialog) {
             FeedbackComposerSheet()
         }
-        .onAppear(perform: applyLaunchNavigation)
+        .onAppear {
+            showsTwoColumns = true
+            applyLaunchNavigation()
+        }
         .onChange(of: deepLink.pendingSettingsTarget) { _, _ in
             applyPendingDeepLink()
         }
@@ -142,7 +148,10 @@ struct SettingsSheet: View {
                 }
             }
             .navigationDestination(for: SettingsDestination.self) { settingsDestination($0) }
-            .onAppear(perform: applyLaunchNavigation)
+            .onAppear {
+                showsTwoColumns = false
+                applyLaunchNavigation()
+            }
             .onChange(of: deepLink.pendingSettingsTarget) { _, _ in
                 applyPendingDeepLink()
             }
@@ -298,7 +307,7 @@ struct SettingsSheet: View {
     /// top of whichever entry happened to be selected).
     private func show(_ path: SettingsDestination...) {
         var rest = path[...]
-        if measuredWide ?? (hSizeClass == .regular), let first = rest.first,
+        if showsTwoColumns, let first = rest.first,
            let entry = Self.sidebarEntry[first] {
             splitSelection = entry
             rest = rest.dropFirst()

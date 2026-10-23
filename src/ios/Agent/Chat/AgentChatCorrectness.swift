@@ -3,16 +3,45 @@ import Foundation
 /// Content-driven split decision shared by the iPhone/iPad workspace and the
 /// lightweight logic-test target. Device names are deliberately irrelevant:
 /// Stage Manager, Split View and mirrored windows can all resize continuously.
+///
+/// [duo-shell] iPhone Duo widths these rules have to land on deterministically
+/// (Xcode 27.1 device profile; both displays report the iPhone idiom, so
+/// nothing here may key off the device type):
+///   outer portrait 466 (compact/regular) · outer landscape 678 (compact/compact)
+///   inner portrait 669 · inner landscape 951 (regular/regular) · inner split half ≈ 475
+/// Every threshold keeps ≥ 50 pt between itself and the nearest Duo width, so
+/// a ±20 pt change in system margins or safe areas cannot flip a layout.
 enum LeoWorkspaceLayoutPolicy {
+    /// Split shell = sidebar + detail. The sidebar takes 38 % of the window,
+    /// clamped to 300…380, so for any window under 790 pt it is exactly 300 and
+    /// the split starts at 300 + 440 = 740 pt. Duo inner portrait (669) sits
+    /// 71 pt below that and stays a single column; inner landscape (951) splits.
+    static let splitSidebarMinWidth: CGFloat = 300
+    /// Narrowest detail column the chat is laid out for (composer + model pill).
+    static let splitDetailMinWidth: CGFloat = 440
+    /// The window width at which `usesSplit` turns on (derived, see above).
+    static var splitMinWidth: CGFloat { splitSidebarMinWidth + splitDetailMinWidth }
+
     /// `regularHeight` is the vertical size class, not a measured height: the
     /// on-screen keyboard shrinks the measured height (an 11" iPad in landscape
     /// fell under the old 480 pt floor), and flipping to one column tore down the
     /// composer being typed in. Landscape phones are compact-height either way.
     static func usesSplit(width: CGFloat, regularWidth: Bool, regularHeight: Bool) -> Bool {
         guard regularWidth, regularHeight, width.isFinite else { return false }
-        let sidebar = min(max(width * 0.38, 300), 380)
+        let sidebar = min(max(width * 0.38, splitSidebarMinWidth), 380)
         let detail = width - sidebar
-        return sidebar >= 300 && detail >= 440
+        return sidebar >= splitSidebarMinWidth && detail >= splitDetailMinWidth
+    }
+
+    /// [duo-shell] P2-3 outer-display quick mode: a compact-width window no
+    /// wider than 500 pt (Duo outer portrait 466, the inner split half ≈ 475,
+    /// any phone in portrait) keeps approvals and running Mac tasks next to
+    /// the composer at the bottom, within thumb reach. Outer landscape (678)
+    /// and inner portrait (669, regular width) keep the normal home.
+    static let quickHomeMaxWidth: CGFloat = 500
+
+    static func usesQuickHome(width: CGFloat, regularWidth: Bool) -> Bool {
+        !regularWidth && width.isFinite && width > 0 && width <= quickHomeMaxWidth
     }
 
     // MARK: [WP-43] iPad three columns (session list / chat / context)
@@ -26,16 +55,35 @@ enum LeoWorkspaceLayoutPolicy {
     /// Chat content column cap (the list's scroll indicator stays at the edge).
     static let contentMaxWidth: CGFloat = 760
     /// Sidebar stays put at or above this; narrower windows get it as a drawer.
+    /// [duo-shell] Kept at 800: 740–800 (iPad Stage Manager narrow windows) is a
+    /// drawer so the chat keeps ≥ 440 pt; Duo inner landscape (951) is 151 pt
+    /// above it, so the sidebar is resident there and the chat gets 651 pt.
     static let residentSidebarMinWidth: CGFloat = 800
-    /// The context column (文件/工具详情 · Mac 画面) opens by itself at or above this.
+    /// The context column (文件/工具详情 · Mac 画面) opens by itself at or above
+    /// this: sidebar ideal 300 + inspector ideal 360 + chat min 440 = 1100.
     static let contextColumnMinWidth: CGFloat = 1100
+    /// [duo-shell] Below the auto-open width the user can still pin the column
+    /// open from this width up: three 300 pt columns (sidebar, chat, inspector
+    /// min) fit. Duo inner landscape (951) never reaches 1100, so without the
+    /// pin the column would have to be reopened by hand after every fold.
+    static let contextColumnPinMinWidth: CGFloat = 900
 
     static func sidebarResident(width: CGFloat) -> Bool {
         width.isFinite && width >= residentSidebarMinWidth
     }
 
+    /// Auto-open rule (nobody pinned the column).
     static func showsContextColumn(width: CGFloat) -> Bool {
         width.isFinite && width >= contextColumnMinWidth
+    }
+
+    static func canPinContextColumn(width: CGFloat) -> Bool {
+        width.isFinite && width >= contextColumnPinMinWidth
+    }
+
+    /// The rule the inspector follows: auto-open at ≥ 1100, or the user's pin at ≥ 900.
+    static func opensContextColumn(width: CGFloat, pinned: Bool) -> Bool {
+        showsContextColumn(width: width) || (pinned && canPinContextColumn(width: width))
     }
 
     /// The new value a threshold rule wants after a resize, or nil when the
@@ -44,6 +92,25 @@ enum LeoWorkspaceLayoutPolicy {
         guard old > 0 else { return rule(new) }   // first measurement
         let before = rule(old), after = rule(new)
         return before == after ? nil : after
+    }
+}
+
+/// [duo-shell] Settings sheet: two columns (sidebar + page) or one stack. The
+/// sheet measures its own width, which is the window width when it fills the
+/// screen (Duo inner display / iPhone) and the page-sheet width on iPad.
+enum LeoSettingsLayoutPolicy {
+    /// Matches the sidebar's `navigationSplitViewColumnWidth(min:ideal:max:)`.
+    static let sidebarWidth = (min: CGFloat(280), ideal: CGFloat(320), max: CGFloat(380))
+    /// The page column gets the same floor as the shell's chat column.
+    static let detailMinWidth: CGFloat = LeoWorkspaceLayoutPolicy.splitDetailMinWidth
+    /// 280 + 440 = 720. Was 700, only 31 pt above Duo inner portrait (669);
+    /// now 51 pt above it, so a ±20 pt margin change still leaves 669 a single
+    /// column, while iPad page sheets (≥ 744) and Duo inner landscape (951) keep
+    /// two columns.
+    static var twoColumnMinWidth: CGFloat { sidebarWidth.min + detailMinWidth }
+
+    static func usesTwoColumns(width: CGFloat) -> Bool {
+        width.isFinite && width >= twoColumnMinWidth
     }
 }
 

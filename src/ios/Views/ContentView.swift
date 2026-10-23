@@ -438,6 +438,10 @@ struct ContentView: View {
     /// device-specific behaviours (draft-session proxying, Live Activity
     /// gating); the LAYOUT decision keys off the size class instead — see
     /// `body`.
+    /// [duo-shell] P1-10: in this file it only picks wording and icons
+    /// (「此 iPad / 此 iPhone」). The iPhone Duo inner display runs the split
+    /// shell, inspector and sidebar paths with the iPhone idiom, so no layout or
+    /// shell behaviour may read it (IPhoneDuoLayoutTests guards this).
     private let isIPad = UIDevice.current.userInterfaceIdiom == .pad
     /// [T-ipad-sizeclass-layout] Standard adaptive signal for two-column
     /// layout. Replaces the old `isIPad && width >= 700` rule, which locked
@@ -628,6 +632,24 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .newChatRequested)) { _ in
                 guard WindowRegistry.shared.isPrimary(windowId) else { return }
                 handleNewChatRequest()
+            }
+            // [duo-shell] P0-10: a new window could not be opened (iPhone Duo outer
+            // display, or the system refused another window). Say so and open the
+            // session in this window instead of silently doing nothing.
+            .onReceive(NotificationCenter.default.publisher(for: SessionWindow.openFailed)) { note in
+                guard WindowRegistry.shared.isPrimary(windowId) else { return }
+                var openedHere = false
+                if let id = note.userInfo?["sessionId"] as? String, sessionsByIdCache[id] != nil {
+                    jumpToSession(id)
+                    openedHere = true
+                }
+                let message = openedHere ? AppLocalized("这里不能新开窗口，已在当前窗口打开")
+                                         : AppLocalized("这里不能新开窗口")
+                withAnimation(reduceMotion ? nil : .snappy) { forceSyncToast = message }
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    if forceSyncToast == message { forceSyncToast = nil }
+                }
             }
             // [T-ipad-menu-bar] ⌘F / ⌘K / ⌘, / ⌘1…9 from LeoCommands, for the
             // frontmost window only (same rule as ⌘N above).
@@ -1913,7 +1935,8 @@ struct ContentView: View {
         // long-running tasks the badges are scattered down a scrolling list —
         // this answers "is anything waiting on me?" without hunting.
         .safeAreaInset(edge: .top, spacing: 0) {
-            attentionBar
+            // [duo-shell] P2-3: quick mode shows it at the bottom (quickHomeTray).
+            if !usesQuickHome { attentionBar }
         }
         // [T-ios-migration-timer-toolbar-uaf-crash / T-ios-migration-timer-sessionlist-uaf-crash]
         // Own the migration-subtitle refresh driver here, on the stable sidebar list
@@ -3541,11 +3564,50 @@ struct ContentView: View {
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeRoutingError)
     }
 
+    /// [duo-shell] P2-3 外屏快捷模式:窄窗(compact 宽、≤ 500 pt,即 iPhone Duo 外屏竖握、
+    /// 内屏分屏一半,以及普通 iPhone 竖屏)把「等你处理 / 远程审批」条和关注的 Mac 任务里
+    /// 在跑、等审批的(最多两个)挪到输入栏正上方,单手拇指够得着;语音提问就是输入栏里的麦克风。
+    /// 全是现成部件(attentionBar、macLiveRow),顶上的「进行中」列表照旧。
+    private var usesQuickHome: Bool {
+        !isWideLayout && LeoWorkspaceLayoutPolicy.usesQuickHome(
+            width: windowWidth, regularWidth: horizontalSizeClass == .regular)
+    }
+
+    private var quickHomeMacRows: [MacLiveSessionsStore.Row] {
+        guard macFleetEnabled, homeCardsEnabled else { return [] }
+        let busy = macLive.followedRows.filter { $0.isWaiting || ["running", "starting"].contains($0.session.status) }
+        return Array((busy.filter(\.isWaiting) + busy.filter { !$0.isWaiting }).prefix(2))
+    }
+
+    /// Hidden while typing: the keyboard already takes most of a 678 pt screen.
+    @ViewBuilder
+    private var quickHomeTray: some View {
+        let rows = quickHomeMacRows
+        let needsYou = !attentionSessions.isEmpty || !relayCatchUp.missedApprovals.isEmpty
+        if usesQuickHome, !homePromptFocused, needsYou || !rows.isEmpty {
+            VStack(spacing: 6) {
+                attentionBar
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                ForEach(rows) { row in
+                    macLiveRow(row)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .leoGlassSurface(cornerRadius: 14)
+                }
+            }
+            .padding(.horizontal, 12)
+            .accessibilityIdentifier("home.quickTray")
+        }
+    }
+
     /// iPhone 首页底部:输入栏。搜索时收起。
     @ViewBuilder
     private var homeBottomBar: some View {
         if !showSearchBar {
-            homeComposerStack
+            VStack(spacing: 8) {
+                quickHomeTray
+                homeComposerStack
+            }
             // 输入栏后面垫一层渐变到页面底色:列表滚到底下时在输入栏上方淡出。系统的边缘模糊太轻,
             // 会话标题仍会糊在占位字下面,输入栏下面也露出半截会话(1.42.1 真机截图)。
             .frame(maxWidth: .infinity)
@@ -5652,10 +5714,14 @@ private struct SessionContextMenu: View, Equatable {
     let key: MenuKey
     let actions: SessionMenuActionChannel
 
+    /// [duo-shell] Per scene: false on an iPhone Duo's outer display even though
+    /// the app supports multiple scenes (and on every ordinary iPhone).
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.key == rhs.key }
 
     var body: some View {
-        if SessionWindow.isSupported {
+        if SessionWindow.canOffer(sceneSupportsMultipleWindows: supportsMultipleWindows) {
             Button {
                 SessionWindow.open(key.sid)
             } label: {
