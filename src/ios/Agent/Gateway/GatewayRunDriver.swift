@@ -418,8 +418,9 @@ final class GatewayRunDriver: ObservableObject {
     private func pushApprovalToWatch(_ approval: GatewayApprovalRequest) {
         WatchBridge.shared.registerApprovalHandler(approvalId: approval.approvalId) { [weak self] choice in
             guard let self, let pending = self.pendingApproval,
-                  pending.approvalId == approval.approvalId else { return }
+                  pending.approvalId == approval.approvalId else { return false }
             self.respond(to: pending, choice: choice)
+            return true
         }
         WatchBridge.shared.sendApprovalRequest(
             approvalId: approval.approvalId,

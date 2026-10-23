@@ -312,9 +312,11 @@ final class WatchBridge: NSObject, ObservableObject {
     /// driver overwrote the first's closure, and a wrist answer for the first
     /// run then hit a handler that rejected it and returned silently, leaving
     /// that Mac blocked forever with no feedback anywhere.
-    private var approvalHandlers: [String: (String) -> Void] = [:]
+    /// [duo-system] 返回值 = 是否真的处理了:同一会话开在两个窗口、登记的那个窗口已关时,
+    /// 闭包还在但什么也不做;返回 false 就走下面的直连 Mac 兜底,不把手腕上的回答吞掉。
+    private var approvalHandlers: [String: (String) -> Bool] = [:]
 
-    func registerApprovalHandler(approvalId: String, handler: @escaping (String) -> Void) {
+    func registerApprovalHandler(approvalId: String, handler: @escaping (String) -> Bool) {
         approvalHandlers[approvalId] = handler
     }
 
@@ -333,7 +335,9 @@ final class WatchBridge: NSObject, ObservableObject {
             return
         }
         approvalHandlers.removeValue(forKey: approvalId)
-        handler(choice)
+        if !handler(choice) {
+            Task { await MacLiveSessionsStore.shared.answerApproval(approvalId: approvalId, choice: choice) }
+        }
     }
 
     /// Push a pending remote approval to the wrist.
