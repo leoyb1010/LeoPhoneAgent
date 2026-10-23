@@ -24,8 +24,19 @@ private final class CachedViewModel: ObservableObject {
     /// observes all @Published changes through the @StateObject.
     private var cancellable: AnyCancellable?
 
-    init(sessionId: String?) {
-        if let sessionId {
+    init(sessionId: String?, draftId: String? = nil) {
+        if sessionId == nil, let draftId {
+            // [duo-fold] A draft has no ViewModelCache entry, so folding /
+            // unfolding (which re-creates this view) used to hand it a brand-new
+            // empty VM: attachments still loading and the last <400 ms of typing
+            // were lost. The replacement view adopts the same draft VM.
+            let (draft, reused) = ChatFoldContinuity.draftModels.value(for: draftId) {
+                ViewModelCache.shared.createDraft()
+            }
+            self.vm = draft
+            self.isNew = !reused
+            minisLogger.info("🔑DRAFT CachedViewModel.init DRAFT draftId=\(draftId) vm=\(draft.vmInstanceId) reused=\(reused)")
+        } else if let sessionId {
             let (cached, isNew) = ViewModelCache.shared.getOrCreate(for: sessionId)
             self.vm = cached
             self.isNew = isNew
@@ -66,6 +77,57 @@ private final class CachedViewModel: ObservableObject {
             }
         }
     }
+}
+
+/// [duo-fold] P0-7: folding / unfolding swaps the split shell and the stack,
+/// which re-creates AIChatView. Session view models already survive (they live
+/// in ViewModelCache) and drafts / ready attachments are persisted; this keeps
+/// the view-local rest — a draft chat's VM, the voice-input state machine, the
+/// reading position and an open panel — for the replacement view.
+@MainActor
+enum ChatFoldContinuity {
+    static let draftModels = FoldContinuityStore<AIChatViewModel>()
+    static let voiceModels = FoldContinuityStore<VoiceInputViewModel>()
+    static let scrollAnchors = FoldSnapshotStore<MessageListScrollAnchor>()
+    static let openPanels = FoldSnapshotStore<Set<ChatFoldPanel>>()
+}
+
+/// [duo-windows] Box for the window hosting one chat view (weak).
+@MainActor
+final class ChatHostWindow {
+    weak var window: UIWindow?
+}
+
+/// [duo-windows] P1-4: two LeoBot windows side by side on the Duo's inner display
+/// (or iPad) each mount a chat subscribed to the same app-wide publishers. For an
+/// event that must be handled once, the chat in the key window wins; with no key
+/// window among them, the most recently shown one (GlobalEventRouting).
+@MainActor
+enum ChatWindowGate {
+    private struct Entry { weak var host: ChatHostWindow? }
+    private static var entries: [Entry] = []
+
+    static func register(_ host: ChatHostWindow) {
+        entries.removeAll { $0.host == nil || $0.host === host }
+        entries.append(Entry(host: host))
+    }
+
+    static func unregister(_ host: ChatHostWindow) {
+        entries.removeAll { $0.host == nil || $0.host === host }
+    }
+
+    static func shouldHandleGlobalEvent(_ host: ChatHostWindow) -> Bool {
+        entries.removeAll { $0.host == nil }
+        let live = entries.compactMap(\.host)
+        guard let index = live.firstIndex(where: { $0 === host }) else { return live.isEmpty }
+        let winner = GlobalEventRouting.winner(isKey: live.map { $0.window?.isKeyWindow == true })
+        return winner == index
+    }
+}
+
+/// [duo-fold] Sheets reopened after a fold re-creates the chat view (first one wins).
+enum ChatFoldPanel: CaseIterable, Hashable {
+    case modelPicker, fileBrowser, artifacts, inspector, memory, skills, mcps, tokenUsage, downloads
 }
 
 // MARK: - System Resource Monitor
@@ -202,7 +264,13 @@ struct AIChatView: View {
         // re-init a no-op when the StateObject already exists. CachedViewModel.init
         // logs its own creation (🔑DRAFT), so the redundant per-init [SessionLoad]
         // line is dropped.
-        _cached = StateObject(wrappedValue: CachedViewModel(sessionId: sessionId))
+        _cached = StateObject(wrappedValue: CachedViewModel(sessionId: sessionId, draftId: draftId))
+        // [duo-fold] The voice state machine survives the fold re-creation too:
+        // a segment still transcribing holds it weakly and was dropped with it.
+        let voiceKey = sessionId ?? draftId
+        _voiceVM = StateObject(wrappedValue: voiceKey.map { key in
+            ChatFoldContinuity.voiceModels.value(for: key) { VoiceInputViewModel() }.value
+        } ?? VoiceInputViewModel())
         AIChatViewModel.onAppearTimestamp = CFAbsoluteTimeGetCurrent()
     }
     // Face ID lock state moved into `SessionLockGateOverlay` (separate
@@ -312,7 +380,7 @@ struct AIChatView: View {
         get { voiceMode.isVoiceActive }
         nonmutating set { voiceMode.isVoiceActive = newValue }
     }
-    @StateObject private var voiceVM = VoiceInputViewModel()
+    @StateObject private var voiceVM: VoiceInputViewModel
     /// Global read-replies state — observed so the voice-mode "Read replies" toggle
     /// reflects enabled/muted in lockstep with the global voice-output capsule.
     @ObservedObject private var voiceOutput = VoiceOutputState.shared
@@ -378,7 +446,14 @@ struct AIChatView: View {
     /// Landscape phone: with the keyboard up the chat has ~170 pt, so the
     /// composer drops its extras (tool bar, status card, working row, strip).
     @Environment(\.verticalSizeClass) private var vSizeClass
-    private var isShortHeight: Bool { vSizeClass == .compact }
+    /// [duo-keyboard] Same treatment when the height actually left for the chat
+    /// is short although the size class is regular — the iPhone Duo's inner
+    /// display (and the outer one) with the keyboard up. Written only when the
+    /// answer flips (ChatShortHeightRule), never per keyboard-animation frame.
+    @State private var heightIsShort = false
+    private var isShortHeight: Bool {
+        ChatShortHeightRule.isShort(verticalSizeClassCompact: vSizeClass == .compact, heightIsShort: heightIsShort)
+    }
     @Environment(\.scenePhase) private var scenePhase
     /// Face ID lock state — observed so the navbar title can blur in
     /// lockstep with the chat-body SessionLockGateOverlay (both read
@@ -408,6 +483,9 @@ struct AIChatView: View {
     /// Set to false in onDisappear (e.g. when another page is pushed),
     /// used to suppress auto-focus so the keyboard doesn't pop up behind other pages.
     @State private var isChatViewVisible: Bool = false
+    /// [duo-windows] The UIWindow hosting this chat, for app-wide events that
+    /// exactly one chat must handle when two LeoBot windows are open.
+    @State private var hostWindow = ChatHostWindow()
 
     // leophoneagent:// link preview sheet state — hoisted from MinisOpenURLHandler so
     // sheet presentation originates from a stable window-hierarchy root and
@@ -552,6 +630,8 @@ struct AIChatView: View {
                         // Register the composer (tool preview + input bar) as a
                         // region the global speech capsule must not cover.
                         .capsuleProtectedFrame("inputBar")
+                        // [duo-fold] Half-open iPhone Duo: never across the fold.
+                        .modifier(FoldAvoidingControl())
                         inputPopupOverlay
                             .padding(.bottom, inputBarHeight)
                     }
@@ -627,10 +707,18 @@ struct AIChatView: View {
         .background(ChatColors.background)
         // [chat-chrome] Column width for the header cap. Rounded so a sub-point
         // jitter during a transition doesn't re-push the toolbar.
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width.rounded()
-        } action: { width in
+        // [duo-keyboard] Same observer also reads the height between the top
+        // bars and the keyboard / home indicator — independent of the composer,
+        // so compacting can't undo itself. One observer keeps the body's
+        // modifier depth unchanged (cold-launch metadata budget).
+        .onGeometryChange(for: CGSize.self) { proxy in
+            CGSize(width: proxy.size.width.rounded(),
+                   height: (proxy.size.height - proxy.safeAreaInsets.top - proxy.safeAreaInsets.bottom).rounded())
+        } action: { measured in
+            let width = measured.width
             if width > 0, width != chatColumnWidth { chatColumnWidth = width }
+            let short = ChatShortHeightRule.heightIsShort(visibleHeight: measured.height, wasShort: heightIsShort)
+            if short != heightIsShort { heightIsShort = short }
         }
         .onDrop(of: [.image, .movie, .fileURL, .data], isTargeted: $isDropTargeted) { providers in
             handleDropProviders(providers)
@@ -895,7 +983,7 @@ struct AIChatView: View {
             // the user can keep typing without an extra tap on the field.
             inputFocused = true
         }
-        .modifier(ChatInputAppendListener(vm: vm, inputFocused: $inputFocused))
+        .modifier(ChatInputAppendListener(vm: vm, inputFocused: $inputFocused, hostWindow: hostWindow))
         .modifier(LongImageShareListener(vm: vm))
         // [B5] Also hosts the open_terminal link confirmation, so this chain
         // gains no modifier layer for it (cold-launch demangle crash history).
@@ -959,6 +1047,9 @@ struct AIChatView: View {
         // to new subscribers on first attach — without it, a chat view
         // created after a previous OSC capture would re-present a stale URL.
         .onReceive(MinisOpenURLBroker.shared.$pendingURL.dropFirst().compactMap { $0 }) { url in
+            // [duo-windows] P1-4: the broker is app-wide; with two windows each
+            // chat used to present the same preview. Exactly one chat handles it.
+            guard ChatWindowGate.shouldHandleGlobalEvent(hostWindow) else { return }
             if MinisOpenURLBroker.isActionURL(url) {
                 // Defense in depth: `offer` already drops these.
             } else if MinisOpenURLBroker.isWebScheme(url.scheme) {
@@ -1221,7 +1312,10 @@ struct AIChatView: View {
             inputBarHeightDebounce?.cancel()
             inputBarHeightDebounce = nil
             AppLogger(category: "InputBarLayout").info("inputBarHeight re-arm seed on appear (was \(inputBarHeight))")
-            vm.sessionId = sessionId
+            // [duo-fold] An adopted draft VM may already carry the session id it
+            // was persisted under; don't reset it to this view's nil.
+            if sessionId != nil || cached.isNew { vm.sessionId = sessionId }
+            claimFoldContinuity()
             vm.draftId = draftId
             vm.remoteDeviceId = remoteDeviceId
             vm.initialGroupId = initialGroupId
@@ -1287,7 +1381,10 @@ struct AIChatView: View {
                     let mountElapsed = (CFAbsoluteTimeGetCurrent() - reuseStart) * 1000
                     // Cached VM already has messages — trigger scroll-to-bottom
                     // since isLoadingSession won't transition and its onChange won't fire.
-                    if !vm.messages.isEmpty {
+                    // [duo-fold] Not when this view replaces one that a fold / unfold
+                    // just tore down while the user was reading: the list restores
+                    // that position itself (MessageListScrollAnchor).
+                    if !vm.messages.isEmpty, !ChatFoldContinuity.scrollAnchors.wasRecentlyParked(sessionId) {
                         vm.forceScrollToBottom.send()
                     }
                     let totalElapsed = (CFAbsoluteTimeGetCurrent() - reuseStart) * 1000
@@ -1332,12 +1429,15 @@ struct AIChatView: View {
         }
         .onDisappear {
             isChatViewVisible = false
-            // [B10] The draft save is debounced 400 ms and holds the VM weakly:
-            // write it now so the last keystrokes of a closed new chat survive.
-            vm.flushComposerDraft()
+            // [duo-fold] Stop dictation first so the draft written below already
+            // holds everything transcribed so far (paused, text kept).
             if speechManager.state == .recording {
                 speechManager.stopRecording()
             }
+            // [B10] The draft save is debounced 400 ms and holds the VM weakly:
+            // write it now so the last keystrokes of a closed new chat survive.
+            vm.flushComposerDraft()
+            releaseFoldContinuity()
             // [T-inputbar-keyboard-leaks-to-home] Cut the ONLY channel by which
             // chat composer geometry can reach the HOME screen.
             //
@@ -2640,6 +2740,7 @@ struct AIChatView: View {
                     }
                 }
                 .frame(maxWidth: maxContentWidth ?? .infinity, alignment: .trailing)
+                .modifier(FoldAvoidingControl())
                 .padding(.horizontal, 12)
                 .padding(.bottom, floatingControlsBottom - 4)
                 // [chat-chrome] 停下 2 秒就收起,不压在回答上;再滚动立刻出现。
@@ -2676,6 +2777,10 @@ struct AIChatView: View {
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                // [duo-fold] Full-width wrapper so the fold padding can move the
+                // centred pill onto one half.
+                .frame(maxWidth: .infinity)
+                .modifier(FoldAvoidingControl())
                 .padding(.bottom, floatingControlsBottom - 4)
                 .transition(.opacity)
                 .accessibilityLabel("有新消息，跳到底部")
@@ -2701,6 +2806,7 @@ struct AIChatView: View {
             }
             .padding(.trailing, 4)
             .frame(maxWidth: maxContentWidth ?? .infinity, alignment: .trailing)
+            .modifier(FoldAvoidingControl())
             .padding(.horizontal, 12)
             // Two 44pt scroll targets + 4pt gap sit below.
             .padding(.bottom, floatingControlsBottom + 92)
@@ -2740,6 +2846,70 @@ struct AIChatView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             if forcePullToast == message { forcePullToast = nil }
         }
+    }
+
+    // MARK: - [duo-fold] Fold / unfold continuity
+
+    /// Key this chat's fold-continuity state goes under: the session, or the
+    /// draft id while the chat has none (same key the replacement view gets).
+    private var foldKey: String? { sessionId ?? draftId }
+
+    /// The panels worth reopening after a fold re-creates the view: sheets the
+    /// user opened to read or pick something, all presented from this view.
+    private var openFoldPanels: Set<ChatFoldPanel> {
+        var open: Set<ChatFoldPanel> = []
+        if showModelPicker { open.insert(.modelPicker) }
+        if showFileBrowser { open.insert(.fileBrowser) }
+        if showArtifactTray { open.insert(.artifacts) }
+        if showSessionInspector { open.insert(.inspector) }
+        if showSessionMemory { open.insert(.memory) }
+        if showSessionSkills { open.insert(.skills) }
+        if showSessionMCPs { open.insert(.mcps) }
+        if showTokenUsage { open.insert(.tokenUsage) }
+        if showDownloadsPanel { open.insert(.downloads) }
+        return open
+    }
+
+    private func reopen(_ panel: ChatFoldPanel) {
+        switch panel {
+        case .modelPicker: showModelPicker = true
+        case .fileBrowser: showFileBrowser = true
+        case .artifacts: showArtifactTray = true
+        case .inspector: showSessionInspector = true
+        case .memory: showSessionMemory = true
+        case .skills: showSessionSkills = true
+        case .mcps: showSessionMCPs = true
+        case .tokenUsage: showTokenUsage = true
+        case .downloads: showDownloadsPanel = true
+        }
+    }
+
+    private func claimFoldContinuity() {
+        ChatWindowGate.register(hostWindow)
+        guard let key = foldKey else { return }
+        if sessionId == nil { ChatFoldContinuity.draftModels.claim(key) }
+        ChatFoldContinuity.voiceModels.claim(key)
+        // A panel open in the view this one replaces comes back once the
+        // replacement has settled (a sheet can't present mid-transition).
+        if let panels = ChatFoldContinuity.openPanels.take(key), let panel = ChatFoldPanel.allCases.first(where: { panels.contains($0) }) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                guard isChatViewVisible, openFoldPanels.isEmpty else { return }
+                reopen(panel)
+            }
+        }
+    }
+
+    private func releaseFoldContinuity() {
+        ChatWindowGate.unregister(hostWindow)
+        guard let key = foldKey else { return }
+        let panels = openFoldPanels
+        if panels.isEmpty {
+            ChatFoldContinuity.openPanels.discard(key)
+        } else {
+            ChatFoldContinuity.openPanels.park(panels, for: key)
+        }
+        if sessionId == nil { ChatFoldContinuity.draftModels.release(key) }
+        ChatFoldContinuity.voiceModels.release(key)
     }
 
     /// Shared label style for the floating scroll buttons (up / down), matching
@@ -2926,6 +3096,10 @@ struct AIChatView: View {
               let tappedMessageId = info[MarkdownImageTapRouter.messageIdKey] as? UUID,
               let tappedSource = info[MarkdownImageTapRouter.sourceURLKey] as? String
         else { return }
+        // [duo-windows] App-wide notification: only the chat showing the tapped
+        // message (and, for the same chat in two windows, the one in front).
+        guard vm.messages.contains(where: { $0.id == tappedMessageId }),
+              ChatWindowGate.shouldHandleGlobalEvent(hostWindow) else { return }
 
         // Collect every `![alt](src)` occurrence from every assistant
         // message's text blocks, in chronological order. Tool-call blocks
@@ -3253,6 +3427,9 @@ struct AIChatView: View {
         // demangle crash history, see inputBar). The row is always mounted
         // with the composer, like the host's previous spot.
         .background(composerSheetsHost)
+        // [duo-windows] Which window hosts this chat (ChatWindowGate). Rides in
+        // this erased row so the body's generic type gains no layer.
+        .background(WindowCaptureView { [hostWindow] window in hostWindow.window = window })
         return AnyView(row)
     }
 
@@ -4017,12 +4194,9 @@ struct AIChatView: View {
             // scroll-edge blur (home gets one from safeAreaBar), so bare glass
             // let message text show through under the placeholder. Keep the
             // opaque fill — a rounded-shape fill, so no white corners.
-            .background(
-                RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous)
-                    .fill(ChatColors.inputBg)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous))
-            .leoComposerChrome(glassID: "chat.composer", in: chatComposerGlassNS)
+            // [duo-corners] Fill, clip and glass share one shape: concentric with
+            // the display on iOS 27.1+ (ChatComposerShell), the fixed 26 pt before.
+            .modifier(ChatComposerShell(namespace: chatComposerGlassNS))
             }
             .frame(maxWidth: maxContentWidth)
             .padding(.horizontal, LeoComposerMetrics.outerPadding)
@@ -4581,12 +4755,11 @@ struct AIChatView: View {
         var body: some View {
             content()
                 .frame(maxWidth: .infinity)
-                .background(Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.15, alpha: 1) : UIColor.systemBackground }))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(UIColor.separator).opacity(0.3), lineWidth: 0.5)
-                )
+                // [duo-corners] Concentric on iOS 27.1+, the fixed 10 pt before.
+                .modifier(LeoEdgeSurface(
+                    fill: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.15, alpha: 1) : UIColor.systemBackground }),
+                    radius: 10,
+                    stroke: Color(UIColor.separator).opacity(0.3)))
                 .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.08, alpha: 0.75) : UIColor(white: 0, alpha: 0.12) }), radius: 8, x: 0, y: 4)
                 .frame(maxWidth: maxContentWidth)
                 .padding(.horizontal, 12)
@@ -5074,6 +5247,33 @@ private struct NavTitleFrameModifier: ViewModifier {
     }
 }
 
+/// [duo-corners] The chat composer's shell: opaque fill (message text must not
+/// show through under the placeholder), clip and regular glass in ONE shape.
+/// iOS 27.1+: concentric with the display corners (asymmetric on the Duo's outer
+/// display), never below the 26 pt design radius. Earlier: exactly the old chain.
+private struct ChatComposerShell: ViewModifier {
+    let namespace: Namespace.ID
+
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            let shape = ConcentricRectangle(corners: .concentric(minimum: .fixed(LeoTheme.Radius.composer)), isUniform: false)
+            content
+                .background(shape.fill(ChatColors.inputBg))
+                .clipShape(shape)
+                .glassEffect(.regular, in: shape)
+                .glassEffectID("chat.composer", in: namespace)
+        } else {
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous)
+                        .fill(ChatColors.inputBg)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous))
+                .leoComposerChrome(glassID: "chat.composer", in: namespace)
+        }
+    }
+}
+
 private struct NavBarStyleModifier: ViewModifier {
     @Binding var topSafeAreaInset: CGFloat
 
@@ -5085,6 +5285,10 @@ private struct NavBarStyleModifier: ViewModifier {
         content
             .ignoresSafeArea(.container, edges: .top)
             .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+            // [duo-bars] Closed iPhone Duo: horizontal bars for the whole chat
+            // page (P0-3 interim; see LeoHorizontalSystemBars). Lives in this
+            // modifier so the chat body's generic depth doesn't grow.
+            .modifier(LeoHorizontalSystemBars())
     }
 }
 

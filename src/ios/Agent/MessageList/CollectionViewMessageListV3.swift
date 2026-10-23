@@ -9,6 +9,14 @@ extension Notification.Name {
     static let messageListNeedsResnapshot = Notification.Name("messageListNeedsResnapshot")
 }
 
+/// [duo-fold] Top visible list item when the list was torn down, and how far
+/// its top edge sat from the visible top (ChatScrollAnchorMath).
+struct MessageListScrollAnchor {
+    let item: MessageListItem
+    let messageId: UUID
+    let offsetFromTop: CGFloat
+}
+
 /// [T-new-message-pill] Set by the coordinator when streamed text / new items
 /// land while the user is browsing (scrollMode != .autoScrolling); cleared the
 /// moment the list is back at (or auto-following) the bottom. Lives outside the
@@ -176,6 +184,12 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
+
+    /// [duo-fold] Folding / unfolding re-creates the chat view and with it this
+    /// list. Park the reading position so the replacement list can restore it.
+    static func dismantleUIViewController(_ vc: MessageListViewController, coordinator: Coordinator) {
+        coordinator.parkFoldAnchor()
+    }
 
     enum Section { case main }
 }
@@ -1324,6 +1338,77 @@ extension CollectionViewMessageListV3 {
             }
 
             bindViewModel(vm)
+
+            // [duo-fold] A list a fold just tore down left the reader's position:
+            // hold off the bottom pin and restore it on the first snapshot.
+            if let sid = vm.sessionId, let anchor = ChatFoldContinuity.scrollAnchors.take(sid) {
+                pendingFoldAnchor = anchor
+                scrollMode = .userBrowsing
+            }
+        }
+
+        // MARK: - [duo-fold] Reading position across view re-creation
+
+        private var pendingFoldAnchor: MessageListScrollAnchor?
+        private var foldRestoreAttempts = 0
+
+        /// Called when the list goes away. Only a reader above the bottom is
+        /// worth restoring; a following list re-pins to the bottom anyway.
+        func parkFoldAnchor() {
+            guard let sid = vm?.sessionId else { return }
+            guard scrollMode == .userBrowsing, !isNearBottom(),
+                  let cv = viewController?.collectionView, let ds = dataSource else {
+                ChatFoldContinuity.scrollAnchors.discard(sid)
+                return
+            }
+            let visibleTop = cv.contentOffset.y + cv.adjustedContentInset.top
+            let top = cv.indexPathsForVisibleItems.sorted()
+                .compactMap { ip in cv.layoutAttributesForItem(at: ip).map { (ip, $0.frame) } }
+                .first { $0.1.maxY > visibleTop }
+            guard let (ip, frame) = top, let item = ds.itemIdentifier(for: ip),
+                  let messageId = Self.messageId(of: item) else { return }
+            ChatFoldContinuity.scrollAnchors.park(
+                MessageListScrollAnchor(item: item, messageId: messageId, offsetFromTop: frame.minY - visibleTop),
+                for: sid)
+        }
+
+        /// Puts the parked item back where it sat (relative to the visible top).
+        /// Waits for a non-empty snapshot and a laid-out list.
+        func restoreFoldAnchorIfNeeded() {
+            guard let anchor = pendingFoldAnchor, let cv = viewController?.collectionView,
+                  let ds = dataSource else { return }
+            let items = ds.snapshot().itemIdentifiers
+            guard !items.isEmpty else { return }
+            guard cv.bounds.height > 0 else {
+                foldRestoreAttempts += 1
+                if foldRestoreAttempts <= 5 {
+                    DispatchQueue.main.async { [weak self] in self?.restoreFoldAnchorIfNeeded() }
+                } else {
+                    pendingFoldAnchor = nil
+                }
+                return
+            }
+            pendingFoldAnchor = nil
+            let target = ds.indexPath(for: anchor.item)
+                ?? items.first(where: { Self.messageId(of: $0) == anchor.messageId }).flatMap { ds.indexPath(for: $0) }
+            guard let target else {
+                // The message is gone: behave like any re-entry.
+                scrollMode = .autoScrolling
+                scrollToBottomNow()
+                return
+            }
+            cv.layoutIfNeeded()
+            guard let attrs = cv.layoutAttributesForItem(at: target) else { return }
+            let maxOff = cv.contentSize.height - cv.bounds.height + cv.adjustedContentInset.bottom
+            let y = ChatScrollAnchorMath.restoredOffset(itemMinY: attrs.frame.minY,
+                                                        offsetFromTop: anchor.offsetFromTop,
+                                                        adjustedTop: cv.adjustedContentInset.top,
+                                                        maxOffset: maxOff)
+            scrollMode = .userBrowsing
+            isAnimatingScrollToBottom = false
+            cv.setContentOffset(CGPoint(x: cv.contentOffset.x, y: y), animated: false)
+            syncScrollFlags()
+            AppLogger(category: "ScrollDiag").info("[duo-fold] restored reading position item=\(String(describing: anchor.item).prefix(40)) y=\(Int(y))")
         }
 
         // MARK: - Cell Configuration
@@ -1879,6 +1964,7 @@ extension CollectionViewMessageListV3 {
                     }
                     self.flushPendingSnapshotIfNeeded(caller: "bind1-messages")
                     self.applySnapshot(messages: msgs, caller: "bind1-messages")
+                    self.restoreFoldAnchorIfNeeded()
                 }
                 .store(in: &subscriptions)
 
@@ -2039,7 +2125,9 @@ extension CollectionViewMessageListV3 {
                         self.hasPendingSnapshot = false
                         self.applySnapshot(messages: msgs, caller: "bind3-sessionLoad")
                     }
-                    if isFirstLoad {
+                    if self.pendingFoldAnchor != nil {
+                        self.restoreFoldAnchorIfNeeded()
+                    } else if isFirstLoad {
                         // First load: scroll to bottom and clamp.
                         // 8s window (was 2s) so async video thumbnail
                         // generation can complete and the cell-height

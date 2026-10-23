@@ -2407,12 +2407,11 @@ private struct ToolStatusBar: View {
         .padding(.trailing, 4)
         .frame(minHeight: LeoChromeMetrics.activityRowHeight)
         .frame(maxWidth: .infinity)
-        .background(Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.15, alpha: 1) : UIColor.systemBackground }))
-        .clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous)
-                .stroke(Color(UIColor.separator).opacity(0.3), lineWidth: 0.5)
-        )
+        // [duo-corners] Activity strip: concentric with the display on iOS 27.1+.
+        .modifier(LeoEdgeSurface(
+            fill: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.15, alpha: 1) : UIColor.systemBackground }),
+            radius: LeoTheme.Radius.field,
+            stroke: Color(UIColor.separator).opacity(0.3)))
     }
 
     private func stepButton(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {

@@ -117,3 +117,86 @@ extension LeoChromePillLabel where Leading == EmptyView {
                   surface: surface, tint: tint, leading: { EmptyView() })
     }
 }
+
+// MARK: - [duo] iPhone Duo chrome adapters (iOS 27.1 APIs, no-ops on 27.0)
+
+/// [duo-bars] P0-3 interim (approved plan): on a closed iPhone Duo the system
+/// lays the navigation bar out vertically beside the side-mounted Dynamic
+/// Island, while the chat page's own chrome (title + model pill stack in the
+/// principal item, composer, activity strip) stays horizontal — half vertical,
+/// half horizontal. Until the chat header is rebuilt on system toolbar items
+/// (P1-1), the chat page keeps horizontal bars. The vertical bar's side inset
+/// goes away with it; the island side's remaining safe area is honored by the
+/// default SwiftUI layout, which the chat page never opts out of horizontally.
+/// Resolved per container (top of the stack / trailing-most split column), so
+/// it is applied once on the chat root and never toggled with view state.
+struct LeoHorizontalSystemBars: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            content.toolbarVerticalBehavior(.disabled)
+        } else {
+            content
+        }
+    }
+}
+
+/// [duo-fold] P1-2: keeps a bottom-anchored floating control (composer card,
+/// activity strip, ↑↓ discs, new-message pill) off the fold of a half-open
+/// iPhone Duo. Reads the active `.division` regions over the control and pads
+/// it onto one side (FoldAvoidance). Fully open or closed there is no active
+/// division and nothing changes. Scrolling content is never moved.
+struct FoldAvoidingControl: ViewModifier {
+    @State private var applied = FoldInsets.zero
+
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            content
+                .padding(EdgeInsets(top: applied.top, leading: applied.leading,
+                                    bottom: applied.bottom, trailing: applied.trailing))
+                .onGeometryChange(for: FoldProbe.self) { proxy in
+                    FoldProbe(size: proxy.size,
+                              divisions: proxy.reservedRegions(kind: .division)
+                                .filter(\.isActive).map(\.frame))
+                } action: { probe in
+                    let next = probe.divisions.isEmpty ? FoldInsets.zero
+                        : FoldAvoidance.nextInsets(measured: probe.size, divisions: probe.divisions, applied: applied)
+                    if next != applied { applied = next }
+                }
+        } else {
+            content
+        }
+    }
+
+    private struct FoldProbe: Equatable {
+        let size: CGSize
+        let divisions: [CGRect]
+    }
+}
+
+/// [duo-corners] P1-3: surface for chrome near a screen edge. On iOS 27.1+ the
+/// corners follow the display (`ConcentricRectangle`; the Duo's outer display
+/// is 8 pt on the hinge side and 59 pt outside, the inner one 55 pt) and never
+/// drop below the design radius; earlier systems keep the fixed radius.
+struct LeoEdgeSurface<Fill: ShapeStyle>: ViewModifier {
+    let fill: Fill
+    let radius: CGFloat
+    var style: RoundedCornerStyle = .continuous
+    var stroke: Color? = nil
+    var strokeWidth: CGFloat = 0.5
+
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            let shape = ConcentricRectangle(corners: .concentric(minimum: .fixed(radius)), isUniform: false)
+            content
+                .background(shape.fill(fill))
+                .clipShape(shape)
+                .overlay { if let stroke { shape.stroke(stroke, lineWidth: strokeWidth) } }
+        } else {
+            let shape = RoundedRectangle(cornerRadius: radius, style: style)
+            content
+                .background(shape.fill(fill))
+                .clipShape(shape)
+                .overlay { if let stroke { shape.stroke(stroke, lineWidth: strokeWidth) } }
+        }
+    }
+}
