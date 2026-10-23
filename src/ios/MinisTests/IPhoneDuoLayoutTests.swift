@@ -143,7 +143,9 @@ final class IPhoneDuoLayoutTests: XCTestCase {
             }
         }
         // The two the plan flagged: inner portrait 669 vs settings and split.
-        XCTAssertGreaterThanOrEqual(LeoSettingsLayoutPolicy.twoColumnMinWidth - 669, 50)
+        // Settings stays at 700 so the iPad page sheet (≈ 704) keeps two columns:
+        // 31 pt above inner portrait, still outside the ±20 pt band.
+        XCTAssertGreaterThanOrEqual(LeoSettingsLayoutPolicy.twoColumnMinWidth - 669, 30)
         XCTAssertGreaterThanOrEqual(L.splitMinWidth - 669, 50)
         for delta: CGFloat in [-20, 0, 20] {
             XCTAssertFalse(LeoSettingsLayoutPolicy.usesTwoColumns(width: 669 + delta))
@@ -156,6 +158,14 @@ final class IPhoneDuoLayoutTests: XCTestCase {
         }
     }
 
+    /// Settings is presented with `.sheet`; on iPad that is a page sheet about
+    /// 704 pt wide, which must keep the sidebar + page layout.
+    func testIPadPageSheetSettingsIsTwoColumns() {
+        XCTAssertTrue(LeoSettingsLayoutPolicy.usesTwoColumns(width: 704), "iPad page sheet")
+        XCTAssertTrue(LeoSettingsLayoutPolicy.usesTwoColumns(width: 744))
+        XCTAssertFalse(LeoSettingsLayoutPolicy.usesTwoColumns(width: 669), "Duo inner portrait")
+    }
+
     func testThresholdValuesAndDerivations() {
         XCTAssertEqual(L.splitMinWidth, 740)
         XCTAssertFalse(L.usesSplit(width: 739, regularWidth: true, regularHeight: true))
@@ -163,14 +173,13 @@ final class IPhoneDuoLayoutTests: XCTestCase {
         XCTAssertEqual(L.residentSidebarMinWidth, 800)
         XCTAssertEqual(L.contextColumnPinMinWidth, 900)
         XCTAssertEqual(L.contextColumnMinWidth, 1100)
-        XCTAssertEqual(LeoSettingsLayoutPolicy.twoColumnMinWidth, 720)
-        XCTAssertFalse(LeoSettingsLayoutPolicy.usesTwoColumns(width: 719))
-        XCTAssertTrue(LeoSettingsLayoutPolicy.usesTwoColumns(width: 720))
+        XCTAssertEqual(LeoSettingsLayoutPolicy.twoColumnMinWidth, 700)
+        XCTAssertFalse(LeoSettingsLayoutPolicy.usesTwoColumns(width: 699))
+        XCTAssertTrue(LeoSettingsLayoutPolicy.usesTwoColumns(width: 700))
         XCTAssertFalse(LeoSettingsLayoutPolicy.usesTwoColumns(width: .nan))
-        // Settings sidebar + page floor = the threshold; iPad mini page sheet (744) stays two columns.
+        // Settings sidebar + page floor = the threshold.
         XCTAssertEqual(LeoSettingsLayoutPolicy.sidebarWidth.min + LeoSettingsLayoutPolicy.detailMinWidth,
                        LeoSettingsLayoutPolicy.twoColumnMinWidth)
-        XCTAssertTrue(LeoSettingsLayoutPolicy.usesTwoColumns(width: 744))
         XCTAssertEqual(TreasuryWorkspaceLayoutPolicy.splitMinWidth, 760)
         XCTAssertEqual(L.quickHomeMaxWidth, 500)
         // Three ≥ 300 pt columns fit at the pin width.

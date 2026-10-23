@@ -382,6 +382,7 @@ final class AgentLiveActivityManager {
         guard let last = lastHinge else { return }
         if last.status != status || abs(last.angle - angle) > 0.035 {
             lastHingeMovement = Date()
+            FoldSignal.noteHingeMovement()
         }
     }
 

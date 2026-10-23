@@ -15,11 +15,16 @@ final class DuoAdaptationTests: XCTestCase {
     // MARK: P0-9 keyboard: short height from the height actually left
 
     func testInnerDisplayWithKeyboardIsShortAlthoughSizeClassIsRegular() {
-        // 669 pt inner display, landscape: ~24 status + ~50 bar + ~300 keyboard.
-        XCTAssertTrue(ChatShortHeightRule.heightIsShort(visibleHeight: 295, wasShort: false))
+        // 669 pt inner display, landscape (951 wide): ~24 status + ~50 bar + ~300 keyboard.
+        XCTAssertTrue(ChatShortHeightRule.heightIsShort(visibleHeight: 295, wasShort: false,
+                                                        verticalSizeClassRegular: true, windowWidth: 951))
         XCTAssertTrue(ChatShortHeightRule.isShort(verticalSizeClassCompact: false, heightIsShort: true))
-        // Outer display, portrait, keyboard up: ~678 − 54 − 50 − 320.
-        XCTAssertTrue(ChatShortHeightRule.heightIsShort(visibleHeight: 254, wasShort: false))
+        // Inner portrait (669 wide) with a tall keyboard.
+        XCTAssertTrue(ChatShortHeightRule.heightIsShort(visibleHeight: 300, wasShort: false,
+                                                        verticalSizeClassRegular: true, windowWidth: 669))
+        // Keyboard down on the inner display: full composer.
+        XCTAssertFalse(ChatShortHeightRule.heightIsShort(visibleHeight: 595, wasShort: false,
+                                                         verticalSizeClassRegular: true, windowWidth: 951))
     }
 
     func testOrdinaryPhonesKeepTheFullComposer() {
@@ -29,6 +34,30 @@ final class DuoAdaptationTests: XCTestCase {
         XCTAssertFalse(ChatShortHeightRule.isShort(verticalSizeClassCompact: false, heightIsShort: false))
         // Landscape phone: the size class alone still decides.
         XCTAssertTrue(ChatShortHeightRule.isShort(verticalSizeClassCompact: true, heightIsShort: false))
+    }
+
+    func testSmallPhonesWithTallThirdPartyKeyboardsAreNotCompacted() {
+        // iPhone SE / mini portrait with a tall third-party keyboard: ~300 visible,
+        // regular height, but the window is far below 600 wide.
+        for width: CGFloat in [375, 393, 440] {
+            XCTAssertFalse(ChatShortHeightRule.heightIsShort(visibleHeight: 300, wasShort: false,
+                                                             verticalSizeClassRegular: true, windowWidth: width), "\(width)")
+        }
+        // Duo outer display portrait (466): the height half does not apply either.
+        XCTAssertFalse(ChatShortHeightRule.heightIsShort(visibleHeight: 254, wasShort: false,
+                                                         verticalSizeClassRegular: true, windowWidth: 466))
+        // Compact height is the size-class half's job, not this one.
+        XCTAssertFalse(ChatShortHeightRule.heightIsShort(visibleHeight: 200, wasShort: true,
+                                                         verticalSizeClassRegular: false, windowWidth: 951))
+        // Window not known yet: not short.
+        XCTAssertFalse(ChatShortHeightRule.heightIsShort(visibleHeight: 200, wasShort: true,
+                                                         verticalSizeClassRegular: true, windowWidth: 0))
+        // 320–360 used to enter; now it does not, even on a wide window.
+        XCTAssertFalse(ChatShortHeightRule.heightIsShort(visibleHeight: 340, wasShort: false,
+                                                         verticalSizeClassRegular: true, windowWidth: 951))
+        XCTAssertEqual(ChatShortHeightRule.enterBelow, 320)
+        XCTAssertEqual(ChatShortHeightRule.exitAbove, 400)
+        XCTAssertEqual(ChatShortHeightRule.minWindowWidth, 600)
     }
 
     func testHysteresisAbsorbsTheNavBarMinimizeStep() {
@@ -184,6 +213,35 @@ final class DuoAdaptationTests: XCTestCase {
         XCTAssertFalse(store.wasRecentlyParked("s3"))
     }
 
+    // MARK: Fold continuity gating
+
+    func testContinuityOnlyFollowsAFoldOrDisplayChange() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        // Ordinary navigation (no hinge, no geometry change): nothing is parked.
+        XCTAssertFalse(FoldSignalPolicy.isRecentFold(lastHingeMovement: nil, lastGeometryChange: nil, now: now))
+        // Hinge moved within ~1.5 s.
+        XCTAssertTrue(FoldSignalPolicy.isRecentFold(lastHingeMovement: now - 1.2, lastGeometryChange: nil, now: now))
+        XCTAssertTrue(FoldSignalPolicy.isRecentFold(lastHingeMovement: now - 1.5, lastGeometryChange: nil, now: now))
+        XCTAssertFalse(FoldSignalPolicy.isRecentFold(lastHingeMovement: now - 1.6, lastGeometryChange: nil, now: now))
+        // Scene geometry changed within ~1 s.
+        XCTAssertTrue(FoldSignalPolicy.isRecentFold(lastHingeMovement: nil, lastGeometryChange: now - 0.4, now: now))
+        XCTAssertFalse(FoldSignalPolicy.isRecentFold(lastHingeMovement: nil, lastGeometryChange: now - 1.2, now: now))
+        // Pop home and re-enter 2 s after an earlier fold: both signals stale.
+        XCTAssertFalse(FoldSignalPolicy.isRecentFold(lastHingeMovement: now - 2, lastGeometryChange: now - 2, now: now))
+        // A timestamp from the future (clock change) does not count.
+        XCTAssertFalse(FoldSignalPolicy.isRecentFold(lastHingeMovement: now + 5, lastGeometryChange: nil, now: now))
+    }
+
+    func testAnchorRestoreGivesUpAfterFiveZeroHeightTurns() {
+        XCTAssertEqual(FoldAnchorRestore.step(boundsHeight: 600, failedAttempts: 0), .restore)
+        for attempt in 1...5 {
+            XCTAssertEqual(FoldAnchorRestore.step(boundsHeight: 0, failedAttempts: attempt), .retry, "\(attempt)")
+        }
+        XCTAssertEqual(FoldAnchorRestore.step(boundsHeight: 0, failedAttempts: 6), .giveUp)
+        // Laid out on the last turn: still restores.
+        XCTAssertEqual(FoldAnchorRestore.step(boundsHeight: 600, failedAttempts: 5), .restore)
+    }
+
     // MARK: P1-4 two windows
 
     func testExactlyOneChatHandlesAnAppWideEvent() {
@@ -209,7 +267,7 @@ final class DuoAdaptationTests: XCTestCase {
         XCTAssertTrue(pill.contains("if #available(iOS 27.1, *) {\n            content.toolbarVerticalBehavior(.disabled)"))
         // P0-9: the composer compaction reads the measured height too.
         XCTAssertTrue(chat.contains("ChatShortHeightRule.isShort(verticalSizeClassCompact: vSizeClass == .compact"))
-        XCTAssertTrue(chat.contains("ChatShortHeightRule.heightIsShort(visibleHeight: measured.height"))
+        XCTAssertTrue(chat.contains("visibleHeight: measured.height, wasShort: heightIsShort,\n                verticalSizeClassRegular: vSizeClass == .regular,"))
         // P1-2: composer stack, ↑↓ discs, new-message pill, download button.
         XCTAssertEqual(chat.components(separatedBy: ".modifier(FoldAvoidingControl())").count - 1, 4)
         XCTAssertTrue(pill.contains("proxy.reservedRegions(kind: .division)"))
@@ -218,7 +276,15 @@ final class DuoAdaptationTests: XCTestCase {
         XCTAssertTrue(chat.contains("ConcentricRectangle(corners: .concentric(minimum: .fixed(LeoTheme.Radius.composer))"))
         XCTAssertTrue(try source("Views/Chat/ToolLiveSheet.swift").contains(".modifier(LeoEdgeSurface("))
         // P0-7: list parks / restores, the re-entry bottom pin yields to it.
-        XCTAssertTrue(list.contains("static func dismantleUIViewController(_ vc: MessageListViewController, coordinator: Coordinator) {\n        coordinator.parkFoldAnchor()"))
+        XCTAssertTrue(list.contains("static func dismantleUIViewController(_ vc: MessageListViewController, coordinator: Coordinator) {\n        if FoldSignal.isRecent {\n            coordinator.parkFoldAnchor()\n        } else {\n            coordinator.discardFoldAnchor()"))
+        // Open panels are parked only on a fold / display change.
+        XCTAssertTrue(chat.contains("if panels.isEmpty || !FoldSignal.isRecent {\n            ChatFoldContinuity.openPanels.discard(key)"))
+        // The restore's give-up path follows the bottom again.
+        XCTAssertTrue(list.contains("case .giveUp:"))
+        XCTAssertTrue(list.contains("pendingFoldAnchor = nil\n                scrollMode = .autoScrolling\n                scrollToBottomNow()"))
+        // Signal sources.
+        XCTAssertTrue(try source("Agent/Background/AgentLiveActivityManager.swift").contains("FoldSignal.noteHingeMovement()"))
+        XCTAssertTrue(try source("Diagnostics/SceneDisplayLogger.swift").contains("if lastLogged[id] != nil { FoldSignal.noteGeometryChange() }"))
         XCTAssertTrue(chat.contains("!ChatFoldContinuity.scrollAnchors.wasRecentlyParked(sessionId)"))
         XCTAssertTrue(chat.contains("CachedViewModel(sessionId: sessionId, draftId: draftId)"))
         // P1-4: app-wide notifications handled by one chat only.

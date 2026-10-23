@@ -64,6 +64,9 @@ final class SceneDisplayLogger {
         let summary = Self.summary(of: scene)
         let id = ObjectIdentifier(scene)
         guard lastLogged[id] != summary else { return }
+        // [duo-fold] A real change (not the first reading of a scene): fold,
+        // display move, rotation or resize. Gates fold continuity.
+        if lastLogged[id] != nil { FoldSignal.noteGeometryChange() }
         lastLogged[id] = summary
         if scene.activationState == .foregroundActive || DisplayContext.current == "display=unknown" {
             DisplayContext.setCurrent(summary)

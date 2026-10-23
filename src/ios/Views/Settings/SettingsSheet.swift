@@ -61,7 +61,7 @@ struct SettingsSheet: View {
     @State private var navPath = NavigationPath()
     @State private var showFeedbackDialog = false
     /// [T-ipad-settings-split] 面板够宽(iPad 整页面板、iPhone Duo 内屏横向)时用双栏。
-    /// [duo-shell] 只看面板自己的实测宽度(≥ 720,见 LeoSettingsLayoutPolicy),不看尺寸类别、
+    /// [duo-shell] 只看面板自己的实测宽度(≥ 700,见 LeoSettingsLayoutPolicy;iPad 整页面板约 704),不看尺寸类别、
     /// 也不看设备类型:Duo 内屏竖握 669 是 regular 宽,以前第一帧按尺寸类别猜成双栏、
     /// 量到 669 再跳回单列。GeometryReader 在布局时就给出宽度,没有猜的那一帧。
     /// Which branch is on screen, for deep links (set by that branch's onAppear).

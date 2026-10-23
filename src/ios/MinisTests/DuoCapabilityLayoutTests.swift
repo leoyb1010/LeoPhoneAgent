@@ -184,4 +184,29 @@ final class DuoCapabilityLayoutTests: XCTestCase {
         }
         XCTAssertFalse(help.contains("--camera front|back "), "old two-choice help")
     }
+
+    /// Outer / inner capture: the session is built before anything is presented
+    /// (a failure ends the operation, never a dead black controller), the
+    /// preview and the photo follow the device rotation, and every dismissal
+    /// stops the session off the main thread.
+    func testSpecificFrontCameraLifecycleAndRotation() throws {
+        let bridge = try String(contentsOf: iosRoot.appendingPathComponent("NativeOffloads/CameraOffloadBridge.swift"),
+                                encoding: .utf8)
+        let take = try XCTUnwrap(bridge.range(of: "private static func takeSpecificFrontPhoto("))
+        let controller = try XCTUnwrap(bridge.range(of: "private final class SpecificCameraController"))
+        let entry = String(bridge[take.lowerBound..<controller.lowerBound])
+        let configure = try XCTUnwrap(entry.range(of: "capture.canAddInput(input) && capture.canAddOutput(output)"))
+        let present = try XCTUnwrap(entry.range(of: "top.present(controller, animated: true)"))
+        XCTAssertLessThan(configure.lowerBound, present.lowerBound, "configured before presenting")
+        XCTAssertTrue(entry.contains("try AVCaptureDeviceInput(device: device)"))
+        let body = String(bridge[controller.lowerBound...])
+        XCTAssertFalse(body.contains("AVCaptureDeviceInput("), "no session setup inside the controller")
+        XCTAssertTrue(body.contains("AVCaptureDevice.RotationCoordinator(device: device, previewLayer: preview)"))
+        XCTAssertTrue(body.contains("\\.videoRotationAngleForHorizonLevelPreview"))
+        XCTAssertTrue(body.contains("coordinator.videoRotationAngleForHorizonLevelCapture"))
+        XCTAssertTrue(body.contains("if !wasCurrent { closeIfOrphaned() }"))
+        XCTAssertTrue(body.contains("specificCaptureQueue.async { session.stopRunning() }"))
+        XCTAssertTrue(bridge.contains("(session.controller as? SpecificCameraController)?.stopCapture()"))
+        XCTAssertTrue(body.contains("let image = uprightImage(decoded)"))
+    }
 }
