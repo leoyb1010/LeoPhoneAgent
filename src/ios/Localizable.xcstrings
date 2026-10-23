@@ -55539,6 +55539,50 @@
         }
       }
     },
+    "这个会话已用 %@ 锁定，请在 App 里打开后回复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This conversation is locked with %@. Open it in the app to reply."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个会话已用 %@ 锁定，请在 App 里打开后回复。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個會話已用 %@ 鎖定，請在 App 裡打開後回覆。"
+          }
+        }
+      }
+    },
+    "这个会话已用 %@ 锁定，请在 App 里打开查看。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This conversation is locked with %@. Open it in the app to view it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个会话已用 %@ 锁定，请在 App 里打开查看。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個會話已用 %@ 鎖定，請在 App 裡打開查看。"
+          }
+        }
+      }
+    },
     "Retry from “%@”? The %lld message(s) after it will be removed.": {
       "localizations": {
         "en": {

@@ -163,10 +163,18 @@ import VisionKit
                                  hostDir: String, guestDir: String,
                                  completion: @escaping (NSDictionary?, NSError?) -> Void) {
         guard begin(operation, completion: completion) else { return }
-        guard camera == "front" || camera == "back" else {
-            finish(operation, data: nil, error: failure("invalid_args", "Camera must be front or back.")); return
+        guard let request = CameraFacingRequest(argument: camera) else {
+            finish(operation, data: nil, error: failure("invalid_args",
+                "Camera must be one of: \(CameraFacingRequest.accepted).")); return
         }
-        let cameraDevice: UIImagePickerController.CameraDevice = camera == "front" ? .front : .rear
+        // [duo-cap] iPhone Duo: "outer" / "inner" pick one of its two front cameras.
+        if request.needsSpecificFrontCamera {
+            takeSpecificFrontPhoto(operation: operation, request: request, hostDir: hostDir, guestDir: guestDir)
+            return
+        }
+        // "front" / "user_facing": the system camera UI picks the front camera of the
+        // display in use (on iPhone Duo: outer when closed, under-display when open).
+        let cameraDevice: UIImagePickerController.CameraDevice = request == .back ? .rear : .front
         guard UIImagePickerController.isSourceTypeAvailable(.camera),
               UIImagePickerController.isCameraDeviceAvailable(cameraDevice) else {
             finish(operation, data: nil, error: failure("not_available", "The requested camera is unavailable.")); return
@@ -181,6 +189,150 @@ import VisionKit
                 session.delegate = delegate
                 session.controller = picker
                 top.present(picker, animated: true)
+            }
+        }
+    }
+
+    /// The outer / inner front camera, when this device has both (iPhone Duo, iOS 27.1+).
+    private static func specificFrontCamera(_ request: CameraFacingRequest) -> AVCaptureDevice? {
+        guard #available(iOS 27.1, *) else { return nil }
+        let types: [AVCaptureDevice.DeviceType] = [.builtInOuterUltraWideCamera, .builtInInnerUltraWideCamera]
+        let devices = AVCaptureDevice.DiscoverySession(deviceTypes: types, mediaType: .video,
+                                                       position: .unspecified).devices
+        let outer = devices.first { $0.deviceType == .builtInOuterUltraWideCamera }
+        let inner = devices.first { $0.deviceType == .builtInInnerUltraWideCamera }
+        guard let outer, let inner else { return nil }
+        return request == .inner ? inner : outer
+    }
+
+    /// Minimal user-operated capture (preview + shutter + cancel) for a camera the
+    /// system picker can't be told to use. Never captures without the user's tap.
+    private static func takeSpecificFrontPhoto(operation: CameraCaptureOperation, request: CameraFacingRequest,
+                                               hostDir: String, guestDir: String) {
+        guard let device = specificFrontCamera(request) else {
+            finish(operation, data: nil, error: failure("not_available",
+                "This device has no separate outer and inner front cameras. Use --camera user_facing (or front)."))
+            return
+        }
+        ensureCameraAuth(operation) {
+            withPresenter(operation) { top, session in
+                let controller = SpecificCameraController(operation: operation, device: device,
+                                                          hostDir: hostDir, guestDir: guestDir)
+                controller.modalPresentationStyle = .fullScreen
+                session.controller = controller
+                top.present(controller, animated: true)
+            }
+        }
+    }
+
+    @MainActor
+    private final class SpecificCameraController: UIViewController, AVCapturePhotoCaptureDelegate {
+        let operation: CameraCaptureOperation
+        let hostDir: String
+        let guestDir: String
+        private let device: AVCaptureDevice
+        private let capture = AVCaptureSession()
+        private let output = AVCapturePhotoOutput()
+        private let preview: AVCaptureVideoPreviewLayer
+        private let shutter = UIButton(type: .system)
+
+        init(operation: CameraCaptureOperation, device: AVCaptureDevice, hostDir: String, guestDir: String) {
+            self.operation = operation; self.device = device; self.hostDir = hostDir; self.guestDir = guestDir
+            preview = AVCaptureVideoPreviewLayer(session: capture)
+            super.init(nibName: nil, bundle: nil)
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            view.backgroundColor = .black
+            preview.videoGravity = .resizeAspect
+            view.layer.addSublayer(preview)
+            shutter.setImage(UIImage(systemName: "circle.inset.filled",
+                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 64)), for: .normal)
+            shutter.tintColor = .white
+            shutter.accessibilityLabel = AppLocalized("Take Photo")
+            shutter.addTarget(self, action: #selector(shoot), for: .touchUpInside)
+            let cancel = UIButton(type: .system)
+            cancel.setTitle(AppLocalized("Cancel"), for: .normal)
+            cancel.tintColor = .white
+            cancel.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+            for button in [shutter, cancel] {
+                button.translatesAutoresizingMaskIntoConstraints = false
+                view.addSubview(button)
+            }
+            let guide = view.safeAreaLayoutGuide
+            NSLayoutConstraint.activate([
+                shutter.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
+                shutter.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -16),
+                cancel.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
+                cancel.centerYAnchor.constraint(equalTo: shutter.centerYAnchor),
+            ])
+            do {
+                let input = try AVCaptureDeviceInput(device: device)
+                capture.beginConfiguration()
+                capture.sessionPreset = .photo
+                guard capture.canAddInput(input), capture.canAddOutput(output) else {
+                    capture.commitConfiguration()
+                    throw failure("not_available", "The requested camera cannot be opened.")
+                }
+                capture.addInput(input)
+                capture.addOutput(output)
+                capture.commitConfiguration()
+            } catch {
+                finish(operation, data: nil, error: (error as NSError).domain == "LeoPhoneAgent.Camera"
+                    ? error as NSError
+                    : failure("not_available", "The requested camera cannot be opened: \(error.localizedDescription)"))
+                return
+            }
+            let session = capture
+            DispatchQueue.global(qos: .userInitiated).async { session.startRunning() }
+        }
+
+        override func viewDidLayoutSubviews() {
+            super.viewDidLayoutSubviews()
+            preview.frame = view.bounds
+        }
+
+        override func viewDidDisappear(_ animated: Bool) {
+            super.viewDidDisappear(animated)
+            let session = capture
+            DispatchQueue.global(qos: .userInitiated).async { session.stopRunning() }
+        }
+
+        @objc private func cancelTapped() { cancelOperation(operation) }
+
+        @objc private func shoot() {
+            guard isCurrent(operation), capture.isRunning else { return }
+            shutter.isEnabled = false
+            output.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
+        }
+
+        nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto,
+                                     error: Error?) {
+            let data = photo.fileDataRepresentation()
+            let message = error?.localizedDescription
+            Task { @MainActor in self.save(data, error: message) }
+        }
+
+        private func save(_ data: Data?, error: String?) {
+            guard isCurrent(operation) else { cancelOperation(operation); return }
+            guard let data, let image = UIImage(data: data), let jpeg = image.jpegData(compressionQuality: 0.9) else {
+                finish(operation, data: nil, error: failure("capture_failed",
+                    "Failed to read the captured photo\(error.map { ": \($0)" } ?? ".")")); return
+            }
+            do {
+                let name = "camera-\(operation.operationID).jpg"
+                let file = URL(fileURLWithPath: hostDir).appendingPathComponent(name)
+                try FileManager.default.createDirectory(atPath: hostDir, withIntermediateDirectories: true)
+                try jpeg.write(to: file, options: .atomic)
+                active?.writtenFiles.append(file)
+                finish(operation, data: ["guest_path": "\(guestDir)/\(name)",
+                                        "width": Int(image.size.width * image.scale),
+                                        "height": Int(image.size.height * image.scale), "bytes": jpeg.count], error: nil)
+            } catch {
+                finish(operation, data: nil, error: failure("capture_failed", "Failed to save photo: \(error.localizedDescription)"))
             }
         }
     }

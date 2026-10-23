@@ -3954,8 +3954,8 @@ final class ImageAttachment: NSTextAttachment {
             return
         }
         // [T-r3-B22] Captured on main: the policy check and displayTargetPixels
-        // run off-main.
-        let screenScale = UIScreen.main.scale
+        // run off-main. [duo-cap] The window's display scale, not UIScreen.main.
+        let screenScale = LeoWindowMetrics.layoutScale
         let mediaRoot = AIChatViewModel.activeSessionId.map {
             AIChatViewModel.minisPersistentBase.appendingPathComponent($0, isDirectory: true)
         }
@@ -4117,7 +4117,9 @@ final class ImageAttachment: NSTextAttachment {
         // Image view — clipped to rounded corners, black background for transparent/white images
         let imageView = DraggableImageView(image: img)
         imageView.fileURL = resolvedFileURL
-        if UIDevice.current.userInterfaceIdiom == .pad { imageView.enableDrag() }
+        // [duo-cap] Drag into the app beside us in split view — iPad and iPhone
+        // (iPhone Duo's inner display splits apps side by side).
+        imageView.enableDrag()
         imageView.contentMode = .scaleAspectFit
         imageView.backgroundColor = .black
         imageView.frame = shadowView.bounds

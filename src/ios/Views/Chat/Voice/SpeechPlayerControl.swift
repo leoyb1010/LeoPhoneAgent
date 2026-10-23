@@ -149,10 +149,13 @@ struct SpeechPlayerControl: View {
     /// GeometryReader whose frame drifts during keyboard animation).
     private var restingFrame: CGRect {
         let screen = Self.windowBounds()
-        let bottom = Self.safeAreaBottomInset()
+        let insets = Self.safeAreaInsets()
         let w = capsuleSize.width, h = capsuleSize.height
-        let maxY = screen.maxY - bottom - Self.restingBottomGap + dragOffset.height
-        let maxX = screen.maxX - 16 + dragOffset.width
+        let maxY = screen.maxY - insets.bottom - Self.restingBottomGap + dragOffset.height
+        // [duo-cap] The resting corner sits inside the safe area: on iPhone Duo (and
+        // any iPhone in landscape) the right inset is real and differs from the left.
+        let maxX = FloatingControlBounds.restingMaxX(windowMaxX: screen.maxX, safeRight: insets.right,
+                                                     trailingPadding: 16) + dragOffset.width
         return CGRect(x: maxX - w, y: maxY - h, width: w, height: h)
     }
 
@@ -184,7 +187,7 @@ struct SpeechPlayerControl: View {
         // hidden, require extra headroom before showing again so a value sitting
         // on the threshold can't flip hide/show on every recompute.
         let liftedTop = rf.minY - newLift
-        let safeTop = Self.safeAreaTopInset() + 44 + 8 // nav bar band, matches clamp
+        let safeTop = FloatingControlBounds.topLimit(safeTop: Self.safeAreaInsets().top) // nav bar band, matches clamp
         let headroom = liftedTop - safeTop
         let threshold = spaceInsufficient
             ? Self.minStableHeadroom + Self.crampedHideHysteresis
@@ -339,30 +342,33 @@ struct SpeechPlayerControl: View {
         let restTop  = baseFrame.minY - baseFrameOffset.height
         let w = baseFrame.width, h = baseFrame.height
 
-        let minX = m - restLeft
-        let maxX = (screen.width - m - w) - restLeft
+        // [duo-cap] Left and right safe areas apply independently: the Duo's
+        // Dynamic Island and status bar stand on one side.
+        let insets = Self.safeAreaInsets()
+        let xRange = FloatingControlBounds.horizontalOffsetRange(
+            windowWidth: screen.width, safeLeft: insets.left, safeRight: insets.right,
+            margin: m, restLeft: restLeft, width: w)
 
-        let topInset = Self.safeAreaTopInset()
-        let navBottom = topInset + 44 + 8
+        // The app's own top bar band starts at the real top inset (on the Duo's
+        // outer display the system bar is on the side, so that inset is small;
+        // the band itself stays — our header is drawn horizontally there too).
+        let navBottom = FloatingControlBounds.topLimit(safeTop: insets.top)
         let lowestTop = screen.maxY - bottomReserve - h
         let minY = navBottom - restTop
         let maxY = lowestTop - restTop
 
         return CGSize(
-            width: min(max(proposed.width, min(minX, maxX)), max(minX, maxX)),
+            width: min(max(proposed.width, xRange.lowerBound), xRange.upperBound),
             height: min(max(proposed.height, min(minY, maxY)), max(minY, maxY))
         )
     }
 
-    private static func safeAreaTopInset() -> CGFloat {
-        UIApplication.shared.connectedScenes
+    /// The key window's real safe-area insets (all four edges; no fixed fallbacks).
+    private static func safeAreaInsets() -> UIEdgeInsets {
+        let window = UIApplication.shared.connectedScenes
             .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-            .first?.safeAreaInsets.top ?? 47
-    }
-    private static func safeAreaBottomInset() -> CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-            .first?.safeAreaInsets.bottom ?? 34
+            .first ?? LeoWindowMetrics.window
+        return window?.safeAreaInsets ?? .zero
     }
 
     /// The app WINDOW's bounds — NOT UIScreen. On iPad (Stage Manager / Split

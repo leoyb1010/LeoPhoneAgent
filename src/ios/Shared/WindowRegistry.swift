@@ -31,6 +31,7 @@
 //  `ContentView.jumpToSession`.
 //
 
+import os
 import SwiftUI
 import UIKit
 
@@ -71,7 +72,10 @@ final class WindowRegistry: ObservableObject {
         } else {
             entries.append(Entry(id: id, window: window))
         }
-        if window != nil { attachedIds.insert(id) }
+        if let window {
+            attachedIds.insert(id)
+            LeoWindowMetrics.track(window.windowScene)
+        }
         // A freshly-registered window is what the user is looking at.
         activeWindowId = id
     }
@@ -151,7 +155,10 @@ struct WindowCaptureView: UIViewRepresentable {
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            if let window { onWindow?(window) }
+            if let window {
+                LeoWindowMetrics.track(window.windowScene)
+                onWindow?(window)
+            }
         }
     }
 }
@@ -173,18 +180,77 @@ enum LeoWindowMetrics {
         return firstScreen?.bounds ?? CGRect(x: 0, y: 0, width: 390, height: 844)
     }
 
-    static var scale: CGFloat { window?.screen.scale ?? firstScreen?.scale ?? 3 }
+    /// [duo-cap] The window's display scale (trait), not the screen's.
+    static var scale: CGFloat { window?.traitCollection.displayScale ?? firstScreen?.scale ?? 3 }
 
     /// The screen the app is on (brightness is a per-display setting).
     static var screen: UIScreen? { window?.screen ?? firstScreen }
 
-    /// For nonisolated layout code (TextKit attachments, image caps): the
-    /// screen's height. Stable on purpose — a cap that followed the key window
-    /// changed as focus moved between windows, and image views already built at
-    /// the old size stopped matching their space in the text.
+    /// For nonisolated layout code (TextKit attachments, image caps): the height
+    /// of the tallest foreground window scene. [duo-cap] It follows the scenes,
+    /// not the screen — an iPhone Duo unfolding from the outer to the inner
+    /// display (or a Stage Manager resize) re-caps, and laid-out images
+    /// re-measure (`minisAttachmentSizeChanged`). The tallest window rather than
+    /// the key one keeps it stable as focus moves between windows: image views
+    /// built at one size must keep matching their space in the text.
     nonisolated static var layoutHeight: CGFloat {
-        if Thread.isMainThread { return MainActor.assumeIsolated { (screen?.bounds ?? bounds).height } }
-        return UIScreen.main.bounds.height   // ponytail: off-main fallback only
+        if let cached = layoutCache.withLock({ $0 })?.height { return cached }
+        if Thread.isMainThread { return MainActor.assumeIsolated { refreshLayoutMetrics(notify: false).height } }
+        return fallbackBounds.height   // before any scene exists, off main
+    }
+
+    /// Display scale for nonisolated image decoding: the key window's trait.
+    nonisolated static var layoutScale: CGFloat {
+        if let cached = layoutCache.withLock({ $0 })?.scale { return cached }
+        if Thread.isMainThread { return MainActor.assumeIsolated { refreshLayoutMetrics(notify: false).scale } }
+        return 3
+    }
+
+    private nonisolated static let fallbackBounds = CGRect(x: 0, y: 0, width: 390, height: 844)
+    private nonisolated static let layoutCache = OSAllocatedUnfairLock<(height: CGFloat, scale: CGFloat)?>(initialState: nil)
+    private static var sceneObservations: [ObjectIdentifier: NSKeyValueObservation] = [:]
+    private static var recapWork: DispatchWorkItem?
+
+    /// Watch a scene's geometry (window size, display switch) so the cap follows it.
+    static func track(_ scene: UIWindowScene?) {
+        guard let scene else { return }
+        let key = ObjectIdentifier(scene)
+        if sceneObservations[key] == nil {
+            sceneObservations[key] = scene.observe(\.effectiveGeometry, options: [.new]) { _, _ in
+                DispatchQueue.main.async { MainActor.assumeIsolated { scheduleRefresh() } }
+            }
+        }
+        refreshLayoutMetrics(notify: true)
+    }
+
+    /// Live resizes fire many geometry changes; re-measure once they settle.
+    private static func scheduleRefresh() {
+        recapWork?.cancel()
+        let work = DispatchWorkItem { MainActor.assumeIsolated { refreshLayoutMetrics(notify: true) } }
+        recapWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
+    }
+
+    @discardableResult
+    private static func refreshLayoutMetrics(notify: Bool) -> (height: CGFloat, scale: CGFloat) {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let live = Set(scenes.map(ObjectIdentifier.init))
+        sceneObservations = sceneObservations.filter { live.contains($0.key) }
+        let foreground = scenes.filter { $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive }
+        let heights = (foreground.isEmpty ? scenes : foreground).map { $0.effectiveGeometry.coordinateSpace.bounds.height }
+        let height = LayoutHeightPolicy.height(sceneHeights: heights,
+                                               fallback: (firstScreen?.bounds ?? fallbackBounds).height)
+        let value = (height: height, scale: scale)
+        let old = layoutCache.withLock { cache -> CGFloat? in
+            let previous = cache?.height
+            cache = value
+            return previous
+        }
+        if notify, LayoutHeightPolicy.shouldRecap(old: old, new: height) {
+            // No owner: every message re-measures its image attachments against the new cap.
+            NotificationCenter.default.post(name: .minisAttachmentSizeChanged, object: "leo.layoutHeight")
+        }
+        return value
     }
 
     private static var firstScreen: UIScreen? {
