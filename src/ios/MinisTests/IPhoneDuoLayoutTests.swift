@@ -47,7 +47,7 @@ final class IPhoneDuoLayoutTests: XCTestCase {
             // The inspector only exists inside the split shell's detail column.
             inspectorAutoOpens: split && L.showsContextColumn(width: w.width),
             inspectorPinnable: split && L.canPinContextColumn(width: w.width),
-            quickHome: !split && L.usesQuickHome(width: w.width, regularWidth: w.regularWidth))
+            quickHome: !split && L.usesQuickHome(width: w.width, height: w.height, regularWidth: w.regularWidth))
     }
 
     private func d(split: Bool, resident: Bool = false, settings2: Bool, treasury: Bool,
@@ -226,11 +226,16 @@ final class IPhoneDuoLayoutTests: XCTestCase {
             XCTAssertFalse(LeoSettingsLayoutPolicy.usesTwoColumns(width: width))
             XCTAssertFalse(TreasuryWorkspaceLayoutPolicy.usesSplit(width: width, regularWidth: true))
         }
-        XCTAssertTrue(L.usesQuickHome(width: 475, regularWidth: false))
-        XCTAssertFalse(L.usesQuickHome(width: 475, regularWidth: true))
-        XCTAssertFalse(L.usesQuickHome(width: 501, regularWidth: false))
-        XCTAssertFalse(L.usesQuickHome(width: 0, regularWidth: false), "unmeasured window")
-        XCTAssertFalse(L.usesQuickHome(width: .infinity, regularWidth: false))
+        XCTAssertTrue(L.usesQuickHome(width: 475, height: 669, regularWidth: false), "Duo inner split half")
+        XCTAssertTrue(L.usesQuickHome(width: 466, height: 678, regularWidth: false), "Duo outer portrait")
+        XCTAssertFalse(L.usesQuickHome(width: 475, height: 669, regularWidth: true))
+        XCTAssertFalse(L.usesQuickHome(width: 501, height: 669, regularWidth: false))
+        // 普通 iPhone 竖屏不触发:用户主力机首页不能被悄悄改
+        XCTAssertFalse(L.usesQuickHome(width: 440, height: 956, regularWidth: false), "iPhone 18 Pro Max")
+        XCTAssertFalse(L.usesQuickHome(width: 402, height: 874, regularWidth: false), "iPhone 18 Pro")
+        XCTAssertFalse(L.usesQuickHome(width: 375, height: 667, regularWidth: false), "iPhone SE")
+        XCTAssertFalse(L.usesQuickHome(width: 0, height: 678, regularWidth: false), "unmeasured window")
+        XCTAssertFalse(L.usesQuickHome(width: .infinity, height: 678, regularWidth: false))
     }
 
     // MARK: - P1-10 nothing in the shell keys off the device idiom

@@ -357,6 +357,8 @@ struct ContentView: View {
     /// [WP-43] Window width: sidebar resident at ≥ 800 pt (drawer below), the
     /// chat's third column opens by itself at ≥ 1100 pt.
     @State private var windowWidth: CGFloat = 0
+    /// [duo-shell] 外屏快捷模式要看窗口形状(宽高比),只量宽不够。
+    @State private var windowHeight: CGFloat = 0
     /// [WP-43] ⌘K palette → this window's third column.
     @State private var contextRequest: ChatContextRequest?
 
@@ -580,8 +582,10 @@ struct ContentView: View {
                 isWideLayout = newWide
             }
             .onChange(of: geo.size.width) { _, width in updateWindowWidth(width) }
+            .onChange(of: geo.size.height) { _, height in windowHeight = height }
             .onAppear {
                 updateWindowWidth(geo.size.width)
+                windowHeight = geo.size.height
                 isWideLayout = wide
                 if !homeDraftRestored {
                     homeDraftRestored = true
@@ -3564,13 +3568,13 @@ struct ContentView: View {
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeRoutingError)
     }
 
-    /// [duo-shell] P2-3 外屏快捷模式:窄窗(compact 宽、≤ 500 pt,即 iPhone Duo 外屏竖握、
-    /// 内屏分屏一半,以及普通 iPhone 竖屏)把「等你处理 / 远程审批」条和关注的 Mac 任务里
+    /// [duo-shell] P2-3 外屏快捷模式:矮胖的窄窗(compact 宽、≤ 500 pt、宽高比 ≥ 0.62,即 iPhone Duo
+    /// 外屏竖握和内屏分屏一半;普通 iPhone 竖屏不触发)把「等你处理 / 远程审批」条和关注的 Mac 任务里
     /// 在跑、等审批的(最多两个)挪到输入栏正上方,单手拇指够得着;语音提问就是输入栏里的麦克风。
     /// 全是现成部件(attentionBar、macLiveRow),顶上的「进行中」列表照旧。
     private var usesQuickHome: Bool {
         !isWideLayout && LeoWorkspaceLayoutPolicy.usesQuickHome(
-            width: windowWidth, regularWidth: horizontalSizeClass == .regular)
+            width: windowWidth, height: windowHeight, regularWidth: horizontalSizeClass == .regular)
     }
 
     private var quickHomeMacRows: [MacLiveSessionsStore.Row] {

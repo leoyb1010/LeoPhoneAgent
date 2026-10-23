@@ -39,9 +39,14 @@ enum LeoWorkspaceLayoutPolicy {
     /// the composer at the bottom, within thumb reach. Outer landscape (678)
     /// and inner portrait (669, regular width) keep the normal home.
     static let quickHomeMaxWidth: CGFloat = 500
+    /// 只给「矮胖」的窗口:Duo 外屏竖握 466 × 678(宽高比 0.69)、内屏分屏一半约 475 × 669。
+    /// 普通 iPhone 竖屏(如 18 Pro Max 440 × 956,0.46;SE 375 × 667,0.56)不触发,
+    /// 免得用户的主力机首页布局被悄悄改掉。
+    static let quickHomeMinAspect: CGFloat = 0.62
 
-    static func usesQuickHome(width: CGFloat, regularWidth: Bool) -> Bool {
-        !regularWidth && width.isFinite && width > 0 && width <= quickHomeMaxWidth
+    static func usesQuickHome(width: CGFloat, height: CGFloat, regularWidth: Bool) -> Bool {
+        guard !regularWidth, width.isFinite, height.isFinite, width > 0, height > 0 else { return false }
+        return width <= quickHomeMaxWidth && width / height >= quickHomeMinAspect
     }
 
     // MARK: [WP-43] iPad three columns (session list / chat / context)
