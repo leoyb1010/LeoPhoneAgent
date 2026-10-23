@@ -106,12 +106,13 @@ enum LeoWorkspaceLayoutPolicy {
 enum LeoSettingsLayoutPolicy {
     /// Matches the sidebar's `navigationSplitViewColumnWidth(min:ideal:max:)`.
     static let sidebarWidth = (min: CGFloat(280), ideal: CGFloat(320), max: CGFloat(380))
-    /// The page column gets the same floor as the shell's chat column.
-    static let detailMinWidth: CGFloat = LeoWorkspaceLayoutPolicy.splitDetailMinWidth
-    /// 280 + 440 = 720. Was 700, only 31 pt above Duo inner portrait (669);
-    /// now 51 pt above it, so a ±20 pt margin change still leaves 669 a single
-    /// column, while iPad page sheets (≥ 744) and Duo inner landscape (951) keep
-    /// two columns.
+    /// Narrowest settings page column (settings pages are forms, not the chat).
+    static let detailMinWidth: CGFloat = 420
+    /// 280 + 420 = 700. Settings is a `.sheet`, so on iPad it is a page sheet
+    /// about 704 pt wide and must stay two columns; it must not rise above 704.
+    /// Duo inner portrait (669) is 31 pt below, so a ±20 pt margin change still
+    /// leaves it a single column (the GeometryReader measures the real width);
+    /// Duo inner landscape (951) is two columns.
     static var twoColumnMinWidth: CGFloat { sidebarWidth.min + detailMinWidth }
 
     static func usesTwoColumns(width: CGFloat) -> Bool {
