@@ -717,7 +717,10 @@ struct AIChatView: View {
         } action: { measured in
             let width = measured.width
             if width > 0, width != chatColumnWidth { chatColumnWidth = width }
-            let short = ChatShortHeightRule.heightIsShort(visibleHeight: measured.height, wasShort: heightIsShort)
+            let short = ChatShortHeightRule.heightIsShort(
+                visibleHeight: measured.height, wasShort: heightIsShort,
+                verticalSizeClassRegular: vSizeClass == .regular,
+                windowWidth: hostWindow.window?.bounds.width ?? 0)
             if short != heightIsShort { heightIsShort = short }
         }
         .onDrop(of: [.image, .movie, .fileURL, .data], isTargeted: $isDropTargeted) { providers in
@@ -2903,7 +2906,9 @@ struct AIChatView: View {
         ChatWindowGate.unregister(hostWindow)
         guard let key = foldKey else { return }
         let panels = openFoldPanels
-        if panels.isEmpty {
+        // Only a fold / display change re-creates this view on purpose; a deep-link
+        // jump or a pop must not re-open a sheet on the next appear.
+        if panels.isEmpty || !FoldSignal.isRecent {
             ChatFoldContinuity.openPanels.discard(key)
         } else {
             ChatFoldContinuity.openPanels.park(panels, for: key)

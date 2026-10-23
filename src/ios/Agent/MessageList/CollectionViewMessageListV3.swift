@@ -186,9 +186,15 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     /// [duo-fold] Folding / unfolding re-creates the chat view and with it this
-    /// list. Park the reading position so the replacement list can restore it.
+    /// list. Park the reading position so the replacement list can restore it —
+    /// only when a fold / display change caused the teardown; ordinary navigation
+    /// re-enters at the bottom as before.
     static func dismantleUIViewController(_ vc: MessageListViewController, coordinator: Coordinator) {
-        coordinator.parkFoldAnchor()
+        if FoldSignal.isRecent {
+            coordinator.parkFoldAnchor()
+        } else {
+            coordinator.discardFoldAnchor()
+        }
     }
 
     enum Section { case main }
@@ -1352,6 +1358,11 @@ extension CollectionViewMessageListV3 {
         private var pendingFoldAnchor: MessageListScrollAnchor?
         private var foldRestoreAttempts = 0
 
+        func discardFoldAnchor() {
+            guard let sid = vm?.sessionId else { return }
+            ChatFoldContinuity.scrollAnchors.discard(sid)
+        }
+
         /// Called when the list goes away. Only a reader above the bottom is
         /// worth restoring; a following list re-pins to the bottom anyway.
         func parkFoldAnchor() {
@@ -1379,13 +1390,19 @@ extension CollectionViewMessageListV3 {
                   let ds = dataSource else { return }
             let items = ds.snapshot().itemIdentifiers
             guard !items.isEmpty else { return }
-            guard cv.bounds.height > 0 else {
-                foldRestoreAttempts += 1
-                if foldRestoreAttempts <= 5 {
-                    DispatchQueue.main.async { [weak self] in self?.restoreFoldAnchorIfNeeded() }
-                } else {
-                    pendingFoldAnchor = nil
-                }
+            if cv.bounds.height <= 0 { foldRestoreAttempts += 1 }
+            switch FoldAnchorRestore.step(boundsHeight: cv.bounds.height, failedAttempts: foldRestoreAttempts) {
+            case .restore:
+                break
+            case .retry:
+                DispatchQueue.main.async { [weak self] in self?.restoreFoldAnchorIfNeeded() }
+                return
+            case .giveUp:
+                // Never laid out: drop the anchor and follow the bottom again
+                // (bind set .userBrowsing for the restore that never came).
+                pendingFoldAnchor = nil
+                scrollMode = .autoScrolling
+                scrollToBottomNow()
                 return
             }
             pendingFoldAnchor = nil

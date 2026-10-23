@@ -164,16 +164,32 @@ enum ChatListInsets {
 /// height minus its top and bottom safe-area insets), or compacting would grow
 /// the measurement and undo itself. The gap between the two thresholds absorbs
 /// the nav bar minimizing on scroll.
+///
+/// The height half only applies to inner-display-like windows (regular height,
+/// window ≥ 600 pt wide): an ordinary iPhone in portrait with a tall
+/// third-party keyboard is left alone, and enters only below 320 pt.
 enum ChatShortHeightRule {
-    /// Below this a full composer leaves the list about two lines.
-    static let enterBelow: CGFloat = 360
+    /// Below this a full composer leaves the list about two lines. Duo inner
+    /// landscape with the keyboard up is ~295.
+    static let enterBelow: CGFloat = 320
     /// Clears `enterBelow` by more than the nav bar's minimize step.
     static let exitAbove: CGFloat = 400
+    /// Narrowest window the height half applies to (Duo inner display: 669 / 951;
+    /// every iPhone portrait window and the Duo outer display are narrower).
+    static let minWindowWidth: CGFloat = 600
 
     /// Height half of the rule. `visibleHeight <= 0` = not measured yet: keep the answer.
     static func heightIsShort(visibleHeight: CGFloat, wasShort: Bool) -> Bool {
         guard visibleHeight > 0 else { return wasShort }
         return wasShort ? visibleHeight < exitAbove : visibleHeight < enterBelow
+    }
+
+    /// The height half, gated to inner-display-like windows. `windowWidth <= 0`
+    /// = window not known yet: not short.
+    static func heightIsShort(visibleHeight: CGFloat, wasShort: Bool,
+                              verticalSizeClassRegular: Bool, windowWidth: CGFloat) -> Bool {
+        guard verticalSizeClassRegular, windowWidth.isFinite, windowWidth >= minWindowWidth else { return false }
+        return heightIsShort(visibleHeight: visibleHeight, wasShort: wasShort)
     }
 
     static func isShort(verticalSizeClassCompact: Bool, heightIsShort: Bool) -> Bool {
@@ -330,6 +346,55 @@ final class FoldContinuityStore<Value: AnyObject> {
             guard let released = e.releasedAt else { return true }
             return t.timeIntervalSince(released) < window
         }
+    }
+}
+
+/// [duo-fold] Fold continuity (parking a reading position or open panel for the
+/// replacement view) only applies to a teardown a fold / display change caused:
+/// the hinge moved within `hingeWindow`, or a window scene's geometry changed
+/// within `geometryWindow`. Any other teardown (pop to home, deep-link jump)
+/// behaves as before the Duo work: nothing is parked.
+enum FoldSignalPolicy {
+    static let hingeWindow: TimeInterval = 1.5
+    static let geometryWindow: TimeInterval = 1.0
+
+    static func isRecentFold(lastHingeMovement: Date?, lastGeometryChange: Date?, now: Date) -> Bool {
+        func within(_ date: Date?, _ window: TimeInterval) -> Bool {
+            guard let date else { return false }
+            let age = now.timeIntervalSince(date)
+            return age >= 0 && age <= window
+        }
+        return within(lastHingeMovement, hingeWindow) || within(lastGeometryChange, geometryWindow)
+    }
+}
+
+/// [duo-fold] Timestamps fed by the hinge observer (AgentLiveActivityManager)
+/// and the scene geometry observer (SceneDisplayLogger).
+@MainActor
+enum FoldSignal {
+    static var lastHingeMovement: Date?
+    static var lastGeometryChange: Date?
+
+    static func noteHingeMovement(at date: Date = Date()) { lastHingeMovement = date }
+    static func noteGeometryChange(at date: Date = Date()) { lastGeometryChange = date }
+
+    static var isRecent: Bool {
+        FoldSignalPolicy.isRecentFold(lastHingeMovement: lastHingeMovement,
+                                      lastGeometryChange: lastGeometryChange, now: Date())
+    }
+}
+
+/// [duo-fold] Restoring a parked reading position waits for the list to be laid
+/// out; after `maxAttempts` run-loop turns with zero height it gives up and the
+/// list goes back to following the bottom.
+enum FoldAnchorRestore {
+    enum Step: Equatable { case restore, retry, giveUp }
+    static let maxAttempts = 5
+
+    /// `failedAttempts`: zero-height measurements so far, including this one.
+    static func step(boundsHeight: CGFloat, failedAttempts: Int) -> Step {
+        if boundsHeight > 0 { return .restore }
+        return failedAttempts <= maxAttempts ? .retry : .giveUp
     }
 }
 
