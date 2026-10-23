@@ -22,6 +22,8 @@ final class DiagnosticRing: @unchecked Sendable {
         case shortcutRun = "shortcut.run"
         /// [WP-46] One MCP request handled by the in-guest daemon (server/method/ok/code/ms only).
         case mcpCall = "mcp.call"
+        /// [duo-diag] A window scene changed display / size (message = DisplayContext summary).
+        case sceneDisplay = "scene.display"
         case truncated = "diag.truncated"
     }
 

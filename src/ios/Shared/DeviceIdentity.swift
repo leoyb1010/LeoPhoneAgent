@@ -150,64 +150,30 @@ enum DeviceIdentity {
                 String(validatingUTF8: $0) ?? "Unknown"
             }
         }
-        return modelNameMap(for: machine)
+        return modelNameMap(for: machineIdentifier(uname: machine))
+    }
+
+    /// Hardware identifier ("iPhone19,4"). The simulator's `uname` says "arm64";
+    /// it publishes the simulated model in SIMULATOR_MODEL_IDENTIFIER.
+    static func machineIdentifier(uname machine: String,
+                                  environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
+        if let simulated = environment["SIMULATOR_MODEL_IDENTIFIER"], !simulated.isEmpty { return simulated }
+        return machine
+    }
+
+    /// Readable name for a hardware identifier, nil when it isn't in the table.
+    static func knownModelName(for identifier: String) -> String? {
+        modelNames[identifier]
+    }
+
+    /// "iPhone19,4 (iPhone Duo)": identifier plus name when known, for crash
+    /// reports and diagnostics.
+    static func describe(identifier: String) -> String {
+        knownModelName(for: identifier).map { "\(identifier) (\($0))" } ?? identifier
     }
 
     private static func modelNameMap(for identifier: String) -> String {
-        let map: [String: String] = [
-            // iPhone 17 (2025) & iPhone 17e (2026)
-            "iPhone18,1": "iPhone 17 Pro", "iPhone18,2": "iPhone 17 Pro Max",
-            "iPhone18,3": "iPhone 17", "iPhone18,4": "iPhone Air",
-            "iPhone18,5": "iPhone 17e",
-            // iPhone 16 (2024)
-            "iPhone17,1": "iPhone 16 Pro", "iPhone17,2": "iPhone 16 Pro Max",
-            "iPhone17,3": "iPhone 16", "iPhone17,4": "iPhone 16 Plus",
-            "iPhone17,5": "iPhone 16e",
-            // iPhone 15 (2023)
-            "iPhone16,1": "iPhone 15 Pro", "iPhone16,2": "iPhone 15 Pro Max",
-            "iPhone15,4": "iPhone 15", "iPhone15,5": "iPhone 15 Plus",
-            // iPhone 14 (2022)
-            "iPhone15,2": "iPhone 14 Pro", "iPhone15,3": "iPhone 14 Pro Max",
-            "iPhone14,7": "iPhone 14", "iPhone14,8": "iPhone 14 Plus",
-            // iPhone 13 (2021)
-            "iPhone14,2": "iPhone 13 Pro", "iPhone14,3": "iPhone 13 Pro Max",
-            "iPhone14,4": "iPhone 13 mini", "iPhone14,5": "iPhone 13",
-            // iPhone SE
-            "iPhone12,8": "iPhone SE (2nd generation)",
-            "iPhone14,6": "iPhone SE (3rd generation)",
-            // iPad Pro M4 (2024)
-            "iPad16,3": "iPad Pro 11\" (M4)", "iPad16,4": "iPad Pro 11\" (M4)",
-            "iPad16,5": "iPad Pro 13\" (M4)", "iPad16,6": "iPad Pro 13\" (M4)",
-            // iPad Pro M2 (2022)
-            "iPad14,3": "iPad Pro 11\" (M2)", "iPad14,4": "iPad Pro 11\" (M2)",
-            "iPad14,5": "iPad Pro 12.9\" (M2)", "iPad14,6": "iPad Pro 12.9\" (M2)",
-            // iPad Pro M1 (2021)
-            "iPad13,4": "iPad Pro 11\" (M1)", "iPad13,5": "iPad Pro 11\" (M1)",
-            "iPad13,6": "iPad Pro 11\" (M1)", "iPad13,7": "iPad Pro 11\" (M1)",
-            "iPad13,8": "iPad Pro 12.9\" (M1)", "iPad13,9": "iPad Pro 12.9\" (M1)",
-            "iPad13,10": "iPad Pro 12.9\" (M1)", "iPad13,11": "iPad Pro 12.9\" (M1)",
-            // iPad Air M3 (2025)
-            "iPad15,3": "iPad Air 11\" (M3)", "iPad15,4": "iPad Air 11\" (M3)",
-            "iPad15,5": "iPad Air 13\" (M3)", "iPad15,6": "iPad Air 13\" (M3)",
-            // iPad Air M2 (2024)
-            "iPad14,8": "iPad Air 11\" (M2)", "iPad14,9": "iPad Air 11\" (M2)",
-            "iPad14,10": "iPad Air 13\" (M2)", "iPad14,11": "iPad Air 13\" (M2)",
-            // iPad Air M1 (2022)
-            "iPad13,16": "iPad Air (M1)", "iPad13,17": "iPad Air (M1)",
-            // iPad mini
-            "iPad14,1": "iPad mini (6th generation)",
-            "iPad14,2": "iPad mini (6th generation)",
-            "iPad16,1": "iPad mini (A17 Pro)", "iPad16,2": "iPad mini (A17 Pro)",
-            // iPad (10th generation, 2022)
-            "iPad13,18": "iPad (10th generation)",
-            "iPad13,19": "iPad (10th generation)",
-            // iPad (11th generation, 2025)
-            "iPad15,7": "iPad (11th generation)",
-            "iPad15,8": "iPad (11th generation)",
-            // Mac (Catalyst) — uname returns "arm64" or "x86_64"
-            "arm64": "Mac", "x86_64": "Mac",
-        ]
-        if let name = map[identifier] { return name }
+        if let name = modelNames[identifier] { return name }
         if identifier.hasPrefix("iPhone") { return "iPhone" }
         if identifier.hasPrefix("iPad") { return "iPad" }
         // Catalyst/Mac fallback: try to get Mac model from sysctl
@@ -217,6 +183,62 @@ enum DeviceIdentity {
         return UIDevice.current.model
         #endif
     }
+
+    private static let modelNames: [String: String] = [
+        // iPhone Duo (2026), foldable: outer 466x678 pt, inner 951x669 pt
+        "iPhone19,4": "iPhone Duo",
+        // iPhone 17 (2025) & iPhone 17e (2026)
+        "iPhone18,1": "iPhone 17 Pro", "iPhone18,2": "iPhone 17 Pro Max",
+        "iPhone18,3": "iPhone 17", "iPhone18,4": "iPhone Air",
+        "iPhone18,5": "iPhone 17e",
+        // iPhone 16 (2024)
+        "iPhone17,1": "iPhone 16 Pro", "iPhone17,2": "iPhone 16 Pro Max",
+        "iPhone17,3": "iPhone 16", "iPhone17,4": "iPhone 16 Plus",
+        "iPhone17,5": "iPhone 16e",
+        // iPhone 15 (2023)
+        "iPhone16,1": "iPhone 15 Pro", "iPhone16,2": "iPhone 15 Pro Max",
+        "iPhone15,4": "iPhone 15", "iPhone15,5": "iPhone 15 Plus",
+        // iPhone 14 (2022)
+        "iPhone15,2": "iPhone 14 Pro", "iPhone15,3": "iPhone 14 Pro Max",
+        "iPhone14,7": "iPhone 14", "iPhone14,8": "iPhone 14 Plus",
+        // iPhone 13 (2021)
+        "iPhone14,2": "iPhone 13 Pro", "iPhone14,3": "iPhone 13 Pro Max",
+        "iPhone14,4": "iPhone 13 mini", "iPhone14,5": "iPhone 13",
+        // iPhone SE
+        "iPhone12,8": "iPhone SE (2nd generation)",
+        "iPhone14,6": "iPhone SE (3rd generation)",
+        // iPad Pro M4 (2024)
+        "iPad16,3": "iPad Pro 11\" (M4)", "iPad16,4": "iPad Pro 11\" (M4)",
+        "iPad16,5": "iPad Pro 13\" (M4)", "iPad16,6": "iPad Pro 13\" (M4)",
+        // iPad Pro M2 (2022)
+        "iPad14,3": "iPad Pro 11\" (M2)", "iPad14,4": "iPad Pro 11\" (M2)",
+        "iPad14,5": "iPad Pro 12.9\" (M2)", "iPad14,6": "iPad Pro 12.9\" (M2)",
+        // iPad Pro M1 (2021)
+        "iPad13,4": "iPad Pro 11\" (M1)", "iPad13,5": "iPad Pro 11\" (M1)",
+        "iPad13,6": "iPad Pro 11\" (M1)", "iPad13,7": "iPad Pro 11\" (M1)",
+        "iPad13,8": "iPad Pro 12.9\" (M1)", "iPad13,9": "iPad Pro 12.9\" (M1)",
+        "iPad13,10": "iPad Pro 12.9\" (M1)", "iPad13,11": "iPad Pro 12.9\" (M1)",
+        // iPad Air M3 (2025)
+        "iPad15,3": "iPad Air 11\" (M3)", "iPad15,4": "iPad Air 11\" (M3)",
+        "iPad15,5": "iPad Air 13\" (M3)", "iPad15,6": "iPad Air 13\" (M3)",
+        // iPad Air M2 (2024)
+        "iPad14,8": "iPad Air 11\" (M2)", "iPad14,9": "iPad Air 11\" (M2)",
+        "iPad14,10": "iPad Air 13\" (M2)", "iPad14,11": "iPad Air 13\" (M2)",
+        // iPad Air M1 (2022)
+        "iPad13,16": "iPad Air (M1)", "iPad13,17": "iPad Air (M1)",
+        // iPad mini
+        "iPad14,1": "iPad mini (6th generation)",
+        "iPad14,2": "iPad mini (6th generation)",
+        "iPad16,1": "iPad mini (A17 Pro)", "iPad16,2": "iPad mini (A17 Pro)",
+        // iPad (10th generation, 2022)
+        "iPad13,18": "iPad (10th generation)",
+        "iPad13,19": "iPad (10th generation)",
+        // iPad (11th generation, 2025)
+        "iPad15,7": "iPad (11th generation)",
+        "iPad15,8": "iPad (11th generation)",
+        // Mac (Catalyst) — uname returns "arm64" or "x86_64"
+        "arm64": "Mac", "x86_64": "Mac",
+    ]
 
     #if targetEnvironment(macCatalyst)
     private static func macModelName() -> String? {

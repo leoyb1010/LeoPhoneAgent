@@ -20,7 +20,7 @@ final class DeploymentTargetTests: XCTestCase {
 
     func testNoAlwaysTrueAvailabilityChecksRemain() throws {
         let re = try NSRegularExpression(
-            pattern: #"#(un)?available\((iOS|iOSApplicationExtension|watchOS|watchOSApplicationExtension) ([0-9]+)"#)
+            pattern: #"#(un)?available\((iOS|iOSApplicationExtension|watchOS|watchOSApplicationExtension) ([0-9]+)(?:\.([0-9]+))?"#)
         let skip: Set<String> = ["Vendor", "iSH", "MinisTests", "MinisUITests", "LeoPhoneAgent.xcodeproj"]
         var offenders: [String] = []
         let enumerator = FileManager.default.enumerator(at: iosRoot, includingPropertiesForKeys: nil)!
@@ -34,7 +34,10 @@ final class DeploymentTargetTests: XCTestCase {
                 let code = line.components(separatedBy: "//").first ?? line
                 for m in re.matches(in: code, range: NSRange(code.startIndex..., in: code)) {
                     let major = Int(code[Range(m.range(at: 3), in: code)!]) ?? 0
-                    if major <= 27 { offenders.append("\(url.lastPathComponent):\(n + 1)") }
+                    // [duo] 27.1 APIs (iPhone Duo: UIHingeInteraction, …) are NOT always
+                    // true on a 27.0 target; only versions <= 27.0 are.
+                    let minor = Range(m.range(at: 4), in: code).flatMap { Int(code[$0]) } ?? 0
+                    if major < 27 || (major == 27 && minor == 0) { offenders.append("\(url.lastPathComponent):\(n + 1)") }
                 }
             }
         }

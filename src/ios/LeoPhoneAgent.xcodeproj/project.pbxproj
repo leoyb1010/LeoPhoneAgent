@@ -142,6 +142,9 @@
         E5DGR002 /* DiagnosticRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DGR003 /* DiagnosticRing.swift */; };
         E5PSN46B2 /* PerfSanity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PSN46R /* PerfSanity.swift */; };
         E5CMP46B2 /* CrashMarkerPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CMP46R /* CrashMarkerPolicy.swift */; };
+        E5DUOD001 /* DisplayContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DUOD003 /* DisplayContext.swift */; };
+        E5DUOD002 /* DisplayContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DUOD003 /* DisplayContext.swift */; };
+        E5DUOL001 /* SceneDisplayLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DUOL003 /* SceneDisplayLogger.swift */; };
         E5LRP001 /* LLMRetryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LRP003 /* LLMRetryPolicy.swift */; };
         E5LRP002 /* LLMRetryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LRP003 /* LLMRetryPolicy.swift */; };
         E5SSHT001 /* RemoteSSHTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SSHT003 /* RemoteSSHTrust.swift */; };
@@ -1277,6 +1280,8 @@
         E5DGR003 /* DiagnosticRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics/DiagnosticRing.swift; sourceTree = SOURCE_ROOT; };
         E5PSN46R /* PerfSanity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics/PerfSanity.swift; sourceTree = SOURCE_ROOT; };
         E5CMP46R /* CrashMarkerPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics/CrashMarkerPolicy.swift; sourceTree = SOURCE_ROOT; };
+        E5DUOD003 /* DisplayContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics/DisplayContext.swift; sourceTree = SOURCE_ROOT; };
+        E5DUOL003 /* SceneDisplayLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics/SceneDisplayLogger.swift; sourceTree = SOURCE_ROOT; };
         E5LRP003 /* LLMRetryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/LLMRetryPolicy.swift; sourceTree = SOURCE_ROOT; };
         E5SSHT003 /* RemoteSSHTrust.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Session/RemoteSSHTrust.swift; sourceTree = SOURCE_ROOT; };
         E5CKIJ003 /* CloudKitInboundJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Sync/V2/CloudKitInboundJournal.swift; sourceTree = SOURCE_ROOT; };
@@ -2967,6 +2972,8 @@
                 E5DGR003 /* DiagnosticRing.swift */,
                 E5PSN46R /* PerfSanity.swift */,
                 E5CMP46R /* CrashMarkerPolicy.swift */,
+                E5DUOD003 /* DisplayContext.swift */,
+                E5DUOL003 /* SceneDisplayLogger.swift */,
                 E5LRP003 /* LLMRetryPolicy.swift */,
                 E5SSHT003 /* RemoteSSHTrust.swift */,
                 E5CKIJ003 /* CloudKitInboundJournal.swift */,
@@ -3946,6 +3953,7 @@
                 E5DGR002 /* DiagnosticRing.swift in Sources */,
                 E5PSN46B2 /* PerfSanity.swift in Sources */,
                 E5CMP46B2 /* CrashMarkerPolicy.swift in Sources */,
+                E5DUOD002 /* DisplayContext.swift in Sources */,
                 E5LRP002 /* LLMRetryPolicy.swift in Sources */,
                 E5SSHT002 /* RemoteSSHTrust.swift in Sources */,
 				E5TRP001 /* CollectionStore.swift in Sources */,
@@ -4820,6 +4828,8 @@
                 E5DGR001 /* DiagnosticRing.swift in Sources */,
                 E5PSN46B1 /* PerfSanity.swift in Sources */,
                 E5CMP46B1 /* CrashMarkerPolicy.swift in Sources */,
+                E5DUOD001 /* DisplayContext.swift in Sources */,
+                E5DUOL001 /* SceneDisplayLogger.swift in Sources */,
                 E5LRP001 /* LLMRetryPolicy.swift in Sources */,
                 E5SSHT001 /* RemoteSSHTrust.swift in Sources */,
                 E5CKIJ001 /* CloudKitInboundJournal.swift in Sources */,

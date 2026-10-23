@@ -9,8 +9,7 @@ import WidgetKit
 struct RecordingLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RecordingActivityAttributes.self) { context in
-            RecordingActivityCard(attributes: context.attributes, state: context.state)
-                .padding(14)
+            RecordingActivityFamilyView(attributes: context.attributes, state: context.state)
                 .leoWidgetLocale()
                 .widgetURL(URL(string: "leophoneagent://recordings/recorder"))
         } dynamicIsland: { context in
@@ -39,17 +38,92 @@ struct RecordingLiveActivityWidget: Widget {
                     .padding(.horizontal, 6)
                 }
             } compactLeading: {
-                Image(systemName: context.state.isPaused ? "pause.fill" : "waveform")
-                    .foregroundStyle(context.state.isPaused ? Color.secondary : Color.red)
+                RecordingStatusGlyph(state: context.state)
             } compactTrailing: {
-                RecordingClock(state: context.state)
-                    .font(.caption2.monospacedDigit())
-                    .frame(maxWidth: 52)
+                RecordingCompactClock(state: context.state)
             } minimal: {
-                Image(systemName: context.state.isPaused ? "pause.fill" : "waveform")
-                    .foregroundStyle(context.state.isPaused ? Color.secondary : Color.red)
+                RecordingStatusGlyph(state: context.state)
             }
             .widgetURL(URL(string: "leophoneagent://recordings/recorder"))
+        }
+        // Apple Watch Smart Stack / CarPlay get their own small layout instead of
+        // a squeezed lock-screen card (same as the agent card).
+        .supplementalActivityFamilies([.small])
+    }
+}
+
+/// [duo-island] One glyph that reads at any island size, including the narrow
+/// side island of iPhone Duo: filled record dot while recording, pause bars when paused.
+@available(iOSApplicationExtension 16.2, *)
+private struct RecordingStatusGlyph: View {
+    let state: RecordingActivityAttributes.ContentState
+    @Environment(\.isLuminanceReduced) private var dimmed
+
+    var body: some View {
+        Image(systemName: state.isPaused ? "pause.fill" : "record.circle.fill")
+            .foregroundStyle(state.isPaused ? Color.secondary : Color.red.opacity(dimmed ? 0.6 : 1))
+            .accessibilityLabel(state.isPaused ? Text("暂停") : Text(state.statusText))
+    }
+}
+
+/// [duo-island] Compact trailing clock, sized by its content instead of a fixed
+/// width: an invisible template shaped like the current reading ("0:00", "00:00",
+/// "0:00:00") gives the timer its intrinsic width, since a live timer text alone
+/// stretches to fill the island. When the island is limited in width (several
+/// activities, landscape, or the vertical side island of iPhone Duo) the digits
+/// may shrink further rather than clip.
+@available(iOSApplicationExtension 16.2, *)
+private struct RecordingCompactClock: View {
+    let state: RecordingActivityAttributes.ContentState
+    @Environment(\.isDynamicIslandLimitedInWidth) private var limited
+
+    var body: some View {
+        Text(verbatim: Self.template(elapsed: state.elapsed))
+            .hidden()
+            .overlay(alignment: .trailing) {
+                RecordingClock(state: state)
+                    .lineLimit(1)
+                    .minimumScaleFactor(limited ? 0.5 : 0.75)
+            }
+            .font(.caption2.monospacedDigit())
+            .accessibilityElement(children: .combine)
+    }
+
+    /// Widest reading likely before the next push (pushes come on state changes,
+    /// so leave a minute of headroom before each width step).
+    static func template(elapsed: Double) -> String {
+        elapsed < 540 ? "0:00" : (elapsed < 3540 ? "00:00" : "0:00:00")
+    }
+}
+
+/// Lock screen / banner card, or the small layout on the watch / CarPlay.
+@available(iOSApplicationExtension 16.2, *)
+private struct RecordingActivityFamilyView: View {
+    let attributes: RecordingActivityAttributes
+    let state: RecordingActivityAttributes.ContentState
+    @Environment(\.activityFamily) private var family
+
+    var body: some View {
+        if family == .small {
+            HStack(spacing: 8) {
+                RecordingStatusGlyph(state: state)
+                    .font(.title3)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(attributes.title)
+                        .font(.caption.bold())
+                        .lineLimit(1)
+                    RecordingClock(state: state)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+        } else {
+            RecordingActivityCard(attributes: attributes, state: state)
+                .padding(14)
         }
     }
 }
@@ -58,13 +132,15 @@ struct RecordingLiveActivityWidget: Widget {
 private struct RecordingActivityCard: View {
     let attributes: RecordingActivityAttributes
     let state: RecordingActivityAttributes.ContentState
+    /// [duo-aod] Always-On (iPhone Duo outer display, Pro models): dim the accents.
+    @Environment(\.isLuminanceReduced) private var dimmed
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: state.isPaused ? "pause.circle.fill" : "record.circle")
                     .font(.title3)
-                    .foregroundStyle(state.isPaused ? Color.secondary : Color.red)
+                    .foregroundStyle(state.isPaused ? Color.secondary : Color.red.opacity(dimmed ? 0.6 : 1))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(attributes.title)
                         .font(.subheadline.bold())
@@ -82,7 +158,8 @@ private struct RecordingActivityCard: View {
                 RecordingClock(state: state)
                     .font(.title2.monospacedDigit().weight(.semibold))
             }
-            RecordingLevelBar(level: state.isPaused ? 0 : state.level)
+            // The live level means nothing on a dimmed screen that refreshes rarely.
+            RecordingLevelBar(level: state.isPaused || dimmed ? 0 : state.level)
                 .frame(height: 6)
             RecordingActivityControls(state: state)
         }

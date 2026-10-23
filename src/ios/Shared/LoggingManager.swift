@@ -604,7 +604,8 @@ final class LoggingManager: ObservableObject {
             body += "\n## 环境快照\n\n"
             body += "- App: LeoBot \(version) (\(build))\n"
             body += "- 系统: \(ProcessInfo.processInfo.operatingSystemVersionString)\n"
-            body += "- 设备: \(machine), 内存 \(memoryMB) MB\n"
+            body += "- 设备: \(DeviceIdentity.describe(identifier: DeviceIdentity.machineIdentifier(uname: machine))), 内存 \(memoryMB) MB\n"
+            body += "- 屏幕: \(DisplayContext.current)\n"
             body += "- 语言: \((UserDefaults.standard.object(forKey: "AppleLanguages") as? [String])?.first ?? Locale.preferredLanguages.first ?? "?")\n"
             body += "- 日志采集开关: \(isEnabled ? "开" : "关")\n"
         }
