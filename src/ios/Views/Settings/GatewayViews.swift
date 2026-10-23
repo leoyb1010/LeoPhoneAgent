@@ -963,10 +963,14 @@ struct GatewayConsoleView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if driver.isRunning {
+                    // [duo-bars] Titled label: a vertical (closed iPhone Duo) or
+                    // overflowing bar shows the title, never a bare glyph.
                     Button {
                         driver.stop()
                     } label: {
-                        Image(systemName: "stop.circle.fill").foregroundStyle(.red)
+                        Label { Text("Stop") } icon: {
+                            Image(systemName: "stop.circle.fill").foregroundStyle(.red)
+                        }
                     }
                     .accessibilityLabel(Text("Stop"))
                 }
@@ -1866,8 +1870,11 @@ struct HarnessConsoleView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if driver.showsChanges {
+                    // [duo-bars] Every bar item carries a title (vertical bar / overflow menu).
                     Button { showChanges = true } label: {
-                        HarnessChangesBadge(count: driver.changes?.files.count ?? 0)
+                        Label { Text("改动") } icon: {
+                            HarnessChangesBadge(count: driver.changes?.files.count ?? 0)
+                        }
                     }
                     .accessibilityLabel(Text("改动"))
                     .accessibilityValue(Text("\(driver.changes?.files.count ?? 0) 个文件"))
@@ -1878,8 +1885,12 @@ struct HarnessConsoleView: View {
                 Button {
                     withAnimation(LeoMotion.smooth(reduceMotion: reduceMotion)) { showScreen.toggle() }
                 } label: {
-                    Image(systemName: showScreen ? "display.trianglebadge.exclamationmark" : "display")
-                        .symbolVariant(showScreen ? .fill : .none)
+                    Label {
+                        showScreen ? Text("收起 Mac 画面") : Text("Mac 画面")
+                    } icon: {
+                        Image(systemName: showScreen ? "display.trianglebadge.exclamationmark" : "display")
+                            .symbolVariant(showScreen ? .fill : .none)
+                    }
                 }
                 .accessibilityLabel(showScreen ? Text("收起 Mac 画面") : Text("Mac 画面"))
                 .accessibilityIdentifier("harness.macScreen")
@@ -1887,7 +1898,9 @@ struct HarnessConsoleView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 if driver.isRunning {
                     Button { driver.stop() } label: {
-                        Image(systemName: "stop.circle.fill").foregroundStyle(.red)
+                        Label { Text("停止") } icon: {
+                            Image(systemName: "stop.circle.fill").foregroundStyle(.red)
+                        }
                     }
                     .accessibilityLabel(Text("停止"))
                 }

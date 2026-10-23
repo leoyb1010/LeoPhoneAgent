@@ -60,7 +60,11 @@ final class WP42MotionSystemTests: XCTestCase {
     func testControlLayerGlassAndComposerContainer() throws {
         let chat = try source("Views/Chat/AIChatView.swift")
         XCTAssertTrue(chat.contains("GlassEffectContainer(spacing: LeoComposerGlass.containerSpacing)"))
-        XCTAssertTrue(chat.contains(".leoComposerChrome(glassID: \"chat.composer\", in: chatComposerGlassNS)"))
+        // [duo-corners] The shell lives in ChatComposerShell (concentric on 27.1+,
+        // this exact chrome before), still inside the same GlassEffectContainer.
+        XCTAssertTrue(chat.contains(".modifier(ChatComposerShell(namespace: chatComposerGlassNS))"))
+        XCTAssertTrue(chat.contains(".leoComposerChrome(glassID: \"chat.composer\", in: namespace)"))
+        XCTAssertTrue(chat.contains(".glassEffectID(\"chat.composer\", in: namespace)"))
         XCTAssertTrue(chat.contains(".toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)"))
         XCTAssertFalse(chat.contains(".background(.regularMaterial, in: Capsule())"), "new-messages pill is glass")
         // 隐私遮罩是内容层,保留 Material。

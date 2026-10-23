@@ -676,6 +676,8 @@ struct RerunFromToolBlockListener: ViewModifier {
         content
             .onReceive(NotificationCenter.default.publisher(for: .rerunFromToolBlock)) { note in
                 guard let blockId = note.userInfo?["blockId"] as? UUID else { return }
+                // [duo-windows] App-wide notification: only the chat that owns the block.
+                guard vm.messages.contains(where: { $0.blocks.contains { $0.id == blockId } }) else { return }
                 let run = { [vm] in
                     vm.retryFromToolBlock(blockId: blockId)
                     vm.forceScrollToBottom.send()
@@ -760,10 +762,15 @@ struct DismissImmersiveCoversListener: ViewModifier {
 struct ChatInputAppendListener: ViewModifier {
     let vm: AIChatViewModel
     @Binding var inputFocused: Bool
+    /// [duo-windows] The chat's window: with two LeoBot windows open, "Add to
+    /// chat input" lands only in the chat the user is working in (ChatWindowGate),
+    /// not in every open chat's draft.
+    var hostWindow: ChatHostWindow? = nil
 
     func body(content: Content) -> some View {
         content.onReceive(NotificationCenter.default.publisher(for: .chatInputAppendRequested)) { note in
             guard let text = note.userInfo?["text"] as? String else { return }
+            if let hostWindow, !ChatWindowGate.shouldHandleGlobalEvent(hostWindow) { return }
             // [T-quote-followup] Blockquote payloads must keep their line
             // structure -- the whitespace-collapsing append would glue the
             // follow-up question onto the last "> " line.

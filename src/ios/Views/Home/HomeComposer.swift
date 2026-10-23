@@ -225,6 +225,16 @@ struct HomeComposerBar: View {
         }
         .padding(.horizontal, LeoComposerMetrics.horizontalPadding)
         .padding(.vertical, LeoComposerMetrics.verticalPadding)
+        // [duo-drop] P1-8: text or a link dragged from the app beside LeoBot (iPhone
+        // Duo inner display split view, iPad) goes into the prompt — on any idiom.
+        // Home keeps no attachments; files and images go in through "+".
+        .dropDestination(for: String.self) { items, _ in
+            let dropped = items.map { String($0.prefix(20_000)) }
+                .joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !dropped.isEmpty else { return false }
+            text = text.isEmpty ? dropped : text + (text.hasSuffix("\n") ? "" : "\n") + dropped
+            return true
+        }
         .leoComposerChrome(glassID: "home.composer", in: glassNamespace)
         .padding(.horizontal, LeoComposerMetrics.outerPadding)
         .padding(.bottom, 6)
