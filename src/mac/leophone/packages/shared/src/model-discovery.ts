@@ -190,18 +190,74 @@ export function isLikelyNonChatModel(modelId: string): boolean {
   return NON_CHAT_PATTERN.test(modelId.toLowerCase());
 }
 
+const CLOAKED_ID = /^claude-[a-z0-9.]+(?:-[a-z0-9.]+)*?-dd-(.+)$/u;
+
+/**
+ * CLIProxyAPI 这类网关在 Anthropic 风格的 /v1/models 里把非 Claude 模型「伪装」成
+ * `claude-fable-5-dd-<倒序的真实 ID>`(给只认 claude-* 的客户端用):
+ * `claude-fable-5-dd-orp-1.3k-imik/og` → `go/kimi-k3.1-pro`。原样存下来就是一串乱码,
+ * 还会被当成 Claude 套用 Claude 专属参数。还原成真实 ID;网关两种写法都认。
+ */
+export function decodeCloakedModelId(modelId: string): string {
+  const match = CLOAKED_ID.exec(modelId.trim());
+  return match ? [...match[1]!].reverse().join("") : modelId;
+}
+
 function compareVersionDesc(left: string, right: string): number {
   return right.localeCompare(left, "en", { numeric: true, sensitivity: "base" });
 }
 
-/** 新的在前:有 release_date 按日期,否则按 ID 里的版本号自然序。 */
+/**
+ * ID 里紧跟品牌的版本号:`kimi-k3.1-pro` → [3,1]、`qwen3.8-max` → [3,8]、`deepseek-v4.1-flash` → [4,1]、
+ * `claude-opus-5-5-high` → [5,5]。`gpt-oss-120b` 这类参数量不算版本(返回空,排最后)。
+ */
+export function modelVersionOf(modelId: string): number[] {
+  const base = stripVendorPrefix(modelId).toLowerCase().replace(DATE_SUFFIX, "");
+  const claude = /^claude-(?:[a-z]+-)?(\d+)(?:[-.](\d{1,2}))?(?=$|[-.])/u.exec(base);
+  const version = claude
+    ? [claude[1]!, ...(claude[2] ? [claude[2]] : [])]
+    : /(\d+(?:\.\d+)*)(?![\d.]*[bkm](?:$|[-_]))/u.exec(base)?.[1]?.split(".");
+  // 小版本按小数比:grok-4.20 是 4.2,排在 4.7 之前。
+  return (version ?? []).map((part, index) => (index === 0 ? Number(part) : Number(`0.${part}`)));
+}
+
+function compareVersionArrays(left: readonly number[], right: readonly number[]): number {
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const diff = (right[index] ?? -1) - (left[index] ?? -1);
+    if (diff) return diff;
+  }
+  return 0;
+}
+
+const FLAGSHIP_TOKEN = /^(?:pro|max|ultra|plus|opus|large)$/u;
+const LITE_TOKEN =
+  /^(?:flash|flashx|fast|turbo|mini|lite|air|nano|small|highspeed|preview|build|instant|code|contributor)$/u;
+
+/** 同一版本里先选旗舰:pro/max 加分,flash/lite/mini/preview 等减分,多余后缀轻微减分。 */
+function flagshipScore(modelId: string): number {
+  const tokens = stripVendorPrefix(modelId).toLowerCase().split(/[-_]/u).slice(1);
+  let score = 0;
+  for (const token of tokens) {
+    if (FLAGSHIP_TOKEN.test(token)) score += 2;
+    else if (LITE_TOKEN.test(token)) score -= 2;
+    else if (!/^[a-z]?\d/u.test(token)) score -= 0.25;
+  }
+  return score;
+}
+
+/** 新的在前:有 release_date 按日期,否则按 ID 里的版本号;同版本先旗舰、后快照。 */
 export function compareModelsNewestFirst(
   left: Pick<DiscoveredModel, "id" | "releaseDate">,
   right: Pick<DiscoveredModel, "id" | "releaseDate">,
 ): number {
+  const byVersion = compareVersionArrays(modelVersionOf(left.id), modelVersionOf(right.id));
+  // 版本号能比出新旧就以它为准(网关的 created 常是「接入时间」,不可靠);比不出再看日期。
+  if (byVersion) return byVersion;
   if (left.releaseDate && right.releaseDate && left.releaseDate !== right.releaseDate) {
     return right.releaseDate.localeCompare(left.releaseDate);
   }
+  const byTier = flagshipScore(right.id) - flagshipScore(left.id);
+  if (byTier) return byTier;
   // 带日期后缀的快照排在别名之后,同名时默认勾选别名。
   const leftDated = DATE_SUFFIX.test(left.id);
   const rightDated = DATE_SUFFIX.test(right.id);
@@ -212,19 +268,21 @@ export function compareModelsNewestFirst(
 }
 
 /**
- * 默认勾选:每个系列取最新的 perFamily 个(同展示名只取一个),总数不超过 maxTotal。
- * 已添加的不会出现在返回值里。
+ * 默认勾选:每个品牌系列取最新的 perFamily 个(默认 1 个,同展示名只取一个),
+ * 例如 Kimi 只勾 `kimi-k3.1-pro`、Qwen 只勾 `qwen3.8-max`。已添加的不会出现在返回值里;
+ * 已经有该系列模型的,不再重复推荐。
  */
 export function selectDefaultDiscoveredModels(
   models: readonly DiscoveredModel[],
   existingIds: ReadonlySet<string>,
   options: { readonly perFamily?: number; readonly maxTotal?: number } = {},
 ): string[] {
-  const perFamily = options.perFamily ?? 2;
-  const maxTotal = options.maxTotal ?? 10;
+  const perFamily = options.perFamily ?? 1;
+  const maxTotal = options.maxTotal ?? 24;
   const byFamily = new Map<string, DiscoveredModel[]>();
   for (const model of models) {
-    if (model.hidden || existingIds.has(model.id)) continue;
+    // 没版本号的路由别名(cn/fast-model 之类)不默认勾,用户要的话手动勾。
+    if (model.hidden || (!model.releaseDate && modelVersionOf(model.id).length === 0)) continue;
     const family = resolveModelFamily(model.id);
     byFamily.set(family, [...(byFamily.get(family) ?? []), model]);
   }
@@ -236,8 +294,9 @@ export function selectDefaultDiscoveredModels(
       if (count >= perFamily) break;
       if (names.has(model.displayName)) continue;
       names.add(model.displayName);
-      picked.push(model.id);
       count += 1;
+      // 这一系列最新的已经加过了:位置占掉,不往下挑旧款。
+      if (!existingIds.has(model.id)) picked.push(model.id);
     }
   }
   return picked.slice(0, maxTotal);

@@ -356,7 +356,9 @@ export function MarkdownImage({
           alt={imageAlt}
           className={cn(
             imageThumbnailClassName,
-            effectiveImageStatus === "loading" && "invisible",
+            // [leo] 加载完成后淡入，减少动态效果偏好下直接显示。
+            "transition-opacity duration-200 motion-reduce:transition-none",
+            effectiveImageStatus === "loading" && "invisible opacity-0",
             className,
           )}
           data-markdown-image=""

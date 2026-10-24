@@ -12,11 +12,14 @@ const BADGE_CLASS_NAME =
 export function DiscoveredModelRow({
   model,
   added,
+  latest = false,
   checked,
   onCheckedChange,
 }: {
   model: DiscoveredModel;
   added: boolean;
+  /** 这一品牌最新的一款:标「最新」。 */
+  latest?: boolean;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
 }) {
@@ -25,8 +28,9 @@ export function DiscoveredModelRow({
     <label
       data-testid="model-discovery-row"
       className={cn(
-        "flex h-8 items-center gap-2 rounded-md px-2",
+        "flex h-8 items-center gap-2 rounded-md px-2 transition-colors duration-150",
         added ? "cursor-default opacity-60" : "cursor-pointer hover:bg-surface-hover",
+        checked && !added && "bg-surface/60",
       )}
     >
       <Checkbox
@@ -43,6 +47,14 @@ export function DiscoveredModelRow({
       >
         {model.id}
       </span>
+      {latest ? (
+        <span
+          data-testid="model-discovery-latest"
+          className="shrink-0 rounded-full bg-primary/10 px-1.5 py-px text-ui-xs leading-normal text-primary"
+        >
+          {intl.formatMessage({ id: "settings.modelProvider.discovery.latest" })}
+        </span>
+      ) : null}
       {added ? (
         <span className={BADGE_CLASS_NAME}>
           {intl.formatMessage({ id: "settings.modelProvider.discovery.added" })}

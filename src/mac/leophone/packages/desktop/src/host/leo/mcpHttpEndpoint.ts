@@ -180,9 +180,11 @@ export async function handleMcpHttpRequest(
 export function leoMcpEndpoints(
   store: TreasuryStore,
   brain: McpHttpServer = createBrainMcpServer(),
+  media?: McpHttpServer,
 ): ReadonlyMap<string, McpHttpServer> {
   return new Map([
     ["/api/leo/treasury/mcp", createTreasuryMcpServer(store)],
     ["/api/leo/brain/mcp", brain],
+    ...(media ? ([["/api/leo/media/mcp", media]] as const) : []),
   ]);
 }

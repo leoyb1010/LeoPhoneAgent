@@ -32,6 +32,11 @@ relay_has() {   # relay_has <relay-name> <version> → 0 表示该 Mac 以该版
     /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if any(m['name']=='$1' and m.get('app_version')=='$2' for m in d.get('machines',[])) else 1)" 2>/dev/null
 }
 
+drop_archive() {   # drop_archive <host> <remote-out>:健康检查过关,回滚用的旧版存档就没用了
+  local a=$(echo "$2" | sed -n 's/.*archived=\(.*\)$/\1/p')
+  [[ -n $a ]] && ssh -o BatchMode=yes "$1" "rm -rf '$a' '${a%.app}.cli-config.json'" && echo "  已删旧版存档(每台只留一份 LeoBot)"
+}
+
 for h in ${(s:,:)HOSTS}; do
   echo "\n== $h"
   ka=$KEEPALIVE; [[ $h == mbp ]] && ka=0
@@ -123,9 +128,11 @@ if [ $ok = 0 ]; then
   fi
   exit 1
 fi
-# 旧版存档只留最近 3 份(每份约 700 MB,不清理时每台已堆到 4–10 GB)
-ls -dt ~/LeoBot-archives/LeoBot-*-replaced-*.app 2>/dev/null | tail -n +4 | while read -r d; do rm -rf "$d"; done
-ls -t ~/LeoBot-archives 2>/dev/null | grep -E '^LeoBot-.*-replaced-.*\.cli-config\.json$' | tail -n +4 | while read -r f; do rm -f ~/LeoBot-archives/"$f"; done
+# 每台只留一份 LeoBot:更早的存档全清,本次存档只活到下面中继健康检查过关(过关后本机脚本删掉它)。
+# 以前留 3 份,旧 .app 会进启动台 / Spotlight / 「打开方式」,用户看到好几个 LeoBot。
+for d in ~/LeoBot-archives/LeoBot-*-replaced-*.app(N) ~/LeoBot-archives/LeoBot-*-replaced-*.cli-config.json(N); do
+  [ "$d" = "$archived" ] || [ "$d" = "$cfg_snap" ] || rm -rf "$d"
+done
 echo "RESULT installed $V (was $old) archived=$archived"
 REMOTE
 )
@@ -137,6 +144,7 @@ REMOTE
   if [[ -n $name ]]; then
     for i in {1..18}; do relay_has "$name" "$V" && break; sleep 5; done
     if relay_has "$name" "$V"; then echo "  ✓ $name 已以 $V 连上中继"
+      drop_archive "$h" "$out"
     else
       echo "  ✗ 90 秒内没以 $V 连上中继,回滚"
       archived=$(echo "$out" | sed -n 's/.*archived=\(.*\)$/\1/p')

@@ -30,6 +30,7 @@ import {
   TID_V4_FORK,
   TID_V4_ROW,
   TID_V4_ROW_ATTACHMENTS,
+  encodeMarkdownArtifactImageSource,
   parseAutomationRunId,
   testId,
 } from "@zcode/shared";
@@ -64,6 +65,7 @@ import {
   type ChatMediaAttachmentPreviewTarget,
 } from "@/ChatMediaAttachmentPreviewDialog.js";
 import type { PdfViewerRangeSource } from "@/components/ui/pdf-viewer.js";
+import { MarkdownImage } from "@/components/ai-elements/markdown-image.js";
 import { MessageAction, MessageActions } from "@/components/ai-elements/message.js";
 import { LeoSpeakAction } from "@/leo/LeoSpeakAction.js";
 import {
@@ -149,9 +151,33 @@ function RowShell({
   );
 }
 
-const ArtifactRowView = memo(function ArtifactRowView({ row }: { row: ArtifactRow }) {
+const ArtifactRowView = memo(function ArtifactRowView({
+  row,
+  sessionId,
+  readAttachment,
+}: {
+  row: ArtifactRow;
+  sessionId?: string;
+  readAttachment?: ConversationRowRenderContext["readAttachment"];
+}) {
+  // [leo] 图片结果物直接给缩略图；读取/加载态/灯箱全部复用 markdown artifact 图片链路。
+  const showThumbnail =
+    row.artifactType === "image" &&
+    row.ref.startsWith("zcode-artifact://") &&
+    Boolean(sessionId && readAttachment);
   return (
     <RowShell rowId={row.rowId} className="px-4 py-1">
+      {showThumbnail ? (
+        <div className="[&>[data-image-thumbnail-trigger]]:my-2">
+          <MarkdownImage
+            alt={row.displayName}
+            className="max-h-60 max-w-60"
+            readAttachment={readAttachment}
+            sessionId={sessionId}
+            src={encodeMarkdownArtifactImageSource(row.ref)}
+          />
+        </div>
+      ) : null}
       <div className="flex items-center gap-2 rounded-lg border border-card-border bg-card px-3 py-2">
         <FileIcon className="size-4 shrink-0 text-foreground-subtle" aria-hidden="true" />
         <div className="min-w-0 flex-1">
@@ -2322,7 +2348,13 @@ function ConversationRowViewImpl({
     case "subagent":
       return <SubagentRowView row={row} />;
     case "artifact":
-      return <ArtifactRowView row={row} />;
+      return (
+        <ArtifactRowView
+          row={row}
+          sessionId={context.sessionId ?? undefined}
+          readAttachment={context.readAttachment}
+        />
+      );
     default:
       return null;
   }

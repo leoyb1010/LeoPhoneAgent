@@ -20,9 +20,22 @@ export const APP_PROTOCOL_APP_ONLY_BUILTIN_SLASH_COMMANDS = [
     name: "plan",
     source: "builtin",
   },
+  // [leo] 正文由 builtin-prompt-command.ts 展开；只进 App `/` 面板。
+  {
+    description: "只读审查当前改动（或与 base-ref 的差异），按严重度给出行内评论。",
+    inputHint: "/review [base-ref]",
+    name: "review",
+    source: "builtin",
+  },
+  {
+    description: "用图像模型生成图片（generate_image 工具）。",
+    inputHint: "/image <描述>",
+    name: "image",
+    source: "builtin",
+  },
 ] as const satisfies readonly ZCodeSlashCommand[];
 
-const EXTRA_RESERVED_SLASH_COMMAND_NAMES = ["compress", "plan"] as const;
+const EXTRA_RESERVED_SLASH_COMMAND_NAMES = ["compress", "plan", "review", "image"] as const;
 
 const RESERVED_SLASH_COMMAND_NAMES = new Set(
   BUILTIN_ZCODE_SLASH_COMMAND_HELP_ENTRIES.flatMap((entry) => [

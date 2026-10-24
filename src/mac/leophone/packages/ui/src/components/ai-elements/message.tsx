@@ -820,9 +820,38 @@ function rewriteLocalFileMarkdownTargetsRehypePlugin() {
   };
 }
 
+// [leo] 默认 sanitize 的 protocols.src 只有 http/https，`![x](data:image/png;base64,…)` 会被剥掉 src。
+// 在 Streamdown 默认 schema 上放行 data:，但 img.src 再用白名单正则收窄到位图 base64；
+// data:text/html、data:image/svg+xml 等仍被丢弃。其余插件与顺序保持不变。
+const markdownImageDataUrlPattern = /^data:image\/(?:png|jpe?g|webp|gif);base64,/i;
+type MarkdownSanitizeSchema = {
+  attributes?: Record<string, Array<string | unknown[]>>;
+  protocols?: Record<string, string[] | null | undefined>;
+};
+
+function allowMarkdownImageDataUrls(plugin: Pluggable): Pluggable {
+  if (!Array.isArray(plugin)) return plugin;
+  const [sanitize, schema] = plugin as [Pluggable, MarkdownSanitizeSchema];
+  const imgAttributes = (schema.attributes?.img ?? []).filter((attr) => attr !== "src");
+  return [
+    sanitize,
+    {
+      ...schema,
+      protocols: { ...schema.protocols, src: [...(schema.protocols?.src ?? []), "data"] },
+      attributes: {
+        ...schema.attributes,
+        // 非 data: 的 src 仍只受上面 protocols 约束；data: 必须命中位图白名单。
+        img: [...imgAttributes, ["src", /^(?!data:)/i, markdownImageDataUrlPattern]],
+      },
+    },
+  ] as Pluggable;
+}
+
 const messageRehypePlugins: PluggableList = [
   rewriteLocalFileMarkdownTargetsRehypePlugin,
-  ...Object.values(defaultRehypePlugins),
+  ...Object.entries(defaultRehypePlugins).map(([name, plugin]) =>
+    name === "sanitize" ? allowMarkdownImageDataUrls(plugin) : plugin,
+  ),
 ];
 
 const messageDefaultRemarkPlugins: PluggableList = Object.entries(defaultRemarkPlugins).map(

@@ -218,6 +218,14 @@ describe("ContextBuilder meta user context", () => {
         "- file should be an absolute path or include the workspace folder segment so it can be resolved relative to the workspace.",
         "- Keep line ranges tight; end defaults to start.",
         '- Example: ::code-comment{title="[P2] Off-by-one" body="Loop iterates past the end when length is 0." file="/path/to/foo.ts" start=10 end=11 priority=2}',
+        "",
+        "### 富文本输出（桌面端）",
+        "- 本会话在 LeoBot 桌面聊天视图中渲染，不是终端；上文 Harness 中“in a terminal”一句在此不适用。",
+        "- 支持：GFM 表格、任务列表（- [ ]）、带语法高亮的围栏代码块、Mermaid 图（```mermaid）、KaTeX 公式（行内 $…$，独立 $$…$$）、GitHub 风格提示块（> [!NOTE] / [!TIP] / [!IMPORTANT] / [!WARNING] / [!CAUTION]）、<details><summary>…</summary> 折叠块。",
+        "- 图片：用 Markdown ![说明](路径)，路径为本地绝对路径或 https URL，会内联显示并可点开大图。",
+        "- 何时用：多项对比用表格；流程、架构、时序用 mermaid；长日志、完整输出放进 <details> 折叠；关键注意事项、风险用提示块。",
+        "- 普通对话保持简短，简单问题直接回答，不要为琐碎回复堆砌标题、表格或提示块。",
+        "- 若有名为 generate_image 的工具：用户要求画图/生成图片时调用它，并把它返回的 Markdown 原样贴进回答。",
       ].join("\n"),
     );
 
@@ -250,6 +258,10 @@ describe("ContextBuilder meta user context", () => {
     expect(result.sections.some((section) => section.source === "desktop_context")).toBe(false);
     expect(
       result.systemMessages.some((message) => String(message.content).includes("Desktop Context")),
+    ).toBe(false);
+    // [leo] 富文本输出指引只给桌面端，CLI 仍按终端渲染。
+    expect(
+      result.systemMessages.some((message) => String(message.content).includes("generate_image")),
     ).toBe(false);
   });
 

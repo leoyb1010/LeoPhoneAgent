@@ -42,9 +42,14 @@ export function extractMarkdownArtifactImageRefs(markdown: string): string[] {
 export function rewriteMarkdownArtifactImageSources(markdown: string): string {
   return mapOutsideMarkdownFences(markdown, (line) =>
     line.replace(ARTIFACT_IMAGE_PATTERN, (image, ref: string) =>
-      image.replace(ref, `${ARTIFACT_IMAGE_RENDER_PREFIX}${encodeURIComponent(ref)}`),
+      image.replace(ref, encodeMarkdownArtifactImageSource(ref)),
     ),
   );
+}
+
+/** [leo] 把 zcode-artifact:// 引用编码成 MarkdownImage 可识别的渲染 src（artifact 行缩略图复用）。 */
+export function encodeMarkdownArtifactImageSource(ref: string): string {
+  return `${ARTIFACT_IMAGE_RENDER_PREFIX}${encodeURIComponent(ref)}`;
 }
 
 export function decodeMarkdownArtifactImageSource(source: string): string | null {

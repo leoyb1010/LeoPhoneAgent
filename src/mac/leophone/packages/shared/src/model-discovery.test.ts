@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  decodeCloakedModelId,
   diffDiscoveredModels,
   isKeylessLocalBaseUrl,
   isLikelyNonChatModel,
@@ -65,7 +66,7 @@ function model(id: string, extra: Partial<DiscoveredModel> = {}): DiscoveredMode
   return { id, displayName: prettifyModelId(id), ...extra };
 }
 
-test("selectDefaultDiscoveredModels picks the newest few per family and skips existing", () => {
+test("selectDefaultDiscoveredModels picks the newest one per family; an added newest fills the slot", () => {
   const models = [
     model("claude-opus-4-1"),
     model("claude-opus-5-5"),
@@ -78,10 +79,32 @@ test("selectDefaultDiscoveredModels picks the newest few per family and skips ex
     model("text-embedding-3-small", { hidden: true }),
   ];
   const picked = selectDefaultDiscoveredModels(models, new Set(["gpt-5.5"]));
-  assert.deepEqual(
-    new Set(picked),
-    new Set(["claude-opus-5-5", "claude-opus-5", "claude-haiku-4-5", "gpt-5", "gpt-4o"]),
+  assert.deepEqual(new Set(picked), new Set(["claude-opus-5-5", "claude-haiku-4-5"]));
+});
+
+test("selectDefaultDiscoveredModels picks each brand's newest flagship from a gateway list", () => {
+  const ids = [
+    "go/kimi-k2.6", "go/kimi-k3", "cn/kimi-k3-2", "go/kimi-k3.1-pro", "cn/kimi-k3.1-pro",
+    "cn/kimi-k3.1-pro-highspeed", "go/kimi-k2.7-code", "go/qwen3.8-flash", "go/qwen3.8-max",
+    "go/qwen3.7-max", "grok-4.20-0309-reasoning", "grok-4.7", "grok-4.7-build-fast",
+    "gpt-oss-120b-medium", "go/gpt-5.6-luna", "go/gpt-6-luna", "go/deepseek-v4-pro",
+    "go/deepseek-v4.1-flash", "claude-opus-4-6-thinking", "claude-opus-5-5-high",
+    "cn/fast-model", "gemini-3.1-flash-image",
+  ];
+  const models = ids.map((id) =>
+    model(id, isLikelyNonChatModel(id) ? { hidden: true } : {}),
   );
+  assert.deepEqual(selectDefaultDiscoveredModels(models, new Set()), [
+    "go/kimi-k3.1-pro", "go/qwen3.8-max", "grok-4.7", "go/gpt-6-luna",
+    "go/deepseek-v4.1-flash", "claude-opus-5-5-high",
+  ]);
+});
+
+test("decodeCloakedModelId restores CLIProxyAPI's disguised ids and leaves real ones alone", () => {
+  assert.equal(decodeCloakedModelId("claude-fable-5-dd-orp-1.3k-imik/og"), "go/kimi-k3.1-pro");
+  assert.equal(decodeCloakedModelId("claude-fable-5-dd-hgih-hsalf-8.3-inimeg"), "gemini-3.8-flash-high");
+  assert.equal(decodeCloakedModelId("claude-opus-5-5-high"), "claude-opus-5-5-high");
+  assert.equal(decodeCloakedModelId("go/kimi-k3"), "go/kimi-k3");
 });
 
 test("selectDefaultDiscoveredModels prefers catalog release dates", () => {

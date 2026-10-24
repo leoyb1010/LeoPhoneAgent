@@ -1010,6 +1010,51 @@ describe("Node file and context adapters", () => {
     }
   });
 
+  // [leo] 仓库根到 cwd 每层的 AGENTS.md + CLAUDE.md 都读；用户级缺 AGENTS.md 时退到 ~/.claude/CLAUDE.md。
+  it("loads AGENTS.md and CLAUDE.md from every level between repo root and cwd", async () => {
+    const home = await mkdtemp(join(tmpdir(), "zcode-context-layers-"));
+    const repo = join(home, "repo");
+    const app = join(repo, "src", "app");
+    const adapter = createNodeContextSourceAdapter({ env: { HOME: home, SHELL: "/bin/zsh" } });
+
+    try {
+      await mkdir(app, { recursive: true });
+      await mkdir(join(repo, ".git"));
+      await mkdir(join(home, ".claude"), { recursive: true });
+      await writeFile(join(home, "AGENTS.md"), "above repo root");
+      await writeFile(join(home, ".claude", "CLAUDE.md"), "claude user");
+      await writeFile(join(repo, "AGENTS.md"), "repo agents");
+      await writeFile(join(repo, "CLAUDE.md"), "repo claude");
+      await writeFile(join(app, "AGENTS.md"), "app instructions");
+      await writeFile(join(app, "CLAUDE.md"), "app instructions");
+
+      const snapshot = await adapter.resolveContextSources({
+        workingDirectory: app,
+        userInstructions: { workingDirectory: app },
+      });
+
+      expect(snapshot.userInstructions?.sources?.map((source) => [source.scope, source.filePath])).toEqual([
+        ["user", join(home, ".claude", "CLAUDE.md")],
+        ["workspace", join(repo, "AGENTS.md")],
+        ["workspace", join(repo, "CLAUDE.md")],
+        ["workspace", join(app, "AGENTS.md")],
+      ]);
+      expect(snapshot.userInstructions?.content).toBe(
+        "claude user\n\nrepo agents\n\nrepo claude\n\napp instructions",
+      );
+
+      // 总预算按读入顺序扣减，超出的文件标记截断。
+      const capped = await adapter.resolveContextSources({
+        workingDirectory: app,
+        userInstructions: { workingDirectory: app, maxBytes: 15 },
+      });
+      expect(capped.userInstructions?.bytesRead).toBe(15);
+      expect(capped.userInstructions?.truncated).toBe(true);
+    } finally {
+      await rm(home, { force: true, recursive: true });
+    }
+  });
+
   it("captures a session-start git snapshot when the workspace is a repository", async () => {
     const dir = await mkdtemp(join(tmpdir(), "zcode-context-git-"));
     const adapter = createNodeContextSourceAdapter({ env: { SHELL: "/bin/zsh" } });

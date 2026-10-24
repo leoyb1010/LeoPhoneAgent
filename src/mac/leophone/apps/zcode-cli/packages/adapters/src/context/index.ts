@@ -22,7 +22,9 @@ import type {
 } from "@zcode/contracts";
 import { resolveGitSnapshot } from "./git-snapshot.js";
 
-const DEFAULT_PRIORITY_FILES = ["AGENTS.md"];
+// [leo] 每层目录 AGENTS.md 在前、CLAUDE.md 在后，两份都读（兼容 Claude Code 的项目约定）。
+const DEFAULT_PRIORITY_FILES = ["AGENTS.md", "CLAUDE.md"];
+// [leo] 所有指令文件共用这一份预算（原先是单文件上限），文件变多也不会撑爆上下文。
 const DEFAULT_MAX_BYTES = 100 * 1024;
 /** [leo] Host 写入时已截到 2KB；这里再兜一道，手改大了也不会撑爆上下文。 */
 const USER_PROFILE_MAX_BYTES = 4 * 1024;
@@ -108,26 +110,29 @@ async function resolveUserInstructions(
   const projectRoot = options.projectRoot ?? (await findProjectRoot(options.workingDirectory));
 
   const defaultUserInstructionFile = await findDefaultUserInstructionFile(priorityFiles, env);
-  const workspaceInstructionFile = await findInstructionFile(
+  const workspaceInstructionFiles = await findInstructionFiles(
     options.workingDirectory,
     projectRoot,
     priorityFiles,
+    resolve(resolveUserHomeDir(env)),
   );
   const candidates = dedupeInstructionFileCandidates([
     defaultUserInstructionFile
       ? { ...defaultUserInstructionFile, scope: "user" as const }
       : undefined,
-    workspaceInstructionFile
-      ? { ...workspaceInstructionFile, scope: "workspace" as const }
-      : undefined,
+    ...workspaceInstructionFiles.map((file) => ({ ...file, scope: "workspace" as const })),
   ]);
   const sources: ResolvedUserInstructionSource[] = [];
+  const seenContent = new Set<string>();
+  let remainingBytes = maxBytes;
 
   for (const candidate of candidates) {
-    const source = await readInstructionSource(candidate, maxBytes, diagnostics);
-    if (source) {
-      sources.push(source);
-    }
+    const source = await readInstructionSource(candidate, remainingBytes, diagnostics);
+    // [leo] 同目录 CLAUDE.md 常是 AGENTS.md 的软链/拷贝：内容相同只留一份。
+    if (!source || (source.content && seenContent.has(source.content))) continue;
+    seenContent.add(source.content);
+    remainingBytes = Math.max(0, remainingBytes - source.bytesRead);
+    sources.push(source);
   }
 
   if (sources.length === 0) return undefined;
@@ -208,42 +213,54 @@ function mergeInstructionSources(
   };
 }
 
-async function findInstructionFile(
+/**
+ * [leo] 从仓库根（没有仓库就到文件系统根，但不越过 $HOME）往下到工作目录，
+ * 每层按 priorityFiles 顺序收集全部存在的文件；外层在前、内层在后，越具体越靠后。
+ */
+async function findInstructionFiles(
   startDir: string,
   projectRoot: string | null,
   priorityFiles: string[],
-): Promise<{ filePath: string; fileName: string } | undefined> {
+  homeDir: string,
+): Promise<Array<{ filePath: string; fileName: string }>> {
+  const directories: string[] = [];
   let current = resolve(startDir);
 
   while (true) {
-    for (const fileName of priorityFiles) {
-      const filePath = join(current, fileName);
-      if (await isFile(filePath)) {
-        return { filePath, fileName };
-      }
-    }
-
-    if (current === projectRoot || current === dirname(current)) {
+    directories.unshift(current);
+    if (current === projectRoot || current === homeDir || current === dirname(current)) {
       break;
     }
-
     current = dirname(current);
   }
 
-  return undefined;
+  const files: Array<{ filePath: string; fileName: string }> = [];
+  for (const directory of directories) {
+    for (const fileName of priorityFiles) {
+      const filePath = join(directory, fileName);
+      if (await isFile(filePath)) {
+        files.push({ filePath, fileName });
+      }
+    }
+  }
+
+  return files;
 }
 
 async function findDefaultUserInstructionFile(
   priorityFiles: string[],
   env: NodeJS.ProcessEnv,
 ): Promise<{ filePath: string; fileName: string } | undefined> {
-  if (!priorityFiles.includes("AGENTS.md")) {
-    return undefined;
-  }
-
-  const filePath = join(resolveUserHomeDir(env), ".leophoneagent", "AGENTS.md"); // [leo]
-  if (await isFile(filePath)) {
-    return { filePath, fileName: "AGENTS.md" };
+  // [leo] ~/.leophoneagent/AGENTS.md 优先；没有就退到 Claude Code 的 ~/.claude/CLAUDE.md。
+  const home = resolveUserHomeDir(env);
+  const fallbacks = [
+    { fileName: "AGENTS.md", filePath: join(home, ".leophoneagent", "AGENTS.md") },
+    { fileName: "CLAUDE.md", filePath: join(home, ".claude", "CLAUDE.md") },
+  ];
+  for (const fallback of fallbacks) {
+    if (priorityFiles.includes(fallback.fileName) && (await isFile(fallback.filePath))) {
+      return fallback;
+    }
   }
 
   return undefined;

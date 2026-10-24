@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ModelDiscoveryApiFormat } from "@zcode/shared/model-discovery";
+import { decodeCloakedModelId, type ModelDiscoveryApiFormat } from "@zcode/shared/model-discovery";
 import {
   PROVIDER_IMPORT_LIMITS,
   type ProviderImportSkipReason,
@@ -176,13 +176,15 @@ function mapModels(rawModels: readonly unknown[] | null | undefined): ImportedMo
     const parsed = iosModelSchema.safeParse(raw);
     if (!parsed.success) continue;
     const model = parsed.data;
-    if (model.isHidden || seen.has(model.modelId)) continue;
-    seen.add(model.modelId);
+    // 手机上从网关拉过的 ID 也可能是 claude-…-dd-<倒序> 的伪装写法,导入时一并还原。
+    const id = decodeCloakedModelId(model.modelId);
+    if (model.isHidden || seen.has(id)) continue;
+    seen.add(id);
     const contextWindow = model.overrides?.contextWindow ?? model.contextWindow ?? undefined;
     const maxOutput = model.overrides?.maxOutputTokens ?? model.maxOutputTokens ?? undefined;
     const modality = model.overrides?.modalityOverride ?? model.modalityOverride ?? undefined;
     models.push({
-      id: model.modelId,
+      id,
       ...(contextWindow ? { contextWindow } : {}),
       ...(maxOutput ? { maxOutput } : {}),
       ...(modality === undefined ? {} : { vision: (modality & IOS_IMAGE_INPUT_BIT) !== 0 }),

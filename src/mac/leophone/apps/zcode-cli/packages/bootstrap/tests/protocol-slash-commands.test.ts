@@ -18,8 +18,10 @@ describe("protocol slash command surface", () => {
     try {
       await mkdir(projectCommands, { recursive: true });
       await mkdir(userCommands, { recursive: true });
-      await writeCommand(projectCommands, "review", "Project review", "Project body.");
-      await writeCommand(userCommands, "review", "User review", "User body.");
+      await writeCommand(projectCommands, "audit", "Project audit", "Project body.");
+      await writeCommand(userCommands, "audit", "User audit", "User body.");
+      // [leo] `/review` 已是内置命令（保留名），同名自定义命令不得顶替。
+      await writeCommand(userCommands, "review", "Shadowing review", "Should be hidden.");
       await writeCommand(userCommands, "ship", "Ship changes", "Ship $ARGUMENTS.", [
         "argument-hint: [target]",
       ]);
@@ -47,11 +49,16 @@ describe("protocol slash command surface", () => {
         { name: "compact", source: "builtin" },
         { name: "init", source: "builtin" },
         { name: "plan", source: "builtin" },
-        { name: "review", source: "custom" },
+        { name: "review", source: "builtin" },
+        { name: "image", source: "builtin" },
+        { name: "audit", source: "custom" },
         { name: "ship", source: "custom" },
       ]);
-      expect(commands.find((command) => command.name === "review")?.description).toBe(
-        "User review",
+      expect(commands.find((command) => command.name === "audit")?.description).toBe(
+        "User audit",
+      );
+      expect(commands.find((command) => command.name === "review")?.inputHint).toBe(
+        "/review [base-ref]",
       );
       expect(commands.find((command) => command.name === "ship")?.inputHint).toBe(
         "/ship [target]",
@@ -80,7 +87,7 @@ describe("protocol slash command surface", () => {
     try {
       await mkdir(workspace, { recursive: true });
       await mkdir(userCommands, { recursive: true });
-      await writeCommand(userCommands, "review", "Review changes", "Review $ARGUMENTS.");
+      await writeCommand(userCommands, "audit", "Audit changes", "Audit $ARGUMENTS.");
       await writeCommand(userCommands, "init", "Custom init", "Should not expand.");
       await writeCommand(userCommands, "model", "Reserved model", "Should not expand.");
 
@@ -90,16 +97,16 @@ describe("protocol slash command surface", () => {
         skipUserConfig: true,
         workingDirectory: workspace,
       };
-      const prompt = await resolveZCodeCustomCommandPrompt("/review src packages", options);
+      const prompt = await resolveZCodeCustomCommandPrompt("/audit src packages", options);
 
-      expect(prompt).toContain("Run custom command /review.");
+      expect(prompt).toContain("Run custom command /audit.");
       expect(prompt).toContain("Command source: user/zcode.");
-      expect(prompt).toContain("Review src packages.");
+      expect(prompt).toContain("Audit src packages.");
       await expect(resolveZCodeCustomCommandPrompt("/model glm-5", options)).resolves.toBe(
         undefined,
       );
       await expect(resolveZCodeCustomCommandPrompt("/init", options)).resolves.toBe(undefined);
-      await expect(resolveZCodeCustomCommandPrompt("please /review", options)).resolves.toBe(
+      await expect(resolveZCodeCustomCommandPrompt("please /audit", options)).resolves.toBe(
         undefined,
       );
     } finally {
@@ -169,7 +176,7 @@ describe("protocol slash command surface", () => {
       expect(prompt).toContain("they already have an instructions file");
       expect(prompt).not.toContain("Do not create CLAUDE.md or AGNENTS.md");
       expect(prompt).toContain("include pnpm scripts");
-      expect(resolveZCodeBuiltinPromptCommand("/review", { workingDirectory: workspace })).toBe(
+      expect(resolveZCodeBuiltinPromptCommand("/ship", { workingDirectory: workspace })).toBe(
         undefined,
       );
       expect(resolveZCodeBuiltinPromptCommand("please /init", { workingDirectory: workspace })).toBe(
@@ -178,6 +185,32 @@ describe("protocol slash command surface", () => {
     } finally {
       await rm(tempRoot, { force: true, recursive: true });
     }
+  });
+
+  // [leo] `/review`：只读审查，working tree 或 base...HEAD，发现用 ::code-comment 卡片。
+  it("expands builtin /review into a read-only diff review prompt", () => {
+    const working = resolveZCodeBuiltinPromptCommand("/review");
+    expect(working).toContain("内置的 /review 命令");
+    expect(working).toContain("git diff HEAD");
+    expect(working).toContain("::code-comment{");
+    expect(working).toContain("不要修改、创建或删除任何文件");
+
+    const based = resolveZCodeBuiltinPromptCommand("/review origin/main");
+    expect(based).toContain("git diff origin/main...HEAD");
+    expect(based).not.toContain("git diff HEAD（");
+  });
+
+  // [leo] `/image`：走 generate_image 工具，返回的 Markdown 原样贴出；无描述先问。
+  it("expands builtin /image into a generate_image prompt", () => {
+    const prompt = resolveZCodeBuiltinPromptCommand("/image 一只橘猫 1024x1024");
+    expect(prompt).toContain("generate_image");
+    expect(prompt).toContain("一只橘猫 1024x1024");
+    expect(prompt).toContain("原样贴进回答");
+    expect(prompt).toContain("设置 → 模型供应商");
+
+    const empty = resolveZCodeBuiltinPromptCommand("/image");
+    expect(empty).toContain("问用户想画什么");
+    expect(empty).not.toContain("1. 调用 generate_image");
   });
 
   it("runs shell expansion for plugin commands with plugin and session variables", async () => {

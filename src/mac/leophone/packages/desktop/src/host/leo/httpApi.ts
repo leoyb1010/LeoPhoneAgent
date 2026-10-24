@@ -83,6 +83,8 @@ export function startLeoHttpApi(deps: {
   groups?: LeoTaskGroups;
   /** 测试注入;默认读 `~/.config/leo-brain/leobot-mac.key`、连默认网关。 */
   brainMcp?: McpHttpServer;
+  /** 生图工具 leo-media(要读供应商配置,由 Host 注入)。 */
+  mediaMcp?: McpHttpServer;
 }): Server {
   const isMainKey = secretMatcher(`Bearer ${leoLocalKey()}`);
   const isTreasuryKey = secretMatcher(`Bearer ${leoTreasuryKey()}`);
@@ -90,7 +92,7 @@ export function startLeoHttpApi(deps: {
   // 口令为空(不是主进程拉起的 Host)时 secretMatcher 一律不认:登录页接口整体关闭。
   const isUiSecret = secretMatcher(leoUiSecret());
   // [up-d-mac] 藏宝阁 / 第二大脑的共享 MCP 端点:所有 workspace 的 CLI 连这里,不再各起 stdio 子进程。
-  const mcpEndpoints = leoMcpEndpoints(deps.store, deps.brainMcp);
+  const mcpEndpoints = leoMcpEndpoints(deps.store, deps.brainMcp, deps.mediaMcp);
 
   const json = (res: ServerResponse, status: number, payload: unknown): void => {
     if (res.headersSent) {

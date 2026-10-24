@@ -1,4 +1,5 @@
 import {
+  decodeCloakedModelId,
   isLikelyNonChatModel,
   prettifyModelId,
   type DiscoveredModel,
@@ -19,6 +20,7 @@ import type { ModelsDevCatalog, ModelsDevCatalogSource } from "./modelsDevCatalo
  * - 401/403 直接报 auth,不回退(回退会让用户以为 Key 没问题)。
  * - 404 / HTML / 解析失败 / 空列表:回退到模板内置列表,再回退 models.dev,error.kind = not_supported。
  * - 网络 / TLS 错误照实报告;有内置列表时一并带回,方便用户先选。
+ * - CLIProxyAPI 在 Anthropic 风格列表里把非 Claude 模型伪装成 `claude-…-dd-<倒序 ID>`,入库前还原。
  */
 export interface ModelDiscoveryTarget {
   readonly baseUrl: string;
@@ -131,7 +133,7 @@ function enrichModels(
   const seen = new Set<string>();
   const models: DiscoveredModel[] = [];
   for (const item of raw) {
-    const id = item.id.trim();
+    const id = decodeCloakedModelId(item.id.trim());
     if (!id || seen.has(id)) continue;
     seen.add(id);
     const entry = catalog?.lookup(id);

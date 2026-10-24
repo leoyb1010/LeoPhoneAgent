@@ -15,6 +15,20 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.19.0",
+    date: "2026-10-24",
+    items: [
+      "修复「从接口获取模型」导入后是乱码、模型用不了：网关在 Anthropic 格式下会把非 Claude 模型伪装成 claude-fable-5-dd-…（真实 ID 倒过来写），现在获取时自动还原成 go/kimi-k3.1-pro 这样的真实 ID，从 iPhone 导入的也一样；已经存进去的乱码 ID 在本机已修好。",
+      "获取模型默认只勾每个品牌最新的一款（如 Kimi K3.1 Pro、Qwen3.8 Max、Grok 4.7、DeepSeek V4.1），按品牌分组并标「最新」，一键「只选最新」；和当前列表的差异改成小标签，下线的模型可展开查看。",
+      "模型列表更清爽：编辑、删除按钮平时收起，鼠标移到那一行才淡入。",
+      "可以生图了：新增生图工具（generate_image），让 LeoBot「画一张…」就会用你网关里的生图模型（gemini-3.1-flash-image、grok-imagine-image 等）出图，图片直接显示在对话里，原图保存在 ~/.leophoneagent/media/。",
+      "新命令：/review 审查当前改动（只读，问题按严重程度以行内评论卡片列出，可点到代码行）；/image 描述 直接生图。",
+      "项目规则读得更全：从仓库根到当前目录每一层的 AGENTS.md 和 CLAUDE.md 都会读进来；没有 ~/.leophoneagent/AGENTS.md 时沿用 ~/.claude/CLAUDE.md 里的个人规则。",
+      "回答格式更清楚：对比用表格、流程用 Mermaid 图、长日志折叠、要点用提示框，简单问题照样简短回答。",
+      "回答显示更丰富：支持 GitHub 风格提示框（> [!NOTE] / [!TIP] / [!WARNING] 等）、base64 内嵌图片、图片类产物直接显示缩略图并可点开大图，图片加载时淡入。",
+    ],
+  },
+  {
     version: "1.18.0",
     date: "2026-10-22",
     items: [

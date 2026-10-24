@@ -18,6 +18,8 @@ import { resolveLeoBotModelSelection } from "./leobotModelSelection.js";
 import { linkEnabled, relayConfigSignature, startLeoLink } from "./link/index.js";
 import { startProfileCardSync, stopProfileCardSync } from "./profileCard.js";
 import { registerBrainMcpServer } from "./registerBrainMcp.js";
+import { registerLeoHttpMcpServer } from "./leoHttpMcpRegistration.js";
+import { createMediaMcpServer, type MediaProvider } from "./mediaTools.js";
 import { registerPeekabooMcpServer } from "./registerPeekabooMcp.js";
 import { registerTreasuryMcpServer } from "./registerTreasuryMcp.js";
 import { syncSubscriptionProvider } from "./subscriptionProvider.js";
@@ -83,6 +85,7 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
       httpServer = startLeoHttpApi({
         store,
         logger: deps.logger,
+        mediaMcp: createMediaMcpServer({ providers: () => mediaProviders(providerSettings) }),
         onSubscriptionChanged: syncSubscriptions,
         quick: createLeoQuickEntry(deps.services),
         groups: createLeoTaskGroups({
@@ -113,6 +116,7 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
             void (async () => {
               await registerTreasuryMcpServer(mcpSync, deps.logger);
               await registerBrainMcpServer(mcpSync, deps.logger);
+              await registerLeoHttpMcpServer(mcpSync, deps.logger, "leo-media", "/api/leo/media/mcp");
               if (process.platform === "darwin") await registerPeekabooMcpServer(mcpSync, deps.logger);
             })().catch((error) => deps.logger.warn("[leo] MCP registration chain failed", { error: String(error) }));
           }
@@ -199,4 +203,40 @@ export function stopLeoHostServices(): void {
   httpServer = null;
   store = null;
   started = false;
+}
+
+/** 生图工具用的供应商清单:有 Base URL 的 API Key 供应商(订阅代理不出图,跳过)。Key 只在 Host 里用。 */
+async function mediaProviders(
+  providerSettings: { getView(): Promise<unknown> },
+): Promise<MediaProvider[]> {
+  const view = (await providerSettings.getView()) as {
+    providers?: Array<{
+      providerName?: string;
+      providerId: string;
+      personalModelIds?: readonly string[];
+      models?: Array<{ modelId: string }>;
+      effectiveConfig?: {
+        api?: { baseUrl?: string | null; headers?: Record<string, string> };
+        access?: { type?: string; apiKey?: string };
+      };
+    }>;
+  };
+  return (view.providers ?? []).flatMap((provider) => {
+    const config = provider.effectiveConfig;
+    const baseUrl = config?.api?.baseUrl?.trim();
+    if (!baseUrl || /^https?:\/\/(?:127\.0\.0\.1|localhost):38473/u.test(baseUrl)) return [];
+    const apiKey = config?.access?.type === "api-key" ? config.access.apiKey : undefined;
+    return [
+      {
+        name: provider.providerName ?? provider.providerId,
+        baseUrl,
+        ...(apiKey ? { apiKey } : {}),
+        ...(config?.api?.headers ? { headers: config.api.headers } : {}),
+        modelIds: [
+          ...(provider.personalModelIds ?? []),
+          ...(provider.models ?? []).map((model) => model.modelId),
+        ],
+      },
+    ];
+  });
 }

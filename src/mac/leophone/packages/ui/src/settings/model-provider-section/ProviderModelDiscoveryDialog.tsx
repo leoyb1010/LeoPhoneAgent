@@ -87,9 +87,14 @@ export function ProviderModelDiscoveryDialog({
   const [addError, setAddError] = useState<string | null>(null);
   const result: ModelDiscoveryResult | null = state.status === "done" ? state.result : null;
   const existing = useMemo(() => new Set(existingModelIds), [existingModelIds]);
+  // 每个品牌最新的一款(不排除已添加的):行上标「最新」,「只选最新」按它重置。
+  const latestIds = useMemo(
+    () => new Set(result ? selectDefaultDiscoveredModels(result.models, new Set()) : []),
+    [result],
+  );
 
   useEffect(() => {
-    // 每次拿到新结果按「每个系列最新几款」重置默认勾选;已添加的不参与。
+    // 每次拿到新结果按「每个品牌最新一款」重置默认勾选;已添加的不参与。
     if (!result) return;
     setSelected(new Set(selectDefaultDiscoveredModels(result.models, existing)));
     setAddError(null);
@@ -144,6 +149,10 @@ export function ProviderModelDiscoveryDialog({
     });
   };
 
+  const selectLatestOnly = () => {
+    setSelected(new Set([...latestIds].filter((id) => !existing.has(id))));
+  };
+
   const confirm = async () => {
     if (!result || adding) return;
     const models = result.models.filter(
@@ -173,7 +182,7 @@ export function ProviderModelDiscoveryDialog({
     <Dialog open={open} onOpenChange={(next) => (adding ? undefined : onOpenChange(next))}>
       <DialogContent
         data-testid="model-provider-discovery-dialog"
-        className="max-h-[min(44rem,calc(100vh-4rem))] max-w-xl grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-clip"
+        className="max-h-[min(46rem,calc(100vh-4rem))] max-w-2xl grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-clip"
       >
         <DialogHeader className="pr-8">
           <div className="flex items-center gap-2">
@@ -216,18 +225,29 @@ export function ProviderModelDiscoveryDialog({
             </div>
           ) : null}
           {diff ? (
-            <div className="text-ui-sm text-foreground-subtle" data-testid="model-discovery-diff">
-              {intl.formatMessage(
-                { id: "settings.modelProvider.discovery.diff" },
-                { added: diff.added.length, removed: diff.removed.length },
-              )}
+            <div
+              className="flex flex-wrap items-center gap-1.5 text-ui-sm text-foreground-subtle"
+              data-testid="model-discovery-diff"
+            >
+              <span className="rounded-full bg-primary/10 px-2 py-px text-primary">
+                {intl.formatMessage({ id: "settings.modelProvider.discovery.diffAdded" }, { count: diff.added.length })}
+              </span>
               {diff.removed.length > 0 ? (
-                <div className="mt-0.5 break-all">
-                  {intl.formatMessage(
-                    { id: "settings.modelProvider.discovery.removedHint" },
-                    { ids: diff.removed.join(", ") },
-                  )}
-                </div>
+                <details className="group/removed min-w-0 basis-full">
+                  <summary className="w-fit cursor-pointer list-none rounded-full bg-surface px-2 py-px marker:hidden hover:bg-surface-hover">
+                    {intl.formatMessage(
+                      { id: "settings.modelProvider.discovery.diffRemoved" },
+                      { count: diff.removed.length },
+                    )}
+                    <span className="ml-1 inline-block transition-transform duration-150 group-open/removed:rotate-90">›</span>
+                  </summary>
+                  <div className="mt-1 break-all rounded-md bg-surface px-2 py-1.5 font-mono text-ui-xs leading-relaxed">
+                    {diff.removed.join("  ·  ")}
+                    <div className="mt-1 font-sans text-foreground-subtlest">
+                      {intl.formatMessage({ id: "settings.modelProvider.discovery.removedHint2" })}
+                    </div>
+                  </div>
+                </details>
               ) : null}
             </div>
           ) : null}
@@ -243,6 +263,16 @@ export function ProviderModelDiscoveryDialog({
                 })}
                 onChange={(event) => setQuery(event.target.value)}
               />
+              <Button
+                type="button"
+                variant="ghost"
+                size="default"
+                data-testid="model-discovery-select-latest"
+                disabled={latestIds.size === 0}
+                onClick={selectLatestOnly}
+              >
+                {intl.formatMessage({ id: "settings.modelProvider.discovery.selectLatest" })}
+              </Button>
               <Button
                 type="button"
                 variant="ghost"
@@ -285,14 +315,16 @@ export function ProviderModelDiscoveryDialog({
           ) : (
             groups.map((group) => (
               <section key={group.family} className="mb-2">
-                <div className="sticky top-0 z-10 bg-popover py-1 text-ui-xs font-medium text-foreground-subtlest">
-                  {familyLabel(group.family)}
+                <div className="sticky top-0 z-10 flex items-baseline gap-1.5 bg-popover py-1 text-ui-xs font-medium text-foreground-subtlest">
+                  <span className="text-foreground-subtle">{familyLabel(group.family)}</span>
+                  <span className="tabular-nums">{group.models.length}</span>
                 </div>
                 {group.models.map((model) => (
                   <DiscoveredModelRow
                     key={model.id}
                     model={model}
                     added={existing.has(model.id)}
+                    latest={latestIds.has(model.id)}
                     checked={existing.has(model.id) || selected.has(model.id)}
                     onCheckedChange={(next) => toggle(model.id, next)}
                   />

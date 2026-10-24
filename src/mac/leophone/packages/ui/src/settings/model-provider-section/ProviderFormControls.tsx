@@ -247,7 +247,7 @@ export function ModelRowInput({
   const hasDisplayName = displayName !== model.modelId;
 
   return (
-    <div className="space-y-2 px-3 py-2">
+    <div className="group/model-row space-y-2 px-3 py-2 transition-colors duration-150 hover:bg-surface-hover/60">
       <div className="flex items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {/* [leo] 1.9.0：先显示可读名称（与模型选择器一致），原始 ID 用等宽小字放在后面；
@@ -300,6 +300,8 @@ export function ModelRowInput({
             {testIcon}
           </Button>
         ) : null}
+        {/* [leo] 编辑 / 删除平时收起,悬停或键盘聚焦这一行时淡入:26 行模型每行 4 个图标太吵。 */}
+        <span className="flex shrink-0 items-center opacity-0 transition-opacity duration-150 group-focus-within/model-row:opacity-100 group-hover/model-row:opacity-100 has-[[data-state=open]]:opacity-100 motion-reduce:transition-none">
         <ProviderModelMetadataDialog
           onRestore={() => {
             setDraftErrorField(null);
@@ -346,6 +348,7 @@ export function ModelRowInput({
             <Trash2 className="size-3.5" />
           </Button>
         ) : null}
+        </span>
         {onEnabledChange ? (
           <Switch
             size="sm"
