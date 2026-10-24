@@ -960,7 +960,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// - Parameter interrupted: stopped but resumable (connection drop, output
     ///   limit): says so instead of "failed".
     func postBackgroundTaskNotification(sessionTitle: String, responseSummary: String, sessionId: String,
-                                        isError: Bool = false, interrupted: Bool = false, wasBackground: Bool? = nil) {
+                                        isError: Bool = false, interrupted: Bool = false, wasBackground: Bool? = nil,
+                                        failureLabel: String? = nil) {
         guard backgroundNotificationsEnabled else { return }
         // [T-subagent] A hidden sub agent never posts its own notification;
         // its parent conversation reports the result.
@@ -994,6 +995,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
                 isError: isError,
                 startedAt: AgentLiveActivityManager.shared.taskStartTime
             )
+            // [leo] 失败原因只由原因码拼成、不含内容:隐私模式也写「失败：网络中断」。
+            if isError, let failureLabel { content.body = failureLabel }
         } else {
             content.title = "\(isError ? "❌" : interrupted ? "⏸" : "✅") \(sessionTitle)"
             content.body = responseSummary
@@ -1605,7 +1608,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     func refreshHomeScreenWidget(
         source: String,
         terminalState: AgentWidgetSnapshot.State? = nil,
-        terminalSessionId: String = ""
+        terminalSessionId: String = "",
+        terminalStatus: String = ""
     ) {
         let tracker = SessionActivityTracker.shared
         // [T-widget-placeholder-count] intent-eager placeholder ids live for
@@ -1645,7 +1649,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         } else if !displayName.isEmpty {
             status = displayName
         } else {
-            status = state == .running ? AppLocalized("Working") : ""
+            status = state == .running ? AppLocalized("Working") : terminalStatus
         }
 
         let snapshot = AgentWidgetSnapshot(
@@ -1654,7 +1658,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             activeCount: activeIds.count,
             sessionId: selectedId,
             title: redact ? "" : (info?.title ?? ""),
-            status: redact ? "" : status,
+            // [leo] 收尾那句只由原因码拼成、不含内容,隐私模式也照写。
+            status: redact && activeIds.isEmpty ? terminalStatus : redact ? "" : status,
             toolIcon: redact || toolName.isEmpty
                 ? "sparkles"
                 : AgentLiveActivityManager.sfSymbol(forTool: toolName),

@@ -420,12 +420,62 @@ extension LiveSessionSnapshot.RestingOutcome {
     /// final phase `SessionActivityTracker.setInactive` recorded. Only a real
     /// ending gets a verdict: `.suspended` (background time ran out, resumes on
     /// its own) is `.paused`, never `.attention`.
-    init(ending phase: AgentActivityPhase?) {
+    /// [leo] 以前「等你批准 / 可续跑的中断 / 结果没回执」全落进 `.attention`,
+    /// 和真失败一个橙色感叹号。现在只有 `.failed` 才是 `.attention`。
+    init(ending phase: AgentActivityPhase?, reason: AgentActivityReason? = nil) {
         switch phase {
         case .cancelled: self = .stopped
         case .suspended: self = .paused
-        case .failed, .waitingForUser, .waitingForPermission, .unverified: self = .attention
+        case .failed: self = .attention
+        case .waitingForPermission: self = .waiting
+        case .waitingForUser:
+            self = reason == .userQuestion || reason == .permissionApproval ? .waiting : .interrupted
+        case .unverified: self = .unknown
         default: self = .done
+        }
+    }
+}
+
+/// [leo] 一次运行怎么收尾的那句话 —— 灵动岛、桌面小组件、通知、系统后台进度条
+/// 共用这一份,所以四处说法一致:「失败：网络中断」「等你批准」「已中断，回到 App 继续」…
+/// 只用稳定的原因码拼,不带任何对话内容,隐私模式也能直接显示。
+struct AgentRunEnding: Equatable, Sendable {
+    let outcome: LiveSessionSnapshot.RestingOutcome
+    let reason: AgentActivityReason?
+
+    init(phase: AgentActivityPhase?, reason: AgentActivityReason?) {
+        outcome = LiveSessionSnapshot.RestingOutcome(ending: phase, reason: reason)
+        self.reason = reason
+    }
+
+    var isFailure: Bool { outcome == .attention }
+
+    var label: String {
+        switch outcome {
+        case .attention:
+            guard let why = reason.flatMap(Self.failureCause) else { return outcome.label }
+            return AppLocalized("失败：\(why)")
+        case .waiting:
+            return reason == .userQuestion ? AppLocalized("等你回答") : AppLocalized("等你批准")
+        default:
+            return outcome.label
+        }
+    }
+
+    /// 失败原因的短说法;nil = 说不清,只写「失败」。
+    static func failureCause(_ reason: AgentActivityReason) -> String? {
+        switch reason {
+        case .connectionDropped: AppLocalized("网络中断")
+        case .authenticationRequired: AppLocalized("服务商认证失败")
+        case .rateLimited: AppLocalized("请求太频繁")
+        case .kernelUnavailable: AppLocalized("执行环境不可用")
+        case .toolFailure: AppLocalized("工具出错")
+        case .providerFailure: AppLocalized("模型服务出错")
+        case .responseLimit: AppLocalized("输出超出上限")
+        case .backgroundTimeExpired: AppLocalized("后台时间用完")
+        case .unexpectedTermination: AppLocalized("App 被系统结束")
+        case .concurrencyLimit: AppLocalized("同时运行的任务太多")
+        default: nil
         }
     }
 }

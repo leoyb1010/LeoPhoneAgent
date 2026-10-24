@@ -628,6 +628,47 @@ struct LiveSessionSnapshot: Codable, Hashable {
         /// out): not finished, not failed. Used to rest as `.attention`, which
         /// painted the orange exclamation over a task that was going to resume.
         case paused
+        /// [leo] 可续跑的中断(断流、输出超限、被系统结束):不是失败,回 App 点继续。
+        case interrupted
+        /// [leo] 停在等你:批准一条命令、回答一个问题。
+        case waiting
+        /// [leo] 结果没法确认(动作发出去了没回执):不报成功,也不报失败。
+        case unknown
+    }
+}
+
+// [leo] 收尾样子的唯一一份:灵动岛、桌面小组件、隐私模式都读这里。
+// 只有 `.attention`(真失败,中继的 run.failed 也落在这)才配感叹号。
+extension LiveSessionSnapshot.RestingOutcome {
+    var symbol: String {
+        switch self {
+        case .done: "checkmark.circle.fill"
+        case .attention: "exclamationmark.circle.fill"
+        case .stopped: "stop.circle.fill"
+        case .paused: "pause.circle.fill"
+        case .interrupted: "arrow.clockwise.circle.fill"
+        case .waiting: "hand.raised.fill"
+        case .unknown: "questionmark.circle.fill"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .done: LeoWidgetLanguage.string("已完成")
+        case .attention: LeoWidgetLanguage.string("失败")
+        case .stopped: LeoWidgetLanguage.string("已停止")
+        case .paused: LeoWidgetLanguage.string("已暂停，回到 App 继续")
+        case .interrupted: LeoWidgetLanguage.string("已中断，回到 App 继续")
+        case .waiting: LeoWidgetLanguage.string("等你处理")
+        case .unknown: LeoWidgetLanguage.string("结果待确认")
+        }
+    }
+
+    /// [leo] 多个会话共用一个胶囊时,最要紧的那个说了算。
+    static func mostUrgent(_ outcomes: [Self]) -> Self {
+        for o in [Self.attention, .waiting, .interrupted, .paused, .unknown] where outcomes.contains(o) { return o }
+        if !outcomes.isEmpty, outcomes.allSatisfy({ $0 == .stopped }) { return .stopped }
+        return .done
     }
 }
 

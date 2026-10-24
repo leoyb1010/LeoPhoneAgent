@@ -285,7 +285,8 @@ private extension AgentWidgetSnapshot {
 
     var secondaryText: String {
         if isPossiblyStale { return LeoWidgetLanguage.string("Status may be stale · Open the app") }
-        if privacyMode { return state.privacyStatus }
+        // [leo] 收尾那句(「失败：网络中断」)不含内容,隐私模式下也显示。
+        if privacyMode { return status.isEmpty ? state.privacyStatus : status }
         if !status.isEmpty { return status }
         return state.privacyStatus
     }
@@ -592,8 +593,8 @@ struct AgentSmallActivityView: View {
 
     private func title(_ s: LiveSessionSnapshot?) -> String {
         if state.allCompleted {
-            if state.anyNeedsAttention { return String(localized: "Needs attention") }
-            if state.restingOutcome == .paused { return String(localized: "已暂停，回到 App 继续") }
+            // [leo] 不是「完成」就说清是哪种收尾,不再一律「需要注意」。
+            if state.restingOutcome != .done { return state.restingOutcome.label }
             return String(localized: "\(state.sessions.count) completed")
         }
         if state.activeSessionCount > 1, waiting == nil {
@@ -717,8 +718,8 @@ struct AgentLockScreenView: View {
                         Image(systemName: state.restingSymbol)
                             .font(.caption)
                             .foregroundStyle(state.restingTint.aod(dimmed))
-                        if state.anyNeedsAttention {
-                            Text("Needs attention")
+                        if state.restingOutcome != .done {
+                            Text(state.restingOutcome.label)
                                 .font(.caption.bold())
                         } else {
                             Text("\(state.sessions.count) completed")
@@ -2252,22 +2253,17 @@ private struct ArtifactsWidgetView: View {
 /// or was stopped (grey). The resting state used to paint every ending green,
 /// so a failed run showed a checkmark next to its error text.
 extension LiveSessionSnapshot.RestingOutcome {
-    var symbol: String {
-        switch self {
-        case .done: "checkmark.circle.fill"
-        case .attention: "exclamationmark.circle.fill"
-        case .stopped: "stop.circle.fill"
-        case .paused: "pause.circle.fill"
-        }
-    }
-
+    // [leo] 图标和文案在 Shared(AgentActivityAttributes.swift),App 和这里共用;这里只管颜色。
     var tint: Color {
         switch self {
         case .done: .green
-        case .attention: .orange
-        case .stopped: .gray
+        // [leo] 只有真失败是警示色;以前「等你 / 中断 / 没回执」也是这个橙色感叹号。
+        case .attention: .red
+        case .stopped, .unknown: .gray
         // [T-la-false-failure] Parked, resumes on its own: blue like a running card, not a warning color.
-        case .paused: .blue
+        case .paused, .interrupted: .blue
+        // 等你批准 / 回答:和运行中「等你」那一格同色。
+        case .waiting: .orange
         }
     }
 }
@@ -2283,10 +2279,7 @@ extension LiveSessionSnapshot {
 extension AgentActivityAttributes.ContentState {
     /// The most urgent outcome decides the shared capsule.
     var restingOutcome: LiveSessionSnapshot.RestingOutcome {
-        if sessions.contains(where: { $0.outcome == .attention }) { return .attention }
-        if sessions.contains(where: { $0.outcome == .paused }) { return .paused }
-        if !sessions.isEmpty, sessions.allSatisfy({ $0.outcome == .stopped }) { return .stopped }
-        return .done
+        .mostUrgent(sessions.map(\.outcome))
     }
     var anyNeedsAttention: Bool { restingOutcome == .attention }
     var restingSymbol: String { restingOutcome.symbol }

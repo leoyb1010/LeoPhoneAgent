@@ -139,27 +139,25 @@ extension AIChatViewModel {
         // 于是给一次失败的回合推送"任务完成"。同一坑本文件别处已修过。
         let lastAssistantError = messages.last(where: { $0.role == .assistant })?.error
         let completionHasError = lastAssistantError != nil || errorMessage != nil
+        // [leo] 和 tracker 收尾同一套判定(AgentRunCompletion → AgentRunEnding):
+        // 系统后台进度条、灵动岛、小组件、通知说的是同一件事。以前「可续跑的中断」
+        // 也按 success:false 收尾,系统卡片就挂黄色感叹号报失败。
+        let activityKey = sessionId ?? draftId ?? ""
+        let ending = { () -> AgentRunEnding in
+            let completion = AgentRunCompletion(
+                userCancelled: userDidCancel, canResume: canResume,
+                backgroundSuspended: backgroundSuspended,
+                failureText: errorMessage ?? lastAssistantError,
+                waitingReason: SessionActivityTracker.shared.sessionActivityReasons[activityKey],
+                nativeOutcome: nativeRunOutcome
+            )
+            return AgentRunEnding(phase: completion.phase, reason: completion.reason)
+        }()
         if !continuedKey.isEmpty {
-            // 与通知同一套语义:挂起、用户主动停止都不算失败;可恢复的中断如实说
-            // "已中断",不可恢复的错误才报失败。系统横幅只有成功/失败两态,
-            // 所以把真实情况写进副标题再收尾。
-            let failed = completionHasError && !backgroundSuspended && !userDidCancel
-            let subtitle: String
-            if backgroundSuspended && !userDidCancel {
-                subtitle = AppLocalized("已暂停，回到 App 继续")
-            } else if userDidCancel {
-                subtitle = AppLocalized("Stopped")
-            } else if failed && canResume {
-                subtitle = AppLocalized("已中断，回到 App 继续")
-            } else if failed {
-                subtitle = AppLocalized("Needs attention")
-            } else {
-                subtitle = AppLocalized("Completed")
-            }
             AgentContinuedProcessingManager.shared.finish(
                 sessionKey: continuedKey,
-                success: !failed,
-                subtitle: subtitle
+                success: !ending.isFailure,
+                subtitle: ending.label
             )
         }
         continuedProcessingSessionKey = nil
@@ -190,8 +188,9 @@ extension AIChatViewModel {
             }
         }
 
-        guard backgroundTaskID != .invalid else { return }
+        // [leo] 放在 guard 前:到期处理器先把 id 置空再调进来,计时器以前就一直留着。
         stopBackgroundStatusTimer()
+        guard backgroundTaskID != .invalid else { return }
         let remaining = UIApplication.shared.backgroundTimeRemaining
         let remainingStr = remaining > 99999 ? "unlimited" : String(format: "%.1fs", remaining)
         logger.info("[BKA][BGTask] Ending id=\(self.backgroundTaskID.rawValue) remaining=\(remainingStr) sessions=\(SessionActivityTracker.shared.activeSessions.count) silentAudio=\(BackgroundKeepAliveManager.shared.silentAudioIsPlaying)")
@@ -271,7 +270,6 @@ extension AIChatViewModel {
             // still in the tracker and resumes by itself on foreground. Resting
             // it as "completed" here was the Dynamic Island saying done/failed
             // while the task was about to carry on.
-            let activityKey = sessionId ?? draftId ?? ""
             let runStillActive = !activityKey.isEmpty && SessionActivityTracker.shared.isActive(activityKey)
             let restingMessage = hasError
                 ? String((errorMessage ?? lastAssistantError ?? responseSummary).prefix(200))
@@ -314,12 +312,16 @@ extension AIChatViewModel {
                     return true
                 }
                 if stillWorthNotifying {
-                    let summary = interrupted && !hasError
+                    // [leo] 失败时正文先说原因(「失败：网络中断」),不再拿上一轮的回复正文充数。
+                    let summary = hasError
+                        ? ending.label + " · " + String((self.errorMessage ?? lastAssistantError ?? "").prefix(160))
+                        : interrupted
                         ? AppLocalized("任务中断,回到 app 可继续。") + " " + responseSummary
                         : responseSummary
                     BackgroundKeepAliveManager.shared.postBackgroundTaskNotification(
                         sessionTitle: sessionTitle, responseSummary: summary, sessionId: sid,
-                        isError: hasError, interrupted: interrupted, wasBackground: wasBackground
+                        isError: hasError, interrupted: interrupted, wasBackground: wasBackground,
+                        failureLabel: ending.isFailure ? ending.label : nil
                     )
                 } else {
                     logger.info("[BackgroundNotification] suppressed — suspended=\(wasSuspended) stopped=\(userStopped) hasError=\(hasError) interrupted=\(interrupted)")
@@ -339,15 +341,16 @@ extension AIChatViewModel {
         stopBackgroundStatusTimer()
         let timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] timer in
             guard let self else { timer.invalidate(); return }
+            // [leo] 系统后台进度条只认进度在动:不动就判「卡住」强制到期,系统卡片挂黄色
+            // 感叹号报失败。以前这一格只在「后台 + 有限后台时间」才推 —— 前台不推,保活
+            // 生效(后台时间 unlimited)时第一跳就把计时器停了;真机日志里这条计时器一次都
+            // 没跑过(0 条 ⏱),10-24 17:57:39 跑了 44 秒的任务被系统判到期。现在每 5 秒都推。
+            if self.isProcessing { self.noteContinuedProgress() }
             // Only log when actually in background
             guard UIApplication.shared.applicationState != .active else { return }
             let remaining = UIApplication.shared.backgroundTimeRemaining
-            guard remaining < 99999 else {
-                // Background task ended — stop timer
-                timer.invalidate()
-                self.backgroundStatusTimer = nil
-                return
-            }
+            // 保活生效时后台时间是 unlimited:没什么可报的,但计时器要留着推进度。
+            guard remaining < 99999 else { return }
             let remainingStr = String(format: "%.1fs", remaining)
             let status = self.backgroundToolStatusSummary()
             // Escalate to WARN once we're inside the last 15s — past this
@@ -464,12 +467,18 @@ extension AIChatViewModel {
             // same tool is still the one running.
             let detail = existing?.toolName == liveTool ? (existing?.toolStatus ?? "") : ""
             tracker.updateToolInfo(sessionId: sid, toolName: liveTool, toolStatus: detail)
-            AgentContinuedProcessingManager.shared.noteProgress(
-                sessionKey: continuedProcessingSessionKey ?? sid,
-                subtitle: AgentToolPresentation.displayName(for: liveTool)
-            )
         }
         return summary
+    }
+
+    /// [leo] 给系统后台进度条推一格,副标题是此刻在做的那一步。
+    func noteContinuedProgress() {
+        let key = continuedProcessingSessionKey ?? sessionId ?? draftId ?? ""
+        let tool = sessionId.flatMap { SessionActivityTracker.shared.sessionToolInfo[$0]?.toolName } ?? ""
+        AgentContinuedProcessingManager.shared.noteProgress(
+            sessionKey: key,
+            subtitle: AgentToolPresentation.displayName(for: tool)
+        )
     }
 
     /// Called from the agent loop after a tool result is collected.
@@ -891,7 +900,9 @@ final class AgentContinuedProcessingManager {
 
     private func attach(_ task: BGContinuedProcessingTask, identifier: String) {
         guard let run = runs.values.first(where: { $0.identifier == identifier }) else {
-            task.setTaskCompleted(success: false)
+            // [leo] 系统拉起时这一轮已经收尾(cancel 晚了一步):什么都没失败。
+            // 以前按 success:false 收,凭空多一张「失败」系统卡片。
+            task.setTaskCompleted(success: true)
             return
         }
         run.task = task

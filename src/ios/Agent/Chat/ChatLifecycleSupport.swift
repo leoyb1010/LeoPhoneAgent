@@ -66,6 +66,8 @@ final class SessionActivityTracker: ObservableObject {
     /// no matter which code path ends the activity. Cleared when the session
     /// starts running again.
     private(set) var lastOutcomes: [String: AgentActivityPhase] = [:]
+    /// [leo] 和 `lastOutcomes` 配对的原因(失败为什么、等的是批准还是回答),收尾文案靠它分开说。
+    private(set) var lastOutcomeReasons: [String: AgentActivityReason] = [:]
     private var lastActivityPhases: [String: AgentActivityPhase] = [:]
     private var lastActivityReasons: [String: AgentActivityReason] = [:]
 
@@ -259,6 +261,7 @@ final class SessionActivityTracker: ObservableObject {
         let wasPresent = activeSessions.contains(sessionId)
         if !wasPresent { activeSessions.insert(sessionId) }
         lastOutcomes.removeValue(forKey: sessionId)
+        lastOutcomeReasons.removeValue(forKey: sessionId)
         syncMirror()
         if !wasPresent {
             // [T-haptic-misfire] Skip placeholder ids (they precede the real
@@ -310,7 +313,10 @@ final class SessionActivityTracker: ObservableObject {
         activeSessions.remove(sessionId)
         sessionToolInfo.removeValue(forKey: sessionId)
         reconnectAttempts.removeValue(forKey: sessionId)
-        if wasPresent { lastOutcomes[sessionId] = finalPhase }
+        if wasPresent {
+            lastOutcomes[sessionId] = finalPhase
+            lastOutcomeReasons[sessionId] = reason
+        }
         if wasPresent, let runId = activityRunIds[sessionId] {
             receiptStored = AgentActivityLog.shared.append(AgentActivityEvent(
                 runId: runId,
@@ -382,7 +388,10 @@ final class SessionActivityTracker: ObservableObject {
         BackgroundKeepAliveManager.shared.refreshHomeScreenWidget(
             source: "trackerInactive",
             terminalState: snapshotState,
-            terminalSessionId: sessionId
+            terminalSessionId: sessionId,
+            // [leo] 小组件第二行写清楚怎么收的尾(「失败：网络中断」「等你批准」…),和灵动岛同一句。
+            terminalStatus: snapshotState == nil || !receiptStored
+                ? "" : AgentRunEnding(phase: finalPhase, reason: reason).label
         )
         // [T-widget-briefing-pending] A widget-launched run just ended; its
         // final assistant message is on disk now. This is the earliest

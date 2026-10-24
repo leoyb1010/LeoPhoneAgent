@@ -1008,21 +1008,17 @@ final class AgentLiveActivityManager {
             // The real ending beside its icon, in the slot where the reply
             // summary appears outside Privacy Mode: a failed or stopped run
             // must not read "Completed".
+            // [leo] 收尾那句只由原因码拼成、不含内容,隐私模式照样说「失败：网络中断」
+            // 「等你批准」,不再一律「需要注意」。从 tracker 重算,不信 toolStatus(中继的行写的是正文)。
+            let tracker = SessionActivityTracker.shared
+            redacted.toolIcon = snap.outcome.symbol
             redacted.toolStatus = ""
-            switch snap.outcome {
-            case .done:
-                redacted.toolIcon = "checkmark.circle.fill"
+            if snap.outcome == .done {
                 redacted.lastMessage = privacyCompletedStatus
-            case .attention:
-                redacted.toolIcon = "exclamationmark.circle.fill"
-                redacted.lastMessage = AppLocalized("Needs attention")
-            case .paused:
-                // A run parked until the app returns says so (no content in it).
-                redacted.toolIcon = pausedIcon
-                redacted.lastMessage = privacyPausedStatus
-            case .stopped:
-                redacted.toolIcon = "stop.circle.fill"
-                redacted.lastMessage = AppLocalized("Stopped")
+            } else if let phase = tracker.lastOutcomes[snap.sessionId] {
+                redacted.lastMessage = AgentRunEnding(phase: phase, reason: tracker.lastOutcomeReasons[snap.sessionId]).label
+            } else {
+                redacted.lastMessage = snap.outcome.label
             }
         } else if snap.needsApproval {
             // A run waiting for your OK says so even in Privacy Mode (no command text).
@@ -1051,7 +1047,7 @@ final class AgentLiveActivityManager {
     @available(iOS 16.2, *)
     private static func privacyLatestIcon(_ state: AgentActivityAttributes.ContentState) -> String {
         guard state.allCompleted else { return privacyNeutralIcon }
-        return state.sessions.contains { $0.outcome == .attention } ? "exclamationmark.circle.fill" : "checkmark.circle.fill"
+        return LiveSessionSnapshot.RestingOutcome.mostUrgent(state.sessions.map(\.outcome)).symbol
     }
 
     /// Neutral placeholders used by Privacy Mode. Localized so the redacted
@@ -1232,7 +1228,7 @@ final class AgentLiveActivityManager {
             }
             return c
         }
-        let anyAttention = completedSessions.contains { $0.outcome == .attention }
+        let resting = LiveSessionSnapshot.RestingOutcome.mostUrgent(completedSessions.map(\.outcome))
         // [T-ios-live-activity-audio-toggle] Keep the audio control alive into the
         // completed resting state — the TTS narration of the just-finished reply
         // is often still playing, and the user should be able to pause it from the
@@ -1242,7 +1238,7 @@ final class AgentLiveActivityManager {
             sessions: completedSessions,
             carouselIndex: 0,
             soulName: soul,
-            latestToolIcon: anyAttention ? "exclamationmark.circle.fill" : "checkmark.circle.fill",
+            latestToolIcon: resting.symbol,
             minimalShowsTool: false,
             allCompleted: true
         )
@@ -1290,26 +1286,15 @@ final class AgentLiveActivityManager {
     /// finish the activity first (the keep-alive teardown and the view model race
     /// here, and the teardown knows nothing about the result).
     static func applyOutcome(to snap: inout LiveSessionSnapshot, lastMessage: String) {
-        let phase = SessionActivityTracker.shared.lastOutcomes[snap.sessionId]
+        let tracker = SessionActivityTracker.shared
+        // [leo] 收尾样子和文案都出自 AgentRunEnding,与小组件、通知同一份。
+        let ending = AgentRunEnding(phase: tracker.lastOutcomes[snap.sessionId],
+                                    reason: tracker.lastOutcomeReasons[snap.sessionId])
         snap.isCompleted = true
-        snap.outcome = LiveSessionSnapshot.RestingOutcome(ending: phase)
+        snap.outcome = ending.outcome
         snap.lastMessage = lastMessage
-        switch snap.outcome {
-        case .stopped:
-            snap.toolIcon = "stop.circle.fill"
-            snap.toolStatus = AppLocalized("Stopped")
-        case .paused:
-            // [T-la-false-failure] Not a verdict: the run carries on once the app
-            // is back. Pause glyph, not the orange exclamation.
-            snap.toolIcon = "pause.circle.fill"
-            snap.toolStatus = AppLocalized("已暂停，回到 App 继续")
-        case .attention:
-            snap.toolIcon = "exclamationmark.circle.fill"
-            snap.toolStatus = AppLocalized("Needs attention")
-        case .done:
-            snap.toolIcon = "checkmark.circle.fill"
-            snap.toolStatus = AppLocalized("Completed")
-        }
+        snap.toolIcon = ending.outcome.symbol
+        snap.toolStatus = ending.label
     }
 
     /// Collapse a stored last-message body to a single trimmed line, capped.
