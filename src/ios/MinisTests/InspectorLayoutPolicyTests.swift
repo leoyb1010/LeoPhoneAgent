@@ -43,4 +43,17 @@ final class InspectorLayoutPolicyTests: XCTestCase {
         XCTAssertFalse(src.contains("isOscillating"), "不再拦截系统的关闭")
         XCTAssertFalse(src.contains("max(0, contentFrame.maxX - inspectorFrame.minX)"), "旧的无条件算法不能回来")
     }
+
+    /// 1.87 真机日志:点开右栏后 [Inspector] width rule 951⇄867 一秒四次。根因是窗口宽度只看了安全区内的宽度。
+    func testWindowWidthIncludesSafeAreaAndWidthRuleIsDebouncedAndYieldsToTheUser() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let content = try String(contentsOf: root.appendingPathComponent("Views/ContentView.swift"), encoding: .utf8)
+        XCTAssertTrue(content.contains(".onChange(of: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing)"))
+        XCTAssertFalse(content.contains(".onChange(of: geo.size.width) { _, width in updateWindowWidth(width) }"))
+        let src = try String(contentsOf: root.appendingPathComponent("Views/Chat/ChatInspector.swift"), encoding: .utf8)
+        XCTAssertTrue(src.contains(".onChange(of: windowWidth) { _, width in scheduleWidthRule(width) }"), "宽度稳定后才套规则")
+        XCTAssertTrue(src.contains("Date().timeIntervalSince(lastHandToggle) < LeoWorkspaceLayoutPolicy.handToggleGrace"),
+                      "不推翻用户刚刚的手动开关")
+        XCTAssertEqual(LeoWorkspaceLayoutPolicy.handToggleGrace, 1.5)
+    }
 }

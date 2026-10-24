@@ -12,6 +12,14 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.87.1",
+            date: "2026-10-24",
+            title: "右栏按钮不再疯狂闪",
+            highlights: [
+                "修复 Duo 内屏点对话右上角的右栏按钮后一秒开关好几次、停不下来：打开右栏时 App 把窗口宽度量窄了（951 被当成 867），跨过了右栏自动收起的界线，收起后又量回 951 再打开。现在按真实窗口宽度判断，宽度要稳定下来才自动开关，也不会推翻你刚刚的点击。"
+            ]
+        ),
+        LeoRelease(
             version: "1.87.0",
             date: "2026-10-24",
             title: "后台状态说真话、附件能打开、右栏不再闪",

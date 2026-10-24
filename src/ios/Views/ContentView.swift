@@ -514,7 +514,7 @@ struct ContentView: View {
     private var rootLayout: some View {
         GeometryReader { geo in
             let wide = LeoWorkspaceLayoutPolicy.usesSplit(
-                width: geo.size.width,
+                width: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing,
                 regularWidth: horizontalSizeClass == .regular,
                 regularHeight: verticalSizeClass != .compact
             )
@@ -582,10 +582,15 @@ struct ContentView: View {
                 migrateNavigationState(toWide: newWide)
                 isWideLayout = newWide
             }
-            .onChange(of: geo.size.width) { _, width in updateWindowWidth(width) }
+            // [leo] 窗口宽度要算上左右安全区:Duo 内屏打开右栏时根视图的安全区会多出 84 pt,
+            // 只看 geo.size.width 会从 951 跳到 867,跨过 900 的右栏规则 → 关右栏 → 宽度回来 → 再开,
+            // 一秒四次的无限折叠展开(1.87 真机日志 [Inspector] width rule 951⇄867)。
+            .onChange(of: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing) { _, width in
+                updateWindowWidth(width)
+            }
             .onChange(of: geo.size.height) { _, height in windowHeight = height }
             .onAppear {
-                updateWindowWidth(geo.size.width)
+                updateWindowWidth(geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing)
                 windowHeight = geo.size.height
                 isWideLayout = wide
                 if !homeDraftRestored {

@@ -104,6 +104,9 @@ enum LeoWorkspaceLayoutPolicy {
         return covered
     }
 
+    /// 手动开 / 关右栏后这段时间里,宽度阈值规则不推翻用户的选择。
+    static let handToggleGrace: TimeInterval = 1.5
+
     /// 右栏浮在对话上时,对话至少保留的宽度。
     static let minimumChatWidth: CGFloat = 300
 

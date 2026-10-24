@@ -52,6 +52,9 @@ struct ChatDetailContainer<Content: View>: View {
     @State private var inspectorFrame: CGRect = .zero
     /// [ipad-chat] Detail width including the inspector column (= nav bar width).
     @State private var barWidth: CGFloat = 0
+    /// [leo] 宽度规则只认「稳定下来」的窗口宽度,且不推翻用户刚刚的手动开关。
+    @State private var lastHandToggle: Date = .distantPast
+    @State private var pendingWidthRule: Task<Void, Never>?
 
     private var headerBarGeometry: ChatHeaderBarGeometry {
         let width = max(barWidth, contentFrame.width)
@@ -103,14 +106,30 @@ struct ChatDetailContainer<Content: View>: View {
     /// or unpins; narrower windows only show it for now.
     private func setInspectorByHand(_ visible: Bool) {
         inspectorLog.info("[Inspector] by hand visible=\(visible) width=\(Int(windowWidth)) sheet=\(usesSheet)")
+        lastHandToggle = Date()
         if LeoWorkspaceLayoutPolicy.canPinContextColumn(width: windowWidth) { inspectorPinned = visible }
         withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = visible }
+    }
+
+    /// 窗口宽度变了:等它稳定 0.35 秒再按阈值规则开 / 关(展开右栏本身引起的布局抖动不算窗口变宽变窄)。
+    private func scheduleWidthRule(_ width: CGFloat) {
+        pendingWidthRule?.cancel()
+        pendingWidthRule = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled, width == windowWidth else { return }
+            applyWidthRule(width)
+        }
     }
 
     private func applyWidthRule(_ width: CGFloat) {
         guard width > 0 else { return }
         let old = CGFloat(contextRuleWidth)
         contextRuleWidth = Double(width)
+        // 用户 1.5 秒内刚手动开 / 关过:记下宽度,但不推翻他的选择。
+        if Date().timeIntervalSince(lastHandToggle) < LeoWorkspaceLayoutPolicy.handToggleGrace {
+            inspectorLog.info("[Inspector] width rule skipped (just toggled by hand) \(Int(old))→\(Int(width))")
+            return
+        }
         let pinned = inspectorPinned
         guard let show = LeoWorkspaceLayoutPolicy.crossing(
             from: old, to: width,
@@ -128,7 +147,7 @@ struct ChatDetailContainer<Content: View>: View {
                 withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = true }
             })
             .onAppear { applyWidthRule(windowWidth) }
-            .onChange(of: windowWidth) { _, width in applyWidthRule(width) }
+            .onChange(of: windowWidth) { _, width in scheduleWidthRule(width) }
             .onChange(of: contextRequest) { _, request in
                 guard let request else { return }
                 contextModeRaw = request.mode.rawValue
