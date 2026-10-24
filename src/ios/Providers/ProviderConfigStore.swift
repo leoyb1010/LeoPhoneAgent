@@ -1517,6 +1517,7 @@ final class ProviderConfigStore: ObservableObject {
                         pruneCloudCopies: Bool = false) -> Bool {
         guard config.instances.contains(where: { $0.id == instanceId }) else { return false }
         let existing = config.modelEntries.filter { $0.providerInstanceId == instanceId }
+        migrateCloakedEntries(for: instanceId, existing: existing)
         let template = VoiceProviderTemplate.template(
             forBaseURL: config.instances.first(where: { $0.id == instanceId })?.effectiveCustomBaseURL)
         do {
@@ -2325,8 +2326,10 @@ final class ProviderConfigStore: ObservableObject {
         do {
             logger.info("[ModelList] refreshModels (MANUAL): instance=\(instance.label) starting fetch")
             let result = try await Self.fetchModelsWithFallback(instance, forceRefresh: true)
-            guard replaceEntries(for: instance.id, models: result.models, caller: "refreshModels(manual)",
-                                 pruneCloudCopies: result.source == "api") else { return false }
+            // [leo] 只增不删:网关列表会随上游起伏,某台设备在低谷时刷新不能删掉别的设备读到的模型。
+            // 删除只走用户删除或「清理已下线模型」(cleanUpOfflineModels)。
+            guard replaceEntries(for: instance.id, models: additiveModels(for: instance.id, fresh: result.models),
+                                 caller: "refreshModels(manual)") else { return false }
             logger.info("[ModelList] refreshModels (MANUAL): instance=\(instance.label) source=\(result.source) count=\(result.models.count)")
             for w in result.warnings { logger.warning("⚠️ \(w)") }
             return true
@@ -2346,28 +2349,73 @@ final class ProviderConfigStore: ObservableObject {
     }
 
     private func autoRefreshModels(for instance: ProviderInstance) async {
-        // [T-mimo-shadow-voice] No longer skipped for "voice-only" providers —
-        // audio-modality template seed entries survive replaceEntries.
-        let hasCustomModels = config.modelEntries.contains { $0.providerInstanceId == instance.id && $0.isCustom }
-        if hasCustomModels {
-            logger.info("[ModelList] autoRefreshModels (DAILY): instance=\(instance.label) SKIP — user has custom models")
-            return
-        }
         do {
-            logger.info("[ModelList] autoRefreshModels (DAILY): instance=\(instance.label) starting fetch")
+            logger.info("[ModelList] autoRefreshModels: instance=\(instance.label) starting fetch")
             let result = try await Self.fetchModelsWithFallback(instance, forceRefresh: true)
-            // [leo] 只有服务商自己的 /models（source == "api"）才是真实清单，可以删掉不再提供的模型。
-            // 退回内置表 / models.dev 时只增不删：2026-10-21 Anthropic 实例走内置表（7 个，缺 5.5 系列），
-            // 把分组「Leo常用模型」排在前面的四个 Claude 全删了，之后每次对话都退到不带缓存的网关。
-            let models = result.source == "api"
-                ? result.models
-                : Self.mergeKeepingExisting(result.models, existing: config.modelEntries
-                    .filter { $0.providerInstanceId == instance.id }.map(\.baseModel))
-            guard replaceEntries(for: instance.id, models: models, caller: "autoRefreshModels(daily)",
-                                 pruneCloudCopies: result.source == "api") else { return }
-            logger.info("[ModelList] autoRefreshModels (DAILY): instance=\(instance.label) source=\(result.source) count=\(result.models.count)")
+            // [leo] 1.86:自动刷新只增不删、也不再删 iCloud 副本。以前每台设备每天刷新时把「这一刻」网关给的
+            // 列表当成全部真相,不在里面的连同云端一起删——CLIProxyAPI 的列表随上游账号起伏(cursor/ 一会儿有
+            // 一会儿没有),哪台设备赶上低谷,所有设备上刚读到的新模型就一起消失。用户删过的模型不再自动加回来。
+            let tombstoned = Set(config.deletedModelEntries.map(\.id))
+            guard replaceEntries(for: instance.id,
+                                 models: additiveModels(for: instance.id, fresh: result.models, excluded: tombstoned),
+                                 caller: "autoRefreshModels") else { return }
+            logger.info("[ModelList] autoRefreshModels: instance=\(instance.label) source=\(result.source) fetched=\(result.models.count)")
         } catch {
-            logger.error("[ModelList] autoRefreshModels (DAILY) FAILED type=\(String(describing: type(of: error)))")
+            logger.error("[ModelList] autoRefreshModels FAILED type=\(String(describing: type(of: error)))")
+        }
+    }
+
+    /// 刷新合并:这次拉到的在前(伪装 ID 已还原),本机已有、这次没给的非自定义模型留在后面。
+    /// 自定义模型由 ModelCatalogArchive 自己保留(放进来会被当成非自定义)。`excluded` 是条目 id(实例/模型)。
+    func additiveModels(for instanceId: String, fresh: [LLMModel], excluded: Set<String> = []) -> [LLMModel] {
+        let existing = config.modelEntries.filter { $0.providerInstanceId == instanceId && !$0.isCustom }
+        let excludedModelIds = Set(excluded.compactMap { key -> String? in
+            key.hasPrefix(instanceId + "/") ? String(key.dropFirst(instanceId.count + 1)) : nil
+        })
+        let order = ModelCloudPrune.additiveMergeIds(fresh: fresh.map(\.id), existing: existing.map(\.baseModel.id),
+                                                     excluded: excludedModelIds)
+        var byId: [String: LLMModel] = [:]
+        // 已有的先放、这次拉到的覆盖:元数据以服务器最新为准。伪装 ID 的旧条目不再出现(由 migrateCloakedEntries 收尾)。
+        for entry in existing where !ModelIdentity.isCloaked(entry.baseModel.id) { byId[entry.baseModel.id] = entry.baseModel }
+        for model in fresh { byId[model.id] = model }
+        return order.compactMap { byId[$0] }
+    }
+
+    /// 「清理已下线模型」:用户明确要求时才把服务器这次没给的模型删掉(连同 iCloud 副本)。
+    /// 返回 nil 表示拉取失败 / 不是服务商自己的列表(不清理);否则返回删掉的数量。
+    func cleanUpOfflineModels(for instance: ProviderInstance) async -> Int? {
+        guard let result = try? await Self.fetchModelsWithFallback(instance, forceRefresh: true),
+              result.source == "api", !result.models.isEmpty else { return nil }
+        let before = config.modelEntries.filter { $0.providerInstanceId == instance.id }.count
+        guard replaceEntries(for: instance.id, models: result.models, caller: "cleanUpOfflineModels",
+                             pruneCloudCopies: true) else { return nil }
+        let after = config.modelEntries.filter { $0.providerInstanceId == instance.id }.count
+        return max(0, before - after)
+    }
+
+    /// 以前从网关 Anthropic 列表存进来的伪装条目(claude-…-dd-<倒序>):换成真实 ID。
+    /// 分组成员改指向真实条目(带时间戳,跟着 iCloud 走到别的设备),收藏/绑定经别名继续解析,云端旧记录删掉。
+    private func migrateCloakedEntries(for instanceId: String, existing: [ModelEntry]) {
+        let cloaked = existing.filter { ModelIdentity.isCloaked($0.baseModel.id) }
+        guard !cloaked.isEmpty else { return }
+        var remap: [String: String] = [:]
+        for entry in cloaked {
+            let real = "\(instanceId)/\(ModelIdentity.decodeCloaked(entry.baseModel.id))"
+            for name in [entry.id, entry.uuid, entry.legacyColonCompositeKey] { remap[name] = real; legacyUuidToCompositeKey[name] = real }
+        }
+        persistLegacyUuidMap()
+        for group in config.modelGroups where group.memberEntryIds.contains(where: { remap[$0] != nil }) {
+            var updated = group
+            var seen = Set<String>()
+            updated.memberEntryIds = group.memberEntryIds.map { remap[$0] ?? $0 }.filter { seen.insert($0).inserted }
+            _ = updateGroup(updated)
+        }
+        let names = Set(cloaked.flatMap { [$0.id, $0.uuid, $0.legacyColonCompositeKey] })
+        logger.info("[ModelList] migrateCloakedEntries instance=\(instanceId.prefix(8)) entries=\(cloaked.count) cloudDeletes=\(names.count)")
+        Task {
+            for name in names {
+                await ChatStore.shared.markDirty(recordType: "ProviderModelEntryV3", recordId: name, operation: "delete")
+            }
         }
     }
 
@@ -2454,6 +2502,7 @@ final class ProviderConfigStore: ObservableObject {
     }
 
     private var modelRefreshScheduled = false
+    static let modelRefreshInterval: TimeInterval = 6 * 3600
 
     private func refreshAllModelsSerially() async {
         let key = "lastModelsRefreshDate"
@@ -2468,16 +2517,22 @@ final class ProviderConfigStore: ObservableObject {
         }
         // [leo] 1.77.6：内置 Anthropic 表补上 5.5 系列、非权威来源不再删模型。升级后立即重刷一次，
         // 把今天被误删的 Claude 5.5 条目恢复回来，不等明天。
+        // [leo] 1.86:升级后立即读一次,把伪装 ID 换成真实 ID、找回被旧的自动删除删掉的模型。
+        let additiveOnceKey = "leo.models.additiveRefreshOnce.v1"
+        if !UserDefaults.standard.bool(forKey: additiveOnceKey) {
+            UserDefaults.standard.set(true, forKey: additiveOnceKey)
+            lastRefresh = nil
+        }
         let restoreOnceKey = "leo.models.restoreDroppedOnce.v1"
         if !UserDefaults.standard.bool(forKey: restoreOnceKey) {
             UserDefaults.standard.set(true, forKey: restoreOnceKey)
             lastRefresh = nil
         }
-        let calendar = Calendar.current
         let lastStr = lastRefresh.map { ISO8601DateFormatter().string(from: $0) } ?? "nil"
 
-        if let lastRefresh, calendar.isDateInToday(lastRefresh) {
-            logger.info("[ModelList] refreshAllModelsIfNeeded: SKIP — already refreshed today (lastRefresh=\(lastStr))")
+        // [leo] 1.86:每 6 小时(回到前台时)读一次,新模型当天就能出现;以前一天只在第一次启动读一次。
+        if let lastRefresh, Date().timeIntervalSince(lastRefresh) < Self.modelRefreshInterval {
+            logger.info("[ModelList] refreshAllModelsIfNeeded: SKIP — refreshed \(Int(Date().timeIntervalSince(lastRefresh) / 60)) min ago (lastRefresh=\(lastStr))")
             return
         }
 

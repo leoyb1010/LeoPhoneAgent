@@ -121,7 +121,9 @@ enum AnthropicModelsAPI {
         }
 
         let raw = dataArray.compactMap { item -> LLMModel? in
-            guard let id = item["id"] as? String else { return nil }
+            // [leo] CLIProxyAPI 在这条 Anthropic 风格列表里把非 Claude 模型伪装成 claude-…-dd-<倒序 ID>,入库前还原。
+            guard let rawId = item["id"] as? String else { return nil }
+            let id = ModelIdentity.decodeCloaked(rawId)
             // Anthropic format uses "display_name"; OpenAI-compatible proxies use "id" only
             let displayName = (item["display_name"] as? String) ?? modelDisplayName(from: id)
             return LLMModel(id: id, displayName: displayName, provider: "Anthropic")

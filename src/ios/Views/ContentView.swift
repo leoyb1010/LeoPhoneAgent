@@ -935,7 +935,7 @@ struct ContentView: View {
                 Group {
                 switch sheet {
                 case .settings:
-                    SettingsSheet(showTerminal: $showTerminal)
+                    SettingsSheet(showTerminal: $showTerminal, onClose: { activeToolSheet = nil })
                 case .collections:
                     CollectionsView(onClose: { activeToolSheet = nil })
                 case .rootfsManagement:

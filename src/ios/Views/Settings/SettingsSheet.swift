@@ -8,6 +8,8 @@
 
 import SwiftUI
 
+private let settingsLogger = AppLogger(category: "Settings")
+
 // MARK: - Settings Sheet
 
 extension EnvironmentValues {
@@ -55,6 +57,9 @@ struct SettingsSheet: View {
     @AppStorage(WorkerPool.enabledKey) private var orchestrationEnabled = false
 
     @Binding var showTerminal: Bool
+    /// [leo] 「完成」直接交给呈现它的那一层关(ContentView 里是 `activeToolSheet = nil`),不靠环境里的
+    /// dismiss:环境值随所在容器变(分栏、GeometryReader、多窗口),拿错一层就会「点了没反应」。
+    var onClose: (() -> Void)? = nil
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
@@ -90,7 +95,8 @@ struct SettingsSheet: View {
             .navigationTitle("Settings")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done") { close(from: "split") }
+                        .accessibilityIdentifier("settings.done")
                 }
             }
             .navigationSplitViewColumnWidth(min: LeoSettingsLayoutPolicy.sidebarWidth.min,
@@ -144,7 +150,8 @@ struct SettingsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("Done") { close(from: "stack") }
+                        .accessibilityIdentifier("settings.done")
                 }
             }
             .navigationDestination(for: SettingsDestination.self) { settingsDestination($0) }
@@ -226,6 +233,11 @@ struct SettingsSheet: View {
 
     /// Deep link / legacy flags / language-change reopen, on first appear —
     /// shared by the single-column and the split layout.
+    private func close(from layout: String) {
+        settingsLogger.info("[Settings] Done tapped layout=\(layout) path=\(navPath.count) explicitClose=\(onClose != nil)")
+        if let onClose { onClose() } else { dismiss() }
+    }
+
     private func applyLaunchNavigation() {
         // A saved entry that has since been renamed would open on an empty column.
         if !SettingsHomeView.groups.flatMap(\.entries).contains(where: { $0.id == splitSelection }) {

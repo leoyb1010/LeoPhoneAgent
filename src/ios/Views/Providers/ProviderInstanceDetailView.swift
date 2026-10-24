@@ -11,6 +11,8 @@ struct ProviderInstanceDetailView: View {
     @State private var showKimiLogin = false
     @State private var keyInputText = ""
     @State private var isFetchingModels = false
+    @State private var confirmCleanUp = false
+    @State private var cleanUpMessage: String?
     @State private var fetchError: String?
     @State private var organizationError: String?
     @State private var fetchWarnings: [String] = []
@@ -330,6 +332,18 @@ struct ProviderInstanceDetailView: View {
                 }
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
+                    // [leo] 刷新只增不删;服务器真的下线的模型由用户在这里明确清理(连同 iCloud 副本)。
+                    Button(AppLocalized("Clean Up Offline Models")) { confirmCleanUp = true }
+                        .font(.caption)
+                        .disabled(isFetchingModels)
+                        .confirmationDialog(AppLocalized("Clean Up Offline Models"), isPresented: $confirmCleanUp, titleVisibility: .visible) {
+                            Button(AppLocalized("Clean Up"), role: .destructive) { cleanUpOfflineModels(instance) }
+                        } message: {
+                            Text(AppLocalized("Removes models this provider's server no longer lists, on all your devices. Custom models are kept. Refresh never removes models by itself."))
+                        }
+                    if let cleanUpMessage {
+                        Text(cleanUpMessage).font(.caption).foregroundStyle(.secondary)
+                    }
                     // Source info (green)
                     if let source = fetchSource {
                         Label("Loaded from \(source)", systemImage: "checkmark.circle")
@@ -949,8 +963,18 @@ struct ProviderInstanceDetailView: View {
             .padding(.vertical, 8)
         }
 
-        ForEach(entries) { entry in
-            modelEntryRow(entry, isHidden: entry.isHidden)
+        // [leo] 与模型选择器一致:按品牌分小组、组内最新在前(网关返回的顺序每次不同)。
+        let brandSections = ModelBrand.sections(entries) { $0.model.id }
+        ForEach(brandSections, id: \.family) { section in
+            if brandSections.count > 1 {
+                Text(ModelBrand.label(for: section.family))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            ForEach(section.items) { entry in
+                modelEntryRow(entry, isHidden: entry.isHidden)
+            }
         }
     }
 
@@ -1094,8 +1118,9 @@ struct ProviderInstanceDetailView: View {
             defer { isFetchingModels = false }
             do {
                 let result = try await ProviderConfigStore.fetchModelsWithFallback(freshInstance, forceRefresh: true)
-                guard store.replaceEntries(for: freshInstance.id, models: result.models,
-                                           pruneCloudCopies: result.source == "api") else {
+                // [leo] 只增不删(见 ProviderConfigStore.additiveModels);删下线模型走「清理已下线模型」。
+                guard store.replaceEntries(for: freshInstance.id,
+                                           models: store.additiveModels(for: freshInstance.id, fresh: result.models)) else {
                     fetchError = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.")
                     return
                 }
@@ -1103,6 +1128,19 @@ struct ProviderInstanceDetailView: View {
                 fetchSource = result.source
             } catch {
                 fetchError = error.localizedDescription
+            }
+        }
+    }
+
+    private func cleanUpOfflineModels(_ instance: ProviderInstance) {
+        isFetchingModels = true
+        cleanUpMessage = nil
+        Task {
+            defer { isFetchingModels = false }
+            if let removed = await store.cleanUpOfflineModels(for: instance) {
+                cleanUpMessage = removed == 0 ? AppLocalized("No offline models.") : AppLocalized("Removed \(removed) offline models.")
+            } else {
+                cleanUpMessage = AppLocalized("Could not read the server's model list. Nothing was removed.")
             }
         }
     }

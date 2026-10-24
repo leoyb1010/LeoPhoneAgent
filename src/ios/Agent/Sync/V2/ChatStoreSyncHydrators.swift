@@ -1535,6 +1535,15 @@ enum ChatStoreSyncHydrators {
             // Can't resolve (missing fields) — fall back to raw id (no worse than before).
             return rawId
         }()
+        // [leo] 网关伪装 ID(claude-…-dd-<倒序>)的旧记录:各设备刷新时已换成真实 ID,这份不再收,云端删掉。
+        if let m = canonModelId, ModelIdentity.isCloaked(m) {
+            noteRecentlyDeletedSkip(kind: "rejectCloakedModelEntry", id: String(id.prefix(16)),
+                firstLine: "[v3] mergeProviderModelEntryV3 REJECT (gateway-cloaked id): id=\(id.prefix(16)) — deleting cloud copy")
+            for name in Set([rawId, id]) {
+                await ChatStore.shared.markDirty(recordType: "ProviderModelEntryV3", recordId: name, operation: "delete")
+            }
+            return
+        }
         // [T-model-cloud-prune] 服务器早已不提供的模型,云端旧副本拒收并删掉,不再「复活」回列表。
         if let m = canonModelId, !canonInstanceId.isEmpty,
            ModelCloudPrune.rejectsInbound(modelId: m, isCustom: (intField(record, "isCustom") ?? 0) != 0,

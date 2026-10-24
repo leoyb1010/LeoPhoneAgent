@@ -86,7 +86,7 @@ final class MountBackoffAndForegroundSignpostWiringTests: XCTestCase {
             "fg.step.scheduleAfterFrame", "fg.step.syncKick", "fg.step.inactivePass",
             // 下一帧之后的 runAfterForegroundFrame
             "fg.step.afterFrame", "fg.step.pushRegistrar", "fg.step.crashReporterLaunch", "fg.step.resourceDiagStart",
-            "fg.step.crashMarker", "fg.step.liveActivityCleanup", "fg.step.brainProvision",
+            "fg.step.crashMarker", "fg.step.liveActivityCleanup", "fg.step.modelRefresh", "fg.step.brainProvision",
             "fg.step.liveActivityDismiss", "fg.step.badgeKick", "fg.step.badgeResumableQuery", "fg.step.badgeReconcile",
             "fg.step.interruptionCheck", "fg.step.shortcutPendingCheck", "fg.step.skillsReloadKick",
             "fg.step.skillNotifierDrain", "fg.step.widgetKick", "fg.step.mountWritability", "fg.step.credentialDiagKick",

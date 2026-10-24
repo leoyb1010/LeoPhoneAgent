@@ -198,7 +198,8 @@ enum OpenAIModelsAPI {
         // 端点自己报的上下文 / 输出上限（中转站、vLLM 等），合并 models.dev 之后再盖上去：端点说了算。
         var endpointLimits: [String: (context: Int?, output: Int?)] = [:]
         let models = modelsArray.compactMap { item -> LLMModel? in
-            guard let id = item["id"] as? String else { return nil }
+            guard let rawId = item["id"] as? String else { return nil }
+            let id = ModelIdentity.decodeCloaked(rawId)  // [leo] 网关伪装 ID 还原(见 ModelIdentity)
             let limits = (context: OpenAIModelLimits.contextWindow(in: item), output: OpenAIModelLimits.maxOutputTokens(in: item))
             if limits.context != nil || limits.output != nil { endpointLimits[id] = limits }
 

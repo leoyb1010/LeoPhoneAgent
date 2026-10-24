@@ -1160,14 +1160,27 @@ struct UnifiedModelPicker: View {
                         }
                     }.disabled(selectable.isEmpty)
                 }
-                ForEach(item.entries) { entry in entryRow(entry) }
+                // [leo] 网关返回的顺序每次都不同:按品牌分小组(Kimi / Qwen / Claude Opus …),组内最新在前,
+                // 每个品牌最新的一款标「最新」。只有一个品牌时不加小标题。
+                let brandSections = ModelBrand.sections(item.entries) { $0.model.id }
+                let latest = ModelBrand.latestIds(item.entries.map(\.model.id))
+                ForEach(brandSections, id: \.family) { section in
+                    if brandSections.count > 1 {
+                        Text(ModelBrand.label(for: section.family))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(ModelPickerText.secondary)
+                            .accessibilityAddTraits(.isHeader)
+                            .listRowSeparator(.hidden, edges: .bottom)
+                    }
+                    ForEach(section.items) { entry in entryRow(entry, isLatest: latest.contains(entry.model.id)) }
+                }
             }
         }
     }
 
     // MARK: - Entry Row
 
-    private func entryRow(_ entry: ModelEntry) -> some View {
+    private func entryRow(_ entry: ModelEntry, isLatest: Bool = false) -> some View {
         let unavailable = isMulti ? nil : memberUnavailableReason(entry.id)
         let disabled = (config.isDisabled?(entry) ?? false) || unavailable != nil
         let traits = entry.displayTraits
@@ -1193,6 +1206,11 @@ struct UnifiedModelPicker: View {
                             Text(entry.model.displayName).font(.body).foregroundStyle(Color.primary)
                                 .multilineTextAlignment(.leading)
                                 .fixedSize(horizontal: false, vertical: true)
+                            if isLatest {
+                                Text("Latest").font(.caption2.weight(.semibold)).foregroundStyle(Color.accentColor)
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+                            }
                             if balances.isLow(instanceId: entry.providerInstanceId) {
                                 Circle().fill(Color.yellow).frame(width: 7, height: 7)
                                     .accessibilityLabel(Text("余额偏低"))

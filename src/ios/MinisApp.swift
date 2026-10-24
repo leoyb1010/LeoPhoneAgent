@@ -376,6 +376,9 @@ struct MinisApp: App {
         }
         fgSteps.next("fg.step.liveActivityCleanup")
         AgentLiveActivityManager.shared.cleanupStaleActivities(source: "scenePhase.active")
+        // [leo] 模型列表:距上次读取超过 6 小时就在后台再读一次(内部 10 秒延迟、逐个服务商、只增不删)。
+        fgSteps.next("fg.step.modelRefresh")
+        ProviderConfigStore.shared.refreshAllModelsIfNeeded()
         // [T-brain] devicectl 拷进来的资料库令牌文件:导入钥匙串后立即删除。
         fgSteps.next("fg.step.brainProvision")
         BrainStore.shared.importProvisionFileIfPresent()
