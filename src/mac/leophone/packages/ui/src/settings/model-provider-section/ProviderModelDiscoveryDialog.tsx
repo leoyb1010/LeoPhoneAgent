@@ -43,14 +43,22 @@ interface ModelGroup {
   readonly models: readonly DiscoveredModel[];
 }
 
-function groupModels(models: readonly DiscoveredModel[]): ModelGroup[] {
+function groupModels(
+  models: readonly DiscoveredModel[],
+  latestIds: ReadonlySet<string>,
+): ModelGroup[] {
   const groups = new Map<string, DiscoveredModel[]>();
   for (const model of models) {
     const family = resolveModelFamily(model.id);
     groups.set(family, [...(groups.get(family) ?? []), model]);
   }
+  // [leo] 有「最新」推荐的品牌排前面(按名字),cn/fast-model 这类没版本号的路由别名沉到最后。
+  const ranked = (items: readonly DiscoveredModel[]) =>
+    items.some((model) => latestIds.has(model.id)) ? 0 : 1;
   return [...groups.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([leftFamily, left], [rightFamily, right]) =>
+      ranked(left) - ranked(right) || leftFamily.localeCompare(rightFamily),
+    )
     .map(([family, items]) => ({ family, models: [...items].sort(compareModelsNewestFirst) }));
 }
 
@@ -117,7 +125,7 @@ export function ProviderModelDiscoveryDialog({
       ),
     [query, result, showAll],
   );
-  const groups = useMemo(() => groupModels(visibleModels), [visibleModels]);
+  const groups = useMemo(() => groupModels(visibleModels, latestIds), [visibleModels, latestIds]);
   const selectableVisibleIds = visibleModels
     .filter((model) => !existing.has(model.id))
     .map((model) => model.id);
