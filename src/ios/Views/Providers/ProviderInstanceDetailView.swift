@@ -339,7 +339,7 @@ struct ProviderInstanceDetailView: View {
                         .confirmationDialog(AppLocalized("Clean Up Offline Models"), isPresented: $confirmCleanUp, titleVisibility: .visible) {
                             Button(AppLocalized("Clean Up"), role: .destructive) { cleanUpOfflineModels(instance) }
                         } message: {
-                            Text(AppLocalized("Removes models this provider's server no longer lists, on all your devices. Custom models are kept. Refresh never removes models by itself."))
+                            Text(AppLocalized("Removes models this provider's server no longer lists, on all your devices. Custom models are kept. Run it when the provider is working normally. Refresh never removes models by itself."))
                         }
                     if let cleanUpMessage {
                         Text(cleanUpMessage).font(.caption).foregroundStyle(.secondary)
@@ -1120,7 +1120,8 @@ struct ProviderInstanceDetailView: View {
                 let result = try await ProviderConfigStore.fetchModelsWithFallback(freshInstance, forceRefresh: true)
                 // [leo] 只增不删(见 ProviderConfigStore.additiveModels);删下线模型走「清理已下线模型」。
                 guard store.replaceEntries(for: freshInstance.id,
-                                           models: store.additiveModels(for: freshInstance.id, fresh: result.models)) else {
+                                           models: store.additiveModels(for: freshInstance.id, fresh: result.models,
+                                                                        excluded: ProviderConfigStore.decodedTombstoneIds(store.config.deletedModelEntries))) else {
                     fetchError = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.")
                     return
                 }
@@ -1140,7 +1141,7 @@ struct ProviderInstanceDetailView: View {
             if let removed = await store.cleanUpOfflineModels(for: instance) {
                 cleanUpMessage = removed == 0 ? AppLocalized("No offline models.") : AppLocalized("Removed \(removed) offline models.")
             } else {
-                cleanUpMessage = AppLocalized("Could not read the server's model list. Nothing was removed.")
+                cleanUpMessage = AppLocalized("Could not read a complete model list from the server (it may be temporarily missing models). Nothing was removed.")
             }
         }
     }

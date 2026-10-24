@@ -113,8 +113,7 @@ enum ModelBrand {
         return String(trimmed[trimmed.index(after: slash)...])
     }
 
-    /// 品牌系列键:claude-opus / gpt / kimi / qwen …;识别不了取开头的字母段。
-    static func family(of id: String) -> String {
+    private static func computeFamily(_ id: String) -> String {
         let lower = base(id)
         if lower.hasPrefix("claude") {
             for tier in ["opus", "sonnet", "haiku"] where lower.contains(tier) { return "claude-\(tier)" }
@@ -132,7 +131,7 @@ enum ModelBrand {
 
     /// 紧跟品牌的版本号:kimi-k3.1-pro → [3, 0.1];claude-opus-5-5 → [5, 0.5];gpt-oss-120b → [](参数量不算)。
     /// 小版本按小数比:grok-4.20 是 4.2,排在 4.7 之前。
-    static func version(of id: String) -> [Double] {
+    private static func computeVersion(_ id: String) -> [Double] {
         let lower = base(id).replacing(dateSuffix, with: "")
         var parts: [Substring] = []
         if let match = lower.firstMatch(of: claudeVersion) {
@@ -144,7 +143,7 @@ enum ModelBrand {
         return parts.enumerated().compactMap { index, part in index == 0 ? Double(part) : Double("0.\(part)") }
     }
 
-    private static func tierScore(_ id: String) -> Double {
+    private static func computeTier(_ id: String) -> Double {
         base(id).split(whereSeparator: { $0 == "-" || $0 == "_" }).dropFirst().reduce(0) { score, token in
             let word = String(token)
             if flagship.contains(word) { return score + 2 }
@@ -156,14 +155,39 @@ enum ModelBrand {
         }
     }
 
+    // 每个 ID 只解析一次:分组在 SwiftUI body 里算,每次排序比较都跑正则太贵(150 个模型约 5000 次匹配)。
+    // ponytail: 全局表 + 锁,超过 4000 个 ID 清空重来;ID 是小而封闭的集合,够用。
+    private struct Traits { let family: String; let version: [Double]; let tier: Double }
+    nonisolated(unsafe) private static var traitsCache: [String: Traits] = [:]
+    private static let traitsLock = NSLock()
+
+    private static func traits(_ id: String) -> Traits {
+        traitsLock.lock()
+        if let hit = traitsCache[id] { traitsLock.unlock(); return hit }
+        traitsLock.unlock()
+        let computed = Traits(family: computeFamily(id), version: computeVersion(id), tier: computeTier(id))
+        traitsLock.lock()
+        if traitsCache.count > 4000 { traitsCache.removeAll() }
+        traitsCache[id] = computed
+        traitsLock.unlock()
+        return computed
+    }
+
+    /// 品牌系列键:claude-opus / gpt / kimi / qwen …;识别不了取开头的字母段。
+    static func family(of id: String) -> String { traits(id).family }
+
+    /// 紧跟品牌的版本号(见 computeVersion)。
+    static func version(of id: String) -> [Double] { traits(id).version }
+
     /// 新的在前:先比版本号,同版本先旗舰(pro/max)、后 flash/lite/preview,最后按 ID 自然序。
     static func isNewer(_ left: String, than right: String) -> Bool {
-        let lv = version(of: left), rv = version(of: right)
+        let lt0 = traits(left), rt0 = traits(right)
+        let lv = lt0.version, rv = rt0.version
         for index in 0..<max(lv.count, rv.count) {
             let l = index < lv.count ? lv[index] : -1, r = index < rv.count ? rv[index] : -1
             if l != r { return l > r }
         }
-        let lt = tierScore(left), rt = tierScore(right)
+        let lt = lt0.tier, rt = rt0.tier
         if lt != rt { return lt > rt }
         return left.localizedStandardCompare(right) == .orderedDescending
     }

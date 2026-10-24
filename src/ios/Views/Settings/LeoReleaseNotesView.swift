@@ -12,6 +12,19 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.86.0",
+            date: "2026-10-24",
+            title: "模型列表不再丢模型",
+            highlights: [
+                "新读到的模型不会再「过一会就消失」：以前哪台设备刷新时网关刚好少列了几个模型，就会把所有设备上的这几个模型一起删掉；现在刷新只增不删，iPhone、iPad、Duo 之间不会再互相删。",
+                "模型自动保持最新：每 6 小时、回到 App 时会在后台读一次服务商的模型列表，新模型当天就出现；你删过的模型不会被自动加回来。",
+                "服务器真的下线的模型，可以在服务商详情页点「清理已下线模型」一次清掉（自定义模型保留）。",
+                "模型按品牌分组：选模型时同一服务商下按 Kimi、Qwen、Claude、Grok 等分开，组内最新在前，每个品牌最新的一款标「最新」。",
+                "修复网关把模型名「伪装」成 claude-…-dd-（倒着写的乱码）导致的分组混乱，旧的乱码条目会自动换成真实模型，分组和收藏不受影响。",
+                "设置页右上角的「完成」改为直接关闭设置。"
+            ]
+        ),
+        LeoRelease(
             version: "1.85.0",
             date: "2026-10-23",
             title: "iPhone Duo 首版适配",

@@ -1516,15 +1516,17 @@ final class ProviderConfigStore: ObservableObject {
     func replaceEntries(for instanceId: String, models rawModels: [LLMModel], caller: String = #function,
                         pruneCloudCopies: Bool = false) -> Bool {
         guard config.instances.contains(where: { $0.id == instanceId }) else { return false }
+        // [leo] 伪装 ID 的旧条目先就地改成真实 ID(保留 uuid、改名、隐藏等用户设置),再做归档刷新;
+        // 分组成员改指向、云端旧记录删除放到本机保存成功之后。
+        let cloakedRemap = renameCloakedEntriesInPlace(for: instanceId)
         let existing = config.modelEntries.filter { $0.providerInstanceId == instanceId }
-        migrateCloakedEntries(for: instanceId, existing: existing)
         let template = VoiceProviderTemplate.template(
             forBaseURL: config.instances.first(where: { $0.id == instanceId })?.effectiveCustomBaseURL)
         do {
             let refresh = try ModelCatalogArchive.refresh(
                 instanceId: instanceId, activeEntries: config.modelEntries, models: rawModels,
                 templateModels: template?.mockModels ?? [],
-                forgottenEntryIds: Set(config.deletedModelEntries.map(\.id)),
+                forgottenEntryIds: Self.decodedTombstoneIds(config.deletedModelEntries),
                 forgottenInstanceIds: Set(config.deletedInstances.map(\.id)), at: modelArchiveURL)
             // The archive is durable before active rows disappear. Never route
             // using archive-only entries, and never prune user group/favorite refs.
@@ -1537,6 +1539,7 @@ final class ProviderConfigStore: ObservableObject {
                 : []
             logger.info("[ModelList] replaceEntries caller=\(caller) instance=\(instanceId.prefix(8)) before=\(existing.count) after=\(refresh.entries.count); omitted metadata archived locally; cloud deletes=\(cloudDeletes.count)")
             guard save() else { return false }
+            finishCloakedMigration(cloakedRemap)
             if pruneCloudCopies && !rawModels.isEmpty {
                 ModelCloudPrune.recordServerList(.init(at: Date(), modelIds: refresh.entries.map(\.baseModel.id)),
                                                  for: instanceId)
@@ -2328,7 +2331,9 @@ final class ProviderConfigStore: ObservableObject {
             let result = try await Self.fetchModelsWithFallback(instance, forceRefresh: true)
             // [leo] 只增不删:网关列表会随上游起伏,某台设备在低谷时刷新不能删掉别的设备读到的模型。
             // 删除只走用户删除或「清理已下线模型」(cleanUpOfflineModels)。
-            guard replaceEntries(for: instance.id, models: additiveModels(for: instance.id, fresh: result.models),
+            guard replaceEntries(for: instance.id,
+                                 models: additiveModels(for: instance.id, fresh: result.models,
+                                                        excluded: Self.decodedTombstoneIds(config.deletedModelEntries)),
                                  caller: "refreshModels(manual)") else { return false }
             logger.info("[ModelList] refreshModels (MANUAL): instance=\(instance.label) source=\(result.source) count=\(result.models.count)")
             for w in result.warnings { logger.warning("⚠️ \(w)") }
@@ -2355,7 +2360,7 @@ final class ProviderConfigStore: ObservableObject {
             // [leo] 1.86:自动刷新只增不删、也不再删 iCloud 副本。以前每台设备每天刷新时把「这一刻」网关给的
             // 列表当成全部真相,不在里面的连同云端一起删——CLIProxyAPI 的列表随上游账号起伏(cursor/ 一会儿有
             // 一会儿没有),哪台设备赶上低谷,所有设备上刚读到的新模型就一起消失。用户删过的模型不再自动加回来。
-            let tombstoned = Set(config.deletedModelEntries.map(\.id))
+            let tombstoned = Self.decodedTombstoneIds(config.deletedModelEntries)
             guard replaceEntries(for: instance.id,
                                  models: additiveModels(for: instance.id, fresh: result.models, excluded: tombstoned),
                                  caller: "autoRefreshModels") else { return }
@@ -2375,8 +2380,9 @@ final class ProviderConfigStore: ObservableObject {
         let order = ModelCloudPrune.additiveMergeIds(fresh: fresh.map(\.id), existing: existing.map(\.baseModel.id),
                                                      excluded: excludedModelIds)
         var byId: [String: LLMModel] = [:]
-        // 已有的先放、这次拉到的覆盖:元数据以服务器最新为准。伪装 ID 的旧条目不再出现(由 migrateCloakedEntries 收尾)。
-        for entry in existing where !ModelIdentity.isCloaked(entry.baseModel.id) { byId[entry.baseModel.id] = entry.baseModel }
+        // 已有的先放、这次拉到的覆盖:元数据以服务器最新为准。伪装 ID 的旧条目在 replaceEntries 里先就地改名,
+        // 这里只是兜底(万一还剩,它的元数据也要能找到,不能因为这次网关没列出就丢)。
+        for entry in existing { byId[ModelIdentity.decodeCloaked(entry.baseModel.id)] = byId[ModelIdentity.decodeCloaked(entry.baseModel.id)] ?? entry.baseModel }
         for model in fresh { byId[model.id] = model }
         return order.compactMap { byId[$0] }
     }
@@ -2387,31 +2393,77 @@ final class ProviderConfigStore: ObservableObject {
         guard let result = try? await Self.fetchModelsWithFallback(instance, forceRefresh: true),
               result.source == "api", !result.models.isEmpty else { return nil }
         let before = config.modelEntries.filter { $0.providerInstanceId == instance.id }.count
+        // 网关正在低谷(这次只列出不到现有一半)时不清理:那多半是上游暂时不可用,不是真的下线。
+        let nonCustom = config.modelEntries.filter { $0.providerInstanceId == instance.id && !$0.isCustom }.count
+        guard result.models.count * 2 >= nonCustom else {
+            logger.warning("[ModelList] cleanUpOfflineModels REFUSED: fetched=\(result.models.count) existing=\(nonCustom) — looks like a gateway dip")
+            return nil
+        }
         guard replaceEntries(for: instance.id, models: result.models, caller: "cleanUpOfflineModels",
                              pruneCloudCopies: true) else { return nil }
         let after = config.modelEntries.filter { $0.providerInstanceId == instance.id }.count
         return max(0, before - after)
     }
 
-    /// 以前从网关 Anthropic 列表存进来的伪装条目(claude-…-dd-<倒序>):换成真实 ID。
-    /// 分组成员改指向真实条目(带时间戳,跟着 iCloud 走到别的设备),收藏/绑定经别名继续解析,云端旧记录删掉。
-    private func migrateCloakedEntries(for instanceId: String, existing: [ModelEntry]) {
-        let cloaked = existing.filter { ModelIdentity.isCloaked($0.baseModel.id) }
-        guard !cloaked.isEmpty else { return }
-        var remap: [String: String] = [:]
-        for entry in cloaked {
-            let real = "\(instanceId)/\(ModelIdentity.decodeCloaked(entry.baseModel.id))"
-            for name in [entry.id, entry.uuid, entry.legacyColonCompositeKey] { remap[name] = real; legacyUuidToCompositeKey[name] = real }
+    /// 用户删过的条目(墓碑)按真实 ID 比较:旧版本删除伪装 ID 留下的墓碑也要认。
+    nonisolated static func decodedTombstoneIds(_ tombstones: [ProviderConfigTombstone]) -> Set<String> {
+        Set(tombstones.flatMap { tomb -> [String] in
+            guard let slash = tomb.id.firstIndex(of: "/") else { return [tomb.id] }
+            let instance = tomb.id[..<slash], model = String(tomb.id[tomb.id.index(after: slash)...])
+            return [tomb.id, "\(instance)/\(ModelIdentity.decodeCloaked(model))"]
+        })
+    }
+
+    /// 以前从网关 Anthropic 列表存进来的伪装条目(claude-…-dd-<倒序>):就地换成真实 ID。
+    /// 保留 uuid、改名 / 隐藏等用户设置;已有同名真实条目时合并(取用户改得更晚的那份设置)。
+    /// 返回 旧 id → 真实 id,保存成功后由 finishCloakedMigration 改分组、删云端旧记录。
+    private func renameCloakedEntriesInPlace(for instanceId: String) -> [String: (real: String, names: [String])] {
+        var remap: [String: (real: String, names: [String])] = [:]
+        var renamed: [ModelEntry] = []
+        for entry in config.modelEntries where entry.providerInstanceId == instanceId && ModelIdentity.isCloaked(entry.baseModel.id) {
+            let base = entry.baseModel
+            var model = LLMModel(id: ModelIdentity.decodeCloaked(base.id), displayName: base.displayName, provider: base.provider,
+                                 modalityOverride: base.modalityOverride, contextWindow: base.contextWindow,
+                                 maxOutputTokens: base.maxOutputTokens, supportsReasoning: base.supportsReasoning,
+                                 interleavedReasoningField: base.interleavedReasoningField,
+                                 reasoningEffortValues: base.reasoningEffortValues,
+                                 declaresNoEffortTiers: base.declaresNoEffortTiers)
+            model.effortDeclarationIsAuthoritative = base.effortDeclarationIsAuthoritative
+            let real = entry.replacingBaseModel(model)
+            remap[entry.id] = (real.id, [entry.id, entry.uuid, entry.legacyColonCompositeKey])
+            renamed.append(real)
         }
+        guard !renamed.isEmpty else { return [:] }
+        config.modelEntries.removeAll { remap[$0.id] != nil }
+        for real in renamed {
+            if let index = config.modelEntries.firstIndex(where: { $0.id == real.id }) {
+                let current = config.modelEntries[index]
+                if (real.userModifiedAt ?? .distantPast) > (current.userModifiedAt ?? .distantPast) {
+                    config.modelEntries[index].overrides = real.overrides
+                    config.modelEntries[index].isHidden = real.isHidden
+                    config.modelEntries[index].userModifiedAt = real.userModifiedAt
+                }
+            } else {
+                config.modelEntries.append(real)
+            }
+        }
+        // 只登记组合键别名(实例/伪装 ID → 实例/真实 ID):uuid / 冒号旧键若也指向真实条目,
+        // 云端回声里对它们的删除会被级联到真实条目上。
+        for (old, target) in remap { legacyUuidToCompositeKey[old] = target.real }
         persistLegacyUuidMap()
+        return remap
+    }
+
+    private func finishCloakedMigration(_ remap: [String: (real: String, names: [String])]) {
+        guard !remap.isEmpty else { return }
         for group in config.modelGroups where group.memberEntryIds.contains(where: { remap[$0] != nil }) {
             var updated = group
             var seen = Set<String>()
-            updated.memberEntryIds = group.memberEntryIds.map { remap[$0] ?? $0 }.filter { seen.insert($0).inserted }
+            updated.memberEntryIds = group.memberEntryIds.map { remap[$0]?.real ?? $0 }.filter { seen.insert($0).inserted }
             _ = updateGroup(updated)
         }
-        let names = Set(cloaked.flatMap { [$0.id, $0.uuid, $0.legacyColonCompositeKey] })
-        logger.info("[ModelList] migrateCloakedEntries instance=\(instanceId.prefix(8)) entries=\(cloaked.count) cloudDeletes=\(names.count)")
+        let names = Set(remap.values.flatMap(\.names)).subtracting(remap.values.map(\.real))
+        logger.info("[ModelList] cloaked ids migrated: entries=\(remap.count) cloudDeletes=\(names.count)")
         Task {
             for name in names {
                 await ChatStore.shared.markDirty(recordType: "ProviderModelEntryV3", recordId: name, operation: "delete")

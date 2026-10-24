@@ -5,6 +5,7 @@ import WidgetKit
 
 private let shareLog = AppLogger(category: "Share")
 private let draftLog = AppLogger(category: "DraftSession")
+private let toolSheetLog = AppLogger(category: "ToolSheet")
 
 // MARK: - Session context-menu action channel
 
@@ -930,6 +931,10 @@ struct ContentView: View {
                     sessionExtras.addFolder(newFolderName)
                     newFolderName = ""
                 }
+            }
+            // [leo] 记下设置等工具面板的每次开 / 关:以前「完成点了没反应」查不到是谁又把它打开了。
+            .onChange(of: activeToolSheet) { old, new in
+                toolSheetLog.info("[ToolSheet] \(String(describing: old)) → \(String(describing: new)) primary=\(WindowRegistry.shared.isPrimary(windowId))")
             }
             .sheet(item: $activeToolSheet) { sheet in
                 Group {

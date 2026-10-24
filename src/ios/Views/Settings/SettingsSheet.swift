@@ -117,6 +117,16 @@ struct SettingsSheet: View {
                     }
                 }
                 .navigationDestination(for: SettingsDestination.self) { settingsDestination($0) }
+                // [leo] 竖握 iPad / Duo 内屏时侧栏会被收起,侧栏里的「完成」跟着看不见:右栏首页也放一个。
+                // 只放在右栏首页(推进去的页面有自己的返回,编辑页的放弃确认不被绕过)。
+                .toolbar {
+                    if navPath.isEmpty {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { close(from: "split-detail") }
+                                .accessibilityIdentifier("settings.done.detail")
+                        }
+                    }
+                }
             }
             // 换一项就从这一项的首页开始,不留上一项推进去的页面。
             .id(splitSelection)

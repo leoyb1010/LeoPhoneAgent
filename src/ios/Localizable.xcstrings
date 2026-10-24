@@ -78905,28 +78905,6 @@
         }
       }
     },
-    "Removes models this provider's server no longer lists, on all your devices. Custom models are kept. Refresh never removes models by itself.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Removes models this provider's server no longer lists, on all your devices. Custom models are kept. Refresh never removes models by itself."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "把服务器已不再提供的模型从你所有设备上删掉，自定义模型保留。平时的刷新只会增加、不会删除模型。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "把伺服器已不再提供的模型從你所有裝置上刪掉，自訂模型保留。平時的重新整理只會增加、不會刪除模型。"
-          }
-        }
-      }
-    },
     "No offline models.": {
       "localizations": {
         "en": {
@@ -78971,28 +78949,6 @@
         }
       }
     },
-    "Could not read the server's model list. Nothing was removed.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Could not read the server's model list. Nothing was removed."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "读不到服务器的模型列表，没有删除任何模型。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "讀不到伺服器的模型列表，沒有刪除任何模型。"
-          }
-        }
-      }
-    },
     "Latest": {
       "localizations": {
         "en": {
@@ -79011,6 +78967,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "最新"
+          }
+        }
+      }
+    },
+    "Could not read a complete model list from the server (it may be temporarily missing models). Nothing was removed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read a complete model list from the server (it may be temporarily missing models). Nothing was removed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没读到完整的服务器模型列表（可能是服务商暂时少列了模型），没有删除任何模型。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒讀到完整的伺服器模型列表（可能是服務商暫時少列了模型），沒有刪除任何模型。"
+          }
+        }
+      }
+    },
+    "Removes models this provider's server no longer lists, on all your devices. Custom models are kept. Run it when the provider is working normally. Refresh never removes models by itself.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removes models this provider's server no longer lists, on all your devices. Custom models are kept. Run it when the provider is working normally. Refresh never removes models by itself."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把服务器已不再提供的模型从你所有设备上删掉，自定义模型保留。请在服务商正常时使用。平时的刷新只会增加、不会删除模型。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把伺服器已不再提供的模型從你所有裝置上刪掉，自訂模型保留。請在服務商正常時使用。平時的重新整理只會增加、不會刪除模型。"
           }
         }
       }
