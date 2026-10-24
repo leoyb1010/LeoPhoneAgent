@@ -2,7 +2,7 @@
 //  SettingsHomeView.swift
 //  MinisApp
 //
-//  [T-settings-ia] 设置首页:4 组折叠 + 搜索。
+//  [T-settings-ia] 设置首页:常用方块 + 8 组始终展开 + 分类跳转条 + 搜索(1.86 去掉折叠)。
 //
 //  为什么是独立文件 + 数据驱动:旧设置页是 ContentView 里 400 行的单体
 //  List,三次尝试就地加分层折叠都撞了 SwiftUI 类型检查超时(巨型表达式)。
@@ -57,20 +57,22 @@ struct SettingsHomeView: View {
     let onFeedback: () -> Void
 
     @State private var query = ""
-    @AppStorage("settings.group.common") private var openCommon = true
-    // [up-home] 「更多」里的分组默认收起(换了键:旧键里存着「展开」)。
-    @AppStorage("settings.group.device.v2") private var openDevice = false
-    @AppStorage("settings.group.agent.v2") private var openAgent = false
-    @AppStorage("settings.group.general.v2") private var openGeneral = false
-    @AppStorage("settings.group.data.v2") private var openData = false
-    @AppStorage("settings.group.abilities") private var openAbilities = false
-    @AppStorage("settings.group.knowledge") private var openKnowledge = false
-    @AppStorage("settings.group.automation") private var openAutomation = false
+    /// 分类跳转条:点胶囊滚到该组;滚动时高亮当前组(scrollPosition 只在跨组时变一次,不逐帧算)。
+    @State private var currentGroup: String?
+    @Namespace private var chipNamespace
     /// 只为在开关变化时重画(groups 是静态的,直接读 UserDefaults)。
     @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
+    @AppStorage("appearanceMode") private var appearanceMode: Int = 0
+    @ObservedObject private var providers = ProviderConfigStore.shared
+    @ObservedObject private var hosts = GatewayHostStore.shared
+    @ObservedObject private var fullAuto = FullAutoStore.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var tileSize: CGFloat = 29
 
     private var groups: [SettingsGroup] { Self.groups }
+    /// 分组列表的卡片色:浅色下是白、深色下比底色亮一档。LeoTheme.surface(secondarySystemBackground)
+    /// 在浅色下和 groupedBackground 一模一样,卡片会「消失」。
+    static let card = Color(uiColor: .secondarySystemGroupedBackground)
 
     /// [F-mac-fleet-advanced] Mac 舰队没打开时不显示「Mac 控制台」。
     private static var macConsoleEntries: [SettingsEntry] {
@@ -81,129 +83,127 @@ struct SettingsHomeView: View {
     }
 
     // ── 分组数据(个人版信息架构)────────────────────────────────────────
-    /// 单列首页和 iPad 双栏的侧栏共用这一份。
+    /// 单列首页和 iPad 双栏的侧栏共用这一份。[1.86] 每一项只在一个分组里(常用改成首页顶部的
+    /// 快捷方块,不再从别的组「偷」条目);条目标题即 id(iPad 侧栏按标题记选中项),不能改。
     static var groups: [SettingsGroup] {
         [
-            // [up-home] 常用的四样留在首屏;其余按分组折叠,搜索仍能搜到全部。
-            SettingsGroup(id: "common", title: "常用", entries: [
-                SettingsEntry("远程机器", keywords: "mac android 舰队 中继 relay 密钥 macbook cortex studio fold ipad",
-                              icon: "desktopcomputer", color: .teal,
-                              hint: "连接哪几台 Mac、中继地址与密钥") { GatewaySettingsView() },
-            ] + macConsoleEntries + [
+            SettingsGroup(id: "models", title: "模型与推理", entries: [
                 SettingsEntry("AI 服务商", keywords: "provider api key oauth 模型 llm 模型供应商",
-                              icon: "key.circle.fill", color: .indigo) { ProviderInstancesView() },
-                SettingsEntry("权限", keywords: "permission 审批 offload 全自动 自动批准 不再询问 yolo",
-                              icon: "hand.raised.fill", color: .red,
-                              hint: "全自动开关；Agent 动用某项能力前，是直接放行还是先问你") { OffloadPermissionSettingsView() },
-                SettingsEntry("外观", keywords: "appearance 深色 浅色 主题 语言 字体 字号 图标 启动 回车 复制 language font icon mac 进行中",
-                              icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
-            ]),
-            SettingsGroup(id: "device", title: "我的设备", entries: [
-                SettingsEntry("Siri 指挥中心", keywords: "siri 语音 快捷指令 shortcuts 审批 action button 自动化",
-                              icon: "mic.fill", color: .purple) { SiriCommandCenterView() },
-                SettingsEntry("Apple Watch", keywords: "手表 watch 蜂窝 直连 独立 模型 cellular",
-                              icon: "applewatch", color: .green,
-                              hint: "手表用哪个模型、离开 iPhone 能不能自己回答") { WatchSettingsView() },
-                SettingsEntry("本机模型", keywords: "本机 端上 离线 apple intelligence foundation models 改写 摘要 隐私",
-                              icon: "cpu.fill", color: .pink) { LocalBrainSettingsView() },
-                SettingsEntry("远程主机(SSH·备用)", keywords: "ssh remote host 备用",
-                              icon: "server.rack", color: .gray,
-                              hint: "旧通道，只在中继不可用时使用") { RemoteHostSettingsView() },
-            ]),
-            // [up-settings] 以前「Agent」一组平铺 18 项、夹着内部代号；按用户要办的事拆成四组。
-            SettingsGroup(id: "agent", title: "模型与推理", entries: [
+                              icon: "key.fill", color: .indigo) { ProviderInstancesView() },
                 SettingsEntry("模型分组", keywords: "model group 回退 负载",
-                              icon: "gearshape.circle.fill", color: .indigo) { ModelGroupsView() },
+                              icon: "square.stack.3d.up.fill", color: .indigo) { ModelGroupsView() },
                 SettingsEntry("推理与模型", keywords: "thinking 推理 读图 压缩 标题 vision compact 上下文 裁剪 精简 context trim",
                               icon: "brain.head.profile", color: .indigo,
                               hint: "思考深度、读图、压缩与标题用哪个模型") { ThinkingAndModelSlotsView() },
                 SettingsEntry("快速判断模型", keywords: "jev 快速判断 typesafe system one 快速判断 分类 打分",
-                              icon: "bolt.horizontal.circle.fill", color: .indigo,
+                              icon: "bolt.horizontal.fill", color: .indigo,
                               hint: "TypeSafe 的快判断模型,填 Key 后 Agent 多一个 jev_decide 工具") { JevSettingsView() },
-                // 1.57 的实时出字、自动改字、热词、语音度量都在这一页;以前只能从 AI 服务商里翻到。
-                SettingsEntry("语音识别", keywords: "语音 识别 听写 实时出字 改字 热词 度量 离线 语言资源 speech",
-                              icon: "waveform", color: .purple,
-                              hint: "实时出字、自动改字、热词与离线语言包") { SystemSpeechResourcesView() },
+                SettingsEntry("本机模型", keywords: "本机 端上 离线 apple intelligence foundation models 改写 摘要 隐私",
+                              icon: "cpu.fill", color: .indigo) { LocalBrainSettingsView() },
             ]),
             SettingsGroup(id: "abilities", title: "能力与工具", entries: [
                 SettingsEntry("技能", keywords: "skills 技能包",
                               icon: "sparkles", color: .purple) { SkillsManagementView() },
                 SettingsEntry("MCP 集成", keywords: "mcp server 集成 工具",
-                              icon: "puzzlepiece.extension.fill", color: .orange) { MCPIntegrationsView() },
+                              icon: "puzzlepiece.extension.fill", color: .purple) { MCPIntegrationsView() },
                 SettingsEntry("工具开关", keywords: "tools 工具 开关 浏览器 browser 子代理 定时跟进 关闭",
-                              icon: "switch.2", color: .indigo,
+                              icon: "switch.2", color: .purple,
                               hint: "浏览器、子代理、定时跟进可以分别关掉") { ToolTogglesSettingsView() },
                 SettingsEntry("手机能力与授权", keywords: "能力中心 capabilities 权限 能干什么",
-                              icon: "square.grid.2x2.fill", color: .cyan,
+                              icon: "square.grid.2x2.fill", color: .purple,
                               hint: "Agent 能调用哪些手机能力，系统授权到哪一步") { CapabilitiesView() },
                 SettingsEntry("子代理", keywords: "sub agent subagent helper 子代理 委派 角色 并行",
-                              icon: "person.2.fill", color: .indigo,
+                              icon: "person.2.fill", color: .purple,
                               hint: "让 Agent 把独立任务交给后台子代理并行完成") { HelperSettingsView() },
                 SettingsEntry("邮箱账户", keywords: "mail email imap 邮箱 邮件 gmail qq 163 126 icloud",
-                              icon: "envelope.fill", color: .blue,
+                              icon: "envelope.fill", color: .purple,
                               hint: "授权 Gmail / QQ / 163 等邮箱,对话里直接读邮件") { MailAccountsView() },
+                SettingsEntry("环境变量", keywords: "environment env 变量",
+                              icon: "chevron.left.forwardslash.chevron.right", color: .purple) { EnvironmentVariablesView() },
             ]),
             SettingsGroup(id: "knowledge", title: "记忆与资料", entries: [
                 SettingsEntry("记忆", keywords: "memory 记忆库",
-                              icon: "brain", color: .purple) { MemoryManagementView() },
+                              icon: "brain", color: .pink) { MemoryManagementView() },
                 SettingsEntry("资料库", keywords: "brain archive 资料库 第二大脑 知识卡 文件 mini 网关 令牌",
-                              icon: "books.vertical.fill", color: .brown,
+                              icon: "books.vertical.fill", color: .pink,
                               hint: "连接 Mac 上的资料库,藏宝阁和 Agent 都能查你的旧资料") { BrainSettingsView() },
                 SettingsEntry("人设", keywords: "灵魂 soul 人格 性格",
                               icon: "heart.fill", color: .pink,
                               hint: "Agent 的说话风格和性格") { SoulSettingsView() },
+                SettingsEntry("Leo藏宝阁", keywords: "藏宝阁 收藏 笔记 note collect 分享 小红书 favorite 星标 附件 扫描",
+                              icon: "star.square.on.square.fill", color: .pink) { CollectionsView() },
             ]),
             SettingsGroup(id: "automation", title: "自动化", entries: [
                 SettingsEntry("快捷任务", keywords: "quick task 捷径 快速任务",
-                              icon: "bolt.fill", color: .indigo) { QuickTaskSettingsView() },
+                              icon: "bolt.fill", color: .orange) { QuickTaskSettingsView() },
                 SettingsEntry("自动化", keywords: "automation 触发 位置 日历 充电",
-                              icon: "bolt.badge.clock", color: .orange) { AutomationSettingsView() },
+                              icon: "bolt.badge.clock.fill", color: .orange) { AutomationSettingsView() },
                 SettingsEntry("定时任务", keywords: "schedule cron 定时",
-                              icon: "clock.badge", color: .orange) { ScheduledTaskSettingsView() },
+                              icon: "clock.fill", color: .orange) { ScheduledTaskSettingsView() },
                 SettingsEntry("快捷指令模板", keywords: "配方 shortcuts 快捷指令 自动化 配方 siri 到家 车载 蓝牙 晨报 recipe",
-                              icon: "square.on.square", color: .orange,
+                              icon: "square.on.square.fill", color: .orange,
                               hint: "到家、上车、按一下按钮，让 Agent 自己动起来") { ShortcutRecipesView() },
-                SettingsEntry("环境变量", keywords: "environment env 变量",
-                              icon: "chevron.left.forwardslash.chevron.right", color: .gray) { EnvironmentVariablesView() },
+                SettingsEntry("Siri 指挥中心", keywords: "siri 语音 快捷指令 shortcuts 审批 action button 自动化",
+                              icon: "mic.fill", color: .orange) { SiriCommandCenterView() },
             ]),
-            SettingsGroup(id: "general", title: "外观与通用", entries: [
+            SettingsGroup(id: "devices", title: "设备与连接", entries: macConsoleEntries + [
+                SettingsEntry("远程机器", keywords: "mac android 舰队 中继 relay 密钥 macbook cortex studio fold ipad",
+                              icon: "desktopcomputer", color: .teal,
+                              hint: "连接哪几台 Mac、中继地址与密钥") { GatewaySettingsView() },
+                SettingsEntry("Apple Watch", keywords: "手表 watch 蜂窝 直连 独立 模型 cellular",
+                              icon: "applewatch", color: .teal,
+                              hint: "手表用哪个模型、离开 iPhone 能不能自己回答") { WatchSettingsView() },
+                SettingsEntry("iCloud 同步", keywords: "icloud sync 同步 云",
+                              icon: "icloud.fill", color: .teal) { CloudSyncSettingsV2View() },
+                SettingsEntry("远程主机(SSH·备用)", keywords: "ssh remote host 备用",
+                              icon: "server.rack", color: .teal,
+                              hint: "旧通道，只在中继不可用时使用") { RemoteHostSettingsView() },
+            ]),
+            SettingsGroup(id: "general", title: "通用", entries: [
+                SettingsEntry("权限", keywords: "permission 审批 offload 全自动 自动批准 不再询问 yolo",
+                              icon: "hand.raised.fill", color: .blue,
+                              hint: "全自动开关；Agent 动用某项能力前，是直接放行还是先问你") { OffloadPermissionSettingsView() },
+                SettingsEntry("外观", keywords: "appearance 深色 浅色 主题 语言 字体 字号 图标 启动 回车 复制 language font icon mac 进行中",
+                              icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
                 // 以前只能从 权限 → 后台 进去,搜「后台」「通知」「灵动岛」都搜不到。
                 SettingsEntry("后台与通知", keywords: "background 后台 保活 keep alive 通知 notification 实时活动 灵动岛 live activity 定位 位置追踪 朗读 语音 音色 隐私模式",
-                              icon: "bell.badge.fill", color: .orange) { EnhancedBackgroundSettingsView() },
+                              icon: "bell.badge.fill", color: .blue) { EnhancedBackgroundSettingsView() },
+                // 1.57 的实时出字、自动改字、热词、语音度量都在这一页;以前只能从 AI 服务商里翻到。
+                SettingsEntry("语音识别", keywords: "语音 识别 听写 实时出字 改字 热词 度量 离线 语言资源 speech",
+                              icon: "waveform", color: .blue,
+                              hint: "实时出字、自动改字、热词与离线语言包") { SystemSpeechResourcesView() },
                 SettingsEntry("生物识别保护", keywords: "face id touch id 解锁 保护 spotlight 聚焦 搜索",
-                              icon: "faceid", color: .red) { FaceIDProtectionSettingsView() },
+                              icon: "faceid", color: .blue) { FaceIDProtectionSettingsView() },
+                SettingsEntry("隐私与数据", keywords: "privacy 隐私",
+                              icon: "lock.shield.fill", color: .blue) { LeoPrivacyView() },
             ]),
-            SettingsGroup(id: "data", title: "数据与关于", entries: [
-                SettingsEntry("Leo藏宝阁", keywords: "藏宝阁 收藏 笔记 note collect 分享 小红书 favorite 星标 附件 扫描",
-                              icon: "star.square.on.square", color: .yellow) { CollectionsView() },
+            SettingsGroup(id: "data", title: "数据与诊断", entries: [
                 SettingsEntry("存储", keywords: "storage 空间 清理",
-                              icon: "internaldrive.fill", color: .mint) { StorageManagementView() },
+                              icon: "internaldrive.fill", color: .gray) { StorageManagementView() },
                 SettingsEntry("共享文件夹", keywords: "shared folder 文件",
-                              icon: "folder.fill.badge.person.crop", color: .mint) { SharedFoldersSettingsView() },
+                              icon: "folder.fill.badge.person.crop", color: .gray) { SharedFoldersSettingsView() },
                 SettingsEntry("挂载外部文件夹", keywords: "mount 外部 folder",
-                              icon: "externaldrive.fill", color: .mint) { MountedFoldersSettingsView() },
-                SettingsEntry("iCloud 同步", keywords: "icloud sync 同步 云",
-                              icon: "icloud", color: .cyan) { CloudSyncSettingsV2View() },
+                              icon: "externaldrive.fill", color: .gray) { MountedFoldersSettingsView() },
                 SettingsEntry("备份与恢复", keywords: "backup restore 备份 恢复 导出 导入 迁移 换机 minisbak",
-                              icon: "archivebox.fill", color: .cyan,
+                              icon: "archivebox.fill", color: .gray,
                               hint: "把数据打包成一个文件，换机或出问题时合并恢复") { BackupSettingsView() },
                 SettingsEntry("Token 用量", keywords: "usage token 统计 花费",
-                              icon: "chart.line.uptrend.xyaxis.circle.fill", color: .green) { UsageStatsView() },
+                              icon: "chart.bar.fill", color: .gray) { UsageStatsView() },
                 SettingsEntry("Agent 时间线", keywords: "timeline 今天 做了什么",
-                              icon: "list.bullet.rectangle.portrait", color: .mint) { AgentTimelineView() },
-                SettingsEntry("更新记录", keywords: "更新 版本 release notes changelog 新功能",
-                              icon: "sparkles.rectangle.stack", color: .blue) {
-                    LeoReleaseNotesView(mode: .history)
-                },
+                              icon: "list.bullet.rectangle.portrait.fill", color: .gray) { AgentTimelineView() },
                 SettingsEntry("能力自检", keywords: "自检 测试 能力 诊断 health check selftest",
-                              icon: "checklist.checked", color: .green,
+                              icon: "checklist.checked", color: .gray,
                               hint: "把每项能力按 Agent 的路径只读跑一遍") { CapabilitySelfTestView() },
                 SettingsEntry("日志", keywords: "logs 日志 反馈 诊断",
                               icon: "doc.text.fill", color: .gray) { LogManagementView() },
-                SettingsEntry("隐私与数据", keywords: "privacy 隐私",
-                              icon: "lock.shield.fill", color: .blue) { LeoPrivacyView() },
+            ]),
+            SettingsGroup(id: "about", title: "关于", entries: [
+                SettingsEntry("更新记录", keywords: "更新 版本 release notes changelog 新功能",
+                              icon: "sparkles.rectangle.stack.fill", color: .gray) {
+                    LeoReleaseNotesView(mode: .history)
+                },
                 SettingsEntry("新手引导", keywords: "onboarding 引导 新手 入门 帮助 help 连接模型 配对 mac 第一个任务",
-                              icon: "figure.wave", color: .blue,
+                              icon: "figure.wave", color: .gray,
                               hint: "连接模型、配对 Mac、派第一个任务") {
                     OnboardingFlowView(presentation: .pushed) { prefill in
                         guard let prefill else { return }
@@ -217,47 +217,123 @@ struct SettingsHomeView: View {
         ]
     }
 
+    /// 首页顶部的「常用」快捷方块(条目仍只属于各自分组;iPad 侧栏不渲染这一块,免得同一个选中标签出现两次)。
+    static let pinnedTitles = ["AI 服务商", "远程机器", "权限", "外观"]
+
+
     private var searching: Bool {
         !query.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     private func matches(_ entry: SettingsEntry) -> Bool { entry.matches(query) }
 
+    /// 行尾的当前值:一眼看到状态,不用点进去(系统设置的做法)。只给有明确状态的几项。
+    private func value(for entry: SettingsEntry) -> String? {
+        switch entry.title {
+        case "外观": return appearanceMode == 1 ? "浅色" : appearanceMode == 2 ? "深色" : "跟随系统"
+        case "权限":
+            switch fullAuto.mode {
+            case .full: return "全自动"
+            case .smart: return "智能批准"
+            case .ask: return "逐项确认"
+            }
+        case "AI 服务商":
+            let count = providers.config.instances.filter(\.isEnabled).count
+            return count == 0 ? "未添加" : "\(count) 个"
+        case "远程机器":
+            let count = hosts.hosts.count
+            return count == 0 ? "未连接" : "\(count) 台"
+        default: return nil
+        }
+    }
+
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 12) {
+            // 普通 VStack:45 行很轻,LazyVStack 里跳到还没建出来的分组会滚不到位。
+            VStack(spacing: 0) {
                 settingsSearchField
+                    .padding(.bottom, 16)
                 if searching {
                     searchResults
+                        .transition(.opacity)
                 } else {
-                    // 按 id 取分组，分组增删不会再让后面的分组悄悄消失（1.77.1 拆分 Agent 后漏渲染了三组）。
-                    ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
-                        groupCard(group, isOpen: openBinding(group.id), index: index)
-                        if group.id == "automation" { orchestrationCard }
+                    pinnedTiles
+                        .padding(.bottom, 8)
+                    ForEach(groups) { group in
+                        groupSection(group)
                     }
-                    feedbackCard
                 }
             }
-            .frame(maxWidth: 760)
+            .scrollTargetLayout()
+            .frame(maxWidth: 720)
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 32)
             .frame(maxWidth: .infinity)
+        }
+        .scrollPosition(id: $currentGroup, anchor: .top)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if !searching { categoryBar }
         }
         .background(LeoTheme.ColorToken.groupedBackground)
         .scrollDismissesKeyboard(.interactively)
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: searching)
+    }
+
+    // MARK: 分类跳转条
+
+    private var categoryBar: some View {
+        ScrollViewReader { chips in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(groups) { group in
+                        let active = currentGroup == group.id
+                        Button {
+                            LeoHaptics.selection()
+                            withAnimation(LeoMotion.smooth(reduceMotion: reduceMotion)) { currentGroup = group.id }
+                        } label: {
+                            Text(group.title)
+                                .font(.subheadline.weight(active ? .semibold : .regular))
+                                .foregroundStyle(active ? Color.white : Color.primary)
+                                .padding(.horizontal, 12)
+                                .frame(minHeight: 32)
+                                .background {
+                                    if active {
+                                        Capsule().fill(Self.groupTint(group.id))
+                                            .matchedGeometryEffect(id: "chip", in: chipNamespace)
+                                    } else {
+                                        Capsule().fill(Self.card)
+                                    }
+                                }
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .id(group.id)
+                        .accessibilityAddTraits(active ? .isSelected : [])
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+            .background(.bar)
+            .onChange(of: currentGroup) { _, id in
+                guard let id else { return }
+                withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { chips.scrollTo(id, anchor: .center) }
+            }
+        }
     }
 
     private var settingsSearchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.body.weight(.medium))
                 .foregroundStyle(.secondary)
             TextField("搜索设置、能力或设备", text: $query)
                 .textInputAutocapitalization(.never)
                 .submitLabel(.search)
             if !query.isEmpty {
                 Button {
-                    withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { query = "" }
+                    query = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.tertiary)
@@ -266,223 +342,220 @@ struct SettingsHomeView: View {
                 .accessibilityLabel("清除搜索")
             }
         }
-        .padding(.horizontal, 14)
-        .frame(minHeight: 48)
-        .background(LeoTheme.ColorToken.elevatedSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(LeoTheme.ColorToken.separator.opacity(0.25), lineWidth: 0.5)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 40)
+        .background(Self.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .id("search")
+    }
+
+    // MARK: 常用
+
+    private var pinnedTiles: some View {
+        let entries = Self.pinnedTitles.compactMap { title in groups.flatMap(\.entries).first { $0.title == title } }
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("常用")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+                .accessibilityAddTraits(.isHeader)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(entries) { entry in
+                    NavigationLink { entry.destination() } label: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            SettingsIconTile(icon: entry.icon, color: LeoTheme.ColorToken.accent, size: tileSize + 3)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(entry.title).font(.body.weight(.semibold)).foregroundStyle(.primary)
+                                Text(value(for: entry) ?? " ").font(.footnote).foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .background(Self.card, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+                    }
+                    .buttonStyle(LeoSquishButtonStyle())
+                    .accessibilityLabel(Text([entry.title, value(for: entry)].compactMap { $0 }.joined(separator: "，")))
+                }
+            }
         }
+        .padding(.bottom, 16)
+        .id("pinned")
+    }
+
+    // MARK: 分组
+
+    private func groupSection(_ group: SettingsGroup) -> some View {
+        let tint = Self.groupTint(group.id)
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(group.title)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+                .accessibilityAddTraits(.isHeader)
+            VStack(spacing: 0) {
+                ForEach(Array(group.entries.enumerated()), id: \.element.id) { index, entry in
+                    if index > 0 { rowDivider }
+                    SettingsRow(entry: entry, tint: tint, tileSize: tileSize, value: value(for: entry))
+                }
+                if group.id == "abilities" {
+                    rowDivider
+                    orchestrationRow(tint: tint)
+                }
+                if group.id == "about" {
+                    rowDivider
+                    feedbackRow(tint: tint)
+                }
+            }
+            .background(Self.card, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+        }
+        .padding(.bottom, 22)
+        .id(group.id)
+    }
+
+    private var rowDivider: some View {
+        Divider().padding(.leading, 16 + tileSize + 12)
     }
 
     private var searchResults: some View {
-        let hits = groups.flatMap(\.entries).filter(matches)
+        let hits = groups.flatMap { group in group.entries.filter(matches).map { (group, $0) } }
         return VStack(spacing: 0) {
             if hits.isEmpty {
                 LeoEmptyState(systemImage: "magnifyingglass", title: AppLocalized("没有匹配的设置项"),
                               message: AppLocalized("试试「模型」、「Mac」、「藏宝阁」或「权限」"))
             } else {
-                ForEach(Array(hits.enumerated()), id: \.element.id) { index, entry in
-                    SettingsRow(entry: entry)
-                    if index < hits.count - 1 {
-                        Divider().padding(.leading, 60)
-                    }
+                ForEach(Array(hits.enumerated()), id: \.element.1.id) { index, hit in
+                    if index > 0 { rowDivider }
+                    SettingsRow(entry: hit.1, tint: Self.groupTint(hit.0.id), tileSize: tileSize,
+                                value: value(for: hit.1), context: hit.0.title)
                 }
             }
         }
-        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
-        .transition(.opacity.combined(with: .move(edge: .top)))
-    }
-
-    /// 母菜单(分组头)和子菜单(条目)必须一眼分开。旧版两者都是
-    /// "34pt 图标框 + 15pt 标题 + 白底",展开后十几行长得一样,用户反馈
-    /// "母菜单和子菜单堆在一起"。现在分组头是一条低饱和色带、小号粗体、
-    /// 无图标框、带数量胶囊;子项白底、向右缩进、图标框更小、常规字重 ——
-    /// 颜色、字号、缩进三个维度同时区分,任何一个维度失效仍能分开。
-    private func groupCard(_ group: SettingsGroup, isOpen: Binding<Bool>, index: Int) -> some View {
-        let tint = Self.groupTint(group.id)
-        return VStack(spacing: 0) {
-            Button {
-                withAnimation(LeoMotion.spring(reduceMotion: reduceMotion, dampingFraction: 0.86)) {
-                    isOpen.wrappedValue.toggle()
-                }
-                LeoHaptics.selection()
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: Self.groupSymbol(group.id))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(tint)
-                        .frame(width: 22)
-                    Text(group.title)
-                        .font(.footnote.weight(.bold))
-                        .foregroundStyle(tint)
-                    Text("\(group.entries.count)")
-                        .font(.caption2.monospacedDigit().weight(.semibold))
-                        .foregroundStyle(tint)
-                        .padding(.horizontal, 7)
-                        .frame(minHeight: 18)
-                        .background(tint.opacity(0.14), in: Capsule())
-                    Spacer()
-                    Text(isOpen.wrappedValue ? "收起" : "展开")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isOpen.wrappedValue ? 90 : 0))
-                }
-                .padding(.horizontal, 14)
-                .frame(minHeight: 44)
-                .background(tint.opacity(0.07))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("\(group.title)，\(group.entries.count) 项"))
-            .accessibilityValue(isOpen.wrappedValue ? Text("已展开") : Text("已折叠"))
-            .accessibilityAddTraits(.isHeader)
-
-            if isOpen.wrappedValue {
-                ForEach(Array(group.entries.enumerated()), id: \.element.id) { rowIndex, entry in
-                    SettingsRow(entry: entry, nested: true)
-                        .leoStaggerEntrance(index: rowIndex)
-                    if rowIndex < group.entries.count - 1 {
-                        Divider().padding(.leading, 68)
-                    }
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous)
-                .stroke(LeoTheme.ColorToken.separator.opacity(0.2), lineWidth: 0.5)
-        }
+        .background(Self.card, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
-        .leoStaggerEntrance(index: index + 1)
     }
 
-    private func openBinding(_ id: String) -> Binding<Bool> {
-        switch id {
-        case "common": return $openCommon
-        case "device": return $openDevice
-        case "agent": return $openAgent
-        case "abilities": return $openAbilities
-        case "knowledge": return $openKnowledge
-        case "automation": return $openAutomation
-        case "general": return $openGeneral
-        default: return $openData
-        }
-    }
-
-    private var orchestrationCard: some View {
+    private func orchestrationRow(tint: Color) -> some View {
         Toggle(isOn: $orchestrationEnabled) {
             HStack(spacing: 12) {
-                Image(systemName: "person.3.sequence.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.purple)
-                    .frame(width: 34, height: 34)
-                    .background(Color.purple.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                SettingsIconTile(icon: "person.3.sequence.fill", color: tint, size: tileSize)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("多 Agent 编排").font(.subheadline.weight(.semibold))
-                    Text("让多个 Agent 分工协作").font(.caption2).foregroundStyle(.secondary)
+                    Text("多 Agent 编排").font(.body).foregroundStyle(.primary)
+                    Text("让多个 Agent 分工协作").font(.footnote).foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(.horizontal, 14)
-        .frame(minHeight: 62)
-        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .frame(minHeight: 52)
         .onChange(of: orchestrationEnabled) { _, _ in LeoHaptics.selection() }
     }
 
-    private var feedbackCard: some View {
+    private func feedbackRow(tint: Color) -> some View {
         Button(action: onFeedback) {
             HStack(spacing: 12) {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.indigo)
-                    .frame(width: 34, height: 34)
-                    .background(Color.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                Text("反馈与建议").font(.subheadline.weight(.semibold))
+                SettingsIconTile(icon: "bubble.left.and.bubble.right.fill", color: tint, size: tileSize)
+                Text("反馈与建议").font(.body).foregroundStyle(.primary)
                 Spacer()
                 // Feedback is saved locally, so no external-link arrow.
-                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 58)
-            .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+            .padding(.horizontal, 16)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(LeoSquishButtonStyle())
-        .foregroundStyle(.primary)
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
     }
 
     static func groupSymbol(_ id: String) -> String {
         switch id {
-        case "common": return "star.fill"
-        case "device": return "macbook.and.iphone"
-        case "agent": return "sparkles"
+        case "models": return "sparkles"
         case "abilities": return "wrench.and.screwdriver"
         case "knowledge": return "books.vertical"
         case "automation": return "bolt.badge.clock"
-        case "general": return "paintbrush"
+        case "devices": return "macbook.and.iphone"
+        case "general": return "gearshape"
         case "data": return "externaldrive"
-        default: return "lock.shield"
+        default: return "info.circle"
         }
     }
 
+    /// 每组一个色系(5 个色相 + 中性灰),颜色只出现在图标块上,不再给整条分组头上色。
     static func groupTint(_ id: String) -> Color {
         switch id {
-        case "common": return .orange
-        case "device": return .teal
-        case "agent": return .indigo
+        case "models": return .indigo
         case "abilities": return .purple
-        case "knowledge": return .brown
+        case "knowledge": return .pink
         case "automation": return .orange
+        case "devices": return .teal
         case "general": return .blue
-        case "data": return .mint
-        default: return .orange
+        default: return .gray
         }
+    }
+}
+
+/// 系统设置式的实色圆角图标块(白色符号)。
+struct SettingsIconTile: View {
+    let icon: String
+    let color: Color
+    var size: CGFloat = 29
+
+    var body: some View {
+        Image(systemName: icon)
+            .font(.system(size: size * 0.5, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(color.gradient, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
+            .accessibilityHidden(true)
     }
 }
 
 private struct SettingsRow: View {
     let entry: SettingsEntry
-    /// 分组内的子项:向右缩进、图标框更小,和分组头拉开层级。搜索结果平铺时为 false。
-    var nested: Bool = false
+    let tint: Color
+    let tileSize: CGFloat
+    var value: String?
+    /// 搜索结果里显示所属分组,告诉用户它平时在哪。
+    var context: String?
 
     var body: some View {
         NavigationLink {
             entry.destination()
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: entry.icon)
-                    .font(.system(size: nested ? 13 : 14, weight: .semibold))
-                    .foregroundStyle(entry.color)
-                    .frame(width: nested ? 28 : 34, height: nested ? 28 : 34)
-                    .background(entry.color.opacity(0.11), in: RoundedRectangle(cornerRadius: nested ? 8 : 10, style: .continuous))
+                SettingsIconTile(icon: entry.icon, color: tint, size: tileSize)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.title)
-                        .font(.subheadline.weight(nested ? .regular : .medium))
+                        .font(.body)
                         .foregroundStyle(.primary)
                     if let hint = entry.hint {
                         Text(hint)
-                            .font(.caption2)
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                     }
                 }
-                Spacer()
+                Spacer(minLength: 8)
+                if let trailing = value ?? context {
+                    Text(trailing)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
                 Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.bold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
-            .padding(.leading, nested ? 28 : 14)
-            .padding(.trailing, 14)
-            .padding(.vertical, entry.hint == nil ? 0 : 8)
-            .frame(minHeight: nested ? 48 : 54)
+            .padding(.horizontal, 16)
+            .padding(.vertical, entry.hint == nil ? 0 : 9)
+            .frame(minHeight: 52)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
+        .accessibilityValue(Text(value ?? ""))
     }
 }
 
@@ -597,17 +670,12 @@ struct SettingsSidebar: View {
                         Label {
                             Text(entry.title)
                         } icon: {
-                            Image(systemName: entry.icon)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(entry.color)
-                                .frame(width: 28, height: 28)
-                                .background(entry.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            SettingsIconTile(icon: entry.icon, color: SettingsHomeView.groupTint(group.id), size: 28)
                         }
                         .tag(entry.id)
                     }
                 } header: {
-                    Label(group.title, systemImage: SettingsHomeView.groupSymbol(group.id))
-                        .foregroundStyle(SettingsHomeView.groupTint(group.id))
+                    Text(group.title)
                 }
             }
             if query.isEmpty {
