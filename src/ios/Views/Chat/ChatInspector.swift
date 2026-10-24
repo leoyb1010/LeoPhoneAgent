@@ -12,6 +12,8 @@
 
 import SwiftUI
 
+private let inspectorLog = AppLogger(category: "Inspector")
+
 /// [WP-43] A request from this window's ⌘K palette to show the third column
 /// in a mode. The nonce makes asking twice for the same mode count.
 struct ChatContextRequest: Equatable {
@@ -50,6 +52,8 @@ struct ChatDetailContainer<Content: View>: View {
     @State private var inspectorFrame: CGRect = .zero
     /// [ipad-chat] Detail width including the inspector column (= nav bar width).
     @State private var barWidth: CGFloat = 0
+    /// [leo] 系统(而不是用户)改右栏开关的时间点,用来识别并掐断布局震荡。
+    @State private var autoToggles: [Date] = []
 
     private var headerBarGeometry: ChatHeaderBarGeometry {
         let width = max(barWidth, contentFrame.width)
@@ -62,8 +66,24 @@ struct ChatDetailContainer<Content: View>: View {
     /// Whatever it covers becomes trailing safe area, so the chat lays out
     /// beside it either way (0 when the column squeezes the chat).
     private var coveredTrailing: CGFloat {
-        guard inspectorVisible, inspectorFrame.width > 0 else { return 0 }
-        return max(0, contentFrame.maxX - inspectorFrame.minX)
+        guard inspectorVisible else { return 0 }
+        return LeoWorkspaceLayoutPolicy.coveredTrailing(content: contentFrame, inspector: inspectorFrame)
+    }
+
+    /// `.inspector` 的开关:系统在窄分栏里会自己改它(改成弹出面板、空间不够时收起)。
+    /// 系统发起的来回切换 1.5 秒内超过 3 次就停在当前状态,不再跟着闪。
+    private var inspectorBinding: Binding<Bool> {
+        Binding(get: { inspectorVisible }, set: { newValue in
+            guard newValue != inspectorVisible else { return }
+            let now = Date()
+            autoToggles = autoToggles.filter { now.timeIntervalSince($0) <= 1.5 } + [now]
+            if LeoWorkspaceLayoutPolicy.isOscillating(recentAutoToggles: autoToggles, now: now) {
+                inspectorLog.warning("[Inspector] system toggle ignored (oscillating) → \(newValue) width=\(Int(windowWidth))")
+                return
+            }
+            inspectorLog.info("[Inspector] system set visible=\(newValue) width=\(Int(windowWidth))")
+            inspectorVisible = newValue
+        })
     }
 
     /// ⌥⌘I / ⇧⌘M: show the column in that mode, or hide it when it already shows it.
@@ -80,6 +100,8 @@ struct ChatDetailContainer<Content: View>: View {
     /// An explicit show/hide of the column. Wide enough to pin → it also pins
     /// or unpins; narrower windows only show it for now.
     private func setInspectorByHand(_ visible: Bool) {
+        inspectorLog.info("[Inspector] by hand visible=\(visible) width=\(Int(windowWidth))")
+        autoToggles = []
         if LeoWorkspaceLayoutPolicy.canPinContextColumn(width: windowWidth) { inspectorPinned = visible }
         withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = visible }
     }
@@ -92,6 +114,7 @@ struct ChatDetailContainer<Content: View>: View {
         guard let show = LeoWorkspaceLayoutPolicy.crossing(
             from: old, to: width,
             rule: { LeoWorkspaceLayoutPolicy.opensContextColumn(width: $0, pinned: pinned) }) else { return }
+        inspectorLog.info("[Inspector] width rule visible=\(show) \(Int(old))→\(Int(width))")
         withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = show }
     }
 
@@ -118,7 +141,7 @@ struct ChatDetailContainer<Content: View>: View {
             .modifier(ChatToolbarMinimization())
             .safeAreaPadding(.trailing, coveredTrailing)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { contentFrame = $0 }
-            .inspector(isPresented: $inspectorVisible) {
+            .inspector(isPresented: inspectorBinding) {
                 ChatInspectorPanel(sessionId: sessionId, modeRaw: $contextModeRaw)
                     .inspectorColumnWidth(min: 300, ideal: 360, max: 480)
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { inspectorFrame = $0 }
