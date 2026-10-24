@@ -307,12 +307,28 @@ struct AgentRunCompletion: Equatable, Sendable {
             phase = .unverified; reason = nil
         } else if backgroundSuspended {
             phase = .suspended; reason = .backgroundTimeExpired
-        } else if canResume {
+        } else if canResume, !Self.isTerminalDespiteResume(failureText) {
             phase = .waitingForUser; reason = waitingReason ?? .userInterruption
         } else if let failureText {
             phase = .failed; reason = AgentActivityFailureClassifier.reason(for: failureText)
         } else {
             phase = .completed; reason = nil
+        }
+    }
+}
+
+extension AgentRunCompletion {
+    /// [leo] 可以点「继续」但重试也不会好的结局按失败显示,不画成蓝色「已中断」:模型拒答、空回复、
+    /// 上下文用尽、服务商认证 / 限流 / 服务出错。真的断流、输出被截断才算可续的中断。
+    static func isTerminalDespiteResume(_ failureText: String?) -> Bool {
+        guard let text = failureText?.lowercased(), !text.isEmpty else { return false }
+        // 中英文都认(错误文案经本地化):拒答、空响应、上下文已满。
+        let terminalMarkers = ["refus", "declined", "拒绝响应", "拒绝回答", "empty response", "空响应",
+                               "context is full", "上下文已满"]
+        if terminalMarkers.contains(where: { text.contains($0) }) { return true }
+        switch AgentActivityFailureClassifier.reason(for: failureText ?? "") {
+        case .authenticationRequired, .rateLimited, .providerFailure: return true
+        default: return false
         }
     }
 }

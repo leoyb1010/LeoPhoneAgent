@@ -222,7 +222,8 @@ extension AIChatViewModel {
             let wasSuspended = backgroundSuspended
             let userStopped = userDidCancel
             let interrupted = completionHasError && canResume && !wasSuspended && !userStopped
-            let hasError = completionHasError && !wasSuspended && !userStopped && !canResume
+            // [leo] ❌ 只跟共享结局走(与灵动岛 / 小组件同一张表),标题和正文不会一个说失败一个说待确认。
+            let hasError = ending.isFailure && !wasSuspended && !userStopped
             let responseSummary: String = {
                 let assistantTurns = agentHistory.filter { $0.role == .assistant }
                 logger.info("[BackgroundNotification] building responseSummary from agentHistory: totalMsgs=\(agentHistory.count) assistantTurns=\(assistantTurns.count) wasBackground=\(wasBackground) hasError=\(hasError)")
@@ -804,6 +805,8 @@ final class AgentContinuedProcessingManager {
 
 
     private var runs: [String: Run] = [:]
+    /// 系统卡片晚于本轮结束才拉起时要用的真实结局(按任务标识)。
+    private var lateEndings: [String: (success: Bool, subtitle: String)] = [:]
 
     private init() {}
 
@@ -894,15 +897,20 @@ final class AgentContinuedProcessingManager {
             task.updateTitle("LeoBot", subtitle: subtitle)
             task.progress.completedUnitCount = success ? ContinuedProcessingProgress.scale : max(1, run.lastProgress)
             task.setTaskCompleted(success: success)
+        } else {
+            // [leo] 系统卡片还没拉起这一轮就结束了:记下真实结局,系统晚到时照它收尾(不凭空报成功)。
+            lateEndings[run.identifier] = (success, subtitle)
         }
         logger.info("[Background][Continued] finished session=\(sessionKey.prefix(8)) success=\(success)")
     }
 
     private func attach(_ task: BGContinuedProcessingTask, identifier: String) {
         guard let run = runs.values.first(where: { $0.identifier == identifier }) else {
-            // [leo] 系统拉起时这一轮已经收尾(cancel 晚了一步):什么都没失败。
-            // 以前按 success:false 收,凭空多一张「失败」系统卡片。
-            task.setTaskCompleted(success: true)
+            // [leo] 系统拉起时这一轮已经收尾(cancel 晚了一步):按 finish 记下的真实结局收尾;
+            // 没有记录(被取消)才按成功收——以前一律 success:false,凭空多一张「失败」系统卡片。
+            let ending = lateEndings.removeValue(forKey: identifier)
+            if let ending { task.updateTitle("LeoBot", subtitle: ending.subtitle) }
+            task.setTaskCompleted(success: ending?.success ?? true)
             return
         }
         run.task = task

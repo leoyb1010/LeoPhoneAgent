@@ -172,8 +172,8 @@ extension AIChatViewModel {
 
         // [leo] 加载 ≠ 上屏：子代理/后台回合/同步重载也走这里，以前会把屏幕上那个聊天的
         // activeSessionId 抢走，点它里的 leophoneagent:// 附件/HTML 就去别的会话目录找、报「文件不存在」。
-        // 上屏的聊天由 AIChatView.onAppear / ContentView 选中时认领，这里只在没人认领时补位。
-        if Self.activeSessionId == nil { Self.activeSessionId = sessionId }
+        // 这里不再认领：上屏的聊天由 AIChatView.onAppear / ContentView 选中 / createDraftSession 认领
+        // (在首页时补位也不行——第一个跑起来的后台子代理会被当成「当前会话」)。
         // [T-ios-session-unread-badge] Opening the session reads its new message,
         // so clear the transient red "unread" dot. Only `.unread` is removed; the
         // `.paused` entry (a different concern) is left to its canResume-driven

@@ -52,8 +52,6 @@ struct ChatDetailContainer<Content: View>: View {
     @State private var inspectorFrame: CGRect = .zero
     /// [ipad-chat] Detail width including the inspector column (= nav bar width).
     @State private var barWidth: CGFloat = 0
-    /// [leo] 系统(而不是用户)改右栏开关的时间点,用来识别并掐断布局震荡。
-    @State private var autoToggles: [Date] = []
 
     private var headerBarGeometry: ChatHeaderBarGeometry {
         let width = max(barWidth, contentFrame.width)
@@ -66,23 +64,27 @@ struct ChatDetailContainer<Content: View>: View {
     /// Whatever it covers becomes trailing safe area, so the chat lays out
     /// beside it either way (0 when the column squeezes the chat).
     private var coveredTrailing: CGFloat {
-        guard inspectorVisible else { return 0 }
+        guard inspectorVisible, !usesSheet else { return 0 }
         return LeoWorkspaceLayoutPolicy.coveredTrailing(content: contentFrame, inspector: inspectorFrame)
     }
 
-    /// `.inspector` 的开关:系统在窄分栏里会自己改它(改成弹出面板、空间不够时收起)。
-    /// 系统发起的来回切换 1.5 秒内超过 3 次就停在当前状态,不再跟着闪。
-    private var inspectorBinding: Binding<Bool> {
-        Binding(get: { inspectorVisible }, set: { newValue in
-            guard newValue != inspectorVisible else { return }
-            let now = Date()
-            autoToggles = autoToggles.filter { now.timeIntervalSince($0) <= 1.5 } + [now]
-            if LeoWorkspaceLayoutPolicy.isOscillating(recentAutoToggles: autoToggles, now: now) {
-                inspectorLog.warning("[Inspector] system toggle ignored (oscillating) → \(newValue) width=\(Int(windowWidth))")
-                return
-            }
-            inspectorLog.info("[Inspector] system set visible=\(newValue) width=\(Int(windowWidth))")
-            inspectorVisible = newValue
+    /// [leo] 窗口不到 900 pt 时右栏放不下三栏:我们自己用弹出面板展示,不交给 `.inspector` 临场改成
+    /// 弹出面板(那时它的几何会让对话忽塌忽回,就是「点一下无限折叠展开」)。≥ 900 才用右栏。
+    private var usesSheet: Bool { !LeoWorkspaceLayoutPolicy.canPinContextColumn(width: windowWidth) }
+
+    /// 两种展示共用同一个开关;系统关掉(下滑、空间不够收起)一律照办,不拦。
+    private var columnPresented: Binding<Bool> {
+        Binding(get: { inspectorVisible && !usesSheet }, set: { shown in
+            guard !shown, inspectorVisible else { return }
+            inspectorLog.info("[Inspector] system closed column width=\(Int(windowWidth))")
+            inspectorVisible = false
+        })
+    }
+
+    private var sheetPresented: Binding<Bool> {
+        Binding(get: { inspectorVisible && usesSheet }, set: { shown in
+            guard !shown, inspectorVisible else { return }
+            inspectorVisible = false
         })
     }
 
@@ -100,8 +102,7 @@ struct ChatDetailContainer<Content: View>: View {
     /// An explicit show/hide of the column. Wide enough to pin → it also pins
     /// or unpins; narrower windows only show it for now.
     private func setInspectorByHand(_ visible: Bool) {
-        inspectorLog.info("[Inspector] by hand visible=\(visible) width=\(Int(windowWidth))")
-        autoToggles = []
+        inspectorLog.info("[Inspector] by hand visible=\(visible) width=\(Int(windowWidth)) sheet=\(usesSheet)")
         if LeoWorkspaceLayoutPolicy.canPinContextColumn(width: windowWidth) { inspectorPinned = visible }
         withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = visible }
     }
@@ -141,11 +142,22 @@ struct ChatDetailContainer<Content: View>: View {
             .modifier(ChatToolbarMinimization())
             .safeAreaPadding(.trailing, coveredTrailing)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { contentFrame = $0 }
-            .inspector(isPresented: inspectorBinding) {
+            .inspector(isPresented: columnPresented) {
                 ChatInspectorPanel(sessionId: sessionId, modeRaw: $contextModeRaw)
                     .inspectorColumnWidth(min: 300, ideal: 360, max: 480)
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { inspectorFrame = $0 }
                     .onDisappear { inspectorFrame = .zero }
+            }
+            .sheet(isPresented: sheetPresented) {
+                NavigationStack {
+                    ChatInspectorPanel(sessionId: sessionId, modeRaw: $contextModeRaw)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("完成") { setInspectorByHand(false) }
+                            }
+                        }
+                }
+                .presentationDetents([.medium, .large])
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
             .toolbar {

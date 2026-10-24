@@ -702,7 +702,12 @@ extension LiveSessionSnapshot {
         loopIteration = try c.decodeIfPresent(Int.self, forKey: .loopIteration) ?? 0
         isCompleted = try c.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
         lastMessage = try c.decodeIfPresent(String.self, forKey: .lastMessage) ?? ""
-        outcome = (try? c.decodeIfPresent(RestingOutcome.self, forKey: .outcome)) ?? .done
+        // [leo] 没带结局字段的旧载荷按完成;带了但认不出来(更新的发送方)按「结果待确认」,不画成绿色对勾。
+        if c.contains(.outcome) {
+            outcome = (try? c.decode(RestingOutcome.self, forKey: .outcome)) ?? .unknown
+        } else {
+            outcome = .done
+        }
     }
 }
 

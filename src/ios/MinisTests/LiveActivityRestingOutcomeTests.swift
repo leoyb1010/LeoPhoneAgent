@@ -115,9 +115,27 @@ final class LiveActivityRestingOutcomeTests: XCTestCase {
                        "unlimited background time must not stop the progress timer")
         // 2. 收尾成败只看 AgentRunEnding:可续跑的中断不是失败。
         XCTAssertTrue(src.contains("success: !ending.isFailure"))
-        // 3. 系统拉起时这一轮已结束:按成功收,不凭空报失败。
+        // 3. 系统拉起时这一轮已结束:按 finish 记下的真实结局收尾,没有记录(被取消)才按成功——不凭空报失败,也不掩盖真失败。
         let attach = try XCTUnwrap(src.range(of: "private func attach("))
-        XCTAssertTrue(String(src[attach.upperBound...].prefix(400)).contains("task.setTaskCompleted(success: true)"))
-        XCTAssertFalse(String(src[attach.upperBound...].prefix(400)).contains("success: false"))
+        let attachBody = String(src[attach.upperBound...].prefix(700))
+        XCTAssertTrue(attachBody.contains("task.setTaskCompleted(success: ending?.success ?? true)"))
+        XCTAssertFalse(attachBody.contains("success: false"))
+        XCTAssertTrue(src.contains("lateEndings[run.identifier] = (success, subtitle)"))
+    }
+
+    /// [leo] Fable 5.1 审计:可以点「继续」但重试也不会好的结局(拒答、空响应、上下文已满、认证 / 限流)按失败显示。
+    func testResumableButTerminalEndingsShowAsFailures() {
+        for text in ["模型拒绝响应此请求。请尝试换一种说法，或切换到其他模型。",
+                     "The model declined to respond to this request.",
+                     "模型返回了空响应，请重试或切换模型。",
+                     "上下文已满，也无法再压缩。请新建对话，或清空当前对话后继续。"] {
+            XCTAssertTrue(AgentRunCompletion.isTerminalDespiteResume(text), text)
+            let c = AgentRunCompletion(userCancelled: false, canResume: true, backgroundSuspended: false, failureText: text)
+            XCTAssertEqual(c.phase, .failed, text)
+        }
+        // 真断流 / 没有错误文本:仍是可续的中断
+        XCTAssertFalse(AgentRunCompletion.isTerminalDespiteResume(nil))
+        let dropped = AgentRunCompletion(userCancelled: false, canResume: true, backgroundSuspended: false, failureText: nil)
+        XCTAssertEqual(dropped.phase, .waitingForUser)
     }
 }

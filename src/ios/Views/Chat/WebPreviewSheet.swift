@@ -41,7 +41,7 @@ final class WebViewHolder: NSObject, ObservableObject {
     private var windowWaitRetries: Int = 0
 
     init(url: URL, localFile: Bool) {
-        localFileReadAccessURL = localFile && url.isFileURL ? url.deletingLastPathComponent() : nil
+        localFileReadAccessURL = localFile && url.isFileURL ? Self.readAccessRoot(for: url) : nil
         let config = WKWebViewConfiguration()
         // Match BrowserUseManager verbatim: shared process pool, default
         // data store, JS on, fullscreen enabled. This keeps the in-chat
@@ -61,8 +61,8 @@ final class WebViewHolder: NSObject, ObservableObject {
         if localFile {
             let prefs = config.preferences
             prefs.setValue(true, forKey: "allowFileAccessFromFileURLs")
-            // [leo] 这个键在 WKWebViewConfiguration 上，挂在 prefs 上真机日志一直报 not supported、等于没开。
-            SafeKVCSetTrue.apply(config, key: "allowUniversalAccessFromFileURLs")
+            // [leo] 不开 allowUniversalAccessFromFileURLs:它让 Agent 生成的 HTML 能 fetch 整个 App 容器里的
+            // 任意文件(所有会话、数据库、偏好)再发出去,且是私有接口。同会话的资源靠下面的读权限根目录。
         }
 
         webView = WKWebView(frame: .zero, configuration: config)
@@ -212,6 +212,22 @@ final class WebViewHolder: NSObject, ObservableObject {
     /// cache-policy control, so use `loadFileRequest` with
     /// `.reloadIgnoringLocalCacheData` to force WebKit to re-read the file from
     /// disk every time the preview is presented. Available iOS 15+.
+    /// [leo] 读权限给到这个文件所在的会话目录(…/MinisChat/minis/<会话>/),同一会话里 `../assets`
+    /// 这类相对引用才能加载;不在会话目录里的文件只给它自己的文件夹。
+    nonisolated static func readAccessRoot(for url: URL) -> URL {
+        var dir = url.deletingLastPathComponent().standardizedFileURL
+        var probe = dir
+        while probe.pathComponents.count > 2 {
+            let parent = probe.deletingLastPathComponent()
+            if parent.lastPathComponent == "minis", parent.deletingLastPathComponent().lastPathComponent == "MinisChat" {
+                dir = probe
+                break
+            }
+            probe = parent
+        }
+        return dir
+    }
+
     private func loadLocalFileBypassingCache(_ url: URL) {
         guard let readAccess = localFileReadAccessURL, canReadFileURL(url) else {
             loadError = WebLoadError(error: URLError(.noPermissionsToReadFile), failedURL: url)

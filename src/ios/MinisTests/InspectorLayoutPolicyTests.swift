@@ -25,25 +25,22 @@ final class InspectorLayoutPolicyTests: XCTestCase {
         XCTAssertEqual(LeoWorkspaceLayoutPolicy.coveredTrailing(content: chat, inspector: .zero), 0)
     }
 
-    func testCoveringMoreThanHalfTheChatIsIgnored() {
-        let wide = CGRect(x: 400, y: 0, width: 551, height: 669)   // 盖住 551 > 651/2
-        XCTAssertEqual(LeoWorkspaceLayoutPolicy.coveredTrailing(content: chat, inspector: wide), 0)
+    func testOverlayKeepsAtLeast300PointsOfChat() {
+        // 浮动栏让出后对话剩 ≥ 300 才算合法:让出 351 剩 300 照让,让出 400 剩 251 不让
+        let ideal = CGRect(x: chat.maxX - 351, y: 0, width: 351, height: 669)
+        XCTAssertEqual(LeoWorkspaceLayoutPolicy.coveredTrailing(content: chat, inspector: ideal), 351)
+        let tooWide = CGRect(x: chat.maxX - 400, y: 0, width: 400, height: 669)
+        XCTAssertEqual(LeoWorkspaceLayoutPolicy.coveredTrailing(content: chat, inspector: tooWide), 0)
     }
 
-    func testOscillationIsDetectedOnlyForRapidRepeatedSystemToggles() {
-        let now = Date()
-        let rapid = (0..<4).map { now.addingTimeInterval(-Double($0) * 0.2) }
-        XCTAssertTrue(LeoWorkspaceLayoutPolicy.isOscillating(recentAutoToggles: rapid, now: now))
-        XCTAssertFalse(LeoWorkspaceLayoutPolicy.isOscillating(recentAutoToggles: Array(rapid.prefix(3)), now: now))
-        let spread = (0..<4).map { now.addingTimeInterval(-Double($0) * 1.0) }
-        XCTAssertFalse(LeoWorkspaceLayoutPolicy.isOscillating(recentAutoToggles: spread, now: now))
-    }
-
-    func testTheContainerUsesThePolicyAndTheGuardedBinding() throws {
+    func testTheContainerPicksItsOwnPresentationAndHonorsSystemCloses() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let src = try String(contentsOf: root.appendingPathComponent("Views/Chat/ChatInspector.swift"), encoding: .utf8)
         XCTAssertTrue(src.contains("LeoWorkspaceLayoutPolicy.coveredTrailing(content: contentFrame, inspector: inspectorFrame)"))
-        XCTAssertTrue(src.contains(".inspector(isPresented: inspectorBinding)"))
+        XCTAssertTrue(src.contains(".inspector(isPresented: columnPresented)"))
+        XCTAssertTrue(src.contains(".sheet(isPresented: sheetPresented)"))
+        XCTAssertTrue(src.contains("!LeoWorkspaceLayoutPolicy.canPinContextColumn(width: windowWidth)"), "< 900 pt 自己用弹出面板")
+        XCTAssertFalse(src.contains("isOscillating"), "不再拦截系统的关闭")
         XCTAssertFalse(src.contains("max(0, contentFrame.maxX - inspectorFrame.minX)"), "旧的无条件算法不能回来")
     }
 }

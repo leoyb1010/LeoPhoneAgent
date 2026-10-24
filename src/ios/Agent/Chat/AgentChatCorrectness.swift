@@ -92,22 +92,20 @@ enum LeoWorkspaceLayoutPolicy {
     }
 
     /// [leo] 右栏浮在对话上方时(竖握分栏),它盖住的对话尾部宽度,对话把这段让成安全区。
-    /// 只认「贴在对话右侧、上下基本等高的一条栏」:系统把右栏改成弹出面板(Duo 内屏这类窄分栏)时,
-    /// 它的 minX 几乎是 0,旧算法会把整个对话宽度都让出去 → 对话塌成一条 → 布局翻转 → 右栏关 → 再开,
-    /// 无限闪。超过对话宽度一半、或不在对话右侧,都按「没盖住」处理。
+    /// 只认「贴在对话右侧、上下基本等高的一条栏」:系统把右栏临场改成弹出面板时它的 minX 几乎是 0,
+    /// 旧算法会把整个对话宽度都让出去 → 对话塌成一条 → 布局翻转 → 右栏关 → 再开,无限闪。
     static func coveredTrailing(content: CGRect, inspector: CGRect) -> CGFloat {
         guard content.width > 0, inspector.width > 0, inspector.height > 0 else { return 0 }
         guard inspector.minX > content.minX + 1, inspector.maxX >= content.maxX - 1 else { return 0 }
         guard inspector.height >= content.height * 0.8 else { return 0 }
         let covered = content.maxX - inspector.minX
-        guard covered > 0, covered <= content.width * 0.5 else { return 0 }
+        // 让出去后对话至少还剩 300 pt(Duo 内屏 651 的对话 + 360 的右栏也算正常浮动栏)。
+        guard covered > 0, covered <= content.width - minimumChatWidth else { return 0 }
         return covered
     }
 
-    /// [leo] 不是手点的开 / 关,1.5 秒内来回超过 3 次就判定为布局震荡,停在当前状态(并记日志)。
-    static func isOscillating(recentAutoToggles: [Date], now: Date, window: TimeInterval = 1.5, limit: Int = 3) -> Bool {
-        recentAutoToggles.filter { now.timeIntervalSince($0) <= window }.count > limit
-    }
+    /// 右栏浮在对话上时,对话至少保留的宽度。
+    static let minimumChatWidth: CGFloat = 300
 
     /// The new value a threshold rule wants after a resize, or nil when the
     /// resize did not cross the threshold (leave the user's choice alone).

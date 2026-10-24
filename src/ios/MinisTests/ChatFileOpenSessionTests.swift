@@ -16,8 +16,11 @@ final class ChatFileOpenSessionTests: XCTestCase {
         let body = try XCTUnwrap(text.range(of: "func loadSession() async {"))
         let end = try XCTUnwrap(text.range(of: "isLoadingSession = true", range: body.upperBound..<text.endIndex))
         let load = String(text[body.upperBound..<end.lowerBound])
-        XCTAssertTrue(load.contains("if Self.activeSessionId == nil { Self.activeSessionId = sessionId }"))
-        XCTAssertFalse(load.contains("\n        Self.activeSessionId = sessionId\n"), "loadSession 无条件认领会抢走上屏的聊天")
+        // Fable 5.1 审计:在首页时「没人认领就补位」也会让第一个后台子代理成为当前会话,干脆不认领。
+        XCTAssertFalse(load.contains("Self.activeSessionId = sessionId"), "loadSession 不认领当前会话")
+        let content = try source("Views/ContentView.swift")
+        XCTAssertTrue(content.contains("if AIChatViewModel.activeSessionId == session.id { AIChatViewModel.activeSessionId = nil }"),
+                      "删掉的会话不能还当当前会话")
     }
 
     /// 点链接按「这个聊天自己的文件会话」解析,子代理的聊天落到父会话。
@@ -35,10 +38,12 @@ final class ChatFileOpenSessionTests: XCTestCase {
         XCTAssertTrue(files.contains("hostURL(for: linuxPath, sessionId: self.subAgentFSSessionId)"))
     }
 
-    /// allowUniversalAccessFromFileURLs 是 WKWebViewConfiguration 的键,挂在 WKPreferences 上无效。
-    func testUniversalFileAccessKeyIsSetOnTheConfiguration() throws {
+    /// Fable 5.1 审计:allowUniversalAccessFromFileURLs 让 Agent 生成的 HTML 能读整个 App 容器再发出去,
+    /// 而且是私有接口——不开;同会话资源靠读权限根目录(会话目录)。
+    func testHTMLPreviewNeverGetsUniversalFileAccess() throws {
         let sheet = try source("Views/Chat/WebPreviewSheet.swift")
-        XCTAssertTrue(sheet.contains("SafeKVCSetTrue.apply(config, key: \"allowUniversalAccessFromFileURLs\")"))
+        XCTAssertFalse(sheet.contains("SafeKVCSetTrue.apply(config, key: \"allowUniversalAccessFromFileURLs\")"))
         XCTAssertFalse(sheet.contains("SafeKVCSetTrue.apply(prefs, key: \"allowUniversalAccessFromFileURLs\")"))
+        XCTAssertTrue(sheet.contains("Self.readAccessRoot(for: url)"))
     }
 }

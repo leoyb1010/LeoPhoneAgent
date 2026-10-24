@@ -4821,6 +4821,8 @@ struct ContentView: View {
         }
         ViewModelCache.shared.remove(sessionId: session.id)
         BrowserUseOffloadBridge.releasePool(forSession: session.id)
+        // [leo] 删掉的会话不能还当「当前会话」(配置工具、附件解析、手表都读它)。
+        if AIChatViewModel.activeSessionId == session.id { AIChatViewModel.activeSessionId = nil }
         withAnimation {
             sessions.removeAll { $0.id == session.id }
         }
@@ -4842,6 +4844,7 @@ struct ContentView: View {
             ViewModelCache.shared.remove(sessionId: id)
             BrowserUseOffloadBridge.releasePool(forSession: id)
         }
+        if let active = AIChatViewModel.activeSessionId, ids.contains(active) { AIChatViewModel.activeSessionId = nil }
         withAnimation {
             sessions.removeAll { ids.contains($0.id) }
         }
