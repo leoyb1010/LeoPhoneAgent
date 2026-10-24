@@ -61,7 +61,8 @@ final class WebViewHolder: NSObject, ObservableObject {
         if localFile {
             let prefs = config.preferences
             prefs.setValue(true, forKey: "allowFileAccessFromFileURLs")
-            SafeKVCSetTrue.apply(prefs, key: "allowUniversalAccessFromFileURLs")
+            // [leo] 这个键在 WKWebViewConfiguration 上，挂在 prefs 上真机日志一直报 not supported、等于没开。
+            SafeKVCSetTrue.apply(config, key: "allowUniversalAccessFromFileURLs")
         }
 
         webView = WKWebView(frame: .zero, configuration: config)

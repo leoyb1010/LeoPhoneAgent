@@ -114,7 +114,7 @@ final class KernelLazyBootWiringTests: XCTestCase {
         let body = try XCTUnwrap(files.range(of: "func resolvePathForDirectRead("))
         let text = String(files[body.lowerBound...])
         let prime = try XCTUnwrap(text.range(of: "await ISHExecutionCoordinator.shared.ensureMounted(for: sid)"))
-        let lookup = try XCTUnwrap(text.range(of: "await ISHExecutionCoordinator.shared.hostURL(for: linuxPath)"))
+        let lookup = try XCTUnwrap(text.range(of: "await ISHExecutionCoordinator.shared.hostURL(for: linuxPath, sessionId: self.subAgentFSSessionId)"))
         XCTAssertLessThan(prime.lowerBound, lookup.lowerBound)
         XCTAssertTrue(text.contains("linuxPath.hasPrefix(\"/var/minis/mounts/\"), let sid = self.subAgentFSSessionId"))
     }

@@ -121,7 +121,8 @@ extension AIChatViewModel {
             if linuxPath.hasPrefix("/var/minis/mounts/"), let sid = self.subAgentFSSessionId {
                 await ISHExecutionCoordinator.shared.ensureMounted(for: sid)
             }
-            if let resolved = await ISHExecutionCoordinator.shared.hostURL(for: linuxPath) {
+            // [leo] 带上本会话：不传就按「最后跑过 shell 的会话」解析，多会话并发时读到/收录别人的同名文件。
+            if let resolved = await ISHExecutionCoordinator.shared.hostURL(for: linuxPath, sessionId: self.subAgentFSSessionId) {
                 let exists = FileManager.default.fileExists(atPath: resolved.path)
                 logger.notice("📂[RESOLVE] \(linuxPath) → \(resolved.path) exists=\(exists) sid=\(self.sessionId ?? "nil")")
                 if exists { return resolved }

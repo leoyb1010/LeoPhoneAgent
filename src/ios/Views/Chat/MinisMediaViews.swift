@@ -154,7 +154,9 @@ let minisDocumentExtensions: Set<String> = [
 /// Resolve a leophoneagent:// URL to a host filesystem URL.
 /// Maps directly to persistent storage: Library/MinisChat/minis/<sessionId>/<subdir>/<path>
 /// No dependency on iSH boot or bind mounts.
-func resolveMinisFileURL(url: URL) -> URL? {
+/// [leo] `sessionId`：点链接的那个聊天自己的会话（子代理传父会话）。不传才退回全局 activeSessionId——
+/// 那是「最后打开的聊天」，双窗口/后台子代理时不一定是你正在点的这个。
+func resolveMinisFileURL(url: URL, sessionId: String? = nil) -> URL? {
     guard let host = url.host else {
         minisLogger.warning("[ResolveMinisURL] no host in URL: \(url.absoluteString)")
         return nil
@@ -166,7 +168,7 @@ func resolveMinisFileURL(url: URL) -> URL? {
     let fm = FileManager.default
 
     // Primary: resolve via active session → persistent directory
-    if let sid = AIChatViewModel.activeSessionId {
+    if let sid = sessionId ?? AIChatViewModel.activeSessionId {
         for subPath in subPaths {
             let persistURL = AIChatViewModel.minisPersistentBase
                 .appendingPathComponent(sid, isDirectory: true)
