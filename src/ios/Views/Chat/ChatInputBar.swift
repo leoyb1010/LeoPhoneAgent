@@ -1175,6 +1175,8 @@ struct PastableTextView: View {
     var onCaretChange: ((Int) -> Void)?
     var onSelectionReplace: ((_ before: String, _ after: String) -> Void)?
     var desiredCaret: Int?
+    /// [duo-composer] Text height before it scrolls; nil = the old fixed caps.
+    var maxTextHeight: CGFloat? = nil
 
     @EnvironmentObject private var vm: AIChatViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1203,7 +1205,8 @@ struct PastableTextView: View {
                 onCaretChange: onCaretChange,
                 onSelectionReplace: onSelectionReplace,
                 desiredCaret: desiredCaret,
-                onFoldLongPaste: { pasted in vm.registerPastedBlock(pasted).token + " " }
+                onFoldLongPaste: { pasted in vm.registerPastedBlock(pasted).token + " " },
+                maxTextHeight: maxTextHeight
             )
         }
         .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: visible.map(\.id))
@@ -1334,6 +1337,8 @@ struct PastableTextFieldRepresentable: UIViewRepresentable {
     /// [T-long-paste-fold] Folds a long plain-text paste and returns the
     /// token to insert. Wired by `PastableTextView`.
     var onFoldLongPaste: ((String) -> String)?
+    /// [duo-composer] From ChatComposerLayout.maxTextHeight; nil = old caps.
+    var maxTextHeight: CGFloat? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -1441,8 +1446,10 @@ struct PastableTextFieldRepresentable: UIViewRepresentable {
 
     func updateUIView(_ tv: PastableUITextView, context: Context) {
         // Landscape phone: the keyboard leaves ~170 pt, so the text grows to
-        // three lines, not six, before it scrolls.
-        let maxHeight: CGFloat = context.environment.verticalSizeClass == .compact ? 60 : 120
+        // three lines, not six, before it scrolls. [duo-composer] The chat
+        // passes a cap scaled to the height actually left (ChatComposerLayout).
+        let maxHeight: CGFloat = maxTextHeight
+            ?? (context.environment.verticalSizeClass == .compact ? 60 : 120)
         if tv.maxHeight != maxHeight {
             tv.maxHeight = maxHeight
             tv.invalidateIntrinsicContentSize()

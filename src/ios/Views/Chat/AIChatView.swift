@@ -454,6 +454,11 @@ struct AIChatView: View {
     private var isShortHeight: Bool {
         ChatShortHeightRule.isShort(verticalSizeClassCompact: vSizeClass == .compact, heightIsShort: heightIsShort)
     }
+    /// [duo-composer] Composer sizing from the container geometry
+    /// (ChatComposerLayout); each written only when its value changes.
+    @State private var composerMaxTextHeight = ChatComposerLayout.unmeasuredMaxText
+    @State private var composerBottomPadding = ChatComposerLayout.keyboardGap
+    @State private var composerDense = false
     @Environment(\.scenePhase) private var scenePhase
     /// Face ID lock state — observed so the navbar title can blur in
     /// lockstep with the chat-body SessionLockGateOverlay (both read
@@ -711,17 +716,12 @@ struct AIChatView: View {
         // bars and the keyboard / home indicator — independent of the composer,
         // so compacting can't undo itself. One observer keeps the body's
         // modifier depth unchanged (cold-launch metadata budget).
-        .onGeometryChange(for: CGSize.self) { proxy in
-            CGSize(width: proxy.size.width.rounded(),
-                   height: (proxy.size.height - proxy.safeAreaInsets.top - proxy.safeAreaInsets.bottom).rounded())
+        .onGeometryChange(for: ChatContainerMetrics.self) { proxy in
+            ChatContainerMetrics(proxy)
         } action: { measured in
             let width = measured.width
             if width > 0, width != chatColumnWidth { chatColumnWidth = width }
-            let short = ChatShortHeightRule.heightIsShort(
-                visibleHeight: measured.height, wasShort: heightIsShort,
-                verticalSizeClassRegular: vSizeClass == .regular,
-                windowWidth: hostWindow.window?.bounds.width ?? 0)
-            if short != heightIsShort { heightIsShort = short }
+            applyContainerMetrics(measured)
         }
         .onDrop(of: [.image, .movie, .fileURL, .data], isTargeted: $isDropTargeted) { providers in
             handleDropProviders(providers)
@@ -2851,6 +2851,27 @@ struct AIChatView: View {
         }
     }
 
+    // MARK: - [duo-composer] Container geometry → composer layout
+
+    private func applyContainerMetrics(_ m: ChatContainerMetrics) {
+        let window = hostWindow.window
+        let visible = ChatComposerLayout.visibleHeight(containerHeight: m.height,
+                                                       windowTopInset: window?.safeAreaInsets.top)
+        let short = ChatShortHeightRule.heightIsShort(
+            visibleHeight: visible, wasShort: heightIsShort,
+            verticalSizeClassRegular: vSizeClass == .regular,
+            windowWidth: window?.bounds.width ?? 0)
+        if short != heightIsShort { heightIsShort = short }
+        let maxText = ChatComposerLayout.maxTextHeight(visibleHeight: visible,
+                                                       verticalSizeClassCompact: vSizeClass == .compact)
+        if maxText != composerMaxTextHeight { composerMaxTextHeight = maxText }
+        let bottom = ChatComposerLayout.bottomPadding(bottomInset: m.bottomInset)
+        if bottom != composerBottomPadding { composerBottomPadding = bottom }
+        let dense = ChatComposerLayout.isDense(
+            windowHeight: ChatComposerLayout.windowHeight(containerHeight: m.height, bottomInset: m.bottomInset))
+        if dense != composerDense { composerDense = dense }
+    }
+
     // MARK: - [duo-fold] Fold / unfold continuity
 
     /// Key this chat's fold-continuity state goes under: the session, or the
@@ -3224,7 +3245,8 @@ struct AIChatView: View {
             DeepLinkRouter.handle(url: url, shareCoordinator: shareCoordinator)
             return .handled
         }
-        if let fileURL = resolveMinisFileURL(url: url) {
+        // [leo] 按这个聊天自己的会话解析（子代理写在父会话 workspace），不靠全局「最后打开的聊天」。
+        if let fileURL = resolveMinisFileURL(url: url, sessionId: vm.subAgentFSSessionId) {
             let ext = url.pathExtension.lowercased()
             withAnimation {
                 if minisImageExtensions.contains(ext) {
@@ -3662,7 +3684,10 @@ struct AIChatView: View {
     /// where `AIChatView.inputBar.getter` blew the stack via
     /// `__swift_instantiateConcreteTypeFromMangledNameV2`).
     private var inputFieldOrWaveform: AnyView {
-        let topPadding: CGFloat = (vm.attachments.isEmpty && vm.loadingVideoCount == 0) ? 16 : 11
+        // [duo-composer] Less air on short windows (Duo outer / inner landscape).
+        let spacing = ChatComposerLayout.spacing(dense: composerDense)
+        let topPadding: CGFloat = (vm.attachments.isEmpty && vm.loadingVideoCount == 0)
+            ? spacing.textTop : spacing.textTopWithAttachments
         if voiceInputActive {
             return AnyView(
                 // [voice-correction §6] Recent conversation turns, straight from the
@@ -3710,7 +3735,8 @@ struct AIChatView: View {
                         locale: "zh", source: "text_input")
                 }
             },
-            desiredCaret: vm.pendingCaret
+            desiredCaret: vm.pendingCaret,
+            maxTextHeight: composerMaxTextHeight
         )
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 16)
@@ -4149,7 +4175,7 @@ struct AIChatView: View {
                     // The "+" disc sits centered in a 44 pt target: 7 + 5 keeps it 12 pt in.
                     .padding(.leading, 7)
                     .padding(.trailing, 12)
-                    .padding(.bottom, 10)
+                    .padding(.bottom, ChatComposerLayout.spacing(dense: composerDense).rowBottom)
             }
             .contentShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous))
             .onTapGesture { inputFocused = true }
@@ -4205,7 +4231,11 @@ struct AIChatView: View {
             }
             .frame(maxWidth: maxContentWidth)
             .padding(.horizontal, LeoComposerMetrics.outerPadding)
-            .padding(.vertical, 8)
+            // [duo-composer] Bottom: just above the home indicator (negative —
+            // the card reaches into the inset), or 8 above the keyboard. Inside
+            // the measured frame, so the list inset and the popups follow.
+            .padding(.top, ChatComposerLayout.spacing(dense: composerDense).outerTop)
+            .padding(.bottom, composerBottomPadding)
             // [T-ios-geometry-observer-crash] onGeometryChange replaces the
             // GeometryReader scaffold (async-renderer SIGTRAP — see the
             // floating-bar site). Fires with the initial value too, so the
@@ -5230,6 +5260,22 @@ private struct ProviderImportSheet: View {
 ///   space. The hint sits ~60pt above the finger (about one thumb-tip).
 
 // MARK: - Nav Bar Modifiers
+
+/// [duo-composer] What the chat root's geometry observer keeps: the column
+/// width, the height (top of window → keyboard / home indicator) and the bottom
+/// inset (the keyboard or home indicator). Rounded so sub-point jitter during a
+/// transition doesn't fire the action.
+private struct ChatContainerMetrics: Equatable {
+    var width: CGFloat
+    var height: CGFloat
+    var bottomInset: CGFloat
+
+    init(_ proxy: GeometryProxy) {
+        width = proxy.size.width.rounded()
+        height = proxy.size.height.rounded()
+        bottomInset = proxy.safeAreaInsets.bottom.rounded()
+    }
+}
 
 private struct NavTitleFrameModifier: ViewModifier {
     func body(content: Content) -> some View {

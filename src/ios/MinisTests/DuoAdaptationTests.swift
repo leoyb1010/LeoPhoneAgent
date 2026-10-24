@@ -27,6 +27,86 @@ final class DuoAdaptationTests: XCTestCase {
                                                          verticalSizeClassRegular: true, windowWidth: 951))
     }
 
+    // MARK: [duo-composer] composer sizing from the container geometry
+
+    func testVisibleHeightSubtractsTheBarsOnceNotTheKeyboardTwice() {
+        typealias C = ChatComposerLayout
+        // Measured on the 18 Pro Max simulator: container 922 / inset 34 (no
+        // keyboard), 608 / inset 348 (keyboard); window top inset 62.
+        XCTAssertEqual(C.visibleHeight(containerHeight: 922, windowTopInset: 62), 810)
+        XCTAssertEqual(C.visibleHeight(containerHeight: 608, windowTopInset: 62), 496)
+        XCTAssertEqual(C.windowHeight(containerHeight: 608, bottomInset: 348), 956)
+        XCTAssertEqual(C.windowHeight(containerHeight: 922, bottomInset: 34), 956)
+        // Window not captured yet: "not measured", the short rule keeps its answer.
+        XCTAssertEqual(C.visibleHeight(containerHeight: 608, windowTopInset: nil), 0)
+        XCTAssertTrue(ChatShortHeightRule.heightIsShort(visibleHeight: 0, wasShort: true,
+                                                        verticalSizeClassRegular: true, windowWidth: 951))
+        // Pro Max with the keyboard is not short (the old double subtraction read 260).
+        XCTAssertFalse(ChatShortHeightRule.heightIsShort(visibleHeight: 496, wasShort: false))
+        // iPad 11" landscape with the keyboard (834 − ~400 kb − 24 − 50 ≈ 360): full composer.
+        XCTAssertFalse(ChatShortHeightRule.heightIsShort(
+            visibleHeight: C.visibleHeight(containerHeight: 834 - 400, windowTopInset: 24),
+            wasShort: false, verticalSizeClassRegular: true, windowWidth: 1194))
+        // Duo inner landscape with a ~330 pt keyboard: 669 − 330 − 24 − 50 = 265, short.
+        XCTAssertTrue(ChatShortHeightRule.heightIsShort(
+            visibleHeight: C.visibleHeight(containerHeight: 669 - 330, windowTopInset: 24),
+            wasShort: false, verticalSizeClassRegular: true, windowWidth: 951))
+        // Duo inner portrait with the keyboard keeps the full composer (951 − 300 − 24 − 50).
+        XCTAssertFalse(ChatShortHeightRule.heightIsShort(
+            visibleHeight: C.visibleHeight(containerHeight: 951 - 300, windowTopInset: 24),
+            wasShort: false, verticalSizeClassRegular: true, windowWidth: 669))
+    }
+
+    func testComposerTextGrowsWithTheRoomLeft() {
+        typealias C = ChatComposerLayout
+        XCTAssertEqual(C.maxTextHeight(visibleHeight: 810, verticalSizeClassCompact: false), 160, "Pro Max, no keyboard: 8 lines")
+        XCTAssertEqual(C.maxTextHeight(visibleHeight: 496, verticalSizeClassCompact: false), 120, "Pro Max + keyboard: 6 lines")
+        XCTAssertEqual(C.maxTextHeight(visibleHeight: 300, verticalSizeClassCompact: false), 60, "Duo outer + keyboard: 3 lines")
+        XCTAssertEqual(C.maxTextHeight(visibleHeight: 265, verticalSizeClassCompact: false), 60, "Duo inner landscape + keyboard")
+        XCTAssertEqual(C.maxTextHeight(visibleHeight: 575, verticalSizeClassCompact: false), 140, "Duo inner landscape, no keyboard")
+        XCTAssertEqual(C.maxTextHeight(visibleHeight: 900, verticalSizeClassCompact: true), 60, "landscape phone keeps 3 lines")
+        XCTAssertEqual(C.maxTextHeight(visibleHeight: 0, verticalSizeClassCompact: false), 120, "unmeasured: old 6 lines")
+        // Whole-line steps: a few points of geometry jitter don't change the cap.
+        XCTAssertEqual(C.maxTextHeight(visibleHeight: 500, verticalSizeClassCompact: false),
+                       C.maxTextHeight(visibleHeight: 515, verticalSizeClassCompact: false))
+        for v in stride(from: CGFloat(1), through: 2000, by: 37) {
+            let h = C.maxTextHeight(visibleHeight: v, verticalSizeClassCompact: false)
+            XCTAssertTrue((C.minText...C.maxText).contains(h))
+            XCTAssertEqual(h.truncatingRemainder(dividingBy: C.textStep), 0)
+        }
+    }
+
+    func testComposerSitsJustAboveTheHomeIndicator() {
+        typealias C = ChatComposerLayout
+        // iPhone (34): card 20 pt from the screen edge instead of 8 + 34 = 42.
+        XCTAssertEqual(C.bottomPadding(bottomInset: 34), -14)
+        XCTAssertEqual(34 + C.bottomPadding(bottomInset: 34), 20)
+        // iPad (20): 12 pt from the edge, clear of the indicator.
+        XCTAssertEqual(20 + C.bottomPadding(bottomInset: 20), 12)
+        // Keyboard / accessory bar, or no inset at all: 8 pt gap as before.
+        XCTAssertEqual(C.bottomPadding(bottomInset: 348), 8)
+        XCTAssertEqual(C.bottomPadding(bottomInset: 55), 8)
+        XCTAssertEqual(C.bottomPadding(bottomInset: 0), 8)
+        // With an indicator the card keeps at least 60 % of the inset to the edge.
+        for inset in stride(from: CGFloat(1), through: C.homeIndicatorMaxInset, by: 1) {
+            XCTAssertGreaterThanOrEqual(inset + C.bottomPadding(bottomInset: inset), (inset * 0.6).rounded())
+        }
+    }
+
+    func testDenseComposerOnlyOnShortWindows() {
+        typealias C = ChatComposerLayout
+        XCTAssertTrue(C.isDense(windowHeight: 678), "Duo outer")
+        XCTAssertTrue(C.isDense(windowHeight: 669), "Duo inner landscape")
+        XCTAssertTrue(C.isDense(windowHeight: 667), "SE")
+        XCTAssertFalse(C.isDense(windowHeight: 951), "Duo inner portrait")
+        XCTAssertFalse(C.isDense(windowHeight: 874), "18 Pro")
+        XCTAssertFalse(C.isDense(windowHeight: 956), "18 Pro Max")
+        XCTAssertFalse(C.isDense(windowHeight: 0), "unmeasured")
+        let roomy = C.spacing(dense: false), dense = C.spacing(dense: true)
+        XCTAssertEqual(roomy, .init(textTop: 16, textTopWithAttachments: 11, rowBottom: 10, outerTop: 8), "ordinary phones unchanged")
+        XCTAssertLessThan(dense.textTop + dense.rowBottom + dense.outerTop, roomy.textTop + roomy.rowBottom + roomy.outerTop)
+    }
+
     func testOrdinaryPhonesKeepTheFullComposer() {
         // 6.1" portrait with keyboard (~422) and without (~760).
         XCTAssertFalse(ChatShortHeightRule.heightIsShort(visibleHeight: 422, wasShort: false))
@@ -267,7 +347,12 @@ final class DuoAdaptationTests: XCTestCase {
         XCTAssertTrue(pill.contains("if #available(iOS 27.1, *) {\n            content.toolbarVerticalBehavior(.disabled)"))
         // P0-9: the composer compaction reads the measured height too.
         XCTAssertTrue(chat.contains("ChatShortHeightRule.isShort(verticalSizeClassCompact: vSizeClass == .compact"))
-        XCTAssertTrue(chat.contains("visibleHeight: measured.height, wasShort: heightIsShort,\n                verticalSizeClassRegular: vSizeClass == .regular,"))
+        XCTAssertTrue(chat.contains("visibleHeight: visible, wasShort: heightIsShort,\n            verticalSizeClassRegular: vSizeClass == .regular,"))
+        // [duo-composer] …measured once (no second subtraction of the keyboard inset).
+        XCTAssertTrue(chat.contains("ChatComposerLayout.visibleHeight(containerHeight: m.height,"))
+        XCTAssertFalse(chat.contains("proxy.size.height - proxy.safeAreaInsets.top - proxy.safeAreaInsets.bottom"))
+        XCTAssertTrue(chat.contains("maxTextHeight: composerMaxTextHeight"), "composer text cap follows the visible height")
+        XCTAssertTrue(chat.contains(".padding(.bottom, composerBottomPadding)"), "card sits just above the home indicator")
         // P1-2: composer stack, ↑↓ discs, new-message pill, download button.
         XCTAssertEqual(chat.components(separatedBy: ".modifier(FoldAvoidingControl())").count - 1, 4)
         XCTAssertTrue(pill.contains("proxy.reservedRegions(kind: .division)"))

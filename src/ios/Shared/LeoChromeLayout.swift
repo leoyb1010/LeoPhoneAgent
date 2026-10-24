@@ -160,9 +160,12 @@ enum ChatListInsets {
 /// couple of lines of messages. The rule now also looks at the height actually
 /// left for the chat between the top bars and the keyboard (or home indicator).
 ///
-/// `visibleHeight` must not depend on the composer (it is the chat container's
-/// height minus its top and bottom safe-area insets), or compacting would grow
-/// the measurement and undo itself. The gap between the two thresholds absorbs
+/// `visibleHeight` (ChatComposerLayout.visibleHeight: the chat container's
+/// height minus the status and nav bars) must not depend on the composer, or
+/// compacting would grow the measurement and undo itself. [duo-composer] It
+/// used to subtract the keyboard inset from a height that already excluded it,
+/// so every keyboard read as "short" (Pro Max: 260 instead of ~490), which on
+/// ≥ 600 pt windows (Duo inner portrait, iPads) compacted the composer. The gap between the two thresholds absorbs
 /// the nav bar minimizing on scroll.
 ///
 /// The height half only applies to inner-display-like windows (regular height,
@@ -194,6 +197,101 @@ enum ChatShortHeightRule {
 
     static func isShort(verticalSizeClassCompact: Bool, heightIsShort: Bool) -> Bool {
         verticalSizeClassCompact || heightIsShort
+    }
+}
+
+/// [duo-composer] Sizing of the chat composer from the chat container's geometry.
+///
+/// The container (AIChatView's root) ignores the top safe area, so its height
+/// runs from the window top down to the keyboard or home indicator, and its
+/// bottom safe-area inset is the keyboard (or home indicator) itself — already
+/// outside the height. Measured: 18 Pro Max 922 / inset 34 without the
+/// keyboard, 608 / inset 348 with it.
+enum ChatComposerLayout {
+    /// Nav bar allowance under the status bar (the bar can minimize; a fixed
+    /// allowance keeps the measurement from moving while scrolling).
+    static let navigationBarAllowance: CGFloat = 50
+
+    /// Height left for the conversation between the top bars and the keyboard /
+    /// home indicator. `windowTopInset == nil` (window not known yet) → 0, which
+    /// every consumer treats as "not measured".
+    static func visibleHeight(containerHeight: CGFloat, windowTopInset: CGFloat?) -> CGFloat {
+        guard let top = windowTopInset, containerHeight.isFinite, containerHeight > 0 else { return 0 }
+        return max(1, containerHeight - top - navigationBarAllowance)
+    }
+
+    /// Full window height, stable while the keyboard comes and goes.
+    static func windowHeight(containerHeight: CGFloat, bottomInset: CGFloat) -> CGFloat {
+        max(0, containerHeight) + max(0, bottomInset)
+    }
+
+    // MARK: Text growth
+
+    /// Landscape phone (compact height): three lines, as before.
+    static let compactHeightMaxText: CGFloat = 60
+    /// Before the first measurement: the old fixed six lines.
+    static let unmeasuredMaxText: CGFloat = 120
+    /// Never fewer than three lines (≈ 20 pt each at the default size)…
+    static let minText: CGFloat = 60
+    /// …and never more than eight.
+    static let maxText: CGFloat = 160
+    /// Share of the visible height the text may take before it scrolls.
+    static let visibleFraction: CGFloat = 0.25
+    /// Whole-line steps, so small geometry changes don't resize a full composer.
+    static let textStep: CGFloat = 20
+
+    /// How tall the composer's text grows before it scrolls. Pro Max: 8 lines
+    /// without the keyboard, 6 with it; Duo outer / inner landscape with the
+    /// keyboard: 3.
+    static func maxTextHeight(visibleHeight: CGFloat, verticalSizeClassCompact: Bool) -> CGFloat {
+        if verticalSizeClassCompact { return compactHeightMaxText }
+        guard visibleHeight > 0, visibleHeight.isFinite else { return unmeasuredMaxText }
+        let stepped = (visibleHeight * visibleFraction / textStep).rounded(.down) * textStep
+        return min(maxText, max(minText, stepped))
+    }
+
+    // MARK: Bottom edge
+
+    /// Gap between the composer and the keyboard (or a window edge with no inset).
+    static let keyboardGap: CGFloat = 8
+    /// Insets up to this are a home indicator (iPhone 34, iPad 20); above it,
+    /// the keyboard or its accessory bar.
+    static let homeIndicatorMaxInset: CGFloat = 44
+
+    /// Bottom padding under the composer card, relative to the safe-area bottom.
+    /// Without the keyboard the card used to float `8 + 34` pt above the screen
+    /// edge — a dead band. Now it sits just above the home indicator (20 pt
+    /// from the edge on iPhone, 12 on iPad), so the value is negative there.
+    static func bottomPadding(bottomInset: CGFloat) -> CGFloat {
+        guard bottomInset.isFinite, bottomInset > 0, bottomInset <= homeIndicatorMaxInset else { return keyboardGap }
+        let gapFromEdge = max(bottomInset - 14, (bottomInset * 0.6).rounded())
+        return gapFromEdge - bottomInset
+    }
+
+    // MARK: Dense chrome (short windows)
+
+    /// Windows this short get the dense composer: iPhone Duo outer (678) and
+    /// inner landscape (669), SE (667), landscape phones. 18 Pro (874), Pro Max
+    /// (956), Duo inner portrait (951) and iPads keep the roomy one.
+    static let denseMaxWindowHeight: CGFloat = 700
+
+    static func isDense(windowHeight: CGFloat) -> Bool {
+        windowHeight.isFinite && windowHeight > 0 && windowHeight <= denseMaxWindowHeight
+    }
+
+    struct Spacing: Equatable {
+        /// Above the text (no attachments / with attachment chips).
+        var textTop: CGFloat
+        var textTopWithAttachments: CGFloat
+        /// Under the + / send row, inside the card.
+        var rowBottom: CGFloat
+        /// Above the card.
+        var outerTop: CGFloat
+    }
+
+    static func spacing(dense: Bool) -> Spacing {
+        dense ? Spacing(textTop: 8, textTopWithAttachments: 6, rowBottom: 6, outerTop: 4)
+              : Spacing(textTop: 16, textTopWithAttachments: 11, rowBottom: 10, outerTop: 8)
     }
 }
 
