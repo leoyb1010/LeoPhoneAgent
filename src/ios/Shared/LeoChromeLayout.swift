@@ -243,11 +243,23 @@ enum ChatComposerLayout {
     /// How tall the composer's text grows before it scrolls. Pro Max: 8 lines
     /// without the keyboard, 6 with it; Duo outer / inner landscape with the
     /// keyboard: 3.
-    static func maxTextHeight(visibleHeight: CGFloat, verticalSizeClassCompact: Bool) -> CGFloat {
-        if verticalSizeClassCompact { return compactHeightMaxText }
-        guard visibleHeight > 0, visibleHeight.isFinite else { return unmeasuredMaxText }
-        let stepped = (visibleHeight * visibleFraction / textStep).rounded(.down) * textStep
-        return min(maxText, max(minText, stepped))
+    /// - `lineHeight`: the input font's real line height (Dynamic Type / app font
+    ///   scale), so the caps stay "3–8 lines" instead of fixed points.
+    /// - `current`: the cap now in effect. A new target within 1.5 lines of it is
+    ///   ignored, so the predictive bar or a keyboard animation doesn't resize a
+    ///   full composer while the user types (Fable 5.1 audit).
+    static func maxTextHeight(visibleHeight: CGFloat, verticalSizeClassCompact: Bool,
+                              lineHeight: CGFloat = textStep, current: CGFloat? = nil) -> CGFloat {
+        let line = lineHeight.isFinite && lineHeight > 0 ? max(textStep, lineHeight) : textStep
+        let scale = line / textStep
+        if verticalSizeClassCompact { return compactHeightMaxText * scale }
+        guard visibleHeight > 0, visibleHeight.isFinite else { return unmeasuredMaxText * scale }
+        let stepped = (visibleHeight * visibleFraction / line).rounded(.down) * line
+        let target = min(maxText * scale, max(minText * scale, stepped))
+        if let current, current >= minText * scale, current <= maxText * scale, abs(target - current) < line * 1.5 {
+            return current
+        }
+        return target
     }
 
     // MARK: Bottom edge
@@ -263,7 +275,17 @@ enum ChatComposerLayout {
     /// edge — a dead band. Now it sits just above the home indicator (20 pt
     /// from the edge on iPhone, 12 on iPad), so the value is negative there.
     static func bottomPadding(bottomInset: CGFloat) -> CGFloat {
-        guard bottomInset.isFinite, bottomInset > 0, bottomInset <= homeIndicatorMaxInset else { return keyboardGap }
+        guard bottomInset.isFinite, bottomInset > 0 else { return keyboardGap }
+        if bottomInset <= homeIndicatorMaxInset { return homeIndicatorPadding(bottomInset) }
+        // 44…64:键盘收起动画最后几帧(和硬件键盘快捷栏)在这里来回,线性过渡,不再跳 22 pt。
+        let blendEnd = homeIndicatorMaxInset + 20
+        guard bottomInset < blendEnd else { return keyboardGap }
+        let t = (bottomInset - homeIndicatorMaxInset) / (blendEnd - homeIndicatorMaxInset)
+        let from = homeIndicatorPadding(homeIndicatorMaxInset)
+        return (from + (keyboardGap - from) * t).rounded()
+    }
+
+    private static func homeIndicatorPadding(_ bottomInset: CGFloat) -> CGFloat {
         let gapFromEdge = max(bottomInset - 14, (bottomInset * 0.6).rounded())
         return gapFromEdge - bottomInset
     }
@@ -319,11 +341,18 @@ enum FoldAvoidance {
     /// - Parameters:
     ///   - size: the control's natural size (no fold padding applied).
     ///   - divisions: active division frames, relative to the control's natural origin.
-    static func insets(size: CGSize, divisions: [CGRect]) -> FoldInsets {
+    /// - `squeezeHorizontally`: false for the composer — squeezing it onto one half of
+    ///   a book-posture fold while the conversation spans both reads as "wrong width".
+    /// - `maxLift`: a horizontal (laptop) fold lifts the control at most this far; a
+    ///   taller blank band between the composer and the keyboard is worse than the
+    ///   crease crossing a scrollable text box.
+    static func insets(size: CGSize, divisions: [CGRect],
+                       squeezeHorizontally: Bool = true, maxLift: CGFloat = .infinity) -> FoldInsets {
         var out = FoldInsets.zero
         let bounds = CGRect(origin: .zero, size: size)
         for division in divisions where division.intersects(bounds) {
             if division.height >= division.width {
+                guard squeezeHorizontally else { continue }
                 // Vertical fold (book posture): move onto the roomier side.
                 let leadingRoom = max(0, division.minX - bounds.minX)
                 let trailingRoom = max(0, bounds.maxX - division.maxX)
@@ -336,7 +365,9 @@ enum FoldAvoidance {
                 }
             } else {
                 // Horizontal fold (laptop posture): rise until the bottom edge clears it.
-                out.bottom = max(out.bottom, bounds.maxY - division.minY)
+                let lift = bounds.maxY - division.minY
+                guard lift <= maxLift else { continue }
+                out.bottom = max(out.bottom, lift)
             }
         }
         return out
@@ -354,11 +385,15 @@ enum FoldAvoidance {
     }
 
     /// One step: measured wrapper + divisions in wrapper space + applied padding → next padding.
-    static func nextInsets(measured: CGSize, divisions: [CGRect], applied: FoldInsets) -> FoldInsets {
+    static func nextInsets(measured: CGSize, divisions: [CGRect], applied: FoldInsets,
+                           squeezeHorizontally: Bool = true, maxLift: CGFloat = .infinity) -> FoldInsets {
         let natural = naturalFrame(measured: measured, applied: applied)
         let local = divisions.map { $0.offsetBy(dx: -natural.minX, dy: -natural.minY) }
-        return insets(size: natural.size, divisions: local)
+        return insets(size: natural.size, divisions: local, squeezeHorizontally: squeezeHorizontally, maxLift: maxLift)
     }
+
+    /// The composer's limit for a laptop-posture lift (see `insets`).
+    static let composerMaxLift: CGFloat = 60
 }
 
 /// [duo-windows] Which of several live chat views (oldest first) handles an

@@ -635,8 +635,9 @@ struct AIChatView: View {
                         // Register the composer (tool preview + input bar) as a
                         // region the global speech capsule must not cover.
                         .capsuleProtectedFrame("inputBar")
-                        // [duo-fold] Half-open iPhone Duo: never across the fold.
-                        .modifier(FoldAvoidingControl())
+                        // [duo-fold] Half-open iPhone Duo: lift off a laptop-posture crease by at most
+                        // 60 pt (no tall blank band) and stay full width across a book-posture one.
+                        .modifier(FoldAvoidingControl(squeezeHorizontally: false, maxLift: FoldAvoidance.composerMaxLift))
                         inputPopupOverlay
                             .padding(.bottom, inputBarHeight)
                     }
@@ -2854,22 +2855,29 @@ struct AIChatView: View {
     // MARK: - [duo-composer] Container geometry → composer layout
 
     private func applyContainerMetrics(_ m: ChatContainerMetrics) {
-        let window = hostWindow.window
+        // 首次布局时 WindowCaptureView 可能还没拿到窗口:退到当前场景的 key window,
+        // 不然一直按「没量过」处理,外接键盘的用户永远等不到第二次测量。
+        let window = hostWindow.window ?? UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.windows.first(where: \.isKeyWindow) }.first
         let visible = ChatComposerLayout.visibleHeight(containerHeight: m.height,
                                                        windowTopInset: window?.safeAreaInsets.top)
-        let short = ChatShortHeightRule.heightIsShort(
+        let dense = ChatComposerLayout.isDense(
+            windowHeight: ChatComposerLayout.windowHeight(containerHeight: m.height, bottomInset: m.bottomInset))
+        if dense != composerDense { composerDense = dense }
+        // 矮屏收缩只给 Duo 内屏横向这类「宽而矮」的窗口;iPad 横屏弹键盘不进(Fable 5.1 审计)。
+        let short = dense && ChatShortHeightRule.heightIsShort(
             visibleHeight: visible, wasShort: heightIsShort,
             verticalSizeClassRegular: vSizeClass == .regular,
             windowWidth: window?.bounds.width ?? 0)
         if short != heightIsShort { heightIsShort = short }
+        let lineHeight = UIFont.systemFont(ofSize: FontSettings.shared.scaledChatInput(16.5)).lineHeight
         let maxText = ChatComposerLayout.maxTextHeight(visibleHeight: visible,
-                                                       verticalSizeClassCompact: vSizeClass == .compact)
+                                                       verticalSizeClassCompact: vSizeClass == .compact,
+                                                       lineHeight: lineHeight,
+                                                       current: composerMaxTextHeight == ChatComposerLayout.unmeasuredMaxText ? nil : composerMaxTextHeight)
         if maxText != composerMaxTextHeight { composerMaxTextHeight = maxText }
         let bottom = ChatComposerLayout.bottomPadding(bottomInset: m.bottomInset)
         if bottom != composerBottomPadding { composerBottomPadding = bottom }
-        let dense = ChatComposerLayout.isDense(
-            windowHeight: ChatComposerLayout.windowHeight(containerHeight: m.height, bottomInset: m.bottomInset))
-        if dense != composerDense { composerDense = dense }
     }
 
     // MARK: - [duo-fold] Fold / unfold continuity

@@ -146,6 +146,9 @@ struct LeoHorizontalSystemBars: ViewModifier {
 /// it onto one side (FoldAvoidance). Fully open or closed there is no active
 /// division and nothing changes. Scrolling content is never moved.
 struct FoldAvoidingControl: ViewModifier {
+    /// Composer: false (stays full width across a book-posture fold), see FoldAvoidance.insets.
+    var squeezeHorizontally = true
+    var maxLift: CGFloat = .infinity
     @State private var applied = FoldInsets.zero
 
     func body(content: Content) -> some View {
@@ -159,7 +162,8 @@ struct FoldAvoidingControl: ViewModifier {
                                 .filter(\.isActive).map(\.frame))
                 } action: { probe in
                     let next = probe.divisions.isEmpty ? FoldInsets.zero
-                        : FoldAvoidance.nextInsets(measured: probe.size, divisions: probe.divisions, applied: applied)
+                        : FoldAvoidance.nextInsets(measured: probe.size, divisions: probe.divisions, applied: applied,
+                                                   squeezeHorizontally: squeezeHorizontally, maxLift: maxLift)
                     if next != applied { applied = next }
                 }
         } else {

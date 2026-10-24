@@ -85,7 +85,8 @@ final class DuoAdaptationTests: XCTestCase {
         XCTAssertEqual(20 + C.bottomPadding(bottomInset: 20), 12)
         // Keyboard / accessory bar, or no inset at all: 8 pt gap as before.
         XCTAssertEqual(C.bottomPadding(bottomInset: 348), 8)
-        XCTAssertEqual(C.bottomPadding(bottomInset: 55), 8)
+        // 44…64 线性过渡(键盘收起最后几帧、硬件键盘快捷栏),64 起回到 8。
+        XCTAssertEqual(C.bottomPadding(bottomInset: 64), 8)
         XCTAssertEqual(C.bottomPadding(bottomInset: 0), 8)
         // With an indicator the card keeps at least 60 % of the inset to the edge.
         for inset in stride(from: CGFloat(1), through: C.homeIndicatorMaxInset, by: 1) {
@@ -354,7 +355,9 @@ final class DuoAdaptationTests: XCTestCase {
         XCTAssertTrue(chat.contains("maxTextHeight: composerMaxTextHeight"), "composer text cap follows the visible height")
         XCTAssertTrue(chat.contains(".padding(.bottom, composerBottomPadding)"), "card sits just above the home indicator")
         // P1-2: composer stack, ↑↓ discs, new-message pill, download button.
-        XCTAssertEqual(chat.components(separatedBy: ".modifier(FoldAvoidingControl())").count - 1, 4)
+        XCTAssertEqual(chat.components(separatedBy: ".modifier(FoldAvoidingControl())").count - 1, 3)
+        XCTAssertTrue(chat.contains(".modifier(FoldAvoidingControl(squeezeHorizontally: false, maxLift: FoldAvoidance.composerMaxLift))"),
+                      "composer: full width across a book fold, lift ≤ 60 pt")
         XCTAssertTrue(pill.contains("proxy.reservedRegions(kind: .division)"))
         // P1-3: composer shell, input popups, activity strip.
         XCTAssertTrue(chat.contains(".modifier(ChatComposerShell(namespace: chatComposerGlassNS))"))
@@ -387,5 +390,42 @@ final class DuoAdaptationTests: XCTestCase {
         for text in [chat, bar, home] {
             XCTAssertFalse(text.contains("userInterfaceIdiom == .pad"), "drag and drop works on the iPhone idiom too")
         }
+    }
+
+    // MARK: Fable 5.1 审计(输入框)
+
+    func testComposerCapIgnoresSmallChangesWhileTyping() {
+        // 预测栏开合 / 键盘动画让目标差 20 pt:保持当前上限,不让整框跳
+        XCTAssertEqual(ChatComposerLayout.maxTextHeight(visibleHeight: 496, verticalSizeClassCompact: false, current: 140), 140)
+        // 差得多(键盘弹出 160 → 3 行)才改
+        XCTAssertEqual(ChatComposerLayout.maxTextHeight(visibleHeight: 265, verticalSizeClassCompact: false, current: 160), 60)
+        XCTAssertEqual(ChatComposerLayout.maxTextHeight(visibleHeight: 496, verticalSizeClassCompact: false, current: nil), 120)
+    }
+
+    func testComposerCapScalesWithTheInputFontsLineHeight() {
+        // 1.5 倍字号(行高 30):最少 3 行 = 90,不是 60
+        XCTAssertEqual(ChatComposerLayout.maxTextHeight(visibleHeight: 265, verticalSizeClassCompact: false, lineHeight: 30), 90)
+        XCTAssertEqual(ChatComposerLayout.maxTextHeight(visibleHeight: 2000, verticalSizeClassCompact: false, lineHeight: 30), 240)
+        XCTAssertEqual(ChatComposerLayout.maxTextHeight(visibleHeight: 0, verticalSizeClassCompact: true, lineHeight: 30), 90)
+    }
+
+    func testBottomPaddingBlendsBetweenHomeIndicatorAndKeyboard() {
+        let atIndicator = ChatComposerLayout.bottomPadding(bottomInset: 44)
+        let mid = ChatComposerLayout.bottomPadding(bottomInset: 54)
+        XCTAssertLessThan(atIndicator, mid)
+        XCTAssertLessThan(mid, ChatComposerLayout.keyboardGap)
+        XCTAssertEqual(ChatComposerLayout.bottomPadding(bottomInset: 64), ChatComposerLayout.keyboardGap)
+        XCTAssertEqual(ChatComposerLayout.bottomPadding(bottomInset: 336), ChatComposerLayout.keyboardGap)
+    }
+
+    func testComposerStaysFullWidthAcrossABookFoldAndNeverLiftsMoreThan60() {
+        let composer = CGSize(width: 900, height: 140)
+        let bookFold = CGRect(x: 470, y: -400, width: 12, height: 900)
+        XCTAssertEqual(FoldAvoidance.insets(size: composer, divisions: [bookFold], squeezeHorizontally: false), .zero)
+        XCTAssertNotEqual(FoldAvoidance.insets(size: composer, divisions: [bookFold]), .zero, "pills still move off the fold")
+        let laptopFoldNearTop = CGRect(x: 0, y: 20, width: 900, height: 12)   // would need a 120 pt lift
+        XCTAssertEqual(FoldAvoidance.insets(size: composer, divisions: [laptopFoldNearTop], maxLift: FoldAvoidance.composerMaxLift), .zero)
+        let laptopFoldNearBottom = CGRect(x: 0, y: 110, width: 900, height: 12)
+        XCTAssertEqual(FoldAvoidance.insets(size: composer, divisions: [laptopFoldNearBottom], maxLift: FoldAvoidance.composerMaxLift).bottom, 30)
     }
 }

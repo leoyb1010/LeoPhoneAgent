@@ -1018,6 +1018,8 @@ class PastableUITextView: UITextView, UIDropInteractionDelegate {
         let size = sizeThatFits(CGSize(width: bounds.width, height: .greatestFiniteMagnitude))
         let clamped = min(size.height, maxHeight)
         isScrollEnabled = size.height > maxHeight
+        // [leo] 缩回不再滚动时回到顶部,不留半截被裁掉的第一行。
+        if !isScrollEnabled, contentOffset != .zero { contentOffset = .zero }
         return CGSize(width: UIView.noIntrinsicMetric, height: clamped)
     }
 
@@ -1453,6 +1455,11 @@ struct PastableTextFieldRepresentable: UIViewRepresentable {
         if tv.maxHeight != maxHeight {
             tv.maxHeight = maxHeight
             tv.invalidateIntrinsicContentSize()
+            // [leo] 上限变小(弹键盘)时长草稿开始滚动:把光标那一行滚进来,不让它藏在框外(Fable 5.1 审计)。
+            DispatchQueue.main.async { [weak tv] in
+                guard let tv, tv.isScrollEnabled, tv.isFirstResponder else { return }
+                tv.scrollRangeToVisible(tv.selectedRange)
+            }
         }
         if tv.text != text, tv.markedTextRange == nil || text.isEmpty {
             // [T-ios-composer-residual-text-33549] Clearing the composer
