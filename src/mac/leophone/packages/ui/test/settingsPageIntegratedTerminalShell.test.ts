@@ -385,7 +385,7 @@ describe("SettingsPage integrated terminal shell", () => {
       const html = renderToStaticMarkup(createElement(SettingsPage, props));
 
       expect(html).toContain("grid-cols-[68px_minmax(0,1fr)]");
-      expect(html).toContain("lg:grid-cols-[268px_minmax(0,1fr)]");
+      expect(html).toContain("md:grid-cols-[208px_minmax(0,1fr)] lg:grid-cols-[256px_minmax(0,1fr)]");
       expect(html).toMatch(/data-settings-content-frame="true"[^>]*p-1 pl-0 pt-0/);
       expect(html).toContain('data-settings-top-inset="true"');
     },

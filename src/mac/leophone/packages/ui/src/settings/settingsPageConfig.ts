@@ -32,8 +32,9 @@ export const THEME_MODES: Array<{
   { mode: "zai-light", icon: Sun },
 ];
 
-// [leo] 与 iOS 设置页对齐的四组信息架构，见 docs/specs/leo-settings-ia.md。
-export type SettingsSectionGroupId = "providers" | "agent" | "devices" | "general";
+// [leo] 1.20：三组信息架构（模型与智能体 / 我的设备 / 通用）。iOS 分组更细（8 组 + 常用方块），
+// 两端条目不同，不再强求一一对齐；见 docs/specs/leo-settings-ia.md。
+export type SettingsSectionGroupId = "agent" | "devices" | "general";
 
 interface SettingsSectionDefinition {
   id: SettingsSectionId;
@@ -54,7 +55,6 @@ const BASE_SETTINGS_SECTION_GROUPS: Array<{
   id: SettingsSectionGroupId;
   titleId: string;
 }> = [
-  { id: "providers", titleId: "settings.sidebar.group.providers" },
   { id: "agent", titleId: "settings.sidebar.group.agent" },
   { id: "devices", titleId: "settings.sidebar.group.devices" },
   { id: "general", titleId: "settings.sidebar.group.general" },
@@ -79,7 +79,8 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     hintId: "settings.modelProvider.hint",
     keywords:
       "provider providers api key 密钥 模型 model models llm openai anthropic claude gemini 供应商 服务商 base url oauth 订阅",
-    groupId: "providers",
+    // [leo] 1.20：原「AI 服务商」组只有这一项，并入「模型与智能体」排第一。
+    groupId: "agent",
   },
   {
     id: "memory",

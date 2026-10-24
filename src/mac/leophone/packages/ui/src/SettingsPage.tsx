@@ -143,10 +143,22 @@ function SettingsUsageProviderTabs() {
   );
 }
 
+/** [leo] 1.20：每组一个色系，颜色只放在图标块上（系统设置式实色圆角块 + 白色线性图标），扫一眼就分得出组。 */
+const SETTINGS_GROUP_TILE_CLASS: Record<string, string> = {
+  agent: "bg-indigo-500 dark:bg-indigo-500/90",
+  devices: "bg-teal-500 dark:bg-teal-500/90",
+  general: "bg-slate-500 dark:bg-slate-500/90",
+};
+
+export function settingsGroupTileClass(groupId: string | undefined): string {
+  return (groupId && SETTINGS_GROUP_TILE_CLASS[groupId]) || "bg-slate-500 dark:bg-slate-500/90";
+}
+
 function SettingsSidebarButton({
   icon: Icon,
   label,
   active,
+  tileClassName,
   children,
   className,
   ...buttonProps
@@ -154,6 +166,8 @@ function SettingsSidebarButton({
   icon: LucideIcon;
   label: string;
   active?: boolean;
+  /** 图标块底色（按所在分组）。 */
+  tileClassName?: string;
   children?: ReactNode;
   className?: string;
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
@@ -164,20 +178,27 @@ function SettingsSidebarButton({
         type={buttonProps.type ?? "button"}
         aria-label={label}
         className={cn(
-          // [leo] 紧凑导航：行高 h-7、小图标，与 iOS 设置列表的密度对齐。
-          "flex h-7 w-full items-center gap-2 rounded-lg px-2.5 text-left transition-colors",
-          "max-lg:mx-auto max-lg:size-10 max-lg:justify-center max-lg:px-0",
+          // [leo] 1.20：行高 h-8，左侧实色图标块；选中态用系统式整行底色 + 中等字重（不加左侧色条）。
+          "flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left",
+          "transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none",
+          "max-md:mx-auto max-md:size-10 max-md:justify-center max-md:px-0",
           active
-            ? "bg-surface-hover text-foreground"
-            : "text-foreground-subtle hover:bg-surface-hover hover:text-foreground",
+            ? "bg-selected font-medium text-foreground"
+            : "text-foreground hover:bg-hover",
           className,
         )}
       >
-        <span className="flex size-4 shrink-0 items-center justify-center text-current">
-          <Icon className="size-3.5 text-foreground-subtle max-lg:size-4" />
+        <span
+          className={cn(
+            "flex size-5 shrink-0 items-center justify-center rounded-[6px] text-white shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.12)]",
+            "max-md:size-6",
+            tileClassName ?? settingsGroupTileClass(undefined),
+          )}
+        >
+          <Icon className="size-3 max-md:size-3.5" strokeWidth={2.25} />
         </span>
-        <span className="min-w-0 flex-1 max-lg:sr-only">
-          {children ?? <span className="truncate text-ui-base text-foreground">{label}</span>}
+        <span className="min-w-0 flex-1 max-md:sr-only">
+          {children ?? <span className="truncate text-ui-base">{label}</span>}
         </span>
       </button>
     </ControlHintTooltip>
@@ -1164,7 +1185,7 @@ export function SettingsPage({
           data-active-section={activeSection}
           // 隐式 auto 行会按 Memory viewer 的内容高度撑出窗口，随后被 DesktopWindowFrame 裁切且没有滚动条。
           // 固定为单个 minmax(0, 1fr) 行，让普通设置页和内部滚动 viewer 都以窗口剩余高度为边界。
-          className="relative grid h-screen min-h-full w-full grid-cols-[68px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] lg:grid-cols-[268px_minmax(0,1fr)]"
+          className="relative grid h-screen min-h-full w-full grid-cols-[68px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] md:grid-cols-[208px_minmax(0,1fr)] lg:grid-cols-[256px_minmax(0,1fr)]"
         >
           {isWindowsDesktop ? <WindowsTopLeftLogo /> : null}
 
@@ -1197,7 +1218,7 @@ export function SettingsPage({
                       aria-label={intl.formatMessage({
                         id: "workspace.backToWorkspace",
                       })}
-                      className="m-1 w-[calc(100%-0.5rem)] justify-start gap-2 rounded-xl px-1.5 text-foreground-subtle hover:bg-surface-hover hover:text-foreground max-lg:m-1 max-lg:size-10 max-lg:justify-center max-lg:px-0"
+                      className="m-1 w-[calc(100%-0.5rem)] justify-start gap-2 rounded-xl px-1.5 text-foreground-subtle hover:bg-surface-hover hover:text-foreground max-md:m-1 max-md:size-10 max-md:justify-center max-md:px-0"
                       onClick={() => {
                         runUserAction({
                           input: {
@@ -1217,7 +1238,7 @@ export function SettingsPage({
                       }}
                     >
                       <ArrowLeft className="size-4" />
-                      <span className="max-lg:sr-only">
+                      <span className="max-md:sr-only">
                         {intl.formatMessage({
                           id: "workspace.backToWorkspace",
                         })}
@@ -1239,7 +1260,7 @@ export function SettingsPage({
                 // 并在还有内容时给底边加渐隐（leo-scroll-fade，见 leo-skin.css）。
                 className="leo-scroll-fade flex-1 overflow-y-auto px-2 pb-3"
               >
-                <div className="px-0.5 pb-3 max-lg:hidden">
+                <div className="px-0.5 pb-3 max-md:hidden">
                   <SettingsSearchInput
                     ref={settingsSearchInputRef}
                     value={settingsSearchQuery}
@@ -1279,7 +1300,7 @@ export function SettingsPage({
                     aria-label={intl.formatMessage({
                       id: "settings.navSearch.placeholder",
                     })}
-                    className="space-y-0.5 max-lg:hidden"
+                    className="space-y-0.5 max-md:hidden"
                   >
                     {settingsSearchResults.length === 0 ? (
                       <div className="px-2.5 py-1 text-ui-sm text-foreground-subtle">
@@ -1318,7 +1339,7 @@ export function SettingsPage({
                     )}
                   </div>
                 ) : null}
-                <div className={cn("space-y-3", isSettingsSearching && "lg:hidden")}>
+                <div className={cn("space-y-4", isSettingsSearching && "md:hidden")}>
                   {settingsSectionGroups.map((group, groupIndex) => {
                     const groupLabel = intl.formatMessage({
                       id: group.titleId,
@@ -1332,12 +1353,12 @@ export function SettingsPage({
                         aria-labelledby={groupLabelId}
                         className={cn(
                           "space-y-0.5",
-                          groupIndex > 0 && "max-lg:border-t max-lg:border-border max-lg:pt-3",
+                          groupIndex > 0 && "max-md:border-t max-md:border-border max-md:pt-3",
                         )}
                       >
                         <div
                           id={groupLabelId}
-                          className="px-2.5 pb-0.5 text-ui-xs font-medium text-foreground-subtlest max-lg:sr-only"
+                          className="px-2 pb-1 text-ui-xs font-medium tracking-wide text-foreground-subtlest max-md:sr-only"
                         >
                           {groupLabel}
                         </div>
@@ -1351,6 +1372,7 @@ export function SettingsPage({
                               icon={Icon}
                               label={label}
                               active={isActive}
+                              tileClassName={settingsGroupTileClass(group.id)}
                               aria-current={isActive ? "page" : undefined}
                               data-testid={testId(TID_SETTINGS_SECTION_NAV, id)}
                               onClick={() => {
@@ -1378,7 +1400,7 @@ export function SettingsPage({
                                 });
                               }}
                             >
-                              <span className="truncate text-ui-base text-foreground">{label}</span>
+                              <span className="truncate text-ui-base">{label}</span>
                             </SettingsSidebarButton>
                           );
                         })}
@@ -1388,7 +1410,7 @@ export function SettingsPage({
                 </div>
               </nav>
 
-              <div className="max-lg:hidden">
+              <div className="max-md:hidden">
                 <WorkspaceSidebarFooter
                   theme={theme}
                   localeMenuValue={localePreference}
@@ -1418,7 +1440,7 @@ export function SettingsPage({
           >
             <div
               data-settings-top-inset={isDesktop ? "true" : undefined}
-              className={cn("[app-region:drag]", isDesktop && "h-1", isMacDesktop && "max-lg:h-16")}
+              className={cn("[app-region:drag]", isDesktop && "h-1", isMacDesktop && "max-md:h-16")}
             />
             <div
               data-settings-panel-frame="true"
@@ -1451,8 +1473,8 @@ export function SettingsPage({
                 <div className="flex min-h-0 flex-1 flex-col">
                   <div className="flex h-12 shrink-0">
                     <div
-                      // Settings 窄布局会像左侧导航一样在 max-lg 收成 icon rail。
-                      // 此时外层已经提供 max-lg:h-16 的顶部拖拽/避让区，内层 h-10 再保留会把内容额外压低。
+                      // Settings 窄布局（<768px）会像左侧导航一样在 max-md 收成 icon rail。
+                      // 此时外层已经提供 max-md:h-16 的顶部拖拽/避让区，内层 h-10 再保留会把内容额外压低。
                       // Electron 的 drag 区不能和右上角帮助/窗口按钮命中区域重叠；
                       // 这里把右侧按钮区域从拖拽条里让出来，避免真实鼠标点击被标题栏拖拽吞掉。
                       // Windows/Linux 设置页共同避开右上角菜单与内联窗控组。
@@ -1484,7 +1506,17 @@ export function SettingsPage({
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="flex min-w-0 flex-wrap items-center gap-3">
                             {showActiveSectionTitle ? (
-                              <h2 className="text-ui-xl font-semibold tracking-tight text-foreground">
+                              <h2 className="flex items-center gap-2.5 text-ui-xl font-semibold tracking-tight text-foreground">
+                                {/* [leo] 1.20：页头放同色图标块，和左侧导航那一行对上。 */}
+                                <span
+                                  aria-hidden="true"
+                                  className={cn(
+                                    "flex size-7 shrink-0 items-center justify-center rounded-[8px] text-white",
+                                    settingsGroupTileClass(headerEntry.groupId),
+                                  )}
+                                >
+                                  <headerEntry.icon className="size-4" strokeWidth={2.25} />
+                                </span>
                                 {headerTitle}
                               </h2>
                             ) : null}

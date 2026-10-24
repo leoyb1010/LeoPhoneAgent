@@ -34,8 +34,7 @@ describe("settingsPageConfig", () => {
         sections: group.sections.map((section) => section.id),
       })),
     ).toEqual([
-      { id: "providers", sections: ["modelProvider"] },
-      { id: "agent", sections: ["memory", "subagents", "extensions"] },
+      { id: "agent", sections: ["modelProvider", "memory", "subagents", "extensions"] },
       { id: "devices", sections: ["browser"] },
       { id: "general", sections: ["general", "appearance", "shortcuts", "usage"] },
     ]);
@@ -107,12 +106,10 @@ describe("settingsPageConfig", () => {
 
   it("侧栏分组标题同时提供中英文文案", () => {
     // [leo] Leo groups (aligned with iOS settings).
-    expect(enUS["settings.sidebar.group.providers"]).toBe("AI Providers");
-    expect(enUS["settings.sidebar.group.agent"]).toBe("Agent");
+    expect(enUS["settings.sidebar.group.agent"]).toBe("Models & Agents");
     expect(enUS["settings.sidebar.group.devices"]).toBe("Devices");
     expect(enUS["settings.sidebar.group.general"]).toBe("General");
-    expect(zhCN["settings.sidebar.group.providers"]).toBe("AI 服务商");
-    expect(zhCN["settings.sidebar.group.agent"]).toBe("智能体");
+    expect(zhCN["settings.sidebar.group.agent"]).toBe("模型与智能体");
     expect(zhCN["settings.sidebar.group.devices"]).toBe("我的设备");
     expect(zhCN["settings.sidebar.group.general"]).toBe("通用");
   });

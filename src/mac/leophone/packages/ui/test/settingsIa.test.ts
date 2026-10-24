@@ -23,12 +23,11 @@ function navIds(config: ReturnType<typeof createSettingsPageConfig>) {
   ]);
 }
 
-test("desktop settings nav has four groups in iOS order", () => {
+test("desktop settings nav has three groups; model providers lead the first", () => {
   const config = createSettingsPageConfig({ isDesktop: true, isMacDesktop: true });
   assert.deepEqual(navIds(config), [
-    ["providers", ["modelProvider"]],
-    // [WP-21] 外部 agent（ACP）跟在扩展后面
-    ["agent", ["memory", "subagents", "extensions", "externalAgents"]],
+    // [WP-21] 外部 agent（ACP）跟在扩展后面；1.20 起「AI 服务商」并入第一组
+    ["agent", ["modelProvider", "memory", "subagents", "extensions", "externalAgents"]],
     ["devices", ["phone", "browser", "computerUse"]],
     ["general", ["general", "appearance", "shortcuts", "usage"]],
   ]);
