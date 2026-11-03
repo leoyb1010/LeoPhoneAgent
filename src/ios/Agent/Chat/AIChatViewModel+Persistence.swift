@@ -199,7 +199,7 @@ extension AIChatViewModel {
         memoryEnabled = await ChatStore.shared.getMemoryEnabled(sessionId: sessionId)
         // [T-memory-enabled-new-session-bug DIAG] confirm loadSession set
         // vm.memoryEnabled from the DB/global default, and which session.
-        AppLogger(category: "MemDiag").info("[MemDiag] loadSession sid=\(sessionId.prefix(8)) → vm.memoryEnabled=\(self.memoryEnabled)")
+        AppLogger(category: "MemDiag").verbose("[MemDiag] loadSession sid=\(sessionId.prefix(8)) → vm.memoryEnabled=\(self.memoryEnabled)")
 
         // Clear stale compact/pending state from previous lifecycle
         skipCompactCheck = false
@@ -1037,7 +1037,7 @@ extension AIChatViewModel {
             await ChatStore.shared.setMemoryEnabled(sessionId: session.id, enabled: override)
         }
         memoryEnabled = await ChatStore.shared.getMemoryEnabled(sessionId: session.id)
-        AppLogger(category: "MemDiag").info("[MemDiag] ensureSession sid=\(session.id.prefix(8)) → vm.memoryEnabled=\(self.memoryEnabled)")
+        AppLogger(category: "MemDiag").verbose("[MemDiag] ensureSession sid=\(session.id.prefix(8)) → vm.memoryEnabled=\(self.memoryEnabled)")
         // Tracker migration: if this vm was marked active under its draftId,
         // swap that entry to the real session id. draftId is kept on the vm
         // itself (sidebar UX still references it until the proxy row is

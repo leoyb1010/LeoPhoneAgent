@@ -20,7 +20,7 @@ enum ModelGroupRouter {
                         verbose: Bool = true) -> String? {
         let available = availableEntryIds(group: group, store: store, verbose: verbose)
         if verbose {
-            logger.info("🔀ROUTE resolve group=\(group.name) strategy=\(group.strategy.rawValue) members=\(group.memberEntryIds) available=\(available)")
+            logger.verbose("🔀ROUTE resolve group=\(group.name) strategy=\(group.strategy.rawValue) members=\(group.memberEntryIds) available=\(available)")
         }
         guard !available.isEmpty else {
             if verbose { logger.warning("🔀ROUTE resolve: no available entries") }
@@ -29,14 +29,14 @@ enum ModelGroupRouter {
 
         switch group.strategy {
         case .fallback:
-            if verbose { logger.info("🔀ROUTE resolve fallback → \(available.first!)") }
+            if verbose { logger.verbose("🔀ROUTE resolve fallback → \(available.first!)") }
             return available.first
 
         case .loadBalance:
             // 稳定哈希:String.hashValue 每次启动换种子,重启后同一会话会换到别的成员(提示缓存失效);
             // abs(Int.min) 还会陷阱崩溃。
             let index = Int(Self.stableHash(sessionId) % UInt64(available.count))
-            if verbose { logger.info("🔀ROUTE resolve loadBalance index=\(index) → \(available[index])") }
+            if verbose { logger.verbose("🔀ROUTE resolve loadBalance index=\(index) → \(available[index])") }
             return available[index]
         }
     }
@@ -58,7 +58,7 @@ enum ModelGroupRouter {
         store: ProviderConfigStore
     ) -> String? {
         let available = availableEntryIds(group: group, store: store)
-        logger.info("🔀ROUTE nextFallback current=\(currentEntryId) available=\(available)")
+        logger.verbose("🔀ROUTE nextFallback current=\(currentEntryId) available=\(available)")
         guard let currentIdx = available.firstIndex(of: currentEntryId) else {
             // Current entry not found in available list — try first available
             logger.warning("🔀ROUTE nextFallback: current entry not in available list, falling back to first=\(available.first ?? "nil")")
@@ -69,17 +69,17 @@ enum ModelGroupRouter {
         // This ensures each reasoning turn can cycle through all providers exactly once.
         let remaining = available[(currentIdx + 1)...]
         if let next = remaining.first {
-            logger.info("🔀ROUTE nextFallback: currentIdx=\(currentIdx) → next=\(next)")
+            logger.verbose("🔀ROUTE nextFallback: currentIdx=\(currentIdx) → next=\(next)")
             return next
         }
 
         let before = available[..<currentIdx]
         if let wrapped = before.first {
-            logger.info("🔀ROUTE nextFallback: wrap-around → \(wrapped)")
+            logger.verbose("🔀ROUTE nextFallback: wrap-around → \(wrapped)")
             return wrapped
         }
 
-        logger.info("🔀ROUTE nextFallback: no more entries (single entry group)")
+        logger.verbose("🔀ROUTE nextFallback: no more entries (single entry group)")
         return nil
     }
 
@@ -124,7 +124,7 @@ enum ModelGroupRouter {
                 return false
             }
             guard !entry.isHidden else {
-                if verbose { logger.info("🔀ROUTE filter: entry \(entryId) is hidden") }
+                if verbose { logger.verbose("🔀ROUTE filter: entry \(entryId) is hidden") }
                 return false
             }
             guard let instance = store.instance(for: entry.providerInstanceId) else {
@@ -132,11 +132,11 @@ enum ModelGroupRouter {
                 return false
             }
             guard instance.isEnabled else {
-                if verbose { logger.info("🔀ROUTE filter: instance \(instance.label) (\(instance.id)) disabled for entry \(entryId)") }
+                if verbose { logger.verbose("🔀ROUTE filter: instance \(instance.label) (\(instance.id)) disabled for entry \(entryId)") }
                 return false
             }
             guard instance.hasAnyCredential else {
-                if verbose { logger.info("🔀ROUTE filter: instance \(instance.label) (\(instance.id)) has no credential for entry \(entryId)") }
+                if verbose { logger.verbose("🔀ROUTE filter: instance \(instance.label) (\(instance.id)) has no credential for entry \(entryId)") }
                 return false
             }
             return true

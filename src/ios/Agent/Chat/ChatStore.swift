@@ -948,7 +948,7 @@ actor ChatStore {
         // UserDefaults and what we bind, so a live repro shows whether the
         // global default is reaching createSession.
         let rawObj = UserDefaults.standard.object(forKey: "memory.global.enabled")
-        memDiagLogger.info("[MemDiag] createSession sid=\(session.id.prefix(8)) rawDefaults=\(String(describing: rawObj)) resolved=\(globalMemoryEnabled) → bind memory_enabled=\(globalMemoryEnabled ? 1 : 0)")
+        memDiagLogger.verbose("[MemDiag] createSession sid=\(session.id.prefix(8)) rawDefaults=\(String(describing: rawObj)) resolved=\(globalMemoryEnabled) → bind memory_enabled=\(globalMemoryEnabled ? 1 : 0)")
 
         // preview_text '' = "computed, nothing displayable yet": a brand-new
         // session never needs the NULL backfill path. [T-ios-listsessions-perf]
@@ -966,7 +966,7 @@ actor ChatStore {
             bindOptionalText(stmt, index: 9, value: parentToolUseId)
             let rc = sqlite3_step(stmt)
             if rc == SQLITE_DONE { SessionProvenanceStore.createdLocally(db, id: session.id, deviceID: DeviceIdentity.deviceId) }
-            memDiagLogger.info("[MemDiag] createSession INSERT step rc=\(rc) (101=DONE) sid=\(session.id.prefix(8))")
+            memDiagLogger.verbose("[MemDiag] createSession INSERT step rc=\(rc) (101=DONE) sid=\(session.id.prefix(8))")
         } else {
             memDiagLogger.error("[MemDiag] createSession prepare FAILED sid=\(session.id.prefix(8))")
         }
@@ -1893,17 +1893,17 @@ actor ChatStore {
         // [T-memory-enabled-new-session-bug DIAG]
         let rawObj = UserDefaults.standard.object(forKey: "memory.global.enabled")
         if rowFound {
-            memDiagLogger.info("[MemDiag] getMemoryEnabled sid=\(sessionId.prefix(8)) rowFound=true storedRow=\(enabled) (returning storedRow) globalRaw=\(String(describing: rawObj))")
+            memDiagLogger.verbose("[MemDiag] getMemoryEnabled sid=\(sessionId.prefix(8)) rowFound=true storedRow=\(enabled) (returning storedRow) globalRaw=\(String(describing: rawObj))")
             return enabled
         }
         // No row — apply global default. UserDefaults.bool returns false
         // for unset keys, so probe presence via object(forKey:) first
         // and treat absent as true (matches @AppStorage default).
         if let stored = UserDefaults.standard.object(forKey: "memory.global.enabled") as? Bool {
-            memDiagLogger.info("[MemDiag] getMemoryEnabled sid=\(sessionId.prefix(8)) rowFound=false → global=\(stored)")
+            memDiagLogger.verbose("[MemDiag] getMemoryEnabled sid=\(sessionId.prefix(8)) rowFound=false → global=\(stored)")
             return stored
         }
-        memDiagLogger.info("[MemDiag] getMemoryEnabled sid=\(sessionId.prefix(8)) rowFound=false global unset → true")
+        memDiagLogger.verbose("[MemDiag] getMemoryEnabled sid=\(sessionId.prefix(8)) rowFound=false global unset → true")
         return true
     }
 

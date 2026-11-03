@@ -4848,7 +4848,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // value the injection actually keys off. Trace it against the
         // session so a repro shows whether loadSession seeded it from the
         // global default.
-        AppLogger(category: "MemDiag").info("[MemDiag] inject-decision sid=\(self.sessionId?.prefix(8) ?? "nil") vm.memoryEnabled=\(self.memoryEnabled)")
+        AppLogger(category: "MemDiag").verbose("[MemDiag] inject-decision sid=\(self.sessionId?.prefix(8) ?? "nil") vm.memoryEnabled=\(self.memoryEnabled)")
         var userSystemPrompt = composeUserSystemPrompt(for: activeModel)
 
         let promptBuildMs = (CFAbsoluteTimeGetCurrent() - loopSetupStart) * 1000
