@@ -34,6 +34,13 @@ struct BrainLibraryView: View {
                         icon: { Image(systemName: "star.square.on.square") }
                     }
                 }
+                Section {
+                    Button { model.showWorkspace = true } label: {
+                        Label { VStack(alignment: .leading) { Text("分类检索"); Text("全库、文件、图片、视频、知识卡;私密影像解锁后在本机看").font(.caption).foregroundStyle(.secondary) } }
+                        icon: { Image(systemName: "square.grid.2x2") }
+                    }
+                    .accessibilityIdentifier("brain.workspace")
+                }
                 if !uploads.isEmpty {
                     Section("最近发到资料库的") {
                         ForEach(uploads.prefix(5), id: \.id) { u in
@@ -73,7 +80,7 @@ struct BrainLibraryView: View {
         }
         .task { uploads = (try? await BrainSpaceAPI.shared.get("/uploads", query: [("limit", "10")], as: BrainUploadList.self).items) ?? [] }
         .navigationDestination(for: BrainDocTarget.self) { BrainDocView(target: $0) }
-        .navigationDestination(for: BrainMediaRow.self) { BrainMediaDetailView(row: $0) }
+        .navigationDestination(for: BrainSpaceMediaRow.self) { BrainSpaceMediaDetailView(row: $0) }
     }
 
     @ViewBuilder private func resultRow(_ item: BrainSearchPage.Item) -> some View {
@@ -96,7 +103,7 @@ struct BrainLibraryView: View {
             }
         }
         if isMedia {
-            NavigationLink(value: BrainMediaRow(id: item.id, title: item.title, ext: item.ext, mediaKind: item.mediaKind)) { content }
+            NavigationLink(value: BrainSpaceMediaRow(id: item.id, title: item.title, ext: item.ext, mediaKind: item.mediaKind)) { content }
         } else if kind == "card" {
             Button { model.webPage = BrainWebPage(id: "card/" + item.id, title: item.title ?? "知识卡") } label: { content }.buttonStyle(.plain)
         } else {

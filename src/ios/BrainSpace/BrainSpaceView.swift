@@ -38,6 +38,7 @@ final class BrainSpaceModel: ObservableObject {
     @Published var showSteward = false
     @Published var showUpload = false
     @Published var showPhoneCollections = false
+    @Published var showWorkspace = false
     @Published var webPage: BrainWebPage?
     @Published var toast: String?
     @Published var stewardNeedsYou = false
@@ -105,7 +106,8 @@ struct BrainSpaceView: View {
         }
         .sheet(isPresented: $model.showSteward) { BrainStewardSheet().environmentObject(model).tint(BrainTheme.accent) }
         .sheet(isPresented: $model.showUpload) { BrainUploadSheet().environmentObject(model).tint(BrainTheme.accent) }
-        .sheet(isPresented: $model.showPhoneCollections) { CollectionsView(onClose: { model.showPhoneCollections = false }) }
+        .sheet(isPresented: $model.showPhoneCollections) { CollectionsView(onClose: { model.showPhoneCollections = false }, phoneOnly: true) }
+        .sheet(isPresented: $model.showWorkspace) { NavigationStack { BrainWorkspaceView(onClose: { model.showWorkspace = false }) }.tint(BrainTheme.accent) }
         .sheet(item: $model.webPage) { page in BrainWebSheet(page: page).tint(BrainTheme.accent) }
         .overlay(alignment: .top) {
             if let t = model.toast {

@@ -118,7 +118,7 @@ final class NativeModelJourneys: XCTestCase {
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         capture("01-quick-picker")
         search("Catalog Model 180")
-        _ = waitForText("Catalog Model 180")
+        _ = waitForText("catalog-180")
         capture("02-search-large-catalog")
         XCTAssertFalse(app.staticTexts["Disabled fixture"].exists)
         XCTAssertFalse(app.staticTexts["Hidden fixture"].exists)
@@ -311,7 +311,7 @@ final class NativeModelJourneys: XCTestCase {
     func test11DraftSelectionDoesNotCreateConversationOrChangeDefault() {
         launch("draft", large: false)
         search("DeepSeek")
-        waitForText("DeepSeek Reasoner").tap()
+        waitForText("deepseek-reasoner").tap()
         XCTAssertEqual(rootValue("audit.draft"), "relay-proxy/deepseek-reasoner")
         XCTAssertEqual(rootValue("audit.binding-count"), "1")
         XCTAssertEqual(rootValue("audit.selection"), "anthropic-direct/claude-sonnet-4")

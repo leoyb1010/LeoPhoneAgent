@@ -290,6 +290,7 @@ struct AIChatView: View {
     @State private var macChatTarget: ComposerMacTarget?
     // [T-model-quickswitch] 输入条上的模型胶囊
     @State private var showQuickModelSwitch = false
+    @State private var hasAppliedDraftChoice = false
     // [T-local-brain] 本机改写:选项菜单 + 进行中状态
     @State private var rewriting = false
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
@@ -1128,11 +1129,7 @@ struct AIChatView: View {
             })
         }
         .sheet(isPresented: $showModelPicker) {
-            NavigationStack {
-                SessionModelPicker(sessionId: vm.sessionId) {
-                    await vm.ensureSessionReturningId()
-                }
-            }
+            sessionModelSelection
             .presentationDetents([.large])
         }
         .sheet(isPresented: $showTokenUsage) {
@@ -1322,8 +1319,11 @@ struct AIChatView: View {
             claimFoldContinuity()
             vm.draftId = draftId
             vm.remoteDeviceId = remoteDeviceId
-            vm.initialGroupId = initialGroupId
-            vm.initialEntryKey = initialEntryKey
+            if !hasAppliedDraftChoice {
+                vm.initialGroupId = initialGroupId
+                vm.initialEntryKey = initialEntryKey
+                hasAppliedDraftChoice = true
+            }
             if let sessionId { AIChatViewModel.activeSessionId = sessionId }
             // [T-kernel-lazy-boot] 聊天页出现不再启动内核(以前每次 onAppear 都调一遍,冷启动、回前台、
             // 后台拉起的 UI 也各起一遍,启动本身还同步跑在主线程)。内核只在第一次真的要用时才起:
@@ -2090,8 +2090,9 @@ struct AIChatView: View {
     /// custom base) — and the model id must contain "gpt" (mirrors the
     /// official fast catalog: gpt-5.6-sol/terra/luna, gpt-5.5, gpt-5.4).
     private var activeModelSupportsFastMode: Bool {
-        let display = SessionModelDisplay(store: configStore, draftGroupId: vm.initialGroupId, draftEntryKey: vm.initialEntryKey)
-        guard let (instance, modelId) = display.resolvedInstanceAndModel(for: vm.sessionId) else { return false }
+        guard let entry = currentResolvedChatEntry,
+              let instance = configStore.instance(for: entry.providerInstanceId) else { return false }
+        let modelId = entry.model.id
         guard modelId.lowercased().contains("gpt") else { return false }
         if instance.providerType == .openAIResponses { return true }
         return instance.providerType == .openAI
@@ -2102,19 +2103,37 @@ struct AIChatView: View {
     /// [T-ios-navbar-principal-streaming-stability] Snapshot of everything
     /// titleView displays — must stay in lockstep with titleView's reads
     /// (see NavTitleKey doc). Cheap to compute per body pass.
+    private var draftRoutingPending: Bool {
+        guard vm.sessionId == nil, vm.initialEntryKey == nil,
+              let groupId = vm.initialGroupId ?? configStore.defaultPrimaryGroupId else { return false }
+        return configStore.group(for: groupId)?.strategy == .loadBalance
+    }
+    private var currentResolvedChatEntry: ModelEntry? {
+        draftRoutingPending ? nil : vm.resolveCurrentEntry()
+    }
+    private var currentChatModelLabel: String {
+        if draftRoutingPending { return AppLocalized("发送时自动选模") }
+        return currentResolvedChatEntry?.model.id ?? AppLocalized("No model selected")
+    }
+
+    private var currentModelResolvedDetail: (providerLabel: String, modelName: String)? {
+        guard let entry = currentResolvedChatEntry, let instance = configStore.instance(for: entry.providerInstanceId) else { return nil }
+        return (instance.label, entry.model.id)
+    }
+
     private var navTitleKey: NavTitleKey {
         #if DEBUG
         NavbarEvalStats.toolbarPass += 1
         #endif
         let display = SessionModelDisplay(store: configStore, draftGroupId: vm.initialGroupId, draftEntryKey: vm.initialEntryKey)
-        let resolved = display.resolvedDetail(for: vm.sessionId)
+        let resolved = currentModelResolvedDetail
         let sessionTitle: String? = (titlePillSession?.title?.trimmingCharacters(in: .whitespacesAndNewlines))
             .flatMap { $0.isEmpty ? nil : $0 }
         return NavTitleKey(
             sessionTitle: sessionTitle,
             canEditTitle: titlePillSession != nil,
             soulName: soulName,
-            modelName: display.displayName(for: vm.sessionId),
+            modelName: currentChatModelLabel,
             isGroupBound: display.isGroupBound(for: vm.sessionId),
             showFastBolt: codexFastModeEnabled && activeModelSupportsFastMode,
             resolvedText: resolved.map { "\($0.providerLabel) · \($0.modelName)" },
@@ -2132,9 +2151,9 @@ struct AIChatView: View {
 
     private var titleView: some View {
         let display = SessionModelDisplay(store: configStore, draftGroupId: vm.initialGroupId, draftEntryKey: vm.initialEntryKey)
-        let modelName = display.displayName(for: vm.sessionId)
+        let modelName = currentChatModelLabel
         let isGroupBound = display.isGroupBound(for: vm.sessionId)
-        let resolved = display.resolvedDetail(for: vm.sessionId)
+        let resolved = currentModelResolvedDetail
         let hasBinding = vm.sessionId != nil && configStore.binding(for: vm.sessionId!) != nil
         let hasProviders = !configStore.instances.isEmpty
 
@@ -2368,7 +2387,7 @@ struct AIChatView: View {
 
     /// [chat-chrome] Header pill spellings, widest first (see ModelNameCompaction).
     private func headerModelCandidates(modelName: String, isGroupBound: Bool, resolvedModel: String?) -> [String] {
-        ModelNameCompaction.headerCandidates(displayName: modelName, isGroupBound: isGroupBound, resolvedModel: resolvedModel)
+        ModelNameCompaction.headerCandidates(displayName: modelName, isGroupBound: false, resolvedModel: nil)
     }
 
     private func headerModelAccessibilityLabel(modelName: String,
@@ -3826,6 +3845,18 @@ struct AIChatView: View {
     /// Kept in an erased subtree: AIChatView.body has a documented history of
     /// blowing Swift's mangled-type decoder on cold launch when another large
     /// closure is added to the outer chain.
+    private var sessionModelSelection: some View {
+            QuickModelSwitchSheet(sessionId: vm.sessionId, resolvedEntryKey: currentResolvedChatEntry?.id,
+                ensureSessionId: nil,
+                pickedKey: vm.initialEntryKey ?? vm.initialGroupId.map { "group:" + $0 },
+                onPick: vm.sessionId == nil ? { choice in
+                    vm.objectWillChange.send()
+                    if choice.hasPrefix("group:") {
+                        vm.initialGroupId = String(choice.dropFirst(6)); vm.initialEntryKey = nil
+                    } else { vm.initialEntryKey = choice; vm.initialGroupId = nil }
+                } : nil)
+    }
+
     private var composerSheetsHost: AnyView {
         let host = Color.clear.frame(width: 0, height: 0)
         .sheet(isPresented: $showQuickTaskPicker) {
@@ -3837,9 +3868,7 @@ struct AIChatView: View {
             ComposerMacChatCover(target: target) { macChatTarget = nil }
         }
         .sheet(isPresented: $showQuickModelSwitch) {
-            QuickModelSwitchSheet(sessionId: vm.sessionId) {
-                await vm.ensureSessionReturningId()
-            }
+            sessionModelSelection
             .presentationDetents([.large])
         }
         .onReceive(NotificationCenter.default.publisher(for: .leoOpenQuickModelSwitch, object: vm)) { _ in
@@ -4012,7 +4041,7 @@ struct AIChatView: View {
         .buttonStyle(.plain)
         .hoverEffect(.lift)
         .accessibilityLabel(Text(verbatim: modelCapsuleLabel))
-        .accessibilityHint("点按管理常用模型,长按直接切换")
+        .accessibilityHint("点按查看当前模型并切换常用模型")
         .accessibilityIdentifier("chat.composer.model-pill")
         .contextMenu { pinnedQuickMenu }
     }
@@ -4023,16 +4052,7 @@ struct AIChatView: View {
     /// (删了供应商)时解析器会回落到别的条目,以前胶囊却改显示默认分组的
     /// 模型,和实际用的对不上。新对话:默认分组会用的;什么都解析不到就如实
     /// 写「未选择模型」,和标题一致(以前退回一个没配置过的内置模型名)。
-    private var modelCapsuleLabel: String {
-        if vm.sessionId != nil,
-           let label = ModelSwitcher.currentLabel(sessionId: vm.sessionId)
-                ?? vm.resolveCurrentEntry()?.model.displayName {
-            return label
-        }
-        return ModelSwitcher.defaultLabel()
-            ?? vm.resolveCurrentEntry()?.model.displayName
-            ?? AppLocalized("No model selected")
-    }
+    private var modelCapsuleLabel: String { currentChatModelLabel }
 
     /// 长按胶囊弹出的常用列表。空的时候给一句话指路,不给一个空菜单。
     @ViewBuilder

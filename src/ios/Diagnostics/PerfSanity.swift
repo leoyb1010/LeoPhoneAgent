@@ -109,3 +109,33 @@ struct ForegroundFrameTimeline {
         return out
     }
 }
+
+/// Display-link hitch accounting uses the previous frame's promised deadline,
+/// not the next frame's interval (which can change under ProMotion).
+struct ScrollHitchTimeline {
+    private(set) var hitchSeconds: Double = 0
+    private(set) var frames = 0
+    private var previousTarget: Double?
+    private var previousInterval: Double = 0
+
+    mutating func tick(timestamp: Double, targetTimestamp: Double) {
+        let interval = targetTimestamp - timestamp
+        guard timestamp.isFinite, targetTimestamp.isFinite, interval > 0 else { return }
+        if let target = previousTarget {
+            let excess = timestamp - target
+            if excess > previousInterval * 0.5 { hitchSeconds += excess }
+        }
+        frames += 1
+        previousTarget = targetTimestamp
+        previousInterval = interval
+    }
+
+    mutating func finish(at timestamp: Double) {
+        guard timestamp.isFinite, let target = previousTarget else { return }
+        // Resign/background may run before a delayed display-link callback.
+        // Settle the foreground tail now; a second finish cannot count it twice.
+        let excess = timestamp - target
+        if excess > previousInterval * 0.5 { hitchSeconds += excess }
+        previousTarget = nil
+    }
+}

@@ -1,5 +1,6 @@
 import Foundation
 import MetricKit
+import Security
 import QuartzCore
 import UIKit
 import os
@@ -32,6 +33,8 @@ enum LeoPerf {
     private static let queue = DispatchQueue(label: "com.leoyuan.leophoneagent.LeoPerf", qos: .utility)
     private static let lock = NSLock()
     private static let maxBytes: UInt64 = 1_000_000
+    private static let runID = UUID().uuidString
+    private static let build = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "?"
     private static let version = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "?"
 
     private static let fileURL: URL? = {
@@ -60,6 +63,7 @@ enum LeoPerf {
             LeoPerf.wasInBackground = true; LeoPerf.backgroundEpoch += 1; LeoPerf.settleAnchor = nil
             LeoPerf.lock.unlock()
             ForegroundFrameMeter.shared.stop()
+            ScrollHitchMeter.shared.end(interrupted: true)
             // 回前台后没等到 active 就又退回后台时,不会再有 willResignActive 把它关掉。
             HangCounter.shared.setActive(false)
         }
@@ -94,6 +98,7 @@ enum LeoPerf {
             }
         }
         center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in
+            ScrollHitchMeter.shared.end(interrupted: true)
             HangCounter.shared.setActive(false)
         }
     }
@@ -105,12 +110,31 @@ enum LeoPerf {
         queue.async {
             guard let url = LeoPerf.fileURL else { return }
             var obj: [String: Any] = ["t": (now * 1000).rounded() / 1000, "e": event,
-                                      "ms": (ms * 10).rounded() / 10, "v": LeoPerf.version]
+                                      "ms": (ms * 10).rounded() / 10, "v": LeoPerf.version,
+                                      "build": LeoPerf.build, "run": LeoPerf.runID]
+            if let origin = LeoPerf.measurementOrigin { obj["origin"] = origin }
             for (k, v) in extra { obj[k] = v }
             guard let data = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]) else { return }
             LeoPerf.append(data + Data([0x0A]), to: url)
         }
     }
+
+    /// Local, non-synchronizing and ThisDeviceOnly: a restored backup must not
+    /// make another phone's old samples look like measurements from this phone.
+    private static let measurementOrigin: String? = {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.leoyuan.leophoneagent.perf-origin",
+            kSecAttrAccount as String: "origin", kSecAttrSynchronizable as String: false]
+        var read = query; read[kSecReturnData as String] = true
+        var value: CFTypeRef?
+        if SecItemCopyMatching(read as CFDictionary, &value) == errSecSuccess,
+           let bytes = value as? Data, let text = String(data: bytes, encoding: .utf8) { return text }
+        let origin = UUID().uuidString
+        var add = query
+        add[kSecValueData as String] = Data(origin.utf8)
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess ? origin : nil
+    }()
 
     private static func append(_ line: Data, to url: URL) {
         if !FileManager.default.fileExists(atPath: url.path) {
@@ -539,43 +563,34 @@ final class ScrollHitchMeter: NSObject {
     static let shared = ScrollHitchMeter()
 
     private var link: CADisplayLink?
-    private var last: CFTimeInterval = 0
     private var began: CFTimeInterval = 0
-    private var hitchSeconds: Double = 0
-    private var frames = 0
+    private var timeline = ScrollHitchTimeline()
 
     /// 手指拖动到减速停下之间为 true(主线程读)。回前台的非界面工作据此让开用户的滑动。
     var isScrolling: Bool { link != nil }
 
     func begin() {
         guard link == nil else { return }
-        last = 0
-        hitchSeconds = 0
-        frames = 0
+        timeline = ScrollHitchTimeline()
         began = CACurrentMediaTime()
         let l = CADisplayLink(target: self, selector: #selector(tick(_:)))
         l.add(to: .main, forMode: .common)
         link = l
     }
 
-    func end() {
+    func end(interrupted: Bool = false) {
         guard let l = link else { return }
         l.invalidate()
         link = nil
-        let duration = CACurrentMediaTime() - began
-        guard duration >= 0.3, frames > 5 else { return }
-        LeoPerf.record("scroll.hitch", ms: hitchSeconds * 1000 / duration,
-                       extra: ["dur": (duration * 100).rounded() / 100, "frames": frames])
+        let ended = CACurrentMediaTime()
+        timeline.finish(at: ended)
+        let duration = ended - began
+        guard duration >= 0.3, timeline.frames > 5 else { return }
+        LeoPerf.record("scroll.hitch", ms: timeline.hitchSeconds * 1000 / duration,
+                       extra: ["dur": (duration * 100).rounded() / 100, "frames": timeline.frames, "interrupted": interrupted])
     }
 
     @objc private func tick(_ l: CADisplayLink) {
-        frames += 1
-        let interval = l.targetTimestamp - l.timestamp
-        if last > 0, interval > 0 {
-            let actual = l.timestamp - last
-            let excess = actual - interval
-            if excess > interval * 0.5 { hitchSeconds += excess }
-        }
-        last = l.timestamp
+        timeline.tick(timestamp: l.timestamp, targetTimestamp: l.targetTimestamp)
     }
 }

@@ -34,7 +34,7 @@ struct BrainTodayView: View {
         }
         .refreshable { await load() }
         .task { if wall.isEmpty { await load() } }
-        .navigationDestination(for: BrainMediaRow.self) { BrainMediaDetailView(row: $0) }
+        .navigationDestination(for: BrainSpaceMediaRow.self) { BrainSpaceMediaDetailView(row: $0) }
         .sheet(item: $otdYear) { year in BrainMediaGridSheet(title: "\(year.ago) 年前的今天", items: year.items).environmentObject(model) }
     }
 
@@ -43,7 +43,7 @@ struct BrainTodayView: View {
     private var hero: some View {
         TabView {
             ForEach(wall.prefix(8)) { item in
-                NavigationLink(value: BrainMediaRow(id: item.id, capturedAt: item.capturedAt, mediaKind: "photo")) {
+                NavigationLink(value: BrainSpaceMediaRow(id: item.id, capturedAt: item.capturedAt, mediaKind: "photo")) {
                     ZStack(alignment: .bottomLeading) {
                         BrainRemoteImage(path: "/api/media/\(item.id)/preview")
                         LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
@@ -214,7 +214,7 @@ struct BrainTodayView: View {
 struct BrainMediaGridSheet: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
-    let items: [BrainMediaRow]
+    let items: [BrainSpaceMediaRow]
 
     var body: some View {
         NavigationStack {
@@ -230,7 +230,7 @@ struct BrainMediaGridSheet: View {
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: BrainMediaRow.self) { BrainMediaDetailView(row: $0) }
+            .navigationDestination(for: BrainSpaceMediaRow.self) { BrainSpaceMediaDetailView(row: $0) }
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }
     }

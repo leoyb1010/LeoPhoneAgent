@@ -64,10 +64,12 @@ enum BrainKeychain {
 
 // MARK: - Client
 
-final class BrainClient: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+final class BrainClient: NSObject, @unchecked Sendable {
     let endpoint: BrainEndpoint
     private let credentials: BrainCredentials
-    private lazy var session: URLSession = {
+    private let session: URLSession
+
+    private static func makeSession(endpoint: BrainEndpoint) -> URLSession {
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = 30
         cfg.timeoutIntervalForResource = 15 * 60   // 下载 / 上传原件可以更久;单次空闲仍是 30 秒
@@ -76,17 +78,72 @@ final class BrainClient: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
         cfg.httpCookieStorage = nil
         cfg.httpShouldSetCookies = false
         cfg.waitsForConnectivity = false
-        return URLSession(configuration: cfg, delegate: self, delegateQueue: nil)
-    }()
+        return URLSession(configuration: cfg, delegate: BrainRedirectDelegate(base: endpoint.base), delegateQueue: nil)
+    }
 
     init(endpoint: BrainEndpoint, credentials: BrainCredentials) {
         self.endpoint = endpoint
         self.credentials = credentials
+        self.session = Self.makeSession(endpoint: endpoint)
+        super.init()
     }
 
     deinit { session.invalidateAndCancel() }
 
     // MARK: Endpoints
+
+    func mediaSearch(_ query: String, kind: String, offset: Int = 0) async throws -> BrainMediaPage {
+        let page: BrainMediaPage = try await getDecoded(endpoint.mediaSearch(query: query, kind: kind, offset: offset)).0
+        guard page.items.allSatisfy({ $0.privacy == .private || $0.privacy == .general }) else {
+            throw BrainError.forbidden("影像访问级别无法确认，请在第二大脑中检查权限。")
+        }
+        return page
+    }
+
+    func mediaDetail(_ id: String) async throws -> BrainMediaItem {
+        try await verifyMediaAccess(id)
+        return try await getDecoded(endpoint.media(id)).0
+    }
+
+    /// Authenticated, same-origin, bounded bytes. Never use server-provided
+    /// preview URLs, shared URL cache, Photos, or persistent media caches.
+    func mediaBytes(_ id: String, variant: String) async throws -> Data {
+        guard ["thumbnail", "preview", "video"].contains(variant) else { throw BrainError.invalidResponse }
+        try await verifyMediaAccess(id)
+        let (bytes, response) = try await session.bytes(for: request(endpoint.media(id, variant: variant)))
+        _ = try validate(Data(), response)
+        let limit = variant == "thumbnail" ? 4 * 1024 * 1024 : 32 * 1024 * 1024
+        guard response.expectedContentLength <= Int64(limit) else { throw BrainError.server(status: 413, message: "预览过大，请在第二大脑网页查看原片。") }
+        let mime = response.mimeType ?? ""
+        guard mime.hasPrefix(variant == "video" ? "video/" : "image/") else { throw BrainError.invalidResponse }
+        var data = Data()
+        for try await byte in bytes {
+            if data.count % 16384 == 0 { try Task.checkCancellation() }
+            guard data.count < limit else { throw BrainError.server(status: 413, message: "预览过大，请在第二大脑网页查看原片。") }
+            data.append(byte)
+        }
+        return data
+    }
+
+    private func verifyMediaAccess(_ id: String) async throws {
+        let meta = try await file(id).0
+        guard meta.privacy == .private || meta.privacy == .general else {
+            throw BrainError.forbidden("无权读取此影像。")
+        }
+    }
+
+    /// Cards do not expose a privacy field in v1. Verify every current source
+    /// before showing a body or quoting it, and do not use the old untyped cache.
+    func generalCard(_ id: String) async throws -> BrainCard {
+        let value = try await card(id).0
+        for source in value.sources {
+            let meta = try await file(source.fileId).0
+            guard meta.privacy == .general else {
+                throw BrainError.forbidden("这张知识卡引用私密或未知来源，请在第二大脑网页查看。")
+            }
+        }
+        return value
+    }
 
     func health() async throws -> (BrainHealth, Data) { try await getDecoded(endpoint.health()) }
 
@@ -214,12 +271,17 @@ final class BrainClient: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
         catch { throw BrainError.network }
     }
 
-    // MARK: URLSessionTaskDelegate
+}
 
+/// URLSession retains its delegate. A separate immutable delegate avoids both
+/// client→session→client retention and creating a lazy session during deinit.
+private final class BrainRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    let base: URL
+    init(base: URL) { self.base = base }
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         guard let target = request.url,
-              BrainEndpoint.allowsRedirect(from: endpoint.base, to: target) else {
+              BrainEndpoint.allowsRedirect(from: base, to: target) else {
             completionHandler(nil)
             return
         }

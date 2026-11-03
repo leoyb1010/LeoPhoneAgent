@@ -21,6 +21,7 @@ final class BrainStore: ObservableObject {
 
     @Published private(set) var isConfigured: Bool
     @Published var baseURLString: String
+    @Published private(set) var connectionRevision = 0
     @Published private(set) var health: BrainHealth?
     @Published private(set) var statusError: String?
     @Published private(set) var checking = false
@@ -61,6 +62,8 @@ final class BrainStore: ObservableObject {
 
     @discardableResult
     func saveBaseURL(_ raw: String) -> Bool {
+        connectionRevision += 1
+        unlock = BrainUnlockState()
         guard let url = BrainEndpoint.normalizedBase(raw) else { return false }
         baseURLString = url.absoluteString
         UserDefaults.standard.set(baseURLString, forKey: Self.baseURLKey)
@@ -70,6 +73,8 @@ final class BrainStore: ObservableObject {
 
     @discardableResult
     func connect(_ request: BrainConnectRequest) -> Bool {
+        connectionRevision += 1
+        unlock = BrainUnlockState()
         guard BrainTokenValidator.isValid(request.token), BrainKeychain.set(request.token, for: .token) else {
             brainLog.warning("brain connect: token rejected or keychain write failed")
             return false
@@ -89,6 +94,8 @@ final class BrainStore: ObservableObject {
     }
 
     func saveAccessCredentials(id: String, secret: String) {
+        connectionRevision += 1
+        unlock = BrainUnlockState()
         let id = id.trimmingCharacters(in: .whitespacesAndNewlines)
         let secret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
         if id.isEmpty || secret.isEmpty {
@@ -103,6 +110,7 @@ final class BrainStore: ObservableObject {
 
     /// 断开:删钥匙串里的令牌与 Access 凭据,清离线缓存,锁回私密资料。
     func disconnect() {
+        connectionRevision += 1
         BrainKeychain.deleteAll()
         UserDefaults.standard.removeObject(forKey: Self.scopesKey)
         cache.clearAll()
@@ -133,16 +141,20 @@ final class BrainStore: ObservableObject {
 
     func isUnlockFresh(now: Date = Date()) -> Bool { unlock.isFresh(now: now) }
 
+    func lockPrivate() { unlock.lock() }
+
     /// Face ID / 设备密码。5 分钟内解锁过就不再问。
     func unlockPrivate() async -> Bool {
         if unlock.isFresh(now: Date()) { return true }
+        let revision = connectionRevision
         let ctx = LAContext()
         var err: NSError?
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else { return false }
         let ok = (try? await ctx.evaluatePolicy(.deviceOwnerAuthentication,
                                                 localizedReason: AppLocalized("查看资料库里的私密资料"))) ?? false
-        if ok { unlock.recordUnlock(at: Date()) }
-        return ok
+        guard ok, !Task.isCancelled, revision == connectionRevision, isConfigured else { return false }
+        unlock.recordUnlock(at: Date())
+        return true
     }
 
     // MARK: Provisioning without typing

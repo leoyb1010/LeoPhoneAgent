@@ -863,6 +863,8 @@ final class ViewModelCache {
     /// app is transitioning to background — iOS can SIGKILL for excessive
     /// background CPU/rendering otherwise.
     func suspendAllStreamingUI() {
+        streamingResumeGeneration &+= 1
+        pendingStreamingResume.removeAll()
         for (_, vm) in cache where vm.isProcessing {
             vm.setStreamingUIUpdatesSuspended(true)
         }
@@ -872,24 +874,47 @@ final class ViewModelCache {
     /// that accumulated while backgrounded. Called from MinisApp on
     /// scenePhase → .active so the user sees the latest content
     /// immediately on return.
+    private var streamingResumeGeneration = 0
+    private var pendingStreamingResume: [String] = []
+    private var resumedStreamingCount = 0
+
     func resumeAllStreamingUI() {
-        var cleared = 0
-        for (_, vm) in cache where vm.streamingUIUpdatesSuspended {
-            vm.setStreamingUIUpdatesSuspended(false)
-            cleared += 1
+        streamingResumeGeneration &+= 1
+        let generation = streamingResumeGeneration
+        let recent = Dictionary(lruOrder.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: { _, last in last })
+        let active = AIChatViewModel.activeSessionId
+        pendingStreamingResume = cache.keys.filter { cache[$0]?.streamingUIUpdatesSuspended == true }.sorted {
+            if ($0 == active) != ($1 == active) { return $0 == active }
+            return (recent[$0] ?? -1) > (recent[$1] ?? -1)
         }
-        // [T-ios-scroll-suspend-leak] Record how many VMs this foreground-return
-        // pass unblocked. A leaked scroll-suspend that survived a switch-away
-        // gets cleared here on the NEXT foreground return — so a nonzero count
-        // long after backgrounding is a signal the leak occurred.
-        if cleared > 0 {
-            logger.info("[SuspendState] resumeAllStreamingUI cleared \(cleared) suspended VM(s)")
-            // [T-ios-tool-status-desync] Nudge the session list to re-query
-            // the DB so the row subtitle picks up any tool_use blocks that
-            // were persisted while the app was suspended. The per-VM
-            // objectWillChange above covers in-chat views; this covers the
-            // session list whose lastMessage comes from a DB query triggered
-            // by .sessionDidUpdate.
+        resumedStreamingCount = 0
+        guard !pendingStreamingResume.isEmpty else { return }
+        // 一次 yield 仍会在同一帧中渲染全部缓存会话；每帧只恢复一个，
+        // 最近活跃会话先看到内容，其余不挤占它的布局和输入响应。
+        scheduleNextStreamingResume(generation: generation)
+    }
+
+    private func scheduleNextStreamingResume(generation: Int) {
+        LeoPerf.afterNextFrame { [weak self] in self?.resumeNextStreamingUI(generation: generation) }
+    }
+
+    private func resumeNextStreamingUI(generation: Int) {
+        guard generation == streamingResumeGeneration,
+              UIApplication.shared.applicationState == .active else { return }
+        guard !pendingStreamingResume.isEmpty else { return }
+        let sid = pendingStreamingResume.removeFirst()
+        if let vm = cache[sid], vm.streamingUIUpdatesSuspended {
+            let start = CFAbsoluteTimeGetCurrent()
+            vm.setStreamingUIUpdatesSuspended(false)
+            resumedStreamingCount += 1
+            LeoPerf.record("ui.resume.batch", ms: (CFAbsoluteTimeGetCurrent() - start) * 1000,
+                           extra: ["remaining": pendingStreamingResume.count])
+        }
+        if !pendingStreamingResume.isEmpty {
+            scheduleNextStreamingResume(generation: generation)
+        } else if resumedStreamingCount > 0 {
+            logger.info("[SuspendState] resumeAllStreamingUI cleared \(resumedStreamingCount) suspended VM(s), one per frame")
+            // 最后一帧后仍刷新列表，不能用性能优化丢掉后台工具状态。
             for (sid, vm) in cache where vm.isProcessing {
                 NotificationCenter.default.post(name: .sessionDidUpdate, object: sid)
             }

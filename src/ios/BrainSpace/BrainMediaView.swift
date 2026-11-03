@@ -14,7 +14,7 @@ struct BrainMediaView: View {
     @State private var query = ""
     @State private var kind = "all"
     @State private var family: [BrainFamilyMember] = []
-    @State private var items: [BrainMediaRow] = []
+    @State private var items: [BrainSpaceMediaRow] = []
     @State private var total = 0
     @State private var loading = false
     @State private var error: String?
@@ -56,7 +56,7 @@ struct BrainMediaView: View {
             if items.isEmpty { await reload() }
         }
         .refreshable { await reload() }
-        .navigationDestination(for: BrainMediaRow.self) { BrainMediaDetailView(row: $0) }
+        .navigationDestination(for: BrainSpaceMediaRow.self) { BrainSpaceMediaDetailView(row: $0) }
         .toolbar {
             ToolbarItem(placement: .secondaryAction) {
                 Button(selecting ? "取消选择" : "选择后分享") { selecting.toggle(); selected = [] }
@@ -77,9 +77,9 @@ struct BrainMediaView: View {
         .sheet(item: $share) { BrainShareResultSheet(result: $0).environmentObject(model).tint(BrainTheme.accent) }
     }
 
-    private var groups: [(String, [BrainMediaRow])] {
+    private var groups: [(String, [BrainSpaceMediaRow])] {
         var order: [String] = []
-        var map: [String: [BrainMediaRow]] = [:]
+        var map: [String: [BrainSpaceMediaRow]] = [:]
         for row in items {
             if map[row.month] == nil { order.append(row.month) }
             map[row.month, default: []].append(row)
@@ -115,7 +115,7 @@ struct BrainMediaView: View {
         .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 6)
     }
 
-    @ViewBuilder private func tile(_ row: BrainMediaRow) -> some View {
+    @ViewBuilder private func tile(_ row: BrainSpaceMediaRow) -> some View {
         let picked = selected.contains(row.id)
         let cell = BrainRemoteImage(path: row.thumbPath)
             .aspectRatio(1, contentMode: .fill)
@@ -155,7 +155,7 @@ struct BrainMediaView: View {
         loading = true; error = nil
         defer { if gen == generation { loading = false } }
         do {
-            let page: BrainMediaPage = try await BrainSpaceAPI.shared.get("/media/search", query: params(offset: 0))
+            let page: BrainSpaceMediaPage = try await BrainSpaceAPI.shared.get("/media/search", query: params(offset: 0))
             guard gen == generation else { return }
             items = page.items; total = page.total ?? page.items.count
         } catch {
@@ -169,7 +169,7 @@ struct BrainMediaView: View {
         let gen = generation
         loading = true
         defer { if gen == generation { loading = false } }
-        if let page = try? await BrainSpaceAPI.shared.get("/media/search", query: params(offset: items.count), as: BrainMediaPage.self),
+        if let page = try? await BrainSpaceAPI.shared.get("/media/search", query: params(offset: items.count), as: BrainSpaceMediaPage.self),
            gen == generation {
             let known = Set(items.map(\.id))
             items += page.items.filter { !known.contains($0.id) }
@@ -189,9 +189,9 @@ struct BrainMediaView: View {
 
 // MARK: - Detail
 
-struct BrainMediaDetailView: View {
+struct BrainSpaceMediaDetailView: View {
     @EnvironmentObject private var model: BrainSpaceModel
-    let row: BrainMediaRow
+    let row: BrainSpaceMediaRow
     @State private var detail: BrainMediaDetail?
     @State private var error: String?
     @State private var player: AVPlayer?

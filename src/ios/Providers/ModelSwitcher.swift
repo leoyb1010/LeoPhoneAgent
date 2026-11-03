@@ -305,13 +305,13 @@ enum ModelSwitcher {
         // loadBalance 按真实 sessionId 散列,草稿阶段无法预知会命中谁 ——
         // 谎报一个具体模型名(显示 A 实际用 B)不如如实显示分组名。
         // fallback 策略 resolve 恒取第一个可用成员,与真实发送一致,可显示。
-        if group.strategy == .loadBalance { return group.name }
+        if group.strategy == .loadBalance { return AppLocalized("发送时自动选模") }
         if let entryId = ModelGroupRouter.resolve(group: group, sessionId: "draft",
                                                   store: store, verbose: false),
            let entry = store.entry(for: entryId) {
             // [up-home] 同时说出「选的是哪个组」和「这次会用谁」。只显示模型名时，组里第一个可用模型
             // 一变（下架、限流、换序），首页胶囊就换成另一个名字，看着像选择被改了。
-            return "\(group.name) · \(entry.model.displayName)"
+            return entry.model.id
         }
         return group.name
     }
@@ -321,12 +321,12 @@ enum ModelSwitcher {
         guard let sessionId, !sessionId.isEmpty,
               let binding = store.binding(for: sessionId) else { return nil }
         switch binding.primarySource {
-        case .group(let groupId, _):
-            return store.modelGroups.first { $0.id == groupId }?.name
+        case .group(_, let resolvedEntryId):
+            return store.entry(for: resolvedEntryId)?.model.id
         case .directEntry(let entryId, let composite):
             let key = composite ?? entryId
-            return store.entry(for: key)?.model.displayName
-                ?? store.entry(for: entryId)?.model.displayName
+            return store.entry(for: key)?.model.id
+                ?? store.entry(for: entryId)?.model.id
         }
     }
 }

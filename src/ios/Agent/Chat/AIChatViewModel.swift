@@ -4329,8 +4329,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         if msgIdx < messages.count {
             for i in messages[msgIdx].blocks.indices {
                 if case .text = messages[msgIdx].blocks[i].kind, !messages[msgIdx].blocks[i].content.isEmpty {
-                    messages[msgIdx].blocks[i].cachedMarkdown = MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(messages[msgIdx].blocks[i].content)))
-                    cacheAttributedString(for: messages[msgIdx].blocks[i])
+                        cacheAttributedString(for: messages[msgIdx].blocks[i])
                 }
             }
             // Clear "thinking" indicator + store usage on the just-finished assistant message
@@ -6176,7 +6175,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // to avoid re-parsing and re-rendering on cell recycling / SwiftUI refreshes.
         for i in messages[msgIdx].blocks.indices {
             if case .text = messages[msgIdx].blocks[i].kind, !messages[msgIdx].blocks[i].content.isEmpty {
-                messages[msgIdx].blocks[i].cachedMarkdown = MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(messages[msgIdx].blocks[i].content)))
                 cacheAttributedString(for: messages[msgIdx].blocks[i])
             }
         }
@@ -6189,6 +6187,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     func cacheAttributedString(for block: AssistantBlock) {
         block.isStreamingText = false
         guard !block.content.isEmpty else { return }
+        // 完成、恢复与队列接力可能连续缓存同一段原文；复用已完成结果，
+        // 主题/字号清理会把 cachedAttributedString 置 nil，仍会重新渲染。
+        if block.cachedAttributedString != nil, block.cachedAttributedSource == block.content { return }
         // [T-ios-markdown-rerender-burst] Persist the parsed MarkdownContent back
         // onto the block, not just the rendered attributed string. Previously
         // this parsed `MarkdownContent(prepared)` to render the attributed
@@ -6202,7 +6203,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // hit `cachedContent` (skip re-parse) AND keys its content-hash off the
         // stable `blocks.hashValue` so the per-coordinator hash-skip can land.
         // No extra work: we were already computing this MarkdownContent here.
-        let content = block.cachedMarkdown ?? MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(block.content)))
+        let content: MarkdownContent
+        if block.cachedMarkdownSource == block.content, let cached = block.cachedMarkdown { content = cached }
+        else { content = MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(block.content))) }
         let source = block.content
         block.applyBatched {
             block.cachedMarkdown = content
@@ -6360,9 +6363,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         block.applyBatched {
             block.isStreamingText = !shouldCacheAttributedString
             block.content = text
+            if block.cachedAttributedSource != text { block.cachedAttributedString = nil }
             if let parsedMarkdown {
                 block.cachedMarkdown = parsedMarkdown
-            } else if block.cachedMarkdown == nil {
+            } else if block.cachedMarkdown == nil || block.cachedMarkdownSource != text {
                 block.cachedMarkdown = MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(text)))
             }
             if shouldCacheAttributedString {

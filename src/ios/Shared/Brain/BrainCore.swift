@@ -14,7 +14,7 @@ import Foundation
 
 // MARK: - Loose JSON values
 
-private struct BrainAnyKey: CodingKey {
+struct BrainAnyKey: CodingKey {
     var stringValue: String
     var intValue: Int? { nil }
     init(_ s: String) { stringValue = s }
@@ -22,7 +22,7 @@ private struct BrainAnyKey: CodingKey {
     init?(intValue: Int) { return nil }
 }
 
-private extension KeyedDecodingContainer where K == BrainAnyKey {
+extension KeyedDecodingContainer where K == BrainAnyKey {
     /// 字符串或数字都收:id、时间戳在网关两端的表示不必完全一致。
     func loose(_ key: String) -> String? {
         let k = BrainAnyKey(key)
@@ -143,6 +143,8 @@ struct BrainSearchResponse: Decodable, Equatable, Sendable {
     var total: Int
     var mode: String
     var semanticUsed: Bool
+    var hiddenSensitive: Int = 0
+    var nextOffset: Int?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: BrainAnyKey.self)
@@ -150,10 +152,15 @@ struct BrainSearchResponse: Decodable, Equatable, Sendable {
         total = c.int("total") ?? items.count
         mode = c.loose("mode") ?? "keyword"
         semanticUsed = c.bool("semantic_used") ?? false
+        hiddenSensitive = max(0, c.int("hidden_sensitive") ?? 0)
+        nextOffset = c.int("next_offset")
     }
 
     init(items: [BrainSearchItem], total: Int, mode: String = "keyword", semanticUsed: Bool = false) {
         self.items = items; self.total = total; self.mode = mode; self.semanticUsed = semanticUsed
+    }
+    func resumeOffset(after offset: Int) -> Int {
+        max(offset, nextOffset ?? (offset + items.count + hiddenSensitive))
     }
 }
 

@@ -3,6 +3,7 @@ import SwiftUI
 /// Same native selector everywhere; draft choice never creates a conversation.
 struct QuickModelSwitchSheet: View {
     let sessionId: String?
+    var resolvedEntryKey: String? = nil
     let ensureSessionId: (() async -> String)?
     var pickedKey: String? = nil
     var onPick: ((String) -> Void)? = nil
@@ -11,7 +12,7 @@ struct QuickModelSwitchSheet: View {
 
     var body: some View {
         NavigationStack {
-            SessionModelPicker(sessionId: sessionId, ensureSessionId: ensureSessionId,
+            SessionModelPicker(sessionId: sessionId, ensureSessionId: ensureSessionId, resolvedEntryKey: resolvedEntryKey,
                                draftChoice: pickedKey, onPick: onPick,
                                prefersQuickSelection: true, onResetToDefault: onResetToDefault,
                                onExpand: { detent = .large })

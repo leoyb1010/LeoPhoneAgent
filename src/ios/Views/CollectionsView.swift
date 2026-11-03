@@ -46,8 +46,10 @@ struct CollectionsView: View {
     /// stays nil and borrows the host's stack.
     private let onClose: (() -> Void)?
 
-    init(onClose: (() -> Void)? = nil) {
+    private let phoneOnly: Bool
+    init(onClose: (() -> Void)? = nil, phoneOnly: Bool = false) {
         self.onClose = onClose
+        self.phoneOnly = phoneOnly
     }
     @State private var items: [CollectedItem] = []
     /// Latest-wins token for `reload()` / `reloadOffMain()`.
@@ -178,7 +180,7 @@ struct CollectionsView: View {
 
     /// 没连接资料库时按「手机收藏」走,不显示范围切换。
     private var scope: BrainBrowseScope {
-        BrainBrowseScope.effective(brainScope, configured: brain.isConfigured)
+        phoneOnly ? .phone : BrainBrowseScope.effective(brainScope, configured: brain.isConfigured)
     }
 
     private var isSearching: Bool {
@@ -198,6 +200,10 @@ struct CollectionsView: View {
     }
 
     var body: some View {
+        if !phoneOnly { BrainWorkspaceView(onClose: onClose) } else { phoneCollections }
+    }
+
+    private var phoneCollections: some View {
         GeometryReader { geometry in
             // 只有自己当容器(整页面板)时才分栏;被推进别人的导航栈(设置的 iPad 分栏详情页)
             // 再套一层 NavigationSplitView 会出现两层侧栏、返回键失灵。
@@ -246,7 +252,7 @@ struct CollectionsView: View {
         let staggerOrder = LeoStaggerPolicy.indices(for: shown.map(\.id))
         let highlightTerms = LeoMatchHighlight.terms(fromQuery: TreasuryLocalQuery.parse(query).textQuery)
         return List(selection: $selection) {
-            if !editMode.isEditing, BrainBrowseScope.showsPicker(configured: brain.isConfigured) {
+            if !phoneOnly, !editMode.isEditing, BrainBrowseScope.showsPicker(configured: brain.isConfigured) {
                 BrainScopePicker(scope: $brainScope, inset: inset)
             }
             if scope.showsPhoneItems {
@@ -306,7 +312,7 @@ struct CollectionsView: View {
             }
         }
         .environment(\.editMode, $editMode)
-        .navigationTitle(editMode.isEditing && !selection.isEmpty ? "已选 \(selection.count) 条" : "藏宝阁")
+        .navigationTitle(editMode.isEditing && !selection.isEmpty ? "已选 \(selection.count) 条" : "手机收藏")
         .navigationBarTitleDisplayMode(.inline)
         // 进来就能看到搜索框:默认的自动抽屉要先往下拉一下才露出来。
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),

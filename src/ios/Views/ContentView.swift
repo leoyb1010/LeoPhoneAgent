@@ -947,7 +947,7 @@ struct ContentView: View {
                 case .settings:
                     SettingsSheet(showTerminal: $showTerminal, onClose: { activeToolSheet = nil })
                 case .collections:
-                    CollectionsView(onClose: { activeToolSheet = nil })
+                    CollectionsView(onClose: { activeToolSheet = nil }, phoneOnly: true)
                 case .rootfsManagement:
                     NavigationStack {
                         RootfsManagementView()
@@ -2805,7 +2805,7 @@ struct ContentView: View {
             }
         }
         // [T-collections] 收藏一级入口:分享进来的东西从这里翻。iPad 在「更多」菜单里(整页面板)。
-        // [brain-space] 1.88:藏宝阁升级为「第二大脑」全屏空间,手机收藏在它的「资料」里。
+        // [brain-space] 1.89:藏宝阁升级为「第二大脑」全屏空间,手机收藏和分类检索在它的「资料」里。
         ToolbarItem(placement: .topBarTrailing) {
             if !isSelecting, !isWideLayout {
                 Button { showBrainSpace = true } label: {
@@ -2834,7 +2834,7 @@ struct ContentView: View {
                         Label("第二大脑", systemImage: "brain.head.profile")
                     }
                     Button { activeToolSheet = .collections } label: {
-                        Label("Leo藏宝阁", systemImage: "star.square.on.square")
+                        Label("手机收藏", systemImage: "star.square.on.square")
                     }
                     // [T-settings-ia] Mac 控制台是主功能:iPad 放在「更多」第一屏(整页面板)。
                     if macFleetEnabled {

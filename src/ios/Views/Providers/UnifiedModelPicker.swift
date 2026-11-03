@@ -565,17 +565,15 @@ struct UnifiedModelPicker: View {
 
     @ViewBuilder
     private var quickSections: some View {
-        // The selected favorite already has a checkmark and provider label.
-        // Don't spend the compact sheet repeating the same model above it.
-        if config.currentGroupId?() != nil || !favoriteEntries.prefix(3).contains(where: { $0.id == config.currentEntryId?() }) {
-            selectionSummary
-        }
+        selectionSummary
         if !favoriteEntries.isEmpty {
             Section {
-                ForEach(favoriteEntries.prefix(3)) { entry in entryRow(entry) }
-                Button("All favorites") { browseScope = .favorites; config.onExpand?() }
-                    .foregroundStyle(ModelPickerText.action)
-                    .accessibilityIdentifier("model-picker.all-favorites")
+                ForEach(favoriteEntries.prefix(6)) { entry in entryRow(entry) }
+                if favoriteEntries.count > 6 {
+                    Button("All favorites") { browseScope = .favorites; config.onExpand?() }
+                        .foregroundStyle(ModelPickerText.action)
+                        .accessibilityIdentifier("model-picker.all-favorites")
+                }
             } header: { Text("Favorites").foregroundStyle(ModelPickerText.secondary) }
         }
         if !quickRecentEntries.isEmpty {
@@ -608,20 +606,6 @@ struct UnifiedModelPicker: View {
             }
             .foregroundStyle(ModelPickerText.action)
             .accessibilityIdentifier("model-picker.all-models")
-            if supportsGroups {
-                Button { browseScope = .groups; config.onExpand?() } label: {
-                    Label("Groups", systemImage: "square.stack.3d.up")
-                        .frame(minHeight: 44)
-                }
-                .foregroundStyle(ModelPickerText.action)
-                .accessibilityIdentifier("model-picker.all-groups")
-            }
-            Button { showModelLibrary = true } label: {
-                Label("Model Library", systemImage: "slider.horizontal.3")
-                    .frame(minHeight: 44)
-            }
-            .foregroundStyle(ModelPickerText.action)
-            .accessibilityIdentifier("model-picker.library")
         } footer: {
             if let note = config.headerNote { Text(note).foregroundStyle(ModelPickerText.secondary) }
         }
@@ -629,29 +613,28 @@ struct UnifiedModelPicker: View {
 
     @ViewBuilder
     private var selectionSummary: some View {
-        if let gid = config.currentGroupId?(), let group = store.group(for: gid) {
-            Section {
-                VStack(alignment: .leading, spacing: 4) {
-                    Label(group.name, systemImage: "square.stack.3d.up").font(.headline)
-                    if let eid = config.currentEntryId?(), let entry = store.entry(for: eid) {
-                        Text("Selected member: \(entry.model.displayName)").font(.footnote).foregroundStyle(ModelPickerText.secondary)
-                        if let reason = memberUnavailableReason(entry.id) {
-                            Text(reason).font(.caption).foregroundStyle(.orange)
-                        }
-                    }
+        let entry = config.currentEntryId?().flatMap { store.entry(for: $0) ?? Self.systemEntry(for: $0) }
+        let group = config.currentGroupId?().flatMap { store.group(for: $0) }
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(entry?.model.id ?? (group != nil ? AppLocalized("发送时自动选模") : AppLocalized("No model selected")))
+                    .font(.headline).foregroundStyle(Color.primary)
+                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                    .accessibilityIdentifier("model-picker.current-model-id")
+                if let entry, let provider = store.instance(for: entry.providerInstanceId) {
+                    Text(provider.label).font(.subheadline).foregroundStyle(ModelPickerText.secondary)
                 }
-            } header: { Text("Current selection").foregroundStyle(ModelPickerText.secondary) }
-        } else if let eid = config.currentEntryId?(), let entry = store.entry(for: eid) ?? Self.systemEntry(for: eid) {
-            Section {
-                VStack(alignment: .leading, spacing: 4) {
-                    Label(entry.model.displayName, systemImage: "checkmark.circle.fill").font(.headline)
-                    if let provider = store.instance(for: entry.providerInstanceId) {
-                        Text(provider.label).font(.footnote).foregroundStyle(ModelPickerText.secondary)
-                    }
+                if let group {
+                    Text("路由分组：\(group.name)").font(.caption).foregroundStyle(ModelPickerText.secondary)
+                        .lineLimit(2)
                 }
-            } header: { Text("Current selection").foregroundStyle(ModelPickerText.secondary) }
-        }
+                if let entry, let reason = memberUnavailableReason(entry.id) {
+                    Text(reason).font(.caption).foregroundStyle(.orange)
+                }
+            }.padding(.vertical, 4)
+        } header: { Text(isQuickBrowse ? "当前模型 · 仅更改此对话" : "Current selection").foregroundStyle(ModelPickerText.secondary) }
     }
+
 
     private var favoritesSection: some View {
         Section {
@@ -813,6 +796,17 @@ struct UnifiedModelPicker: View {
                     }
                     .accessibilityIdentifier("model-picker.edit-favorites")
                 }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button { showModelLibrary = true } label: { Label("Model Library", systemImage: "slider.horizontal.3") }
+                        .accessibilityIdentifier("model-picker.library")
+                    if supportsGroups {
+                        Button { browseScope = .groups; config.onExpand?() } label: { Label("Groups", systemImage: "square.stack.3d.up") }
+                            .accessibilityIdentifier("model-picker.all-groups")
+                    }
+                } label: { Image(systemName: "ellipsis.circle").frame(minWidth: 44, minHeight: 44) }
+                .accessibilityLabel("模型管理").accessibilityIdentifier("model-picker.management")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { dismiss() } label: {
@@ -1064,7 +1058,7 @@ struct UnifiedModelPicker: View {
                     Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(entry.model.displayName).font(.body).foregroundStyle(Color.primary)
+                        Text(isQuickBrowse ? entry.model.id : entry.model.displayName).font(.body).foregroundStyle(Color.primary)
                         Text(store.instance(for: entry.providerInstanceId)?.label ?? entry.model.provider)
                             .font(.caption).foregroundStyle(ModelPickerText.secondary)
                         if isActive { Text("Active in this group").font(.caption).foregroundStyle(.tint) }
@@ -1203,7 +1197,7 @@ struct UnifiedModelPicker: View {
                         .foregroundStyle(selected ? Color.accentColor : Color.secondary)
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text(entry.model.displayName).font(.body).foregroundStyle(Color.primary)
+                            Text(isQuickBrowse ? entry.model.id : entry.model.displayName).font(.body).foregroundStyle(Color.primary)
                                 .multilineTextAlignment(.leading)
                                 .fixedSize(horizontal: false, vertical: true)
                             if isLatest {

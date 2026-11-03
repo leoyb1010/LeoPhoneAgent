@@ -363,8 +363,10 @@ final class AssistantBlock: Identifiable, ObservableObject {
     /// surface the yellow ⓘ "enable enhanced background" hint only when relevant.
     @Published var wasBackgroundSuspended: Bool = false
     /// Cached parsed markdown for completed text blocks.
+    private(set) var cachedMarkdownSource: String?
     var cachedMarkdown: MarkdownContent? {
         willSet { publishChange() }
+        didSet { cachedMarkdownSource = cachedMarkdown.map { _ in content } }
     }
     /// [T-stream-table-tail] True between the first streamed flush and the
     /// finalize. `cachedMarkdown` can't tell the two apart any more — the
@@ -375,8 +377,10 @@ final class AssistantBlock: Identifiable, ObservableObject {
     /// Cached rendered NSAttributedString for completed text blocks.
     /// Set once when cachedMarkdown is finalized; avoids re-running MarkdownNSRenderer
     /// on every SwiftUI updateUIView triggered by unrelated state changes.
+    private(set) var cachedAttributedSource: String?
     var cachedAttributedString: NSAttributedString? {
         willSet { publishChange() }
+        didSet { cachedAttributedSource = cachedAttributedString.map { _ in content } }
     }
     /// The tool_use ID from the provider, used to match with snapshots.
     var toolUseId: String?

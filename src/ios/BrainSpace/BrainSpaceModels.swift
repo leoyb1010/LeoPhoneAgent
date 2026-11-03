@@ -44,7 +44,7 @@ struct BrainWall: Decodable {
     var items: [Item]
 }
 
-struct BrainMediaRow: Decodable, Identifiable, Hashable {
+struct BrainSpaceMediaRow: Decodable, Identifiable, Hashable {
     let id: String
     var title: String?
     var ext: String?
@@ -58,8 +58,8 @@ struct BrainMediaRow: Decodable, Identifiable, Hashable {
     var month: String { String((capturedAt ?? "").prefix(7)) }
 }
 
-struct BrainMediaPage: Decodable {
-    var items: [BrainMediaRow]
+struct BrainSpaceMediaPage: Decodable {
+    var items: [BrainSpaceMediaRow]
     var total: Int?
 }
 
@@ -68,7 +68,7 @@ struct BrainOnThisDay: Decodable {
         var id: String { year }
         let year: String
         let ago: Int
-        let items: [BrainMediaRow]
+        let items: [BrainSpaceMediaRow]
     }
     var years: [Year]
 }

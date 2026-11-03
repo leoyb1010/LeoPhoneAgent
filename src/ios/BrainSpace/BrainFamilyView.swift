@@ -41,7 +41,7 @@ struct BrainFamilyView: View {
         .refreshable { await load() }
         .task { if members.isEmpty { await load() } }
         .navigationDestination(for: BrainFamilyMember.self) { BrainFamilyProfileView(member: $0) }
-        .navigationDestination(for: BrainMediaRow.self) { BrainMediaDetailView(row: $0) }
+        .navigationDestination(for: BrainSpaceMediaRow.self) { BrainSpaceMediaDetailView(row: $0) }
     }
 
     private func reportRow(_ p: BrainFamilyReport.Person) -> some View {
@@ -58,7 +58,7 @@ struct BrainFamilyView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 4) {
                         ForEach(picks) { pick in
-                            NavigationLink(value: BrainMediaRow(id: pick.id, capturedAt: pick.capturedAt, thumbnailUrl: pick.thumbnailUrl)) {
+                            NavigationLink(value: BrainSpaceMediaRow(id: pick.id, capturedAt: pick.capturedAt, thumbnailUrl: pick.thumbnailUrl)) {
                                 BrainRemoteImage(path: pick.thumbnailUrl ?? "/api/media/\(pick.id)/thumbnail")
                                     .frame(width: 72, height: 72).clipShape(RoundedRectangle(cornerRadius: 8))
                             }
@@ -107,7 +107,7 @@ struct BrainFamilyProfileView: View {
                 Section("\(y.year) 年 · \(y.photos ?? 0) 张 · \(y.videos ?? 0) 段") {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 4), spacing: 3) {
                         ForEach(y.picks ?? []) { pick in
-                            NavigationLink(value: BrainMediaRow(id: pick.id, capturedAt: pick.capturedAt, thumbnailUrl: pick.thumbnailUrl)) {
+                            NavigationLink(value: BrainSpaceMediaRow(id: pick.id, capturedAt: pick.capturedAt, thumbnailUrl: pick.thumbnailUrl)) {
                                 BrainRemoteImage(path: pick.thumbnailUrl ?? "/api/media/\(pick.id)/thumbnail")
                                     .aspectRatio(1, contentMode: .fill).clipShape(RoundedRectangle(cornerRadius: 6))
                             }

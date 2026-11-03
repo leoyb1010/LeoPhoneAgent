@@ -5,6 +5,7 @@ import SwiftUI
 struct SessionModelPicker: View {
     let sessionId: String?
     var ensureSessionId: (() async -> String)?
+    var resolvedEntryKey: String? = nil
     var draftChoice: String? = nil
     var onPick: ((String) -> Void)? = nil
     var prefersQuickSelection = false
@@ -25,11 +26,12 @@ struct SessionModelPicker: View {
     }
 
     init(sessionId: String?, ensureSessionId: (() async -> String)? = nil,
-         draftChoice: String? = nil, onPick: ((String) -> Void)? = nil,
+         resolvedEntryKey: String? = nil, draftChoice: String? = nil, onPick: ((String) -> Void)? = nil,
          prefersQuickSelection: Bool = false, onResetToDefault: (() -> Void)? = nil,
          onExpand: (() -> Void)? = nil) {
         self.sessionId = sessionId
         self.ensureSessionId = ensureSessionId
+        self.resolvedEntryKey = resolvedEntryKey
         self.draftChoice = draftChoice
         self.onPick = onPick
         self.prefersQuickSelection = prefersQuickSelection
@@ -38,9 +40,17 @@ struct SessionModelPicker: View {
     }
 
     private var currentEntryId: String? {
-        if onPick != nil { return draftChoice.flatMap { store.entry(for: $0)?.id } }
-        guard let sid = sessionId,
-              let binding = store.binding(for: sid) else { return nil }
+        if let resolvedEntryKey { return store.entry(for: resolvedEntryKey)?.id }
+        if onPick != nil {
+            if let draftChoice, !draftChoice.hasPrefix("group:") { return store.entry(for: draftChoice)?.id }
+            let gid = draftChoice.map { String($0.dropFirst(6)) } ?? store.defaultPrimaryGroupId
+            guard let gid, let group = store.group(for: gid), group.strategy != .loadBalance else { return nil }
+            return ModelGroupRouter.resolve(group: group, sessionId: "draft", store: store, verbose: false)
+        }
+        guard let sid = sessionId, let binding = store.binding(for: sid) else {
+            guard let gid = currentGroupId, let group = store.group(for: gid), group.strategy != .loadBalance else { return nil }
+            return ModelGroupRouter.resolve(group: group, sessionId: sessionId ?? "draft", store: store, verbose: false)
+        }
         switch binding.primarySource {
         case .directEntry(let entryId, let composite): return store.entry(for: composite ?? entryId)?.id ?? entryId
         case .group(_, let resolvedEntryId): return store.entry(for: resolvedEntryId)?.id ?? resolvedEntryId
@@ -109,7 +119,7 @@ struct SessionModelPicker: View {
                 }
             }
         } message: { selection in
-            Text(AppLocalized("\(selection.entry.model.displayName) outputs \(selection.modalityLabel) and usually can't drive an Agent task. Pick a text-output model for the session, or add this model to Available Models in Agent Loop so the agent can call it via minis-model-use when it needs to generate \(selection.modalityLabel)."))
+            Text(AppLocalized("\(selection.entry.model.id) outputs \(selection.modalityLabel) and usually can't drive an Agent task. Pick a text-output model for the session, or add this model to Available Models in Agent Loop so the agent can call it via minis-model-use when it needs to generate \(selection.modalityLabel)."))
         }
     }
 
@@ -246,33 +256,20 @@ struct SessionModelDisplay {
     }
 
     func displayName(for sessionId: String?) -> String {
-        if sessionId == nil, let entry = draftEntry {
-            return entry.model.displayName
+        // 分组是路由策略，不是模型身份；紧凑界面优先显示实际模型 ID。
+        if sessionId == nil, let entry = draftEntry { return entry.model.id }
+        if sessionId == nil, let gid = draftGroupId, let group = store.group(for: gid) {
+            guard group.strategy != .loadBalance else { return AppLocalized("发送时自动选模") }
+            return resolvedInstanceAndModel(forGroupId: gid)?.modelId ?? AppLocalized("No model selected")
         }
-        if sessionId == nil, let gid = draftGroupId,
-           let group = store.group(for: gid) {
-            return group.name
-        }
-        guard let sid = sessionId,
-              let binding = store.binding(for: sid) else {
-            return defaultDisplayName()
-        }
-
-        switch binding.primarySource {
-        case .directEntry(let entryId, _):
-            if let entry = store.entry(for: entryId) {
-                return entry.model.displayName
-            }
-            return entryId
-        case .group(let groupId, _):
-            return store.group(for: groupId)?.name ?? AppLocalized("Group")
-        }
+        return ModelSwitcher.currentLabel(sessionId: sessionId, store: store)
+            ?? ModelSwitcher.defaultLabel(store: store) ?? AppLocalized("No model selected")
     }
 
     func resolvedDetail(for sessionId: String?) -> (providerLabel: String, modelName: String)? {
         if sessionId == nil, let entry = draftEntry {
             guard let instance = store.instance(for: entry.providerInstanceId) else { return nil }
-            return (instance.label, entry.model.displayName)
+            return (instance.label, entry.model.id)
         }
         if sessionId == nil, let gid = draftGroupId {
             return resolvedDetail(forGroupId: gid)
@@ -290,7 +287,7 @@ struct SessionModelDisplay {
 
         guard let entry = store.entry(for: entryId),
               let instance = store.instance(for: entry.providerInstanceId) else { return nil }
-        return (instance.label, entry.model.displayName)
+        return (instance.label, entry.model.id)
     }
 
     private func defaultResolvedDetail() -> (providerLabel: String, modelName: String)? {
@@ -350,12 +347,12 @@ struct SessionModelDisplay {
             return (instance, entry)
         }.first
         if let (instance, entry) = resolved {
-            return (instance.label, entry.model.displayName)
+            return (instance.label, entry.model.id)
         }
         guard let firstEntryId = group.memberEntryIds.first,
               let entry = store.entry(for: firstEntryId),
               let instance = store.instance(for: entry.providerInstanceId) else { return nil }
-        return (instance.label, entry.model.displayName)
+        return (instance.label, entry.model.id)
     }
 
     func isGroupBound(for sessionId: String?) -> Bool {

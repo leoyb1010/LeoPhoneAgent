@@ -117,3 +117,45 @@ private func XCTAssertEqual(_ a: ForegroundSettlePolicy.Decision, _ b: Foregroun
     default: XCTFail("\(a) != \(b)", file: file, line: line)
     }
 }
+
+final class ScrollHitchDeadlineTests: XCTestCase {
+    func testPlannedFrameRateChangeIsNotAStall() {
+        var t = ScrollHitchTimeline()
+        t.tick(timestamp: 0, targetTimestamp: 1.0 / 60)
+        // Next frame changes to 120Hz; its incoming deadline was still 1/60.
+        t.tick(timestamp: 1.0 / 60, targetTimestamp: 1.0 / 60 + 1.0 / 120)
+        XCTAssertEqual(t.hitchSeconds, 0, accuracy: 1e-9)
+    }
+    func testRealMissedDeadlineStillCounts() {
+        var t = ScrollHitchTimeline()
+        t.tick(timestamp: 0, targetTimestamp: 0.016)
+        t.tick(timestamp: 0.116, targetTimestamp: 0.132)
+        XCTAssertEqual(t.hitchSeconds, 0.100, accuracy: 1e-9)
+        XCTAssertEqual(t.frames, 2)
+    }
+    func testANewGestureCannotInheritBackgroundTime() {
+        var t = ScrollHitchTimeline()
+        t.tick(timestamp: 0, targetTimestamp: 0.016)
+        t = ScrollHitchTimeline() // The lifecycle invalidates and closes the old link.
+        t.tick(timestamp: 10, targetTimestamp: 10.016)
+        t.tick(timestamp: 10.016, targetTimestamp: 10.032)
+        XCTAssertEqual(t.hitchSeconds, 0, accuracy: 1e-9)
+    }
+    func testStallFollowedByLifecycleEndIsStillCounted() {
+        var t = ScrollHitchTimeline()
+        for frame in 0..<6 {
+            t.tick(timestamp: Double(frame) / 60, targetTimestamp: Double(frame + 1) / 60)
+        }
+        t.finish(at: 0.5)
+        XCTAssertEqual(t.hitchSeconds, 0.4, accuracy: 1e-9)
+        t.finish(at: 10)
+        XCTAssertEqual(t.hitchSeconds, 0.4, accuracy: 1e-9, "background time / duplicate end is not added")
+    }
+    func testEndDoesNotCountAnAlreadyObservedStallTwice() {
+        var t = ScrollHitchTimeline()
+        t.tick(timestamp: 0, targetTimestamp: 0.016)
+        t.tick(timestamp: 0.416, targetTimestamp: 0.432)
+        t.finish(at: 0.420)
+        XCTAssertEqual(t.hitchSeconds, 0.4, accuracy: 1e-9)
+    }
+}
