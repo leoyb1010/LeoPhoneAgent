@@ -1871,6 +1871,10 @@ struct ContentView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showBrainSpace) { BrainSpaceView() }
+        // [brain-space] 第二大脑盖在上面时,首页输入栏不能再抢焦点(否则键盘会弹在第二大脑上)。
+        .onChange(of: showBrainSpace) { _, shown in if shown { homePromptFocused = false } }
+        .onChange(of: homePromptFocused) { _, focused in if focused && showBrainSpace { homePromptFocused = false } }
         .fullScreenCover(item: $homeMacScreen) { target in
             HomeMacScreenCover(target: target)
         }
@@ -2801,12 +2805,13 @@ struct ContentView: View {
             }
         }
         // [T-collections] 收藏一级入口:分享进来的东西从这里翻。iPad 在「更多」菜单里(整页面板)。
+        // [brain-space] 1.88:藏宝阁升级为「第二大脑」全屏空间,手机收藏在它的「资料」里。
         ToolbarItem(placement: .topBarTrailing) {
             if !isSelecting, !isWideLayout {
-                NavigationLink { CollectionsView() } label: {
-                    Image(systemName: "star.square.on.square")
+                Button { showBrainSpace = true } label: {
+                    Image(systemName: "brain.head.profile")
                 }
-                .accessibilityLabel(Text("Leo藏宝阁"))
+                .accessibilityLabel(Text("第二大脑"))
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
@@ -2825,6 +2830,9 @@ struct ContentView: View {
         ToolbarItem(placement: .topBarTrailing) {
             if !isSelecting, isWideLayout {
                 Menu {
+                    Button { showBrainSpace = true } label: {
+                        Label("第二大脑", systemImage: "brain.head.profile")
+                    }
                     Button { activeToolSheet = .collections } label: {
                         Label("Leo藏宝阁", systemImage: "star.square.on.square")
                     }
@@ -3337,6 +3345,7 @@ struct ContentView: View {
     @State private var pendingHomeAction: HomeAction?
     @State private var showBrightnessOptions = false
     @State private var showMacConsole = false
+    @State private var showBrainSpace = false
     @State private var homeRoutingError: String?
     @State private var homeRoutingInProgress = false
     /// [T-home-sensory-feedback] Bumped when a NATIVE action starts (not the

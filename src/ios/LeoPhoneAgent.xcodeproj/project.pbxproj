@@ -755,6 +755,7 @@
 		E5BRN01A /* BrainCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN01F /* BrainCore.swift */; };
 		LF342FB8DD6E /* BrainProfileCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2C4303FE10 /* BrainProfileCard.swift */; };
 		E5BRN01T /* BrainCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN01F /* BrainCore.swift */; };
+		BB2026110300000000000002 /* BrainSpaceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2026110300000000000003 /* BrainSpaceModels.swift */; };
 		LFA46343AEC9 /* BrainProfileCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2C4303FE10 /* BrainProfileCard.swift */; };
 		E5BRN02A /* BrainOfflineCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN02F /* BrainOfflineCache.swift */; };
 		E5BRN02T /* BrainOfflineCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN02F /* BrainOfflineCache.swift */; };
@@ -1830,6 +1831,7 @@
 		E5COL0008 /* CollectionIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Intents/CollectionIntents.swift"; sourceTree = SOURCE_ROOT; };
 		E5COL0006 /* CollectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/CollectionsView.swift"; sourceTree = SOURCE_ROOT; };
 		E5BRN01F /* BrainCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Brain/BrainCore.swift"; sourceTree = SOURCE_ROOT; };
+		BB2026110300000000000003 /* BrainSpaceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BrainSpace/BrainSpaceModels.swift"; sourceTree = SOURCE_ROOT; };
 		LF2C4303FE10 /* BrainProfileCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Brain/BrainProfileCard.swift; sourceTree = SOURCE_ROOT; };
 		E5BRN02F /* BrainOfflineCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Brain/BrainOfflineCache.swift"; sourceTree = SOURCE_ROOT; };
 		E5BRN03F /* BrainClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Brain/BrainClient.swift"; sourceTree = SOURCE_ROOT; };
@@ -2085,6 +2087,7 @@
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AA0838CB2F3CA8A900049557 /* Terminal */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Terminal; sourceTree = "<group>"; };
+		BB2026110300000000000001 /* BrainSpace */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = BrainSpace; sourceTree = "<group>"; };
 		AA8A568C2F6FBB7A00A3E54E /* MinisUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = MinisUITests; sourceTree = "<group>"; };
 		BB1000012F700000000000AA /* MinisTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = MinisTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -2253,6 +2256,7 @@
 				E52000030 /* Providers */,
 				E5W000010 /* WebApp */,
 				E5B000030 /* iSH */,
+				BB2026110300000000000001 /* BrainSpace */,
 				E5L000030 /* NativeOffloads */,
 				E54000030 /* Debug */,
 				E5CR00100 /* Diagnostics */,
@@ -2927,6 +2931,7 @@
 				E5COL0008 /* CollectionIntents.swift */,
 				E5COL0006 /* CollectionsView.swift */,
 				E5BRN01F /* BrainCore.swift */,
+				BB2026110300000000000003 /* BrainSpaceModels.swift */,
 				LF2C4303FE10 /* BrainProfileCard.swift */,
 				E5BRN02F /* BrainOfflineCache.swift */,
 				E5BRN03F /* BrainClient.swift */,
@@ -3629,6 +3634,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				AA0838CB2F3CA8A900049557 /* Terminal */,
+				BB2026110300000000000001 /* BrainSpace */,
 			);
 			name = LeoPhoneAgent;
 			packageProductDependencies = (
@@ -3996,6 +4002,7 @@
 				E5SUB0101T /* SubAgentPolicy.swift in Sources */,
 				E5ASK0001T /* AskUserState.swift in Sources */,
 				E5BRN01T /* BrainCore.swift in Sources */,
+				BB2026110300000000000002 /* BrainSpaceModels.swift in Sources */,
 				LFA46343AEC9 /* BrainProfileCard.swift in Sources */,
 				E5BRN02T /* BrainOfflineCache.swift in Sources */,
 				E5ASK0004T /* ToolStepGrouping.swift in Sources */,
@@ -5017,7 +5024,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -5026,7 +5033,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -5041,12 +5048,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -5061,7 +5068,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -5077,7 +5084,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -5092,7 +5099,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -5104,7 +5111,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -5251,7 +5258,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -5280,7 +5287,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				EXCLUDED_SOURCE_FILE_NAMES = ISHSimulatorStubs.m;
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = (
 					ISHKernel.m,
@@ -5320,7 +5327,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -5349,7 +5356,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				EXCLUDED_SOURCE_FILE_NAMES = ISHSimulatorStubs.m;
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = (
 					ISHKernel.m,
@@ -5384,7 +5391,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -5396,7 +5403,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5411,7 +5418,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -5423,7 +5430,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5438,7 +5445,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -5450,7 +5457,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5465,7 +5472,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -5477,7 +5484,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5492,7 +5499,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -5504,7 +5511,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5519,7 +5526,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -5531,7 +5538,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5547,7 +5554,7 @@
 				CODE_SIGN_ENTITLEMENTS = LeoWatch/LeoWatch.entitlements;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -5556,7 +5563,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "语音提问需要麦克风。";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leoyuan.leophoneagent;
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -5574,7 +5581,7 @@
 				CODE_SIGN_ENTITLEMENTS = LeoWatch/LeoWatch.entitlements;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = LeoBot;
@@ -5582,7 +5589,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "语音提问需要麦克风。";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leoyuan.leophoneagent;
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -5599,7 +5606,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = LeoWatchWidget/LeoWatchWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LeoWatchWidget/Info.plist;
@@ -5610,7 +5617,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -5628,7 +5635,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = LeoWatchWidget/LeoWatchWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 195;
+				CURRENT_PROJECT_VERSION = 196;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LeoWatchWidget/Info.plist;
@@ -5639,7 +5646,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.87.1;
+				MARKETING_VERSION = 1.88.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
