@@ -17,6 +17,7 @@ struct BrainTodayView: View {
     @State private var answers: [BrainAnswerList.Item] = []
     @State private var error: String?
     @State private var otdYear: BrainOnThisDay.Year?
+    @State private var openDoc: BrainDocTarget?
 
     var body: some View {
         ScrollView {
@@ -35,6 +36,7 @@ struct BrainTodayView: View {
         .refreshable { await load() }
         .task { if wall.isEmpty { await load() } }
         .navigationDestination(for: BrainSpaceMediaRow.self) { BrainSpaceMediaDetailView(row: $0) }
+        .navigationDestination(item: $openDoc) { BrainDocView(target: $0) }
         .sheet(item: $otdYear) { year in BrainMediaGridSheet(title: "\(year.ago) 年前的今天", items: year.items).environmentObject(model) }
     }
 
@@ -180,8 +182,8 @@ struct BrainTodayView: View {
 
     private func open(_ c: BrainContinuations.Item) {
         let href = c.href ?? ""
-        if href.hasPrefix("#file/") {
-            model.tab = .library
+        if href.hasPrefix("#file/"), let id = href.dropFirst(6).split(separator: "?").first, !id.isEmpty {
+            openDoc = BrainDocTarget(id: String(id), title: c.title)
         } else {
             model.webPage = BrainWebPage(id: String(href.drop(while: { $0 == "#" })), title: c.title)
         }

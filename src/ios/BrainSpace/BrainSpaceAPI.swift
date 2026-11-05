@@ -170,6 +170,24 @@ actor BrainImageCache {
         dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("BrainSpace", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let root = dir
+        Task.detached(priority: .background) { Self.prune(root) }
+    }
+
+    /// Keep the disk cache under ~400 MB (34k thumbnails would otherwise grow without bound); oldest first.
+    nonisolated static func prune(_ dir: URL, limit: Int = 400 * 1024 * 1024) {
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey, .fileSizeKey]
+        guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: Array(keys)) else { return }
+        var entries = files.compactMap { url -> (URL, Date, Int)? in
+            guard let v = try? url.resourceValues(forKeys: keys) else { return nil }
+            return (url, v.contentModificationDate ?? .distantPast, v.fileSize ?? 0)
+        }
+        var total = entries.reduce(0) { $0 + $1.2 }
+        guard total > limit else { return }
+        entries.sort { $0.1 < $1.1 }
+        for (url, _, size) in entries where total > limit * 3 / 4 {
+            try? FileManager.default.removeItem(at: url); total -= size
+        }
     }
 
     /// path: an archive API path such as /api/media/<id>/thumbnail (the /api prefix is optional).
@@ -182,9 +200,16 @@ actor BrainImageCache {
             if let data = try? Data(contentsOf: file), let img = UIImage(data: data) { return img }
             let parts = key.split(separator: "?", maxSplits: 1)
             let query = parts.count > 1 ? URLComponents(string: "?" + parts[1])?.queryItems?.map { ($0.name, $0.value ?? "") } ?? [] : []
-            guard let url = try? BrainSpaceAPI.shared.apiURL(String(parts[0]), query: query),
-                  let data = try? await BrainSpaceAPI.shared.raw(url),
-                  let img = UIImage(data: data) else { return nil }
+            guard let url = try? BrainSpaceAPI.shared.apiURL(String(parts[0]), query: query) else { return nil }
+            var data: Data?
+            for attempt in 0..<3 {
+                do { data = try await BrainSpaceAPI.shared.raw(url); break }
+                catch BrainSpaceError.http(let code, _) where code == 429 || code == 503 || code == 0 {
+                    // Fast scrolling can hit the gateway's per-minute limit; wait and try again instead of leaving a blank tile.
+                    try? await Task.sleep(for: .seconds(2 << attempt))
+                } catch { return nil }
+            }
+            guard let data, let img = UIImage(data: data) else { return nil }
             try? data.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             return img
         }

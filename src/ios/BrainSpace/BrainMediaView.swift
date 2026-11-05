@@ -195,6 +195,8 @@ struct BrainSpaceMediaDetailView: View {
     @State private var detail: BrainMediaDetail?
     @State private var error: String?
     @State private var player: AVPlayer?
+    @State private var videoReady = false
+    @State private var videoError: String?
     @State private var share: BrainShareResult?
 
     var body: some View {
@@ -216,6 +218,21 @@ struct BrainSpaceMediaDetailView: View {
     @ViewBuilder private var visual: some View {
         if let player {
             VideoPlayer(player: player).aspectRatio(aspect, contentMode: .fit).frame(maxWidth: .infinity)
+                .overlay {
+                    if let videoError {
+                        Text(videoError).font(.footnote).foregroundStyle(.white).padding(10)
+                            .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
+                    } else if !videoReady {
+                        // First play of a phone video is transcoded on the mini (up to ~30 s); later plays come from its cache.
+                        VStack(spacing: 8) {
+                            ProgressView().tint(.white)
+                            Text("第一次播放要先在 Mac mini 上转码,可能要半分钟").font(.footnote).foregroundStyle(.white)
+                        }
+                        .padding(14).background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
+                        .allowsHitTesting(false)
+                    }
+                }
+                .task(id: ObjectIdentifier(player)) { await watch(player) }
         } else {
             BrainRemoteImage(path: "/api/media/\(row.id)/preview", contentMode: .fit)
                 .aspectRatio(aspect, contentMode: .fit)
@@ -280,8 +297,21 @@ struct BrainSpaceMediaDetailView: View {
         guard let url = try? BrainSpaceAPI.shared.apiURL("/media/\(row.id)/video") else { return }
         let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": BrainSpaceAPI.shared.authorizedHeaders()])
         let p = AVPlayer(playerItem: AVPlayerItem(asset: asset))
+        videoReady = false; videoError = nil
         player = p
         p.play()
+    }
+
+    private func watch(_ p: AVPlayer) async {
+        for _ in 0..<240 {   // 2 minutes
+            if Task.isCancelled { return }
+            switch p.currentItem?.status {
+            case .readyToPlay: videoReady = true; return
+            case .failed: videoError = "这段视频现在放不了,稍后再试"; return
+            default: try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
+        videoError = "等太久了,网络可能不稳,稍后再试"
     }
 
     private func shareOne() async {
@@ -298,6 +328,7 @@ struct BrainShareResultSheet: View {
     @Environment(\.dismiss) private var dismiss
     let result: BrainShareResult
     @State private var revoked = false
+    @State private var previewPage: BrainWebPage?
 
     private var link: URL? {
         guard let base = BrainSpaceAPI.shared.webBase else { return nil }
@@ -329,13 +360,13 @@ struct BrainShareResultSheet: View {
             .navigationTitle(result.count.map { "已分享 \($0) 项" } ?? "已分享")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .sheet(item: $previewPage) { BrainWebSheet(page: $0).tint(BrainTheme.accent) }
         }
     }
 
     private func preview() {
         // The owner's preview of the receiver page lives under the web UI's share preview route.
-        model.webPage = BrainWebPage(id: "/api/shares/preview/" + result.token, title: "对方看到的样子")
-        dismiss()
+        previewPage = BrainWebPage(id: "/api/shares/preview/" + result.token, title: "对方看到的样子")
     }
 
     private func revoke() async {

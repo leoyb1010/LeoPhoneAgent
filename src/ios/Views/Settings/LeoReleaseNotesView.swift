@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.89.1",
+            date: "2026-11-05",
+            title: "第二大脑小修",
+            highlights: [
+                "影像:视频第一次播放要在 Mac mini 上转码(最长约半分钟),现在会显示「正在转码」而不是黑屏不动;放不了时会说明。",
+                "分享后点「先看对方看到的样子」现在一定能打开。",
+                "今日「从这里接着做」里的文档直接打开阅读页,不再只是跳到资料页。",
+                "照片网格快速滑动碰到服务器限流时会自动重试,不再留下空白格;本机图片缓存超过约 400 MB 自动清理旧的。"
+            ]
+        ),
+        LeoRelease(
             version: "1.89.0",
             date: "2026-11-03",
             title: "第二大脑变成全屏空间",
