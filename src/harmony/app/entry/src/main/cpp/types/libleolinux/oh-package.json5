@@ -1,0 +1,7 @@
+{
+  "name": "libleolinux.so",
+  "version": "1.0.0",
+  "description": "App-local ARM64 iSH Linux compatibility runtime",
+  "types": "./index.d.ts",
+  "license": "GPL-3.0"
+}

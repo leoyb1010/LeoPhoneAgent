@@ -1,5 +1,8 @@
 {
   "string": [
-    { "name": "app_name", "value": "LeoPhoneAgent" }
+    {
+      "name": "app_name",
+      "value": "LeoBot"
+    }
   ]
 }

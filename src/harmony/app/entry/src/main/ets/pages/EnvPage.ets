@@ -22,7 +22,7 @@ struct EnvPage {
   build() {
     Column() {
       NavBar({ title: '环境变量' })
-      Text('注入本机对话。没有 Linux 进程环境，只给模型看。')
+      Text('注入本机对话。值在本机加密保存，执行已配置的MCP调用时注入。')
         .fontSize(13)
         .fontColor(Tokens.muted)
         .width('100%')

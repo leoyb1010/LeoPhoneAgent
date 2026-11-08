@@ -1,4 +1,5 @@
-import { abilityAccessCtrl, common, Permissions, Want } from '@kit.AbilityKit';
+import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit';
+import { router } from '@kit.ArkUI';
 import { PushRegistrar } from '../push/PushRegistrar';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
@@ -22,7 +23,7 @@ struct RuntimePage {
     Scroll() {
       Column() {
         NavBar({ title: '本机运行时' })
-        Text('OAuth、语音、Push 在这一页接。Linux / stdio MCP 受鸿蒙进程模型挡住，不是先不做。')
+        Text('查看本机权限和连接状态，系统能力按当前设备支持情况显示。')
           .fontSize(13)
           .fontColor(Tokens.muted)
           .width('100%')
@@ -33,10 +34,11 @@ struct RuntimePage {
         this.card('杀进程后推送', this.pushLine, '重新要 token', () => {
           this.refreshPush();
         })
-        this.card('无障碍', '打开系统无障碍，把 Leo 打开后才能点其他应用', '去系统设置', () => {
-          this.openA11y();
+        this.card('系统智能体与分享', '通过系统授权入口交互，查看已配置能力和运行状态', '查看系统集成', () => {
+          router.pushUrl({ url: 'pages/SystemIntegrationPage' });
         })
-        this.card('Linux / stdio MCP', '鸿蒙 NEXT 跑不了 Android 那份 PRoot ELF，也拉不起 npx 进程。沙箱文件和 HTTP MCP 能用。', '', () => {
+        this.card('本机 Linux', 'App 内置 iSH ARM64 解释器与 Alpine Linux，共享文件位于 /mnt/workspace。首次打开会安装并校验资源。', '打开终端', () => {
+          router.pushUrl({ url: 'pages/TerminalPage' });
         })
         if (this.message.length > 0) {
           Text(this.message)
@@ -99,25 +101,4 @@ struct RuntimePage {
     this.pushLine = PushRegistrar.line();
   }
 
-  private async openA11y(): Promise<void> {
-    const ctx = getContext(this) as common.UIAbilityContext;
-    const first: Want = {
-      action: 'ohos.settings.accessibility'
-    };
-    try {
-      await ctx.startAbility(first);
-      return;
-    } catch (_err) {
-      // try the settings bundle
-    }
-    const second: Want = {
-      bundleName: 'com.huawei.hmos.settings',
-      uri: 'accessibility://'
-    };
-    try {
-      await ctx.startAbility(second);
-    } catch (err) {
-      this.message = `${err}`;
-    }
-  }
 }

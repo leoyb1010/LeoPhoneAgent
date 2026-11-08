@@ -2,12 +2,14 @@ import { webview } from '@kit.ArkWeb';
 import { router } from '@kit.ArkUI';
 import { browserStore, BrowserTab } from '../store/BrowserStore';
 import { WebLaunch } from '../local/InAppBrowser';
+import { BrowserAutomation } from '../local/BrowserAutomation';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
 @Component
 struct WebPage {
   @StorageProp('themeTick') tick: number = 0;
+  @StorageProp('browserTick') @Watch('onBrowserTick') browserTick: number = 0;
   @State url: string = '';
   @State tabs: BrowserTab[] = [];
   @State activeId: string = '';
@@ -21,8 +23,17 @@ struct WebPage {
     this.sync();
   }
 
+  onPageShow(): void {
+    if (this.attached) BrowserAutomation.attach(this.controller, WebLaunch.owner);
+  }
+
+  onPageHide(): void {
+    BrowserAutomation.detach(this.controller);
+  }
+
   aboutToDisappear(): void {
     this.attached = false;
+    BrowserAutomation.detach(this.controller);
   }
 
   build() {
@@ -82,7 +93,7 @@ struct WebPage {
             .backgroundColor(tab.id === this.activeId ? Tokens.surface : Tokens.bg)
             .borderRadius(8)
             .onClick(() => {
-              browserStore.activeId = tab.id;
+              browserStore.select(tab.id);
               this.sync();
             })
         }, (tab: BrowserTab) => `${tab.id}|${tab.title}`)
@@ -97,6 +108,7 @@ struct WebPage {
           .domStorageAccess(true)
           .onControllerAttached(() => {
             this.attached = true;
+            BrowserAutomation.attach(this.controller, WebLaunch.owner);
           })
           .onPageEnd(() => {
             try {
@@ -124,6 +136,11 @@ struct WebPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+  }
+
+  onBrowserTick(): void {
+    this.sync();
+    if (this.attached) BrowserAutomation.attach(this.controller, WebLaunch.owner);
   }
 
   private sync(): void {

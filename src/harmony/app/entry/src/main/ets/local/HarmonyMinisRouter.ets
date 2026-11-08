@@ -1,10 +1,11 @@
+import { BackupAccess, BackupLease } from '../backup/BackupAccess';
 import { conversationHistory } from './ConversationHistory';
 import { common } from '@kit.AbilityKit';
 import { ReleaseCatalog } from '../release/ReleaseCatalog';
 import { errorBody } from '../net/OutboundCodec';
 import { LocalAgentEngine } from './LocalAgentEngine';
 import { LocalTools } from './LocalTools';
-import { sessionStore } from '../store/SessionStore';
+import { SessionStore, sessionStore } from '../store/SessionStore';
 
 /**
  * 中继 harness 协议版本，四端共用一个号。
@@ -24,7 +25,7 @@ export const PROTOCOL_VERSION: string = '0.4.0';
  * 手机没挂着 SSE 时(切后台、被杀),这是唯一的触达路径 —— 中继据此留最近事件
  * 并发 APNs。少了这一条，鸿蒙身体跑完的任务在 iPhone 上就是石沉大海。
  */
-const PUSH_EVENTS: string[] = ['approval.request', 'run.completed', 'run.failed', 'run.cancelled'];
+const PUSH_EVENTS: string[] = ['run.started', 'approval.request', 'run.completed', 'run.failed', 'run.cancelled'];
 
 /**
  * 会话表与事件表的上限。
@@ -53,7 +54,15 @@ export class RouterResult {
   after: number = 0;
 }
 
+class BodyTurn {
+  lease: BackupLease | null = null;
+  preparing: boolean = true;
+  completing: boolean = false;
+  release(): void { this.lease?.release(); this.lease = null; }
+}
+
 class BodySession {
+  turn: BodyTurn | null = null;
   id: string = '';
   localId: string = '';
   status: string = 'idle';
@@ -90,6 +99,14 @@ export class HarmonyMinisRouter {
   }
 
   handle(method: string, pathAndQuery: string, bodyText: string): RouterResult {
+    if (!this.context) { return this.handleReady(method, pathAndQuery, bodyText); }
+    let lease: BackupLease;
+    try { lease = BackupAccess.beginExecution(this.context); }
+    catch (_error) { return HarmonyMinisRouter.json(503, errorBody('备份或恢复正在处理本机数据，请稍后重试')); }
+    try { return this.handleReady(method, pathAndQuery, bodyText); } finally { lease.release(); }
+  }
+
+  private handleReady(method: string, pathAndQuery: string, bodyText: string): RouterResult {
     const q = pathAndQuery.indexOf('?');
     const path = q >= 0 ? pathAndQuery.substring(0, q) : pathAndQuery;
     const query = q >= 0 ? pathAndQuery.substring(q + 1) : '';
@@ -103,7 +120,7 @@ export class HarmonyMinisRouter {
       // 而不是省略 —— Android 就是这么做的。省略在 iOS 上等价于 false
       // (LeoAgentClient `features[feature] == true`),但别的消费者未必。
       return HarmonyMinisRouter.json(200,
-        `{"object":"leoagent.capabilities","platform":"harmony","version":${JSON.stringify(PROTOCOL_VERSION)},"server":"minis","app_version":${JSON.stringify(ReleaseCatalog.currentVersion)},"features":{"harness_sessions":true,"resumable_events":true,"approval_events":false,"session_steering":true,"task_scope_approval":false,"full_auto":false,"session_digest":false,"task_receipts":false,"artifacts":false,"exact_window":false},"harnesses":[{"key":"minis","name":"LeoPhoneAgent"}]}`);
+        `{"object":"leoagent.capabilities","platform":"harmony","version":${JSON.stringify(PROTOCOL_VERSION)},"server":"minis","app_version":${JSON.stringify(ReleaseCatalog.currentVersion)},"features":{"harness_sessions":true,"resumable_events":true,"approval_events":false,"session_steering":true,"task_scope_approval":false,"full_auto":false,"session_digest":false,"task_receipts":false,"artifacts":false,"exact_window":false,"screen_snapshot":false,"screen_session":false,"agent_login":false,"external_sessions":false,"external_sessions_codex":false,"automations":false,"automation_templates":false,"models":false,"model_switch":false,"effort":false,"compact":false,"rename":false,"attachments":false,"ask_user_question":false,"follow":false},"harnesses":[{"key":"minis","name":"LeoPhoneAgent"}]}`);
     }
     if (verb === 'GET' && path === '/harness/sessions') {
       return HarmonyMinisRouter.json(200, `{"sessions":[${this.summaries()}]}`);
@@ -257,7 +274,9 @@ export class HarmonyMinisRouter {
     if (idx < 0) {
       return false;
     }
-    const victimId = this.sessions[idx].id;
+    const victim = this.sessions[idx];
+    const victimId = victim.id;
+    if (victim.turn && !victim.turn.preparing && !victim.turn.completing) { victim.turn.release(); }
     // 在飞的回合先分代作废,再把 LocalAgentEngine 那两张按 sessionId 存的 Map
     // 里的死键清掉 —— 否则会话虽然没了,gen/reqs 仍然跟着 id 无限长。
     LocalAgentEngine.stop(victimId);
@@ -295,6 +314,7 @@ export class HarmonyMinisRouter {
     }
     this.streams.set(id, false);
     LocalAgentEngine.stop(id);
+    if (row.turn && !row.turn.preparing && !row.turn.completing) { row.turn.release(); }
     row.status = 'cancelled';
     this.emit(row, '{"event":"run.cancelled"}');
     return HarmonyMinisRouter.json(200, `{"ok":true,"status":"cancelled"}`);
@@ -324,6 +344,11 @@ export class HarmonyMinisRouter {
       this.emit(row, HarmonyMinisRouter.runFailed('鸿蒙身体还没挂上上下文'));
       return;
     }
+    let lease: BackupLease;
+    try { lease = BackupAccess.beginExecution(ctx); }
+    catch (_error) { this.emit(row, HarmonyMinisRouter.runFailed('备份或恢复尚未完成，当前回合未执行')); return; }
+    if (row.turn && !row.turn.preparing && !row.turn.completing) { row.turn.release(); }
+    const turn = new BodyTurn(); turn.lease = lease; row.turn = turn;
     const mine = LocalAgentEngine.bump(row.id);
     this.streams.set(row.id, true);
     row.status = 'running';
@@ -350,27 +375,33 @@ export class HarmonyMinisRouter {
       // 控制端气泡里已经有的全文。完成时 output 给这一份:原来只给最后一轮的话,
       // 带工具的回答在 iPhone 上会把最终答复再显示一遍。
       let shown = '';
+      turn.preparing = false;
       LocalAgentEngine.run(ctx, row.id, mine, text, thinking, (delta: string) => {
         shown += delta;
         this.emit(row, `{"event":"message.delta","delta":${JSON.stringify(delta)}}`);
       }, (output: string) => {
+        turn.completing = true;
         row.status = 'idle';
         this.emit(row, `{"event":"run.completed","output":${JSON.stringify(shown.length > 0 ? shown : output)},"usage":{}}`);
         if (row.localId) {
           sessionStore.append(ctx, row.localId, 'assistant', output).catch(() => {
             // keep relay alive
-          });
-        }
+          }).finally(() => { turn.release(); });
+        } else { turn.release(); }
       }, (message: string) => {
+        turn.release();
         row.status = 'idle';
         this.emit(row, HarmonyMinisRouter.runFailed(message));
-      }, conversationHistory(session.messages));
+      }, conversationHistory(session.messages), () => SessionStore.memoryAllowed(ctx, row.localId));
     }).catch((err: Error) => {
+      turn.release();
       if (LocalAgentEngine.current(row.id) !== mine) {
         return;
       }
       row.status = 'idle';
       this.emit(row, HarmonyMinisRouter.runFailed(`${err}`));
+    }).finally(() => {
+      if (LocalAgentEngine.current(row.id) !== mine) { turn.release(); }
     });
   }
 

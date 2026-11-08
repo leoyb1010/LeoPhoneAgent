@@ -1,3 +1,7 @@
+import { IconButton, ActionButton } from '../theme/Controls';
+import { MotionPolicy } from '../theme/MotionPolicy';
+import { ChatViewState } from '../local/ChatViewState';
+import { Voice } from '../local/Voice';
 import { common } from '@kit.AbilityKit';
 import { promptAction, router } from '@kit.ArkUI';
 import { FirstMessage, LocalChatLaunch, LocalChatPane } from './LocalChatPane';
@@ -15,8 +19,13 @@ import { Copy } from '../theme/Copy';
 import { Sym } from '../theme/Symbols';
 import { Tokens } from '../theme/Tokens';
 
+class HomeAttachment {
+  static sending: boolean = false;
+  static focusSequence: number = 0;
+}
+
 /** 对话头像的颜色:按标题挑一个,同一个对话每次一样。 */
-const AVATAR_COLORS: string[] = ['#2E8B8B', '#5B7CFA', '#8E6CEF', '#F08A24', '#E5577A', '#34A853', '#0FA3C8'];
+const AVATAR_COLORS: string[] = ['#286F61', '#385D70', '#58623C', '#7B6034', '#79504A', '#3F6B64'];
 
 function avatarColor(title: string): string {
   let hash = 0;
@@ -28,7 +37,7 @@ function avatarColor(title: string): string {
 
 /** 一行对话的 key:画面上用到的都在里面(鸿蒙 ForEach key 不变就不重画,改了标题也还显示旧的)。 */
 function sessionKey(row: LocalSessionSummary): string {
-  return `${row.id}|${row.title}|${row.updatedAt}|${row.pinned}|${row.lastMessage}`;
+  return `${row.id}|${row.title}|${row.updatedAt}|${row.pinned}|${row.lastMessage.substring(0, 100)}|${ChatViewState.draftText(row.id).substring(0, 80)}`;
 }
 
 /**
@@ -44,11 +53,19 @@ export struct LocalAgentPane {
   /** 点通知回来要打开的对话(EntryAbility 放进来,用完清空)。 */
   @StorageProp('openSession') @Watch('onOpenSession') openRequest: string = '';
   /** 正在跑(或等你确认)的对话:列表里标出来。 */
+  @StorageProp('chatViewTick') @Watch('onHomeVoice') voiceTick: number = 0;
   @State activeIds: string[] = [];
+  @State viewportWidth: number = 0;
+  @State viewportHeight: number = 720;
+  @State homeSending: boolean = false;
+  @State homeFocusTicket: number = 0;
+  @StorageProp('motionReduced') reduced: boolean = false;
+  @State listening: boolean = false;
+  private voiceVersion: number = 0;
   @Prop wide: boolean = false;
   onRemote: () => void = () => {};
   onSettings: () => void = () => {};
-  @State sessionId: string = '';
+  @StorageLink('homeSessionId') sessionId: string = '';
   @State groups: SessionGroup[] = [];
   @State query: string = '';
   @State importDraft: string = '';
@@ -62,15 +79,46 @@ export struct LocalAgentPane {
   @State menuId: string = '';
   @State menuTitle: string = '';
   @State menuPinned: boolean = false;
-  @State draft: string = '';
-  @State homeFiles: string[] = [];
-  @State homeImagePath: string = '';
-  private homeImage: PendingImage | null = null;
+  @StorageLink('homeDraft') @Watch('homeDraftChanged') draft: string = '';
+  @StorageProp('draftError') @Watch('onHomeDraftError') draftError: string = '';
+  @StorageProp('draftTick') @Watch('onHomeDraftTick') draftTick: number = 0;
+  private restoringHome: boolean = false;
+  @StorageLink('homeFiles') @Watch('homeDraftChanged') homeFiles: string[] = [];
+  @StorageLink('homeImagePath') @Watch('homeDraftChanged') homeImagePath: string = '';
+  @State homeImagePaths: string[] = [];
+  private get homeImages(): PendingImage[] { const images = ChatViewState.get('home').images; return Array.isArray(images) ? images : []; }
+  private set homeImages(value: PendingImage[]) {
+    if (!Array.isArray(value)) return;
+    const row = ChatViewState.get('home'); row.images = value; row.image = value[0] ?? null;
+  }
+  private get homeImage(): PendingImage | null { return ChatViewState.get('home').image ?? null; }
+  private set homeImage(value: PendingImage | null) { if (value !== undefined) ChatViewState.get('home').image = value; }
   private launched: boolean = false;
 
   aboutToAppear(): void {
+    ChatViewState.initialize(getContext(this) as common.UIAbilityContext);
+    const saved = ChatViewState.get('home');
+    this.restoringHome = true;
+    this.draft = saved.draft; this.homeFiles = saved.files.slice();
+    this.homeImages = Array.isArray(saved.images) && saved.images.length ? saved.images.slice() : (saved.image ? [saved.image] : []);
+    this.homeImagePaths = this.homeImages.map((image: PendingImage) => image.path); this.homeImagePath = this.homeImage?.path ?? '';
+    this.restoringHome = false;
     this.activeIds = ChatRuns.activeIds();
+    const voice = ChatViewState.get('home'); this.listening = voice.listening;
+    this.homeSending = HomeAttachment.sending; this.onHomeVoice();
     this.reload();
+  }
+
+  aboutToDisappear(): void { this.homeDraftChanged(); ChatViewState.flush(); }
+  homeDraftChanged(): void { if (!this.restoringHome) this.saveHomeDraft(); }
+  onHomeDraftError(): void { if (this.draftError) this.message = this.draftError; }
+  onHomeDraftTick(): void { this.groups = sessionStore.grouped(this.query); }
+  private saveHomeDraft(): void {
+    const row = ChatViewState.get('home');
+    // Native view teardown may unbind component properties. Keep the conversation-owned snapshot in that case.
+    if (typeof this.draft === 'string') row.draft = this.draft;
+    if (Array.isArray(this.homeFiles)) row.files = this.homeFiles.slice();
+    ChatViewState.persistSoon();
   }
 
   onProviderTick(): void {
@@ -97,7 +145,11 @@ export struct LocalAgentPane {
   }
 
   build() {
-    if (this.wide) {
+    if (!this.ready) {
+      this.loadingSurface()
+    } else if (!this.configured) {
+      this.connectionSurface()
+    } else if (this.wide) {
       Row() {
         Column() {
           this.listColumn()
@@ -109,17 +161,79 @@ export struct LocalAgentPane {
           .height('100%')
           .backgroundColor(Tokens.separator)
         if (this.sessionId.length > 0) {
-          LocalChatPane({ sessionId: this.sessionId, compact: true })
+          LocalChatPane({ sessionId: this.sessionId, compact: true, onBack: () => { this.sessionId = ''; }, onNew: () => this.createSession() })
             .layoutWeight(1)
         } else {
-          this.pickHint()
+          Column() {
+            Column() { this.pickHint() }.layoutWeight(1).width('100%')
+            this.homeComposer()
+          }.layoutWeight(1).height('100%')
         }
       }
       .width('100%')
       .height('100%')
+      .onAreaChange((_old: Area, area: Area) => {
+        const width = Number.parseFloat(`${area.width}`); const height = Number.parseFloat(`${area.height}`);
+        if (width > 0) this.viewportWidth = width; if (height > 0) this.viewportHeight = height;
+      })
+    } else if (this.sessionId.length > 0) {
+      LocalChatPane({ sessionId: this.sessionId, onBack: () => { this.sessionId = ''; }, onNew: () => this.createSession() })
     } else {
       this.listColumn()
     }
+  }
+
+  @Builder
+  homeComposer() {
+        Column() {
+          Composer({
+            draft: $draft,
+            inputId: 'homeComposerInput',
+            focusRequest: this.homeFocusTicket,
+            onFocusApplied: (ticket: number) => { if (this.homeFocusTicket === ticket) this.homeFocusTicket = 0; },
+            ready: this.ready && !this.homeSending,
+            compact: this.viewportHeight < 460,
+            listening: this.listening,
+            onMic: () => this.toggleHomeVoice(),
+            placeholder: '问 Leo，或直接说要做的事',
+            modelLabel: this.modelLine,
+            showApproval: true,
+            fullAuto: SensitiveToolGate.fullAuto && this.approvalTick >= 0,
+            approvalLabel: SensitiveToolGate.modeTitle(),
+            files: this.homeFiles,
+            imagePath: this.homeImagePath,
+            imagePaths: this.homeImagePaths,
+            returnSend: themeStore.returnSend,
+            onSend: () => {
+              this.sendFromHome();
+            },
+            onPickImage: () => {
+              this.pickHomeImage();
+            },
+            onPickFiles: () => {
+              this.pickHomeFiles();
+            },
+            onSlash: () => {
+              this.draft = '/';
+            },
+            onModel: () => {
+              this.openModelPick();
+            },
+            onApproval: () => {
+              router.pushUrl({ url: 'pages/ApprovalPage' });
+            },
+            onRemoveFile: (index: number) => {
+              this.homeFiles = this.homeFiles.filter((_name: string, i: number) => i !== index);
+            },
+            onRemoveImage: (index: number) => {
+              this.homeImages = this.homeImages.filter((_image: PendingImage, i: number) => i !== index); this.homeImage = this.homeImages[0] ?? null;
+              this.homeImagePath = this.homeImage?.path ?? ''; this.homeImagePaths = this.homeImages.map((image: PendingImage) => image.path); this.homeDraftChanged();
+            }
+          })
+        }
+        .width('100%')
+        .padding({ left: 10, right: 10, top: 4, bottom: 10 })
+        .constraintSize({ maxWidth: Tokens.readable + 24 })
   }
 
   @Builder
@@ -159,52 +273,16 @@ export struct LocalAgentPane {
       .scrollBar(BarState.Off)
       .align(Alignment.Top)
       .edgeEffect(EdgeEffect.Spring)
-      if (!this.wide && this.configured) {
-        Column() {
-          Composer({
-            draft: $draft,
-            placeholder: '问 Leo，或直接说要做的事',
-            modelLabel: this.modelLine,
-            showApproval: true,
-            fullAuto: SensitiveToolGate.fullAuto && this.approvalTick >= 0,
-            files: this.homeFiles,
-            imagePath: this.homeImagePath,
-            returnSend: themeStore.returnSend,
-            onSend: () => {
-              this.sendFromHome();
-            },
-            onPickImage: () => {
-              this.pickHomeImage();
-            },
-            onPickFiles: () => {
-              this.pickHomeFiles();
-            },
-            onSlash: () => {
-              this.draft = '/';
-            },
-            onModel: () => {
-              this.openModelPick();
-            },
-            onApproval: () => {
-              const ctx = getContext(this) as common.UIAbilityContext;
-              SensitiveToolGate.setFullAuto(ctx, !SensitiveToolGate.fullAuto);
-            },
-            onRemoveFile: (index: number) => {
-              this.homeFiles = this.homeFiles.filter((_name: string, i: number) => i !== index);
-            },
-            onRemoveImage: () => {
-              this.homeImage = null;
-              this.homeImagePath = '';
-            }
-          })
-        }
-        .width('100%')
-        .padding({ left: 10, right: 10, top: 4, bottom: 10 })
-      }
+      if (!this.wide && this.configured) this.homeComposer()
     }
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+    .onAreaChange((_old: Area, area: Area) => {
+      if (this.wide) return;
+      const width = Number.parseFloat(`${area.width}`); const height = Number.parseFloat(`${area.height}`);
+      if (width > 0) this.viewportWidth = width; if (height > 0) this.viewportHeight = height;
+    })
     .bindSheet($$this.importOpen, this.importSheet(), {
       height: SheetSize.FIT_CONTENT,
       dragBar: true,
@@ -225,7 +303,7 @@ export struct LocalAgentPane {
           this.onSettings();
         })
       }
-      Text(this.wide ? '对话' : 'LeoPhoneAgent')
+      Text(this.wide ? '对话' : 'LeoBot')
         .fontSize(this.wide ? 20 : 19)
         .fontWeight(FontWeight.Bold)
         .fontColor(Tokens.text)
@@ -242,9 +320,10 @@ export struct LocalAgentPane {
           }
         })
       }
-      this.barIcon('computer', () => {
-        this.onRemote();
-      })
+      if (!this.wide) {
+        this.barIcon('bookshelf', () => router.pushUrl({ url: 'pages/BrainSpacePage' }))
+        this.barIcon('computer', () => this.onRemote())
+      }
       if (this.wide && this.configured) {
         this.barIcon('square_and_pencil', () => {
           this.createSession();
@@ -253,9 +332,12 @@ export struct LocalAgentPane {
       Stack() {
         Sym({ name: 'ellipsis_circle', dim: 21, color: Tokens.text })
       }
-      .width(40)
-      .height(40)
+      .width(44)
+      .height(44)
+      .accessibilityText('更多操作')
       .bindMenu(this.wide ? [
+        { value: '第二大脑', action: () => { router.pushUrl({ url: 'pages/BrainSpacePage' }); } },
+        { value: '远程机器', action: () => this.onRemote() },
         {
           value: '设置',
           action: () => {
@@ -290,14 +372,7 @@ export struct LocalAgentPane {
 
   @Builder
   barIcon(name: string, tap: () => void) {
-    Stack() {
-      Sym({ name: name, dim: 20, color: Tokens.text })
-    }
-    .width(40)
-    .height(40)
-    .onClick(() => {
-      tap();
-    })
+    IconButton({ icon: name, label: name === 'gearshape' ? '设置' : (name === 'magnifyingglass' ? '搜索对话' : (name === 'bookshelf' ? '第二大脑' : (name === 'computer' ? '远程机器' : '新对话'))), onTap: tap })
   }
 
   @Builder
@@ -311,7 +386,7 @@ export struct LocalAgentPane {
             this.groups = sessionStore.grouped(this.query);
           })
           .layoutWeight(1)
-          .height(36)
+          .height(44)
           .fontSize(15)
           .backgroundColor('#00000000')
           .fontColor(Tokens.text)
@@ -319,19 +394,13 @@ export struct LocalAgentPane {
           .padding({ left: 6 })
       }
       .layoutWeight(1)
-      .height(38)
+      .height(44)
       .padding({ left: 10, right: 6 })
       .backgroundColor(Tokens.surface)
       .borderRadius(19)
-      Text('取消')
-        .fontSize(15)
-        .fontColor(Tokens.accent)
-        .margin({ left: 12 })
-        .onClick(() => {
-          this.query = '';
-          this.searchOpen = false;
-          this.groups = sessionStore.grouped('');
-        })
+      ActionButton({ label: '取消', variant: 'quiet', fullWidth: false, onTap: () => {
+        this.query = ''; this.searchOpen = false; this.groups = sessionStore.grouped('');
+      } })
     }
     .width('100%')
     .padding({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 8 })
@@ -392,7 +461,7 @@ export struct LocalAgentPane {
         .fontColor(icon === 'dot' ? color : Tokens.text)
         .margin({ left: 6 })
     }
-    .height(32)
+    .height(44)
     .padding({ left: 12, right: 12 })
     .backgroundColor(Tokens.surface)
     .borderRadius(16)
@@ -447,6 +516,7 @@ export struct LocalAgentPane {
             .width(Tokens.iconCircle + 6)
             .height(Tokens.iconCircle + 6)
             .color(Tokens.accent)
+            .enableLoading(!this.reduced)
         }
       }
       .width(Tokens.iconCircle + 6)
@@ -458,7 +528,7 @@ export struct LocalAgentPane {
           .fontColor(Tokens.text)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(row.lastMessage.length > 0 ? row.lastMessage : '暂无消息')
+        Text(ChatViewState.draftText(row.id) ? '草稿 · ' + ChatViewState.draftText(row.id) : (row.lastMessage.length > 0 ? row.lastMessage : '暂无消息'))
           .fontSize(Tokens.rowSub)
           .fontColor(Tokens.secondary)
           .maxLines(1)
@@ -481,11 +551,14 @@ export struct LocalAgentPane {
       .margin({ left: 8 })
     }
     .width(this.wide ? 'calc(100% - 16vp)' : '100%')
-    .height(70)
+    .height(76)
     .padding({ left: this.wide ? 6 : 10, right: this.wide ? 10 : 16 })
     .margin({ left: this.wide ? 8 : 0, right: this.wide ? 8 : 0 })
     .backgroundColor(this.wide && this.sessionId === row.id ? Tokens.surface : '#00000000')
-    .borderRadius(this.wide ? 14 : 0)
+    .borderRadius(this.wide ? 16 : 0)
+    .accessibilityGroup(true)
+    .accessibilityText(row.title + '，' + (this.activeIds.indexOf(row.id) >= 0 ? '任务进行中' : relativeTime(row.updatedAt)))
+    .focusable(true)
     .gesture(
       LongPressGesture({ repeat: false })
         .onAction(() => {
@@ -503,16 +576,7 @@ export struct LocalAgentPane {
   @Builder
   emptyList() {
     Column() {
-      Stack() {
-        Column()
-          .width(64)
-          .height(64)
-          .borderRadius(32)
-          .backgroundColor(Tokens.accentSoft)
-        Sym({ name: 'wand_and_stars_fill', dim: 28, color: Tokens.accent })
-      }
-      .width(64)
-      .height(64)
+      Image(Tokens.dark ? $r('app.media.leobot_mark_dark') : $r('app.media.leobot_mark')).width(56).height(56).objectFit(ImageFit.Contain)
       Text('有什么要我做的？')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
@@ -550,146 +614,71 @@ export struct LocalAgentPane {
 
   @Builder
   pickHint() {
+    Column({ space: 14 }) {
+      Image(Tokens.dark ? $r('app.media.leobot_mark_dark') : $r('app.media.leobot_mark')).width(56).height(56).objectFit(ImageFit.Contain)
+      Text('今天想做什么').fontSize(25).fontWeight(FontWeight.Medium).fontColor(Tokens.text)
+      Text('选择一个对话，或交代一件新的事。').fontSize(15).fontColor(Tokens.secondary).textAlign(TextAlign.Center)
+      ActionButton({ label: '新对话', icon: 'square_and_pencil', fullWidth: false, onTap: () => this.createSession() }).margin({ top: 8 })
+    }.layoutWeight(1).height('100%').padding(28).justifyContent(FlexAlign.Center).backgroundColor(Tokens.bg)
+  }
+
+  @Builder
+  setupChrome() {
+    Row() {
+      IconButton({ icon: 'gearshape', label: '设置', onTap: () => this.onSettings() })
+      Blank()
+      IconButton({ icon: 'bookshelf', label: '第二大脑', onTap: () => router.pushUrl({ url: 'pages/BrainSpacePage' }) })
+      IconButton({ icon: 'computer', label: '远程机器', onTap: () => this.onRemote() })
+    }.height(56).width('100%').padding({ left: 10, right: 10 })
+  }
+
+  @Builder
+  loadingSurface() {
     Column() {
-      Sym({ name: 'text_bubble_left_2', dim: 40, color: Tokens.muted })
-      Text('选一个对话，或新建一个')
-        .fontSize(16)
-        .fontColor(Tokens.secondary)
-        .margin({ top: 12 })
-      Text('新对话')
-        .fontSize(15)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#FFFFFF')
-        .padding({ left: 18, right: 18, top: 9, bottom: 9 })
-        .backgroundColor(Tokens.accent)
-        .borderRadius(20)
-        .margin({ top: 16 })
-        .onClick(() => {
-          this.createSession();
-        })
-    }
-    .layoutWeight(1)
-    .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .backgroundColor(Tokens.bg)
+      this.setupChrome()
+      Column({ space: 14 }) {
+        if (this.message) {
+          Text('本机资料暂时无法读取').fontSize(22).fontWeight(FontWeight.Medium).fontColor(Tokens.text)
+          Text(this.message).fontSize(14).fontColor(Tokens.secondary).textAlign(TextAlign.Center)
+          ActionButton({ label: '重新读取', fullWidth: false, onTap: () => { this.message = ''; this.reload(); } })
+        } else {
+          LoadingProgress().width(28).height(28).color(Tokens.accent).enableLoading(!this.reduced)
+          Text('正在读取本机对话').fontSize(15).fontColor(Tokens.secondary)
+        }
+      }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center).padding(24)
+    }.width('100%').height('100%').backgroundColor(Tokens.bg)
+  }
+
+  @Builder
+  connectionSurface() {
+    Column() {
+      this.setupChrome()
+      Scroll() {
+        this.onboarding()
+      }.layoutWeight(1).width('100%').align(Alignment.Center).scrollBar(BarState.Off)
+    }.width('100%').height('100%').backgroundColor(Tokens.bg)
   }
 
   @Builder
   onboarding() {
-    Column() {
-      Stack() {
-        Column()
-          .width(Tokens.hero)
-          .height(Tokens.hero)
-          .borderRadius(Tokens.heroRadius)
-          .linearGradient({
-            angle: 135,
-            colors: [[Tokens.heroA, 0], [Tokens.heroB, 1]]
-          })
-        Sym({ name: 'wand_and_stars_fill', dim: 32, color: '#FFFFFF' })
+    Column({ space: 16 }) {
+      Image(Tokens.dark ? $r('app.media.leobot_mark_dark') : $r('app.media.leobot_mark'))
+        .width(80).height(80).objectFit(ImageFit.Contain).accessibilityText('LeoBot')
+      Text('从一件事开始').fontSize(30).fontWeight(FontWeight.Bold).fontColor(Tokens.text).textAlign(TextAlign.Center)
+      Text('连接一个 AI 服务商。\n让 LeoBot 帮你整理资料、完成任务。')
+        .fontSize(16).lineHeight(25).fontColor(Tokens.secondary).textAlign(TextAlign.Center).constraintSize({ maxWidth: 420 })
+      ActionButton({ label: '连接 AI 服务商', icon: 'plus', onTap: () => router.pushUrl({ url: 'pages/ProviderListPage' }) })
+        .width('100%').constraintSize({ maxWidth: 380 }).margin({ top: 12 })
+      Text('服务商密钥由设备钥匙串保管。').fontSize(13).fontColor(Tokens.muted).textAlign(TextAlign.Center)
+      if (this.draft || this.homeFiles.length > 0 || this.homeImagePath) {
+        Column({ space: 6 }) {
+          Text('本机草稿').fontSize(13).fontWeight(FontWeight.Medium).fontColor(Tokens.accent).width('100%')
+          Text(this.draft || '已添加附件').fontSize(14).lineHeight(21).fontColor(Tokens.secondary).maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+        }.width('100%').padding(16).backgroundColor(Tokens.surface).borderRadius(16).margin({ top: 10 })
       }
-      .width(Tokens.hero)
-      .height(Tokens.hero)
-      .margin({ bottom: 20 })
-      Text(Copy.welcomeTitle)
-        .fontSize(Tokens.welcome)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Tokens.text)
-        .textAlign(TextAlign.Center)
-      Text(Copy.welcomeSubtitle)
-        .fontSize(15)
-        .lineHeight(22)
-        .fontColor(Tokens.secondary)
-        .textAlign(TextAlign.Center)
-        .margin({ top: 8, bottom: 22 })
-      Row() {
-        Column()
-          .width(7)
-          .height(7)
-          .borderRadius(3.5)
-          .backgroundColor(Tokens.stepGreen)
-        Text(Copy.localRuntime)
-          .fontSize(Tokens.pill)
-          .fontColor(Tokens.secondary)
-          .fontWeight(FontWeight.Medium)
-          .margin({ left: 7 })
-      }
-      .padding({ left: 12, right: 12, top: 7, bottom: 7 })
-      .backgroundColor(Tokens.surface)
-      .borderRadius(50)
-      .margin({ bottom: 24 })
-      Column() {
-        this.stepRow('1', Copy.step1, this.configured ? Copy.stepDone : Copy.step1sub, this.configured, false)
-        Divider()
-          .strokeWidth(Tokens.hairline)
-          .color(Tokens.separator)
-          .margin({ left: 66 })
-        this.stepRow('2', Copy.step2, this.step2Sub(), false, !this.configured)
-        Divider()
-          .strokeWidth(Tokens.hairline)
-          .color(Tokens.separator)
-          .margin({ left: 66 })
-        this.stepRow('3', Copy.step3, this.configured ? Copy.step3sub : Copy.stepLocked, false, !this.configured)
-      }
-      .width('100%')
-      .backgroundColor(Tokens.surface)
-      .borderRadius(Tokens.cardRadius)
-    }
-    .width('100%')
-    .constraintSize({ maxWidth: 560 })
-    .alignItems(HorizontalAlign.Center)
-    .padding({ left: 24, right: 24, top: this.wide ? 24 : 36, bottom: 48 })
-  }
-
-  @Builder
-  stepRow(index: string, title: string, subtitle: string, done: boolean, locked: boolean) {
-    Row() {
-      Stack() {
-        Column()
-          .width(Tokens.stepIcon)
-          .height(Tokens.stepIcon)
-          .borderRadius(Tokens.stepRadius)
-          .backgroundColor(done ? Tokens.stepGreen : (locked ? Tokens.surface2 : Tokens.heroA))
-        if (done) {
-          Sym({ name: 'checkmark', dim: 16, color: '#FFFFFF' })
-        } else {
-          Text(index)
-            .fontSize(15)
-            .fontColor(locked ? Tokens.muted : '#FFFFFF')
-            .fontWeight(FontWeight.Medium)
-        }
-      }
-      .width(Tokens.stepIcon)
-      .height(Tokens.stepIcon)
-      Column() {
-        Text(title)
-          .fontSize(Tokens.rowTitle)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(locked ? Tokens.muted : Tokens.text)
-        Text(subtitle)
-          .fontSize(12.5)
-          .fontColor(Tokens.muted)
-          .margin({ top: 2 })
-      }
-      .alignItems(HorizontalAlign.Start)
-      .margin({ left: 14 })
-      .layoutWeight(1)
-      if (!done && !locked) {
-        Sym({ name: 'chevron_right', dim: 13, color: Tokens.muted })
-      }
-    }
-    .width('100%')
-    .height(68)
-    .padding({ left: 14, right: 14 })
-    .onClick(() => {
-      if (index === '1') {
-        this.onSettings();
-      } else if (index === '2') {
-        this.openModelPick();
-      } else if (index === '3' && this.configured) {
-        this.createSession();
-      }
-    })
+      if (this.message) Text(this.message).fontSize(14).fontColor(Tokens.warn).width('100%')
+    }.width('100%').constraintSize({ maxWidth: 552 }).padding({ left: 28, right: 28, top: 36, bottom: 64 })
+      .alignItems(HorizontalAlign.Center)
   }
 
   @Builder
@@ -775,28 +764,41 @@ export struct LocalAgentPane {
     })
   }
 
-  /** 展开的折叠屏(约 700–840vp)左边四成;再宽固定 360。 */
+  /** 按当前窗口分配侧栏，三折叠全展开保持独立可读正文。 */
   private listWidth(): string | number {
-    return '40%';
+    if (this.viewportWidth <= 0) return '32%';
+    return this.viewportWidth >= Tokens.largeBreak ? Math.min(340, Math.max(280, this.viewportWidth * 0.27)) : Math.max(208, this.viewportWidth * 0.32);
   }
 
   private async sendFromHome(): Promise<void> {
+    if (HomeAttachment.sending) return;
+    HomeAttachment.sending = true; this.homeSending = true;
+    try { await this.submitFromHome(); } finally { HomeAttachment.sending = false; this.homeSending = false; }
+  }
+
+  private async submitFromHome(): Promise<void> {
     const text = this.draft.trim();
     if (!text && !this.homeImage && this.homeFiles.length === 0) {
       return;
     }
     const ctx = getContext(this) as common.UIAbilityContext;
+    const voice = ChatViewState.get('home');
+    if (voice.stopListen) { voice.stopListen(); voice.stopListen = null; voice.listening = false; }
     try {
       const session = await sessionStore.create(ctx);
       const first = new FirstMessage();
       first.sessionId = session.id;
       first.text = text;
       first.files = this.homeFiles;
-      first.image = this.homeImage;
+      first.image = this.homeImage; first.images = this.homeImages.slice();
+      const draft = ChatViewState.get(session.id); draft.draft = this.draft; draft.files = this.homeFiles.slice(); draft.image = this.homeImage; draft.images = this.homeImages.slice();
+      first.submissionId = ChatViewState.beginSubmission(session.id);
       LocalChatLaunch.first = first;
       this.draft = '';
+      voice.voiceGeneration += 1; voice.draft = ''; voice.voiceVersion += 1; this.voiceVersion = voice.voiceVersion;
+      ChatViewState.changed();
       this.homeFiles = [];
-      this.homeImage = null;
+      this.homeImage = null; this.homeImages = []; this.homeImagePaths = [];
       this.homeImagePath = '';
       this.groups = sessionStore.grouped(this.query);
       this.openSession(session.id);
@@ -805,13 +807,35 @@ export struct LocalAgentPane {
     }
   }
 
+  onHomeVoice(): void {
+    const voice = ChatViewState.get('home');
+    if (voice.voiceVersion > this.voiceVersion) { this.draft = voice.draft; this.voiceVersion = voice.voiceVersion; }
+    this.listening = voice.listening; if (voice.voiceError) this.message = voice.voiceError;
+  }
+
+  private async toggleHomeVoice(): Promise<void> {
+    const voice = ChatViewState.get('home');
+    if (voice.stopListen) { voice.stopListen(); voice.stopListen = null; voice.listening = false; ChatViewState.changed(); return; }
+    if (voice.listening) { voice.voiceGeneration += 1; voice.listening = false; ChatViewState.changed(); return; }
+    const generation = ++voice.voiceGeneration;
+    voice.listening = true; voice.voiceError = ''; ChatViewState.changed();
+    try {
+      const stop = await Voice.listen(getContext(this) as common.UIAbilityContext, (text: string, last: boolean) => {
+        if (voice.voiceGeneration !== generation) return;
+        voice.draft = text; voice.voiceVersion += 1;
+        if (last) { voice.listening = false; voice.stopListen = null; }
+        ChatViewState.changed();
+      }, (message: string) => { if (voice.voiceGeneration !== generation) return; voice.voiceError = message; voice.listening = false; voice.stopListen = null; ChatViewState.changed(); }, () => voice.voiceGeneration === generation);
+      if (voice.listening) voice.stopListen = stop; else stop();
+    } catch (error) { if (voice.voiceGeneration !== generation) return; voice.voiceError = `${error}`; voice.listening = false; voice.stopListen = null; ChatViewState.changed(); }
+  }
+
   private async pickHomeImage(): Promise<void> {
     try {
-      const image = await Attachments.pickImage(getContext(this) as common.UIAbilityContext);
-      if (image) {
-        this.homeImage = image;
-        this.homeImagePath = image.path;
-      }
+      const images = await Attachments.pickImages(getContext(this) as common.UIAbilityContext, 16 - this.homeImages.length);
+      if (!images.length) return;
+      this.homeImages = this.homeImages.concat(images); this.homeImage = this.homeImages[0] ?? null;
+      this.homeImagePath = this.homeImage?.path ?? ''; this.homeImagePaths = this.homeImages.map((image: PendingImage) => image.path); this.homeDraftChanged();
     } catch (err) {
       this.message = err instanceof Error ? err.message : `${err}`;
     }
@@ -872,13 +896,6 @@ export struct LocalAgentPane {
     return this.groups.length > 0;
   }
 
-  private step2Sub(): string {
-    if (this.configured && this.modelLine.length > 0) {
-      return `当前 ${this.modelLine}，点这里换`;
-    }
-    return Copy.stepLocked;
-  }
-
   private openModelPick(): void {
     const row = providerStore.active();
     if (row) {
@@ -893,13 +910,15 @@ export struct LocalAgentPane {
     const ctx = getContext(this) as common.UIAbilityContext;
     Promise.all([
       providerStore.ensureLoaded(ctx),
-      sessionStore.ensureLoaded(ctx)
+      sessionStore.ensureLoaded(ctx),
+      SensitiveToolGate.load(ctx)
     ]).then(() => {
       this.configured = providerStore.configured();
       const active = providerStore.active();
       this.modelLine = active ? active.model : '';
       this.groups = sessionStore.grouped(this.query);
       this.ready = true;
+      if (SensitiveToolGate.lastError) this.message = SensitiveToolGate.lastError;
       if (sessionStore.jsonLoadFailed) {
         this.message = '对话档案读坏了，先别保存，避免覆盖';
       }
@@ -910,14 +929,8 @@ export struct LocalAgentPane {
   }
 
   private async createSession(): Promise<void> {
-    const ctx = getContext(this) as common.UIAbilityContext;
-    try {
-      const session = await sessionStore.create(ctx);
-      this.groups = sessionStore.grouped(this.query);
-      this.openSession(session.id);
-    } catch (err) {
-      this.message = `${err}`;
-    }
+    this.sessionId = ''; LocalChatLaunch.sessionId = '';
+    this.homeFocusTicket = ++HomeAttachment.focusSequence;
   }
 
   private async importSession(): Promise<void> {
@@ -1012,8 +1025,6 @@ export struct LocalAgentPane {
   private openSession(id: string): void {
     this.sessionId = id;
     LocalChatLaunch.sessionId = id;
-    if (!this.wide) {
-      router.pushUrl({ url: 'pages/LocalChatPage' });
-    }
+
   }
 }

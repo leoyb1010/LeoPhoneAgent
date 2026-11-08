@@ -1,8 +1,9 @@
 import { common } from '@kit.AbilityKit';
 import { http } from '@kit.NetworkKit';
 import { OpenAICompatClient, StreamTurn } from './OpenAICompatClient';
-import { FailoverSlot, LoopTurn } from './LocalProtocol';
-import { providerStore } from '../store/ProviderStore';
+import { LoopTurn } from './LocalProtocol';
+import { modelImageMode } from './ProviderModels';
+import { ProviderRunSlot, providerStore } from '../store/ProviderStore';
 
 /**
  * 只要一段文字的旁路请求:写压缩摘要、起标题。不带工具、不显示过程,按当前服务商顺序试,
@@ -12,13 +13,16 @@ import { providerStore } from '../store/ProviderStore';
 export class SideModel {
   static async complete(context: common.Context, systemPrompt: string, userText: string): Promise<string> {
     await providerStore.ensureLoaded(context);
-    const queue: FailoverSlot[] = providerStore.queue();
+    let queue: ProviderRunSlot[];
+    try {
+      // Generic image mode identifies image-only capabilities, independent of provider endpoint family.
+      queue = providerStore.captureQueue(providerStore.queue()).filter((slot: ProviderRunSlot) => modelImageMode(slot.model, slot.metadata) !== 'images');
+    } catch (_error) { return ''; }
     for (let i = 0; i < queue.length; i++) {
       const slot = queue[i];
       try {
-        const client = await OpenAICompatClient.open(providerStore.slotRoot(slot.instanceId),
-          providerStore.keyFor(slot.instanceId), slot.model, providerStore.slotType(slot.instanceId),
-          providerStore.slotCredential(slot.instanceId), slot.instanceId);
+        const client = await OpenAICompatClient.open(slot.root, slot.key, slot.model, slot.type,
+          slot.credential, slot.instanceId, '', slot.reference, slot.metadata);
         const text = await SideModel.collect(client, systemPrompt, userText);
         if (text.trim().length > 0) {
           return text.trim();

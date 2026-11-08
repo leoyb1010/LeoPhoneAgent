@@ -23,6 +23,21 @@
     "pages/BodyPage",
     "pages/McpPage",
     "pages/SchedulePage",
-    "pages/RuntimePage"
+    "pages/RuntimePage",
+    "pages/BrainSpacePage",
+    "pages/SystemIntegrationPage",
+    "pages/RecordingsPage",
+    "pages/BackupPage",
+    "pages/DocumentScanPage",
+    "pages/SyncPage",
+    "pages/RemoteWorkspacePage",
+    "pages/RecoveryPage",
+    "pages/TerminalPage",
+    "pages/MailAccountsPage",
+    "pages/ScreenSessionPage",
+    "pages/SSHTerminalPage",
+    "pages/ApprovalPage",
+    "pages/McpOAuthPage",
+    "pages/StartupPage"
   ]
 }

@@ -1,0 +1,26 @@
+{
+  "forms": [
+    {
+      "name": "LeoBotTasks",
+      "displayName": "$string:form_name",
+      "description": "$string:form_description",
+      "src": "./ets/form/LeoFormCard.ets",
+      "uiSyntax": "arkts",
+      "isDynamic": true,
+      "window": {
+        "designWidth": 360,
+        "autoDesignWidth": true
+      },
+      "colorMode": "auto",
+      "isDefault": true,
+      "updateEnabled": true,
+      "updateDuration": 1,
+      "defaultDimension": "2*2",
+      "supportDimensions": [
+        "2*2",
+        "2*4"
+      ],
+      "fontScaleFollowSystem": true
+    }
+  ]
+}

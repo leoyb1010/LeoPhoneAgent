@@ -102,11 +102,6 @@ export function codexCatalogIds(json: any): string[] {
   return [...new Set(listed.map((row: any) => `${row.slug}`))]
 }
 
-// OpenCode Go 的目录里混着走 Responses / Anthropic Messages 的模型;本端只会 chat completions,
-// 列出来一选就 4xx,所以拉回来的目录按协议筛一遍。筛完为空就原样返回,不把列表清空。
-// 按 https://opencode.ai/docs/go/ 的端点表:GPT / Grok / Muse Spark 走 /v1/responses,
-// MiniMax 和 Qwen 全部走 /v1/messages。和 iOS OpenCodeGoWireProtocol、ProviderModels.ets 保持一致。
-const OPENCODE_GO_NON_CHAT_PREFIXES = ["gpt-", "grok-", "muse-spark-", "minimax-", "qwen"]
 // /models 里还挂着、一调用就回 "Model is unavailable" 的下线模型(2026-09-27 实测),不给选。
 const OPENCODE_GO_RETIRED = ["kimi-k2.5", "glm-5", "qwen3.5-plus", "mimo-v2-pro", "mimo-v2-omni", "hy3-preview", "grok-4.5"]
 
@@ -114,8 +109,7 @@ export function chatModelsFor(type: string, ids: string[]): string[] {
   if (type !== "openCodeGo") return ids
   const kept = ids.filter((id) => {
     const bare = id.toLowerCase().split("/").pop() ?? ""
-    return !OPENCODE_GO_RETIRED.includes(bare) &&
-      !OPENCODE_GO_NON_CHAT_PREFIXES.some((prefix) => bare.startsWith(prefix))
+    return !OPENCODE_GO_RETIRED.includes(bare)
   })
-  return kept.length > 0 ? kept : ids
+  return kept
 }

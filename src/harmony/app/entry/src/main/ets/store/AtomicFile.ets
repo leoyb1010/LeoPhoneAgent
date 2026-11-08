@@ -7,7 +7,7 @@ export class AtomicCommitUncertainError extends Error {
 }
 
 /** 写完且刷盘后才替换旧配置；短写/失败绝不截断原档案。每个写者独立临时名。 */
-export function atomicWriteText(path: string, text: string): void {
+export function atomicWriteText(path: string, text: string, pinnedParent: number = -1): void {
   const tmp = `${path}.${util.generateRandomUUID(false)}.tmp`;
   const bytes = new util.TextEncoder().encodeInto(text);
   const data = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
@@ -25,9 +25,13 @@ export function atomicWriteText(path: string, text: string): void {
     }
     fileIo.renameSync(tmp, path);
     renamed = true;
-    const parent = fileIo.openSync(path.substring(0, path.lastIndexOf('/')),
-      fileIo.OpenMode.READ_ONLY | fileIo.OpenMode.DIR | fileIo.OpenMode.NOFOLLOW);
-    try { fileIo.fsyncSync(parent.fd); } finally { fileIo.closeSync(parent); }
+    if (pinnedParent >= 0) {
+      fileIo.fsyncSync(pinnedParent);
+    } else {
+      const parent = fileIo.openSync(path.substring(0, path.lastIndexOf('/')),
+        fileIo.OpenMode.READ_ONLY | fileIo.OpenMode.DIR | fileIo.OpenMode.NOFOLLOW);
+      try { fileIo.fsyncSync(parent.fd); } finally { fileIo.closeSync(parent); }
+    }
   } catch (error) {
     if (renamed) throw new AtomicCommitUncertainError();
     throw error as Error;

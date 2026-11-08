@@ -5,7 +5,7 @@
 [![iOS](https://img.shields.io/badge/iOS-1.89.1%20(198)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.20.0-7C3AED.svg)](src/mac/leophone/package.json)
-[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
+[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.4.0-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
 
@@ -59,38 +59,37 @@ iOS 1.72.0 / Mac 1.10.0 起移除了服务器任务（Paperclip）工作区：�
   [`docs/upgrade-2026-09-25/PLAN.md`](docs/upgrade-2026-09-25/PLAN.md)。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
-  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.22`，只走 `hdc install`。
-  没有 Linux 沙箱，也不做无障碍跨应用。杀进程后审批不可用。
+  工程落地在 `src/harmony/`。当前版本为 `0.4.0`，采用个人HDC签名安装。
+  内置本机Linux与离线工具，系统权限和生态资格受限的扩展按本次范围暂缓。
 - Android 同时交付 Standard 和 Power；修改 `main` 公共源码后必须同时验证两个 flavor。
 - 不得把「能编译」、「CI 是绿的」或「APK 已上传」当成可发布证据。
   可升级签名、覆盖安装、冷启动、发布附件哈希都必须单独校验。
 - 任务开始先读 `git status`并获取最新 `origin/main`；未知本地改动默认属于用户，
   不得 `reset --hard`、覆盖或删除。
 
-## HarmonyOS 0.3.0-alpha.22
+## HarmonyOS 0.4.0
 
-个人 hdc 安装，不上应用市场。包名 `com.leoyuan.leophoneagent.harmony`。
-本机 Agent 能用手机能力（天气、定位、闹钟、提醒、通知、手电、复制、拨号盘、打开链接），
-能附文件、看图、搜网页；写文件审批分「逐项确认 / 全自动」两档。离开聊天页、退到后台都接着跑，
-没做完的点「继续」，太长自动压缩。定时任务在 App 关着时也会被系统唤起补跑。
-远控 Mac 可以接着没做完的任务或接手桌面任务。
-界面对齐 iOS / 安卓（回答不套气泡、工具胶囊、卡片输入框）；宽度 600vp 起就左右分栏（折叠屏展开也分）。
-回答边出边显示到最后（alpha.20 及更早经常停在半截，要退出对话再进来才看全）。
-界面在 Mac 上用 DevEco 预览器截图核对过（手机、折叠屏展开、浅色、深色）；alpha.20 已装到鸿蒙真机用过，alpha.21、alpha.22 还没装。
-alpha.22:新增 OpenCode Go(API Key,只列 chat/completions 模型);Claude 订阅登录下线(旧实例首启改成 API Key 方式);
-远控 Mac 的全自动按任务单独开、开前确认;环境变量只进 mcp_call、值存钥匙串;远程 / 定时回合不能拉起 App、拨号、写剪贴板、读定位、调 MCP;
-对话档案原子写、目录坏了按档案重建。证据:源码断言 + 未签名 HAP 构建;真机未验证。
+个人HDC安装，最低HarmonyOS7/API26。包名 `com.leoyuan.leophoneagent.harmony`。
 
-OpenAI / Anthropic / Gemini / xAI 登录和官方接口大陆直连通常不通，需要可访问境外的网络。OpenRouter 通常可达，Kimi 和多数国内兼容根可直连。登录被地区拦截时不再跳系统浏览器，停在本页中文说明并可复制链接。
+原生ArkUI覆盖聊天、模型与模型组、技能/人格/记忆、浏览器、第二大脑、SSH、录音、邮箱、MCP、Mac远控与看屏、跨端同步及备份恢复。折叠窗口保留会话与草稿，多图和生图使用本机原生预览，按钮与主题跟随系统无障碍设置。
+
+本机Alpine ARM64运行时提供固定校验的离线Python、Node/npm、Git等工具，共享工作区为 `/mnt/workspace`。工作区支持嵌套目录、文本分页、文件导出及本机HTML预览。审批包含逐项确认、智能批准、全自动，并绑定当前会话、操作和参数。
+
+服务商由用户手动配置。系统级受限权限、健康/穿戴等生态资质接入及新增硬件扩展列入暂缓范围。桌面卡片和现有系统入口的实际证据、Pura X Max几何模拟器范围、真机覆盖安装与外部服务资格分别记录在[本次状态](docs/harmony-upgrade-20261108/STATUS.md)。
 
 ```bash
+git submodule update --init deps/ish
+# 使用包含API26的官方Release SDK，可用HARMONY_TOOLCHAIN_HOME指定工具链Contents目录
 bash src/harmony/scripts/verify_harmony_release_notes.sh
 bash src/harmony/scripts/build_hap.sh
-# 产物：/tmp/leo-harmony-app/entry/build/default/outputs/default/entry-default-unsigned.hap
-# 在 DevEco 里对工程签一次名后再 hdc install。仓库路径含中文，hvigor 必须在 /tmp 舞台目录构建。
+# DevEco本机签名材料只留在私有构建舞台
+# /tmp/leo-harmony-app/entry/build/default/outputs/default/entry-default-signed.hap
 ```
 
-鸿蒙 NEXT 跑不了 Android 那份 PRoot。远程机器仍是第二个入口。Push 没配 AGC 时杀进程后仍收不到。
+
+三折叠原生界面实测，图中使用本机测试服务商。
+
+![鸿蒙7三折叠聊天界面](docs/harmony-upgrade-20261108/images/triple-fold-chat.jpeg)
 
 ## 直接下载 Android APK
 
@@ -158,7 +157,7 @@ Alpha 切换到正式版时可能需要先卸载旧包。APK 内已附 GPL、第
 ```text
 src/ios/                iOS 主 app(Swift/SwiftUI)+ Share/FileProvider/Widget/Watch
 src/android/            Android 主 app(Kotlin/Compose)+ PRoot/Accessibility/Shizuku
-src/harmony/            HarmonyOS 7 瘦控制面(ArkTS)：协议层 + DevEco 工程
+src/harmony/            HarmonyOS 7 原生端侧Agent与远控客户端（ArkTS + Native）
 src/mac/leophone/       当前 LeoPhoneAgent · Mac 1.x:桌面、CLI/runtime、Leo Link、同步副本
 src/mac/leoagent/       Mac 常驻服务:server.py(harness 会话)、relay.py(中继)、
                         harness.py(CLI 方言翻译)

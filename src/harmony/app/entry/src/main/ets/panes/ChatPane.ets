@@ -1,4 +1,10 @@
 import { http } from '@kit.NetworkKit';
+import { util } from '@kit.ArkTS';
+import { fileIo } from '@kit.CoreFileKit';
+import { Attachments } from '../chat/Attachments';
+import { WorkspaceStore } from '../store/WorkspaceStore';
+import { RemoteAttachment, RemoteCapabilities, RemoteQuestion, RemoteQuestionRequest } from '../remote/RemoteModels';
+import { RemoteWorkspaceLaunch } from '../remote/RemoteWorkspaceLaunch';
 import { common } from '@kit.AbilityKit';
 import { promptAction, router } from '@kit.ArkUI';
 import { Composer } from '../chat/Composer';
@@ -42,6 +48,11 @@ export struct ChatPane {
   @State status: string = '准备中';
   @State approval: ApprovalState = new ApprovalState();
   @State lastSeq: number = 0;
+  @State remoteFeatures: RemoteCapabilities = new RemoteCapabilities();
+  @State question: RemoteQuestionRequest = new RemoteQuestionRequest();
+  @State attachments: RemoteAttachment[] = [];
+  @State sending: boolean = false;
+  private questions: RemoteQuestionRequest[] = [];
   private sessionId: string = '';
   private scroller: Scroller = new Scroller();
   private client: HarnessClient | null = null;
@@ -89,6 +100,11 @@ export struct ChatPane {
     this.reconnects = 0;
     this.fullAutoRefused = false;
     this.macAuto = false;
+    this.question = new RemoteQuestionRequest();
+    this.questions = [];
+    this.attachments = [];
+    this.remoteFeatures = new RemoteCapabilities();
+    this.sending = false;
     this.launchGen += 1;
     this.startSession();
   }
@@ -259,6 +275,35 @@ export struct ChatPane {
             .shadow({ radius: 12, color: Tokens.composerShadow, offsetY: 2 })
             .margin({ bottom: 8 })
           }
+          if (this.question.id) {
+            Column({ space: 8 }) {
+              Text('远程任务需要你的回答').fontSize(16).fontWeight(FontWeight.Bold).fontColor(Tokens.text)
+              ForEach(this.question.questions, (item: RemoteQuestion, index: number) => {
+                Text(item.question).fontSize(14).fontColor(Tokens.text)
+                Flex({ wrap: FlexWrap.Wrap }) {
+                  ForEach(item.labels, (label: string) => {
+                    Button((item.selected.includes(label) ? '✓ ' : '') + label).margin(4)
+                      .onClick(() => { this.selectAnswer(index, label); })
+                  })
+                }
+                TextInput({ text: item.text, placeholder: '补充回答' }).onChange((value: string) => {
+                  item.text = value;
+                  this.question.questions = this.question.questions.slice();
+                })
+              })
+              Row({ space: 10 }) {
+                Button('提交回答').enabled(!this.sending).onClick(() => { this.answerQuestion(false); })
+                Button('跳过').enabled(!this.sending).onClick(() => { this.answerQuestion(true); })
+              }
+            }.width('100%').padding(12).backgroundColor(Tokens.card).borderRadius(12)
+          }
+          Row({ space: 10 }) {
+            Button('工作区').onClick(() => { this.openWorkspace(); })
+            if (this.remoteFeatures.has('attachments')) {
+              Button('照片').onClick(() => { this.pickAttachment(true); })
+              Button('文件').onClick(() => { this.pickAttachment(false); })
+            }
+          }.width('100%').padding({ top: 6, bottom: 6 })
           Composer({
             draft: $draft,
             placeholder: `给 ${this.machine.length > 0 ? displayName(this.machine) : '远程机器'} 发任务`,
@@ -266,6 +311,9 @@ export struct ChatPane {
             showApproval: ChatLaunch.harness === 'zcode',
             fullAuto: this.macAuto,
             tools: false,
+            ready: !this.sending,
+            files: this.attachments.map((item: RemoteAttachment) => item.name),
+            onRemoveFile: (index: number) => { this.attachments = this.attachments.filter((_item: RemoteAttachment, i: number) => i !== index); },
             showMic: false,
             onSend: () => {
               this.send();
@@ -289,9 +337,9 @@ export struct ChatPane {
   }
 
   private agentName(): string {
-    return ChatLaunch.harness === 'zcode' || ChatLaunch.harness === 'minis' ? 'LeoPhoneAgent' :
+    return ChatLaunch.harness === 'zcode' || ChatLaunch.harness === 'minis' ? 'LeoBot' :
       (ChatLaunch.harness === 'claude' ? 'Claude Code' : (ChatLaunch.harness === 'codex' ? 'Codex' :
-        (ChatLaunch.harness.length > 0 ? ChatLaunch.harness : 'LeoPhoneAgent')));
+        (ChatLaunch.harness.length > 0 ? ChatLaunch.harness : 'LeoBot')));
   }
 
   private badStatus(): boolean {
@@ -301,9 +349,10 @@ export struct ChatPane {
 
   private startSession(): void {
     this.alive = true;
+    const gen = this.launchGen;
     const ctx = getContext(this) as common.UIAbilityContext;
     gatewayStore.ensureLoaded(ctx).then(() => {
-      if (!this.alive) {
+      if (!this.alive || gen !== this.launchGen) {
         return;
       }
       if (!this.machine) {
@@ -311,6 +360,9 @@ export struct ChatPane {
         return;
       }
       this.client = new HarnessClient(gatewayStore.apiRoot, this.machine, gatewayStore.key);
+      this.client.capabilities().then((features: RemoteCapabilities) => {
+        if (this.alive && gen === this.launchGen) { this.remoteFeatures = features; }
+      }).catch(() => {});
       // 选中的(或这台机器上次用的)任务就接着看,回放会补齐对话和还挂着的审批;没有就等第一条消息再建。
       // 原来每次点进来都在 Mac 上建一个空任务,iPhone 首页跟着多出一行「可继续」。
       const saved = ChatLaunch.sessions.get(ChatLaunch.key(this.machine, ChatLaunch.harness)) ?? '';
@@ -418,7 +470,16 @@ export struct ChatPane {
       this.reconnects = 0;
     }
     const name = `${obj['event'] ?? ''}`;
-    if (name === 'user.message') {
+    if (name === 'question.request') {
+      const request = RemoteQuestionRequest.parse(obj);
+      if (request.id && request.questions.length > 0 && !this.questions.some((item: RemoteQuestionRequest) => item.id === request.id)) {
+        this.questions.push(request);
+        this.question = this.questions[0];
+        this.status = '需要回答';
+      }
+    } else if (name === 'question.responded') {
+      this.dropQuestion(`${obj['question_id'] ?? ''}`);
+    } else if (name === 'user.message') {
       this.ended = false;
       const text = `${obj['text'] ?? ''}`;
       const echo = this.pendingEcho.indexOf(text);
@@ -437,6 +498,8 @@ export struct ChatPane {
       // 一轮结束,这一轮挂着的审批都作废了(Mac 也会补发拒绝回执)。
       this.approvalQueue = [];
       this.approval = new ApprovalState();
+      this.questions = [];
+      this.question = new RemoteQuestionRequest();
       if (name === 'run.completed') {
         const output = `${obj['output'] ?? ''}`;
         if (output.length > 0 && !this.liveLine) {
@@ -552,10 +615,12 @@ export struct ChatPane {
 
   private async send(): Promise<void> {
     const text = this.draft.trim();
-    if (!text || !this.client) {
+    if ((!text && this.attachments.length === 0) || !this.client || this.sending) {
       return;
     }
     const client = this.client;
+    const attachments = this.attachments.slice();
+    this.sending = true;
     const gen = this.launchGen;
     const machine = this.machine;
     const harness = ChatLaunch.harness;
@@ -570,17 +635,22 @@ export struct ChatPane {
       const auto = zcode && this.macAuto && !this.fullAutoRefused;
       if (!this.sessionId) {
         // 第一条消息才在 Mac 上建任务,建的同时就跑这一句。
-        const created = await this.createTask(client, text, auto);
+        const created = await this.createTask(client, attachments.length > 0 ? '' : text, auto);
         if (gen !== this.launchGen) {
           // 等 Mac 回话时换了机器或任务:这个任务属于原来那台,记在它名下,不接到当前页上。
           ChatLaunch.sessions.set(ChatLaunch.key(machine, harness), created);
           return;
         }
         this.sessionId = created;
+        if (attachments.length > 0) {
+          ChatLaunch.sessions.set(ChatLaunch.key(machine, harness), created);
+          await client.send(created, text, '', zcode ? (auto ? 1 : 0) : -1, attachments);
+          if (gen !== this.launchGen) { return; }
+        }
         ChatLaunch.sessions.set(ChatLaunch.key(machine, harness), this.sessionId);
         this.listen(0);
       } else {
-        await client.send(this.sessionId, text, '', zcode ? (auto ? 1 : 0) : -1);
+        await client.send(this.sessionId, text, '', zcode ? (auto ? 1 : 0) : -1, attachments);
         if (gen !== this.launchGen) {
           return;
         }
@@ -589,17 +659,89 @@ export struct ChatPane {
           this.listen(this.lastSeq);
         }
       }
+      if (gen === this.launchGen) { this.attachments = []; }
     } catch (err) {
+      if (gen !== this.launchGen) { return; }
       // 没送到:从对话里拿掉,原文放回输入框,说清原因(原来输入框先清空,这句话就没了)。
       const echo = this.pendingEcho.indexOf(text);
       if (echo >= 0) {
         this.pendingEcho.splice(echo, 1);
       }
       this.lines = this.lines.filter((row: ChatLine) => row !== line);
-      this.draft = text;
+      this.draft = this.draft ? text + '\n' + this.draft : text;
       const reason = err instanceof Error ? err.message : `${err}`;
       this.status = `没送到:${reason}`;
-    }
+    } finally { if (gen === this.launchGen) { this.sending = false; } }
+  }
+
+  private openWorkspace(): void {
+    RemoteWorkspaceLaunch.machine = this.machine;
+    RemoteWorkspaceLaunch.sessionId = this.sessionId;
+    router.pushUrl({ url: 'pages/RemoteWorkspacePage' });
+  }
+
+  private selectAnswer(index: number, label: string): void {
+    const item = this.question.questions[index];
+    item.selected = item.multiple ? item.selected.includes(label) ?
+      item.selected.filter((value: string) => value !== label) : item.selected.concat([label]) : [label];
+    this.question.questions = this.question.questions.slice();
+  }
+
+  private dropQuestion(id: string): void {
+    this.questions = this.questions.filter((item: RemoteQuestionRequest) => item.id !== id);
+    this.question = this.questions.length > 0 ? this.questions[0] : new RemoteQuestionRequest();
+  }
+
+  private async answerQuestion(decline: boolean): Promise<void> {
+    const client = this.client;
+    const current = this.question;
+    const gen = this.launchGen;
+    if (!client || !current.id) { return; }
+    this.sending = true;
+    try {
+      await client.answerQuestion(this.sessionId, current, decline);
+      if (this.alive && gen === this.launchGen) { this.dropQuestion(current.id); }
+    } catch (err) { if (gen === this.launchGen) { this.status = `${err}`; } }
+    finally { if (gen === this.launchGen) { this.sending = false; } }
+  }
+
+  private async pickAttachment(photo: boolean): Promise<void> {
+    const gen = this.launchGen;
+    const ctx = getContext(this) as common.UIAbilityContext;
+    try {
+      const next: RemoteAttachment[] = [];
+      if (photo) {
+        const picked = await Attachments.pickImage(ctx);
+        if (picked) {
+          const row = new RemoteAttachment();
+          row.name = picked.mime === 'image/png' ? 'photo.png' : 'photo.jpg';
+          row.mime = picked.mime;
+          row.data_base64 = picked.b64;
+          next.push(row);
+        }
+      } else {
+        const picked = await Attachments.pickFiles(ctx);
+        for (const name of picked.names) {
+          const file = fileIo.openSync(WorkspaceStore.pathOf(ctx, name), fileIo.OpenMode.READ_ONLY);
+          try {
+            const size = fileIo.statSync(file.fd).size;
+            if (size > 6 * 1024 * 1024) { throw new Error('远程单个附件最多 6 MB'); }
+            const buffer = new ArrayBuffer(size);
+            if (fileIo.readSync(file.fd, buffer) !== size) { throw new Error('附件读取不完整'); }
+            const row = new RemoteAttachment();
+            row.name = name;
+            row.mime = 'application/octet-stream';
+            row.data_base64 = new util.Base64Helper().encodeToStringSync(new Uint8Array(buffer));
+            next.push(row);
+          } finally { fileIo.closeSync(file); }
+        }
+      }
+      if (gen !== this.launchGen || !this.alive) { return; }
+      const total = this.attachments.concat(next);
+      const size = total.reduce((count: number, row: RemoteAttachment) => count + row.data_base64.length, 0);
+      if (total.length > 5 || size > 24 * 1024 * 1024) { throw new Error('最多 5 个附件，总计约 18 MB'); }
+      this.attachments = total;
+    } catch (err) { if (gen === this.launchGen) { this.status = `${err}`; } }
   }
 
   private async createTask(client: HarnessClient, text: string, auto: boolean): Promise<string> {

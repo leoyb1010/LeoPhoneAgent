@@ -1,0 +1,1 @@
+{"name":"libleossh.so","version":"1.0.0","description":"Memory-only SSH authentication with host-key pinning","types":"./index.d.ts","license":"GPL-3.0"}

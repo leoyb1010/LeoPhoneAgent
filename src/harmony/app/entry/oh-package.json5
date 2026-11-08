@@ -1,9 +1,13 @@
 {
   "name": "entry",
-  "version": "0.3.0-alpha.16",
+  "version": "0.4.0",
   "description": "LeoPhoneAgent HarmonyOS entry",
   "main": "",
   "author": "leoyuan",
   "license": "GPL-3.0",
-  "dependencies": {}
+  "dependencies": {
+    "libleolinux.so": "file:./src/main/cpp/types/libleolinux",
+    "libleossh.so": "file:./src/main/cpp/ssh/types",
+    "libleobackup.so": "file:./src/main/cpp/backup/types"
+  }
 }

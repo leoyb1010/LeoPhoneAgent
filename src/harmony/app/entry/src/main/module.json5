@@ -4,17 +4,24 @@
     "type": "entry",
     "description": "$string:module_desc",
     "mainElement": "EntryAbility",
-    "deviceTypes": ["phone", "tablet"],
+    "deviceTypes": [
+      "phone",
+      "tablet"
+    ],
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
     "requestPermissions": [
-      { "name": "ohos.permission.INTERNET" },
+      {
+        "name": "ohos.permission.INTERNET"
+      },
       {
         "name": "ohos.permission.MICROPHONE",
         "reason": "$string:module_desc",
         "usedScene": {
-          "abilities": ["EntryAbility"],
+          "abilities": [
+            "EntryAbility"
+          ],
           "when": "inuse"
         }
       },
@@ -22,7 +29,9 @@
         "name": "ohos.permission.CAMERA",
         "reason": "$string:camera_reason",
         "usedScene": {
-          "abilities": ["EntryAbility"],
+          "abilities": [
+            "EntryAbility"
+          ],
           "when": "inuse"
         }
       },
@@ -30,7 +39,9 @@
         "name": "ohos.permission.PUBLISH_AGENT_REMINDER",
         "reason": "$string:reminder_reason",
         "usedScene": {
-          "abilities": ["EntryAbility"],
+          "abilities": [
+            "EntryAbility"
+          ],
           "when": "inuse"
         }
       },
@@ -38,7 +49,9 @@
         "name": "ohos.permission.APPROXIMATELY_LOCATION",
         "reason": "$string:location_reason",
         "usedScene": {
-          "abilities": ["EntryAbility"],
+          "abilities": [
+            "EntryAbility"
+          ],
           "when": "inuse"
         }
       },
@@ -46,9 +59,67 @@
         "name": "ohos.permission.LOCATION",
         "reason": "$string:location_reason",
         "usedScene": {
-          "abilities": ["EntryAbility"],
+          "abilities": [
+            "EntryAbility"
+          ],
           "when": "inuse"
         }
+      },
+      {
+        "name": "ohos.permission.ACCESS_BIOMETRIC",
+        "reason": "$string:biometric_reason",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.KEEP_BACKGROUND_RUNNING"
+      },
+      {
+        "name": "ohos.permission.READ_CALENDAR",
+        "reason": "$string:personal_tools_reason",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.WRITE_CALENDAR",
+        "reason": "$string:personal_tools_reason",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.READ_CONTACTS",
+        "reason": "$string:personal_tools_reason",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.WRITE_CONTACTS",
+        "reason": "$string:personal_tools_reason",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.GET_NETWORK_INFO"
       }
     ],
     "abilities": [
@@ -56,17 +127,89 @@
         "name": "EntryAbility",
         "srcEntry": "./ets/entryability/EntryAbility.ets",
         "description": "$string:EntryAbility_desc",
-        "icon": "$media:layered_image",
+        "icon": "$media:app_icon",
         "label": "$string:EntryAbility_label",
-        "startWindowIcon": "$media:startIcon",
+        "startWindowIcon": "$media:app_icon",
         "startWindowBackground": "$color:start_window_background",
         "orientation": "auto_rotation",
         "exported": true,
         "skills": [
           {
-            "entities": ["entity.system.home"],
-            "actions": ["ohos.want.action.home"]
+            "entities": [
+              "entity.system.home"
+            ],
+            "actions": [
+              "ohos.want.action.home"
+            ]
+          },
+          {
+            "actions": [
+              "ohos.want.action.sendData"
+            ],
+            "uris": [
+              {
+                "type": "text/*"
+              },
+              {
+                "type": "image/*"
+              },
+              {
+                "type": "application/*"
+              }
+            ]
+          },
+          {
+            "entities": [
+              "entity.system.browsable"
+            ],
+            "actions": [
+              "ohos.want.action.viewData"
+            ],
+            "uris": [
+              {
+                "scheme": "leobot",
+                "host": "mcp",
+                "path": "/oauth/callback"
+              },
+              {
+                "scheme": "lobe",
+                "host": "mcp",
+                "path": "/oauth/callback"
+              },
+              {
+                "scheme": "leophoneagent",
+                "host": "mcp",
+                "path": "/oauth/callback"
+              },
+              {
+                "scheme": "leophoneagent-mcp",
+                "host": "oauth",
+                "path": "/callback"
+              }
+            ]
+          },
+          {
+            "entities": [
+              "entity.system.browsable"
+            ],
+            "actions": [
+              "ohos.want.action.viewData"
+            ],
+            "uris": [
+              {
+                "scheme": "leobot"
+              },
+              {
+                "scheme": "lobe"
+              },
+              {
+                "scheme": "leophoneagent"
+              }
+            ]
           }
+        ],
+        "backgroundModes": [
+          "audioRecording"
         ]
       }
     ],
@@ -76,6 +219,30 @@
         "srcEntry": "./ets/workscheduler/ScheduleWork.ets",
         "type": "workScheduler",
         "description": "$string:schedule_work_desc"
+      },
+      {
+        "name": "LeoAgentAbility",
+        "srcEntry": "./ets/agentextension/LeoAgentAbility.ets",
+        "type": "agent",
+        "exported": true,
+        "metadata": [
+          {
+            "name": "ohos.extension.agent",
+            "resource": "$profile:leo_agent_card"
+          }
+        ]
+      },
+      {
+        "name": "LeoFormAbility",
+        "srcEntry": "./ets/form/LeoFormAbility.ets",
+        "type": "form",
+        "description": "$string:form_description",
+        "metadata": [
+          {
+            "name": "ohos.extension.form",
+            "resource": "$profile:leo_forms"
+          }
+        ]
       }
     ]
   }

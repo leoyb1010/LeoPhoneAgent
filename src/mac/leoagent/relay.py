@@ -50,6 +50,8 @@ from urllib.parse import urlsplit
 from aiohttp import WSCloseCode, WSMsgType, web
 
 from .apns import build_pusher
+from .huawei_push import build_huawei_pusher
+from pathlib import Path
 from .live_activity import LiveActivityPlanner
 from .relay_identity import valid_registry
 
@@ -214,6 +216,7 @@ class Relay:
         # [T-live-mission] APNs 推送器。没配 ~/.leoagent/apns.json 就整体
         # 禁用,中继本体照常工作(降级而非报错)。
         self.apns = build_pusher()
+        self.huawei = build_huawei_pusher(Path(state_dir))
         # [WP-41] Live Activity 远程推送:记住每张卡上各会话的样子(见 live_activity.py)。
         self.live_planner = LiveActivityPlanner()
         # 后台任务引用集(防 GC,见 _push_apns 调用处)
@@ -1349,6 +1352,11 @@ class Relay:
         if device is None and device_id not in self.revoked_devices:
             return web.json_response({"error": {"message": "unknown device"}}, status=404)
         self.revoked_devices.add(device_id)
+        try:
+            self.huawei.forget_owner(device_id)
+        except OSError:
+            # Revoked device identity remains the authoritative send gate even if registry cleanup fails.
+            log("[relay] Huawei push registry cleanup needs recovery")
         forget = getattr(self.apns, "_forget", None)
         for kind, token in _device_push_tokens(device or {}):
             if callable(forget):
@@ -1583,6 +1591,13 @@ class Relay:
         kind = event.get("event", "?")
         log(f"[relay] event {kind} from {machine_name}")
         # [T-live-mission] 关键事件转 APNs:app 完全没运行时的唯一触达路径。
+        if self.huawei.enabled:
+            task = asyncio.get_running_loop().create_task(
+                self.huawei.send_event(machine_name, event,
+                                       lambda owner: owner == "master" or
+                                       (owner in self.devices and owner not in self.revoked_devices)))
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
         if self.apns.enabled:
             # 持引用!事件循环只持任务弱引用,裸 create_task 的协程挂在
             # APNs 网络 I/O 上时可能被 GC 中途回收——推送静默消失。
@@ -1867,6 +1882,22 @@ class Relay:
             body = await request.json()
         except Exception:  # noqa: BLE001
             return web.json_response({"error": {"message": "invalid json"}}, status=400)
+        if not isinstance(body, dict):
+            return web.json_response({"error": {"message": "invalid json object"}}, status=400)
+        platform = str(body.get("platform") or "ios")
+        if platform == "harmony":
+            if body.get("kind", "device") != "device":
+                return web.json_response({"error": {"message": "bad Huawei token kind"}}, status=400)
+            owner = caller.device_id or "master"
+            try:
+                ok = self.huawei.register(owner, body.get("token"), str(body.get("bundle_id") or ""))
+            except OSError:
+                return web.json_response({"error": {"message": "push registry persistence failed"}}, status=503)
+            if not ok:
+                return web.json_response({"error": {"message": "bad Huawei token payload"}}, status=400)
+            return web.json_response({"ok": True, "harmony": self.huawei.status()})
+        if platform not in ("ios", ""):
+            return web.json_response({"error": {"message": "unknown push platform"}}, status=400)
         kind = str(body.get("kind") or "device")
         token = str(body.get("token") or "")
         raw_sids = body.get("session_ids")

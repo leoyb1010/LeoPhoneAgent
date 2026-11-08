@@ -1,0 +1,65 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import vm from 'node:vm';
+import {randomUUID} from 'node:crypto';
+import {stripTypeScriptTypes} from 'node:module';
+const root=new URL('../app/entry/src/main/ets/',import.meta.url);
+function load(file,names,env={}){const s=fs.readFileSync(new URL(file,root),'utf8').replace(/^import[\s\S]*?from\s+['"][^'"]+['"];\s*/gm,'').replace(/\bexport\s+/g,'');const c=vm.createContext({console,...env});vm.runInContext(stripTypeScriptTypes(s,{mode:'strip'})+`\nObject.assign(globalThis,{${names.join(',')}});`,c);return Object.fromEntries(names.map(n=>[n,c[n]]));}
+const protocol=load('sync/SyncProtocol.ets',['ReplicaRecord','ReplicaChange','PortableValue','replicaDate','replicaText','textValue','recordKey']);
+const native=load('local/LocalProtocol.ets',['requireProviderRoot','ProviderSlot','resolveFailoverQueue','stableModelIndex'],{util:{TextEncoder}});
+const providers=load('store/ProviderStore.ets',['ProviderStore','ProviderInstance','ModelGroup'],{AtomicTextFile:class{},...native,kindByKey:()=>({models:[],root:''}),chatModelsFor:(_type,ids)=>ids});
+const providerStore=new providers.ProviderStore();providerStore.ensureLoaded=async()=>{};providerStore.keyFor=()=> 'LOCAL_API_KEY';
+providerStore.persistSnapshot=async(_ctx,instances,keys,activeId,groups,activeGroupId)=>{Object.assign(providerStore,{instances,groups,activeId,activeGroupId});};
+const mcpStore={rows:[],load:async()=>{},mergeReplicaMetadata:async(_ctx,label,url)=>{mcpStore.rows=mcpStore.rows.filter(r=>r.label!==label).concat([{label,url,secret:'LOCAL_MCP_KEY'}]);},remove:async(_ctx,id)=>{mcpStore.rows=mcpStore.rows.filter(r=>r.label!==id);}};
+mcpStore.mergeHTTPPublicMetadata=async(ctx,label,url,names,enabled=true)=>{await mcpStore.mergeReplicaMetadata(ctx,label,url);const row=mcpStore.rows.find(r=>r.label===label);row.enabled=enabled;row.transport='http';row.headers=Object.fromEntries(names.map(name=>[name,'']));};
+mcpStore.mergeStdioReplicaMetadata=async(_ctx,label,command,args,names,enabled)=>{mcpStore.rows.push({label,transport:'stdio',url:'',command,args,env:Object.fromEntries(names.map(name=>[name,''])),enabled});};
+const envStore={mergeReplicaName:async(_ctx,name)=>{if(!envStore.rows.some(r=>r.name===name))envStore.rows.push({name,value:''});},rows:[{name:'EXISTING',value:'LOCAL_ENV_SECRET'}],load:async()=>{},upsert:async(_ctx,name,value)=>{envStore.rows=envStore.rows.filter(r=>r.name!==name).concat([{name,value}]);},remove:async(_ctx,name)=>{envStore.rows=envStore.rows.filter(r=>r.name!==name);}};
+const io={accessSync:fs.existsSync,readTextSync:p=>fs.readFileSync(p,'utf8')};
+const {ConfigReplica}=load('sync/ConfigReplica.ets',['ConfigReplica'],{...protocol,...providers,providerStore,mcpStore,envStore,McpOAuth:{mergePublicMetadata:async()=>{},exportPublicMetadata:()=>null},fileIo:io,util:{generateRandomUUID:randomUUID},atomicWriteText:(p,s)=>fs.writeFileSync(p,s)});
+const temp=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-config-sync-'));const context={filesDir:temp};const records={};
+function change(type,id,fields){const c=new protocol.ReplicaChange();c.id={type,id};c.changeId=randomUUID();c.record=new protocol.ReplicaRecord();c.record.id=c.id;for(const[k,v]of Object.entries(fields))c.record.fields[k]=typeof v==='number'?{t:'int',v}:protocol.textValue(v);records[type+':'+id]=c;return c;}
+try{
+ const p=change('ProviderInstanceV3','provider-1',{label:'Replica',providerType:'custom',credentialType:'apiKey',customBaseURL:'https://provider.test',isEnabled:1,appendV1Suffix:1,secretBlob:'REMOTE_SECRET_NOT_IMPORTED'});
+ assert.equal(await ConfigReplica.apply(context,p,records),true);assert.equal(providerStore.instances[0].id,'provider-1');
+ const m=change('ProviderModelEntryV3','model-uuid',{providerInstanceId:'provider-1',baseModelJson:'{"id":"brand/model","displayName":"Original Name","provider":"custom","contextWindow":12345}',isHidden:0,isCustom:1});
+ assert.equal(await ConfigReplica.apply(context,m,records),true);assert.ok(providerStore.instances[0].models.includes('brand/model'));
+ const g=change('ProviderModelGroupV3','group-1',{name:'Group',strategy:'fallback',fallbackStrategy:'limited',memberEntryIdsJson:'["model-uuid"]',removedMembersJson:'{"added":{"model-uuid":100},"removed":{"model-uuid":50}}'});
+ await ConfigReplica.apply(context,g,records);assert.deepEqual(Array.from(providerStore.groups[0].modelIds),['provider-1/brand/model']);
+ g.record.fields.removedMembersJson=protocol.textValue('{"added":{"model-uuid":100},"removed":{"model-uuid":200}}');await ConfigReplica.apply(context,g,records);assert.equal(providerStore.groups[0].modelIds.length,0,'newer removal intent wins');
+ g.record.fields.removedMembersJson=protocol.textValue('{"added":{"model-uuid":300},"removed":{"model-uuid":200}}');await ConfigReplica.apply(context,g,records);assert.equal(providerStore.groups[0].modelIds.length,1,'newer re-add survives');
+ const mcp=change('MCPServerItem','search',{entryJson:'{"url":"https://mcp.test","headers":{"Authorization":"REMOTE_MCP_SECRET"}}'});await ConfigReplica.apply(context,mcp,records);assert.equal(mcpStore.rows[0].url,'https://mcp.test');
+ const stdio=change('MCPServerItem','local-process',{entryJson:'{\"command\":\"node\",\"args\":[\"server.js\"],\"env\":{\"PRIVATE\":\"REMOTE_STDIO_SECRET\"}}'});await ConfigReplica.apply(context,stdio,records);assert.equal(mcpStore.rows.find(row=>row.label==='local-process').env.PRIVATE,'');
+ const env=change('EnvVarItem','env-uuid',{key:'EXISTING',valueB64:Buffer.from('REMOTE_ENV_SECRET').toString('base64')});await ConfigReplica.apply(context,env,records);assert.equal(envStore.rows[0].value,'LOCAL_ENV_SECRET');
+ const captured=await ConfigReplica.capture(context,records);const text=JSON.stringify(captured);
+ for(const secret of ['LOCAL_API_KEY','LOCAL_MCP_KEY','LOCAL_ENV_SECRET','REMOTE_SECRET_NOT_IMPORTED','REMOTE_ENV_SECRET'])assert.ok(!text.includes(secret),secret+' absent from outgoing capture');
+ const mcpWire=captured.find(r=>r.id.type==='MCPServerItem');assert.equal(JSON.parse(protocol.replicaText(mcpWire,'entryJson')).headers.Authorization,'REMOTE_MCP_SECRET','same-destination opaque remote metadata survives without importing into native keys');
+ mcpStore.rows[0].url='https://changed-mcp.test';providerStore.instances[0].baseUrl='https://changed-provider.test';
+ const changed=await ConfigReplica.capture(context,records);assert.equal(JSON.parse(protocol.replicaText(changed.find(r=>r.id.type==='MCPServerItem'),'entryJson')).headers.Authorization,'');
+ const revoked=changed.find(r=>r.id.type==='ProviderInstanceV3');assert.equal(revoked.fields.secretBlob.t,'null');assert.equal(revoked.fields.isEnabled.v,0,'a destination change revokes remote opaque credentials');
+ const processRow=mcpStore.rows.find(row=>row.label==='local-process');processRow.command='python3';const changedProcess=await ConfigReplica.capture(context,records);const processWire=changedProcess.find(row=>row.id.id==='local-process');assert.equal(JSON.parse(protocol.replicaText(processWire,'entryJson')).env.PRIVATE,'','a changed process cannot inherit opaque remote env values');
+ const outgoing=captured.find(r=>r.id.type==='ProviderModelEntryV3');assert.equal(outgoing.id.id,'model-uuid');assert.equal(JSON.parse(protocol.replicaText(outgoing,'baseModelJson')).contextWindow,12345,'source model metadata retained');
+ // Hidden is an upsert, not a tombstone. Discovery must retain its identity and visibility.
+ m.record.fields.isHidden={t:'int',v:1};await ConfigReplica.apply(context,m,records);
+ assert.ok(providerStore.instances[0].models.includes('brand/model'));
+ assert.ok(providerStore.instances[0].hiddenModels.includes('brand/model'));
+ assert.equal(providerStore.queue('session','',false).length,0,'hidden model cannot be routed');
+ const hiddenWire=(await ConfigReplica.capture(context,records)).find(r=>r.id.id==='model-uuid');
+ assert.equal(hiddenWire.fields.isHidden.v,1,'hidden metadata remains materialized and cannot become inferred delete');
+ providerStore.instances[0].visibilityEditedAt['brand/model']=2000000000000;
+ m.record.fields.isHidden={t:'int',v:0};await ConfigReplica.apply(context,m,records);
+ assert.ok(providerStore.instances[0].hiddenModels.includes('brand/model'),'automatic rediscovery cannot undo intentional local visibility');
+ m.record.fields.userModifiedAt={t:'date',v:protocol.replicaDate(2000000000001)};await ConfigReplica.apply(context,m,records);
+ assert.equal(providerStore.instances[0].hiddenModels.length,0,'newer explicit remote visibility can unhide');
+ const removedModel=new protocol.ReplicaChange();removedModel.id=m.id;removedModel.operation='delete';
+ await ConfigReplica.apply(context,removedModel,records);providerStore.applyModels(providerStore.instances[0],['brand/model']);
+ assert.ok(!providerStore.instances[0].models.includes('brand/model'),'hard deletion remains absent after catalog refresh');
+ const oldSnapshot=change('ProviderConfigV2','provider-config',{configJson:JSON.stringify({instances:[{id:'provider-deleted-before',label:'stale',type:'openAI'}]})});
+ await ConfigReplica.apply(context,oldSnapshot,records);assert.ok(!providerStore.instances.some(row=>row.id==='provider-deleted-before'),'V3 authoritative surface cannot resurrect a provider from stale V2 snapshot');
+ const modernRemoved=new protocol.ReplicaChange();modernRemoved.id={type:'MCPServerItem',id:'deleted-server'};modernRemoved.operation='delete';modernRemoved.updatedAt=200;records['MCPServerItem:deleted-server']=modernRemoved;
+ const oldMcp=change('MCPServersV2','mcp-whole',{serversJson:JSON.stringify({mcpServers:{'deleted-server':{url:'https://old.test',updatedAt:978307200+100}}})});oldMcp.record.updatedAt=100;
+ await ConfigReplica.apply(context,oldMcp,records);assert.ok(!mcpStore.rows.some(row=>row.label==='deleted-server'),'per-server tombstone wins over older legacy whole snapshot');
+ const deleted=new protocol.ReplicaChange();deleted.id={type:'ProviderInstanceV3',id:'provider-1'};deleted.operation='delete';await ConfigReplica.apply(context,deleted,records);assert.equal(providerStore.instances.length,0);
+ console.log('HARMONY_CONFIG_REPLICA_OK production ETS provider/model/group/MCP/env mapping, stable model IDs, member intent union, metadata retention, zero local-secret export');
+}finally{fs.rmSync(temp,{recursive:true,force:true});}

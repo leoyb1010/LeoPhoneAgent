@@ -1,3 +1,9 @@
+import { GeneratedMedia } from './GeneratedMedia';
+import { fileIo } from '@kit.CoreFileKit';
+import { ChatViewState } from './ChatViewState';
+import { util } from '@kit.ArkTS';
+import { LinuxRuntime } from './LinuxRuntime';
+import { MailTools } from './MailTools';
 import { conversationHistory } from './ConversationHistory';
 import { common, wantAgent, WantAgent } from '@kit.AbilityKit';
 import { http } from '@kit.NetworkKit';
@@ -8,7 +14,11 @@ import { LocalTools, ToolResult } from './LocalTools';
 import { OpenAICompatClient, StreamTurn } from './OpenAICompatClient';
 import { SensitiveToolGate } from './SensitiveToolGate';
 import { SideModel } from './SideModel';
+import { SubAgentTasks } from './SubAgentTasks';
 import {
+  ChatImage,
+  chatImages,
+  FailoverSlot,
   LOOP_STOP_AT,
   LOOP_WARN_AT,
   LocalChatMessage,
@@ -44,8 +54,8 @@ import {
   unfinishedTail
 } from './AgentText';
 import { memoryStore } from '../store/MemoryStore';
-import { providerStore } from '../store/ProviderStore';
-import { LocalSession, sessionStore } from '../store/SessionStore';
+import { ModelGroup, ProviderInstance, ProviderRunSlot, providerStore } from '../store/ProviderStore';
+import { LocalSession, SessionStore, sessionStore } from '../store/SessionStore';
 import { taskStatus } from '../store/TaskStatus';
 import { usageStore } from '../store/UsageStore';
 
@@ -72,11 +82,8 @@ function hashOf(text: string): number {
 }
 
 /** 这次要带上的图片(相机或相册选的那一张)。 */
-export class PendingImage {
-  b64: string = '';
-  mime: string = 'image/jpeg';
-  path: string = '';
-}
+class NativeWriteArgs { path: string = ''; text: string = ''; }
+export class PendingImage extends ChatImage {}
 
 /**
  * 本机的一个对话,和它正在跑的那一轮。原来这一切都长在聊天页上:离开页面、切到别的对话,这一轮就被作废。
@@ -88,6 +95,9 @@ export class PendingImage {
  */
 export class ChatRun {
   readonly sessionId: string;
+  memoryEnabled: boolean = true;
+  actualModel: string = '';
+  actualProviderId: string = '';
   private readonly context: common.UIAbilityContext;
   lines: LocalChatMessage[] = [];
   title: string = '本机 Agent';
@@ -103,9 +113,20 @@ export class ChatRun {
   private pausedByBackground: boolean = false;
   private thinking: string = '';
   private pendingCalls: ToolCall[] = [];
+  private pendingNative: ToolCall | null = null;
+  private pendingNativeSubmission: string = '';
+  private approvalCall: ToolCall | null = null;
+  private approvalGeneration: number = -1;
+  private approvalTicket: string = '';
+  private approvalResource: string = '';
   private loopTurns: LoopTurn[] = [];
   private rounds: number = 0;
+  private sending: boolean = false;
+  private submissionId: string = '';
+  get submitting(): boolean { return this.sending; }
   private failIndex: number = 0;
+  private modelClients: Map<number, OpenAICompatClient> = new Map();
+  private modelQueue: ProviderRunSlot[] = [];
   private runGen: number = 0;
   private loopGuard: ToolLoopGuard = new ToolLoopGuard();
   private stream: http.HttpRequest | null = null;
@@ -136,7 +157,7 @@ export class ChatRun {
       this.changed();
       return;
     }
-    this.title = session.title;
+    this.title = session.title; this.memoryEnabled = session.memoryEnabled;
     this.lines = session.messages.slice();
     this.interrupted = session.running || unfinishedTail(textLines(session.messages));
     this.status = this.interrupted ? '上一轮没做完,可以点「继续」' : '空闲';
@@ -144,34 +165,49 @@ export class ChatRun {
   }
 
   /** 发一句话:先试本机快捷动作,斜杠命令走本机,其余交给模型。 */
-  async send(text: string, image: PendingImage | null, files: string[], thinking: string): Promise<void> {
+  async send(text: string, image: PendingImage | null, files: string[], thinking: string, submissionId: string = '', images: PendingImage[] = []): Promise<void> {
+    if (this.active || this.sending) return;
+    this.sending = true; this.submissionId = submissionId;
+    try { await this.sendMessage(text, image, files, thinking, images); } finally { this.sending = false; }
+  }
+
+  private async sendMessage(text: string, image: PendingImage | null, files: string[], thinking: string, images: PendingImage[] = []): Promise<void> {
+    const attached = images.length ? images : (image ? [image] : []);
+    if (attached.length > 16) throw new Error('单条消息最多16张图片');
     this.thinking = thinking;
+    const nativeGeneration = this.runGen;
     if (text.length > 0 && files.length === 0) {
-      const spoken = await FastLocalActions.tryRoute(this.context, text, image ? 1 : 0);
+      const spoken = await FastLocalActions.tryRoute(this.context, text, attached.length, false, () => nativeGeneration === this.runGen);
+      if (nativeGeneration !== this.runGen) return;
       if (spoken.length > 0) {
         await this.finishNative(text, spoken);
         return;
       }
     }
-    if (!providerStore.configured()) {
+    if (text.startsWith('/')) { await this.runSlash(text); return; }
+    const boundSession = await sessionStore.get(this.context, this.sessionId);
+    if (boundSession && boundSession.unresolvedModelId) {
+      this.status = `请先选择 AI 服务商中的模型（原模型 ${boundSession.unresolvedModelId}）`; this.changed(); return;
+    }
+    const hasBinding = boundSession !== null && boundSession.modelQueue.length > 0;
+    if (!hasBinding && !providerStore.configured()) {
       this.status = '未配置 AI 服务商';
       this.changed();
       return;
     }
-    if (text.startsWith('/')) {
-      await this.runSlash(text);
-      return;
-    }
     const line = new LocalChatMessage();
     line.role = 'user';
-    line.text = (text.length > 0 ? text : (image ? '看这张图' : '看看这些文件')) + (image ? '\n[图片]' : '');
-    if (image) {
+    line.text = (text.length > 0 ? text : (attached.length ? '看看这些图片' : '看看这些文件')) + (attached.length ? `\n[${attached.length}张图片]` : '');
+    line.images = attached.slice();
+    if (attached.length) {
+      image = attached[0];
       line.imageB64 = image.b64;
       line.imageMime = image.mime;
       line.imagePath = image.path;
     }
-    line.files = files.slice();
+    line.files = files.slice(); line.submissionId = this.submissionId;
     await sessionStore.appendLine(this.context, this.sessionId, line);
+    ChatViewState.admitted(this.sessionId, this.submissionId);
     this.lines = this.lines.concat([line]);
     await this.refreshTitle();
     await this.start();
@@ -231,12 +267,14 @@ export class ChatRun {
 
   /** 停止:没说完的回答存下来(标成没说完),之后能「继续」。 */
   async stop(): Promise<void> {
+    LinuxRuntime.cancelOwner(this.sessionId);
+    MailTools.cancel(this.sessionId);
     const partial = this.assistantOpen || this.streamBuf.length > 0;
     this.flushStream();
     const last = this.lines.length > 0 ? this.lines[this.lines.length - 1] : null;
     this.cancelRun();
     this.active = false;
-    taskStatus.setRunning(false);
+    taskStatus.setRunning(false, this.sessionId);
     if (partial && last && last.role === 'assistant' && last.text.trim().length > 0) {
       const line = new LocalChatMessage();
       line.role = 'assistant';
@@ -254,19 +292,22 @@ export class ChatRun {
     this.changed();
   }
 
-  allowWrite(sessionWide: boolean): void {
-    if (sessionWide) {
-      SensitiveToolGate.grantSession(this.sessionId);
-    } else {
-      SensitiveToolGate.grantWriteOnce(this.sessionId);
-    }
-    this.askWrite = false;
-    taskStatus.setPendingWrite(false);
-    this.status = sessionWide ? '这个对话里写文件不再问' : '已允许这一次';
-    this.continueTools();
+  allowWrite(sessionWide: boolean, displayedTicket: string): void {
+    if (!displayedTicket || displayedTicket !== this.approvalToken()) throw new Error('审批内容已变化，请重新查看当前操作');
+    const granted = sessionWide ? SensitiveToolGate.grantSession(this.sessionId, displayedTicket) : SensitiveToolGate.grantWriteOnce(this.sessionId, displayedTicket);
+    if (!granted) throw new Error('审批已失效，请重新查看当前操作');
+    this.askWrite = false; taskStatus.setPendingWrite(false, this.sessionId);
+    this.status = sessionWide ? '已允许本会话同类操作' : '已允许这一次';
+    if (this.pendingNative) this.finishPendingNative(this.runGen).catch((error: Error) => { this.status = error.message; this.changed(); });
+    else this.continueTools();
   }
 
-  denyWrite(stop: boolean): void {
+  denyWrite(stop: boolean, displayedTicket: string): void {
+    if (!displayedTicket || displayedTicket !== this.approvalToken()) throw new Error('审批内容已变化，请重新查看当前操作');
+    if (this.pendingNative) {
+      this.pendingNative = null; this.pendingNativeSubmission = ''; this.clearApproval(); this.askWrite = false; taskStatus.setPendingWrite(false, this.sessionId);
+      this.status = '已拒绝本机操作'; this.changed(); if (stop) this.stop(); return;
+    }
     const calls = this.pendingCalls.slice();
     if (stop || calls.length === 0) {
       this.stop();
@@ -274,7 +315,7 @@ export class ChatRun {
     }
     this.askWrite = false;
     this.pendingCalls = [];
-    taskStatus.setPendingWrite(false);
+    taskStatus.setPendingWrite(false, this.sessionId);
     // 每个没执行的调用都要回一条结果,不然下一轮请求会因为「有调用没有结果」被服务商拒掉。
     for (let i = 0; i < calls.length; i++) {
       const call = calls[i];
@@ -284,26 +325,70 @@ export class ChatRun {
       tool.toolName = call.name;
       tool.content = (call.name === 'file_write' || call.name === 'file_edit') ?
         SensitiveToolGate.denialMessage(ChatRun.pathOf(call)) :
-        '没有执行:前面的写文件被用户拒绝了。';
+        '没有执行，前面的操作已被用户拒绝。';
       this.loopTurns = this.loopTurns.concat([tool]);
     }
-    this.push('system', '已拒绝写文件');
+    this.clearApproval();
+    this.push('system', '已拒绝这次操作');
     this.markActive();
     this.startModel(this.runGen);
   }
 
   /** 刚切到全自动:正在等的这次写文件一并放行(Mac 端也是这么做的)。 */
   onFullAuto(): void {
-    if (SensitiveToolGate.fullAuto && this.askWrite && this.pendingCalls.length > 0) {
+    if (SensitiveToolGate.fullAuto && this.askWrite && (this.pendingCalls.length > 0 || this.pendingNative !== null)) {
       this.askWrite = false;
-      taskStatus.setPendingWrite(false);
-      this.continueTools();
+      taskStatus.setPendingWrite(false, this.sessionId);
+      if (this.pendingNative) this.finishPendingNative(this.runGen).catch((error: Error) => { this.status = error.message; this.changed(); });
+      else this.continueTools();
     }
   }
 
   writeAskTitle(): string {
-    const path = this.pendingCalls.length > 0 ? ChatRun.pathOf(this.pendingCalls[0]) : '';
-    return path.length > 0 ? `要写文件:${path}` : '要写沙箱文件,等你确认';
+    const call = this.approvalCall; const path = call ? ChatRun.pathOf(call) : '';
+    const name = call?.name ?? '';
+    if (name === 'shell_execute') return '运行 Linux 命令，等你确认';
+    if (name === 'browser_use') return '操作浏览器页面，等你确认';
+    if (name.startsWith('calendar_')) return SensitiveToolGate.requiresPersonalRead(name, call?.args ?? '{}') ? '读取日历资料，等你确认' : '修改日历，等你确认';
+    if (name.startsWith('contacts_')) return SensitiveToolGate.requiresPersonalRead(name, call?.args ?? '{}') ? '读取联系人资料，等你确认' : '修改联系人，等你确认';
+    if (call && SensitiveToolGate.requiresPersonalRead(name, call.args)) return '读取个人资料，等你确认';
+    return path.length > 0 ? `要写文件:${path}` : '此操作需要你确认';
+  }
+
+  approvalToken(): string {
+    if (!this.askWrite || this.approvalGeneration !== this.runGen || !this.approvalCall) return '';
+    const actual = this.pendingNative ?? this.pendingCalls[0];
+    return actual && actual.id === this.approvalCall.id && actual.name === this.approvalCall.name && actual.args === this.approvalCall.args ? this.approvalTicket : '';
+  }
+
+  writeAskDetails(): string {
+    if (!this.approvalToken() || !this.approvalCall) return '这项审批已变化，请等待当前操作刷新';
+    let args = this.approvalCall.args;
+    try { args = JSON.stringify(JSON.parse(args), null, 2); } catch (_error) {}
+    return this.approvalCall.name + (this.approvalResource ? '\n目标 ' + this.approvalResource : '') + '\n' + args;
+  }
+
+  private freezeApproval(call: ToolCall, generation: number): void {
+    const resource = SensitiveToolGate.resource(this.sessionId);
+    const snapshot = new ToolCall(); snapshot.id = call.id; snapshot.name = call.name; snapshot.args = call.args;
+    this.approvalCall = snapshot; this.approvalGeneration = generation; this.approvalTicket = util.generateRandomUUID(); this.approvalResource = resource;
+    SensitiveToolGate.beginOperation(this.sessionId, this.approvalTicket, call.name, call.args); SensitiveToolGate.setResource(this.sessionId, resource);
+  }
+
+  private clearApproval(): void {
+    this.approvalTicket = ''; this.approvalCall = null; this.approvalGeneration = -1; this.approvalResource = '';
+    SensitiveToolGate.revokeOperation(this.sessionId);
+  }
+
+  private async finishPendingNative(generation: number): Promise<void> {
+    const call = this.pendingNative; if (!call || generation !== this.runGen) return;
+    const result = LocalTools.writeSandbox(this.context, toolArg(call.args, 'path'), toolArg(call.args, 'text'), this.sessionId);
+    if (result === '__NEED_WRITE_GRANT__') { this.askWrite = true; taskStatus.setPendingWrite(true, this.sessionId); this.changed(); return; }
+    const submission = this.pendingNativeSubmission; this.pendingNativeSubmission = ''; this.pendingNative = null; this.clearApproval();
+    const line = new LocalChatMessage(); line.role = 'system'; line.text = result; line.submissionId = submission;
+    await sessionStore.appendLine(this.context, this.sessionId, line); ChatViewState.admitted(this.sessionId, line.submissionId);
+    if (generation !== this.runGen) return;
+    this.push('system', result); this.status = '空闲'; this.changed();
   }
 
   /** 工具要写的沙箱文件名;路径不合法时返回空(不能在点按钮时抛出去)。 */
@@ -395,6 +480,30 @@ export class ChatRun {
     const gen = this.runGen;
     this.loopGuard = new ToolLoopGuard();
     this.interrupted = false;
+    const bound = await sessionStore.get(this.context, this.sessionId);
+    if (!bound || gen !== this.runGen) return;
+    this.memoryEnabled = bound.memoryEnabled;
+    if (bound.unresolvedModelId) {
+      this.finish(gen, 'failed', `请先选择 AI 服务商中的模型（原模型 ${bound.unresolvedModelId}）`); return;
+    }
+    if (bound.modelGroupId) {
+      const group = providerStore.groups.find((row: ModelGroup) => row.id === bound.modelGroupId);
+      const queue = providerStore.queue(this.sessionId, bound.modelGroupId, false);
+      if (!group || !queue.length) { this.finish(gen, 'failed', '这个对话绑定的模型组已不可用，请重新选择模型'); return; }
+      if (queue.length > 0) {
+        const different = JSON.stringify(queue) !== JSON.stringify(bound.modelQueue);
+        if (different) await sessionStore.bindModels(this.context, this.sessionId, queue, bound.modelGroupId);
+        if (gen !== this.runGen) return;
+      }
+    }
+    if (bound.modelQueue.length === 0) {
+      await sessionStore.bindModels(this.context, this.sessionId, providerStore.queue(this.sessionId), providerStore.activeGroupId);
+      if (gen !== this.runGen) return;
+    }
+    if (!this.thinking && bound.modelGroupId) this.thinking = providerStore.groups.find((row: ModelGroup) => row.id === bound.modelGroupId)?.defaultThinkingLevel ?? '';
+    try { this.modelQueue = providerStore.captureQueue(bound.modelQueue); }
+    catch (error) { this.finish(gen, 'failed', (error as Error).message); return; }
+    this.modelClients.clear();
     this.markActive();
     ChatRuns.askNotifications(this.context);
     await sessionStore.setRunning(this.context, this.sessionId, true).catch(() => {
@@ -434,24 +543,28 @@ export class ChatRun {
       return;
     }
     this.rounds += 1;
-    const queue = providerStore.queue();
+    const queue = this.modelQueue;
     if (this.failIndex >= queue.length) {
       this.finish(gen, 'failed', '所有 AI 服务商都试过了,都没成功');
       return;
     }
     const slot = queue[this.failIndex];
-    const client = await OpenAICompatClient.open(providerStore.slotRoot(slot.instanceId),
-      providerStore.keyFor(slot.instanceId), slot.model, providerStore.slotType(slot.instanceId),
-      providerStore.slotCredential(slot.instanceId), slot.instanceId, this.sessionId);
+    if (!providerStore.instances.some((row: ProviderInstance) => row.id === slot.instanceId && row.enabled)) {
+      this.finish(gen, 'failed', '这个对话绑定的 AI 服务商已停用，请重新选择模型'); return;
+    }
+    this.actualModel = slot.model; this.actualProviderId = slot.instanceId; this.changed();
+    const client = this.modelClients.get(this.failIndex) ?? await OpenAICompatClient.open(slot.root, slot.key, slot.model, slot.type,
+      slot.credential, slot.instanceId, this.sessionId, slot.reference, slot.metadata);
     // 登录态刷新要走网络,这期间点了停止就不再开流。
     if (gen !== this.runGen) {
       return;
     }
+    this.modelClients.set(this.failIndex, client);
     this.assistantOpen = false;
     this.streamBuf = '';
     this.streamDone = false;
     this.clearStreamTick();
-    this.stream = client.streamTurn(this.loopTurns, LocalTools.systemPrompt(), this.thinking,
+    this.stream = client.streamTurn(this.loopTurns, LocalTools.systemPrompt(this.memoryAllowed()), this.thinking,
       (delta: string) => {
         if (gen !== this.runGen) {
           return;
@@ -463,26 +576,10 @@ export class ChatRun {
         }
         this.stream = null;
         this.streamDone = true;
-        if (turn.calls.length > 0) {
-          this.flushStream();
-          this.assistantOpen = false;
-          const assistant = new LoopTurn();
-          assistant.role = 'assistant';
-          assistant.content = turn.text;
-          assistant.calls = turn.calls;
-          this.loopTurns = this.loopTurns.concat([assistant]);
-          // 和存档里同一行:页面上画成工具胶囊,重开对话也一样
-          this.push('system', toolPlanLine(turn.calls.map((call: ToolCall) => call.name)));
-          const calls = turn.calls;
-          this.saveToolRound(turn.text, calls).then(() => {
-            if (gen === this.runGen) {
-              this.runTools(gen, calls);
-            }
-          });
-          return;
-        }
-        this.persistAssistant(turn.text, turn.promptTokens, turn.completionTokens);
-        this.finish(gen, 'done', turn.text);
+        this.completeTurn(gen, turn).catch((error: Error) => {
+          if (gen !== this.runGen) return;
+          this.flushStream(); this.push('system', '回复保存失败，' + error.message, 'error'); this.finish(gen, 'failed', '回复保存失败');
+        });
       }, (message: string) => {
         if (gen !== this.runGen) {
           return;
@@ -490,8 +587,8 @@ export class ChatRun {
         this.stream = null;
         this.flushStream();
         this.assistantOpen = false;
-        const queue = providerStore.queue();
-        if (shouldFailover(message) && this.failIndex + 1 < queue.length) {
+        const queue = this.modelQueue;
+        if ((slot.fallbackAlways || shouldFailover(message)) && this.failIndex + 1 < queue.length) {
           this.dropPartialAssistant();
           this.failIndex += 1;
           this.rounds = Math.max(0, this.rounds - 1);
@@ -502,7 +599,45 @@ export class ChatRun {
         const shown = friendlyModelError(message);
         this.push('system', shown, 'error');
         this.finish(gen, 'failed', shown);
-      });
+      }, true, this.memoryAllowed(), () => gen === this.runGen);
+  }
+
+  private async completeTurn(gen: number, turn: StreamTurn): Promise<void> {
+    const images: ChatImage[] = []; const deadline = Date.now() + 120000;
+    for (const candidate of turn.images ?? []) {
+      if (gen !== this.runGen) return;
+      const saved = await GeneratedMedia.save(this.context, candidate, () => gen === this.runGen, deadline);
+      if (gen !== this.runGen) return;
+      if (images.some((media: ChatImage) => media.contentHash === saved.contentHash)) continue;
+      const media = new ChatImage(); media.path = saved.path; media.mime = saved.mime; media.width = saved.width; media.height = saved.height;
+      media.sourceId = saved.sourceId; media.contentHash = saved.contentHash; media.generated = true;
+      const file = fileIo.openSync(saved.path, fileIo.OpenMode.READ_ONLY | fileIo.OpenMode.NOFOLLOW);
+      try {
+        const bytes = new ArrayBuffer(fileIo.statSync(file.fd).size);
+        if (fileIo.readSync(file.fd, bytes) !== bytes.byteLength) throw new Error('生成图片读取不完整');
+        media.b64 = new util.Base64Helper().encodeToStringSync(new Uint8Array(bytes));
+      } finally { fileIo.closeSync(file); }
+      images.push(media);
+    }
+    if (gen !== this.runGen) return;
+    this.flushStream();
+    const text = turn.text || (images.length ? '已生成图片' : '');
+    if (text && !this.assistantOpen) { this.push('assistant', text); this.assistantOpen = true; }
+    if (images.length) {
+      const last = this.lines[this.lines.length - 1];
+      if (last && last.role === 'assistant') { last.images = images; last.imagePath = images[0].path; last.imageMime = images[0].mime; last.imageB64 = images[0].b64; this.lines = this.lines.slice(); this.changed(); }
+    }
+    this.assistantOpen = false;
+    const line = new LocalChatMessage(); line.role = 'assistant'; line.text = text; line.images = images;
+    if (text || images.length) await sessionStore.appendLine(this.context, this.sessionId, line, () => gen === this.runGen);
+    if (gen !== this.runGen) return;
+    usageStore.add(this.context, turn.promptTokens, turn.completionTokens).catch(() => {});
+    if (turn.calls.length) {
+      const assistant = new LoopTurn(); assistant.role = 'assistant'; assistant.content = text; assistant.calls = turn.calls; assistant.images = images;
+      this.loopTurns = this.loopTurns.concat([assistant]); this.push('system', toolPlanLine(turn.calls.map((call: ToolCall) => call.name)));
+      await sessionStore.append(this.context, this.sessionId, 'system', toolPlanLine(turn.calls.map((call: ToolCall) => call.name)));
+      if (gen === this.runGen) await this.runTools(gen, turn.calls);
+    } else this.finish(gen, 'done', text);
   }
 
   private continueTools(): void {
@@ -515,7 +650,7 @@ export class ChatRun {
   private markActive(): void {
     this.active = true;
     this.status = '进行中';
-    taskStatus.setRunning(true);
+    taskStatus.setRunning(true, this.sessionId);
     this.changed();
   }
 
@@ -526,21 +661,26 @@ export class ChatRun {
         return;
       }
       const call = calls[i];
-      const result: ToolResult = await LocalTools.run(this.context, call.name, call.args, this.sessionId);
+      const prior = this.approvalCall;
+      const matching = this.approvalGeneration === gen && prior && prior.id === call.id && prior.name === call.name && prior.args === call.args;
+      SensitiveToolGate.beginOperation(this.sessionId, matching ? this.approvalTicket : util.generateRandomUUID(), call.name, call.args);
+      const result: ToolResult = await LocalTools.run(this.context, call.name, call.args, this.sessionId, false, () => gen === this.runGen, () => this.memoryAllowed());
       if (gen !== this.runGen) {
         return;
       }
       if (result.needWrite) {
         this.askWrite = true;
         this.active = false;
-        taskStatus.setPendingWrite(true);
-        taskStatus.setRunning(false);
-        this.pendingCalls = calls.slice(i);
+        taskStatus.setPendingWrite(true, this.sessionId);
+        taskStatus.setRunning(false, this.sessionId);
+        this.pendingCalls = calls.slice(i).map((item: ToolCall) => { const copy = new ToolCall(); copy.id = item.id; copy.name = item.name; copy.args = item.args; return copy; });
+        this.freezeApproval(this.pendingCalls[0], gen);
         this.status = '等待写文件';
         this.changed();
         ChatRuns.settled(this, 'approval', '');
         return;
       }
+      this.clearApproval();
       const times = this.loopGuard.note(call.name, call.args);
       const tool = new LoopTurn();
       tool.role = 'tool';
@@ -568,34 +708,6 @@ export class ChatRun {
     }
   }
 
-  /**
-   * 工具执行前先把这一步存下来:模型这一步说的话,和要调用哪些工具。
-   * App 在工具跑到一半被杀,重开时看得出哪一步没跑完(「继续」会告诉模型)。
-   */
-  private async saveToolRound(text: string, calls: ToolCall[]): Promise<void> {
-    try {
-      if (text.length > 0) {
-        await sessionStore.append(this.context, this.sessionId, 'assistant', text);
-      }
-      await sessionStore.append(this.context, this.sessionId, 'system',
-        toolPlanLine(calls.map((call: ToolCall) => call.name)));
-    } catch (_err) {
-      // 存档失败也接着跑
-    }
-  }
-
-  private persistAssistant(output: string, prompt: number, completion: number): void {
-    usageStore.add(this.context, prompt, completion).catch(() => {
-      // keep chatting
-    });
-    if (!output) {
-      return;
-    }
-    sessionStore.append(this.context, this.sessionId, 'assistant', output).catch((err: Error) => {
-      this.status = `${err}`;
-    });
-  }
-
   private finish(gen: number, outcome: string, text: string): void {
     if (gen !== this.runGen) {
       return;
@@ -604,8 +716,9 @@ export class ChatRun {
   }
 
   private finishNow(outcome: string, text: string): void {
+
     this.active = false;
-    taskStatus.setRunning(false);
+    taskStatus.setRunning(false, this.sessionId);
     sessionStore.setRunning(this.context, this.sessionId, false).catch(() => {
       // 下次打开时按最后一条判断
     });
@@ -625,16 +738,28 @@ export class ChatRun {
 
   /** 作废正在跑的一轮,连同挂着的写文件审批。 */
   private cancelRun(): void {
+
+    this.pendingNative = null; this.pendingNativeSubmission = ''; this.clearApproval();
+    SubAgentTasks.cancelOwner(this.sessionId);
     this.runGen += 1;
     this.stopStream();
     this.askWrite = false;
     this.pendingCalls = [];
-    taskStatus.setPendingWrite(false);
+    taskStatus.setPendingWrite(false, this.sessionId);
+  }
+
+  private memoryAllowed(): boolean { return this.memoryEnabled && SessionStore.memoryAllowed(this.context, this.sessionId); }
+
+  async setMemoryEnabled(enabled: boolean): Promise<void> {
+    await sessionStore.setMemoryEnabled(this.context, this.sessionId, enabled);
+    this.memoryEnabled = enabled; this.changed();
   }
 
   private async finishNative(text: string, spoken: string): Promise<void> {
     try {
-      await sessionStore.append(this.context, this.sessionId, 'user', text);
+      const user = new LocalChatMessage(); user.role = 'user'; user.text = text; user.submissionId = this.submissionId;
+      await sessionStore.appendLine(this.context, this.sessionId, user);
+      ChatViewState.admitted(this.sessionId, this.submissionId);
       this.push('user', text);
       await sessionStore.append(this.context, this.sessionId, 'assistant', spoken);
       this.push('assistant', spoken);
@@ -662,19 +787,27 @@ export class ChatRun {
         if (space < 0) {
           out = '用法：/write 文件名 内容';
         } else {
-          out = LocalTools.writeSandbox(this.context, rest.substring(0, space), rest.substring(space + 1),
-            this.sessionId);
+          const call = new ToolCall(); call.id = util.generateRandomUUID(); call.name = 'file_write';
+          const args = new NativeWriteArgs(); args.path = rest.substring(0, space); args.text = rest.substring(space + 1); call.args = JSON.stringify(args);
+          SensitiveToolGate.beginOperation(this.sessionId, util.generateRandomUUID(), call.name, call.args);
+          const current = this.runGen;
+          if (!await SensitiveToolGate.bindArguments(this.sessionId, call.name, call.args, () => current === this.runGen)) return;
+          out = LocalTools.writeSandbox(this.context, args.path, args.text, this.sessionId);
           if (out === '__NEED_WRITE_GRANT__') {
-            this.askWrite = true;
-            out = '写文件要你先确认:点下面的「允许一次」或「本次会话允许」,再发一次 /write';
+            this.pendingNative = call; this.pendingNativeSubmission = this.submissionId; this.freezeApproval(call, this.runGen);
+            this.askWrite = true; taskStatus.setPendingWrite(true, this.sessionId);
+            out = '请检查下方完整内容后批准写入';
           }
         }
+      } else if (cmd === '/memory') {
+        await this.setMemoryEnabled(!this.memoryEnabled); out = this.memoryEnabled ? '已开启本会话记忆' : '已关闭本会话记忆';
       } else if (cmd === '/remember') {
+        if (!this.memoryAllowed()) throw new Error('本会话已关闭记忆，请先用 /memory 开启');
         await memoryStore.load(this.context);
         await memoryStore.appendToday(this.context, rest);
         out = '已写入今日记忆';
       } else if (cmd === '/open') {
-        out = LocalTools.openLink(rest);
+        out = LocalTools.openLink(rest, false, this.sessionId);
       } else if (cmd === '/auto') {
         await SensitiveToolGate.setFullAuto(this.context, !SensitiveToolGate.fullAuto);
         out = SensitiveToolGate.fullAuto ? '已切到全自动:写文件不再逐项确认。再发 /auto 切回。' :
@@ -689,7 +822,10 @@ export class ChatRun {
     }
     if (out.length > 0) {
       this.push('system', out);
-      await sessionStore.append(this.context, this.sessionId, 'system', out).catch(() => {
+      const result = new LocalChatMessage(); result.role = 'system'; result.text = out; result.submissionId = this.askWrite ? '' : this.submissionId;
+      await sessionStore.appendLine(this.context, this.sessionId, result).then(() => {
+        if (result.submissionId) ChatViewState.admitted(this.sessionId, result.submissionId);
+      }).catch(() => {
         // 显示过了就行
       });
     }
@@ -817,7 +953,7 @@ export class ChatRun {
     next.text = last.text + delta;
     next.imageB64 = last.imageB64;
     next.imageMime = last.imageMime;
-    next.imagePath = last.imagePath;
+    next.imagePath = last.imagePath; next.images = last.images.slice();
     next.kind = last.kind;
     next.at = last.at;
     copy[copy.length - 1] = next;
@@ -893,6 +1029,11 @@ export class ChatRuns {
       }
     });
     return busy;
+  }
+
+  static invalidateIdle(sessionId: string): void {
+    const run = ChatRuns.runs.get(sessionId);
+    if (run && !run.active && !run.askWrite) ChatRuns.runs.delete(sessionId);
   }
 
   /** 对话被删了:停下它在跑的一轮。 */

@@ -1,0 +1,69 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; media-src blob:; connect-src 'self'"><title>LeoBot Mac 屏幕</title><style>
+:root{color-scheme:light dark;font-family:system-ui,sans-serif}*{box-sizing:border-box}body{margin:0;background:#111;color:#eee;height:100dvh;display:flex;flex-direction:column}header,footer{display:flex;gap:8px;align-items:center;padding:12px;flex-wrap:wrap}button,input{font:inherit;min-height:44px;border-radius:9px;border:1px solid #555;background:#252525;color:#fff;padding:8px 12px}button:focus-visible,input:focus-visible{outline:3px solid #46c4b7}#status{font-size:13px;color:#bbb;flex:1}main{flex:1;min-height:100px;display:flex;align-items:center;justify-content:center;overflow:hidden}video{max-width:100%;max-height:100%;object-fit:contain;touch-action:none}input{flex:1;min-width:150px}#control{font-size:12px;color:#e6b46b}button:disabled{opacity:.5}</style></head><body>
+<header><button id="connect">连接屏幕</button><button id="disconnect">断开</button><span id="status" role="status">等待连接</span><span id="control">只看屏幕</span></header>
+<main><video id="video" autoplay playsinline muted tabindex="0" aria-label="远程 Mac 屏幕"></video></main>
+<div id="metrics" role="status" style="padding:0 12px;font-size:12px;color:#aaa"></div>
+<footer><button id="escape">Esc</button><button id="tab">Tab</button><button id="copy">⌘C</button><button id="paste">⌘V</button><input id="text" aria-label="发送到 Mac 的文字" placeholder="输入中文或粘贴文字"><button id="send">发送文字</button></footer>
+<script>
+'use strict';
+const status=document.getElementById('status'),video=document.getElementById('video'),pending=new Map();
+let nextId=0,peer=null,channel=null,session=false,control=false,generation=0,ice=[],sendingIce=false,statsTimer=null;
+function native(op,body={}){if(pending.size>=8)return Promise.reject(Error('连接请求过多，请稍后重试'));if(!window.leoScreen?.postMessage)return Promise.reject(Error('本机信令桥尚未就绪'));return new Promise((resolve,reject)=>{const id=++nextId;const timer=setTimeout(()=>{pending.delete(id);reject(Error('连接请求超时'));},70000);pending.set(id,{resolve,reject,timer});window.leoScreen.postMessage(JSON.stringify({id,op,body}));});}
+window.leoScreenReply=reply=>{const request=pending.get(reply.id);if(!request)return;pending.delete(reply.id);clearTimeout(request.timer);reply.error?request.reject(Error(reply.error)):request.resolve(reply.result);};
+function show(message){status.textContent=message;}
+function input(event){if(control&&channel?.readyState==='open'){const value=JSON.stringify(event);if(value.length<=16000)channel.send(value);}}
+async function flushIce(){if(!session||sendingIce||!ice.length)return;sendingIce=true;const batch=ice.splice(0,50);try{await native('ice',{candidates:batch});}catch(error){show(error.message);}finally{sendingIce=false;if(ice.length)void flushIce();}}
+function syncInputControls() {
+  const enabled = control && channel?.readyState === 'open';
+  for (const element of document.querySelectorAll('footer button,footer input')) element.disabled = !enabled;
+}
+async function disconnect(signal = true) {
+  generation++;
+  if (statsTimer) { clearInterval(statsTimer); statsTimer = null; }
+  document.getElementById('connect').disabled = false;
+  document.getElementById('disconnect').disabled = true;
+  document.getElementById('metrics').textContent = '';
+  session = false; control = false; ice = [];
+  if (channel) { channel.close(); channel = null; }
+  if (peer) { peer.close(); peer = null; }
+  video.srcObject = null;
+  document.getElementById('control').textContent = '只看屏幕';
+  syncInputControls();
+  if (signal) { try { await native('close'); } catch {} }
+  show('已断开');
+}
+async function connect(){await disconnect();const mine=generation;document.getElementById('connect').disabled=true;document.getElementById('disconnect').disabled=false;show('正在建立连接…');try{if(!window.RTCPeerConnection)throw Error('这台设备的 ArkWeb 尚未提供 WebRTC');const config=await native('preflight');if(mine!==generation)return;
+const connection=new RTCPeerConnection({iceServers:config.ice_servers||[],bundlePolicy:'max-bundle',rtcpMuxPolicy:'require'});peer=connection;
+const receiver=connection.addTransceiver('video',{direction:'recvonly'});const codecs=RTCRtpReceiver.getCapabilities?.('video')?.codecs||[];if(receiver.setCodecPreferences&&codecs.length)receiver.setCodecPreferences([...codecs.filter(c=>c.mimeType.toLowerCase()==='video/h264'),...codecs.filter(c=>c.mimeType.toLowerCase()!=='video/h264')]);
+statsTimer = setInterval(async () => {
+  try {
+    const stats = await connection.getStats();
+    if (mine !== generation) return;
+    for (const row of stats.values()) {
+      if (row.type === 'inbound-rtp' && (row.kind === 'video' || row.mediaType === 'video')) {
+        document.getElementById('metrics').textContent =
+          `已解码 ${row.framesDecoded || 0} 帧 · ${row.frameWidth || 0} × ${row.frameHeight || 0} · ${Math.round(row.framesPerSecond || 0)} fps`;
+      }
+    }
+  } catch {}
+}, 1000);
+channel=connection.createDataChannel('leo-input',{ordered:true});channel.onopen=()=>syncInputControls();channel.onclose=()=>syncInputControls();channel.onmessage=event=>{if(mine!==generation)return;try{const data=JSON.parse(event.data);if(data.t==='status'){control=data.ok===true;document.getElementById('control').textContent=control?'已获 Mac 操控权限':data.reason==='accessibility'?'请在 Mac 授予辅助功能权限':'只看屏幕';syncInputControls();}}catch{}};
+connection.ontrack=event=>{if(mine!==generation)return;video.srcObject=event.streams[0]||new MediaStream([event.track]);video.play().catch(()=>show('点视频开始播放'));};
+connection.onicecandidate=event=>{if(mine!==generation||!event.candidate)return;ice.push(event.candidate.toJSON());void flushIce();};
+connection.onconnectionstatechange=()=>{if(mine===generation)show(connection.connectionState==='connected'?'屏幕已连接':`连接状态 ${connection.connectionState}`);};
+await connection.setLocalDescription(await connection.createOffer());if(mine!==generation)return;
+const answer=await native('open',{offer:connection.localDescription.sdp});if(mine!==generation){await native('close');return;}session=true;control=answer.control===true;await connection.setRemoteDescription({type:'answer',sdp:answer.answer});void flushIce();
+}catch(error){if(mine!==generation)return;const message=error.message;await disconnect();show(message);}}
+function coordinates(event){const rect=video.getBoundingClientRect();const width=video.videoWidth,height=video.videoHeight;if(!width||!height)return null;const scale=Math.min(rect.width/width,rect.height/height),w=width*scale,h=height*scale;const x=(event.clientX-rect.left-(rect.width-w)/2)/w,y=(event.clientY-rect.top-(rect.height-h)/2)/h;return x>=0&&x<=1&&y>=0&&y<=1?{x,y}:null;}
+video.addEventListener('pointerdown',event=>{const point=coordinates(event);if(point){video.focus();video.setPointerCapture(event.pointerId);input({t:'down',b:event.button===2?'right':event.button===1?'middle':'left',...point});event.preventDefault();}});
+video.addEventListener('pointermove',event=>{const point=coordinates(event);if(point)input({t:'move',...point});});
+video.addEventListener('pointerup',event=>{const point=coordinates(event)||{};input({t:'up',b:event.button===2?'right':event.button===1?'middle':'left',...point});});
+video.addEventListener('pointercancel',()=>input({t:'up',b:'left'}));video.addEventListener('contextmenu',event=>event.preventDefault());
+video.addEventListener('wheel',event=>{const point=coordinates(event);if(point){input({t:'scroll',dx:Math.max(-5000,Math.min(5000,event.deltaX)),dy:Math.max(-5000,Math.min(5000,event.deltaY)),...point});event.preventDefault();}},{passive:false});
+video.addEventListener('keydown',event=>{if(event.isComposing)return;const mods=[];if(event.metaKey)mods.push('cmd');if(event.ctrlKey)mods.push('ctrl');if(event.altKey)mods.push('alt');if(event.shiftKey)mods.push('shift');input({t:'key',code:event.code,mods,phase:'press'});event.preventDefault();});
+document.getElementById('connect').onclick=()=>void connect();document.getElementById('disconnect').onclick=()=>void disconnect();
+for(const [id,code,mods] of [['escape','Escape',[]],['tab','Tab',[]],['copy','KeyC',['cmd']],['paste','KeyV',['cmd']]])document.getElementById(id).onclick=()=>input({t:'key',code,mods,phase:'press'});
+document.getElementById('send').onclick=()=>{const box=document.getElementById('text');const text=box.value;if(!control){show('请先在应用顶部开启操控，并获得 Mac 端许可');return;}for(let offset=0;offset<text.length;offset+=1000)input({t:'text',s:text.slice(offset,offset+1000)});box.value='';};
+syncInputControls();document.getElementById('disconnect').disabled=true;
+document.addEventListener('visibilitychange',()=>{if(document.hidden)void disconnect();});window.leoScreenDisconnect=()=>void disconnect(false);
+</script></body></html>

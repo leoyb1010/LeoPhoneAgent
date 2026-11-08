@@ -1,0 +1,13 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta http-equiv="Content-Security-Policy" content="default-src 'none';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline';connect-src 'none';img-src 'self' data:"><link rel="stylesheet" href="xterm.css"><link rel="icon" href="data:,"><title>LeoBot 终端</title><style>html,body,#terminal{height:100%;width:100%;margin:0;background:#121416;overflow:hidden}.xterm{padding:6px;box-sizing:border-box}</style></head><body><div id="terminal" aria-label="交互终端"></div><script src="xterm.js"></script><script src="fit.js"></script><script>
+'use strict';
+const terminal=new Terminal({cursorBlink:!matchMedia('(prefers-reduced-motion: reduce)').matches,fontSize:14,fontFamily:'Menlo,Consolas,monospace',convertEol:false,scrollback:3000,theme:{background:'#121416',foreground:'#e3f2ec'},allowProposedApi:false});
+const fit=new FitAddon.FitAddon();terminal.loadAddon(fit);terminal.open(document.getElementById('terminal'));
+function post(op,body){window.leoTerminal?.postMessage(JSON.stringify({op,body}));}
+terminal.onData(text=>{if(new TextEncoder().encode(text).length>4096){terminal.writeln('\r\n[单次输入超过4096字节，请分段粘贴]');return;}post('input',{text});});
+terminal.onResize(size=>post('resize',{columns:size.cols,rows:size.rows}));
+new ResizeObserver(()=>{try{fit.fit();}catch{}}).observe(document.getElementById('terminal'));
+window.leoTerminalOutput=text=>terminal.write(text);window.leoTerminalFocus=()=>terminal.focus();
+window.leoTerminalClear=()=>terminal.clear();
+matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',event=>{terminal.options.cursorBlink=!event.matches;});
+post('ready',{});setTimeout(()=>{fit.fit();terminal.focus();},50);
+</script></body></html>

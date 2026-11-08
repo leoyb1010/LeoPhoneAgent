@@ -14,7 +14,8 @@ function load(relative, names, env = {}) {
   source = source.replace(/^import[\s\S]*?from\s+['"][^'"]+['"];\s*/gm, '')
     .replace(/\bexport\s+/g, '');
   const code = stripTypeScriptTypes(source, { mode: 'strip' });
-  const context = vm.createContext({ console, setTimeout, clearTimeout, ArrayBuffer, Uint8Array, Date,
+  for (const method of ['revokeOperation','forgetSession','beginOperation']) { if (env.SensitiveToolGate && !env.SensitiveToolGate[method]) env.SensitiveToolGate[method]=()=>{}; }
+  const context = vm.createContext({WearTools:{cancelOwner(){}}, SessionStore:{memoryAllowed:()=>true}, LinuxRuntime:{cancelOwner(){}},MailTools:{cancel(){}}, console, setTimeout, clearTimeout, ArrayBuffer, Uint8Array, Date,
     ...env });
   vm.runInContext(`${code}\nObject.assign(globalThis, {${names.join(',')}});`, context, { filename: relative });
   return Object.fromEntries(names.map(name => [name, context[name]]));
@@ -56,7 +57,7 @@ const fileIo = {
   renameSync(a, b) { if (failRename) throw new Error('injected rename'); fs.renameSync(a, b); },
   unlinkSync(p) { calls.unlinks.push(p); fs.unlinkSync(p); },
 };
-const protocol = load('local/LocalProtocol.ets', ['sessionArchiveFromJson','sessionArchiveJson','LocalChatMessage',
+const protocol = load('local/LocalProtocol.ets', ['ChatImage','chatImages','sessionArchiveFromJson','sessionArchiveJson','LocalChatMessage',
   'LoopTurn','HISTORY_CHAR_BUDGET','trimHistory','toolArg','allowOpenUrl','weatherSummary',
   'titleFromPrompt','bucketTitle','dateBucket','ToolLoopGuard'], { util });
 const agent = load('local/AgentText.ets', ['TextLine','STOPPED_NOTE','lastSummaryIndex','resumeNote',
@@ -172,7 +173,7 @@ try {
   const turns = history.conversationHistory(messages);
   assert.deepEqual(Array.from(turns, x => x.content), ['remember blue','blue saved','what color?']);
   const { LocalAgentEngine } = load('local/LocalAgentEngine.ets', ['LocalAgentEngine'], { ...protocol, SensitiveToolGate,
-    FastLocalActions:{tryRoute:async()=>''}, taskStatus:{setRunning:()=>{}} });
+    SubAgentTasks:{cancelOwner(){}}, FastLocalActions:{tryRoute:async()=>''}, taskStatus:{setRunning:()=>{}} });
   let captured;
   LocalAgentEngine.loop = (_ctx,_key,_mine,input) => { captured=input; };
   const generation = LocalAgentEngine.bump('remote');
@@ -191,6 +192,7 @@ try {
     return null;
   };
   const { HarmonyMinisRouter } = load('local/HarmonyMinisRouter.ets', ['HarmonyMinisRouter'], {
+    BackupAccess:{beginExecution:()=>({release(){}})},
     LocalAgentEngine, LocalTools:{hydrate:async()=>{}}, sessionStore:store, ...history,
     ReleaseCatalog:{currentVersion:'test'}, errorBody:s=>JSON.stringify({error:s}),
   });
@@ -215,8 +217,8 @@ try {
   fs.writeFileSync(path.join(temp,'schedule.json'),JSON.stringify({rows:[canceled]}));
   assert.equal(ScheduleStore.claimSlot(context,canceled), false);
   const source = rel => fs.readFileSync(new URL(rel,root),'utf8');
-  assert.match(source('local/LocalTools.ets'), /PhoneTools\.run\(context, name, args, unattended\)/);
-  assert.match(source('local/LocalAgentEngine.ets'), /tryRoute\(context, text, 0, true\)/);
+  assert.match(source('local/LocalTools.ets'), /PhoneTools\.run\(context, name, args, unattended, isCurrent\)/);
+  assert.match(source('local/LocalAgentEngine.ets'), /tryRoute\(context, text, 0, true, \(\) => LocalAgentEngine\.alive\(sessionKey, mine\)\)/);
   for (const name of ['ProviderStore','McpStore','EnvStore','ScheduleStore']) {
     const src = source(`store/${name}.ets`);
     assert.match(src, /this\.configFile\.write\(/);

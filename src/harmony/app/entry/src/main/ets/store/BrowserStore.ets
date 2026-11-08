@@ -1,3 +1,4 @@
+import { util } from '@kit.ArkTS';
 export class BrowserTab {
   id: string = '';
   url: string = '';
@@ -25,6 +26,7 @@ export class BrowserStore {
     if (current) {
       current.url = url;
       current.title = url;
+      this.changed();
       return current;
     }
     return this.add(url);
@@ -35,11 +37,12 @@ export class BrowserStore {
       this.close(this.tabs[0].id);
     }
     const tab = new BrowserTab();
-    tab.id = `t_${Date.now()}`;
+    tab.id = `t_${util.generateRandomUUID(false)}`;
     tab.url = url;
     tab.title = url;
     this.tabs = this.tabs.concat([tab]);
     this.activeId = tab.id;
+    this.changed();
     return tab;
   }
 
@@ -47,6 +50,7 @@ export class BrowserStore {
     for (let i = 0; i < this.tabs.length; i++) {
       if (this.tabs[i].id === id) {
         this.activeId = id;
+        this.changed();
         return this.tabs[i];
       }
     }
@@ -64,6 +68,11 @@ export class BrowserStore {
     if (this.activeId === id) {
       this.activeId = next.length > 0 ? next[0].id : '';
     }
+    this.changed();
+  }
+
+  private changed(): void {
+    AppStorage.setOrCreate('browserTick', (AppStorage.get<number>('browserTick') ?? 0) + 1);
   }
 
   list(): string {

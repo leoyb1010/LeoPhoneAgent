@@ -268,15 +268,19 @@ export function htmlToText(raw: string): string {
     .trim()
 }
 
-export function sandboxFileName(path: string): string {
-  let raw = path.trim().replace(/^\/+/, "")
-  if (raw.startsWith("workspace/")) raw = raw.slice("workspace/".length)
-  if (raw.startsWith("var/minis/workspace/")) raw = raw.slice("var/minis/workspace/".length)
-  if (!raw) throw new Error("文件名不能空")
-  if (raw.includes("..") || raw.includes("/") || raw.includes("\\")) {
-    throw new Error("只允许沙箱根目录下的文件名")
+export function sandboxFileName(path: string, allowRoot: boolean = false): string {
+  let raw = path.trim().replace(/^\/+/, '');
+  for (const prefix of ['var/minis/workspace', 'mnt/workspace', 'workspace']) {
+    if (raw === prefix || raw === prefix + '/') { raw = ''; break; }
+    if (raw.startsWith(prefix + '/')) { raw = raw.substring(prefix.length + 1); break; }
   }
-  return raw
+  if (allowRoot) raw = raw.replace(/\/+$/, '');
+  if (!raw && allowRoot) return '';
+  if (!raw) throw new Error('文件名不能空');
+  if (raw.length > 4096 || /[\\\x00-\x1f\x7f]/.test(raw) || raw.split('/').some((part: string) => !part || part === '.' || part === '..')) {
+    throw new Error('只允许工作区内的相对文件路径');
+  }
+  return raw;
 }
 
 export function finishReasonFromJson(json: unknown): string {
@@ -356,6 +360,7 @@ export function toolArg(raw: string, key: string): string {
 
 export function localToolNames(): string[] {
   return [
+    "subagent",
     "file_list",
     "file_read",
     "read_image",
@@ -369,7 +374,6 @@ export function localToolNames(): string[] {
     "browser_use",
     "mcp_tools",
     "mcp_call",
-    // 手机能力,与 PhoneTools.ets 的 NAMES 一致
     "device_info",
     "clipboard_write",
     "set_alarm",
@@ -380,7 +384,44 @@ export function localToolNames(): string[] {
     "dial",
     "location",
     "weather",
-  ]
+    "shell_execute",
+    "brain_search",
+    "brain_get",
+    "brain_read",
+    "brain_ask",
+    "calendar_status",
+    "calendar_calendars",
+    "calendar_list",
+    "calendar_get",
+    "calendar_freebusy",
+    "calendar_create",
+    "calendar_update",
+    "calendar_delete",
+    "calendar_open_editor",
+    "calendar_reminders",
+    "calendar_reminder_create",
+    "calendar_reminder_update",
+    "calendar_reminder_delete",
+    "calendar_reminder_complete",
+    "contacts_status",
+    "contacts_list",
+    "contacts_search",
+    "contacts_get",
+    "contacts_groups",
+    "contacts_create",
+    "contacts_update",
+    "contacts_delete",
+    "camera_capture",
+    "document_scan",
+    "mail_accounts",
+    "mail_folders",
+    "mail_search",
+    "mail_read",
+    "mail_update",
+    "mail_draft",
+    "mail_send",
+    "mail_watch",
+  ];
 }
 
 export function localToolSchema(): object[] {
@@ -394,10 +435,11 @@ export function localToolSchema(): object[] {
     },
   })
   return [
-    tool("file_list", "List files in the Harmony app sandbox workspace.", {
+    tool("file_list", "List files and directories in the local workspace. Optional path selects a nested workspace directory.", {
       tool_title: str("Short summary shown to the user"),
+      path: str("Relative workspace directory. Omit it to list the root."),
     }, ["tool_title"]),
-    tool("file_read", "Read a text file from the Harmony app sandbox. Path is a file name, not a Linux path. Head pages that still have unread lines append next_offset.", {
+    tool("file_read", "Read a text file from the Harmony app sandbox. Path is relative to the local workspace. Nested directories are supported. Head pages that still have unread lines append next_offset.", {
       tool_title: str("Short summary shown to the user"),
       path: str("Sandbox file name, e.g. notes.md"),
       offset: { type: "integer", description: "1-based line number to start reading from (default: 1). Ignored when direction is tail." },

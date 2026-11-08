@@ -14,6 +14,12 @@ export struct Sym {
   }
 
   private res(): Resource {
+    if (this.name === 'lock') {
+      return $r('sys.symbol.lock');
+    }
+    if (this.name === 'envelope') {
+      return $r('sys.symbol.envelope');
+    }
     if (this.name === 'paperclip') {
       return $r('sys.symbol.paperclip');
     }
@@ -122,6 +128,7 @@ export struct Sym {
     if (this.name === 'lightbulb') {
       return $r('sys.symbol.lightbulb');
     }
+    if (this.name === 'folder_badge_plus') return $r('sys.symbol.folder_badge_plus');
     if (this.name === 'folder') {
       return $r('sys.symbol.folder');
     }

@@ -1,0 +1,112 @@
+{
+  "libssh2": {
+    "version": "1.11.1",
+    "url": "https://libssh2.org/download/libssh2-1.11.1.tar.gz",
+    "sha256": "d9ec76cbe34db98eec3539fe2c899d26b0c837cb3eb466a56b0f109cabf658f7"
+  },
+  "openssl": {
+    "version": "3.5.9",
+    "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz",
+    "sha256": "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a"
+  },
+  "patches": [
+    {
+      "file": "01.patch",
+      "sha256": "7fbbb58149ea7e2df234f491d3ee1e7ce8416c8405b0dad0048ea6bbe5ffb5b9",
+      "url": "https://raw.githubusercontent.com/Homebrew/homebrew-core/428c8bc59b7afc61135d8b0d5596a6f063fb7ba2/Patches/libssh2/CVE-2025-15661.patch",
+      "purpose": [
+        "CVE-2025-15661"
+      ]
+    },
+    {
+      "file": "02.patch",
+      "sha256": "7c5fe26b0b58fb3ee3770c8a7648eddec09845fe016eff22b9074451d1a60c34",
+      "url": "https://github.com/libssh2/libssh2/commit/256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch?full_index=1",
+      "purpose": [
+        "CVE-2026-7598"
+      ]
+    },
+    {
+      "file": "03.patch",
+      "sha256": "a236d5cfe1995a85c3b036ab16cc2672aa316fd3e1d6299100bcc4c07a539fd7",
+      "url": "https://github.com/libssh2/libssh2/commit/17626857d20b3c9a1addfa45979dadcee1cd84a4.patch?full_index=1",
+      "purpose": [
+        "CVE-2026-55199"
+      ]
+    },
+    {
+      "file": "04.patch",
+      "sha256": "db9015ee5cbe95ea0861131109cc29e3cb408a4789d497c1c8812e86873533ac",
+      "url": "https://raw.githubusercontent.com/Homebrew/homebrew-core/428c8bc59b7afc61135d8b0d5596a6f063fb7ba2/Patches/libssh2/CVE-2026-55200.patch",
+      "purpose": [
+        "CVE-2026-55200"
+      ]
+    },
+    {
+      "file": "05.patch",
+      "sha256": "052bd73ea87ddcbb473131e2a52bd3523de065a2201051878c1259230ed3bb7f",
+      "url": "https://raw.githubusercontent.com/Homebrew/homebrew-core/428c8bc59b7afc61135d8b0d5596a6f063fb7ba2/Patches/libssh2/CVE-2026-58050.patch",
+      "purpose": [
+        "CVE-2026-58050"
+      ]
+    },
+    {
+      "file": "06.patch",
+      "sha256": "46cc7c5184d333e93c80a9cac1c86469c17340e6fc0418aecb2d0d8f6eaa5f41",
+      "url": "https://github.com/libssh2/libssh2/commit/a9758da45a52bc8c630ec9493804d0c6ea30b24a.patch?full_index=1",
+      "purpose": [
+        "CVE-2026-58051"
+      ]
+    },
+    {
+      "file": "07.patch",
+      "sha256": "d46ed49ff9cf311306deae102fca3b8fd6bd649d43c3d794cc29be6ebb523e0a",
+      "url": "https://raw.githubusercontent.com/Homebrew/homebrew-core/428c8bc59b7afc61135d8b0d5596a6f063fb7ba2/Patches/libssh2/CVE-2026-66032.patch",
+      "purpose": [
+        "CVE-2026-66032"
+      ]
+    },
+    {
+      "file": "08.patch",
+      "sha256": "378b5f95f1a410afb790c57ceb67f2d4bd15cc42fc1db58d19fe26fd6f8acbed",
+      "url": "https://github.com/libssh2/libssh2/commit/a2ed82d40964bbc0d64cd717aa0a5a892117d2e6.patch?full_index=1",
+      "purpose": [
+        "CVE-2026-66033"
+      ]
+    },
+    {
+      "file": "09.patch",
+      "sha256": "4f4eac78ba3ecb7cd43f19e9fe23b1586caf73372a3d6a325f048098fa53b3dd",
+      "url": "https://raw.githubusercontent.com/Homebrew/homebrew-core/428c8bc59b7afc61135d8b0d5596a6f063fb7ba2/Patches/libssh2/CVE-2026-66034.patch",
+      "purpose": [
+        "CVE-2026-66034"
+      ]
+    },
+    {
+      "file": "10.patch",
+      "sha256": "c5ff4520b0815006e3ee925eea9a0cc97ae4f5b93b70183f99428f2e9845ccca",
+      "url": "https://raw.githubusercontent.com/Homebrew/homebrew-core/428c8bc59b7afc61135d8b0d5596a6f063fb7ba2/Patches/libssh2/CVE-2026-66035.patch",
+      "purpose": [
+        "CVE-2026-66035"
+      ]
+    },
+    {
+      "file": "11.patch",
+      "sha256": "a790ab6c15c8dd6300ca8a651121ecc91e90e0eda1a221ad8108f51de05e1cf3",
+      "url": "https://github.com/libssh2/libssh2/commit/631e2f82a32ef016299ebb1af66efeae0161f68e.patch?full_index=1",
+      "purpose": [
+        "OSV-2025-90"
+      ]
+    },
+    {
+      "file": "12.patch",
+      "sha256": "76bdf62172e16e2f74fdde35cd3daa3db27b753c48c4a7bdfd295463444eb936",
+      "url": "https://github.com/libssh2/libssh2/commit/b89858b83d68d7e29e0c5b0bb803f8a68271710c.patch?full_index=1",
+      "purpose": [
+        "OSV-2022-24"
+      ]
+    }
+  ],
+  "patch_source": "Installed Homebrew libssh2 1.11.1_7 formula, official upstream commits and pinned Homebrew backports",
+  "homebrew_commit": "428c8bc59b7afc61135d8b0d5596a6f063fb7ba2"
+}

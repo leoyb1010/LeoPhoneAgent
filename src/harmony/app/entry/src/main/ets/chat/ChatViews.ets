@@ -1,3 +1,6 @@
+import { MediaGallery } from './MediaGallery';
+import { IconButton, ActionButton } from '../theme/Controls';
+import { MotionPolicy } from '../theme/MotionPolicy';
 import { ChatItem, durationText, toolLabel } from '../local/AgentText';
 import { MarkdownText } from '../theme/Markdown';
 import { Sym } from '../theme/Symbols';
@@ -66,14 +69,14 @@ function statusColor(status: string): string {
   return Tokens.secondary;
 }
 
-/** 一轮回答上面的「✦ LeoPhoneAgent」。 */
+/** 一轮回答上面的「✦ LeoBot」。 */
 @Component
 export struct AssistantHead {
-  @Prop name: string = 'LeoPhoneAgent';
+  @Prop name: string = 'LeoBot';
 
   build() {
     Row() {
-      Sym({ name: 'wand_and_stars_fill', dim: 16, color: Tokens.sparkleA })
+      Image(Tokens.dark ? $r('app.media.leobot_mark_dark') : $r('app.media.leobot_mark')).width(24).height(24).objectFit(ImageFit.Contain)
       Text(this.name)
         .fontSize(15)
         .fontWeight(FontWeight.Medium)
@@ -89,17 +92,13 @@ export struct AssistantHead {
 export struct UserBubble {
   @Prop text: string = '';
   @Prop imagePath: string = '';
+  @Prop imagePaths: string[] = [];
   @Prop files: string[] = [];
 
   build() {
     Column() {
-      if (this.imagePath.length > 0) {
-        Image(this.imagePath)
-          .width(120)
-          .height(120)
-          .objectFit(ImageFit.Cover)
-          .borderRadius(12)
-          .margin({ bottom: 6 })
+      if (this.imagePaths.length > 0 || this.imagePath.length > 0) {
+        MediaGallery({ paths: this.imagePaths.length ? this.imagePaths : [this.imagePath] }).width('100%').constraintSize({ maxWidth: 360 }).margin({ bottom: 8 })
       }
       ForEach(this.files, (name: string) => {
         Row() {
@@ -135,6 +134,7 @@ export struct UserBubble {
 /** 一次工具调用:胶囊里是图标、做的事、用时;在跑时转圈,点开看结果。 */
 @Component
 export struct ToolCapsule {
+  @StorageProp('motionReduced') reduced: boolean = false;
   @Prop item: ChatItem = new ChatItem();
   @State open: boolean = false;
 
@@ -158,6 +158,7 @@ export struct ToolCapsule {
             .width(16)
             .height(16)
             .color(Tokens.secondary)
+            .enableLoading(!this.reduced)
         } else if (this.item.status === 'lost') {
           Text('没跑完')
             .fontSize(12)
@@ -169,16 +170,16 @@ export struct ToolCapsule {
             .fontColor(Tokens.muted)
         }
       }
-      .height(Tokens.capsule)
+      .constraintSize({ minHeight: 44 })
       .padding({ left: 12, right: 12 })
       .backgroundColor(Tokens.toolCapsule)
       .border({ width: Tokens.hairline, color: Tokens.separator })
       .borderRadius(Tokens.capsule / 2)
-      .constraintSize({ maxWidth: 420 })
+      .constraintSize({ maxWidth: '100%' })
+      .accessibilityText(toolLabel(this.item.name, this.item.title) + '，' + (this.item.status === 'running' ? '进行中' : (this.item.status === 'fail' ? '失败' : '已完成')))
+      .focusable(this.item.text.length > 0)
       .onClick(() => {
-        if (this.item.text.length > 0) {
-          this.open = !this.open;
-        }
+        if (this.item.text.length > 0) this.getUIContext().animateTo({ duration: MotionPolicy.duration(160), curve: Curve.EaseOut }, () => this.open = !this.open);
       })
       if (this.open && this.item.text.length > 0) {
         Text(this.item.text.length > 1200 ? `${this.item.text.substring(0, 1200)}…` : this.item.text)
@@ -220,7 +221,7 @@ export struct WorkedRow {
       Sym({ name: this.item.open ? 'chevron_up' : 'chevron_down', dim: 12, color: Tokens.muted })
         .margin({ left: 6 })
     }
-    .height(Tokens.capsule - 4)
+    .height(44)
     .padding({ left: 12, right: 12 })
     .backgroundColor(Tokens.toolCapsule)
     .borderRadius((Tokens.capsule - 4) / 2)
@@ -291,16 +292,7 @@ export struct ErrorRow {
         .layoutWeight(1)
         .margin({ left: 8, right: 8 })
       if (this.action.length > 0) {
-        Text(this.action)
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.action === '继续' ? '#FFFFFF' : Tokens.text)
-          .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-          .backgroundColor(this.action === '继续' ? Tokens.warn : Tokens.card)
-          .borderRadius(14)
-          .onClick(() => {
-            this.onAction();
-          })
+        ActionButton({ label: this.action, variant: 'secondary', fullWidth: false, onTap: () => this.onAction() })
       }
     }
     .width('100%')
@@ -341,6 +333,9 @@ export struct SummaryRow {
           .layoutWeight(1)
       }
       .width('100%')
+      .constraintSize({ minHeight: 44 })
+      .accessibilityText(`已压缩前面 ${this.item.count} 条消息，查看摘要`)
+      .focusable(true)
       .onClick(() => {
         this.open = !this.open;
       })
@@ -359,16 +354,18 @@ export struct SummaryRow {
   }
 }
 
-/** 在等模型:「LeoPhoneAgent 正在思考」。 */
+/** 在等模型:「LeoBot 正在思考」。 */
 @Component
 export struct TypingRow {
+  @StorageProp('motionReduced') reduced: boolean = false;
   build() {
     Row() {
       LoadingProgress()
         .width(16)
         .height(16)
         .color(Tokens.muted)
-      Text('LeoPhoneAgent 正在思考')
+        .enableLoading(!this.reduced)
+      Text('LeoBot 正在思考')
         .fontSize(13)
         .fontColor(Tokens.muted)
         .margin({ left: 8 })
@@ -382,8 +379,8 @@ export struct TypingRow {
 export struct ReplyActions {
   @Prop regenerate: boolean = false;
   @State copied: boolean = false;
-  onCopy: () => void = () => {
-  };
+  @State copying: boolean = false;
+  onCopy: () => Promise<boolean> = async () => false;
   onSpeak: () => void = () => {
   };
   onRegenerate: () => void = () => {
@@ -391,13 +388,7 @@ export struct ReplyActions {
 
   build() {
     Row() {
-      this.action(this.copied ? 'checkmark' : 'doc_filled_on_doc', () => {
-        this.onCopy();
-        this.copied = true;
-        setTimeout(() => {
-          this.copied = false;
-        }, 1500);
-      })
+      this.action(this.copied ? 'checkmark' : 'doc_filled_on_doc', () => this.copy())
       this.action('speaker_wave_2', () => {
         this.onSpeak();
       })
@@ -410,16 +401,15 @@ export struct ReplyActions {
     .margin({ top: 2, bottom: 4 })
   }
 
+  private async copy(): Promise<void> {
+    if (this.copying) return; this.copying = true;
+    try { this.copied = await this.onCopy(); if (this.copied) setTimeout(() => this.copied = false, 1500); }
+    catch (_error) { this.copied = false; }
+    finally { this.copying = false; }
+  }
+
   @Builder
   action(name: string, tap: () => void) {
-    Row() {
-      Sym({ name: name, dim: 16, color: name === 'checkmark' ? Tokens.online : Tokens.muted })
-    }
-    .width(32)
-    .height(32)
-    .justifyContent(FlexAlign.Center)
-    .onClick(() => {
-      tap();
-    })
+    IconButton({ icon: name, label: name === 'checkmark' ? '已复制回答' : (name === 'doc_filled_on_doc' ? '复制回答' : (name === 'speaker_wave_2' ? '朗读回答' : '重新生成回答')), selected: name === 'checkmark', isEnabled: !this.copying, onTap: tap })
   }
 }

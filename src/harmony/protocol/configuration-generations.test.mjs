@@ -9,7 +9,7 @@ import {randomUUID} from 'node:crypto';
 const root=new URL('../app/entry/src/main/ets/',import.meta.url);
 function load(file,names,env={}) {
   const source=fs.readFileSync(new URL(file,root),'utf8').replace(/^import[\s\S]*?from\s+['"][^'"]+['"];\s*/gm,'').replace(/\bexport\s+/g,'');
-  const context=vm.createContext({console,ArrayBuffer,Uint8Array,Date,...env});
+  const context=vm.createContext({console,setInterval,clearInterval,ArrayBuffer,Uint8Array,Date,...env});
   vm.runInContext(stripTypeScriptTypes(source,{mode:'strip'})+`\nObject.assign(globalThis,{${names.join(',')}});`,context,{filename:file});
   return Object.fromEntries(names.map(name=>[name,context[name]]));
 }
@@ -38,7 +38,7 @@ const bound=load('store/BoundSecret.ets',['BoundSecret'],{SecretStore,util});
 const network=[];
 const http={RequestMethod:{POST:'POST'},HttpDataType:{STRING:'STRING'},createHttp:()=>({
  request:async(url,options)=>{network.push([url,options.header.Authorization||'']);return{responseCode:200,result:'{}'};},destroy(){}})};
-const common={fileIo,SecretStore,http,envStore:{expand:x=>x},MCP_PROTOCOL_VERSION:'test',...atomic,...bound,requireProviderRoot:x=>x,AppStorage:{setOrCreate(){}},
+const common={McpStdio:{attachContext(){},closeLabel(){}},McpOAuth:{attachContext(){},authorization:async()=>null,unchanged:()=>true,purge:async()=>{}},fileIo,SecretStore,http,envStore:{expand:x=>x},MCP_PROTOCOL_VERSION:'test',...atomic,...bound,requireProviderRoot:x=>x,AppStorage:{setOrCreate(){}},
  kindByKey:t=>({root:'https://official.example/'+t,models:['model']}),OAUTH_ALIAS:'oauth',
  envPromptBlock:()=>'',expandEnvPlaceholders:x=>x,referencesEnv:()=>false};
 const {McpStore}=load('store/McpStore.ets',['McpStore'],common);McpStore.listTools=async()=>'';
@@ -108,7 +108,7 @@ try{
  const {c,f,s}=await setup('mcp');const row=f.row(s);const altered={...row,url:'https://wrong.example'};
  assert.equal(await McpStore.secretFor(altered),'');
  await McpStore.post(row,'{}',100);assert.deepEqual(network.at(-1),['https://a.example','Bearer KEY_A']);
- await McpStore.post(altered,'{}',100);assert.deepEqual(network.at(-1),['https://wrong.example','']);
+ const callsBeforeChangedDestination=network.length;await assert.rejects(McpStore.post(altered,'{}',100),/配置已改变/);assert.equal(network.length,callsBeforeChangedDestination,'changed destination rejected before HTTP');
  // Empty token on changed endpoint is explicit; legacy alias cannot be reused.
  secrets.set('leo.harmony.mcp.service','LEGACY');await f.upsert(s,c,'https://other.example','');
  const noToken=await fresh(f,c);assert.equal(await McpStore.secretFor(f.row(noToken)),'');

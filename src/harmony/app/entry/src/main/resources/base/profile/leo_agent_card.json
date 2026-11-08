@@ -1,0 +1,15 @@
+{
+  "agentCards": [{
+    "agentId": "f0abca42-ad50-4f08-baa8-af7ce6abb5b1",
+    "name": "LeoBot",
+    "description": "使用用户在 LeoBot 配置的模型处理请求，遵守本机无人值守权限。",
+    "type": "APP",
+    "version": "1.0.0",
+    "defaultInputModes": ["text/plain"],
+    "defaultOutputModes": ["text/plain"],
+    "category": "productivity",
+    "iconUrl": "$media:app_icon",
+    "skills": [{"id": "chat", "name": "询问 LeoBot", "description": "处理文字问题，生成带任务状态的回答", "tags": ["问答", "助手"]}],
+    "appInfo": {"bundleName": "com.leoyuan.leophoneagent.harmony", "moduleName": "entry", "abilityName": "LeoAgentAbility", "deviceTypes": ["phone", "tablet"]}
+  }]
+}

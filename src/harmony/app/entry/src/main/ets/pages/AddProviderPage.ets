@@ -15,7 +15,8 @@ import { OAuthLoginSheet } from '../local/OAuthLoginSheet';
 import { DeviceAuth } from '../local/LocalProtocol';
 import { VoiceTemplate, voiceCapabilityLabel, voiceTemplates } from '../local/VoiceCatalog';
 import { ProviderInstance, ProviderLaunch, providerStore } from '../store/ProviderStore';
-import { IconCircle, NavBar } from '../theme/Widgets';
+import { NavBar, SettingsRow } from '../theme/Widgets';
+import { ActionButton } from '../theme/Controls';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -23,6 +24,7 @@ import { Tokens } from '../theme/Tokens';
 struct AddProviderPage {
   @StorageProp('themeTick') tick: number = 0;
   @State step: number = 0;
+  @State saving: boolean = false;
   @State type: string = '';
   @State credential: string = 'apiKey';
   @State methods: string[] = [];
@@ -89,149 +91,40 @@ struct AddProviderPage {
   @Builder
   chooseType() {
     Scroll() {
-      Column() {
-        Text('先选类型。下一步按这一家列出能用的登录方式。')
-          .fontSize(13)
-          .fontColor(Tokens.muted)
-          .width('100%')
-          .padding({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 12 })
+      Column({ space: 12 }) {
+        Text('选择服务商后，连接你的账号或 API Key。').fontSize(14).fontColor(Tokens.secondary).width('100%')
         Column() {
-          ForEach(providerKinds(), (kind: ProviderKind) => {
-            Row() {
-              IconCircle({
-                box: Tokens.settingsIcon,
-                glyph: Tokens.settingsGlyph,
-                color: kind.color,
-                mark: kind.mark
-              })
-              Column() {
-                Text(kind.title)
-                  .fontSize(Tokens.rowTitle)
-                  .fontColor(Tokens.text)
-                Text(BrowserOAuth.methodLabel(kind.key))
-                  .fontSize(12)
-                  .fontColor(Tokens.muted)
-                  .margin({ top: 2 })
-              }
-              .alignItems(HorizontalAlign.Start)
-              .margin({ left: Tokens.rowGap })
-              .layoutWeight(1)
-              Text('›')
-                .fontSize(18)
-                .fontColor(Tokens.muted)
-            }
-            .width('100%')
-            .padding({ left: 14, right: 14, top: 12, bottom: 12 })
-            .onClick(() => {
-              this.pick(kind);
-            })
+          ForEach(providerKinds(), (kind: ProviderKind, index: number) => {
+            SettingsRow({ mark: kind.mark, color: kind.color, title: kind.title,
+              subtitle: BrowserOAuth.methodLabel(kind.key), divider: index > 0, onOpen: () => this.pick(kind) })
           }, (kind: ProviderKind) => kind.key)
-        }
-        .width('100%')
-        .backgroundColor(Tokens.surface)
-        .borderRadius(Tokens.settingsRadius)
-        .margin({ left: Tokens.pagePad, right: Tokens.pagePad })
-        Text('语音服务商模板')
-          .fontSize(13)
-          .fontColor(Tokens.muted)
-          .width('100%')
-          .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 18, bottom: 8 })
+        }.width('100%').backgroundColor(Tokens.card).borderRadius(16).clip(true)
+        Text('语音服务商').fontSize(13).fontColor(Tokens.secondary).width('100%').margin({ top: 16 })
         Column() {
-          ForEach(voiceTemplates(), (tpl: VoiceTemplate) => {
-            Row() {
-              IconCircle({
-                box: Tokens.settingsIcon,
-                glyph: Tokens.settingsGlyph,
-                color: '#8E8E93',
-                icon: 'voice'
-              })
-              Column() {
-                Text(tpl.name)
-                  .fontSize(Tokens.rowTitle)
-                  .fontColor(Tokens.text)
-                Text(`${voiceCapabilityLabel(tpl.capability)} · 预填地址和模型`)
-                  .fontSize(12)
-                  .fontColor(Tokens.muted)
-                  .margin({ top: 2 })
-              }
-              .alignItems(HorizontalAlign.Start)
-              .margin({ left: Tokens.rowGap })
-              .layoutWeight(1)
-              Text('›')
-                .fontSize(18)
-                .fontColor(Tokens.muted)
-            }
-            .width('100%')
-            .padding({ left: 14, right: 14, top: 12, bottom: 12 })
-            .onClick(() => {
-              this.pickVoice(tpl);
-            })
+          ForEach(voiceTemplates(), (tpl: VoiceTemplate, index: number) => {
+            SettingsRow({ icon: 'mic', color: '#8E8E93', title: tpl.name,
+              subtitle: voiceCapabilityLabel(tpl.capability) + ' · 预填地址和模型', divider: index > 0, onOpen: () => this.pickVoice(tpl) })
           }, (tpl: VoiceTemplate) => tpl.id)
-        }
-        .width('100%')
-        .backgroundColor(Tokens.surface)
-        .borderRadius(Tokens.settingsRadius)
-        .margin({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 32 })
-      }
-      .width('100%')
-    }
-    .layoutWeight(1)
-    .align(Alignment.Top)
-    .scrollBar(BarState.Off)
+        }.width('100%').backgroundColor(Tokens.card).borderRadius(16).clip(true)
+      }.width('100%').constraintSize({ maxWidth: 640 }).padding({ left: 20, right: 20, top: 12, bottom: 32 })
+    }.width('100%').layoutWeight(1).align(Alignment.Top).scrollBar(BarState.Off).backgroundColor(Tokens.grouped)
   }
 
   @Builder
   chooseCredential() {
     Scroll() {
-      Column() {
-        Text('怎么登录')
-          .fontSize(13)
-          .fontColor(Tokens.muted)
-          .width('100%')
-          .padding({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 8 })
+      Column({ space: 12 }) {
+        Text('连接方式').fontSize(14).fontColor(Tokens.secondary).width('100%')
         Column() {
-          ForEach(this.methods, (method: string) => {
-            Row() {
-              IconCircle({
-                box: Tokens.settingsIcon,
-                glyph: Tokens.settingsGlyph,
-                color: '#007AFF',
-                icon: method === 'oauth' ? 'web' : 'edit'
-              })
-              Column() {
-                Text(method === 'oauth' ? 'OAuth' : 'API Key')
-                  .fontSize(Tokens.rowTitle)
-                  .fontColor(Tokens.text)
-                Text(method === 'oauth' ? BrowserOAuth.oauthHint(this.type) : BrowserOAuth.keyHint(this.type))
-                  .fontSize(12)
-                  .fontColor(Tokens.muted)
-                  .margin({ top: 2 })
-              }
-              .alignItems(HorizontalAlign.Start)
-              .margin({ left: Tokens.rowGap })
-              .layoutWeight(1)
-              Text('›')
-                .fontSize(18)
-                .fontColor(Tokens.muted)
-            }
-            .width('100%')
-            .padding({ left: 14, right: 14, top: 12, bottom: 12 })
-            .onClick(() => {
-              this.pickCredential(method);
-            })
+          ForEach(this.methods, (method: string, index: number) => {
+            SettingsRow({ icon: method === 'oauth' ? 'globe_badge_message' : 'lock', color: Tokens.accent,
+              title: method === 'oauth' ? 'OAuth 登录' : 'API Key',
+              subtitle: method === 'oauth' ? BrowserOAuth.oauthHint(this.type) : BrowserOAuth.keyHint(this.type),
+              divider: index > 0, onOpen: () => this.pickCredential(method) })
           }, (method: string) => method)
-        }
-        .width('100%')
-        .backgroundColor(Tokens.surface)
-        .borderRadius(Tokens.settingsRadius)
-        .margin({ left: Tokens.pagePad, right: Tokens.pagePad })
-      }
-      .width('100%')
-      .padding({ bottom: 32 })
-    }
-    .layoutWeight(1)
-    .align(Alignment.Top)
-    .scrollBar(BarState.Off)
+        }.width('100%').backgroundColor(Tokens.card).borderRadius(16).clip(true)
+      }.width('100%').constraintSize({ maxWidth: 560 }).padding({ left: 20, right: 20, top: 12, bottom: 32 })
+    }.width('100%').layoutWeight(1).align(Alignment.Top).scrollBar(BarState.Off).backgroundColor(Tokens.grouped)
   }
 
   @Builder
@@ -310,25 +203,18 @@ struct AddProviderPage {
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
-        .padding({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 16 })
+        .constraintSize({ maxWidth: 560 })
+        .padding({ left: 20, right: 20, bottom: 20 })
       }
       .layoutWeight(1)
       .align(Alignment.Top)
       .scrollBar(BarState.Off)
-      Button('添加 AI 服务商')
-        .width('100%')
-        .height(44)
-        .margin({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 20 })
-        .backgroundColor(Tokens.accent)
-        .fontColor('#FFFFFF')
-        .enabled(this.keyDraft.trim().length > 0)
-        .onClick(() => {
-          this.save();
-        })
+      ActionButton({ label: '添加 AI 服务商', busy: this.saving, isEnabled: !this.oauthBusy && this.keyDraft.trim().length > 0,
+        onTap: () => this.save() }).width('100%').constraintSize({ maxWidth: 560 }).padding({ left: 20, right: 20 }).margin({ bottom: 20 })
     }
     .width('100%')
     .layoutWeight(1)
-    .expandSafeArea([SafeAreaType.KEYBOARD], [SafeAreaEdge.BOTTOM])
+
   }
 
   @Builder
@@ -354,15 +240,7 @@ struct AddProviderPage {
           .fontColor(Tokens.warn)
           .padding({ bottom: 10 })
       }
-      Button(BrowserOAuth.signInLabel(this.type))
-        .width('100%')
-        .height(44)
-        .backgroundColor(Tokens.accent)
-        .fontColor('#FFFFFF')
-        .enabled(!this.oauthBusy)
-        .onClick(() => {
-          this.beginOAuth();
-        })
+      ActionButton({ label: BrowserOAuth.signInLabel(this.type), busy: this.oauthBusy, onTap: () => this.beginOAuth() })
     }
   }
 
@@ -383,7 +261,8 @@ struct AddProviderPage {
       .padding({ bottom: 6 })
     TextInput({ text: value, placeholder: hint })
       .onChange(onChange)
-      .height(44)
+      .accessibilityText(title)
+      .height(48)
       .backgroundColor(Tokens.surface)
       .fontColor(Tokens.text)
       .placeholderColor(Tokens.muted)
@@ -399,6 +278,8 @@ struct AddProviderPage {
     Row() {
       TextInput({ text: this.keyDraft, placeholder: keyHint(this.type) })
         .type(this.showSecret ? InputType.Normal : InputType.Password)
+        .accessibilityText('API Key')
+        .enableAutoFill(false)
         .onChange((value: string) => {
           this.keyDraft = value;
         })
@@ -408,13 +289,8 @@ struct AddProviderPage {
         .fontColor(Tokens.text)
         .placeholderColor(Tokens.muted)
         .borderRadius(Tokens.settingsRadius)
-      Text(this.showSecret ? '隐藏' : '显示')
-        .fontSize(13)
-        .fontColor(Tokens.link)
-        .padding({ left: 10 })
-        .onClick(() => {
-          this.showSecret = !this.showSecret;
-        })
+      ActionButton({ label: this.showSecret ? '隐藏' : '显示', variant: 'quiet', fullWidth: false,
+        onTap: () => { this.showSecret = !this.showSecret; } })
     }
     .width('100%')
   }
@@ -538,8 +414,10 @@ struct AddProviderPage {
   }
 
   private async save(): Promise<void> {
+    if (this.saving || !this.keyDraft.trim()) return;
+    this.saving = true;
     try {
-      inputMethod.getController().stopInputSession();
+      await inputMethod.getController().stopInputSession();
     } catch (_err) {
       // keyboard optional
     }
@@ -578,6 +456,6 @@ struct AddProviderPage {
       await router.replaceUrl({ url: 'pages/ProviderDetailPage' });
     } catch (err) {
       this.message = `${err}`;
-    }
+    } finally { this.saving = false; }
   }
 }

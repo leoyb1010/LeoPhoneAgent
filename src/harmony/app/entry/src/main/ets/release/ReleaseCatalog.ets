@@ -6,15 +6,27 @@ export class LeoRelease {
 }
 
 export class ReleaseCatalog {
-  static readonly currentVersion: string = '0.3.0-alpha.22';
-  static readonly currentBuild: number = 100027;
+  static readonly currentVersion: string = '0.4.0';
+  static readonly currentBuild: number = 100028;
 
   static all(): LeoRelease[] {
     const first = new LeoRelease();
-    first.version = '0.3.0-alpha.22';
-    first.date = '2026-09-27';
-    first.title = '接入 OpenCode Go,下线 Claude 订阅登录,安全和数据加固';
+    first.version = '0.4.0';
+    first.date = '2026-11-08';
+    first.title = '鸿蒙7与折叠屏适配';
     first.highlights = [
+      '更新聊天、设置和输入界面，统一青绿与石墨色层次、按钮反馈和系统减少动态效果。开合折叠屏时保留当前对话、草稿、附件和模型。',
+      '多张图片输入、模型生图和本机图片预览支持原生翻页与缩放。错误后可继续，停止后的迟到回复按原任务隔离。',
+      '加入本机Alpine ARM64 Linux与离线Python、Node、npm、Git等工具。工作区支持文件夹、文本分页、文件导出与HTML本机预览。',
+      '第二大脑提供今日、影像、问答、家人与资料入口，支持来源阅读、上传续传、审批与分享，私密资料按本机解锁和访问级别处理。',
+      '接入HTTP与stdio MCP、原生SSH、录音纪要、受控邮箱和Mac屏幕查看。权限提供逐项确认、智能批准、全自动三档，操作与具体参数绑定。',
+      '加入跨端配置与附件同步、流式备份和启动恢复校验。系统权限或生态资质受限的扩展按本次范围暂缓，服务商由你在本机配置。'
+    ];
+    const alpha22 = new LeoRelease();
+    alpha22.version = '0.3.0-alpha.22';
+    alpha22.date = '2026-09-27';
+    alpha22.title = '接入 OpenCode Go,下线 Claude 订阅登录,安全和数据加固';
+    alpha22.highlights = [
       '新增 OpenCode Go:在 opencode.ai/auth 拿 API Key 填进来,就能用会员里的 Kimi、GLM、DeepSeek、Qwen、MiMo、MiniMax 等模型。',
       'Claude 订阅登录下线(Anthropic 不允许第三方应用用订阅账号调用)。原来用订阅登录的会自动改成 API Key 方式,需要重新填 Anthropic 控制台的 Key。',
       '远控 Mac 的任务不再跟着这台的「全自动」走:每个任务默认逐项确认,要全自动在输入框上单独开,开之前会再问一次。批准后点停止、切换页面时发出的消息,都不会落到别的任务上。审批卡能看到完整命令。',
@@ -241,6 +253,6 @@ export class ReleaseCatalog {
       '填中继钥匙后读取 /machines，不再写死三台 Mac。',
       '可对在线 Mac 或 Android 身体开新任务，断线按序号续上。'
     ];
-    return [first, t11, t10, t9, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
+    return [first, alpha22, t11, t10, t9, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
   }
 }

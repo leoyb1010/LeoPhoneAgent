@@ -1,3 +1,4 @@
+import { BackupAccess } from '../backup/BackupAccess';
 import { common } from '@kit.AbilityKit';
 import { http } from '@kit.NetworkKit';
 import { fileIo } from '@kit.CoreFileKit';
@@ -13,6 +14,12 @@ import { soulStore } from '../store/SoulStore';
 import { browserStore } from '../store/BrowserStore';
 import { WorkspaceStore } from '../store/WorkspaceStore';
 import { InAppBrowser } from './InAppBrowser';
+import { MailTools } from './MailTools';
+import { LinuxRuntime } from './LinuxRuntime';
+import { PlatformTools } from './PlatformTools';
+import { BrainTools } from '../brain/BrainTools';
+import { SubAgentTasks } from './SubAgentTasks';
+import { BrowserAutomation } from './BrowserAutomation';
 import { PhoneTools } from './PhoneTools';
 import { SensitiveToolGate } from './SensitiveToolGate';
 import {
@@ -64,23 +71,24 @@ export class LocalTools {
     ]);
   }
 
-  static systemPrompt(): string {
+  static systemPrompt(includeMemory: boolean = true): string {
     const parts: string[] = [
-      '你是 LeoPhoneAgent 的本机 Agent，跑在这台鸿蒙手机上。',
+      '你是 LeoBot 的本机 Agent，跑在这台鸿蒙手机上。',
       '不连中继也能工作。远程机器是另一条入口。',
-      Copy.noLinux,
+      Copy.linuxRuntime,
       nowLine(Date.now()),
+      '手机平台为 HarmonyOS 7。日历与联系人使用 calendar_*、contacts_*。Linux 命令的共享工作区为 /mnt/workspace。',
       '需要读文件、看图片、写文件、记事、打开链接、搜索和抓网页，或者用手机能力(闹钟、提醒、通知、手电、剪贴板、拨号、定位、天气、设备信息)时，直接用 function calling，不要把工具写成普通文字。',
       '用户附上的文件在沙箱里，<user-attached-files> 里给的是文件名：文字用 file_read 读，图片用 read_image 看。',
-      SensitiveToolGate.fullAuto ? '写沙箱文件不用等确认(用户开了全自动)。文件路径只用沙箱文件名，例如 notes.md。' :
-        '写沙箱文件要等用户确认。文件路径只用沙箱文件名，例如 notes.md。',
+      SensitiveToolGate.fullAuto ? '全自动模式下可直接写工作区。文件路径为相对路径，例如 notes.md 或 projects/report.md。' :
+        '写工作区文件先取得当前操作的用户确认。文件路径为相对路径，例如 notes.md 或 projects/report.md。',
       '本机斜杠命令仍可用：/ls /read /write /remember /open /compact。'
     ];
     const soul = soulStore.promptBlock();
     if (soul.length > 0) {
       parts.push(soul);
     }
-    const memory = memoryStore.promptBlock();
+    const memory = includeMemory ? memoryStore.promptBlock() : '';
     if (memory.length > 0) {
       parts.push(memory);
     }
@@ -103,12 +111,12 @@ export class LocalTools {
     return parts.join('\n\n');
   }
 
-  static listSandbox(context: common.Context): string {
-    const rows = WorkspaceStore.list(context);
+  static listSandbox(context: common.Context, directory: string = ''): string {
+    const rows = WorkspaceStore.list(context, directory ? sandboxFileName(directory, true) : '');
     if (rows.length === 0) {
       return '沙箱是空的';
     }
-    return rows.map((row) => `${row.name} · ${row.size}`).join('\n');
+    return rows.map((row) => `${row.path}${row.directory ? '/' : ''} · ${row.size}`).join('\n');
   }
 
   static readSandbox(context: common.Context, name: string): string {
@@ -125,15 +133,27 @@ export class LocalTools {
     return `已写入 ${sandboxFileName(name)}`;
   }
 
-  static openLink(raw: string, newTab: boolean = false): string {
-    const err = InAppBrowser.open(raw, newTab);
+  static openLink(raw: string, newTab: boolean = false, owner: string = ''): string {
+    const err = InAppBrowser.open(raw, newTab, owner);
     return err.length > 0 ? err : (newTab ? '已在应用内打开新标签' : '已在应用内打开');
   }
 
   /** owner：发起这次工具调用的会话。写沙箱的授权按它配对，远程/定时链路拿不到本机用户的授权。 */
   static async run(context: common.Context, name: string, raw: string,
-    owner: string = '', unattended: boolean = false): Promise<ToolResult> {
+    owner: string = '', unattended: boolean = false, isCurrent: () => boolean = () => true, memoryAllowed: () => boolean = () => true): Promise<ToolResult> {
+    const lease = BackupAccess.beginExecution(context);
+    try { return await LocalTools.runAllowed(context, name, raw, owner, unattended, isCurrent, memoryAllowed); }
+    finally { lease.release(); }
+  }
+
+  private static async runAllowed(context: common.Context, name: string, raw: string,
+    owner: string = '', unattended: boolean = false, isCurrent: () => boolean = () => true, memoryAllowed: () => boolean = () => true): Promise<ToolResult> {
     const out = new ToolResult();
+    if (name.startsWith('health_') || name.startsWith('wear_')) { out.text = '健康与穿戴生态接入列入后续版本'; return out; }
+    if (!isCurrent()) { out.text = '任务已取消'; return out; }
+    if (unattended && (name === 'browser_use' || name === 'open_url')) {
+      out.text = '浏览器登录态操作需要在本机前台对话中执行'; return out;
+    }
     const denied = unattended ? SensitiveToolGate.unattendedDenial(name) : '';
     if (denied.length > 0) {
       out.title = toolArg(raw, 'tool_title') || name;
@@ -155,8 +175,29 @@ export class LocalTools {
       return out;
     }
     try {
-      if (name === 'file_list') {
-        out.text = LocalTools.listSandbox(context);
+      if (!await SensitiveToolGate.bindArguments(owner, name, args, isCurrent)) {
+        out.text = '任务已取消或操作授权已失效';
+        return out;
+      }
+      if (SensitiveToolGate.requiresPersonalRead(name, args) && !SensitiveToolGate.consumePersonalReadGrant(owner, name, args)) {
+        out.needWrite = true;
+        out.text = WRITE_GRANT_MARK + name;
+        return out;
+      }
+      if (name === 'shell_execute') {
+        if (!owner) throw new Error('Linux命令需要绑定对话');
+        const approved = SensitiveToolGate.consumeShellGrant(owner, toolArg(args, 'command'));
+        if (approved === null) {
+          out.needWrite = true;
+          out.text = WRITE_GRANT_MARK + 'shell_execute';
+        } else {
+          const rawTimeout = toolArg(args, 'timeout');
+          const seconds = rawTimeout.length > 0 ? Number(rawTimeout) : 120;
+          if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 600) throw new Error('timeout需为1至600秒');
+          out.text = JSON.stringify(await LinuxRuntime.run(context, owner, approved, seconds * 1000, isCurrent));
+        }
+      } else if (name === 'file_list') {
+        out.text = LocalTools.listSandbox(context, toolArg(args, 'path'));
       } else if (name === 'file_read') {
         const raw = toolArg(args, 'path');
         const skillId = skillIdFromPath(raw);
@@ -164,18 +205,25 @@ export class LocalTools {
         if (skillId.length > 0 && skill.length === 0) {
           throw new Error(`没有这个技能:${skillId}`);
         }
-        const path = skillId.length > 0 ? raw.trim() : sandboxFileName(raw);
-        const body = skillId.length > 0 ? skill : LocalTools.readSandbox(context, path);
+        const resource = !skillId && /^\/?(?:var\/minis\/)?skills\//.test(raw.trim());
+        const path = skillId.length > 0 || resource ? raw.trim() : sandboxFileName(raw);
         const offsetRaw = toolArg(args, 'offset');
         const linesRaw = toolArg(args, 'lines');
         const maxRaw = toolArg(args, 'max_length');
-        const direction = toolArg(args, 'direction') || 'head';
-        const offset = offsetRaw.length > 0 ? Number(offsetRaw) : 1;
+        const direction = (toolArg(args, 'direction') || 'head').toLowerCase();
+        const offset = offsetRaw.length > 0 ? Math.max(1, Number(offsetRaw)) : 1;
         const hasLines = linesRaw.length > 0;
         const requested = hasLines ? Number(linesRaw) : 0;
-        const maxLength = maxRaw.length > 0 ? Number(maxRaw) : 15000;
-        out.text = LocalTools.formatFileRead(path, body.length, LocalTools.pageFile(
-          body.split('\n'), offset, requested, hasLines, maxLength, direction));
+        const maxLength = maxRaw.length > 0 ? Math.max(1, Math.min(80000, Number(maxRaw))) : 15000;
+        if (skillId || resource) {
+          const body = skillId ? skill : skillStore.resourceText(context, path);
+          out.text = LocalTools.formatFileRead(path, body.length, LocalTools.pageFile(
+            body.split('\n'), offset, requested, hasLines, maxLength, direction));
+        } else {
+          const page = await WorkspaceStore.readWindow(context, path, offset, requested, hasLines, maxLength, direction, isCurrent);
+          out.text = LocalTools.formatFileRead(path, page.size, LocalTools.clipFile(
+            page.lines, page.showStart, page.totalLines, maxLength, direction === 'tail'));
+        }
       } else if (name === 'file_write') {
         const written = LocalTools.writeSandbox(context, toolArg(args, 'path'), toolArg(args, 'content'),
           owner);
@@ -187,13 +235,19 @@ export class LocalTools {
         }
       } else if (name === 'file_edit') {
         const path = sandboxFileName(toolArg(args, 'path'));
-        const old = toolArg(args, 'old');
-        const next = toolArg(args, 'new');
+        const old = toolArg(args, 'old_string') || toolArg(args, 'old');
+        const next = toolArg(args, 'new_string') || toolArg(args, 'new');
+        if (old.length === 0) throw new Error('需要非空的原文');
         const body = LocalTools.readSandbox(context, path);
         if (body.indexOf(old) < 0) {
           out.text = '文件里没有这段原文';
         } else {
-          const written = LocalTools.writeSandbox(context, path, body.split(old).join(next), owner);
+          const replaceAll = toolArg(args, 'replace_all') === 'true';
+          if (!replaceAll && body.indexOf(old, body.indexOf(old) + old.length) >= 0) {
+            throw new Error('原文出现多次，请提供更完整的原文或明确replace_all');
+          }
+          const edited = replaceAll ? body.split(old).join(next) : body.replace(old, () => next);
+          const written = LocalTools.writeSandbox(context, path, edited, owner);
           if (written === WRITE_GRANT_MARK) {
             out.needWrite = true;
             out.text = '改文件要等用户确认';
@@ -201,20 +255,28 @@ export class LocalTools {
             out.text = written;
           }
         }
+      } else if (['brain_search', 'brain_get', 'brain_read', 'brain_ask'].indexOf(name) >= 0) {
+        out.text = await BrainTools.run(name, args);
+      } else if (name === 'subagent') {
+        out.text = await SubAgentTasks.run(context, owner, toolArg(args, 'prompt'), isCurrent, memoryAllowed);
       } else if (name === 'memory_write') {
+        if (!memoryAllowed()) throw new Error('当前会话已关闭记忆，不能读写全局记忆');
         const content = toolArg(args, 'content').trim();
         if (content.length === 0) {
           out.text = '内容是空的,没有写入';
         } else {
           await memoryStore.load(context);
+          if (!isCurrent() || !memoryAllowed()) throw new Error('任务已取消或当前会话已关闭记忆');
           await memoryStore.appendToday(context, content);
           out.text = '已写入今日记忆';
         }
       } else if (name === 'memory_get') {
+        if (!memoryAllowed()) throw new Error('当前会话已关闭记忆，不能读写全局记忆');
         await memoryStore.load(context);
+        if (!isCurrent() || !memoryAllowed()) throw new Error('任务已取消或当前会话已关闭记忆');
         out.text = memoryStore.search(toolArg(args, 'scope') || 'all', toolArg(args, 'keywords'));
       } else if (name === 'open_url') {
-        out.text = LocalTools.openLink(toolArg(args, 'url'));
+        out.text = LocalTools.openLink(toolArg(args, 'url'), false, owner);
       } else if (name === 'read_image') {
         await LocalTools.readImage(context, toolArg(args, 'path'), out);
       } else if (name === 'web_fetch') {
@@ -222,17 +284,27 @@ export class LocalTools {
       } else if (name === 'web_search') {
         out.text = await LocalTools.search(toolArg(args, 'query'), toolArg(args, 'count'));
       } else if (name === 'browser_use') {
-        out.text = LocalTools.browser(toolArg(args, 'action'), toolArg(args, 'url'), toolArg(args, 'tab_id'));
+        out.text = await LocalTools.browser(toolArg(args, 'action'), toolArg(args, 'url'), toolArg(args, 'tab_id'), args, owner, unattended, isCurrent);
+        out.needWrite = out.text.startsWith(WRITE_GRANT_MARK);
+      } else if (MailTools.accepts(name)) {
+        out.text = await MailTools.run(context, name, args, owner, unattended);
+      } else if (PlatformTools.NAMES.indexOf(name) >= 0) {
+        out.text = await PlatformTools.run(context, name, args, owner, unattended, isCurrent);
+        out.needWrite = out.text.startsWith(WRITE_GRANT_MARK);
       } else if (PhoneTools.NAMES.indexOf(name) >= 0) {
-        out.text = await PhoneTools.run(context, name, args, unattended);
+        out.text = await PhoneTools.run(context, name, args, unattended, isCurrent);
       } else if (name === 'mcp_tools' || name === 'mcp_call') {
         const server = mcpStore.find(toolArg(args, 'server'));
         if (!server) {
           out.text = `没有这个 MCP 服务器。已配置的:${mcpStore.rows.map((row) => row.label).join('、') || '无'}`;
         } else if (name === 'mcp_tools') {
-          out.text = await McpStore.tools(server);
+          if (unattended && server.transport === 'stdio' && SensitiveToolGate.unattendedDenial('mcp_call')) {
+            out.text = '远程和定时任务在当前权限模式下不能启动本机MCP进程';
+          } else {
+            out.text = await McpStore.tools(server, isCurrent);
+          }
         } else {
-          out.text = await McpStore.call(server, toolArg(args, 'name'), toolArg(args, 'arguments'));
+          out.text = await McpStore.call(server, toolArg(args, 'name'), toolArg(args, 'arguments'), isCurrent);
         }
       } else {
         out.text = `没有这个工具：${name}`;
@@ -243,7 +315,8 @@ export class LocalTools {
     return out;
   }
 
-  private static browser(action: string, url: string, tabId: string): string {
+  private static async browser(action: string, url: string, tabId: string, args: string, owner: string, unattended: boolean, isCurrent: () => boolean): Promise<string> {
+    if (!isCurrent() || unattended) throw new Error('浏览器操作已取消或没有前台权限');
     if (action === 'list_tabs') {
       return browserStore.list();
     }
@@ -255,40 +328,36 @@ export class LocalTools {
       const hit = browserStore.select(tabId);
       return hit ? `已切到 ${hit.id} ${hit.url}` : '没有这个标签';
     }
-    if (action === 'get_text') {
-      const current = browserStore.active();
-      return current ? `当前标签 ${current.id} ${current.url}。正文请再用 web_fetch。` : '没有标签';
-    }
     if (action === 'new_tab') {
-      return LocalTools.openLink(url, true);
+      return LocalTools.openLink(url, true, owner);
     }
     if (action === 'navigate' || action.length === 0) {
-      return LocalTools.openLink(url);
+      return LocalTools.openLink(url, false, owner);
     }
-    return `不支持的浏览器动作：${action}`;
+    return await BrowserAutomation.run(action, args, owner, unattended, isCurrent);
   }
 
   /**
    * 看沙箱里的一张图:缩到最长边 2000、转 JPEG,图跟着工具结果交给模型(iOS、安卓的 read_image)。
-   * ponytail: 只认沙箱文件名(附件、下载都在这里);聊天里直接发的图本来就带在消息里。
+   * Includes resources from enabled, validated skill bundles.
    */
   private static async readImage(context: common.Context, raw: string, out: ToolResult): Promise<void> {
-    const name = sandboxFileName(raw);
-    const path = WorkspaceStore.pathOf(context, name);
-    if (!fileIo.accessSync(path)) {
-      out.text = `沙箱里没有这个文件:${name}`;
-      return;
-    }
-    const size = fileIo.statSync(path).size;
-    const source = image.createImageSource(path);
-    if (!source) {
-      out.text = `读不了这个图片:${name}`;
-      return;
-    }
+    const resource = /^\/?(?:var\/minis\/)?skills\//.test(raw.trim());
+    const name = resource ? raw.trim() : sandboxFileName(raw);
+    const path = resource ? skillStore.resourcePath(context, name) : '';
+    if (resource && !path) throw new Error('找不到已启用技能中的图片资源');
+    const file = resource ? fileIo.openSync(path, fileIo.OpenMode.READ_ONLY | fileIo.OpenMode.NOFOLLOW) : WorkspaceStore.open(context, name);
+    let source: image.ImageSource | null = null;
     try {
+      const size = fileIo.statSync(file.fd).size;
+      source = image.createImageSource(file.fd);
+      if (!source) { out.text = `读不了这个图片:${name}`; return; }
       const info = await source.getImageInfo();
       const width = info.size.width;
       const height = info.size.height;
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || width * height > 24000000) {
+        throw new Error('图片尺寸无效或超过2400万像素，请先缩小图片');
+      }
       const scale = Math.min(1, IMAGE_EDGE / Math.max(width, height, 1));
       const outWidth = Math.max(1, Math.round(width * scale));
       const outHeight = Math.max(1, Math.round(height * scale));
@@ -306,7 +375,8 @@ export class LocalTools {
       out.text = `Image loaded successfully.\nPath: ${name}\nOriginal: ${width}x${height}, ${size} bytes\n` +
         (scale < 1 ? `[Resized for analysis: ${outWidth}x${outHeight}]\n` : '') + 'MIME: image/jpeg';
     } finally {
-      source.release();
+      try { if (source) await source.release(); }
+      finally { fileIo.closeSync(file); }
     }
   }
 

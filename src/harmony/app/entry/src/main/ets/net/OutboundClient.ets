@@ -1,3 +1,4 @@
+import { BackupAccess, BackupLease } from '../backup/BackupAccess';
 import { webSocket } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { common } from '@kit.AbilityKit';
@@ -44,6 +45,7 @@ export class OutboundClient {
   private answered: Map<string, Answered> = new Map();
 
   start(context: common.UIAbilityContext): void {
+    BackupAccess.requireReady(context);
     this.context = context;
     harmonyRouter.attach(context);
     harmonyRouter.onLive = (streamId: string, data: string) => {
@@ -158,6 +160,7 @@ export class OutboundClient {
 
   private connect(): void {
     this.dropSocket();
+    if (!this.context || !BackupAccess.executionAllowed(this.context)) { return; }
     if (!bodyStore.on) {
       return;
     }
@@ -366,6 +369,8 @@ export class OutboundClient {
 export const outboundClient: OutboundClient = new OutboundClient();
 
 export function startBody(context: common.UIAbilityContext): void {
+  let lease: BackupLease;
+  try { lease = BackupAccess.beginExecution(context); } catch (_error) { return; }
   Promise.all([
     gatewayStore.ensureLoaded(context),
     providerStore.ensureLoaded(context),
@@ -374,5 +379,5 @@ export function startBody(context: common.UIAbilityContext): void {
     if (bodyStore.on) {
       outboundClient.start(context);
     }
-  });
+  }).catch(() => { bodyStore.lastError = '本机身体暂未启动，请完成备份恢复后重试'; }).finally(() => { lease.release(); });
 }

@@ -9,7 +9,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import { randomUUID } from 'node:crypto';
 const root = new URL('../app/entry/src/main/ets/', import.meta.url);
 function evaluate(source, names, env, filename) {
-  const context = vm.createContext({ console, ArrayBuffer, Uint8Array, Date, ...env });
+  const context = vm.createContext({ console, setInterval, clearInterval, ArrayBuffer, Uint8Array, Date, ...env });
   vm.runInContext(stripTypeScriptTypes(source, { mode: 'strip' }) +
     `\nObject.assign(globalThis,{${names.join(',')}});`, context, { filename });
   return Object.fromEntries(names.map(name => [name, context[name]]));
@@ -83,7 +83,7 @@ const atomic = load('store/AtomicFile.ets', ['AtomicTextFile', 'atomicWriteText'
 const bound = load('store/BoundSecret.ets', ['BoundSecret'], { SecretStore, util });
 const catalog = load('local/ProviderCatalog.ets', ['kindByKey', 'providerKinds']);
 const models = load('local/ProviderModels.ets', ['skipUpstreamModels', 'chatModelsFor', 'codexCatalogIds', 'CODEX_MODELS_URL']);
-const common = { fileIo, SecretStore, ...atomic, ...bound, ...catalog, ...models,
+const common = {McpStdio:{attachContext(){},closeLabel(){}},McpOAuth:{attachContext(){},authorization:async()=>null,unchanged:()=>true,purge:async()=>{}}, fileIo, SecretStore, ...atomic, ...bound, ...catalog, ...models,
   OAUTH_ALIAS: 'leo.harmony.oauth', requireProviderRoot: value => value, AppStorage: { setOrCreate() {} } };
 const { ProviderStore, ProviderInstance } = load('store/ProviderStore.ets', ['ProviderStore', 'ProviderInstance'], common);
 const { McpStore } = load('store/McpStore.ets', ['McpStore'], common); McpStore.listTools = async () => '';
@@ -197,8 +197,9 @@ try {
       seedModels: [], appendV1: true, azureMode: false, keyDraft: 'DUMMY_KEY', message: '' });
     await view.save(); assert.equal(navigated, true, view.message);
     const fresh = new ProviderStore(); await fresh.load(c);
-    assert.deepEqual(Array.from(fresh.instances[0].models), ['upstream-model']);
-    assert.equal(fresh.instances[0].model, 'upstream-model'); assert.equal(fresh.keyFor(fresh.instances[0].id), 'DUMMY_KEY');
+    const seeded = catalog.kindByKey(type).models;
+    assert.deepEqual(Array.from(fresh.instances[0].models), [...seeded, 'upstream-model']);
+    assert.equal(fresh.instances[0].model, seeded[0] || 'upstream-model'); assert.equal(fresh.keyFor(fresh.instances[0].id), 'DUMMY_KEY');
   }
 
   // Exact detail page flow: catalog network fetch refreshes OAuth while its earlier row has become detached.
@@ -234,9 +235,9 @@ try {
     providerStore: detailStore, getContext: () => dc, OpenAICompatClient });
   const view = new Page(); Object.assign(view, { rowId: 'oauth', keyDraft: '', label: '', type: 'openAI',
     credential: 'oauth', root: '', customModel: '', model: 'builtin', models: ['builtin'], isOn: true, appendV1: true, azureMode: false });
-  await view.pullModels(); assert.deepEqual(Array.from(view.models), ['codex-new-model'], view.message);
+  await view.pullModels(); assert.deepEqual(Array.from(view.models), ['builtin', 'codex-new-model'], view.message);
   const final = new ProviderStore(); await final.load(dc);
-  assert.equal(final.keyFor('oauth'), 'ACCESS_NEW'); assert.equal(final.instances[0].model, 'codex-new-model');
+  assert.equal(final.keyFor('oauth'), 'ACCESS_NEW'); assert.equal(final.instances[0].model, 'builtin');
   const refreshedOAuth = JSON.parse(await SecretStore.read('leo.harmony.oauth.' + final.credentialReference('oauth')));
   assert.equal(refreshedOAuth.refresh, 'REFRESH_NEW'); assert.equal(refreshedOAuth.account, 'new-account');
   assert.equal(requests.length, 2, 'actual OAuth token request followed by actual catalog client');
@@ -256,7 +257,7 @@ try {
     };
     if (mutation === 'label') {
       const updated = await store.refreshModels(c, 'p', fetch);
-      assert.equal(updated.label, 'new-label'); assert.equal(updated.model, 'catalog-model');
+      assert.equal(updated.label, 'new-label'); assert.equal(updated.model, 'builtin'); assert.ok(updated.models.includes('catalog-model'));
       assert.equal(updated.secretRef, store.credentialReference('p'));
     } else await assert.rejects(store.refreshModels(c, 'p', fetch), /已变化/);
     const fresh = new ProviderStore(); await fresh.load(c);
@@ -269,6 +270,6 @@ try {
   renameFailure = true; await assert.rejects(store.refreshModels(fc, 'p'), /rename failure/);
   assert.equal(store.instances[0].model, 'builtin');
   await store.refreshModels(fc, 'p'); const fresh = new ProviderStore(); await fresh.load(fc);
-  assert.equal(fresh.instances[0].model, 'retry-model');
+  assert.equal(fresh.instances[0].model, 'builtin');
   console.log(`HARMONY_SECRET_QUERY_MODELS_OK ${migrationChecks} native-query migration faults + retries + empty controls + OAuth copies + actual add/detail callers`);
 } finally { fs.rmSync(temp, { recursive: true, force: true }); }

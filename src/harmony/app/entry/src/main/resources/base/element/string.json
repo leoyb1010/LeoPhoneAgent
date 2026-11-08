@@ -1,11 +1,48 @@
 {
   "string": [
-    { "name": "module_desc", "value": "LeoPhoneAgent HarmonyOS thin controller" },
-    { "name": "camera_reason", "value": "打开或关闭手电筒" },
-    { "name": "reminder_reason", "value": "记下待办、闹钟和定时提醒" },
-    { "name": "location_reason", "value": "告诉 Agent 你在哪,查当地天气" },
-    { "name": "EntryAbility_desc", "value": "LeoPhoneAgent" },
-    { "name": "EntryAbility_label", "value": "LeoPhoneAgent" },
-    { "name": "schedule_work_desc", "value": "App 关着时跑到点的定时任务" }
+    {
+      "name": "module_desc",
+      "value": "LeoBot 鸿蒙原生 Agent"
+    },
+    {
+      "name": "camera_reason",
+      "value": "拍摄照片、扫描文档或控制手电筒"
+    },
+    {
+      "name": "reminder_reason",
+      "value": "记下待办、闹钟和定时提醒"
+    },
+    {
+      "name": "location_reason",
+      "value": "告诉 Agent 你在哪,查当地天气"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "LeoBot"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "LeoBot"
+    },
+    {
+      "name": "schedule_work_desc",
+      "value": "App 关着时跑到点的定时任务"
+    },
+    {
+      "name": "biometric_reason",
+      "value": "用于确认第二大脑私密资料访问、分享和管家审批"
+    },
+    {
+      "name": "personal_tools_reason",
+      "value": "在用户授权的前台对话中查询和管理日历或联系人"
+    },
+    {
+      "name": "form_name",
+      "value": "LeoBot 任务"
+    },
+    {
+      "name": "form_description",
+      "value": "查看最近任务状态，点按继续工作"
+    }
   ]
 }

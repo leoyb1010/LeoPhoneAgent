@@ -1,5 +1,6 @@
 import { http } from '@kit.NetworkKit';
 import { util } from '@kit.ArkTS';
+import { RemoteAttachment, RemoteCapabilities, RemoteModel, RemoteQuestion, RemoteQuestionRequest } from '../remote/RemoteModels';
 import {
   HarnessKind, harnessURL, parseHarnessKinds, parseRemoteTasks, parseSseData, RemoteTask, requireHttpsRoot, sanitizeKey
 } from './Protocol';
@@ -37,10 +38,179 @@ class ApprovalBody {
 export class HarnessClient {
   private readonly base: string;
   private readonly key: string;
+  private knownFeatures: RemoteCapabilities | null = null;
 
   constructor(apiRoot: string, machine: string, key: string) {
     this.base = harnessURL(requireHttpsRoot(apiRoot), machine);
     this.key = sanitizeKey(key);
+  }
+
+  async capabilities(): Promise<RemoteCapabilities> {
+    const result = RemoteCapabilities.parse(await this.getJson('/v1/capabilities'));
+    this.knownFeatures = result;
+    return result;
+  }
+
+  async session(id: string): Promise<Record<string, Object>> {
+    const json = await this.getJson('/harness/sessions') as Record<string, Object>;
+    const sessions = json['sessions'];
+    if (Array.isArray(sessions)) {
+      for (const item of sessions as Object[]) {
+        const row = item as Record<string, Object>;
+        if (`${row['session_id'] ?? ''}` === id) { return row; }
+      }
+    }
+    throw new HttpError('这个远程任务已经不在了', 404);
+  }
+
+  async models(): Promise<RemoteModel[]> {
+    await this.requireFeature('models');
+    const json = await this.getJson('/harness/models') as Record<string, Object>;
+    const rows = json['models'];
+    return Array.isArray(rows) ? rows.map((row: Object) => RemoteModel.parse(row))
+      .filter((row: RemoteModel) => row.provider.length > 0 && row.model.length > 0) : [];
+  }
+
+  async setModel(id: string, provider: string, model: string, effort: string = ''): Promise<Object> {
+    await this.requireFeature('model_switch');
+    const body: Record<string, Object> = {};
+    if (model) {
+      await this.requireFeature('models');
+      body['provider'] = provider;
+      body['model'] = model;
+    }
+    if (effort) { await this.requireFeature('effort'); body['effort'] = effort; }
+    if (Object.keys(body).length === 0) { throw new Error('请选择模型或推理强度'); }
+    return await this.postJson(this.sessionPath(id) + '/model', body);
+  }
+
+  async compact(id: string): Promise<void> {
+    await this.requireFeature('compact');
+    await this.postJson(this.sessionPath(id) + '/compact', {});
+  }
+
+  async rename(id: string, title: string): Promise<string> {
+    await this.requireFeature('rename');
+    const value = title.trim().slice(0, 200);
+    if (!value) { throw new Error('标题不能为空'); }
+    const reply = await this.postJson(this.sessionPath(id) + '/rename', { 'title': value }) as Record<string, Object>;
+    return `${reply['title'] ?? value}`;
+  }
+
+  async follow(id: string, value: boolean): Promise<boolean> {
+    await this.requireFeature('follow');
+    const reply = await this.postJson(this.sessionPath(id) + '/follow', { 'following': value }) as Record<string, Object>;
+    return reply['following'] === true;
+  }
+
+  async answerQuestion(id: string, question: RemoteQuestionRequest, decline: boolean = false): Promise<void> {
+    await this.requireFeature('ask_user_question');
+    if (!question.id) { throw new Error('缺少问题编号'); }
+    const body: Record<string, Object> = { 'question_id': question.id };
+    if (decline) { body['decline'] = true; }
+    else {
+      if (question.questions.some((item: RemoteQuestion) => item.selected.length === 0 && !item.text.trim())) {
+        throw new Error('请回答每个问题，或选择跳过');
+      }
+      body['answers'] = question.questions.map((item: RemoteQuestion) => {
+        const answer: Record<string, Object> = { 'question': item.question, 'selected': item.selected };
+        if (item.text.trim()) { answer['text'] = item.text.trim(); }
+        return answer;
+      });
+    }
+    await this.postJson(this.sessionPath(id) + '/answer', body);
+  }
+
+  async changes(id: string): Promise<Record<string, Object>> {
+    return await this.getJson(this.sessionPath(id) + '/changes') as Record<string, Object>;
+  }
+
+  async diff(id: string, path: string, checkpoint: string = ''): Promise<string> {
+    const query = '?path=' + encodeURIComponent(path) + (checkpoint ? '&checkpoint=' + encodeURIComponent(checkpoint) : '');
+    const reply = await this.getJson(this.sessionPath(id) + '/diff' + query) as Record<string, Object>;
+    if (reply['binary'] === true) { return '这是二进制文件'; }
+    return `${reply['diff'] ?? ''}` + (reply['truncated'] === true ? '\n（改动过长，已截断）' : '');
+  }
+
+  async revert(id: string, checkpoint: string, paths: string[]): Promise<string[]> {
+    if (!checkpoint && paths.length === 0) { throw new Error('请选择检查点或文件'); }
+    const body: Record<string, Object> = {};
+    if (checkpoint) { body['checkpoint'] = checkpoint; }
+    if (paths.length > 0) { body['paths'] = paths; }
+    const reply = await this.postJson(this.sessionPath(id) + '/revert', body) as Record<string, Object>;
+    const reverted = reply['reverted'];
+    return Array.isArray(reverted) ? reverted.map((value: Object) => `${value}`) : [];
+  }
+
+  async automations(): Promise<Record<string, Object>[]> {
+    await this.requireFeature('automations');
+    const result = await this.getJson('/automations') as Record<string, Object>;
+    const rows = result['automations'];
+    return Array.isArray(rows) ? rows as Record<string, Object>[] : [];
+  }
+
+  async createAutomation(name: string, prompt: string, cron: string): Promise<Object> {
+    await this.requireFeature('automations');
+    if (!prompt.trim() || !cron.trim()) { throw new Error('请填写任务和计划'); }
+    const schedule: Record<string, Object> = { 'kind': 'cron', 'cron': cron.trim() };
+    const body: Record<string, Object> = { 'name': name.trim(), 'prompt': prompt.trim(),
+      'schedule': schedule, 'harness': 'zcode', 'mode': 'build' };
+    return await this.postJson('/automations', body);
+  }
+
+  async changeAutomation(id: string, action: string, enabled: boolean = false): Promise<Object> {
+    await this.requireFeature('automations');
+    const path = '/automations/' + encodeURIComponent(id);
+    if (action === 'run') { return await this.postJson(path + '/run', {}); }
+    if (action === 'enabled') { return await this.mutateJson(path, { 'enabled': enabled }, http.RequestMethod.PATCH); }
+    if (action === 'delete') { return await this.mutateJson(path, {}, http.RequestMethod.DELETE); }
+    throw new Error('未知自动化操作');
+  }
+
+  async screenPreflight(): Promise<Record<string, Object>> {
+    await this.requireFeature('screen_session');
+    return await this.getJson('/screen/session') as Record<string, Object>;
+  }
+  async openScreen(offer: string, control: boolean): Promise<Record<string, Object>> {
+    await this.requireFeature('screen_session');
+    if (!offer || offer.length > 65536) { throw new Error('屏幕连接协商数据无效'); }
+    const body: Record<string, Object> = { 'offer': offer, 'control': control, 'max_fps': 30, 'max_edge': 1920 };
+    return await this.postJson('/screen/session', body) as Record<string, Object>;
+  }
+  async screenCandidates(id: string, candidates: Object[]): Promise<void> {
+    if (!/^scr_[A-Za-z0-9-]{1,100}$/.test(id) || candidates.length > 50) { throw new Error('屏幕连接编号或候选数量无效'); }
+    const body: Record<string, Object> = { 'candidates': candidates };
+    await this.postJson('/screen/session/' + encodeURIComponent(id) + '/ice', body);
+  }
+  async closeScreen(id: string): Promise<void> {
+    if (!/^scr_[A-Za-z0-9-]{1,100}$/.test(id)) { return; }
+    await this.mutateJson('/screen/session/' + encodeURIComponent(id), {}, http.RequestMethod.DELETE);
+  }
+
+  async screenSnapshot(): Promise<ArrayBuffer> {
+    await this.requireFeature('screen_snapshot');
+    const request = http.createHttp();
+    try {
+      const reply = await request.request(this.base + '/screen/snapshot?max_edge=1280&q=0.65', {
+        method: http.RequestMethod.GET, header: { 'Authorization': 'Bearer ' + this.key, 'Accept': 'image/jpeg' },
+        expectDataType: http.HttpDataType.ARRAY_BUFFER, connectTimeout: 12000, readTimeout: 12000,
+        maxRedirects: 0, usingCache: false
+      });
+      if (reply.responseCode !== 200) { throw new HttpError('无法读取 Mac 屏幕，请检查 Mac 上的屏幕录制权限和共享开关', reply.responseCode); }
+      const bytes = reply.result as ArrayBuffer;
+      if (bytes.byteLength === 0 || bytes.byteLength > 8 * 1024 * 1024) { throw new Error('远程屏幕图像大小无效'); }
+      return bytes;
+    } finally { request.destroy(); }
+  }
+
+  private sessionPath(id: string): string {
+    if (!id || id.length > 200) { throw new Error('任务编号无效'); }
+    return '/harness/sessions/' + encodeURIComponent(id);
+  }
+
+  private async requireFeature(feature: string): Promise<void> {
+    const known = this.knownFeatures ?? await this.capabilities();
+    if (!known.has(feature)) { throw new Error('这台远程机器尚未提供此能力，请更新 Mac 端'); }
   }
 
   async kinds(): Promise<HarnessKind[]> {
@@ -80,8 +250,12 @@ export class HarnessClient {
   }
 
   /** fullAuto:-1 不说;0 / 1 让 Mac 把这个任务切回「先问我」/ 切到全自动(接着聊的老任务也跟着开关走)。 */
-  async send(sessionId: string, text: string, thinking: string, fullAuto: number = -1): Promise<void> {
+  async send(sessionId: string, text: string, thinking: string, fullAuto: number = -1, attachments: RemoteAttachment[] = []): Promise<void> {
     const body: Record<string, Object> = { 'text': text };
+    if (attachments.length > 0) {
+      await this.requireFeature('attachments');
+      body['attachments'] = attachments;
+    }
     if (thinking.length > 0) {
       body['thinking'] = thinking;
     }
@@ -92,16 +266,14 @@ export class HarnessClient {
   }
 
   async stop(sessionId: string): Promise<void> {
-    await this.postJson(`/harness/sessions/${encodeURIComponent(sessionId)}/stop`, new EmptyJson());
+    await this.postJson(`/harness/sessions/${encodeURIComponent(sessionId)}/stop`, {});
   }
 
   async approve(sessionId: string, choice: string, approvalId: string): Promise<void> {
     if (!approvalId) {
       throw new Error('缺少审批编号');
     }
-    const body = new ApprovalBody();
-    body.choice = choice;
-    body.approval_id = approvalId;
+    const body: Record<string, Object> = { 'choice': choice, 'approval_id': approvalId };
     await this.postJson(`/harness/sessions/${encodeURIComponent(sessionId)}/approval`, body);
   }
 
@@ -150,7 +322,7 @@ export class HarnessClient {
         'Authorization': `Bearer ${this.key}`,
         'Accept': 'text/event-stream'
       },
-      connectTimeout: 12000,
+      connectTimeout: 12000, maxRedirects: 0, usingCache: false,
       readTimeout: 3600000
     }).then((code: number) => {
       if (code === 401) {
@@ -183,7 +355,7 @@ export class HarnessClient {
           'Authorization': `Bearer ${this.key}`,
           'Accept': 'application/json'
         },
-        connectTimeout: 12000,
+        connectTimeout: 12000, maxRedirects: 0, usingCache: false,
         readTimeout: 20000
       });
       this.throwIfBad(resp.responseCode, `${resp.result ?? ''}`);
@@ -193,11 +365,15 @@ export class HarnessClient {
     }
   }
 
-  private async postJson(path: string, body: object): Promise<object> {
+  private async postJson(path: string, body: Record<string, Object>): Promise<object> {
+    return await this.mutateJson(path, body, http.RequestMethod.POST);
+  }
+
+  private async mutateJson(path: string, body: Record<string, Object>, method: http.RequestMethod): Promise<object> {
     const req = http.createHttp();
     try {
-      const resp = await req.request(this.base + path, {
-        method: http.RequestMethod.POST,
+      const options: http.HttpRequestOptions = {
+        method: method,
         header: {
           'Authorization': `Bearer ${this.key}`,
           'Accept': 'application/json',
@@ -205,11 +381,12 @@ export class HarnessClient {
           // Mac 按请求编号去重:中继断线重投、手机重试都不会让同一句话跑两次(iOS 同样带)。
           'X-Leo-Request-Id': util.generateRandomUUID(false)
         },
-        extraData: JSON.stringify(body),
-        connectTimeout: 12000,
+        connectTimeout: 12000, maxRedirects: 0, usingCache: false,
         // 中继最多等 Mac 60 秒;原来 20 秒就放弃,慢一点的 Mac 看起来像失败,重发又跑一遍。
         readTimeout: 65000
-      });
+      };
+      if (method !== http.RequestMethod.DELETE) { options.extraData = JSON.stringify(body); }
+      const resp = await req.request(this.base + path, options);
       this.throwIfBad(resp.responseCode, `${resp.result ?? ''}`);
       if (!resp.result) {
         return new EmptyJson();

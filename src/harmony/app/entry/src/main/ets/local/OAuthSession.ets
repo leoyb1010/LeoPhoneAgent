@@ -48,10 +48,12 @@ export class OAuthSession {
     OAuthSession.lastTokenUrl = '';
   }
 
-  static async ensure(instanceId: string, access: string, type: string = 'openAI'): Promise<OAuthToken> {
+  static async ensure(instanceId: string, access: string, type: string = 'openAI', expectedReference: string = ''): Promise<OAuthToken> {
     const out = new OAuthToken();
     out.access = access;
-    const reference = providerStore.credentialReference(instanceId);
+    const currentReference = providerStore.credentialReference(instanceId);
+    if (expectedReference && currentReference !== expectedReference) throw new Error('AI 服务商凭据已变化，请重试任务');
+    const reference = expectedReference || currentReference;
     const raw = reference ? await SecretStore.read(`${ALIAS}.${reference}`) : '';
     let refresh = '';
     let expire = 0;

@@ -9,6 +9,7 @@ import { OAuthSession } from '../local/OAuthSession';
 import { skipUpstreamModels } from '../local/ProviderModels';
 import { OpenAICompatClient } from '../local/OpenAICompatClient';
 import { ProviderInstance, ProviderLaunch, providerStore } from '../store/ProviderStore';
+import { ActionButton } from '../theme/Controls';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
@@ -26,6 +27,8 @@ struct ProviderDetailPage {
   @State appendV1: boolean = true;
   @State azureMode: boolean = false;
   @State message: string = '';
+  @State operation: string = '';
+  @State deleteConfirm: boolean = false;
   @State type: string = 'custom';
   @State credential: string = 'apiKey';
   @State showSecret: boolean = false;
@@ -104,7 +107,7 @@ struct ProviderDetailPage {
   @Builder
   detail() {
     Column() {
-      NavBar({ title: '' })
+      NavBar({ title: '服务商配置' })
       Scroll() {
         Column() {
           Text(this.label.length > 0 ? this.label : 'AI 服务商')
@@ -157,15 +160,7 @@ struct ProviderDetailPage {
                 .fontColor(Tokens.warn)
                 .padding({ bottom: 8 })
             }
-            Button('重新登录')
-              .width('100%')
-              .height(40)
-              .backgroundColor(Tokens.surface2)
-              .fontColor(Tokens.text)
-              .enabled(!this.oauthBusy)
-              .onClick(() => {
-                this.beginOAuth();
-              })
+            ActionButton({ label: '重新登录', variant: 'secondary', busy: this.oauthBusy, isEnabled: !this.operation && !this.oauthBusy, fullWidth: true, onTap: () => this.beginOAuth() }).margin({ top: 10 })
           } else {
             this.fieldCaption('API Key')
             Row() {
@@ -182,7 +177,7 @@ struct ProviderDetailPage {
               Text(this.showSecret ? '隐藏' : '显示')
                 .fontSize(13)
                 .fontColor(Tokens.link)
-                .padding({ left: 10 })
+                .padding({ left: 10 }).constraintSize({ minWidth: 44, minHeight: 44 }).textAlign(TextAlign.Center)
                 .onClick(() => {
                   this.showSecret = !this.showSecret;
                 })
@@ -199,30 +194,15 @@ struct ProviderDetailPage {
             .fontColor(Tokens.text)
             .borderRadius(Tokens.settingsRadius)
           if (skipUpstreamModels(this.type, this.credential)) {
-            Button('拉取 ChatGPT 模型目录')
-              .width('100%')
-              .height(40)
-              .margin({ top: 12 })
-              .backgroundColor(Tokens.surface2)
-              .fontColor(Tokens.text)
-              .onClick(() => {
-                this.pullModels();
-              })
+            ActionButton({ label: '拉取 ChatGPT 模型目录', variant: 'secondary', busy: this.operation === 'models', isEnabled: !this.operation && !this.oauthBusy, fullWidth: true, onTap: () => this.pullModels() }).margin({ top: 10 })
             Text('和 Codex 用的是同一份目录,新模型(比如 GPT-6)出来就能选。拉不到时保留现在的列表。')
               .fontSize(12)
               .fontColor(Tokens.muted)
               .padding({ top: 8, bottom: 4 })
           } else {
-            Button('从上游拉取 /models')
-              .width('100%')
-              .height(40)
-              .margin({ top: 12 })
-              .backgroundColor(Tokens.surface2)
-              .fontColor(Tokens.text)
-              .onClick(() => {
-                this.pullModels();
-              })
+            ActionButton({ label: '从上游拉取 /models', variant: 'secondary', busy: this.operation === 'models', isEnabled: !this.operation && !this.oauthBusy, fullWidth: true, onTap: () => this.pullModels() }).margin({ top: 10 })
           }
+          ActionButton({ label: '清理已下线模型', variant: 'quiet', busy: this.operation === 'clean', isEnabled: !this.operation && !this.oauthBusy, fullWidth: true, onTap: () => this.cleanModels() }).margin({ top: 10 })
           Row() {
             Text('用作当前 AI 服务商')
               .fontSize(Tokens.rowTitle)
@@ -251,7 +231,7 @@ struct ProviderDetailPage {
           .padding({ bottom: 8 })
           if (this.models.length > 0) {
             List() {
-              ForEach(this.models, (id: string) => {
+              ForEach(providerStore.visibleModels(this.current()), (id: string) => {
                 ListItem() {
                   this.modelRow(id)
                 }
@@ -262,7 +242,7 @@ struct ProviderDetailPage {
             .backgroundColor(Tokens.surface)
             .borderRadius(Tokens.settingsRadius)
             .clip(true)
-            .scrollBar(BarState.Off)
+            .scrollBar(BarState.Auto)
             .edgeEffect(EdgeEffect.None)
           }
           TextInput({ text: this.customModel, placeholder: '追加模型 id' })
@@ -274,24 +254,21 @@ struct ProviderDetailPage {
             .backgroundColor(Tokens.surface)
             .fontColor(Tokens.text)
             .borderRadius(Tokens.settingsRadius)
-          Button('删除这个 AI 服务商')
-            .width('100%')
-            .height(44)
-            .margin({ top: 12, bottom: 12 })
-            .backgroundColor(Tokens.surface2)
-            .fontColor(Tokens.accent)
-            .onClick(() => {
-              this.remove();
-            })
+          ActionButton({ label: this.deleteConfirm ? '取消删除' : '删除这个 AI 服务商', variant: 'quiet', isEnabled: !this.operation && !this.oauthBusy,
+            onTap: () => { this.deleteConfirm = !this.deleteConfirm; } }).margin({ top: 16, bottom: 12 })
+          if (this.deleteConfirm) {
+            Text('删除服务商会解除其模型配置与本机凭据绑定，已绑定的对话将要求重新选择模型。').fontSize(13).lineHeight(20).fontColor(Tokens.secondary).width('100%').padding({ bottom: 8 })
+            ActionButton({ label: '确认删除服务商', variant: 'danger', busy: this.operation === 'delete', isEnabled: !this.operation && !this.oauthBusy, onTap: () => this.remove() })
+          }
         }
-        .width('100%')
+        .width('100%').constraintSize({ maxWidth: 720 })
         .alignItems(HorizontalAlign.Start)
         .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 16 })
       }
       .layoutWeight(1)
       .width('100%')
       .align(Alignment.Top)
-      .scrollBar(BarState.Off)
+      .scrollBar(BarState.Auto)
       Column() {
         if (this.message.length > 0) {
           Text(this.message)
@@ -302,16 +279,9 @@ struct ProviderDetailPage {
             .width('100%')
             .padding({ bottom: 8 })
         }
-        Button('保存')
-          .width('100%')
-          .height(44)
-          .backgroundColor(Tokens.accent)
-          .fontColor('#FFFFFF')
-          .onClick(() => {
-            this.save();
-          })
+        ActionButton({ label: '保存配置', busy: this.operation === 'save', isEnabled: !this.operation && !this.oauthBusy, fullWidth: true, onTap: () => this.save() })
       }
-      .width('100%')
+      .width('100%').constraintSize({ maxWidth: 720 })
       .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 8, bottom: 16 })
       .backgroundColor(Tokens.bg)
     }
@@ -355,13 +325,17 @@ struct ProviderDetailPage {
   }
 
   private current(): ProviderInstance {
-    const row = new ProviderInstance();
+    const existing = providerStore.instances.find((item: ProviderInstance) => item.id === this.rowId);
+    const row = existing ? JSON.parse(JSON.stringify(existing)) as ProviderInstance : new ProviderInstance();
     row.id = this.rowId;
     row.label = this.label;
     row.type = this.type;
     row.credential = this.credential;
     row.baseUrl = this.root;
     row.model = this.customModel.trim().length > 0 ? this.customModel.trim() : this.model;
+    if (existing && (this.customModel.trim() || row.model !== existing.model) && (row.hiddenModels.indexOf(row.model) >= 0 || row.deletedModels.indexOf(row.model) >= 0)) {
+      row.hiddenModels = row.hiddenModels.filter((id: string) => id !== row.model); row.deletedModels = row.deletedModels.filter((id: string) => id !== row.model); row.visibilityEditedAt[row.model] = Date.now();
+    }
     row.models = this.models.slice();
     if (row.model.length > 0 && row.models.indexOf(row.model) < 0) {
       row.models = [row.model].concat(row.models);
@@ -373,6 +347,7 @@ struct ProviderDetailPage {
   }
 
   private async save(): Promise<void> {
+    if (this.operation || this.oauthBusy) return; this.operation = 'save';
     const ctx = getContext(this) as common.UIAbilityContext;
     try {
       await providerStore.upsert(ctx, this.current(), this.keyDraft);
@@ -380,16 +355,18 @@ struct ProviderDetailPage {
       this.message = '已保存';
     } catch (err) {
       this.message = `${err}`;
-    }
+    } finally { this.operation = ''; }
   }
 
   private async makeActive(): Promise<void> {
-    const ctx = getContext(this) as common.UIAbilityContext;
-    await providerStore.setActive(ctx, this.rowId);
-    this.isActive = true;
+    if (this.operation || this.oauthBusy) return; this.operation = 'active';
+    try { await providerStore.setActive(getContext(this) as common.UIAbilityContext, this.rowId); this.isActive = true; this.message = '已设为当前 AI 服务商'; }
+    catch (error) { this.message = `切换失败，${error}`; }
+    finally { this.operation = ''; }
   }
 
   private async pullModels(): Promise<void> {
+    if (this.operation || this.oauthBusy) return; this.operation = 'models';
     const ctx = getContext(this) as common.UIAbilityContext;
     try {
       await providerStore.ensureLoaded(ctx);
@@ -416,7 +393,23 @@ struct ProviderDetailPage {
       this.message = `已拉取 ${this.models.length} 个模型`;
     } catch (err) {
       this.message = `${err}`;
-    }
+    } finally { this.operation = ''; }
+  }
+
+  private async cleanModels(): Promise<void> {
+    if (this.operation || this.oauthBusy) return; this.operation = 'clean';
+    const ctx = getContext(this) as common.UIAbilityContext;
+    try {
+      const count = await providerStore.cleanUnavailableModels(ctx, this.rowId);
+      const updated = providerStore.instances.find((row: ProviderInstance) => row.id === this.rowId);
+      if (updated) {
+        this.models = updated.models.slice();
+        this.model = updated.model;
+      }
+      this.message = `已清理 ${count} 个下线模型，自定义模型已保留`;
+    } catch (err) {
+      this.message = `${err}`;
+    } finally { this.operation = ''; }
   }
 
   private async beginOAuth(): Promise<void> {
@@ -449,12 +442,13 @@ struct ProviderDetailPage {
   }
 
   private async remove(): Promise<void> {
+    if (this.operation || this.oauthBusy) return; this.operation = 'delete';
     const ctx = getContext(this) as common.UIAbilityContext;
     try {
       await providerStore.remove(ctx, this.rowId);
       router.back();
     } catch (err) {
       this.message = `${err}`;
-    }
+    } finally { this.operation = ''; }
   }
 }

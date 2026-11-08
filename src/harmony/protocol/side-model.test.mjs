@@ -1,0 +1,16 @@
+// Production SideModel + ProviderStore captureQueue. HTTP is an explicit async adapter.
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import {stripTypeScriptTypes} from 'node:module';
+const root=new URL('../app/entry/src/main/ets/',import.meta.url);
+function load(file,env={}){const raw=fs.readFileSync(new URL(file,root),'utf8');const names=[...raw.matchAll(/^export (?:class|function|const) (\w+)/gm)].map(m=>m[1]);const source=raw.replace(/^import[\s\S]*?from\s+['"][^'"]+['"];\s*/gm,'').replace(/\bexport\s+/g,'');const c=vm.createContext({console,setTimeout,clearTimeout,...env});vm.runInContext(stripTypeScriptTypes(source,{mode:'strip'})+`\nObject.assign(globalThis,{${names.join(',')}});`,c);return Object.fromEntries(names.map(name=>[name,c[name]]));}
+const protocol=load('local/LocalProtocol.ets');const models=load('local/ProviderModels.ets');const stores=load('store/ProviderStore.ets',{...protocol,AtomicTextFile:class{},kindByKey:()=>({root:'',models:[]})});
+const providerStore=new stores.ProviderStore();providerStore.ensureLoaded=async()=>{};const keys=new Map([['image','IMAGE_KEY'],['first','FIRST_KEY'],['second','SECOND_KEY']]);
+for(const[id,model,url]of[['image','gpt-image-2','https://images.test/v1'],['first','text-a','https://first.test/v1'],['second','text-b','https://second.test/v1']]){const row=new stores.ProviderInstance();Object.assign(row,{id,model,models:[model],baseUrl:url,secretRef:'ref-'+id});providerStore.instances.push(row);}
+providerStore.activeId='image';providerStore.keyFor=id=>keys.get(id);const slots=providerStore.instances.map(row=>Object.assign(new protocol.FailoverSlot(),{instanceId:row.id,model:row.model}));providerStore.queue=()=>slots;
+providerStore.slotRoot=()=>{throw new Error('live root lookup forbidden');};providerStore.slotCredential=()=>{throw new Error('live credential lookup forbidden');};
+const opened=[];const {SideModel}=load('local/SideModel.ets',{...protocol,...models,...stores,providerStore,OpenAICompatClient:{open:async(...args)=>{opened.push(args);return{streamTurn:(_turns,_system,_thinking,_delta,done,error,withTools)=>{assert.equal(withTools,false);queueMicrotask(()=>{if(args[5]==='first'){providerStore.instances[2].baseUrl='https://changed.test/v1';keys.set('second','CHANGED_KEY');error('http 503');}else done({text:'  summary text  '});});return{destroy(){}};}};}}});
+assert.equal(await SideModel.complete({},'summarize','private text'),'summary text');assert.deepEqual(opened.map(args=>args[5]),['first','second'],'known image-only model is never called for a title');assert.equal(opened[1][0],'https://second.test/v1');assert.equal(opened[1][1],'SECOND_KEY');assert.equal(opened[1][7],'ref-second','queued request retains its credential generation');assert.equal(providerStore.activeId,'image','side work never rewrites the user main model binding');
+providerStore.queue=()=>[slots[0]];const before=opened.length;assert.equal(await SideModel.complete({},'title','private text'),'');assert.equal(opened.length,before,'image-only queue has a deterministic recoverable empty result without any image generation');
+console.log('HARMONY_SIDE_MODEL_OK actual ETS fixed provider/credential snapshot, image-only exclusion, deterministic empty recovery and unchanged main model selection');

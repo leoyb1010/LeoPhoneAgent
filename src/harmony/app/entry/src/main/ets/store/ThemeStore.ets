@@ -1,4 +1,5 @@
 import { fileIo } from '@kit.CoreFileKit';
+import { atomicWriteText } from './AtomicFile';
 import { common } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { Tokens } from '../theme/Tokens';
@@ -31,6 +32,8 @@ export class ThemeStore {
     this.win = win;
     this.applyBars();
   }
+
+  detachWindow(win: window.Window | null): void { if (this.win === win) this.win = null; }
 
   apply(): void {
     Tokens.apply(this.isDark());
@@ -81,15 +84,14 @@ export class ThemeStore {
     body.showTitle = this.showTitle;
     body.homeCards = this.homeCards;
     const path = context.filesDir + '/appearance.json';
-    const file = fileIo.openSync(path,
-      fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
-    try {
-      fileIo.writeSync(file.fd, JSON.stringify(body));
-    } finally {
-      fileIo.closeSync(file);
-    }
+    atomicWriteText(path, JSON.stringify(body));
     taskStatus.setCardsEnabled(this.homeCards);
     this.apply();
+  }
+
+  async reload(context: common.Context): Promise<void> {
+    this.loaded = false;
+    await this.load(context);
   }
 
   private applyBars(): void {
@@ -102,8 +104,10 @@ export class ThemeStore {
       navigationBarColor: Tokens.bg,
       navigationBarContentColor: Tokens.text
     };
-    this.win.setWindowSystemBarProperties(props);
-    this.win.setWindowKeepScreenOn(this.keepAwake);
+    try {
+      this.win.setWindowSystemBarProperties(props).catch(() => {});
+      this.win.setWindowKeepScreenOn(this.keepAwake).catch(() => {});
+    } catch (_error) { /* A closing window is updated when the replacement attaches. */ }
   }
 }
 

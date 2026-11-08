@@ -1,3 +1,4 @@
+import { stripTypeScriptTypes } from 'node:module';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
@@ -325,7 +326,12 @@ const ROOT = "https://relay-host.example.ts.net/leoagent-relay/relay/api";
   assert.equal(sandboxFileName("/workspace/notes.md"), "notes.md");
   assert.equal(sandboxFileName("var/minis/workspace/a.txt"), "a.txt");
   assert.throws(() => sandboxFileName("../etc/passwd"));
-  assert.throws(() => sandboxFileName("a/b"));
+  assert.equal(sandboxFileName("a/b"), "a/b");
+  assert.equal(sandboxFileName("/mnt/workspace/中文/report..md"), "中文/report..md");
+  assert.equal(sandboxFileName("workspace/", true), "");
+  assert.throws(() => sandboxFileName("a/../b"));
+  assert.throws(() => sandboxFileName("a//b"));
+  assert.throws(() => sandboxFileName("a\u0000b"));
   let acc = [];
   acc = applyToolDelta(acc, {
     choices: [{ delta: { tool_calls: [{ index: 0, id: "c1", function: { name: "file_read", arguments: "{\"p" } }] } }],
@@ -846,13 +852,13 @@ function wireShape(source, startsWith) {
     "LocalTools.run 要在执行任何工具之前检查参数完整");
 
   // 审批:和 iOS 同样的选项,永远有全自动。
-  for (const label of ["允许一次", "本次会话允许", "拒绝", "拒绝并停止任务"]) {
+  for (const label of ["允许一次", "本会话同操作允许", "拒绝", "拒绝并停止任务"]) {
     assert.ok(chatPane.includes(`'${label}'`), `本机审批栏要有「${label}」`);
   }
   assert.ok(!chatPane.includes("允许写这次"), "旧的单按钮文案要去掉");
   assert.ok(/static fullAuto: boolean/.test(gate) && /'全自动'/.test(gate), "要有全自动");
   assert.ok(/cmd === '\/auto'/.test(chatPane), "/auto 切换全自动");
-  assert.match(gate, /用户拒绝了「写文件」/, "拒绝回执和 iOS 同一句话");
+  assert.match(gate, /用户拒绝了这次操作/, "拒绝回执明确说明实际操作已被拒绝");
 
   // 停止真的停:剩下的工具和下一轮都要看这一轮还算不算数(每一轮带自己的 gen)。
   const runTools = chatPane.slice(chatPane.indexOf("private async runTools("));
@@ -863,7 +869,8 @@ function wireShape(source, startsWith) {
   const leave = chatPane.slice(chatPane.indexOf("aboutToDisappear()"), chatPane.indexOf("aboutToDisappear()") + 300);
   assert.ok(/this\.detach\(\)/.test(leave) && !/runGen|cancelRun|\.stop\(\)/.test(leave), "离开页面时那一轮接着跑");
   // 工具执行前先存这一步。
-  assert.ok(/saveToolRound\(turn\.text, calls\)\.then/.test(chatPane), "工具执行前先存模型这一步");
+  const complete = chatPane.slice(chatPane.indexOf("private async completeTurn("), chatPane.indexOf("private continueTools("));
+  assert.ok(complete.indexOf("await sessionStore.appendLine") >= 0 && complete.indexOf("await sessionStore.appendLine") < complete.indexOf("await this.runTools"), "工具执行前先持久保存文字与图片");
 }
 
 {
@@ -887,6 +894,13 @@ function wireShape(source, startsWith) {
   // 手机工具:工具清单(ETS)、TS 镜像、PhoneTools.NAMES 三处一致,分发也接上了。
   const schemaNames = [...protocolEts.slice(protocolEts.indexOf("export function localToolSchemaJson"),
     protocolEts.indexOf("export function anthropicToolSchemaJson")).matchAll(/"name":"([a-z_]+)"/g)].map((m) => m[1]);
+  const extraSource = stripTypeScriptTypes(etsSrc("local/ExtraToolSchemas.ets"), { mode: "strip" }).replace(/export /g, "");
+  const extraTools = JSON.parse(new Function(extraSource + "\nreturn extraToolSchemas();")());
+  schemaNames.push(...extraTools.map((tool) => tool.function.name));
+  const mailSource = stripTypeScriptTypes(etsSrc("local/MailTools.ets").replace(/^import[^\n]*\n/gm, ""), { mode: "strip" }).replace(/export /g, "");
+  const mailSchemas = JSON.parse(new Function(mailSource + "\nreturn mailToolSchemas();")());
+  schemaNames.push(...mailSchemas.map((tool) => tool.function.name));
+  assert.equal(new Set(schemaNames).size, schemaNames.length, "工具名称不能重复");
   assert.deepEqual([...schemaNames].sort(), [...localToolNames()].sort(), "ETS 工具清单与 TS 镜像一致");
   const phoneNames = [...phone.match(/NAMES: string\[\] = \[([\s\S]*?)\]/)[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
   for (const name of phoneNames) {
@@ -1021,17 +1035,17 @@ function wireShape(source, startsWith) {
   // 打开机器不再建空任务;第一条消息才建(带着这句话)。
   const start = chat.slice(chat.indexOf("private startSession("), chat.indexOf("private teardown("));
   assert.ok(!/client\.create\(/.test(start), "打开机器时不在 Mac 上建任务");
-  assert.ok(/const created = await this\.createTask\(client, text, auto\)/.test(chat) &&
+  assert.ok(/const created = await this\.createTask\(client, attachments\.length > 0 \? '' : text, auto\)/.test(chat) &&
     /client\.create\(ChatLaunch\.harness, text, '', auto\)/.test(chat), "第一条消息建任务并直接跑这一句");
   // Mac 任务的全自动只看这个任务自己的开关,默认关、开之前确认,不跟本机「全自动」走;Mac 不接受就退回逐项审批一次。
   assert.ok(/const auto = zcode && this\.macAuto && !this\.fullAutoRefused/.test(chat));
   assert.ok(!/SensitiveToolGate/.test(chat), "远程页不再读本机的全自动");
   assert.ok(/promptAction\.showDialog\(\{\s*title: '这个任务改成全自动\?'/.test(chat), "开之前要确认");
-  assert.ok(/this\.macAuto = false;\s*this\.launchGen \+= 1;/.test(chat), "换任务回到逐项确认");
+  assert.ok(/this\.macAuto = false;/.test(chat.slice(chat.indexOf('onLaunch(): void'), chat.indexOf('  build()'))) && /this\.launchGen \+= 1;/.test(chat), "换任务回到逐项确认");
   assert.ok(/if \(gen !== this\.launchGen\)/.test(chat), "等回话期间换了页面,结果不接到当前页");
   assert.ok(/await this\.stop\(sessionId, client\)/.test(chat), "批准后停止用答题时的任务");
   assert.ok(/err\.code !== 403/.test(chat) && /client\.create\(ChatLaunch\.harness, text, '', false\)/.test(chat));
-  assert.ok(/client\.send\(this\.sessionId, text, '', zcode \? \(auto \? 1 : 0\) : -1\)/.test(chat));
+  assert.ok(/client\.send\(this\.sessionId, text, '', zcode \? \(auto \? 1 : 0\) : -1, attachments\)/.test(chat));
   assert.ok(/body\['full_auto'\] = true/.test(harness) && /body\['full_auto'\] = fullAuto === 1/.test(harness));
   // 回放的旧帧不重置重连计数;一轮结束后正常关流就不再重连。
   assert.ok(!/this\.reconnects = 0;\s*this\.onEvent/.test(chat), "不再每来一帧就清零重连计数");
@@ -1198,7 +1212,9 @@ function wireShape(source, startsWith) {
   assert.ok(/requestSuspendDelay\(/.test(run) && /run\.pauseForBackground\(\)/.test(run));
   assert.ok(/static onForeground\(\): void \{[\s\S]{0,200}run\.resumeIfPaused\(\)/.test(run));
   assert.ok(/if \(!ChatRuns\.foreground\) \{\s*ChatRuns\.notify\(/.test(run), "只在后台时发通知");
-  assert.ok(/parameters: \{ 'openSession': sessionId \}/.test(run) && /AppStorage\.setOrCreate\('openSession', id\)/.test(entry));
+  assert.ok(/parameters: \{ 'openSession': sessionId \}/.test(run) && /AppStorage\.setOrCreate\('requestedSession', id\)/.test(entry));
+  const home = etsSrc("pages/HomePage.ets");
+  assert.ok(/AppStorage\.setOrCreate\('openSession', this\.openRequest\)/.test(home) && /!this\.notesReady \|\| this\.showNotes/.test(home), "通知导航须等本版更新卡处理后再消费");
   assert.ok(/onNewWant\(want: Want/.test(entry) && /ChatRuns\.onBackground\(ScheduleRunner\.busy\)/.test(entry));
   assert.ok(/requestEnableNotification\(context\)/.test(run), "第一次跑任务时问通知权限");
 
@@ -1250,11 +1266,11 @@ function wireShape(source, startsWith) {
   assert.equal(input[1].type, "function_call_output");
   assert.deepEqual(input[2].content.map((part) => part.type), ["input_text", "input_image"]);
   assert.equal(input[2].content[0].text, TOOL_IMAGE_CAPTION);
-  assert.ok(/"content":\[\{"type":"text","text":\$\{JSON\.stringify\(turn\.content\)\}\},\{"type":"image","source"/.test(proto));
+  assert.ok(proto.includes('for (const image of turnImages(turn)) content.push') && proto.includes('\"type\":\"tool_result\"'), '工具图片通过typed多图数组进入Anthropic tool_result');
   assert.equal((proto.match(/flushImages\(\);/g) ?? []).length >= 6, true, "OpenAI、Gemini、Responses 三处都在工具串后补图");
 
   // 附件:进沙箱,消息里只带清单
-  assert.ok(/WorkspaceStore\.saveUpload\(ctx, name, buf\)/.test(etsSrc("chat/Attachments.ets")) &&
+  assert.ok(/WorkspaceStore\.saveUpload\(ctx, name, buf, directory\)/.test(etsSrc("chat/Attachments.ets")) &&
     /Attachments\.pickFiles\(/.test(pane) && /attachedFilesBlock\(line\.files\)/.test(run));
   const archive = sessionArchiveFromJson({ messages: [{ role: "user", text: "看", files: ["a.pdf"] }, { role: "system", text: "摘要", kind: "summary", count: 4 }] });
   assert.deepEqual(archive.messages[0].files, ["a.pdf"]);
@@ -1402,7 +1418,7 @@ function wireShape(source, startsWith) {
   assert.ok(!/tabLabel\(/.test(home) && /pushUrl\(\{ url: 'pages\/FleetPage' \}\)/.test(home));
   // 输入框:在跑且没打字时是红色停止;芯片在卡片里
   const composer = src("chat/Composer.ets");
-  assert.ok(/this\.running && this\.draft\.trim\(\)\.length === 0/.test(composer) && /backgroundColor\(Tokens\.danger\)/.test(composer));
+  assert.ok(/if \(this\.running\) this\.onStop\(\)/.test(composer) && /this\.running \? Tokens\.danger/.test(composer) && /!this\.running/.test(composer));
   assert.ok(/'全自动' : '逐项确认'/.test(composer));
   // 回答不套气泡:直接画 Markdown,上面一行「✦ LeoPhoneAgent」
   const pane = src("panes/LocalChatPane.ets");
@@ -1426,10 +1442,10 @@ console.log("PROTOCOL_MACHINES_OK");
   // OpenCode Go:只留 chat completions 能跑的模型;其他服务商原样。
   const goIds = ["kimi-k3", "glm-5.3", "gpt-5.6-luna", "grok-4.6", "muse-spark-1.3-contributor", "minimax-m3", "minimax-m2.7", "minimax-m2.5", "qwen3.8-flash", "qwen3.8-max", "qwen3.6-plus", "deepseek-v4-pro"];
   // MiniMax 和 Qwen 只在 /v1/messages 上(opencode.ai/docs/go 端点表),chat completions 端用不了。
-  assert.deepEqual(chatModelsFor("openCodeGo", goIds), ["kimi-k3", "glm-5.3", "deepseek-v4-pro"]);
-  assert.deepEqual(chatModelsFor("openCodeGo", ["opencode-go/MiniMax-M2.7", "opencode-go/GLM-5.3"]), ["opencode-go/GLM-5.3"]);
+  assert.deepEqual(chatModelsFor("openCodeGo", goIds), goIds.filter((id) => !["kimi-k2.5", "glm-5", "qwen3.5-plus", "mimo-v2-pro", "mimo-v2-omni", "hy3-preview", "grok-4.5"].includes(id.toLowerCase().split("/").pop())));
+  assert.deepEqual(chatModelsFor("openCodeGo", ["opencode-go/MiniMax-M2.7", "opencode-go/GLM-5.3"]), ["opencode-go/MiniMax-M2.7", "opencode-go/GLM-5.3"]);
   const modelsEts = readFileSync(new URL("../app/entry/src/main/ets/local/ProviderModels.ets", import.meta.url), "utf8");
-  assert.ok(modelsEts.includes("['gpt-', 'grok-', 'muse-spark-', 'minimax-', 'qwen']"), "ProviderModels.ets 的 OpenCode Go 表要和 providerModels.ts 一致");
+  assert.ok(modelsEts.includes("export function openCodeWire") && modelsEts.includes("@ai-sdk/anthropic") && modelsEts.includes("@ai-sdk/openai-compatible"), "OpenCode Go实际多wire路由，端点/身份隔离由chat-media真实ETS验证");
   assert.deepEqual(chatModelsFor("openCodeGo", ["glm-5", "glm-5.3", "kimi-k2.5", "opencode-go/HY3-Preview"]), ["glm-5.3"]);
   assert.ok(modelsEts.includes("['kimi-k2.5', 'glm-5', 'qwen3.5-plus', 'mimo-v2-pro', 'mimo-v2-omni', 'hy3-preview', 'grok-4.5']"), "ProviderModels.ets 的下线表要和 providerModels.ts 一致");
   assert.deepEqual(chatModelsFor("openCodeGo", ["gpt-5.6-luna"]), ["gpt-5.6-luna"]);
@@ -1448,7 +1464,7 @@ console.log("PROTOCOL_MACHINES_OK");
   // OpenCode Go 不带会话 id 的请求一律 400 MissingSessionID。
   assert.ok(/headers\['x-opencode-session'\] = this\.session/.test(client), "OpenCode Go 请求要带 x-opencode-session");
   const chatRun = readFileSync(new URL("../app/entry/src/main/ets/local/ChatRun.ets", import.meta.url), "utf8");
-  assert.ok(/slot\.instanceId, this\.sessionId\)/.test(chatRun), "对话里的请求用对话 id 当会话 id");
+  assert.ok(/slot\.instanceId, this\.sessionId, slot\.reference, slot\.metadata\)/.test(chatRun), "对话里的请求用对话 id 当会话 id");
   console.log("PROTOCOL_OPENCODE_GO_OK");
 }
 
@@ -1457,7 +1473,7 @@ console.log("PROTOCOL_MACHINES_OK");
   const src = (rel) => readFileSync(new URL(`../app/entry/src/main/ets/${rel}`, import.meta.url), "utf8");
   const gate = src("local/SensitiveToolGate.ets");
   assert.ok(/UNATTENDED_BLOCKED: string\[\] = \['open_app_link', 'dial', 'clipboard_write', 'location', 'mcp_call'\]/.test(gate));
-  assert.ok(/LocalTools\.run\(context, calls\[i\]\.name, calls\[i\]\.args, sessionKey, true\)/.test(src("local/LocalAgentEngine.ets")));
+  assert.ok(/LocalTools\.run\(context, calls\[i\]\.name, calls\[i\]\.args, sessionKey, true, \(\) => LocalAgentEngine\.alive\(sessionKey, mine\), \(\) => LocalAgentEngine\.memoryAllowed\(context, sessionKey\)\)/.test(src("local/LocalAgentEngine.ets")));
   assert.ok(/const denied = unattended \? SensitiveToolGate\.unattendedDenial\(name\) : ''/.test(src("local/LocalTools.ets")));
   console.log("PROTOCOL_UNATTENDED_OK");
 }
@@ -1477,9 +1493,9 @@ console.log("PROTOCOL_MACHINES_OK");
   const sessions = src("store/SessionStore.ets") + src("store/AtomicFile.ets");
   assert.ok(/fileIo\.renameSync\(tmp, path\)/.test(sessions), "档案原子写");
   assert.ok(/this\.summaries = this\.reconcile\(context, listed\)/.test(sessions), "目录按档案重建");
-  assert.ok(/return \/\^s_\\d\+_\\d\+\$\/\.test\(id\)/.test(sessions), "对话编号校验");
+  assert.ok(sessions.includes('static validId(id: string)') && sessions.includes('s_\\d+_\\d+|[a-f0-9]{8}'), '本机编号与严格UUID白名单；实际拒绝用例由agent-parity执行');
   assert.ok(/this\.dropImages\(context, doomed\.messages\)/.test(sessions), "删对话连图片");
-  assert.ok(/if \(SessionStore\.validId\(id\)\) \{\s*AppStorage\.setOrCreate\('openSession'/.test(src("entryability/EntryAbility.ets")));
+  assert.ok(/if \(SessionStore\.validId\(id\)\) \{\s*AppStorage\.setOrCreate\('requestedSession'/.test(src("entryability/EntryAbility.ets")));
   assert.ok(/title: '删除对话\?'/.test(src("panes/LocalAgentPane.ets")), "删对话先确认");
   const gateway = src("store/GatewayStore.ets");
   assert.ok(/pair\.exp > 0 && pair\.exp \* 1000 < Date\.now\(\)/.test(gateway), "过期的码不用");
@@ -1489,3 +1505,12 @@ console.log("PROTOCOL_MACHINES_OK");
   console.log("PROTOCOL_HARMONY_AUDIT_OK");
 }
 
+
+// Production remote transport and send flow, with SDK network adapters.
+await import("./remote-controls.test.mjs");
+
+await import("./chat-media.test.mjs");
+
+await import("./side-model.test.mjs");
+
+await import("./composer-shortcuts.test.mjs");

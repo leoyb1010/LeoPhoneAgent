@@ -4,7 +4,7 @@ import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
 import { http } from '@kit.NetworkKit';
 import { kindByKey, providerKinds } from '../local/ProviderCatalog';
-import { FailoverSlot, ProviderSlot, requireProviderRoot, resolveFailoverQueue } from '../local/LocalProtocol';
+import { FailoverSlot, ProviderSlot, requireProviderRoot, resolveFailoverQueue, stableModelIndex } from '../local/LocalProtocol';
 import {
   chatModelsFor,
   idsFromModelsDevJson,
@@ -12,6 +12,7 @@ import {
   modelIdsFromListJson,
   modelsAuthHeaders,
   modelsDevProviderKey,
+  modelMetadataFromList,
   modelsListUrl,
   skipUpstreamModels
 } from '../local/ProviderModels';
@@ -28,6 +29,12 @@ export class ProviderInstance {
   baseUrl: string = '';
   model: string = '';
   models: string[] = [];
+  discoveredModels: string[] = [];
+  deletedModels: string[] = [];
+  hiddenModels: string[] = [];
+  modelMetadata: Record<string, string> = {};
+  modelOverrides: Record<string, string> = {};
+  visibilityEditedAt: Record<string, number> = {};
   enabled: boolean = true;
   appendV1: boolean = true;
   azureMode: boolean = false;
@@ -35,10 +42,27 @@ export class ProviderInstance {
   createdAt: number = 0;
 }
 
+export class ProviderRunSlot {
+  fallbackAlways: boolean = false;
+  instanceId: string = '';
+  model: string = '';
+  root: string = '';
+  key: string = '';
+  type: string = '';
+  credential: string = '';
+  reference: string = '';
+  metadata: string = '';
+}
+
 export class ModelGroup {
   id: string = '';
   name: string = '';
   modelIds: string[] = [];
+  strategy: string = 'fallback';
+  fallbackStrategy: string = 'limited';
+  defaultThinkingLevel: string = '';
+  removedMembers: Record<string, number> = {};
+  addedMembers: Record<string, number> = {};
 }
 
 class ProviderFile {
@@ -89,11 +113,11 @@ export class ProviderStore {
   }
 
   configured(): boolean {
-    const row = this.active();
-    if (!row || !row.enabled) {
-      return false;
-    }
-    return this.effectiveRoot(row).length > 0 && row.model.length > 0 && this.keyFor(row.id).length > 0;
+    const queue = this.queue('configuration');
+    return queue.some((slot: FailoverSlot) => {
+      const row = this.instances.find((item: ProviderInstance) => item.id === slot.instanceId);
+      return row !== undefined && row.enabled && this.effectiveRoot(row).length > 0 && slot.model.length > 0 && this.keyFor(row.id).length > 0;
+    });
   }
 
   active(): ProviderInstance | null {
@@ -316,7 +340,7 @@ export class ProviderStore {
     });
   }
 
-  upsert(context: common.Context, input: ProviderInstance, key: string): Promise<void> {
+  upsert(context: common.Context, input: ProviderInstance, key: string, expectedSnapshot: string | null = null, activateNew: boolean = true): Promise<void> {
     return this.serial(async () => {
       await this.ensureLoaded(context); this.assertWritable();
       const row = ProviderStore.parseInstances(JSON.parse(JSON.stringify([input])) as Object[])[0];
@@ -326,32 +350,31 @@ export class ProviderStore {
       if (!row.model.trim()) row.model = kindByKey(row.type).models[0] ?? '';
       row.model = row.model.trim();
       const old = this.instances.find((item: ProviderInstance) => item.id === row.id);
+      if (expectedSnapshot !== null && (old ? JSON.stringify(old) : '') !== expectedSnapshot) throw new Error('同步期间本机服务商已修改，请重新同步');
       const keys = this.snapshotKeys();
       keys.set(row.id, key.trim() || (old && this.binding(old) === this.binding(row) ? this.keyFor(row.id) : ''));
       const next = this.instances.slice();
       const index = next.findIndex((item: ProviderInstance) => item.id === row.id);
       if (index >= 0) next[index] = row; else next.push(row);
-      await this.persistSnapshot(context, next, keys, !old || !this.activeId ? row.id : this.activeId, this.groups, this.activeGroupId);
+      await this.persistSnapshot(context, next, keys, (activateNew && !old) || !this.activeId ? row.id : this.activeId, this.groups, this.activeGroupId);
     });
   }
 
-  async setActiveModel(context: common.Context, id: string, model: string): Promise<void> {
-    await this.ensureLoaded(context);
-    this.assertWritable();
-    const next = model.trim();
-    if (!next) {
-      throw new Error('模型不能空');
-    }
-    for (let i = 0; i < this.instances.length; i++) {
-      if (this.instances[i].id === id) {
-        this.instances[i].model = next;
-        if (this.instances[i].models.indexOf(next) < 0) {
-          this.instances[i].models = [next].concat(this.instances[i].models);
-        }
+  setActiveModel(context: common.Context, id: string, model: string): Promise<void> {
+    return this.serial(async () => {
+      await this.ensureLoaded(context); this.assertWritable(); const selected = model.trim();
+      if (!selected) throw new Error('模型不能空');
+      const next = ProviderStore.parseInstances(JSON.parse(JSON.stringify(this.instances)) as Object[]);
+      const row = next.find((item: ProviderInstance) => item.id === id && item.enabled);
+      if (!row) throw new Error('这个 AI 服务商不可用');
+      row.model = selected; if (row.models.indexOf(selected) < 0) row.models = [selected].concat(row.models);
+      if (row.deletedModels.indexOf(selected) >= 0 || row.hiddenModels.indexOf(selected) >= 0) {
+        row.deletedModels = row.deletedModels.filter((name: string) => name !== selected);
+        row.hiddenModels = row.hiddenModels.filter((name: string) => name !== selected);
+        row.visibilityEditedAt[selected] = Date.now();
       }
-    }
-    this.activeId = id;
-    await this.save(context);
+      await this.persistSnapshot(context, next, this.snapshotKeys(), id, this.groups, '');
+    });
   }
 
   remove(context: common.Context, id: string): Promise<void> {
@@ -360,9 +383,10 @@ export class ProviderStore {
       const gone = this.instances.find((row: ProviderInstance) => row.id === id);
       const next = this.instances.filter((row: ProviderInstance) => row.id !== id);
       const groups = ProviderStore.parseGroups(JSON.parse(JSON.stringify(this.groups)) as Object[]);
+      for (let i = 0; i < groups.length; i++) groups[i].modelIds = groups[i].modelIds.filter((entry: string) => !entry.startsWith(`${id}/`));
       const tag = gone ? (gone.label || gone.type) : '';
       if (tag && !next.some((row: ProviderInstance) => (row.label || row.type) === tag)) {
-        for (let i = 0; i < groups.length; i++) groups[i].modelIds = groups[i].modelIds.filter((entry: string) => !entry.startsWith(`${tag}/`));
+        for (let i = 0; i < groups.length; i++) groups[i].modelIds = groups[i].modelIds.filter((entry: string) => !entry.startsWith(`${id}/`) && !entry.startsWith(`${tag}/`));
       }
       const kept = groups.filter((row: ModelGroup) => row.modelIds.length > 0);
       const keys = this.snapshotKeys(); keys.delete(id);
@@ -372,21 +396,28 @@ export class ProviderStore {
     });
   }
 
-  async setActive(context: common.Context, id: string): Promise<void> {
-    await this.ensureLoaded(context);
-    this.assertWritable();
-    this.activeId = id;
-    await this.save(context);
+  setActive(context: common.Context, id: string): Promise<void> {
+    return this.serial(async () => {
+      await this.ensureLoaded(context); this.assertWritable();
+      if (!this.instances.some((row: ProviderInstance) => row.id === id && row.enabled)) throw new Error('这个 AI 服务商不可用');
+      await this.persistSnapshot(context, this.instances, this.snapshotKeys(), id, this.groups, '');
+    });
   }
 
-  async setActiveGroup(context: common.Context, id: string): Promise<void> {
-    await this.ensureLoaded(context);
-    this.assertWritable();
-    this.activeGroupId = id;
-    await this.save(context);
+  setActiveGroup(context: common.Context, id: string): Promise<void> {
+    return this.serial(async () => {
+      await this.ensureLoaded(context); this.assertWritable();
+      if (id && (!this.groups.some((group: ModelGroup) => group.id === id) || this.queue('configuration', id).length === 0)) throw new Error('这组模型尚未可用，请先配置对应服务商');
+      await this.persistSnapshot(context, this.instances, this.snapshotKeys(), this.activeId, this.groups, id);
+    });
   }
 
-  queue(): FailoverSlot[] {
+  visibleModels(row: ProviderInstance): string[] {
+    const models = row.models.length ? row.models : [row.model];
+    return models.filter((id: string) => !!id && row.hiddenModels.indexOf(id) < 0 && row.deletedModels.indexOf(id) < 0);
+  }
+
+  queue(sessionKey: string = '', requestedGroup: string | null = null, requireCredentials: boolean = true): FailoverSlot[] {
     const slots: ProviderSlot[] = [];
     for (let i = 0; i < this.instances.length; i++) {
       const row = this.instances[i];
@@ -398,13 +429,42 @@ export class ProviderStore {
       slot.type = row.type;
       slots.push(slot);
     }
+    let selected: ModelGroup | null = null;
     let groupIds: string[] = [];
     for (let i = 0; i < this.groups.length; i++) {
-      if (this.groups[i].id === this.activeGroupId) {
-        groupIds = this.groups[i].modelIds.slice();
+      if (this.groups[i].id === (requestedGroup ?? this.activeGroupId)) {
+        groupIds = this.groups[i].modelIds.slice(); selected = this.groups[i];
       }
     }
-    return resolveFailoverQueue(this.activeId, slots, groupIds);
+    if (requestedGroup && (!selected || !selected.modelIds.length)) return [];
+    let queue = resolveFailoverQueue(this.activeId, slots, groupIds);
+    queue = queue.filter((entry: FailoverSlot) => {
+      const row = this.instances.find((item: ProviderInstance) => item.id === entry.instanceId); return row !== undefined && row.deletedModels.indexOf(entry.model) < 0 && row.hiddenModels.indexOf(entry.model) < 0 && (!requireCredentials || this.keyFor(row.id).length > 0);
+    });
+    for (let i = 0; i < queue.length; i++) queue[i].fallbackAlways = selected?.fallbackStrategy === 'always';
+    if (selected?.strategy === 'loadBalance' && queue.length > 1) {
+      const offset = stableModelIndex(sessionKey || selected.id, queue.length); queue = queue.slice(offset).concat(queue.slice(0, offset));
+    }
+    return queue;
+  }
+
+  captureQueue(source: FailoverSlot[]): ProviderRunSlot[] {
+    const output: ProviderRunSlot[] = [];
+    for (let i = 0; i < source.length; i++) {
+      const entry = source[i]; const row = this.instances.find((item: ProviderInstance) => item.id === entry.instanceId);
+      if (!row || !row.enabled || row.deletedModels.indexOf(entry.model) >= 0 || row.hiddenModels.indexOf(entry.model) >= 0) continue;
+      const root = this.effectiveRoot(row); const key = this.keyFor(row.id);
+      if (!root || !key) continue;
+      const slot = new ProviderRunSlot(); slot.instanceId = entry.instanceId; slot.model = entry.model;
+      slot.root = root; slot.type = row.type; slot.credential = row.credential; slot.key = key; slot.reference = row.secretRef; slot.fallbackAlways = entry.fallbackAlways;
+      const base = JSON.parse(row.modelMetadata[entry.model] || '{}') as Record<string, Object>;
+      const overrides = JSON.parse(row.modelOverrides[entry.model] || '{}') as Record<string, Object>;
+      const names = Object.keys(overrides); for (const name of names) if (overrides[name] !== null) base[name] = overrides[name];
+      slot.metadata = JSON.stringify(base);
+      output.push(slot);
+    }
+    if (!output.length) throw new Error('这个对话的服务商尚未配置完成，请先登录或填写密钥');
+    return output;
   }
 
   slotRoot(instanceId: string): string {
@@ -434,29 +494,51 @@ export class ProviderStore {
     return 'apiKey';
   }
 
-  async addGroup(context: common.Context, name: string, modelIds: string[]): Promise<void> {
-    // 必须先 ensureLoaded 再改 this.groups。原来是先 concat 再 save()，
-    // 而 save() 内部的 ensureLoaded 若此刻才第一次读盘，会用磁盘内容整个覆盖 this.groups，
-    // 刚加的组直接消失（removeGroup 同理）。
-    await this.ensureLoaded(context);
-    const group = new ModelGroup();
-    group.id = `g_${Date.now()}`;
-    group.name = name.trim() || '模型组';
-    group.modelIds = modelIds;
-    this.groups = this.groups.concat([group]);
-    await this.save(context);
+  addGroup(context: common.Context, name: string, modelIds: string[], strategy: string = 'fallback', fallbackStrategy: string = 'limited', thinking: string = '', existingId: string = ''): Promise<void> {
+    return this.serial(async () => {
+      await this.ensureLoaded(context); this.assertWritable();
+      if (!modelIds.length) throw new Error('请至少选择一个模型');
+      const old = this.groups.find((row: ModelGroup) => row.id === existingId);
+      if (existingId && !old) throw new Error('这组模型已被删除，请重新打开');
+      const group = old ? JSON.parse(JSON.stringify(old)) as ModelGroup : new ModelGroup();
+      group.id = existingId || `g_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+      group.name = name.trim() || '模型组'; group.modelIds = modelIds.filter((id: string, index: number) => modelIds.indexOf(id) === index);
+      group.strategy = strategy === 'loadBalance' ? 'loadBalance' : 'fallback'; group.fallbackStrategy = fallbackStrategy === 'always' ? 'always' : 'limited'; group.defaultThinkingLevel = thinking;
+      const now = Date.now() / 1000;
+      const previous = old?.modelIds ?? [];
+      for (let i = 0; i < previous.length; i++) if (group.modelIds.indexOf(previous[i]) < 0) group.removedMembers[previous[i]] = now;
+      for (let i = 0; i < group.modelIds.length; i++) if (previous.indexOf(group.modelIds[i]) < 0) group.addedMembers[group.modelIds[i]] = now;
+      const next = old ? this.groups.map((row: ModelGroup) => row.id === group.id ? group : row) : this.groups.concat([group]);
+      await this.persistSnapshot(context, this.instances, this.snapshotKeys(), this.activeId, next, this.activeGroupId);
+    });
   }
 
-  async removeGroup(context: common.Context, id: string): Promise<void> {
-    await this.ensureLoaded(context);
-    this.groups = this.groups.filter((row: ModelGroup) => row.id !== id);
-    if (this.activeGroupId === id) {
-      this.activeGroupId = '';
-    }
-    await this.save(context);
+  async mergeReplicaGroup(context: common.Context, group: ModelGroup): Promise<void> {
+    await this.serial(async () => {
+      await this.ensureLoaded(context);
+      const groups = ProviderStore.parseGroups(JSON.parse(JSON.stringify(this.groups)) as Object[]);
+      const old = groups.find((row: ModelGroup) => row.id === group.id);
+      if (old) {
+        const members = old.modelIds.concat(group.modelIds);
+        const localAdds = Object.keys(old.addedMembers);
+        for (let i = 0; i < localAdds.length; i++) group.addedMembers[localAdds[i]] = Math.max(group.addedMembers[localAdds[i]] ?? 0, old.addedMembers[localAdds[i]]);
+        const localRemoves = Object.keys(old.removedMembers);
+        for (let i = 0; i < localRemoves.length; i++) group.removedMembers[localRemoves[i]] = Math.max(group.removedMembers[localRemoves[i]] ?? 0, old.removedMembers[localRemoves[i]]);
+        group.modelIds = members.filter((id: string, index: number) => members.indexOf(id) === index && (group.addedMembers[id] ?? 0) >= (group.removedMembers[id] ?? 0));
+      }
+      const next = groups.filter((row: ModelGroup) => row.id !== group.id).concat([group]);
+      await this.persistSnapshot(context, this.instances, this.snapshotKeys(), this.activeId, next, this.activeGroupId);
+    });
   }
 
-  /** 拉取使用快照，提交只更新当前实例的模型字段，允许期间发生同一服务商的 OAuth 换代。 */
+  removeGroup(context: common.Context, id: string): Promise<void> {
+    return this.serial(async () => {
+      await this.ensureLoaded(context); this.assertWritable();
+      const next = this.groups.filter((row: ModelGroup) => row.id !== id);
+      await this.persistSnapshot(context, this.instances, this.snapshotKeys(), this.activeId, next, this.activeGroupId === id ? '' : this.activeGroupId);
+    });
+  }
+
   async refreshModels(context: common.Context, id: string,
     fetch: ((row: ProviderInstance) => Promise<string[]>) | null = null): Promise<ProviderInstance> {
     await this.ensureLoaded(context);
@@ -471,11 +553,40 @@ export class ProviderStore {
       const next = ProviderStore.parseInstances(JSON.parse(JSON.stringify(this.instances)) as Object[]);
       const updated = next.find((row: ProviderInstance) => row.id === id)!;
       this.applyModels(updated, ids);
+      const models = Object.keys(snapshot.modelMetadata); for (const model of models) updated.modelMetadata[model] = snapshot.modelMetadata[model];
       await this.persistSnapshot(context, next, this.snapshotKeys(), this.activeId, this.groups, this.activeGroupId);
       const committed = this.instances.find((row: ProviderInstance) => row.id === id)!;
       saved = ProviderStore.parseInstances(JSON.parse(JSON.stringify([committed])) as Object[])[0];
     });
     return saved;
+  }
+
+  /** 显式清理只采用服务商当次返回的目录，保留手工加入的模型。 */
+  async cleanUnavailableModels(context: common.Context, id: string): Promise<number> {
+    await this.ensureLoaded(context);
+    const row = this.instances.find((item: ProviderInstance) => item.id === id);
+    if (!row) throw new Error('AI 服务商已移除');
+    if (skipUpstreamModels(row.type, row.credential)) throw new Error('这个登录方式暂不支持核对下线模型');
+    const binding = this.binding(row);
+    const available = chatModelsFor(row.type, await this.pullUpstream(this.effectiveRoot(row), row.type, this.keyFor(id)));
+    if (available.length === 0) throw new Error('服务商返回空目录，本次保留全部模型');
+    let removed = 0;
+    await this.serial(async () => {
+      const next = ProviderStore.parseInstances(JSON.parse(JSON.stringify(this.instances)) as Object[]);
+      const live = next.find((item: ProviderInstance) => item.id === id);
+      if (!live || this.binding(live) !== binding) throw new Error('AI 服务商已变化，请重试');
+      const retired = live.discoveredModels.filter((model: string) => available.indexOf(model) < 0 && model !== live.model);
+      removed = retired.length;
+      live.models = live.models.filter((model: string) => retired.indexOf(model) < 0);
+      live.discoveredModels = available;
+      const groups = ProviderStore.parseGroups(JSON.parse(JSON.stringify(this.groups)) as Object[]);
+      for (let i = 0; i < groups.length; i++) {
+        groups[i].modelIds = groups[i].modelIds.filter((entry: string) => !retired.some((model: string) =>
+          entry === `${id}/${model}` || entry === `${live.label || live.type}/${model}`));
+      }
+      await this.persistSnapshot(context, next, this.snapshotKeys(), this.activeId, groups, this.activeGroupId);
+    });
+    return removed;
   }
 
   private async fetchModels(row: ProviderInstance): Promise<string[]> {
@@ -496,14 +607,14 @@ export class ProviderStore {
     }
     let lastError = '';
     try {
-      const ids = await this.pullUpstream(root, row.type, key);
+      const ids = await this.pullUpstream(root, row.type, key, row);
       this.applyModels(row, ids);
       return row.models;
     } catch (err) {
       lastError = `${err}`;
     }
     try {
-      const ids = await this.pullModelsDev(row.type);
+      const ids = await this.pullModelsDev(row.type, row);
       if (ids.length > 0) {
         this.applyModels(row, ids);
         return row.models;
@@ -521,13 +632,14 @@ export class ProviderStore {
 
   private applyModels(row: ProviderInstance, ids: string[]): void {
     const usable = chatModelsFor(row.type, ids);
-    row.models = usable;
-    if (usable.indexOf(row.model) < 0) {
-      row.model = usable[0];
-    }
+    const merged = row.models.concat(usable).filter((id: string, index: number, all: string[]) =>
+      id.length > 0 && all.indexOf(id) === index && row.deletedModels.indexOf(id) < 0);
+    row.models = merged;
+    row.discoveredModels = row.discoveredModels.concat(usable).filter((id: string, index: number, all: string[]) => all.indexOf(id) === index);
+    if (!row.model && merged.length > 0) row.model = merged[0];
   }
 
-  private async pullUpstream(root: string, type: string, key: string): Promise<string[]> {
+  private async pullUpstream(root: string, type: string, key: string, target: ProviderInstance | null = null): Promise<string[]> {
     const req = http.createHttp();
     try {
       const resp = await req.request(modelsListUrl(root, type, key), {
@@ -539,7 +651,9 @@ export class ProviderStore {
       if (resp.responseCode < 200 || resp.responseCode >= 300) {
         throw new Error(`http ${resp.responseCode}`);
       }
-      const ids = modelIdsFromListJson(JSON.parse(`${resp.result}`) as object);
+      const parsed = JSON.parse(`${resp.result}`) as object;
+      const ids = modelIdsFromListJson(parsed);
+      if (target) { const metadata = modelMetadataFromList(parsed); const names = Object.keys(metadata); for (const name of names) target.modelMetadata[name] = metadata[name]; }
       if (ids.length === 0) {
         throw new Error('上游没有返回模型');
       }
@@ -549,7 +663,7 @@ export class ProviderStore {
     }
   }
 
-  private async pullModelsDev(type: string): Promise<string[]> {
+  private async pullModelsDev(type: string, target: ProviderInstance | null = null): Promise<string[]> {
     const providerKey = modelsDevProviderKey(type);
     if (!providerKey) {
       return [];
@@ -564,7 +678,9 @@ export class ProviderStore {
       if (resp.responseCode < 200 || resp.responseCode >= 300) {
         throw new Error(`http ${resp.responseCode}`);
       }
-      return idsFromModelsDevJson(JSON.parse(`${resp.result}`) as object, providerKey);
+      const parsed = JSON.parse(`${resp.result}`) as object;
+      if (target) { const metadata = modelMetadataFromList(parsed, providerKey); const names = Object.keys(metadata); for (const name of names) target.modelMetadata[name] = metadata[name]; }
+      return idsFromModelsDevJson(parsed, providerKey);
     } finally {
       req.destroy();
     }
@@ -602,6 +718,15 @@ export class ProviderStore {
       row.createdAt = Number(item['createdAt'] ?? 0);
       const models = item['models'];
       row.models = Array.isArray(models) ? models.map((id: Object) => `${id}`) : [];
+      const discovered = item['discoveredModels'];
+      row.discoveredModels = Array.isArray(discovered) ? discovered.map((id: Object) => `${id}`) : [];
+      const deleted = item['deletedModels'];
+      row.deletedModels = Array.isArray(deleted) ? deleted.map((id: Object) => `${id}`) : [];
+      row.modelMetadata = item['modelMetadata'] ? item['modelMetadata'] as Record<string, string> : {};
+      row.modelOverrides = item['modelOverrides'] ? item['modelOverrides'] as Record<string, string> : {};
+      const hidden = item['hiddenModels'];
+      row.hiddenModels = Array.isArray(hidden) ? hidden.map((id: Object) => `${id}`) : [];
+      row.visibilityEditedAt = item['visibilityEditedAt'] ? item['visibilityEditedAt'] as Record<string, number> : {};
       if (row.id.length > 0) {
         out.push(row);
       }
@@ -619,6 +744,11 @@ export class ProviderStore {
       const row = new ModelGroup();
       row.id = `${item['id'] ?? ''}`;
       row.name = `${item['name'] ?? ''}`;
+      row.strategy = item['strategy'] === 'loadBalance' ? 'loadBalance' : 'fallback';
+      row.fallbackStrategy = item['fallbackStrategy'] === 'always' ? 'always' : 'limited';
+      row.defaultThinkingLevel = `${item['defaultThinkingLevel'] ?? ''}`;
+      row.removedMembers = item['removedMembers'] ? item['removedMembers'] as Record<string, number> : {};
+      row.addedMembers = item['addedMembers'] ? item['addedMembers'] as Record<string, number> : {};
       const ids = item['modelIds'];
       row.modelIds = Array.isArray(ids) ? ids.map((id: Object) => `${id}`) : [];
       if (row.id.length > 0) {

@@ -23,7 +23,8 @@ export class PhoneTools {
   static readonly NAMES: string[] = ['device_info', 'clipboard_write', 'set_alarm', 'set_reminder', 'notify',
     'flashlight', 'open_app_link', 'dial', 'location', 'weather'];
 
-  static async run(context: common.Context, name: string, args: string, unattended: boolean = false): Promise<string> {
+  static async run(context: common.Context, name: string, args: string, unattended: boolean = false, isCurrent: () => boolean = () => true): Promise<string> {
+    if (!isCurrent()) return '任务已取消';
     const capability = name === 'weather' && toolArg(args, 'city').trim().length === 0 ? 'location' : name;
     const denied = unattended ? SensitiveToolGate.unattendedDenial(capability) : '';
     if (denied.length > 0) return denied;
@@ -32,23 +33,23 @@ export class PhoneTools {
         return FastLocalActions.deviceSummary();
       }
       if (name === 'clipboard_write') {
-        return await PhoneTools.copy(toolArg(args, 'text'), unattended);
+        return await PhoneTools.copy(toolArg(args, 'text'), unattended, isCurrent);
       }
       if (name === 'set_alarm') {
         return await PhoneTools.alarm(context, toolArg(args, 'hour'), toolArg(args, 'minute'),
-          toolArg(args, 'label'));
+          toolArg(args, 'label'), isCurrent);
       }
       if (name === 'set_reminder') {
-        return await PhoneTools.reminder(context, toolArg(args, 'time'), toolArg(args, 'title'));
+        return await PhoneTools.reminder(context, toolArg(args, 'time'), toolArg(args, 'title'), isCurrent);
       }
       if (name === 'notify') {
         const ok = await FastLocalActions.postNotice(toolArg(args, 'title') || 'LeoPhoneAgent',
-          toolArg(args, 'text'));
+          toolArg(args, 'text'), isCurrent);
         return ok ? '通知已发出' : '通知没发出去:可能没开这个 App 的通知权限';
       }
       if (name === 'flashlight') {
         const on = toolArg(args, 'on') !== 'false';
-        const ok = await FastLocalActions.setTorch(context, on);
+        const ok = await FastLocalActions.setTorch(context, on, isCurrent);
         return ok ? (on ? '手电筒已打开' : '手电筒已关闭') : '手电筒没打开:没有相机权限或这台设备不支持';
       }
       if (name === 'open_app_link') {
@@ -58,12 +59,12 @@ export class PhoneTools {
         return await PhoneTools.dial(toolArg(args, 'number'));
       }
       if (name === 'location') {
-        const place = await PhoneTools.locate(context, unattended);
+        const place = await PhoneTools.locate(context, unattended, isCurrent);
         return place ? `纬度 ${place.latitude.toFixed(5)},经度 ${place.longitude.toFixed(5)}` +
           (place.name.length > 0 ? `,${place.name}` : '') : '拿不到位置:没有定位权限,或定位没开';
       }
       if (name === 'weather') {
-        return await PhoneTools.weather(context, toolArg(args, 'city'), unattended);
+        return await PhoneTools.weather(context, toolArg(args, 'city'), unattended, isCurrent);
       }
       return `没有这个工具：${name}`;
     } catch (err) {
@@ -71,15 +72,15 @@ export class PhoneTools {
     }
   }
 
-  private static async copy(text: string, unattended: boolean): Promise<string> {
+  private static async copy(text: string, unattended: boolean, isCurrent: () => boolean): Promise<string> {
     if (text.length === 0) {
       return '没有要复制的内容';
     }
-    return await FastLocalActions.copyText(text, unattended) ? '已复制到剪贴板' : '没复制上,再试一次';
+    return await FastLocalActions.copyText(text, unattended, isCurrent) ? '已复制到剪贴板' : '没复制上,再试一次';
   }
 
   private static async alarm(context: common.Context, hourRaw: string, minuteRaw: string,
-    label: string): Promise<string> {
+    label: string, isCurrent: () => boolean): Promise<string> {
     const route = new ActionDecision();
     route.hour = Number(hourRaw);
     route.minute = minuteRaw.length > 0 ? Number(minuteRaw) : 0;
@@ -88,18 +89,18 @@ export class PhoneTools {
       route.minute < 0 || route.minute > 59) {
       return '时间不对:hour 0–23,minute 0–59';
     }
-    const ok = await FastLocalActions.addAlarm(context, route);
+    const ok = await FastLocalActions.addAlarm(context, route, isCurrent);
     const pad = route.minute < 10 ? `0${route.minute}` : `${route.minute}`;
     return ok ? `闹钟已设好:${route.hour}:${pad}${label.length > 0 ? ' ' + label : ''}` :
       '闹钟没设上:可能没给「提醒」权限';
   }
 
-  private static async reminder(context: common.Context, time: string, title: string): Promise<string> {
+  private static async reminder(context: common.Context, time: string, title: string, isCurrent: () => boolean): Promise<string> {
     const when: LocalDateTime | null = parseReminderTime(time, Date.now());
     if (!when) {
       return `时间读不懂或已经过去:${time}。用 YYYY-MM-DD HH:mm,例如 ${nowLine(Date.now())}`;
     }
-    const ok = await FastLocalActions.addReminderAt(context, when, title.length > 0 ? title : '提醒');
+    const ok = await FastLocalActions.addReminderAt(context, when, title.length > 0 ? title : '提醒', isCurrent);
     return ok ? `提醒已设好:${time.trim()} ${title}` : '提醒没设上:可能没给「提醒」权限';
   }
 
@@ -127,12 +128,12 @@ export class PhoneTools {
     return `已打开拨号盘:${digits}`;
   }
 
-  private static async locate(context: common.Context, unattended: boolean): Promise<Place | null> {
+  private static async locate(context: common.Context, unattended: boolean, isCurrent: () => boolean): Promise<Place | null> {
     if (unattended && SensitiveToolGate.unattendedDenial('location').length > 0) return null;
     const perms: Permissions[] = ['ohos.permission.APPROXIMATELY_LOCATION', 'ohos.permission.LOCATION'];
     try {
       const grant = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(context, perms);
-      if (grant.authResults.length === 0 || grant.authResults[0] !== 0) {
+      if (!isCurrent() || grant.authResults.length === 0 || grant.authResults[0] !== 0) {
         return null;
       }
       const request: geoLocationManager.SingleLocationRequest = {
@@ -140,6 +141,7 @@ export class PhoneTools {
         locatingTimeoutMs: 10000
       };
       const loc = await geoLocationManager.getCurrentLocation(request);
+      if (!isCurrent()) return null;
       const place = new Place();
       place.latitude = loc.latitude;
       place.longitude = loc.longitude;
@@ -161,7 +163,7 @@ export class PhoneTools {
     }
   }
 
-  private static async weather(context: common.Context, city: string, unattended: boolean): Promise<string> {
+  private static async weather(context: common.Context, city: string, unattended: boolean, isCurrent: () => boolean): Promise<string> {
     let place: Place | null = null;
     if (city.trim().length > 0) {
       place = await PhoneTools.geocode(city.trim());
@@ -169,11 +171,12 @@ export class PhoneTools {
         return `找不到这个地方:${city}`;
       }
     } else {
-      place = await PhoneTools.locate(context, unattended);
+      place = await PhoneTools.locate(context, unattended, isCurrent);
       if (!place) {
         return '拿不到位置:没有定位权限,或者说一个城市名';
       }
     }
+    if (!isCurrent()) return '任务已取消';
     const url = 'https://api.open-meteo.com/v1/forecast' +
       `?latitude=${place.latitude}&longitude=${place.longitude}` +
       '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m' +

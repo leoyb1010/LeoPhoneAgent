@@ -1,13 +1,19 @@
+import { MediaGallery } from '../chat/MediaGallery';
+import { inputMethod } from '@kit.IMEKit';
+import { ActionButton, IconButton } from '../theme/Controls';
+import { MotionPolicy } from '../theme/MotionPolicy';
+import { ChatViewState } from '../local/ChatViewState';
+import { ShareInbox } from '../shareextension/ShareInbox';
 import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { router } from '@kit.ArkUI';
 import { ChatItem, chatItemKey, chatItems } from '../local/AgentText';
 import { ChatRun, ChatRuns, PendingImage, textLines } from '../local/ChatRun';
 import { Voice } from '../local/Voice';
-import { LocalChatMessage, nextThinking, thinkingLabel } from '../local/LocalProtocol';
+import { FailoverSlot, LocalChatMessage, nextThinking, thinkingLabel } from '../local/LocalProtocol';
 import { LocalTools } from '../local/LocalTools';
 import { SensitiveToolGate } from '../local/SensitiveToolGate';
-import { ProviderInstance, providerStore } from '../store/ProviderStore';
+import { ProviderInstance, ModelGroup, providerStore } from '../store/ProviderStore';
 import { themeStore } from '../store/ThemeStore';
 import { sessionStore } from '../store/SessionStore';
 import { soulStore } from '../store/SoulStore';
@@ -32,10 +38,12 @@ import { Tokens } from '../theme/Tokens';
 
 /** 首页输入框发出的第一句:对话页一打开就发出去。 */
 export class FirstMessage {
+  submissionId: string = '';
   sessionId: string = '';
   text: string = '';
   files: string[] = [];
   image: PendingImage | null = null;
+  images: PendingImage[] = [];
 }
 
 export class LocalChatLaunch {
@@ -69,14 +77,18 @@ const SLASH_COMMANDS: SlashCommand[] = [
 ];
 
 /**
- * 本机对话页。画法对齐 iOS / 安卓:回答不套气泡、上面一行「✦ LeoPhoneAgent」;你说的话是右边的灰气泡;
+ * 本机对话页。画法对齐 iOS / 安卓:回答不套气泡、上面一行「✦ LeoBot」;你说的话是右边的灰气泡;
  * 工具是一个个胶囊,说完的一轮折成「已工作 N 步」;输入框是一张卡片,里面有模型和审批方式。
  * 一轮跑在 ChatRun 里,这里只负责看和转交操作(离开页面照样跑)。
  */
 @Component
 export struct LocalChatPane {
+
+  onBack: () => void = () => { router.back(); };
+  onNew: () => void = () => { LocalChatLaunch.sessionId = ''; AppStorage.setOrCreate('homeSessionId', ''); router.back(); };
   @StorageProp('themeTick') tick: number = 0;
   @StorageProp('providerTick') @Watch('onProviderTick') providerTick: number = 0;
+  @StorageProp('chatViewTick') @Watch('onVoiceStateChanged') chatViewTick: number = 0;
   @StorageProp('chatTick') @Watch('onChatTick') chatTick: number = 0;
   @Prop @Watch('onSessionChange') sessionId: string = '';
   @StorageProp('approvalTick') @Watch('onApprovalTick') approvalTick: number = 0;
@@ -86,32 +98,49 @@ export struct LocalChatPane {
   /** 正在流式输出的那段回答的字(见 chatItemKey)。 */
   @State liveText: string = '';
   @State fullAuto: boolean = false;
-  @State title: string = 'LeoPhoneAgent';
-  @State draft: string = '';
+  @State title: string = 'LeoBot';
+  @State @Watch('draftChanged') draft: string = '';
+  @StorageProp('draftTick') @Watch('onDraftTick') draftTick: number = 0;
+  @StorageProp('draftError') @Watch('onDraftFailure') draftError: string = '';
+  private restoringDraft: boolean = false;
+  private draftBaseline: string = '';
+  private filesBaseline: string = '[]';
+  private imageBaseline: string = '';
   @State status: string = '准备中';
   @State configured: boolean = false;
   @State ready: boolean = false;
   @State thinking: string = '';
   @State askWrite: boolean = false;
   @State askTitle: string = '';
+  @State askDetails: string = '';
+  @State askTicket: string = '';
   /** 有一轮在跑:发送按钮变成停止。 */
   @State active: boolean = false;
   /** 上一轮没做完:显示「继续」。 */
   @State interrupted: boolean = false;
   @State listening: boolean = false;
   @State modelLine: string = '';
+  @State selectedProviderId: string = '';
+  @State selectedModelId: string = '';
+  @State modelPicked: boolean = false;
+  @State availableHeight: number = 720;
+  @State memoryEnabled: boolean = true;
   @State modelSheet: boolean = false;
   @State pickerRows: ProviderInstance[] = [];
   @State pickerOpenId: string = '';
   @State slashOpen: boolean = false;
   @State openTurns: number[] = [];
-  @State pendingFiles: string[] = [];
-  @State pendingImagePath: string = '';
+  @State @Watch('draftChanged') pendingFiles: string[] = [];
+  @State @Watch('draftChanged') pendingImagePath: string = '';
   @State showDown: boolean = false;
   @State unseen: boolean = false;
   private image: PendingImage | null = null;
+  private pendingImages: PendingImage[] = [];
+  @State @Watch('draftChanged') pendingImagePaths: string[] = [];
   private chatScroller: Scroller = new Scroller();
   private alive: boolean = false;
+  private appliedVoiceVersion: number = 0;
+  @State sending: boolean = false;
   private currentId: string = '';
   /** 这个页面在看的对话。一轮跑在它里面,离开页面、切走都不作废(见 ChatRun)。 */
   private run: ChatRun | null = null;
@@ -143,25 +172,22 @@ export struct LocalChatPane {
   }
 
   aboutToDisappear(): void {
+    this.saveViewState(); ChatViewState.flush();
     // 离开页面不再作废正在跑的一轮:它接着跑,说完了 App 在后台就发通知。
     this.alive = false;
     this.detach();
-    if (this.stopListen) {
-      this.stopListen();
-      this.stopListen = null;
-      this.listening = false;
-    }
   }
 
   onSessionChange(): void {
     // 切对话:原来那个对话的这一轮接着跑,这里换成看新的。
+    this.saveViewState();
     this.detach();
     this.lines = [];
     this.items = [];
     this.liveText = '';
     this.shown = [];
     this.draft = '';
-    this.image = null;
+    this.image = null; this.pendingImages = []; this.pendingImagePaths = [];
     this.pendingFiles = [];
     this.pendingImagePath = '';
     this.openTurns = [];
@@ -218,23 +244,28 @@ export struct LocalChatPane {
       if (this.currentId.length > 0 || this.configured) {
         Column() {
           if (this.askWrite) {
-            this.approvalCard()
+            // A new operation owns new callbacks, including its immutable approval ticket.
+            ForEach([this.askTicket], (ticket: string) => {
+              this.approvalCard(ticket)
+            }, (ticket: string) => ticket)
           } else if (this.interrupted && !this.active && !this.lastIsError()) {
             this.resumeCard()
           }
-          if (this.slashOpen) {
-            this.slashPanel()
-          }
+          if (!this.askWrite) {
+            if (this.slashOpen) { this.slashPanel() }
           Composer({
             draft: $draft,
-            placeholder: '给 LeoPhoneAgent 交代任务',
+            placeholder: '给 LeoBot 交代任务',
             running: this.active,
             ready: this.ready,
+            compact: this.availableHeight < 460,
             modelLabel: this.modelLine,
             showApproval: true,
             fullAuto: this.fullAuto,
+            approvalLabel: SensitiveToolGate.modeTitle(),
             files: this.pendingFiles,
             imagePath: this.pendingImagePath,
+            imagePaths: this.pendingImagePaths,
             listening: this.listening,
             returnSend: themeStore.returnSend,
             onSend: () => {
@@ -260,17 +291,17 @@ export struct LocalChatPane {
             onModel: () => {
               this.openModelSheet();
             },
-            onApproval: () => {
-              this.toggleFullAuto();
-            },
+            onApproval: () => { router.pushUrl({ url: 'pages/ApprovalPage' }); },
             onRemoveFile: (index: number) => {
               this.pendingFiles = this.pendingFiles.filter((_name: string, i: number) => i !== index);
             },
-            onRemoveImage: () => {
-              this.image = null;
-              this.pendingImagePath = '';
+            onRemoveImage: (index: number) => {
+              this.pendingImages = this.pendingImages.filter((_image: PendingImage, i: number) => i !== index);
+              this.image = this.pendingImages[0] ?? null; this.pendingImagePath = this.image?.path ?? '';
+              this.pendingImagePaths = this.pendingImages.map((image: PendingImage) => image.path); this.saveViewState();
             }
           })
+          }
         }
         .width('100%')
         .constraintSize({ maxWidth: Tokens.readable + 24 })
@@ -280,6 +311,9 @@ export struct LocalChatPane {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+    .onAreaChange((_old: Area, area: Area) => {
+      const height = Number.parseFloat(`${area.height}`); if (Number.isFinite(height) && height > 0) this.availableHeight = height;
+    })
     .bindSheet($$this.modelSheet, this.modelSheetView(), {
       height: SheetSize.MEDIUM,
       dragBar: true,
@@ -291,7 +325,7 @@ export struct LocalChatPane {
   header() {
     Stack() {
       Column() {
-        Text(themeStore.showTitle ? this.title : 'LeoPhoneAgent')
+        Text(themeStore.showTitle ? this.title : 'LeoBot')
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
           .fontColor(Tokens.text)
@@ -314,22 +348,22 @@ export struct LocalChatPane {
               .margin({ left: 3 })
           }
         }
-        .margin({ top: 2 })
+        .constraintSize({ minHeight: 28 })
         .onClick(() => {
           this.openModelSheet();
         })
       }
-      .padding({ left: 104, right: 104 })
+      .padding({ left: this.compact ? 16 : 52, right: 114 })
+      .width('100%')
       Row() {
         if (!this.compact) {
           Stack() {
             Sym({ name: 'chevron_left', dim: 20, color: Tokens.text })
           }
-          .width(40)
-          .height(40)
-          .onClick(() => {
-            router.back();
-          })
+          .width(44)
+          .height(44)
+          .accessibilityText('返回对话列表')
+          .onClick(() => { this.onBack(); })
         }
         Blank()
         Row() {
@@ -339,18 +373,20 @@ export struct LocalChatPane {
             .fontColor(this.thinking.length > 0 ? Tokens.accent : Tokens.muted)
             .margin({ left: 2 })
         }
-        .height(28)
-        .padding({ left: 8, right: 9 })
+        .height(44)
+        .padding({ left: 10, right: 10 })
         .backgroundColor(this.thinking.length > 0 ? Tokens.accentSoft : Tokens.surface)
         .borderRadius(14)
+        .accessibilityText('思考强度，' + thinkingLabel(this.thinking))
         .onClick(() => {
           this.thinking = nextThinking(this.thinking);
         })
         Stack() {
           Sym({ name: 'ellipsis_circle', dim: 22, color: Tokens.text })
         }
-        .width(40)
-        .height(40)
+        .width(44)
+        .height(44)
+        .accessibilityText('对话操作')
         .margin({ left: 2 })
         .bindMenu([
           {
@@ -358,6 +394,10 @@ export struct LocalChatPane {
             action: () => {
               this.newSession();
             }
+          },
+          {
+            value: this.memoryEnabled ? '关闭本会话记忆' : '开启本会话记忆',
+            action: () => this.toggleMemory()
           },
           {
             value: '压缩前面的对话',
@@ -400,12 +440,14 @@ export struct LocalChatPane {
           UserBubble({
             text: item.text,
             imagePath: this.lineImage(item.index),
+            imagePaths: this.lineImages(item.index),
             files: this.lineFiles(item.index)
           })
         }
         .width('100%')
         .margin({ top: 12, bottom: 4 })
       } else if (item.kind === 'assistant') {
+        if (this.lineImages(item.index).length) MediaGallery({ paths: this.lineImages(item.index), thumbnailSize: 160 }).width('100%').constraintSize({ maxWidth: 520 }).margin({ bottom: 12 })
         MarkdownText({ text: item.live ? this.liveText : item.text })
         if (item.partial) {
           Text('没说完')
@@ -416,9 +458,7 @@ export struct LocalChatPane {
         if (item.last) {
           ReplyActions({
             regenerate: this.isLatest(item),
-            onCopy: () => {
-              this.copyText(item.text);
-            },
+            onCopy: () => this.copyText(item.text),
             onSpeak: () => {
               this.speak(item.text);
             },
@@ -469,8 +509,8 @@ export struct LocalChatPane {
           .fontColor(Tokens.text)
           .margin({ left: 4 })
       }
-      .height(32)
-      .padding({ left: 12, right: 12 })
+      .height(44)
+      .padding({ left: 14, right: 14 })
       .backgroundColor(Tokens.card)
       .borderRadius(16)
       .shadow({ radius: 10, color: '#26000000', offsetY: 2 })
@@ -484,8 +524,9 @@ export struct LocalChatPane {
         Stack() {
           Sym({ name: 'arrow_down', dim: 16, color: Tokens.text })
         }
-        .width(36)
-        .height(36)
+        .width(44)
+        .height(44)
+        .accessibilityText('回到最新消息')
         .backgroundColor(Tokens.card)
         .borderRadius(18)
         .border({ width: Tokens.hairline, color: Tokens.separator })
@@ -500,7 +541,7 @@ export struct LocalChatPane {
   }
 
   @Builder
-  approvalCard() {
+  approvalCard(ticket: string) {
     Column() {
       Row() {
         Sym({ name: 'hand', dim: 15, color: Tokens.warn })
@@ -509,31 +550,26 @@ export struct LocalChatPane {
           .fontWeight(FontWeight.Medium)
           .fontColor(Tokens.text)
           .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .margin({ left: 6 })
+          .copyOption(CopyOptions.LocalDevice)
+          .margin({ left: 8 })
           .layoutWeight(1)
+        if (this.listening) IconButton({ icon: 'mic_fill', label: '结束语音输入', selected: true, onTap: () => this.toggleListen() })
       }
       .width('100%')
+      Scroll() {
+        Text(this.askDetails).fontSize(12.5).lineHeight(19).fontFamily('monospace').fontColor(Tokens.text)
+          .copyOption(CopyOptions.LocalDevice).width('100%').padding(12)
+      }.height(Math.max(60, Math.min(160, this.availableHeight * 0.25))).width('100%').backgroundColor(Tokens.surface).borderRadius(12)
+        .scrollBar(BarState.Auto).margin({ top: 10 })
       Row() {
-        this.cardButton('允许一次', true, () => {
-          this.allowWrite(false);
-        })
-        this.cardButton('本次会话允许', false, () => {
-          this.allowWrite(true);
-        })
-        this.cardButton('拒绝', false, () => {
-          this.denyWrite(false);
-        })
+        this.cardButton('允许一次', true, this.approvalAction('once', ticket))
+        this.cardButton('本会话同操作允许', false, this.approvalAction('session', ticket))
+        this.cardButton('拒绝', false, this.approvalAction('deny', ticket))
       }
       .width('100%')
       .margin({ top: 10 })
-      Text('拒绝并停止任务')
-        .fontSize(13)
-        .fontColor(Tokens.danger)
-        .margin({ top: 10 })
-        .onClick(() => {
-          this.denyWrite(true);
-        })
+      ActionButton({ label: '拒绝并停止任务', variant: 'quiet', fullWidth: false, onTap: this.approvalAction('stop', ticket) })
+        .margin({ top: 4 })
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
@@ -547,19 +583,8 @@ export struct LocalChatPane {
 
   @Builder
   cardButton(label: string, primary: boolean, tap: () => void) {
-    Text(label)
-      .fontSize(14)
-      .fontWeight(FontWeight.Medium)
-      .fontColor(primary ? '#FFFFFF' : Tokens.text)
-      .textAlign(TextAlign.Center)
-      .height(36)
-      .layoutWeight(1)
-      .backgroundColor(primary ? Tokens.accent : Tokens.chip)
-      .borderRadius(18)
-      .margin({ right: 8 })
-      .onClick(() => {
-        tap();
-      })
+    ActionButton({ label: label, variant: primary ? 'primary' : 'secondary', fullWidth: false, onTap: tap })
+      .layoutWeight(1).margin({ right: 6 })
   }
 
   @Builder
@@ -571,18 +596,7 @@ export struct LocalChatPane {
         .fontColor(Tokens.text)
         .layoutWeight(1)
         .margin({ left: 8 })
-      Text('继续')
-        .fontSize(13)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#FFFFFF')
-        .padding({ left: 14, right: 14, top: 6, bottom: 6 })
-        .backgroundColor(Tokens.warn)
-        .borderRadius(14)
-        .onClick(() => {
-          if (this.run) {
-            this.run.resume(this.thinking);
-          }
-        })
+      ActionButton({ label: '继续', variant: 'primary', fullWidth: false, onTap: () => { if (this.run) this.run.resume(this.thinking); } })
     }
     .width('100%')
     .padding({ left: 12, right: 10, top: 8, bottom: 8 })
@@ -635,7 +649,7 @@ export struct LocalChatPane {
                 .fontWeight(FontWeight.Medium)
                 .fontColor(Tokens.text)
                 .layoutWeight(1)
-              if (providerStore.activeId === row.id) {
+              if (this.selectedProviderId === row.id) {
                 Text('当前')
                   .fontSize(12)
                   .fontColor(Tokens.accent)
@@ -657,12 +671,12 @@ export struct LocalChatPane {
                     .layoutWeight(1)
                     .maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  if (providerStore.activeId === row.id && row.model === id) {
+                  if (this.selectedProviderId === row.id && this.selectedModelId === id) {
                     Sym({ name: 'checkmark', dim: 14, color: Tokens.accent })
                   }
                 }
                 .width('100%')
-                .height(42)
+                .height(44)
                 .padding({ left: 12 })
                 .onClick(() => {
                   this.useSlot(row.id, id);
@@ -687,20 +701,8 @@ export struct LocalChatPane {
   emptyWorkspace() {
     Scroll() {
       Column() {
-        Stack() {
-          Column()
-            .width(this.compact ? Tokens.heroCompact : Tokens.hero)
-            .height(this.compact ? Tokens.heroCompact : Tokens.hero)
-            .borderRadius(this.compact ? 16 : Tokens.heroRadius)
-            .linearGradient({
-              angle: 135,
-              colors: [[Tokens.heroA, 0], [Tokens.heroB, 1]]
-            })
-          Sym({ name: 'wand_and_stars_fill', dim: this.compact ? 24 : 32, color: '#FFFFFF' })
-        }
-        .width(this.compact ? Tokens.heroCompact : Tokens.hero)
-        .height(this.compact ? Tokens.heroCompact : Tokens.hero)
-        .margin({ bottom: 16 })
+        Image(Tokens.dark ? $r('app.media.leobot_mark_dark') : $r('app.media.leobot_mark'))
+          .width(this.compact ? 52 : 72).height(this.compact ? 52 : 72).objectFit(ImageFit.Contain).margin({ bottom: 16 })
         Text(Copy.readyTitle)
           .fontSize(this.compact ? 21 : 24)
           .fontWeight(FontWeight.Bold)
@@ -739,7 +741,7 @@ export struct LocalChatPane {
         Sym({ name: icon, dim: 16, color: color })
       }
       .width(32)
-      .height(32)
+      .height(44)
       .backgroundColor(`#29${color.substring(1)}`)
       .borderRadius(10)
       Text(title)
@@ -781,8 +783,21 @@ export struct LocalChatPane {
   }
 
   private refreshSlot(): void {
-    const row = providerStore.active();
-    this.modelLine = row ? (row.model.length > 0 ? row.model : `${row.label} · 还没选模型`) : '';
+    const mine = this.currentId;
+    if (!mine && this.modelPicked) return;
+    sessionStore.get(getContext(this) as common.UIAbilityContext, mine).then((session) => {
+      if (mine !== this.currentId) return;
+      const slot = session && session.modelQueue.length > 0 ? session.modelQueue[0] : null;
+      const row = providerStore.active();
+      const group = providerStore.groups.find((item: ModelGroup) => item.id === providerStore.activeGroupId);
+      if (!mine && !this.modelPicked && group?.strategy === 'loadBalance') {
+        this.selectedProviderId = ''; this.selectedModelId = ''; this.modelLine = '发送时自动选模'; return;
+      }
+      const displaySlot = slot ?? (group ? providerStore.queue('draft')[0] : null);
+      this.selectedProviderId = displaySlot ? displaySlot.instanceId : (row ? row.id : '');
+      this.selectedModelId = displaySlot ? displaySlot.model : (row ? row.model : '');
+      this.modelLine = session && session.unresolvedModelId ? `${session.unresolvedModelId} · 待绑定` : this.selectedModelId;
+    });
   }
 
   private openModelSheet(): void {
@@ -790,22 +805,22 @@ export struct LocalChatPane {
       return;
     }
     this.pickerRows = providerStore.instances.slice();
-    this.pickerOpenId = providerStore.activeId;
+    this.pickerOpenId = this.selectedProviderId;
     this.modelSheet = true;
   }
 
-  private slotModels(row: ProviderInstance): string[] {
-    if (row.models.length > 0) {
-      return row.models;
-    }
-    return row.model.length > 0 ? [row.model] : [];
-  }
+  private slotModels(row: ProviderInstance): string[] { return providerStore.visibleModels(row); }
 
   private useSlot(id: string, model: string): void {
     const ctx = getContext(this) as common.UIAbilityContext;
-    providerStore.setActiveModel(ctx, id, model).then(() => {
+    if (this.active || this.sending || this.run?.submitting) { this.status = '请先停止当前任务再切换模型'; return; }
+    const slot = new FailoverSlot(); slot.instanceId = id; slot.model = model;
+    const selected = this.currentId ? sessionStore.bindModels(ctx, this.currentId, [slot]) : Promise.resolve();
+    selected.then(() => {
+      this.modelPicked = true; this.selectedProviderId = id; this.selectedModelId = model; this.modelLine = model;
+      this.saveViewState();
       this.configured = providerStore.configured();
-      this.refreshSlot();
+      if (this.currentId) this.refreshSlot();
       this.modelSheet = false;
       this.status = this.configured ? '空闲' : '未配置 AI 服务商';
     }).catch((err: Error) => {
@@ -831,13 +846,14 @@ export struct LocalChatPane {
 
   private agentName(): string {
     const name = soulStore.name();
-    return name.length > 0 ? name : 'LeoPhoneAgent';
+    return name.length > 0 ? name : 'LeoBot';
   }
 
   private boot(): void {
     this.alive = true;
     this.currentId = this.sessionId;
     const ctx = getContext(this) as common.UIAbilityContext;
+    ChatViewState.initialize(ctx); this.restoreViewState();
     Promise.all([
       providerStore.ensureLoaded(ctx),
       sessionStore.ensureLoaded(ctx),
@@ -859,7 +875,15 @@ export struct LocalChatPane {
       }
       if (!this.currentId) {
         this.status = this.configured ? '空闲' : '未配置 AI 服务商';
-        this.title = 'LeoPhoneAgent';
+        this.title = 'LeoBot';
+        if (!this.draft && this.pendingFiles.length === 0 && !this.image) {
+          const mine = this.currentId;
+          ShareInbox.peek(ctx).then((shared) => {
+            if (!shared || !this.alive || this.currentId !== mine || this.draft || this.pendingFiles.length > 0 || this.image) return;
+            this.draft = shared.text; this.pendingFiles = shared.files.slice(); this.saveViewState(); ChatViewState.flushOrThrow();
+            ShareInbox.clear(ctx, shared.id).catch((err: Error) => { this.status = err.message; });
+          }).catch((err: Error) => { this.status = err.message; });
+        }
         return;
       }
       this.attach(ctx, this.currentId);
@@ -879,11 +903,15 @@ export struct LocalChatPane {
     run.load().then(() => {
       if (this.run === run) {
         this.sync();
-        this.followTail(true);
+        const view = ChatViewState.get(id);
+        if (view.nearBottom) this.followTail(true);
+        else setTimeout(() => {
+          if (this.alive && this.currentId === id) this.chatScroller.scrollTo({ xOffset: 0, yOffset: view.offset });
+        }, 30);
         const first = LocalChatLaunch.first;
         if (first && first.sessionId === id) {
           LocalChatLaunch.first = null;
-          run.send(first.text, first.image, first.files, this.thinking);
+          run.send(first.text, first.image, first.files, this.thinking, first.submissionId, first.images);
         }
       }
     }).catch((err: Error) => {
@@ -920,12 +948,18 @@ export struct LocalChatPane {
       this.liveText = tail !== undefined && tail.live ? tail.text : '';
     }
     this.shown = run.lines;
+    if (run.actualModel) {
+      this.modelLine = run.actualModel;
+    }
     this.status = run.status;
     this.title = run.title;
-    this.active = run.active;
+    this.active = run.active; this.memoryEnabled = run.memoryEnabled;
     this.interrupted = run.interrupted;
+    if (!this.askWrite && run.askWrite) inputMethod.getController().stopInputSession().catch(() => {});
     this.askWrite = run.askWrite;
     this.askTitle = run.askWrite ? run.writeAskTitle() : '';
+    this.askDetails = run.askWrite ? run.writeAskDetails() : '';
+    this.askTicket = run.askWrite ? run.approvalToken() : '';
     if (grew && !this.nearBottom && !mine) {
       this.unseen = true;
     }
@@ -955,6 +989,11 @@ export struct LocalChatPane {
     this.openTurns = this.openTurns.indexOf(turn) >= 0 ? this.openTurns.filter((t: number) => t !== turn) :
       this.openTurns.concat([turn]);
     this.items = chatItems(textLines(this.lines), this.active || this.askWrite, this.openTurns, !themeStore.toolPreview);
+  }
+
+  private lineImages(index: number): string[] {
+    if (index < 0 || index >= this.lines.length) return [];
+    const line = this.lines[index]; return line.images.length ? line.images.map((image: PendingImage) => image.path).filter((path: string) => path.length > 0) : (line.imagePath ? [line.imagePath] : []);
   }
 
   private lineImage(index: number): string {
@@ -1003,6 +1042,12 @@ export struct LocalChatPane {
   }
 
   private async send(): Promise<void> {
+    if (this.sending || this.active || this.run?.submitting) return;
+    this.sending = true;
+    try { await this.sendDraft(); } finally { this.sending = false; }
+  }
+
+  private async sendDraft(): Promise<void> {
     const text = this.draft.trim();
     if (!text && !this.image && this.pendingFiles.length === 0) {
       return;
@@ -1013,7 +1058,13 @@ export struct LocalChatPane {
     if (!this.currentId || !run) {
       try {
         const session = await sessionStore.create(ctx);
-        this.currentId = session.id;
+        const previousDraft = this.currentId; this.currentId = session.id;
+        ChatViewState.moveDraft(previousDraft, session.id);
+        await sessionStore.setMemoryEnabled(ctx, session.id, this.memoryEnabled);
+        if (this.modelPicked && this.selectedProviderId && this.selectedModelId) {
+          const slot = new FailoverSlot(); slot.instanceId = this.selectedProviderId; slot.model = this.selectedModelId;
+          await sessionStore.bindModels(ctx, session.id, [slot]);
+        }
         LocalChatLaunch.sessionId = session.id;
         run = this.attach(ctx, session.id);
         await run.load();
@@ -1024,11 +1075,11 @@ export struct LocalChatPane {
     }
     const image = this.image;
     const files = this.pendingFiles;
-    this.draft = '';
-    this.image = null;
-    this.pendingFiles = [];
-    this.pendingImagePath = '';
-    await run.send(text, image, files, this.thinking);
+    const voice = ChatViewState.get(this.currentId);
+    voice.voiceGeneration += 1; if (voice.stopListen) voice.stopListen(); voice.stopListen = null; voice.listening = false; this.listening = false;
+    this.saveViewState(); const submission = ChatViewState.beginSubmission(this.currentId);
+    await run.send(text, image, files, this.thinking, submission, this.pendingImages.slice());
+    this.onDraftTick();
   }
 
   private pickSlash(cmd: SlashCommand): void {
@@ -1046,20 +1097,7 @@ export struct LocalChatPane {
     }
   }
 
-  private async newSession(): Promise<void> {
-    const ctx = getContext(this) as common.UIAbilityContext;
-    try {
-      const session = await sessionStore.create(ctx);
-      this.currentId = session.id;
-      LocalChatLaunch.sessionId = session.id;
-      this.lines = [];
-      this.items = [];
-      this.openTurns = [];
-      this.attach(ctx, session.id);
-    } catch (err) {
-      this.status = `${err}`;
-    }
-  }
+  private async newSession(): Promise<void> { this.saveViewState(); this.onNew(); }
 
   private async exportSession(): Promise<void> {
     if (!this.currentId) {
@@ -1074,16 +1112,15 @@ export struct LocalChatPane {
     }
   }
 
-  private allowWrite(sessionWide: boolean): void {
-    if (this.run) {
-      this.run.allowWrite(sessionWide);
-    }
-  }
-
-  private denyWrite(stop: boolean): void {
-    if (this.run) {
-      this.run.denyWrite(stop);
-    }
+  private approvalAction(choice: string, ticket: string): () => void {
+    const run = this.run;
+    return () => {
+      if (!run || run !== this.run) return;
+      try {
+        if (choice === 'once' || choice === 'session') run.allowWrite(choice === 'session', ticket);
+        else run.denyWrite(choice === 'stop', ticket);
+      } catch (error) { this.status = `${error}`; }
+    };
   }
 
   private async toggleFullAuto(): Promise<void> {
@@ -1101,31 +1138,87 @@ export struct LocalChatPane {
     }
   }
 
-  private async toggleListen(): Promise<void> {
-    if (this.stopListen) {
-      this.stopListen();
-      this.stopListen = null;
-      this.listening = false;
-      return;
-    }
+  private saveViewState(): void {
+    const view = ChatViewState.get(this.currentId);
+    const textChanged = this.draft !== this.draftBaseline; const files = JSON.stringify(this.pendingFiles);
+    const filesChanged = files !== this.filesBaseline; const imageKey = this.pendingImagePaths.length ? this.pendingImagePaths.join('\n') : this.pendingImagePath; const imageChanged = imageKey !== this.imageBaseline;
+    if (textChanged || filesChanged || imageChanged) ChatViewState.cancelSubmission(this.currentId);
+    if (textChanged || view.draft === this.draftBaseline) { view.draft = this.draft; this.draftBaseline = this.draft; }
+    if (filesChanged || JSON.stringify(view.files) === this.filesBaseline) { view.files = this.pendingFiles.slice(); this.filesBaseline = files; }
+    if (imageChanged || (view.images.length ? view.images.map((image: PendingImage) => image.path).join('\n') : (view.image?.path ?? '')) === this.imageBaseline) { view.image = this.image; view.images = (this.pendingImages ?? []).slice(); this.imageBaseline = imageKey; }
+    view.thinking = this.thinking; view.providerId = this.selectedProviderId; view.modelId = this.selectedModelId; view.modelPicked = this.modelPicked; view.memoryEnabled = this.memoryEnabled;
+    view.openTurns = this.openTurns.slice(); view.nearBottom = this.nearBottom;
+    try { view.offset = this.chatScroller.currentOffset().yOffset; } catch (_err) {}
+    ChatViewState.persistSoon();
+  }
+
+  private restoreViewState(): void {
+    this.restoringDraft = true;
     try {
-      this.listening = true;
+      const view = ChatViewState.get(this.currentId);
+      this.draft = view.draft; this.pendingFiles = view.files.slice(); this.image = view.image;
+      this.pendingImages = view.images.length ? view.images.slice() : (view.image ? [view.image] : []);
+      this.pendingImagePaths = this.pendingImages.map((image: PendingImage) => image.path); this.pendingImagePath = view.image ? view.image.path : '';
+      this.thinking = view.thinking; this.selectedProviderId = view.providerId; this.selectedModelId = view.modelId;
+      this.modelPicked = view.modelPicked; this.memoryEnabled = view.memoryEnabled;
+      this.openTurns = view.openTurns.slice(); this.nearBottom = view.nearBottom;
+      this.listening = view.listening; this.stopListen = view.stopListen; this.appliedVoiceVersion = view.voiceVersion;
+      this.draftBaseline = this.draft; this.filesBaseline = JSON.stringify(this.pendingFiles); this.imageBaseline = this.pendingImagePaths.length ? this.pendingImagePaths.join('\n') : this.pendingImagePath;
+      if (view.submissionId) this.status = '上次发送状态未确认，草稿已保留，请核对任务记录';
+    } finally { this.restoringDraft = false; }
+  }
+
+  draftChanged(): void { if (this.alive && !this.restoringDraft) this.saveViewState(); }
+  onDraftTick(): void {
+    if (!this.alive || this.restoringDraft) return;
+    const view = ChatViewState.get(this.currentId);
+    this.restoringDraft = true;
+    try {
+      if (this.draft === this.draftBaseline) { this.draft = view.draft; this.draftBaseline = view.draft; }
+      if (JSON.stringify(this.pendingFiles) === this.filesBaseline) { this.pendingFiles = view.files.slice(); this.filesBaseline = JSON.stringify(view.files); }
+      if ((this.pendingImagePaths.length ? this.pendingImagePaths.join('\n') : this.pendingImagePath) === this.imageBaseline) {
+        this.image = view.image; this.pendingImages = view.images.slice(); this.pendingImagePaths = this.pendingImages.map((image: PendingImage) => image.path);
+        this.pendingImagePath = view.image?.path ?? ''; this.imageBaseline = this.pendingImagePaths.join('\n');
+      }
+    } finally { this.restoringDraft = false; }
+  }
+  onDraftFailure(): void { if (this.alive && this.draftError) this.status = this.draftError; }
+
+  onVoiceStateChanged(): void {
+    if (!this.alive) return;
+    const view = ChatViewState.get(this.currentId);
+    if (view.voiceVersion > this.appliedVoiceVersion) {
+      this.draft = view.draft; this.appliedVoiceVersion = view.voiceVersion;
+    }
+    this.listening = view.listening; this.stopListen = view.stopListen;
+    if (view.voiceError) this.status = view.voiceError;
+  }
+
+  private async toggleListen(): Promise<void> {
+    const view = ChatViewState.get(this.currentId);
+    if (view.stopListen) {
+      view.stopListen(); view.stopListen = null; view.listening = false; ChatViewState.changed(); return;
+    }
+    if (view.listening) { view.voiceGeneration += 1; view.listening = false; ChatViewState.changed(); return; }
+    const generation = ++view.voiceGeneration;
+    view.listening = true; view.voiceError = ''; ChatViewState.changed();
+    try {
       const ctx = getContext(this) as common.UIAbilityContext;
-      this.stopListen = await Voice.listen(ctx, (text: string, last: boolean) => {
-        this.draft = text;
-        if (last) {
-          this.listening = false;
-          this.stopListen = null;
-        }
+      const stop = await Voice.listen(ctx, (text: string, last: boolean) => {
+        if (view.voiceGeneration !== generation) return;
+        view.draft = text; view.voiceVersion += 1;
+        if (last) { view.listening = false; view.stopListen = null; }
+        ChatViewState.changed();
       }, (message: string) => {
-        this.status = message;
-        this.listening = false;
-        this.stopListen = null;
-      });
+        if (view.voiceGeneration !== generation) return;
+        view.voiceError = message; view.listening = false; view.stopListen = null; ChatViewState.changed();
+      }, () => view.voiceGeneration === generation);
+      if (view.listening) view.stopListen = stop;
+      else stop();
+      ChatViewState.changed();
     } catch (err) {
-      this.status = `${err}`;
-      this.listening = false;
-      this.stopListen = null;
+      if (view.voiceGeneration !== generation) return;
+      view.voiceError = `${err}`; view.listening = false; view.stopListen = null; ChatViewState.changed();
     }
   }
 
@@ -1144,24 +1237,31 @@ export struct LocalChatPane {
     });
   }
 
-  private copyText(text: string): void {
-    if (text.length === 0) {
-      return;
-    }
+  private async copyText(text: string): Promise<boolean> {
+    if (text.length === 0) return false;
     try {
-      pasteboard.getSystemPasteboard().setData(pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, text));
+      await pasteboard.getSystemPasteboard().setData(pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, text));
+      return true;
     } catch (err) {
-      this.status = `${err}`;
+      this.status = `复制失败，${err}`; return false;
     }
+  }
+
+  private async toggleMemory(): Promise<void> {
+    try {
+      const enabled = !this.memoryEnabled;
+      if (this.run) await this.run.setMemoryEnabled(enabled);
+      this.memoryEnabled = enabled; this.saveViewState();
+    } catch (error) { this.status = `${error}`; }
   }
 
   private async pickImage(): Promise<void> {
     try {
-      const image = await Attachments.pickImage(getContext(this) as common.UIAbilityContext);
-      if (image) {
-        this.image = image;
-        this.pendingImagePath = image.path;
-      }
+      const owner = this.currentId;
+      const images = await Attachments.pickImages(getContext(this) as common.UIAbilityContext, 16 - this.pendingImages.length);
+      if (!this.alive || this.currentId !== owner || !images.length) return;
+      this.pendingImages = this.pendingImages.concat(images); this.image = this.pendingImages[0] ?? null;
+      this.pendingImagePath = this.image?.path ?? ''; this.pendingImagePaths = this.pendingImages.map((image: PendingImage) => image.path); this.saveViewState();
     } catch (err) {
       this.status = err instanceof Error ? err.message : `${err}`;
     }

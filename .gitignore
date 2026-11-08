@@ -153,3 +153,11 @@ dist/
 src/ios/Configs/LocalRelay.xcconfig
 src/ios/LeoPhoneAgent.xcodeproj/project.pbxproj.lock
 .turbo/
+
+/src/harmony/app/entry/src/main/cpp/generated/
+
+/src/harmony/app/entry/src/main/cpp/ssh/generated/
+
+/src/harmony/app/entry/src/main/resources/rawfile/linux-rootfs.pack
+
+/src/harmony/app/entry/src/main/resources/rawfile/linux-packages.pack

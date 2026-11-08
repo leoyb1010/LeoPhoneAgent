@@ -1,3 +1,6 @@
+import { atomicWriteText } from './AtomicFile';
+import { SkillBundle } from '../sync/SkillBundle';
+import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
 import { SkillMeta, parseSkillMeta, skillsPromptBlock } from '../local/AgentText';
@@ -7,6 +10,8 @@ export class LocalSkill {
   name: string = '';
   body: string = '';
   enabled: boolean = true;
+  bundleDirectory: string = '';
+  bundleHash: string = '';
 }
 
 export class SkillStore {
@@ -24,6 +29,7 @@ export class SkillStore {
     try {
       const raw = fileIo.readTextSync(path);
       const parsed = JSON.parse(raw) as Object[];
+      if (!Array.isArray(parsed)) throw new Error('技能档案格式无效');
       this.skills = parsed.map((row: Object) => {
         const item = row as Record<string, Object>;
         const skill = new LocalSkill();
@@ -31,8 +37,11 @@ export class SkillStore {
         skill.name = `${item['name'] ?? ''}`;
         skill.body = `${item['body'] ?? ''}`;
         skill.enabled = item['enabled'] === false ? false : true;
+        skill.bundleDirectory = typeof item['bundleDirectory'] === 'string' && SkillBundle.safeDirectory(item['bundleDirectory'] as string) ? item['bundleDirectory'] as string : '';
+        skill.bundleHash = typeof item['bundleHash'] === 'string' && /^[a-f0-9]{64}$/.test(item['bundleHash'] as string) ? item['bundleHash'] as string : '';
         return skill;
       }).filter((row: LocalSkill) => row.id.length > 0 && row.name.length > 0);
+      this.jsonLoadFailed = false;
     } catch (err) {
       this.jsonLoadFailed = true;
       this.skills = [];
@@ -53,38 +62,35 @@ export class SkillStore {
     if (!trimmed) {
       throw new Error('技能名不能空(或在 SKILL.md 的 --- 头里写 name)');
     }
+    const next = JSON.parse(JSON.stringify(this.skills)) as LocalSkill[];
     let found = false;
-    for (let i = 0; i < this.skills.length; i++) {
-      if (this.skills[i].name === trimmed) {
-        this.skills[i].body = body;
+    for (let i = 0; i < next.length; i++) {
+      if (next[i].name === trimmed) {
+        next[i].body = body;
         found = true;
         break;
       }
     }
     if (!found) {
       const skill = new LocalSkill();
-      skill.id = `sk_${Date.now()}`;
+      skill.id = `sk_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
       skill.name = trimmed;
       skill.body = body;
       skill.enabled = true;
-      this.skills = this.skills.concat([skill]);
+      next.push(skill);
     }
-    await this.save(context);
+    this.commit(context, next);
   }
 
   async toggle(context: common.Context, id: string): Promise<void> {
-    for (let i = 0; i < this.skills.length; i++) {
-      if (this.skills[i].id === id) {
-        this.skills[i].enabled = !this.skills[i].enabled;
-        break;
-      }
-    }
-    await this.save(context);
+    const next = JSON.parse(JSON.stringify(this.skills)) as LocalSkill[];
+    const row = next.find((skill: LocalSkill) => skill.id === id); if (!row) throw new Error('技能已被删除');
+    row.enabled = !row.enabled; this.commit(context, next);
   }
-
-  async remove(context: common.Context, id: string): Promise<void> {
-    this.skills = this.skills.filter((row: LocalSkill) => row.id !== id);
-    await this.save(context);
+  async remove(context: common.Context, id: string): Promise<void> { this.commit(context, this.skills.filter((row: LocalSkill) => row.id !== id)); }
+  private commit(context: common.Context, next: LocalSkill[]): void {
+    if (this.jsonLoadFailed) throw new Error('技能档案读取失败，原文件已保留');
+    SkillStore.writeText(SkillStore.filePath(context), JSON.stringify(next)); this.skills = next;
   }
 
   meta(row: LocalSkill): SkillMeta {
@@ -110,6 +116,22 @@ export class SkillStore {
     return '';
   }
 
+  /** Resolve only enabled skill resources under a verified immutable tree. */
+  resourcePath(context: common.Context, raw: string): string {
+    const hit = raw.trim().match(/^\/?(?:var\/minis\/)?skills\/([^/]+)\/(.+)$/); if (!hit) return '';
+    const row = this.enabled().find((skill: LocalSkill) => skill.id === hit[1] || this.meta(skill).id === hit[1]);
+    return row ? SkillBundle.resource(context, row.bundleDirectory, hit[2]) : '';
+  }
+  resourceText(context: common.Context, raw: string): string {
+    const path = this.resourcePath(context, raw); if (!path) throw new Error('找不到已启用技能中的资源');
+    const file = fileIo.openSync(path, fileIo.OpenMode.READ_ONLY | fileIo.OpenMode.NOFOLLOW);
+    try {
+      const size = fileIo.statSync(file.fd).size; if (size > 256 * 1024) throw new Error('技能资源超过256KiB文本读取上限');
+      const buffer = new ArrayBuffer(size); if (fileIo.readSync(file.fd, buffer) !== size) throw new Error('技能资源读取不完整');
+      return util.TextDecoder.create('utf-8', { fatal: true }).decodeToString(new Uint8Array(buffer));
+    } finally { fileIo.closeSync(file); }
+  }
+
   private enabled(): LocalSkill[] {
     return this.skills.filter((row: LocalSkill) => row.enabled && row.body.trim().length > 0);
   }
@@ -119,13 +141,7 @@ export class SkillStore {
   }
 
   private static writeText(path: string, text: string): void {
-    const file = fileIo.openSync(path,
-      fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
-    try {
-      fileIo.writeSync(file.fd, text);
-    } finally {
-      fileIo.closeSync(file);
-    }
+    atomicWriteText(path, text);
   }
 }
 

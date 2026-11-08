@@ -4,6 +4,9 @@ import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 import {
+  ChatImage,
+  chatImages,
+  FailoverSlot,
   LocalChatMessage,
   LocalSessionArchive,
   bucketTitle,
@@ -31,6 +34,10 @@ export class LocalSession {
   pinned: boolean = false;
   /** 有一轮正在跑。App 被杀后读回来还是 true,就知道那一轮没做完(显示「继续」)。 */
   running: boolean = false;
+  modelQueue: FailoverSlot[] = [];
+  unresolvedModelId: string = '';
+  memoryEnabled: boolean = true;
+  modelGroupId: string = '';
   messages: LocalChatMessage[] = [];
 }
 
@@ -190,7 +197,7 @@ export class SessionStore {
 
   /** 对话编号只能是 create() 发的样子,外部链接带进来的编号不能拼成别的路径。 */
   static validId(id: string): boolean {
-    return /^s_\d+_\d+$/.test(id);
+    return /^(?:s_\d+_\d+|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i.test(id);
   }
 
   async create(context: common.Context, title: string = ''): Promise<LocalSession> {
@@ -232,6 +239,20 @@ export class SessionStore {
       session.archived = obj['archived'] === true;
       session.pinned = obj['pinned'] === true;
       session.running = obj['running'] === true;
+      session.memoryEnabled = obj['memoryEnabled'] !== false;
+      session.modelGroupId = typeof obj['modelGroupId'] === 'string' ? obj['modelGroupId'] as string : '';
+      session.unresolvedModelId = typeof obj['unresolvedModelId'] === 'string' ? obj['unresolvedModelId'] as string : '';
+      const queue = obj['modelQueue'];
+      if (Array.isArray(queue)) {
+        for (let i = 0; i < queue.length; i++) {
+          const entry = queue[i] as Record<string, Object>;
+          if (typeof entry['instanceId'] === 'string' && typeof entry['model'] === 'string') {
+            const slot = new FailoverSlot();
+            slot.instanceId = entry['instanceId'] as string; slot.model = entry['model'] as string; slot.fallbackAlways = entry['fallbackAlways'] === true;
+            if (slot.instanceId && slot.model) session.modelQueue.push(slot);
+          }
+        }
+      }
       const archive = sessionArchiveFromJson(obj, true);
       session.messages = archive ? archive.messages : [];
       const wrote = this.hydrateImages(context, session.messages);
@@ -247,6 +268,34 @@ export class SessionStore {
     }
   }
 
+  static memoryAllowed(context: common.Context, id: string): boolean {
+    if (!SessionStore.validId(id)) return true;
+    const path = SessionStore.sessionPath(context, id);
+    try {
+      if (!fileIo.accessSync(path)) return false;
+      const data = JSON.parse(fileIo.readTextSync(path)) as Record<string, Object>;
+      return data['memoryEnabled'] !== false;
+    } catch (_error) { return false; }
+  }
+
+  async setMemoryEnabled(context: common.Context, id: string, enabled: boolean): Promise<void> {
+    const session = await this.get(context, id); if (!session || this.jsonLoadFailed) throw new Error('会话档案不可写');
+    const before = session.memoryEnabled; const previousTime = session.updatedAt; session.memoryEnabled = enabled; session.updatedAt = Date.now();
+    try { this.persist(context, session); } catch (error) { session.memoryEnabled = before; session.updatedAt = previousTime; throw error as Error; }
+  }
+
+  async bindModels(context: common.Context, id: string, queue: FailoverSlot[], groupId: string = ''): Promise<void> {
+    const session = await this.get(context, id);
+    if (!session || this.jsonLoadFailed) throw new Error('这个对话不可写');
+    const previous = session.modelQueue; const previousTime = session.updatedAt; session.updatedAt = Date.now(); const previousGroup = session.modelGroupId; session.modelGroupId = groupId;
+    const unresolved = session.unresolvedModelId;
+    session.unresolvedModelId = '';
+    session.modelQueue = queue.map((entry: FailoverSlot) => {
+      const slot = new FailoverSlot(); slot.instanceId = entry.instanceId; slot.model = entry.model; slot.fallbackAlways = entry.fallbackAlways; return slot;
+    });
+    try { this.persist(context, session); } catch (err) { session.modelQueue = previous; session.updatedAt = previousTime; session.modelGroupId = previousGroup; session.unresolvedModelId = unresolved; throw err as Error; }
+  }
+
   async append(context: common.Context, id: string, role: string, text: string,
     imageB64: string = '', imageMime: string = '', imagePath: string = ''): Promise<void> {
     const line = new LocalChatMessage();
@@ -259,15 +308,16 @@ export class SessionStore {
   }
 
   /** 追加一条完整的消息(带 kind、附件清单)。 */
-  async appendLine(context: common.Context, id: string, line: LocalChatMessage): Promise<void> {
+  async appendLine(context: common.Context, id: string, line: LocalChatMessage, isCurrent: () => boolean = () => true): Promise<void> {
     const session = await this.get(context, id);
     if (!session) {
       throw new Error('对话不存在');
     }
+    if (!isCurrent()) return;
     this.assertWritable();
-    if (line.imagePath.length === 0) {
-      line.imagePath = SessionStore.writeImageB64(context, line.imageB64, line.imageMime);
-    }
+    line.images = chatImages(line.images, line.imageB64, line.imageMime, line.imagePath);
+    for (const media of line.images) if (!media.path) media.path = SessionStore.writeImageB64(context, media.b64, media.mime);
+    SessionStore.firstImage(line);
     if (line.at <= 0) {
       line.at = Date.now();
     }
@@ -301,10 +351,10 @@ export class SessionStore {
     await this.ensureLoaded(context);
   }
 
-  async replaceMessages(context: common.Context, session: LocalSession): Promise<void> {
+  async replaceMessages(context: common.Context, session: LocalSession, updateModified: boolean = true): Promise<void> {
     await this.ensureLoaded(context);
     this.assertWritable();
-    session.updatedAt = Date.now();
+    if (updateModified) session.updatedAt = Date.now();
     this.cache.set(session.id, session);
     this.upsertSummary(session);
     this.persist(context, session);
@@ -343,7 +393,7 @@ export class SessionStore {
 
   /** 删掉这条对话自己的图片;「复制对话」的副本和它共用图片文件,还有别的对话引用的就留着。 */
   private dropImages(context: common.Context, messages: LocalChatMessage[]): void {
-    const paths = messages.map((line: LocalChatMessage) => line.imagePath)
+    const paths = messages.flatMap((line: LocalChatMessage) => chatImages(line.images, line.imageB64, line.imageMime, line.imagePath).map((media: ChatImage) => media.path))
       .filter((path: string) => SessionStore.ownedImage(context, path));
     if (paths.length === 0) {
       return;
@@ -390,7 +440,15 @@ export class SessionStore {
     }
     const copy = await this.create(context);
     copy.title = `${src.title} 副本`;
-    copy.messages = src.messages.slice();
+    copy.modelQueue = src.modelQueue.slice(); copy.modelGroupId = src.modelGroupId;
+    copy.memoryEnabled = src.memoryEnabled; copy.unresolvedModelId = src.unresolvedModelId;
+    copy.messages = src.messages.map((row: LocalChatMessage) => {
+      const line = new LocalChatMessage(); line.role = row.role; line.text = row.text;
+      line.imageB64 = row.imageB64; line.imageMime = row.imageMime; line.imagePath = row.imagePath;
+      line.images = JSON.parse(JSON.stringify(chatImages(row.images, row.imageB64, row.imageMime, row.imagePath))) as ChatImage[];
+      line.kind = row.kind; line.count = row.count; line.at = row.at; line.files = row.files.slice();
+      line.syncPartsJson = row.syncPartsJson; line.syncText = row.syncText; line.syncId = ''; line.submissionId = ''; return line;
+    });
     copy.lastMessage = src.lastMessage;
     copy.updatedAt = Date.now();
     this.upsertSummary(copy);
@@ -436,7 +494,12 @@ export class SessionStore {
     for (let i = 0; i < archive.messages.length; i++) {
       const line = archive.messages[i];
       line.imagePath = '';
-      if (line.imageB64.length > 0) await SessionStore.validateImportedImage(line);
+      line.images = chatImages(line.images, line.imageB64, line.imageMime);
+      for (const media of line.images) {
+        media.path = ''; const validation = new LocalChatMessage(); validation.imageB64 = media.b64; validation.imageMime = media.mime;
+        if (media.b64) await SessionStore.validateImportedImage(validation);
+      }
+      SessionStore.firstImage(line);
     }
     const session = await this.create(context);
     session.title = archive.title;
@@ -448,55 +511,42 @@ export class SessionStore {
     return session;
   }
 
+  private static firstImage(line: LocalChatMessage): void {
+    const first = line.images[0]; line.imageB64 = first?.b64 ?? ''; line.imageMime = first?.mime ?? ''; line.imagePath = first?.path ?? '';
+  }
+
   private fillImageBytes(context: common.Context, messages: LocalChatMessage[]): void {
-    for (let i = 0; i < messages.length; i++) {
-      const line = messages[i];
-      if (line.imagePath.length > 0 && !SessionStore.ownedImage(context, line.imagePath)) {
-        line.imagePath = '';
-        line.imageB64 = '';
-      }
-      if (line.imageB64.length > 0 || line.imagePath.length === 0) {
-        continue;
-      }
-      if (!fileIo.accessSync(line.imagePath)) {
-        continue;
-      }
-      try {
-        const file = fileIo.openSync(line.imagePath, fileIo.OpenMode.READ_ONLY | fileIo.OpenMode.NOFOLLOW);
+    for (const line of messages) {
+      line.images = chatImages(line.images, line.imageB64, line.imageMime, line.imagePath);
+      for (const media of line.images) {
+        if (media.path && !SessionStore.ownedImage(context, media.path)) { media.path = ''; media.b64 = ''; }
+        if (media.b64 || !media.path || !fileIo.accessSync(media.path)) continue;
         try {
-          const stat = fileIo.statSync(file.fd);
-          if (!stat.isFile() || stat.size <= 0 || stat.size > SessionStore.MAX_IMAGE_BYTES) continue;
-          const buf = new ArrayBuffer(stat.size);
-          if (fileIo.readSync(file.fd, buf) !== stat.size) continue;
-          const helper = new util.Base64Helper();
-          line.imageB64 = helper.encodeToStringSync(new Uint8Array(buf));
-        } finally {
-          fileIo.closeSync(file);
-        }
-      } catch (_err) {
-        // keep the path; chat can still show the file
+          const file = fileIo.openSync(media.path, fileIo.OpenMode.READ_ONLY | fileIo.OpenMode.NOFOLLOW);
+          try {
+            const stat = fileIo.statSync(file.fd);
+            if (!stat.isFile() || stat.size <= 0 || stat.size > SessionStore.MAX_IMAGE_BYTES) continue;
+            const buf = new ArrayBuffer(stat.size);
+            if (fileIo.readSync(file.fd, buf) === stat.size) media.b64 = new util.Base64Helper().encodeToStringSync(new Uint8Array(buf));
+          } finally { fileIo.closeSync(file); }
+        } catch (_error) { /* A missing attachment leaves other images and text available. */ }
       }
+      SessionStore.firstImage(line);
     }
   }
 
   private hydrateImages(context: common.Context, messages: LocalChatMessage[]): boolean {
     let changed = false;
-    for (let i = 0; i < messages.length; i++) {
-      const line = messages[i];
-      if (SessionStore.ownedImage(context, line.imagePath)) {
-        continue;
+    for (const line of messages) {
+      line.images = chatImages(line.images, line.imageB64, line.imageMime, line.imagePath);
+      for (const media of line.images) {
+        if (SessionStore.ownedImage(context, media.path)) continue;
+        if (media.path) { media.path = ''; changed = true; }
+        if (!media.b64) continue;
+        media.path = SessionStore.writeImageB64(context, media.b64, media.mime);
+        if (media.path) changed = true;
       }
-      if (line.imagePath.length > 0) {
-        line.imagePath = '';
-        changed = true;
-      }
-      if (line.imageB64.length === 0) {
-        continue;
-      }
-      line.imagePath = SessionStore.writeImageB64(context, line.imageB64, line.imageMime);
-      if (line.imagePath.length > 0) {
-        changed = true;
-      }
+      SessionStore.firstImage(line);
     }
     return changed;
   }
@@ -509,7 +559,7 @@ export class SessionStore {
     const root = context.filesDir + '/chat-images';
     if (!path.startsWith(root + '/')) return false;
     const name = path.substring(root.length + 1);
-    if (!/^\d+(_\d+)?\.(jpg|png)$/.test(name)) return false;
+    if (!/^(?:\d+(_\d+)?|generated-[a-f0-9-]{32,36})\.(jpg|png)$/i.test(name)) return false;
     try {
       const dir = fileIo.lstatSync(root);
       const file = fileIo.lstatSync(path);
@@ -582,7 +632,11 @@ export class SessionStore {
       session.lastMessage = session.messages[session.messages.length - 1].text;
     }
     const held: string[] = [];
+    const mediaBytes: string[][] = [];
     for (let i = 0; i < session.messages.length; i++) {
+      const line = session.messages[i]; line.images = chatImages(line.images, line.imageB64, line.imageMime, line.imagePath);
+      mediaBytes.push(line.images.map((media: ChatImage) => media.b64));
+      for (const media of line.images) if (media.path) media.b64 = '';
       held.push(session.messages[i].imageB64);
       if (session.messages[i].imagePath.length > 0) {
         session.messages[i].imageB64 = '';
@@ -596,6 +650,7 @@ export class SessionStore {
     } finally {
       for (let i = 0; i < session.messages.length; i++) {
         session.messages[i].imageB64 = held[i];
+        for (let j = 0; j < session.messages[i].images.length; j++) session.messages[i].images[j].b64 = mediaBytes[i][j];
       }
     }
   }

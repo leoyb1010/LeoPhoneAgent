@@ -1,3 +1,5 @@
+import { mailToolSchemas } from './MailTools';
+import { extraToolSchemas } from './ExtraToolSchemas';
 import { util } from '@kit.ArkTS';
 
 export class PackedTurn {
@@ -5,12 +7,36 @@ export class PackedTurn {
   content: string = '';
 }
 
+export class ChatImage {
+  b64: string = '';
+  mime: string = 'image/jpeg';
+  path: string = '';
+  width: number = 0;
+  height: number = 0;
+  sourceId: string = '';
+  contentHash: string = '';
+  generated: boolean = false;
+}
+
+/** The array is canonical. The legacy first-image fields remain readable for old archives and callers. */
+export function chatImages(images: ChatImage[] = [], b64: string = '', mime: string = '', path: string = ''): ChatImage[] {
+  if (images.length > 0) return images;
+  if (!b64 && !path) return [];
+  const image = new ChatImage(); image.b64 = b64; image.mime = mime || 'image/jpeg'; image.path = path; return [image];
+}
+export function turnImages(turn: LoopTurn): ChatImage[] { return chatImages(turn.images, turn.imageB64, turn.imageMime).filter((image: ChatImage) => image.b64.length > 0); }
+
 export class LocalChatMessage {
+  submissionId: string = '';
+  syncId: string = '';
+  syncPartsJson: string = '';
+  syncText: string = '';
   role: string = 'user';
   text: string = '';
   imageB64: string = '';
   imageMime: string = '';
   imagePath: string = '';
+  images: ChatImage[] = [];
   /** '' 普通;summary 压缩摘要;resume 「继续」;partial 停下时没说完的回答。 */
   kind: string = '';
   /** 摘要替掉了多少条消息。 */
@@ -201,7 +227,22 @@ export function sessionArchiveFromJson(json: object, trustedPaths: boolean = fal
     text = text.trim();
     const imageB64 = `${item['imageB64'] ?? ''}`;
     const imagePath = trustedPaths ? `${item['imagePath'] ?? ''}` : '';
-    if (!role || (text.length === 0 && imageB64.length === 0 && imagePath.length === 0)) {
+    const media: ChatImage[] = []; const rawImages = item['images'];
+    if (Array.isArray(rawImages)) {
+      if (rawImages.length > 16) throw new Error('单条消息图片数量超过上限');
+      for (let j = 0; j < rawImages.length; j++) {
+        const raw = rawImages[j] as Record<string, Object>; if (!raw || typeof raw !== 'object') continue;
+        const image = new ChatImage(); image.b64 = typeof raw['b64'] === 'string' ? raw['b64'] as string : '';
+        image.mime = raw['mime'] === 'image/png' ? 'image/png' : 'image/jpeg';
+        image.path = trustedPaths && typeof raw['path'] === 'string' ? raw['path'] as string : '';
+        image.generated = trustedPaths && raw['generated'] === true;
+        image.width = Number(raw['width'] ?? 0); image.height = Number(raw['height'] ?? 0);
+        image.sourceId = trustedPaths && typeof raw['sourceId'] === 'string' ? raw['sourceId'] as string : '';
+        image.contentHash = trustedPaths && typeof raw['contentHash'] === 'string' ? raw['contentHash'] as string : '';
+        if (image.b64 || image.path) media.push(image);
+      }
+    }
+    if (!role || (text.length === 0 && imageB64.length === 0 && imagePath.length === 0 && media.length === 0)) {
       continue;
     }
     if (role !== 'user' && role !== 'assistant' && role !== 'system') {
@@ -212,11 +253,15 @@ export function sessionArchiveFromJson(json: object, trustedPaths: boolean = fal
     line.text = text.length > 0 ? text : '看这张图';
     line.imageB64 = imageB64;
     line.imageMime = `${item['imageMime'] ?? ''}`;
-    line.imagePath = imagePath;
+    line.imagePath = imagePath; line.images = chatImages(media, imageB64, line.imageMime, imagePath);
     const kind = `${item['kind'] ?? ''}`;
     line.kind = kind === 'summary' || kind === 'resume' || kind === 'partial' ? kind : '';
     line.count = Number(item['count'] ?? 0) || 0;
     line.at = Number(item['at'] ?? 0) || 0;
+    line.submissionId = trustedPaths && typeof item['submissionId'] === 'string' ? item['submissionId'] as string : '';
+    line.syncId = trustedPaths && typeof item['syncId'] === 'string' ? item['syncId'] as string : '';
+    line.syncPartsJson = trustedPaths && typeof item['syncPartsJson'] === 'string' ? item['syncPartsJson'] as string : '';
+    line.syncText = trustedPaths && typeof item['syncText'] === 'string' ? item['syncText'] as string : '';
     const files = item['files'];
     if (Array.isArray(files)) {
       for (let j = 0; j < files.length; j++) {
@@ -393,6 +438,7 @@ export class LoopTurn {
   calls: ToolCall[] = [];
   imageB64: string = '';
   imageMime: string = 'image/jpeg';
+  images: ChatImage[] = [];
 }
 
 /**
@@ -416,16 +462,12 @@ export function trimHistory(turns: LoopTurn[], maxChars: number): LoopTurn[] {
     turn.toolCallId = turns[i].toolCallId;
     turn.toolName = turns[i].toolName;
     turn.calls = turns[i].calls;
-    if (turns[i].imageB64.length > 0) {
-      if (images < HISTORY_IMAGE_KEEP) {
-        turn.imageB64 = turns[i].imageB64;
-        turn.imageMime = turns[i].imageMime;
-        images += 1;
-      } else {
-        turn.content = `${turn.content}\n(这里原来有一张图片,太早了没再发)`;
-      }
-    }
-    const cost = turn.content.length + (turn.imageB64.length > 0 ? IMAGE_CHAR_COST : 0);
+    const media = turnImages(turns[i]);
+    const keep = i === turns.length - 1 ? 16 : Math.max(0, HISTORY_IMAGE_KEEP - images);
+    turn.images = media.slice(0, keep); images += turn.images.length;
+    if (turn.images.length < media.length) turn.content += media.length - turn.images.length === 1 ? '\n(这里原来有一张图片,太早了没再发)' : `\n(更早的${media.length - turn.images.length}张图片已省略)`;
+    if (turn.images.length) { turn.imageB64 = turn.images[0].b64; turn.imageMime = turn.images[0].mime; }
+    const cost = turn.content.length + turn.images.length * IMAGE_CHAR_COST;
     if (out.length > 0 && used + cost > maxChars) {
       break;
     }
@@ -479,19 +521,17 @@ export function htmlToText(raw: string): string {
     .trim();
 }
 
-export function sandboxFileName(path: string): string {
+export function sandboxFileName(path: string, allowRoot: boolean = false): string {
   let raw = path.trim().replace(/^\/+/, '');
-  if (raw.startsWith('workspace/')) {
-    raw = raw.substring('workspace/'.length);
+  for (const prefix of ['var/minis/workspace', 'mnt/workspace', 'workspace']) {
+    if (raw === prefix || raw === prefix + '/') { raw = ''; break; }
+    if (raw.startsWith(prefix + '/')) { raw = raw.substring(prefix.length + 1); break; }
   }
-  if (raw.startsWith('var/minis/workspace/')) {
-    raw = raw.substring('var/minis/workspace/'.length);
-  }
-  if (!raw) {
-    throw new Error('文件名不能空');
-  }
-  if (raw.indexOf('..') >= 0 || raw.indexOf('/') >= 0 || raw.indexOf('\\') >= 0) {
-    throw new Error('只允许沙箱根目录下的文件名');
+  if (allowRoot) raw = raw.replace(/\/+$/, '');
+  if (!raw && allowRoot) return '';
+  if (!raw) throw new Error('文件名不能空');
+  if (raw.length > 4096 || /[\\\x00-\x1f\x7f]/.test(raw) || raw.split('/').some((part: string) => !part || part === '.' || part === '..')) {
+    throw new Error('只允许工作区内的相对文件路径');
   }
   return raw;
 }
@@ -602,9 +642,7 @@ export function wireMessagesJson(turns: LoopTurn[], systemPrompt: string): strin
     const turn = turns[i];
     if (turn.role === 'tool') {
       rows.push(`{"role":"tool","tool_call_id":${JSON.stringify(turn.toolCallId)},"content":${JSON.stringify(turn.content)}}`);
-      if (turn.imageB64.length > 0) {
-        images.push(`{"type":"image_url","image_url":{"url":"data:${turn.imageMime};base64,${turn.imageB64}"}}`);
-      }
+      for (const image of turnImages(turn)) images.push(`{"type":"image_url","image_url":{"url":${JSON.stringify('data:' + image.mime + ';base64,' + image.b64)}}}`);
       continue;
     }
     flushImages();
@@ -615,8 +653,10 @@ export function wireMessagesJson(turns: LoopTurn[], systemPrompt: string): strin
         calls.push(`{"id":${JSON.stringify(call.id)},"type":"function","function":{"name":${JSON.stringify(call.name)},"arguments":${JSON.stringify(call.args)}}}`);
       }
       rows.push(`{"role":"assistant","content":${JSON.stringify(turn.content)},"tool_calls":[${calls.join(',')}]}`);
-    } else if (turn.imageB64.length > 0) {
-      rows.push(`{"role":${JSON.stringify(turn.role)},"content":[{"type":"text","text":${JSON.stringify(turn.content)}},{"type":"image_url","image_url":{"url":"data:${turn.imageMime};base64,${turn.imageB64}"}}]}`);
+    } else if (turnImages(turn).length > 0) {
+      const content: string[] = [`{"type":"text","text":${JSON.stringify(turn.content)}}`];
+      for (const image of turnImages(turn)) content.push(`{"type":"image_url","image_url":{"url":${JSON.stringify('data:' + image.mime + ';base64,' + image.b64)}}}`);
+      rows.push(`{"role":"user","content":[${content.join(',')}]}`);
     } else {
       const packed = new PackedTurn();
       packed.role = turn.role;
@@ -631,9 +671,10 @@ export function wireMessagesJson(turns: LoopTurn[], systemPrompt: string): strin
 /** 跟在工具结果后面的那张图前面的一句说明。 */
 export const TOOL_IMAGE_CAPTION: string = 'Image returned by read_image:';
 
-export function localToolSchemaJson(): string {
-  return '[' +
-    '{"type":"function","function":{"name":"file_list","description":"List files in the Harmony app sandbox workspace.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"}},"required":["tool_title"]}}},' +
+export function localToolSchemaJson(includeMemory: boolean = true): string {
+  const schema = '[' + extraToolSchemas().slice(1, -1) + ',' + mailToolSchemas().slice(1, -1) + ',' +
+    '{"type":"function","function":{"name":"subagent","description":"Delegate a self-contained research or analysis task. The child uses unattended permissions and returns its result. Child agents cannot delegate again.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"prompt":{"type":"string","maxLength":16000}},"required":["tool_title","prompt"]}}},' +
+    '{"type":"function","function":{"name":"file_list","description":"List files and directories in the local workspace. Optional path selects a nested workspace directory.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"path":{"type":"string"}},"required":["tool_title"]}}},' +
     '{"type":"function","function":{"name":"file_read","description":"Read a text file from the Harmony app sandbox. Head pages that still have unread lines append next_offset.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"path":{"type":"string"},"offset":{"type":"integer"},"lines":{"type":"integer"},"max_length":{"type":"integer"},"direction":{"type":"string"}},"required":["tool_title","path"]}}},' +
     '{"type":"function","function":{"name":"read_image","description":"Look at an image file from the sandbox (files the user attached, downloads). The image is returned to you.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"path":{"type":"string"}},"required":["tool_title","path"]}}},' +
     '{"type":"function","function":{"name":"file_write","description":"Write a text file in the Harmony app sandbox. User must approve writes.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"path":{"type":"string"},"content":{"type":"string"}},"required":["tool_title","path","content"]}}},' +
@@ -643,7 +684,7 @@ export function localToolSchemaJson(): string {
     '{"type":"function","function":{"name":"open_url","description":"Open an http(s) link in the in-app browser.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"url":{"type":"string"}},"required":["tool_title","url"]}}},' +
     '{"type":"function","function":{"name":"web_fetch","description":"Download a public https page as text.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"url":{"type":"string"}},"required":["tool_title","url"]}}},' +
     '{"type":"function","function":{"name":"web_search","description":"Search the web (Bing, then DuckDuckGo) and get titles, links and snippets. Read a result with web_fetch.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"query":{"type":"string"},"count":{"type":"integer"}},"required":["tool_title","query"]}}},' +
-    '{"type":"function","function":{"name":"browser_use","description":"Open or manage up to 3 in-app browser tabs.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"action":{"type":"string"},"url":{"type":"string"},"tab_id":{"type":"string"}},"required":["tool_title","action"]}}},' +
+    '{"type":"function","function":{"name":"browser_use","description":"Manage in-app tabs and interact with the visible browser DOM: get_text, get_backbone, click, fill, scroll, evaluate, back, forward, reload.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"action":{"type":"string"},"url":{"type":"string"},"tab_id":{"type":"string"},"selector":{"type":"string"},"text":{"type":"string"},"direction":{"type":"string"},"amount":{"type":"number"},"script":{"type":"string"}},"required":["tool_title","action"]}}},' +
     '{"type":"function","function":{"name":"mcp_tools","description":"List the tools of a configured MCP server with their input schemas.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"server":{"type":"string"}},"required":["tool_title","server"]}}},' +
     '{"type":"function","function":{"name":"mcp_call","description":"Call a tool on a configured MCP server. Look up tool names and input schemas with mcp_tools first.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"server":{"type":"string"},"name":{"type":"string"},"arguments":{"type":"string","description":"JSON object with the tool arguments"}},"required":["tool_title","server","name"]}}},' +
     // 手机能力(PhoneTools.ets)。安卓、iOS 用沙箱里的设备命令做同样的事。
@@ -658,10 +699,16 @@ export function localToolSchemaJson(): string {
     '{"type":"function","function":{"name":"location","description":"Current location of this phone: coordinates and, when available, the place name.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"}},"required":["tool_title"]}}},' +
     '{"type":"function","function":{"name":"weather","description":"Current weather and a 3-day forecast. Uses the phone location unless a city is given.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"city":{"type":"string"}},"required":["tool_title"]}}}' +
     ']';
+  if (includeMemory) return schema;
+  const rows = JSON.parse(schema) as Record<string, Object>[];
+  return JSON.stringify(rows.filter((row: Record<string, Object>) => {
+    const method = row['function'] as Record<string, Object>;
+    return ['memory_get', 'memory_write', 'memory_recall'].indexOf(`${method['name'] ?? ''}`) < 0;
+  }));
 }
 
-export function anthropicToolSchemaJson(): string {
-  const rows = JSON.parse(localToolSchemaJson()) as Object[];
+export function anthropicToolSchemaJson(includeMemory: boolean = true): string {
+  const rows = JSON.parse(localToolSchemaJson(includeMemory)) as Object[];
   const out: string[] = [];
   for (let i = 0; i < rows.length; i++) {
     const item = rows[i] as Record<string, Object>;
@@ -671,8 +718,8 @@ export function anthropicToolSchemaJson(): string {
   return `[${out.join(',')}]`;
 }
 
-export function geminiToolSchemaJson(): string {
-  const rows = JSON.parse(localToolSchemaJson()) as Object[];
+export function geminiToolSchemaJson(includeMemory: boolean = true): string {
+  const rows = JSON.parse(localToolSchemaJson(includeMemory)) as Object[];
   const out: string[] = [];
   for (let i = 0; i < rows.length; i++) {
     const item = rows[i] as Record<string, Object>;
@@ -766,9 +813,10 @@ export function anthropicMessagesJson(turns: LoopTurn[]): string {
   for (let i = 0; i < turns.length; i++) {
     const turn = turns[i];
     if (turn.role === 'tool') {
-      if (turn.imageB64.length > 0) {
-        const media = turn.imageMime.length > 0 ? turn.imageMime : 'image/jpeg';
-        tools.push(`{"type":"tool_result","tool_use_id":${JSON.stringify(turn.toolCallId)},"content":[{"type":"text","text":${JSON.stringify(turn.content)}},{"type":"image","source":{"type":"base64","media_type":${JSON.stringify(media)},"data":${JSON.stringify(turn.imageB64)}}}]}`);
+      if (turnImages(turn).length > 0) {
+        const content: string[] = [`{"type":"text","text":${JSON.stringify(turn.content)}}`];
+        for (const image of turnImages(turn)) content.push(`{"type":"image","source":{"type":"base64","media_type":${JSON.stringify(image.mime)},"data":${JSON.stringify(image.b64)}}}`);
+        tools.push(`{"type":"tool_result","tool_use_id":${JSON.stringify(turn.toolCallId)},"content":[${content.join(',')}]}`);
       } else {
         tools.push(`{"type":"tool_result","tool_use_id":${JSON.stringify(turn.toolCallId)},"content":${JSON.stringify(turn.content)}}`);
       }
@@ -792,9 +840,10 @@ export function anthropicMessagesJson(turns: LoopTurn[]): string {
         blocks.push(`{"type":"tool_use","id":${JSON.stringify(call.id)},"name":${JSON.stringify(call.name)},"input":${input}}`);
       }
       rows.push(`{"role":"assistant","content":[${blocks.join(',')}]}`);
-    } else if (turn.imageB64.length > 0) {
-      const media = turn.imageMime.length > 0 ? turn.imageMime : 'image/jpeg';
-      rows.push(`{"role":"user","content":[{"type":"text","text":${JSON.stringify(turn.content)}},{"type":"image","source":{"type":"base64","media_type":${JSON.stringify(media)},"data":${JSON.stringify(turn.imageB64)}}}]}`);
+    } else if (turnImages(turn).length > 0) {
+      const content: string[] = [`{"type":"text","text":${JSON.stringify(turn.content)}}`];
+      for (const image of turnImages(turn)) content.push(`{"type":"image","source":{"type":"base64","media_type":${JSON.stringify(image.mime)},"data":${JSON.stringify(image.b64)}}}`);
+      rows.push(`{"role":"user","content":[${content.join(',')}]}`);
     } else {
       rows.push(`{"role":${JSON.stringify(turn.role === 'assistant' ? 'assistant' : 'user')},"content":${JSON.stringify(turn.content)}}`);
     }
@@ -816,8 +865,8 @@ export function geminiContentsJson(turns: LoopTurn[]): string {
     const turn = turns[i];
     if (turn.role !== 'tool') {
       flushImages();
-    } else if (turn.imageB64.length > 0) {
-      images.push(`{"inlineData":{"mimeType":${JSON.stringify(turn.imageMime.length > 0 ? turn.imageMime : 'image/jpeg')},"data":${JSON.stringify(turn.imageB64)}}}`);
+    } else {
+      for (const image of turnImages(turn)) images.push(`{"inlineData":{"mimeType":${JSON.stringify(image.mime)},"data":${JSON.stringify(image.b64)}}}`);
     }
     if (turn.role === 'tool') {
       const replyName = turn.toolName.length > 0 ? turn.toolName : turn.toolCallId;
@@ -843,9 +892,10 @@ export function geminiContentsJson(turns: LoopTurn[]): string {
         parts.push(`{"functionCall":{"name":${JSON.stringify(call.name)},"args":${args}}}`);
       }
       rows.push(`{"role":"model","parts":[${parts.join(',')}]}`);
-    } else if (turn.imageB64.length > 0) {
-      const media = turn.imageMime.length > 0 ? turn.imageMime : 'image/jpeg';
-      rows.push(`{"role":"user","parts":[{"text":${JSON.stringify(turn.content)}},{"inlineData":{"mimeType":${JSON.stringify(media)},"data":${JSON.stringify(turn.imageB64)}}}]}`);
+    } else if (turnImages(turn).length > 0) {
+      const parts: string[] = [`{"text":${JSON.stringify(turn.content)}}`];
+      for (const image of turnImages(turn)) parts.push(`{"inlineData":{"mimeType":${JSON.stringify(image.mime)},"data":${JSON.stringify(image.b64)}}}`);
+      rows.push(`{"role":${JSON.stringify(turn.role === 'assistant' ? 'model' : 'user')},"parts":[${parts.join(',')}]}`);
     } else {
       const role = turn.role === 'assistant' ? 'model' : 'user';
       rows.push(`{"role":${JSON.stringify(role)},"parts":[{"text":${JSON.stringify(turn.content)}}]}`);
@@ -955,6 +1005,7 @@ export function splitMarkdown(raw: string): MdBlock[] {
 }
 
 export class FailoverSlot {
+  fallbackAlways: boolean = false;
   instanceId: string = '';
   model: string = '';
 }
@@ -965,6 +1016,20 @@ export class ProviderSlot {
   model: string = '';
   enabled: boolean = true;
   type: string = '';
+}
+
+/** iOS ModelGroupRouter FNV-1a UInt64 expressed as two exact 32-bit limbs for ArkTS. */
+export function stableModelIndex(text: string, count: number): number {
+  if (count <= 0) return 0;
+  let high = 0xcbf29ce4; let low = 0x84222325;
+  const bytes = new util.TextEncoder().encodeInto(text);
+  for (let i = 0; i < bytes.length; i++) {
+    low = (low ^ bytes[i]) >>> 0;
+    const product = low * 435;
+    high = (high * 435 + Math.floor(product / 4294967296) + (low << 8)) >>> 0;
+    low = product >>> 0;
+  }
+  return ((high % count) * (4294967296 % count) + low % count) % count;
 }
 
 export function resolveFailoverQueue(activeId: string, instances: ProviderSlot[],
@@ -987,17 +1052,19 @@ export function resolveFailoverQueue(activeId: string, instances: ProviderSlot[]
     if (raw.indexOf('/') < 0) {
       continue;
     }
-    // 组条目是 ModelGroupsPage 里拼的 `${label}/${model}`。原来用 lastIndexOf('/') 反着切，
-    // 遇到 OpenRouter 这种模型 id 自带斜杠的（anthropic/claude-3-opus）就会切成
-    // label='OpenRouter/anthropic'、model='claude-3-opus'，匹配不到任何实例，
-    // 该条目被静默丢掉，模型组等于没生效。改成按已知的实例标签做前缀匹配，
-    // 标签和模型 id 两边带斜杠都不会切错。
+    // 新条目先按稳定实例 ID 匹配；只有旧档案才按显示名匹配。
+    let resolved = false;
+    for (let j = 0; j < instances.length; j++) {
+      if (raw.startsWith(`${instances[j].id}/`)) {
+        resolved = true;
+        if (instances[j].enabled) push(instances[j].id, raw.substring(instances[j].id.length + 1));
+        break;
+      }
+    }
+    if (resolved) continue;
     for (let j = 0; j < instances.length; j++) {
       const tag = instances[j].label.length > 0 ? instances[j].label : instances[j].type;
-      if (!instances[j].enabled || tag.length === 0) {
-        continue;
-      }
-      if (raw.startsWith(`${tag}/`)) {
+      if (instances[j].enabled && tag.length > 0 && raw.startsWith(`${tag}/`)) {
         push(instances[j].id, raw.substring(tag.length + 1));
         break;
       }
@@ -1228,10 +1295,7 @@ export function responsesInputJson(turns: LoopTurn[]): string {
     if (turn.role === 'tool') {
       const ids = splitResponsesIds(turn.toolCallId);
       rows.push(`{"type":"function_call_output","call_id":${JSON.stringify(capResponsesId(ids[0]))},"output":${JSON.stringify(turn.content)}}`);
-      if (turn.imageB64.length > 0) {
-        const mime = turn.imageMime.length > 0 ? turn.imageMime : 'image/jpeg';
-        images.push(`{"type":"input_image","image_url":"data:${mime};base64,${turn.imageB64}"}`);
-      }
+      for (const image of turnImages(turn)) images.push(`{"type":"input_image","image_url":${JSON.stringify('data:' + image.mime + ';base64,' + image.b64)}}`);
       continue;
     }
     flushImages();
@@ -1248,9 +1312,10 @@ export function responsesInputJson(turns: LoopTurn[]): string {
       }
       continue;
     }
-    if (turn.imageB64.length > 0) {
-      const mime = turn.imageMime.length > 0 ? turn.imageMime : 'image/jpeg';
-      rows.push(`{"role":${JSON.stringify(turn.role)},"content":[{"type":"input_text","text":${JSON.stringify(turn.content)}},{"type":"input_image","image_url":"data:${mime};base64,${turn.imageB64}"}]}`);
+    if (turnImages(turn).length > 0) {
+      const content: string[] = [`{"type":"input_text","text":${JSON.stringify(turn.content)}}`];
+      for (const image of turnImages(turn)) content.push(`{"type":"input_image","image_url":${JSON.stringify('data:' + image.mime + ';base64,' + image.b64)}}`);
+      rows.push(`{"role":"user","content":[${content.join(',')}]}`);
       continue;
     }
     rows.push(`{"role":${JSON.stringify(turn.role)},"content":${JSON.stringify(turn.content)}}`);
@@ -1259,8 +1324,8 @@ export function responsesInputJson(turns: LoopTurn[]): string {
   return `[${rows.join(',')}]`;
 }
 
-export function responsesToolSchemaJson(): string {
-  const rows = JSON.parse(localToolSchemaJson()) as Object[];
+export function responsesToolSchemaJson(includeMemory: boolean = true): string {
+  const rows = JSON.parse(localToolSchemaJson(includeMemory)) as Object[];
   const out: string[] = [];
   for (let i = 0; i < rows.length; i++) {
     const item = rows[i] as Record<string, Object>;
@@ -1271,7 +1336,7 @@ export function responsesToolSchemaJson(): string {
 }
 
 export function responsesBodyJson(model: string, systemPrompt: string, turns: LoopTurn[],
-  thinking: string, withTools: boolean = true): string {
+  thinking: string, withTools: boolean = true, includeMemory: boolean = true): string {
   const effort = thinking.trim().length > 0 ? thinking.trim() : 'low';
   let cache = 'default';
   for (let i = 0; i < turns.length; i++) {
@@ -1281,7 +1346,7 @@ export function responsesBodyJson(model: string, systemPrompt: string, turns: Lo
     }
   }
   // 写摘要、起标题不带工具:空的 tools 有的服务商会拒。
-  const tools = withTools ? `"parallel_tool_calls":true,"tools":${responsesToolSchemaJson()},"tool_choice":"auto",` : '';
+  const tools = withTools ? `"parallel_tool_calls":true,"tools":${responsesToolSchemaJson(includeMemory)},"tool_choice":"auto",` : '';
   return `{"model":${JSON.stringify(model)},"stream":true,"store":false,${tools}"prompt_cache_key":${JSON.stringify(cache)},"include":["reasoning.encrypted_content"],"reasoning":{"effort":${JSON.stringify(effort)},"summary":"auto"},"instructions":${JSON.stringify(systemPrompt)},"input":${responsesInputJson(turns)}}`;
 }
 

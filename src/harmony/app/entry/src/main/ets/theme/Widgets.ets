@@ -1,5 +1,6 @@
 import { router } from '@kit.ArkUI';
 import { Sym } from './Symbols';
+import { ActionButton, IconButton } from './Controls';
 import { Tokens } from './Tokens';
 
 /** 老代码里的图标名 → 系统符号名。 */
@@ -40,6 +41,7 @@ function symbolFor(icon: string): string {
  */
 @Component
 export struct IconCircle {
+  @StorageProp('themeTick') tick: number = 0;
   @Prop box: number = Tokens.iconCircle;
   @Prop glyph: number = Tokens.iconGlyph;
   @Prop color: string = Tokens.accent;
@@ -67,6 +69,7 @@ export struct IconCircle {
 
 @Component
 export struct StatusPill {
+  @StorageProp('themeTick') tick: number = 0;
   @Prop label: string = '';
   @Prop dot: string = Tokens.online;
 
@@ -91,8 +94,10 @@ export struct StatusPill {
 
 @Component
 export struct SettingsRow {
+  @StorageProp('themeTick') tick: number = 0;
   /** 系统符号名(见 Symbols.ets)。 */
   @Prop icon: string = 'ellipsis_circle';
+  @Prop mark: string = '';
   @Prop color: string = Tokens.accent;
   @Prop title: string = '';
   @Prop subtitle: string = '';
@@ -109,9 +114,14 @@ export struct SettingsRow {
           .color(Tokens.separator)
           .margin({ left: 58 })
       }
-      Row() {
+      Button({ type: ButtonType.Normal }) {
+        Row() {
         Stack() {
-          Sym({ name: this.icon, dim: Tokens.settingsGlyph, color: '#FFFFFF' })
+          if (this.mark) {
+            Text(this.mark).fontSize(13).fontWeight(FontWeight.Medium).fontColor('#FFFFFF')
+          } else {
+            Sym({ name: this.icon, dim: Tokens.settingsGlyph, color: '#FFFFFF' })
+          }
         }
         .width(Tokens.settingsIcon)
         .height(Tokens.settingsIcon)
@@ -125,7 +135,7 @@ export struct SettingsRow {
             Text(this.subtitle)
               .fontSize(12.5)
               .fontColor(Tokens.secondary)
-              .maxLines(1)
+              .maxLines(2)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .margin({ top: 2 })
           }
@@ -138,56 +148,51 @@ export struct SettingsRow {
       .width('100%')
       .padding({ left: 14, right: 14, top: 10, bottom: 10 })
       .constraintSize({ minHeight: 52 })
+      }
+      .width('100%')
+      .padding(0)
+      .borderRadius(0)
+      .backgroundColor('#00000000')
+      .stateEffect(true)
+      .accessibilityText(this.title)
+      .accessibilityDescription(this.subtitle)
+      .onClick(() => { this.onOpen(); })
     }
     .width('100%')
-    .onClick(() => {
-      this.onOpen();
-    })
   }
 }
 
 /** 二级页面的顶栏:左边返回、中间标题、右边可选一个文字按钮(和 iOS / 安卓的导航栏一样)。 */
 @Component
 export struct NavBar {
+  @StorageProp('themeTick') tick: number = 0;
   @Prop title: string = '';
   @Prop action: string = '';
+  onBack: () => void = () => { router.back(); };
   onAction: () => void = () => {
   };
 
   build() {
     Stack() {
       Text(this.title)
-        .fontSize(17)
+        .fontSize(18)
         .fontWeight(FontWeight.Medium)
         .fontColor(Tokens.text)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .padding({ left: 72, right: 72 })
       Row() {
-        Stack() {
-          Sym({ name: 'chevron_left', dim: 20, color: Tokens.text })
-        }
-        .width(40)
-        .height(40)
-        .onClick(() => {
-          router.back();
-        })
+        IconButton({ icon: 'chevron_left', label: '返回', onTap: () => { this.onBack(); } })
         Blank()
         if (this.action.length > 0) {
-          Text(this.action)
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(Tokens.accent)
-            .padding({ left: 8, right: 8, top: 8, bottom: 8 })
-            .onClick(() => {
-              this.onAction();
-            })
+          ActionButton({ label: this.action, variant: 'quiet', fullWidth: false,
+            onTap: () => { this.onAction(); } })
         }
       }
       .width('100%')
     }
     .width('100%')
-    .height(52)
+    .height(56)
     .padding({ left: 6, right: 8 })
   }
 }

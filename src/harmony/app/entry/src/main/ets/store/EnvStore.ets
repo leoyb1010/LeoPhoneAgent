@@ -102,6 +102,15 @@ export class EnvStore {
     }
   }
 
+  mergeReplicaName(context: common.Context, name: string): Promise<void> {
+    return this.serial(async () => {
+      await this.load(context); const key = name.trim(); if (!key) throw new Error('变量名不能空');
+      if (this.rows.some((row: EnvEntry) => row.name === key)) return;
+      const row = new EnvEntry(); row.name = key;
+      await this.persist(context, this.rows.concat([row]));
+    });
+  }
+
   upsert(context: common.Context, name: string, value: string): Promise<void> {
     return this.serial(async () => {
       await this.load(context);

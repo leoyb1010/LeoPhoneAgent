@@ -1,3 +1,4 @@
+import { BackupStore } from '../backup/BackupStore';
 import { common } from '@kit.AbilityKit';
 import { workScheduler } from '@kit.BackgroundTasksKit';
 import { ChatRuns } from './ChatRun';
@@ -5,7 +6,7 @@ import { LocalAgentEngine } from './LocalAgentEngine';
 import { LocalTools } from './LocalTools';
 import { doneNotice } from './AgentText';
 import { ScheduleStore, ScheduleTask, scheduleStore } from '../store/ScheduleStore';
-import { sessionStore } from '../store/SessionStore';
+import { SessionStore, sessionStore } from '../store/SessionStore';
 
 const WORK_ID = 7101;
 
@@ -20,6 +21,7 @@ export class ScheduleRunner {
     if (ScheduleRunner.busy) {
       return 0;
     }
+    const lease = BackupStore.beginExecution(context);
     ScheduleRunner.busy = true;
     try {
       await scheduleStore.reload(context);
@@ -32,7 +34,7 @@ export class ScheduleRunner {
       }
       return started;
     } finally {
-      ScheduleRunner.busy = false;
+      ScheduleRunner.busy = false; lease.release();
     }
   }
 
@@ -42,6 +44,7 @@ export class ScheduleRunner {
    * 要准点得靠常驻后台,那要长时任务和常驻通知,先不做。
    */
   static async syncWork(context: common.Context): Promise<void> {
+    if (!BackupStore.executionAllowed(context)) { return; }
     const work: workScheduler.WorkInfo = {
       workId: WORK_ID,
       bundleName: context.applicationInfo.name,
@@ -97,7 +100,7 @@ export class ScheduleRunner {
       }, (message: string) => {
         clearTimeout(guard);
         resolve(['failed', message]);
-      });
+      }, [], () => SessionStore.memoryAllowed(context, sessionId));
     });
     const ok = outcome[0] === 'done';
     await sessionStore.append(context, sessionId, ok ? 'assistant' : 'system', outcome[1]).catch(() => {

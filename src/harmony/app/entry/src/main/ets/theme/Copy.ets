@@ -11,7 +11,7 @@ export class Copy {
   static readonly promptAutomate: string = '为这件事创建安全、可重复执行的自动化：';
   static readonly welcomeTitle: string = '认识你的本机操作员';
   static readonly welcomeSubtitle: string = '连接一个模型，即可用同一个私密 Agent 读写沙箱文件、记事，并连上你的 Mac。';
-  static readonly localRuntime: string = '本机运行时已安装';
+  static readonly localRuntime: string = '本机 Agent 已就绪';
   static readonly step1: string = '连接智能模型';
   static readonly step1sub: string = '设置 → AI 服务商，先选类型再填钥匙';
   static readonly step2: string = '选择执行模型';
@@ -28,7 +28,7 @@ export class Copy {
   static readonly cardPending: string = '等待审批';
   static readonly homeCardsTitle: string = '显示首页主动卡';
   static readonly homeCardsFooter: string = '对话列表最多三张：正在执行、等待审批、最可能需要的动作。关掉后一张都不显示。';
-  static readonly noLinux: string = '鸿蒙 NEXT 跑不了 Android 那份 PRoot ELF。写文件只在应用沙箱，并默认询问。';
+  static readonly linuxRuntime: string = '本机提供 Alpine ARM64 Linux 沙箱。shell_execute 运行命令，共享文件位于 /mnt/workspace；写文件与命令遵守当前对话授权。';
   static readonly pushB: string = '正在向 Push Kit 要 token。没配 AGC 时杀进程后仍然收不到审批。';
   static readonly sectionDevice: string = '我的设备';
   static readonly sectionAgent: string = 'Agent';

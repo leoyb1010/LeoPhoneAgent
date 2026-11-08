@@ -76,6 +76,7 @@ class SpeakHook {
 }
 
 class RecoHook {
+  onEnd: () => void = () => {};
   onText: (text: string, last: boolean) => void = (_t: string, _l: boolean) => {
   };
   onFail: (message: string) => void = (_m: string) => {
@@ -93,8 +94,7 @@ class RecoHook {
     }
   }
 
-  onComplete(_id: string, _msg: string): void {
-  }
+  onComplete(_id: string, _msg: string): void { this.onEnd(); }
 
   onError(_id: string, code: number, message: string): void {
     this.onFail(`${code} ${message}`);
@@ -103,6 +103,9 @@ class RecoHook {
 
 export class Voice {
   private static capturing: boolean = false;
+  private static starting: boolean = false;
+  private static captureVersion: number = 0;
+  private static closing: Promise<void> | null = null;
   private static speaker: textToSpeech.TextToSpeechEngine | null = null;
   private static speakId: string = '';
 
@@ -125,39 +128,61 @@ export class Voice {
   }
 
   static async listen(context: common.UIAbilityContext, onText: (text: string, last: boolean) => void,
-    onError: (message: string) => void): Promise<() => void> {
-    Voice.stopSpeak();
-    const at = abilityAccessCtrl.createAtManager();
-    const perm: Permissions = 'ohos.permission.MICROPHONE';
-    const grant = await at.requestPermissionsFromUser(context, [perm]);
-    if (grant.authResults.length === 0 || grant.authResults[0] !== 0) {
-      throw new Error('没有麦克风权限');
-    }
-    const engine = await speechRecognizer.createEngine(new Recreate());
-    const hook = new RecoHook();
-    hook.onText = onText;
-    hook.onFail = onError;
-    engine.setListener(hook);
-    engine.startListening(new StartSpec());
-    const capturer = await audio.createAudioCapturer(new CapturerOpts());
-    await capturer.start();
-    Voice.capturing = true;
-    Voice.pump(engine, capturer);
-    return () => {
-      Voice.capturing = false;
-      try {
-        capturer.stop();
-        capturer.release();
-      } catch (_err) {
-        // already closed
+    onError: (message: string) => void, isCurrent: () => boolean = () => true): Promise<() => void> {
+    if (Voice.closing) await Voice.closing;
+    if (!isCurrent()) throw new Error('语音输入已取消');
+    if (Voice.starting || Voice.capturing) throw new Error('另一个会话正在语音输入，请先结束录音');
+    Voice.starting = true;
+    const version = ++Voice.captureVersion;
+    let engine: speechRecognizer.SpeechRecognitionEngine | null = null;
+    let capturer: audio.AudioCapturer | null = null;
+    let captureCreation: Promise<audio.AudioCapturer> | null = null;
+    let captureStart: Promise<void> | null = null;
+    let closed = false;
+    let lastText = '';
+    const active = (): boolean => !closed && version === Voice.captureVersion && isCurrent();
+    const close = (): void => {
+      if (closed) return;
+      closed = true;
+      if (version === Voice.captureVersion) Voice.capturing = false;
+      const currentEngine = engine;
+      if (currentEngine) {
+        try { currentEngine.finish('leo'); } catch (_error) {}
+        try { currentEngine.shutdown(); } catch (_error) {}
       }
-      try {
-        engine.finish('leo');
-        engine.shutdown();
-      } catch (_err) {
-        // already closed
-      }
+      const release = captureCreation ? captureCreation.then(async (currentCapturer: audio.AudioCapturer): Promise<void> => {
+        if (captureStart) await captureStart.catch(() => {});
+        await currentCapturer.stop().catch(() => {}); await currentCapturer.release().catch(() => {});
+      }).catch(() => {}) : Promise.resolve();
+      Voice.closing = release.finally(() => {
+        if (version === Voice.captureVersion) { Voice.starting = false; Voice.capturing = false; Voice.closing = null; }
+      });
     };
+    try {
+      Voice.stopSpeak();
+      const grant = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(context, ['ohos.permission.MICROPHONE']);
+      if (!active()) throw new Error('语音输入已取消');
+      if (!grant.authResults.length || grant.authResults[0] !== 0) throw new Error('没有麦克风权限');
+      engine = await speechRecognizer.createEngine(new Recreate());
+      if (!active()) throw new Error('语音输入已取消');
+      const hook = new RecoHook();
+      hook.onText = (text: string, last: boolean) => {
+        if (!active()) { close(); return; }
+        lastText = text; onText(text, last); if (last) close();
+      };
+      hook.onFail = (message: string) => { const notify = active(); close(); if (notify) onError(message); };
+      hook.onEnd = () => { const notify = active(); close(); if (notify) onText(lastText, true); };
+      engine.setListener(hook);
+      if (!active()) throw new Error('语音输入已取消');
+      captureCreation = audio.createAudioCapturer(new CapturerOpts());
+      capturer = await captureCreation;
+      if (!active()) throw new Error('语音输入已取消');
+      captureStart = capturer.start(); await captureStart;
+      if (!active()) throw new Error('语音输入已取消');
+      Voice.starting = false; Voice.capturing = true; engine.startListening(new StartSpec());
+      Voice.pump(engine, capturer, active, (message: string) => { const notify = active(); close(); if (notify) onError(message); });
+      return close;
+    } catch (error) { close(); throw error as Error; }
   }
 
   static async speak(text: string): Promise<void> {
@@ -186,19 +211,14 @@ export class Voice {
     engine.speak(text, spec);
   }
 
-  private static pump(engine: speechRecognizer.SpeechRecognitionEngine, capturer: audio.AudioCapturer): void {
+  private static pump(engine: speechRecognizer.SpeechRecognitionEngine, capturer: audio.AudioCapturer,
+    active: () => boolean, onError: (message: string) => void): void {
     const step = (): void => {
-      if (!Voice.capturing) {
-        return;
-      }
-      capturer.read(3200, true).then((buf: ArrayBuffer) => {
-        if (Voice.capturing) {
-          engine.writeAudio('leo', new Uint8Array(buf));
-          step();
-        }
-      }).catch(() => {
-        Voice.capturing = false;
-      });
+      if (!active()) return;
+      capturer.read(3200, true).then((buffer: ArrayBuffer) => {
+        if (!active()) return;
+        engine.writeAudio('leo', new Uint8Array(buffer)); step();
+      }).catch((error: Error) => { if (active()) onError(error.message || '录音读取失败'); });
     };
     step();
   }

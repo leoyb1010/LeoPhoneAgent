@@ -1,3 +1,4 @@
+import { BackupStore } from '../backup/BackupStore';
 import { WorkSchedulerExtensionAbility, workScheduler } from '@kit.BackgroundTasksKit';
 import { ScheduleRunner } from '../local/ScheduleRunner';
 import { UiState } from '../store/UiState';
@@ -8,6 +9,7 @@ import { UiState } from '../store/UiState';
  */
 export default class ScheduleWork extends WorkSchedulerExtensionAbility {
   onWorkStart(_work: workScheduler.WorkInfo): void {
+    if (!BackupStore.executionAllowed(this.context)) { return; }
     if (UiState.uiBusy(this.context)) {
       return;
     }

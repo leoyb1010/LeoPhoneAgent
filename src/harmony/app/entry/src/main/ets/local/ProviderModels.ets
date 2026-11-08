@@ -73,6 +73,7 @@ export function modelsDevProviderKey(type: string): string {
   if (type === 'kimiCode') {
     return 'moonshotai';
   }
+  if (type === 'openCodeGo') return 'opencode-go';
   if (type === 'openRouter') {
     return 'openrouter';
   }
@@ -131,11 +132,19 @@ export function codexCatalogIds(json: object): string[] {
   return uniqueIds(listed.map((row: Record<string, Object>) => `${row['slug']}`));
 }
 
-// OpenCode Go 的目录里混着走 Responses / Anthropic Messages 的模型;本端只会 chat completions,
-// 列出来一选就 4xx,所以拉回来的目录按协议筛一遍。筛完为空就原样返回,不把列表清空。
-// 按 https://opencode.ai/docs/go/ 的端点表:GPT / Grok / Muse Spark 走 /v1/responses,
-// MiniMax 和 Qwen 全部走 /v1/messages。和 iOS OpenCodeGoWireProtocol、providerModels.ts 保持一致。
-const OPENCODE_GO_NON_CHAT_PREFIXES: string[] = ['gpt-', 'grok-', 'muse-spark-', 'minimax-', 'qwen'];
+/** The actual provider wire follows iOS OpenCodeGoWireProtocol, including catalog npm overrides. */
+export function openCodeWire(model: string, metadata: string = ''): string {
+  try {
+    const entry = JSON.parse(metadata || '{}') as Record<string, Object>; const provider = entry['provider'] as Record<string, Object> | undefined;
+    const npm = `${provider?.['npm'] ?? ''}`.toLowerCase();
+    if (npm === '@ai-sdk/anthropic') return 'anthropic';
+    if (npm === '@ai-sdk/openai') return 'responses';
+    if (npm === '@ai-sdk/openai-compatible') return 'openai';
+  } catch (_error) {}
+  const id = model.toLowerCase().split('/').pop() ?? model.toLowerCase();
+  if (['gpt-', 'grok-', 'muse-spark-'].some((prefix: string) => id.startsWith(prefix))) return 'responses';
+  return ['minimax-', 'qwen'].some((prefix: string) => id.startsWith(prefix)) ? 'anthropic' : 'openai';
+}
 // /models 里还挂着、一调用就回 "Model is unavailable" 的下线模型(2026-09-27 实测),不给选。
 const OPENCODE_GO_RETIRED: string[] =
   ['kimi-k2.5', 'glm-5', 'qwen3.5-plus', 'mimo-v2-pro', 'mimo-v2-omni', 'hy3-preview', 'grok-4.5'];
@@ -150,12 +159,45 @@ export function chatModelsFor(type: string, ids: string[]): string[] {
     if (OPENCODE_GO_RETIRED.includes(bare)) {
       return false;
     }
-    for (let i = 0; i < OPENCODE_GO_NON_CHAT_PREFIXES.length; i++) {
-      if (bare.startsWith(OPENCODE_GO_NON_CHAT_PREFIXES[i])) {
-        return false;
-      }
-    }
     return true;
   });
-  return kept.length > 0 ? kept : ids;
+  return kept;
+}
+
+/** Output capability follows catalog metadata, with the same known-family fallback used by older archives. */
+export function modelImageMode(model: string, metadata: string = '', type: string = ''): string {
+  const id = model.toLowerCase().split('/').pop() ?? model.toLowerCase();
+  let image = /(?:gpt-image|chatgpt-image|dall-e|dalle|imagen|flash-image|pro-image|image-preview|image-generation|image-gen|gpt-5(?:\.\d+)?-image)/.test(id);
+  let text = !/^(?:gpt-image|chatgpt-image|dall-e|dalle|imagen)/.test(id);
+  if (metadata) {
+    try {
+      const info = JSON.parse(metadata) as Record<string, Object>;
+      const override = info['modalityOverride'];
+      const bits = typeof override === 'number' ? override : Number((override as Record<string, Object>)?.['rawValue'] ?? 0);
+      if (override !== undefined && override !== null) { image = (bits & 64) !== 0; text = (bits & 2) !== 0; }
+      const modalities = info['modalities'] as Record<string, Object> | undefined;
+      const architecture = info['architecture'] as Record<string, Object> | undefined;
+      const output = modalities?.['output'] ?? architecture?.['output_modalities'];
+      if (Array.isArray(output)) { image = output.indexOf('image') >= 0; text = output.indexOf('text') >= 0; }
+    } catch (_error) { /* Legacy hand-entered model IDs still use their known family. */ }
+  }
+  if (!image) return '';
+  return !text && type !== 'gemini' && type !== 'openRouter' ? 'images' : 'multimodal';
+}
+
+export function modelMetadataFromList(json: object, providerKey: string = ''): Record<string, string> {
+  const body = json as Record<string, Object>; const output: Record<string, string> = {};
+  const provider = body[providerKey] as Record<string, Object> | undefined;
+  const source = providerKey ? provider?.['models'] : (body['data'] ?? body['models']);
+  if (Array.isArray(source)) {
+    const rows = source as Object[];
+    for (const entry of rows) {
+      const item = entry as Record<string, Object>; const id = `${item['id'] ?? item['name'] ?? ''}`.replace(/^models\//, '');
+      if (id) output[id] = JSON.stringify(item);
+    }
+  } else if (source && typeof source === 'object') {
+    const entries = source as Record<string, Object>; const keys = Object.keys(entries);
+    for (const id of keys) output[id] = JSON.stringify(entries[id]);
+  }
+  return output;
 }

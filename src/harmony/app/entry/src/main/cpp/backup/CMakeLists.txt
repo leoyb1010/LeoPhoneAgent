@@ -1,0 +1,5 @@
+add_library(leobackup SHARED backup_napi.cpp)
+target_compile_features(leobackup PRIVATE cxx_std_17)
+target_compile_options(leobackup PRIVATE -fvisibility=hidden)
+target_link_options(leobackup PRIVATE -Wl,--no-undefined)
+target_link_libraries(leobackup PRIVATE ace_napi.z oharchive)

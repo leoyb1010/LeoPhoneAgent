@@ -1,3 +1,4 @@
+import { atomicWriteText } from './AtomicFile';
 import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
 
@@ -18,17 +19,18 @@ export class MemoryStore {
     if (this.jsonLoadFailed) {
       throw new Error('记忆档案读坏了，先别保存，避免覆盖');
     }
-    this.global = text;
     MemoryStore.ensureDir(MemoryStore.dir(context));
     MemoryStore.writeText(MemoryStore.globalPath(context), text);
+    this.global = text;
   }
 
   async appendToday(context: common.Context, text: string): Promise<void> {
     this.roll();
-    const next = this.today.length > 0 ? `${this.today}\n${text}` : text;
-    this.today = next;
     MemoryStore.ensureDir(MemoryStore.dir(context));
-    MemoryStore.writeText(MemoryStore.dailyPath(context), next);
+    const path = MemoryStore.dailyPath(context); const previous = MemoryStore.readIfPresent(path);
+    const entry = `<!-- ${new Date().toISOString()} -->\n${text.trim()}\n`;
+    const next = previous.trim() ? `${entry}\n${previous}` : entry;
+    MemoryStore.writeText(path, next); this.today = next;
   }
 
   search(scope: string, keywords: string): string {
@@ -126,13 +128,7 @@ export class MemoryStore {
   }
 
   private static writeText(path: string, text: string): void {
-    const file = fileIo.openSync(path,
-      fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
-    try {
-      fileIo.writeSync(file.fd, text);
-    } finally {
-      fileIo.closeSync(file);
-    }
+    atomicWriteText(path, text);
   }
 }
 

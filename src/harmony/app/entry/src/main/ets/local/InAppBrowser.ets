@@ -4,15 +4,17 @@ import { SensitiveToolGate } from './SensitiveToolGate';
 
 export class WebLaunch {
   static url: string = '';
+  static owner: string = '';
 }
 
 export class InAppBrowser {
-  static open(raw: string, newTab: boolean = false): string {
+  static open(raw: string, newTab: boolean = false, owner: string = ''): string {
     const decision = SensitiveToolGate.openUrl(raw);
     if (!decision.allowed) {
       return decision.reason;
     }
     WebLaunch.url = raw.trim();
+    WebLaunch.owner = owner;
     if (newTab) {
       browserStore.add(WebLaunch.url);
     } else {
