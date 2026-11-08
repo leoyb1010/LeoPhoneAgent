@@ -72,6 +72,7 @@ function statusColor(status: string): string {
 /** 一轮回答上面的「✦ LeoBot」。 */
 @Component
 export struct AssistantHead {
+  @StorageProp('themeTick') themeTick: number = 0;
   @Prop name: string = 'LeoBot';
 
   build() {
@@ -80,7 +81,7 @@ export struct AssistantHead {
       Text(this.name)
         .fontSize(15)
         .fontWeight(FontWeight.Medium)
-        .fontColor(Tokens.text)
+        .fontColor(Tokens.reactive(this.themeTick, Tokens.text))
         .margin({ left: 6 })
     }
     .margin({ bottom: 6 })
@@ -90,7 +91,9 @@ export struct AssistantHead {
 /** 你说的话:右边灰色气泡,带图和附件。 */
 @Component
 export struct UserBubble {
+  @StorageProp('themeTick') themeTick: number = 0;
   @Prop text: string = '';
+  @Prop selectable: boolean = true;
   @Prop imagePath: string = '';
   @Prop imagePaths: string[] = [];
   @Prop files: string[] = [];
@@ -102,16 +105,16 @@ export struct UserBubble {
       }
       ForEach(this.files, (name: string) => {
         Row() {
-          Sym({ name: 'paperclip', dim: 13, color: Tokens.secondary })
+          Sym({ name: 'paperclip', dim: 13, color: Tokens.reactive(this.themeTick, Tokens.secondary) })
           Text(name)
             .fontSize(13)
-            .fontColor(Tokens.secondary)
+            .fontColor(Tokens.reactive(this.themeTick, Tokens.secondary))
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .margin({ left: 4 })
         }
         .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-        .backgroundColor(Tokens.surface)
+        .backgroundColor(Tokens.reactive(this.themeTick, Tokens.surface))
         .borderRadius(10)
         .margin({ bottom: 6 })
       }, (name: string) => name)
@@ -119,10 +122,10 @@ export struct UserBubble {
         Text(this.text)
           .fontSize(16.5)
           .lineHeight(24)
-          .fontColor(Tokens.userText)
-          .copyOption(CopyOptions.LocalDevice)
+          .fontColor(Tokens.reactive(this.themeTick, Tokens.userText))
+          .copyOption(this.selectable ? CopyOptions.LocalDevice : CopyOptions.None)
           .padding({ left: 14, right: 14, top: 9, bottom: 9 })
-          .backgroundColor(Tokens.userBubble)
+          .backgroundColor(Tokens.reactive(this.themeTick, Tokens.userBubble))
           .borderRadius(Tokens.bubbleRadius)
       }
     }
@@ -134,6 +137,7 @@ export struct UserBubble {
 /** 一次工具调用:胶囊里是图标、做的事、用时;在跑时转圈,点开看结果。 */
 @Component
 export struct ToolCapsule {
+  @StorageProp('themeTick') themeTick: number = 0;
   @StorageProp('motionReduced') reduced: boolean = false;
   @Prop item: ChatItem = new ChatItem();
   @State open: boolean = false;
@@ -144,11 +148,11 @@ export struct ToolCapsule {
         Sym({
           name: toolSym(this.item.name),
           dim: 14,
-          color: this.item.status === 'running' ? Tokens.accent : statusColor(this.item.status)
+          color: Tokens.reactive(this.themeTick, this.item.status === 'running' ? Tokens.accent : statusColor(this.item.status))
         })
         Text(toolLabel(this.item.name, this.item.title))
           .fontSize(13.5)
-          .fontColor(Tokens.text)
+          .fontColor(Tokens.reactive(this.themeTick, Tokens.text))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .constraintSize({ maxWidth: 260 })
@@ -157,23 +161,23 @@ export struct ToolCapsule {
           LoadingProgress()
             .width(16)
             .height(16)
-            .color(Tokens.secondary)
+            .color(Tokens.reactive(this.themeTick, Tokens.secondary))
             .enableLoading(!this.reduced)
         } else if (this.item.status === 'lost') {
           Text('没跑完')
             .fontSize(12)
-            .fontColor(Tokens.warn)
+            .fontColor(Tokens.reactive(this.themeTick, Tokens.warn))
         } else if (this.item.seconds >= 0) {
           Text(durationText(this.item.seconds))
             .fontSize(12)
             .fontFamily('monospace')
-            .fontColor(Tokens.muted)
+            .fontColor(Tokens.reactive(this.themeTick, Tokens.muted))
         }
       }
       .constraintSize({ minHeight: 44 })
       .padding({ left: 12, right: 12 })
-      .backgroundColor(Tokens.toolCapsule)
-      .border({ width: Tokens.hairline, color: Tokens.separator })
+      .backgroundColor(Tokens.reactive(this.themeTick, Tokens.toolCapsule))
+      .border({ width: Tokens.hairline, color: Tokens.reactive(this.themeTick, Tokens.separator) })
       .borderRadius(Tokens.capsule / 2)
       .constraintSize({ maxWidth: '100%' })
       .accessibilityText(toolLabel(this.item.name, this.item.title) + '，' + (this.item.status === 'running' ? '进行中' : (this.item.status === 'fail' ? '失败' : '已完成')))
@@ -186,10 +190,10 @@ export struct ToolCapsule {
           .fontSize(12.5)
           .lineHeight(18)
           .fontFamily('monospace')
-          .fontColor(Tokens.secondary)
+          .fontColor(Tokens.reactive(this.themeTick, Tokens.secondary))
           .copyOption(CopyOptions.LocalDevice)
           .padding(10)
-          .backgroundColor(Tokens.surface)
+          .backgroundColor(Tokens.reactive(this.themeTick, Tokens.surface))
           .borderRadius(10)
           .margin({ top: 6 })
           .constraintSize({ maxWidth: '100%' })
@@ -203,6 +207,7 @@ export struct ToolCapsule {
 /** 说完的一轮里的工具折成一条「已工作 N 步 · 用时」,点开展开(iOS 同样)。 */
 @Component
 export struct WorkedRow {
+  @StorageProp('themeTick') themeTick: number = 0;
   @Prop item: ChatItem = new ChatItem();
   onToggle: () => void = () => {
   };
@@ -212,18 +217,18 @@ export struct WorkedRow {
       Sym({
         name: this.item.status === 'fail' ? 'exclamationmark_triangle' : 'list_bullet',
         dim: 14,
-        color: this.item.status === 'fail' ? Tokens.warn : Tokens.secondary
+        color: Tokens.reactive(this.themeTick, this.item.status === 'fail' ? Tokens.warn : Tokens.secondary)
       })
       Text(`已工作 ${this.item.count} 步${this.item.seconds >= 0 ? ` · ${durationText(this.item.seconds)}` : ''}`)
         .fontSize(13.5)
-        .fontColor(Tokens.secondary)
+        .fontColor(Tokens.reactive(this.themeTick, Tokens.secondary))
         .margin({ left: 8 })
-      Sym({ name: this.item.open ? 'chevron_up' : 'chevron_down', dim: 12, color: Tokens.muted })
+      Sym({ name: this.item.open ? 'chevron_up' : 'chevron_down', dim: 12, color: Tokens.reactive(this.themeTick, Tokens.muted) })
         .margin({ left: 6 })
     }
     .height(44)
     .padding({ left: 12, right: 12 })
-    .backgroundColor(Tokens.toolCapsule)
+    .backgroundColor(Tokens.reactive(this.themeTick, Tokens.toolCapsule))
     .borderRadius((Tokens.capsule - 4) / 2)
     .margin({ top: 3, bottom: 3 })
     .onClick(() => {
@@ -235,6 +240,7 @@ export struct WorkedRow {
 /** 系统提示:短的在两条细线中间,长的(斜杠命令的输出)放在灰卡片里。 */
 @Component
 export struct NoticeRow {
+  @StorageProp('themeTick') themeTick: number = 0;
   @Prop text: string = '';
 
   build() {
@@ -242,10 +248,10 @@ export struct NoticeRow {
       Text(this.text)
         .fontSize(13)
         .lineHeight(19)
-        .fontColor(Tokens.secondary)
+        .fontColor(Tokens.reactive(this.themeTick, Tokens.secondary))
         .copyOption(CopyOptions.LocalDevice)
         .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-        .backgroundColor(Tokens.surface)
+        .backgroundColor(Tokens.reactive(this.themeTick, Tokens.surface))
         .borderRadius(12)
         .width('100%')
         .margin({ top: 4, bottom: 4 })
@@ -253,16 +259,16 @@ export struct NoticeRow {
       Row() {
         Divider()
           .strokeWidth(Tokens.hairline)
-          .color(Tokens.separator)
+          .color(Tokens.reactive(this.themeTick, Tokens.separator))
           .layoutWeight(1)
         Text(this.text)
           .fontSize(12)
-          .fontColor(Tokens.muted)
+          .fontColor(Tokens.reactive(this.themeTick, Tokens.muted))
           .margin({ left: 10, right: 10 })
           .maxLines(2)
         Divider()
           .strokeWidth(Tokens.hairline)
-          .color(Tokens.separator)
+          .color(Tokens.reactive(this.themeTick, Tokens.separator))
           .layoutWeight(1)
       }
       .width('100%')
@@ -274,6 +280,7 @@ export struct NoticeRow {
 /** 出错:红底一条,右边是「继续」或「重试」。 */
 @Component
 export struct ErrorRow {
+  @StorageProp('themeTick') themeTick: number = 0;
   @Prop text: string = '';
   @Prop action: string = '';
   onAction: () => void = () => {
@@ -281,11 +288,11 @@ export struct ErrorRow {
 
   build() {
     Row() {
-      Sym({ name: 'exclamationmark_triangle', dim: 15, color: Tokens.danger })
+      Sym({ name: 'exclamationmark_triangle', dim: 15, color: Tokens.reactive(this.themeTick, Tokens.danger) })
       Text(this.text)
         .fontSize(13)
         .lineHeight(18)
-        .fontColor(Tokens.danger)
+        .fontColor(Tokens.reactive(this.themeTick, Tokens.danger))
         .maxLines(3)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .copyOption(CopyOptions.LocalDevice)
@@ -298,7 +305,7 @@ export struct ErrorRow {
     .width('100%')
     .alignItems(VerticalAlign.Center)
     .padding({ left: 12, right: 10, top: 10, bottom: 10 })
-    .backgroundColor(Tokens.errorTint)
+    .backgroundColor(Tokens.reactive(this.themeTick, Tokens.errorTint))
     .borderRadius(12)
     .margin({ top: 6, bottom: 6 })
   }
@@ -307,6 +314,7 @@ export struct ErrorRow {
 /** 压缩摘要:「已压缩前面 N 条消息」,点开看摘要。 */
 @Component
 export struct SummaryRow {
+  @StorageProp('themeTick') themeTick: number = 0;
   @Prop item: ChatItem = new ChatItem();
   @State open: boolean = false;
 
@@ -315,21 +323,21 @@ export struct SummaryRow {
       Row() {
         Divider()
           .strokeWidth(Tokens.hairline)
-          .color(Tokens.separator)
+          .color(Tokens.reactive(this.themeTick, Tokens.separator))
           .layoutWeight(1)
         Row() {
-          Sym({ name: 'rectangle_stack', dim: 12, color: Tokens.muted })
+          Sym({ name: 'rectangle_stack', dim: 12, color: Tokens.reactive(this.themeTick, Tokens.muted) })
           Text(`已压缩前面 ${this.item.count} 条消息`)
             .fontSize(12)
-            .fontColor(Tokens.muted)
+            .fontColor(Tokens.reactive(this.themeTick, Tokens.muted))
             .margin({ left: 4 })
-          Sym({ name: this.open ? 'chevron_up' : 'chevron_down', dim: 10, color: Tokens.muted })
+          Sym({ name: this.open ? 'chevron_up' : 'chevron_down', dim: 10, color: Tokens.reactive(this.themeTick, Tokens.muted) })
             .margin({ left: 4 })
         }
         .margin({ left: 10, right: 10 })
         Divider()
           .strokeWidth(Tokens.hairline)
-          .color(Tokens.separator)
+          .color(Tokens.reactive(this.themeTick, Tokens.separator))
           .layoutWeight(1)
       }
       .width('100%')
@@ -341,10 +349,10 @@ export struct SummaryRow {
       })
       if (this.open) {
         Column() {
-          MarkdownText({ text: this.item.text, color: Tokens.secondary, textSize: 14 })
+          MarkdownText({ text: this.item.text, color: Tokens.reactive(this.themeTick, Tokens.secondary), textSize: 14 })
         }
         .padding(12)
-        .backgroundColor(Tokens.surface)
+        .backgroundColor(Tokens.reactive(this.themeTick, Tokens.surface))
         .borderRadius(12)
         .margin({ top: 8 })
       }
@@ -357,17 +365,18 @@ export struct SummaryRow {
 /** 在等模型:「LeoBot 正在思考」。 */
 @Component
 export struct TypingRow {
+  @StorageProp('themeTick') themeTick: number = 0;
   @StorageProp('motionReduced') reduced: boolean = false;
   build() {
     Row() {
       LoadingProgress()
         .width(16)
         .height(16)
-        .color(Tokens.muted)
+        .color(Tokens.reactive(this.themeTick, Tokens.muted))
         .enableLoading(!this.reduced)
       Text('LeoBot 正在思考')
         .fontSize(13)
-        .fontColor(Tokens.muted)
+        .fontColor(Tokens.reactive(this.themeTick, Tokens.muted))
         .margin({ left: 8 })
     }
     .margin({ top: 6, bottom: 6 })
@@ -377,6 +386,7 @@ export struct TypingRow {
 /** 说完的回答下面:复制、朗读,最新一条还能重新生成。 */
 @Component
 export struct ReplyActions {
+  @StorageProp('themeTick') themeTick: number = 0;
   @Prop regenerate: boolean = false;
   @State copied: boolean = false;
   @State copying: boolean = false;

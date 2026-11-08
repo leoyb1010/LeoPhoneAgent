@@ -1,3 +1,4 @@
+import { ActionButton } from '../theme/Controls';
 import { webview } from '@kit.ArkWeb';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { BrowserOAuth } from './BrowserOAuth';
@@ -124,15 +125,12 @@ export struct OAuthLoginSheet {
           .width('100%')
           .margin({ top: 10 })
       }
-      Button(this.copied ? '已复制登录链接' : '复制登录链接')
+      ActionButton({ label: this.copied ? '已复制登录链接' : '复制登录链接', variant: 'secondary', fullWidth: false, onTap: () => {
+          this.copy();
+        } })
         .width('100%')
         .height(44)
         .margin({ top: 20 })
-        .backgroundColor(Tokens.accent)
-        .fontColor('#FFFFFF')
-        .onClick(() => {
-          this.copy();
-        })
       Text(this.failHint())
         .fontSize(12)
         .fontColor(Tokens.muted)

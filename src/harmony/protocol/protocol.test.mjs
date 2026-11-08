@@ -1400,7 +1400,7 @@ function wireShape(source, startsWith) {
     for (const m of text.matchAll(/name:\s*this\.[a-zA-Z]+ \? '([a-z0-9_]+)' : '([a-z0-9_]+)'/g)) { used.add(m[1]); used.add(m[2]); }
     for (const m of text.matchAll(/(?:barIcon|menuRow|chip)\((?:'[^']*', )?'([a-z0-9_]+)'/g)) if (m[1] !== "dot") used.add(m[1]);
     for (const m of text.matchAll(/this\.quickTask\([^)]*?, '([a-z0-9_]+)', [^)]*\)/g)) used.add(m[1]);
-    for (const m of text.matchAll(/row\('([a-z0-9_]+)', '#/g)) used.add(m[1]);
+    for (const m of text.matchAll(/row\('([a-z0-9_]+)', Tokens\./g)) used.add(m[1]);
   }
   for (const m of src("chat/ChatViews.ets").matchAll(/return '([a-z0-9_]+)';/g)) used.add(m[1]);
   const legacy = src("theme/Widgets.ets");
@@ -1412,7 +1412,9 @@ function wireShape(source, startsWith) {
   // 折叠屏展开(近似正方形、略高)也分栏:不再要求横着拿
   const fold = src("layout/FoldLayout.ets");
   assert.ok(!/width < height/.test(fold), "分栏只看宽度");
-  assert.ok(/width < Tokens\.wideBreak/.test(fold) && /height < Tokens\.tallBreak/.test(fold));
+  assert.ok(/width >= Tokens\.wideBreak/.test(fold) && !/height < Tokens\.tallBreak/.test(fold), 'window width is authoritative even with a resized keyboard');
+  const layout = src("layout/LayoutPolicy.ets");
+  assert.ok(/width < 600/.test(layout) && /width < 840/.test(layout), 'three width tiers must remain explicit');
   // 手机首页:没有「本机 / 远程」文字页签,远程是顶栏的电脑图标
   const home = src("pages/HomePage.ets");
   assert.ok(!/tabLabel\(/.test(home) && /pushUrl\(\{ url: 'pages\/FleetPage' \}\)/.test(home));
@@ -1425,10 +1427,12 @@ function wireShape(source, startsWith) {
   assert.ok(/AssistantHead\(\{ name: this\.agentName\(\) \}\)/.test(pane));
   // 流式输出不截断:key 用 chatItemKey(带字),在流的那段走 liveText 原地刷新;Markdown 的块 key 也带字
   assert.ok(/\(item: ChatItem, i: number\) => chatItemKey\(item, i\)\)/.test(pane), "聊天列表 key 用 chatItemKey");
-  assert.ok(/MarkdownText\(\{ text: item\.live \? this\.liveText : item\.text \}\)/.test(pane) && /this\.liveText = run\.lines\[run\.lines\.length - 1\]\.text/.test(pane));
+  assert.ok(/LongAnswer\(\{ text: item\.live \? this\.liveText : item\.text, live: item\.live/.test(pane) && /this\.liveText = run\.lines\[run\.lines\.length - 1\]\.text/.test(pane));
+  const longAnswer = src("chat/LongAnswer.ets");
+  assert.ok(/if \(!this\.live && this\.long\(\) && !this\.expanded\)/.test(longAnswer) && /else MarkdownText\(\{ text: this\.text, selectable: false \}\)/.test(longAnswer), "流式全文仍直接传给 Markdown；只有完成的长回答折叠");
   const remote = src("panes/ChatPane.ets");
   assert.ok(/\(line: ChatLine, index: number\) => `\$\{index\}\|\$\{line\.role\}\|\$\{line\.text\}`/.test(remote), "远程对话 key 带字");
-  assert.ok(/MarkdownText\(\{ text: line === this\.liveLine \? this\.liveText : line\.text \}\)/.test(remote));
+  assert.ok(/LongAnswer\(\{ text: line === this\.liveLine \? this\.liveText : line\.text, live: line === this\.liveLine/.test(remote));
   assert.ok(/\$\{part\.kind\}\|\$\{part\.level\}\|\$\{part\.ordinal\}\|\$\{part\.lang\}\|\$\{part\.text\}/.test(src("theme/Markdown.ets")), "Markdown 块 key 带字");
   assert.ok(/chatItems\(textLines\(run\.lines\), run\.active \|\| run\.askWrite, this\.openTurns, !themeStore\.toolPreview\)/.test(pane));
   // 设置四组,和 iOS / 安卓同顺序

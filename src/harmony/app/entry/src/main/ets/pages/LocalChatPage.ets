@@ -1,9 +1,10 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { LocalChatLaunch, LocalChatPane } from '../panes/LocalChatPane';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct LocalChatPage {
+export struct LocalChatPage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @State sessionId: string = '';
 
   aboutToAppear(): void {
@@ -11,11 +12,16 @@ struct LocalChatPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       LocalChatPane({ sessionId: this.sessionId })
     }
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 }

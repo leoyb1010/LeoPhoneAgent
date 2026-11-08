@@ -2,12 +2,13 @@ import { MediaGallery } from './MediaGallery';
 import { KeyCode } from '@kit.InputKit';
 import { Sym } from '../theme/Symbols';
 import { Tokens } from '../theme/Tokens';
-import { IconButton } from '../theme/Controls';
+import { IconButton, SurfaceButton } from '../theme/Controls';
 import { MotionPolicy } from '../theme/MotionPolicy';
 
 /** 原生输入区按可用高度收敛，模型与权限入口始终可达，运行时保留草稿并提供停止。 */
 @Component
 export struct Composer {
+  @StorageProp('themeTick') themeTick: number = 0;
   @Link @Watch('draftChanged') draft: string;
   @Prop inputId: string = '';
   @Prop @Watch('focusRequested') focusRequest: number = 0;
@@ -31,6 +32,7 @@ export struct Composer {
   @Prop showMic: boolean = true;
   @StorageProp('motionReduced') reduced: boolean = false;
   @State inputHeight: number = 48;
+  @State actionBarWidth: number = 0;
   @State sendPressed: boolean = false;
   private input: TextAreaController = new TextAreaController();
   private measureTimer: number = -1;
@@ -56,29 +58,54 @@ export struct Composer {
     }, 0);
   }
 
+  @Builder
+  modelButtonContent() {
+              Row({ space: 6 }) {
+                Sym({ name: 'memory_module', dim: 14, color: Tokens.reactive(this.themeTick, Tokens.secondary) })
+                Text(this.modelLabel).fontSize(13).fontWeight(FontWeight.Medium).fontColor(Tokens.reactive(this.themeTick, Tokens.text))
+                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+                Sym({ name: 'chevron_down', dim: 10, color: Tokens.reactive(this.themeTick, Tokens.muted) })
+              }.padding({ left: 10, right: 10 })
+
+  }
+
+  @Builder
+  approvalButtonContent() {
+              Row({ space: 5 }) {
+                Sym({ name: this.fullAuto ? 'bolt_fill' : 'hand', dim: 13, color: Tokens.reactive(this.themeTick, this.fullAuto ? Tokens.warn : Tokens.secondary) })
+                Text(this.approvalLabel || (this.fullAuto ? '全自动' : '逐项确认')).fontSize(13).fontColor(Tokens.reactive(this.themeTick, this.fullAuto ? Tokens.warn : Tokens.secondary))
+              }.padding({ left: 10, right: 10 })
+
+  }
+
+  @Builder
+  sendButtonContent() {
+          if (this.running) {
+            Column().width(12).height(12).borderRadius(3).backgroundColor(Tokens.reactive(this.themeTick, Tokens.sendGlyph))
+          } else Sym({ name: 'arrow_up', dim: 20, color: Tokens.reactive(this.themeTick, Tokens.sendGlyph) })
+
+  }
+
+  @Builder
+  removeButtonContent() {
+      Stack({ alignContent: Alignment.TopEnd }) {
+        Stack() { Sym({ name: 'xmark', dim: 10, color: Tokens.reactive(this.themeTick, Tokens.onMedia) }) }
+          .width(20).height(20).backgroundColor(Tokens.reactive(this.themeTick, Tokens.mediaScrim)).borderRadius(10)
+      }.width(36).height(36)
+
+  }
+
   build() {
     Column() {
-      if (!this.compact && (this.modelLabel.length > 0 || this.showApproval)) {
+      if (!this.compactActions() && (this.modelLabel.length > 0 || this.showApproval)) {
         Row({ space: 4 }) {
           if (this.modelLabel.length > 0) {
-            Button({ type: ButtonType.Normal }) {
-              Row({ space: 6 }) {
-                Sym({ name: 'memory_module', dim: 14, color: Tokens.secondary })
-                Text(this.modelLabel).fontSize(13).fontWeight(FontWeight.Medium).fontColor(Tokens.text)
-                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-                Sym({ name: 'chevron_down', dim: 10, color: Tokens.muted })
-              }.padding({ left: 10, right: 10 })
-            }.layoutWeight(1).height(44).backgroundColor('#00000000').borderRadius(12)
-            .stateEffect(true).accessibilityText('选择模型，当前 ' + this.modelLabel).onClick(() => this.onModel())
+            SurfaceButton({ content: () => { this.modelButtonContent(); } }).layoutWeight(1).height(44).backgroundColor(Tokens.reactive(this.themeTick, Tokens.transparent)).borderRadius(12)
+            .accessibilityText('选择模型，当前 ' + this.modelLabel).onClick(() => this.onModel())
           }
           if (this.showApproval) {
-            Button({ type: ButtonType.Normal }) {
-              Row({ space: 5 }) {
-                Sym({ name: this.fullAuto ? 'bolt_fill' : 'hand', dim: 13, color: this.fullAuto ? Tokens.warn : Tokens.secondary })
-                Text(this.approvalLabel || (this.fullAuto ? '全自动' : '逐项确认')).fontSize(13).fontColor(this.fullAuto ? Tokens.warn : Tokens.secondary)
-              }.padding({ left: 10, right: 10 })
-            }.height(44).backgroundColor(this.fullAuto ? Tokens.warnTint : '#00000000').borderRadius(12)
-            .stateEffect(true).accessibilityText('工具权限，' + (this.approvalLabel || (this.fullAuto ? '全自动' : '逐项确认'))).onClick(() => this.onApproval())
+            SurfaceButton({ content: () => { this.approvalButtonContent(); } }).height(44).backgroundColor(Tokens.reactive(this.themeTick, this.fullAuto ? Tokens.warnTint : Tokens.transparent)).borderRadius(12)
+            .accessibilityText('工具权限，' + (this.approvalLabel || (this.fullAuto ? '全自动' : '逐项确认'))).onClick(() => this.onApproval())
           }
         }.width('100%').padding({ left: 4, right: 4, top: 2 })
       }
@@ -93,25 +120,27 @@ export struct Composer {
             }, (path: string) => path)
             ForEach(this.files, (name: string, index: number) => {
               Row({ space: 6 }) {
-                Sym({ name: 'doc', dim: 18, color: Tokens.accent })
-                Text(name).fontSize(13).fontColor(Tokens.text).maxLines(2)
+                Sym({ name: 'doc', dim: 18, color: Tokens.reactive(this.themeTick, Tokens.accent) })
+                Text(name).fontSize(13).fontColor(Tokens.reactive(this.themeTick, Tokens.text)).maxLines(2)
                   .textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: 116 })
                 this.removeDot('移除附件 ' + name, () => this.onRemoveFile(index))
-              }.height(this.compact ? 48 : 64).padding({ left: 12 }).backgroundColor(Tokens.surface).borderRadius(12)
+              }.height(this.compact ? 48 : 64).padding({ left: 12 }).backgroundColor(Tokens.reactive(this.themeTick, Tokens.surface)).borderRadius(12)
             }, (name: string, index: number) => `${index}:${name}`)
           }.padding({ left: 10, right: 10 })
         }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).align(Alignment.Start)
           .height(this.compact ? 52 : 68).width('100%').margin({ top: 4 })
       }
       TextArea({ text: this.draft, placeholder: this.placeholder, controller: this.input }).id(this.inputId)
-        .fontSize(16).fontColor(Tokens.text).placeholderColor(Tokens.muted).placeholderFont({ size: 16 })
-        .backgroundColor('#00000000').height(Math.min(this.inputHeight, this.compact ? 76 : 144))
+        .fontSize(16).fontColor(Tokens.reactive(this.themeTick, Tokens.text)).placeholderColor(Tokens.reactive(this.themeTick, Tokens.muted)).placeholderFont({ size: 16 })
+        .backgroundColor(Tokens.reactive(this.themeTick, Tokens.transparent)).height(Math.min(this.inputHeight, this.compact ? 76 : 144))
         .constraintSize({ minHeight: 48 }).padding({ left: 14, right: 14, top: 12, bottom: 8 })
         .enterKeyType(this.returnSend && !this.running ? EnterKeyType.Send : EnterKeyType.NEW_LINE)
         .accessibilityText('任务输入框')
         .onSubmit(() => { if (this.returnSend && this.canSend()) this.onSend(); })
         .onChange((value: string) => { this.draft = value; this.measure(); })
         .onAreaChange((_previous: Area, area: Area) => {
+          const width = Number.parseFloat(`${area.width}`);
+          if (Number.isFinite(width) && width > 0) this.actionBarWidth = width;
           this.measure(); this.layoutReady = Number.parseFloat(`${area.width}`) > 0 && Number.parseFloat(`${area.height}`) > 0; this.applyFocus();
         })
         .onVisibleAreaChange([0, 1], (visible: boolean, ratio: number) => { if (visible && ratio > 0) this.applyFocus(); })
@@ -128,36 +157,28 @@ export struct Composer {
             menuItems: [{ value: '选择照片', action: () => this.onPickImage() }, { value: '添加文件', action: () => this.onPickFiles() }] })
           IconButton({ icon: 'keyboard', label: '快捷命令', onTap: () => this.onSlash(), isEnabled: this.ready })
         }
-        if (this.compact && this.modelLabel) IconButton({ icon: 'memory_module', label: '选择模型，当前 ' + this.modelLabel, onTap: () => this.onModel() })
-        if (this.compact && this.showApproval) IconButton({ icon: this.fullAuto ? 'bolt_fill' : 'hand', label: (this.approvalLabel || (this.fullAuto ? '全自动' : '逐项确认')) + '权限', selected: this.fullAuto, onTap: () => this.onApproval() })
+        if (this.compactActions() && this.modelLabel) IconButton({ icon: 'memory_module', label: '选择模型，当前 ' + this.modelLabel, onTap: () => this.onModel() })
+        if (this.compactActions() && this.showApproval) IconButton({ icon: this.fullAuto ? 'bolt_fill' : 'hand', label: (this.approvalLabel || (this.fullAuto ? '全自动' : '逐项确认')) + '权限', selected: this.fullAuto, onTap: () => this.onApproval() })
         Blank()
         if (this.showMic) IconButton({ icon: this.listening ? 'mic_fill' : 'mic', label: this.listening ? '结束语音输入' : '开始语音输入', selected: this.listening, isEnabled: this.ready, onTap: () => this.onMic() })
-        Button({ type: ButtonType.Circle }) {
-          if (this.running) {
-            Column().width(12).height(12).borderRadius(3).backgroundColor(Tokens.sendGlyph)
-          } else Sym({ name: 'arrow_up', dim: 20, color: Tokens.sendGlyph })
-        }.width(44).height(44).flexShrink(0)
-        .backgroundColor(this.running ? Tokens.danger : (this.canSend() ? Tokens.send : Tokens.sendOff))
+        SurfaceButton({ content: () => { this.sendButtonContent(); } }).width(44).height(44).flexShrink(0)
+        .backgroundColor(Tokens.reactive(this.themeTick, this.running ? Tokens.danger : (this.canSend() ? Tokens.send : Tokens.sendOff))).borderRadius(22)
         .scale({ x: this.sendPressed && !this.reduced ? 0.94 : 1, y: this.sendPressed && !this.reduced ? 0.94 : 1 })
-        .enabled(this.running || this.canSend()).stateEffect(true).accessibilityText(this.running ? '停止任务，保留草稿' : '发送消息')
+        .enabled(this.running || this.canSend()).accessibilityText(this.running ? '停止任务，保留草稿' : '发送消息')
         .onTouch((event: TouchEvent) => this.getUIContext().animateTo({ duration: MotionPolicy.duration(100) }, () => this.sendPressed = event.type === TouchType.Down))
         .onBlur(() => this.sendPressed = false)
         .onClick(() => { if (this.running) this.onStop(); else if (this.canSend()) this.onSend(); })
       }.width('100%').height(52).padding({ left: 8, right: 8, bottom: 4 }).flexShrink(0)
-    }.width('100%').flexShrink(0).backgroundColor(Tokens.composer).borderRadius(Tokens.composerRadius)
-      .border({ width: Tokens.hairline, color: Tokens.separator })
-      .shadow({ radius: 14, color: Tokens.composerShadow, offsetY: 3 })
+    }.width('100%').flexShrink(0).backgroundColor(Tokens.reactive(this.themeTick, Tokens.composer)).borderRadius(Tokens.composerRadius)
+      .border({ width: Tokens.hairline, color: Tokens.reactive(this.themeTick, Tokens.separator) })
+      .shadow({ radius: 14, color: Tokens.reactive(this.themeTick, Tokens.composerShadow), offsetY: 3 })
   }
 
   @Builder
   removeDot(label: string, tap: () => void) {
-    Button({ type: ButtonType.Circle }) {
-      Stack({ alignContent: Alignment.TopEnd }) {
-        Stack() { Sym({ name: 'xmark', dim: 10, color: '#FFFFFF' }) }
-          .width(20).height(20).backgroundColor('#B8202A25').borderRadius(10)
-      }.width(36).height(36)
-    }.width(44).height(44).backgroundColor('#00000000').stateEffect(true).accessibilityText(label).onClick(tap)
+    SurfaceButton({ content: () => { this.removeButtonContent(); } }).width(44).height(44).backgroundColor(Tokens.reactive(this.themeTick, Tokens.transparent)).accessibilityText(label).onClick(tap)
   }
+  private compactActions(): boolean { return this.compact && this.actionBarWidth >= 320; }
   private photos(): string[] { return this.imagePaths.length ? this.imagePaths : (this.imagePath ? [this.imagePath] : []); }
   focusRequested(): void { this.applyFocus(); }
   private applyFocus(): void {

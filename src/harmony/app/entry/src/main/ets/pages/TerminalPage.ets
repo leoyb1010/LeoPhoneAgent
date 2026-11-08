@@ -1,14 +1,16 @@
+import { AppNavigation } from '../navigation/AppNavigation';
+import { ActionButton, IconButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
-import { router } from '@kit.ArkUI';
+
 import { webview } from '@kit.ArkWeb';
 import { util } from '@kit.ArkTS';
 import { LinuxRuntime } from '../local/LinuxRuntime';
 import { LinuxTerminalBridge } from '../local/LinuxTerminalBridge';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct TerminalPage {
+export struct TerminalPage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @StorageProp('linuxStage') @Watch('installStageChanged') installStage: string = '';
   @State message: string = '正在初始化本机 Alpine Linux…';
   @State pid: number = 0;
@@ -95,12 +97,13 @@ struct TerminalPage {
     catch (error) { this.message = `${error}`; }
   }
   build() {
+    NavDestination() {
     Column({ space: 8 }) {
       Row({ space: 12 }) {
-        Button('返回').onClick(() => router.back())
+        IconButton({ icon: 'chevron_left', label: '返回上一页', onTap: () => AppNavigation.back() })
         Text('本机 Linux 终端').fontSize(21).fontColor(Tokens.text).layoutWeight(1)
-        if (this.running) { Button('停止').onClick(() => LinuxRuntime.stop(this.owner, this.pid)) }
-        else { Button('重新打开').onClick(() => this.start()) }
+        if (this.running) { ActionButton({ label: '停止', variant: 'secondary', fullWidth: false, onTap: () => LinuxRuntime.stop(this.owner, this.pid) }) }
+        else { ActionButton({ label: '重新打开', variant: 'secondary', fullWidth: false, onTap: () => this.start() }) }
       }.padding(12).width('100%')
       Text(this.message).fontSize(12).fontColor(Tokens.secondary).width('100%').padding({ left: 12, right: 12 })
       Web({ src: $rawfile('terminal/terminal.html'), controller: this.controller })
@@ -110,11 +113,15 @@ struct TerminalPage {
         .onPermissionRequest((event) => event?.request.deny())
         .layoutWeight(1).width('100%')
       Row({ space: 8 }) {
-        Button('Ctrl-C').enabled(this.running).onClick(() => this.send('\u0003'))
-        Button('Tab').enabled(this.running).onClick(() => this.send('\t'))
-        Button('↑').enabled(this.running).onClick(() => this.send('\u001b[A'))
-        Button('↓').enabled(this.running).onClick(() => this.send('\u001b[B'))
+        ActionButton({ label: 'Ctrl-C', variant: 'secondary', fullWidth: false, isEnabled: this.running, onTap: () => this.send('\u0003') })
+        ActionButton({ label: 'Tab', variant: 'secondary', fullWidth: false, isEnabled: this.running, onTap: () => this.send('\t') })
+        ActionButton({ label: '↑', variant: 'secondary', fullWidth: false, isEnabled: this.running, onTap: () => this.send('\u001b[A') })
+        ActionButton({ label: '↓', variant: 'secondary', fullWidth: false, isEnabled: this.running, onTap: () => this.send('\u001b[B') })
       }.width('100%').padding({ left: 12, right: 12, bottom: 12 })
     }.width('100%').height('100%').backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 }

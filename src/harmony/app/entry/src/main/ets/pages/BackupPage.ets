@@ -1,3 +1,4 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { util } from '@kit.ArkTS';
 import { common } from '@kit.AbilityKit';
 import { picker, fileIo } from '@kit.CoreFileKit';
@@ -8,9 +9,9 @@ import { ActionButton } from '../theme/Controls';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct BackupPage {
+export struct BackupPage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @State busy: boolean = false;
   @State operation: string = '';
   @State message: string = '';
@@ -34,6 +35,7 @@ struct BackupPage {
   private cancel(): void { this.generation++; BackupPackage.cancel(); this.message = '正在取消并清理临时文件'; }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '备份与恢复' })
       Scroll() {
@@ -63,6 +65,10 @@ struct BackupPage {
         }.padding(Tokens.pagePad).width('100%').constraintSize({ maxWidth: 680 })
       }.layoutWeight(1).width('100%').align(Alignment.Top).scrollBar(BarState.Auto)
     }.height('100%').width('100%').backgroundColor(Tokens.grouped)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   private async exportBackup(): Promise<void> {

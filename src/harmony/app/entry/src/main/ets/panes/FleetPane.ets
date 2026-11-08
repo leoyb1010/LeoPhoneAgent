@@ -1,5 +1,6 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
-import { promptAction, router } from '@kit.ArkUI';
+import { promptAction } from '@kit.ArkUI';
 import { HarnessKind, RemoteTask, displayName, sanitizeKey } from '../net/Protocol';
 import { MachinesClient } from '../net/MachinesClient';
 import { ChatLaunch, HarnessClient } from '../net/HarnessClient';
@@ -9,6 +10,7 @@ import { Tokens } from '../theme/Tokens';
 
 @Component
 export struct FleetPane {
+  @StorageProp('themeTick') themeTick: number = 0;
   @Prop wide: boolean = false;
   /** 从首页推进来的一页(手机上):左上角返回。 */
   @Prop showBack: boolean = false;
@@ -45,7 +47,7 @@ export struct FleetPane {
           })
         } else if (this.showBack) {
           this.barIcon('chevron_left', () => {
-            router.back();
+            AppNavigation.back();
           })
         }
         Text('远程')
@@ -138,11 +140,11 @@ export struct FleetPane {
     Column() {
       Row() {
         Stack() {
-          Sym({ name: 'dot_radiowaves_left_and_right', dim: 16, color: '#FFFFFF' })
+          Sym({ name: 'dot_radiowaves_left_and_right', dim: 16, color: Tokens.sendGlyph })
         }
         .width(Tokens.settingsIcon)
         .height(Tokens.settingsIcon)
-        .backgroundColor('#30B0C7')
+        .backgroundColor(Tokens.secondary)
         .borderRadius(8)
         Column() {
           Text('中继钥匙与配对')
@@ -254,12 +256,12 @@ export struct FleetPane {
           Sym({
             name: host.platform === 'android' || host.platform === 'harmony' ? 'phone' : 'computer',
             dim: 18,
-            color: '#FFFFFF'
+            color: Tokens.sendGlyph
           })
         }
         .width(34)
         .height(34)
-        .backgroundColor(host.online ? '#30B0C7' : Tokens.muted)
+        .backgroundColor(host.online ? Tokens.secondary : Tokens.muted)
         .borderRadius(9)
         Column() {
           Text(host.displayName.length > 0 ? host.displayName : displayName(host.name))
@@ -347,7 +349,7 @@ export struct FleetPane {
       const picked = await promptAction.showDialog({
         title: '换一台中继?',
         message: `这张码来自另一台中继:${root}\n加入后会改用它,原来中继上的机器要重新配对。只在你确定这张码是自己的 Mac 出的时候才继续。`,
-        buttons: [{ text: '换过去', color: '#D94B16' }, { text: '取消', color: '#007AFF' }]
+        buttons: [{ text: '换过去', color: Tokens.warn }, { text: '取消', color: Tokens.accent }]
       });
       return picked.index === 0;
     } catch (_err) {
@@ -444,7 +446,7 @@ export struct FleetPane {
   /** 系统操作菜单,最多 6 项;取消返回 -1。 */
   private static async pick(title: string, labels: string[]): Promise<number> {
     const items: promptAction.Button[] = labels.slice(0, 6).map((text: string) => {
-      const item: promptAction.Button = { text: text, color: '#007AFF' };
+      const item: promptAction.Button = { text: text, color: Tokens.accent };
       return item;
     });
     const buttons: [promptAction.Button, promptAction.Button?, promptAction.Button?, promptAction.Button?,

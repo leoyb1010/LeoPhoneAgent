@@ -1,7 +1,9 @@
-import { router } from '@kit.ArkUI';
+import { destination } from '../navigation/Destinations';
+import { LayoutState, resolveLayout } from '../layout/LayoutPolicy';
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
 import display from '@ohos.display';
-import { inputMethod } from '@kit.ImeKit';
+import { inputMethod } from '@kit.IMEKit';
 import { ReleaseCatalog } from '../release/ReleaseCatalog';
 import { ReleaseNotesStore } from '../store/ReleaseNotesStore';
 import { MachinesClient } from '../net/MachinesClient';
@@ -26,6 +28,12 @@ struct HomePage {
   @State notesTitle: string = '';
   @State notesLines: string[] = [];
   @State wide: boolean = false;
+  @State pathStack: NavPathStack = AppNavigation.stack;
+  @StorageProp('navigationTick') navigationTick: number = 0;
+  @StorageProp('windowFrameWidth') @Watch('onWindowFrame') windowWidth: number = 0;
+  @StorageLink('inspectorVisible') inspectorVisible: boolean = false;
+  private layoutState: LayoutState = new LayoutState();
+  private widthTimer: number = -1;
   @State tab: number = 0;
   @State chatMachine: string = '';
   @State chatLaunch: number = 0;
@@ -47,6 +55,7 @@ struct HomePage {
 
   aboutToAppear(): void {
     this.pageAlive = true;
+    AppNavigation.ready = true;
     const first = ReleaseCatalog.all()[0];
     this.notesTitle = first.title;
     this.notesLines = first.highlights;
@@ -80,7 +89,7 @@ struct HomePage {
     if (!this.pageAlive || !this.foreground || !this.notesReady || this.showNotes || !this.requestedPage) return;
     const page = this.requestedPage;
     if (!/^pages\/(BrainSpace|Workspace|Terminal|Recordings|Settings|Collections|Sync|Approval|SSHTerminal)Page$/.test(page)) return;
-    router.pushUrl({ url: page }).then(() => {
+    AppNavigation.pushUrl({ url: page }).then(() => {
       if (this.requestedPage === page) AppStorage.setOrCreate('requestedPage', '');
     }).catch(() => { this.pushError = '页面暂时没有打开，请重试'; });
   }
@@ -101,6 +110,8 @@ struct HomePage {
       inputMethod.getController().hideSoftKeyboard().catch(() => {});
       return true;
     }
+    if (this.inspectorVisible) { this.inspectorVisible = false; AppStorage.setOrCreate('inspectorManualAt', Date.now()); return true; }
+    if (this.pathStack.size() > 0) { AppNavigation.back(); return true; }
     if (this.tab !== 0) { this.tab = 0; return true; }
     const selected = AppStorage.get<string>('homeSessionId') ?? '';
     if (selected) { AppStorage.setOrCreate('homeSessionId', ''); return true; }
@@ -136,7 +147,7 @@ struct HomePage {
       ChatLaunch.machine = machine;
       ChatLaunch.harness = harness;
       ChatLaunch.sessions.set(ChatLaunch.key(machine, harness), session);
-      await router.pushUrl({ url: 'pages/RemoteChatPage' });
+      await AppNavigation.pushUrl({ url: 'pages/RemoteChatPage' });
       this.consumedPush = tick;
     } catch (error) {
       this.pushError = `${error}`;
@@ -148,6 +159,8 @@ struct HomePage {
 
   aboutToDisappear(): void {
     this.pageAlive = false;
+    AppNavigation.ready = false;
+    if (this.widthTimer >= 0) clearTimeout(this.widthTimer);
     if (this.foldCb) {
       try {
         display.off('foldStatusChange', this.foldCb);
@@ -158,15 +171,16 @@ struct HomePage {
   }
 
   build() {
+    Navigation(this.pathStack) {
     Column() {
       if (this.pushError) {
-        Text(this.pushError).fontSize(13).fontColor(Tokens.warn).padding(12).width('100%')
+        Text(this.pushError).fontSize(13).fontColor(Tokens.reactive(this.tick, Tokens.warn)).padding(12).width('100%')
       }
       this.wideBody()
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Tokens.bg)
+    .backgroundColor(Tokens.reactive(this.tick, Tokens.bg))
     .onAreaChange((_old: Area, now: Area) => {
       this.syncWide(Number(now.width), Number(now.height));
     })
@@ -176,6 +190,14 @@ struct HomePage {
       backgroundColor: Tokens.card,
       onDisappear: () => { this.drainNavigation(); }
     })
+    }
+    .hideTitleBar(true).hideBackButton(true)
+    .mode(this.wide && this.navigationTick >= 0 && this.pathStack.size() > 0 ? NavigationMode.Split : NavigationMode.Stack)
+    .navBarWidth(this.windowWidth >= 840 ? this.windowWidth - 360 : '50%')
+    .navBarWidthRange([280, Math.max(280, this.windowWidth - 280)])
+    .minContentWidth(280)
+    .navDestination(destination)
+    .width('100%').height('100%')
   }
 
   /** 展开的折叠屏、平板:本机(列表 + 对话)、远程(机器 + 远程对话)、设置,三者之间用各自顶栏的图标切换。 */
@@ -200,29 +222,30 @@ struct HomePage {
             this.tab = 0;
           },
           onSettings: () => {
-            this.tab = 2;
+            AppNavigation.pushUrl({ url: 'pages/SettingsPage' });
           }
         })
-          .width('40%')
+          .width(this.wide ? (this.windowWidth >= 840 ? 208 : '40%') : '100%')
+          .visibility(this.wide || !this.chatMachine ? Visibility.Visible : Visibility.None)
         Column()
           .width(Tokens.hairline)
           .height('100%')
-          .backgroundColor(Tokens.separator)
-        ChatPane({ machine: this.chatMachine, launch: this.chatLaunch })
-          .layoutWeight(1)
+          .backgroundColor(Tokens.reactive(this.tick, Tokens.separator))
+        ChatPane({ machine: this.chatMachine, launch: this.chatLaunch, showBack: !this.wide,
+          onBack: () => { this.chatMachine = ''; } })
+          .layoutWeight(1).visibility(this.wide || this.chatMachine ? Visibility.Visible : Visibility.None)
       }
       .width('100%')
       .layoutWeight(1)
     } else {
       LocalAgentPane({
-        wide: this.wide,
+        wide: this.wide && this.pathStack.size() === 0 && this.navigationTick >= 0,
         onRemote: () => {
           if (this.wide) this.tab = 1;
-          else router.pushUrl({ url: 'pages/FleetPage' });
+          else AppNavigation.pushUrl({ url: 'pages/FleetPage' });
         },
         onSettings: () => {
-          if (this.wide) this.tab = 2;
-          else router.pushUrl({ url: 'pages/SettingsPage' });
+          AppNavigation.pushUrl({ url: 'pages/SettingsPage' });
         }
       })
         .layoutWeight(1)
@@ -234,13 +257,13 @@ struct HomePage {
     Column({ space: 14 }) {
       Scroll() {
         Column({ space: 14 }) {
-          Text('本次更新').fontSize(12).fontColor(Tokens.secondary).width('100%')
+          Text('本次更新').fontSize(12).fontColor(Tokens.reactive(this.tick, Tokens.secondary)).width('100%')
           Text(this.notesTitle).fontSize(24).fontWeight(FontWeight.Bold)
-            .fontColor(Tokens.text).width('100%')
+            .fontColor(Tokens.reactive(this.tick, Tokens.text)).width('100%')
           ForEach(this.notesLines, (line: string) => {
             Row({ space: 12 }) {
-              Column().width(5).height(5).borderRadius(3).backgroundColor(Tokens.accent).margin({ top: 9 })
-              Text(line).fontSize(15).fontColor(Tokens.text).layoutWeight(1)
+              Column().width(5).height(5).borderRadius(3).backgroundColor(Tokens.reactive(this.tick, Tokens.accent)).margin({ top: 9 })
+              Text(line).fontSize(15).fontColor(Tokens.reactive(this.tick, Tokens.text)).layoutWeight(1)
             }.width('100%').alignItems(VerticalAlign.Top)
           }, (line: string) => line)
         }.width('100%').alignItems(HorizontalAlign.Start).padding({ right: 4, bottom: 8 })
@@ -249,7 +272,7 @@ struct HomePage {
       .constraintSize({ maxHeight: Math.max(80, (this.frameHeight || this.lastHeight || 640) - 180) })
       .scrollBar(BarState.Off)
       if (this.notesError) {
-        Text(this.notesError).fontSize(13).fontColor(Tokens.danger).width('100%')
+        Text(this.notesError).fontSize(13).fontColor(Tokens.reactive(this.tick, Tokens.danger)).width('100%')
       }
       ActionButton({ label: '知道了', busy: this.notesBusy, onTap: () => {
         this.notesBusy = true;
@@ -274,6 +297,14 @@ struct HomePage {
     this.lastWidth = width;
     this.lastHeight = height;
     // Keyboard RESIZE changes content height, not the window's structural layout.
-    this.wide = FoldLayout.isWide(width, this.frameHeight || height);
+    if (this.widthTimer >= 0) clearTimeout(this.widthTimer);
+    this.widthTimer = setTimeout(() => {
+      this.widthTimer = -1;
+      this.layoutState.inspector = this.inspectorVisible;
+      this.layoutState.manualAt = AppStorage.get<number>('inspectorManualAt') ?? -1500;
+      this.layoutState = resolveLayout(this.layoutState, this.windowWidth || width, Date.now());
+      this.wide = this.layoutState.size !== 'sm';
+      this.inspectorVisible = this.layoutState.inspector;
+    }, 350);
   }
 }

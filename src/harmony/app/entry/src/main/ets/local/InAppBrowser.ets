@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+import { AppNavigation } from '../navigation/AppNavigation';
 import { browserStore } from '../store/BrowserStore';
 import { SensitiveToolGate } from './SensitiveToolGate';
 
@@ -27,7 +27,7 @@ export class InAppBrowser {
     }
     // pushUrl 返回 Promise，之前没接。定时任务和「当身体」这两条链路也会调到本方法，
     // 那时通常没有前台页面上下文，push 会失败 —— 不接就是一个未处理拒绝。
-    router.pushUrl({ url: 'pages/WebPage' }).catch(() => {
+    AppNavigation.pushUrl({ url: 'pages/WebPage' }).catch(() => {
       // 没有 UI 上下文时（定时/远程回合）打不开页面，标签已经记下了，下次进浏览页能看到
     });
     return '';
@@ -35,7 +35,7 @@ export class InAppBrowser {
 
   private static onWebPage(): boolean {
     try {
-      return router.getState().name === 'WebPage';
+      return AppNavigation.getState().name === 'WebPage';
     } catch (_err) {
       return false;
     }

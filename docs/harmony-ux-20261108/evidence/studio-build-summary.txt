@@ -1,0 +1,16 @@
+
+> hvigor Finished :entry:default@CompileArkTS... after 3 s 46 ms
+> hvigor Finished :entry:default@GeneratePkgModuleJson... after 1 ms
+> hvigor Finished :entry:default@ProcessCompiledResources... after 1 ms
+> hvigor Finished :entry:default@PackageHap... after 293 ms
+> hvigor Finished :entry:default@PackingCheck... after 2 ms
+> hvigor WARN: Will skip sign 'hos_hap'. No signingConfigs profile is configured in current project.
+             If needed, configure the signingConfigs in /private/tmp/leo-harmony-ux-app/build-profile.json5.
+> hvigor Finished :entry:default@SignHap... after 1 ms
+> hvigor Finished :entry:default@CollectDebugSymbol... after 1 ms
+> hvigor Finished :entry:assembleHap... after 1 ms
+> hvigor BUILD SUCCESSFUL in 4 s 659 ms
+
+33 tasks in total: 23 executed, 10 up-to-date
+HAP_STAGE=/tmp/leo-harmony-ux-app
+/tmp/leo-harmony-ux-app/entry/build/default/outputs/default/entry-default-unsigned.hap

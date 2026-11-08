@@ -1,11 +1,12 @@
+import { AppNavigation } from '../navigation/AppNavigation';
+import { ActionButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
 import { EnvEntry, envStore } from '../store/EnvStore';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct EnvPage {
+export struct EnvPage {
   @StorageProp('themeTick') tick: number = 0;
   @State nameDraft: string = '';
   @State valueDraft: string = '';
@@ -20,6 +21,7 @@ struct EnvPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '环境变量' })
       Text('注入本机对话。值在本机加密保存，执行已配置的MCP调用时注入。')
@@ -48,15 +50,12 @@ struct EnvPage {
             .fontColor(Tokens.text)
             .placeholderColor(Tokens.muted)
             .borderRadius(Tokens.settingsRadius)
-          Button('保存变量')
+          ActionButton({ label: '保存变量', variant: 'secondary', fullWidth: false, onTap: () => {
+              this.save();
+            } })
             .width('100%')
             .height(44)
             .margin({ top: 10, bottom: 16 })
-            .backgroundColor(Tokens.accent)
-            .fontColor('#FFFFFF')
-            .onClick(() => {
-              this.save();
-            })
           ForEach(this.rows, (row: EnvEntry) => {
             Row() {
               Column() {
@@ -99,6 +98,10 @@ struct EnvPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   private async save(): Promise<void> {

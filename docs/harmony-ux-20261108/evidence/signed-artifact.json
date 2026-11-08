@@ -1,0 +1,7 @@
+{
+  "app": "leobot",
+  "verify_exit": 0,
+  "signed_stage_unsigned_payload_equal": true,
+  "sha256": "39b05a77c0599b5cfed29e560b88388b20365dbfe6e1c31d28d29ff7fed3083d",
+  "bytes": 83528073
+}

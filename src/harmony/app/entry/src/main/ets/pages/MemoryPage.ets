@@ -1,11 +1,13 @@
+import { AppNavigation } from '../navigation/AppNavigation';
+import { ActionButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
 import { memoryStore } from '../store/MemoryStore';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct MemoryPage {
+export struct MemoryPage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @State global: string = '';
   @State today: string = '';
   @State message: string = '';
@@ -19,6 +21,7 @@ struct MemoryPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '记忆' })
       Scroll() {
@@ -45,20 +48,17 @@ struct MemoryPage {
             .fontSize(14)
             .fontColor(Tokens.text)
             .width('100%')
-          Button('保存 GLOBAL.md')
-            .width('100%')
-            .height(44)
-            .margin({ top: 16 })
-            .backgroundColor(Tokens.accent)
-            .fontColor('#FFFFFF')
-            .onClick(() => {
+          ActionButton({ label: '保存 GLOBAL.md', variant: 'secondary', fullWidth: false, onTap: () => {
               const ctx = getContext(this) as common.UIAbilityContext;
               memoryStore.saveGlobal(ctx, this.global).then(() => {
                 this.message = '已保存';
               }).catch((err: Error) => {
                 this.message = `${err}`;
               });
-            })
+            } })
+            .width('100%')
+            .height(44)
+            .margin({ top: 16 })
           if (this.message.length > 0) {
             Text(this.message)
               .fontColor(Tokens.online)
@@ -76,5 +76,9 @@ struct MemoryPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 }

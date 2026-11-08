@@ -29,6 +29,7 @@ const nativeLinux = {
   poll(pid) {
     polls++;
     const process = processes.get(pid);
+    if (process.command.includes('LEO_GUEST_DNS_WRITE_OK')) return {buffer: new TextEncoder().encode('LEO_GUEST_DNS_WRITE_OK').buffer, stderrBuffer:new ArrayBuffer(0), stderrTruncated:false, exited:true, exitCode:0,truncated:false};
     if (process.command === '/bin/sh /mnt/bootstrap/install.sh') return {buffer: new TextEncoder().encode(bootstrapStatus ? 'INSTALL_FAILED' : 'LEO_LINUX_BOOTSTRAP_COMPLETE').buffer, stderrBuffer:new ArrayBuffer(0), stderrTruncated:false, exited:true, exitCode:bootstrapStatus,truncated:false};
     return {buffer: new ArrayBuffer(0), stderrBuffer:new TextEncoder().encode("diagnostic only").buffer, stderrTruncated:false, exited: process.stopped, exitCode: process.stopped ? 137 : 0, truncated: false};
   },
@@ -102,9 +103,13 @@ console.log('LINUX_BOOTSTRAP_MARKER_OK failed install/storage never commits read
 markerExists = true;
 runtime.ready = false;
 const previousMounts = packageMounts;
-const previousPids = nextPid;
+const bootstrapCount = () => [...processes.values()].filter(process => process.command === '/bin/sh /mnt/bootstrap/install.sh').length;
+const dnsCount = () => [...processes.values()].filter(process => process.command.includes('LEO_GUEST_DNS_WRITE_OK')).length;
+const previousBootstraps = bootstrapCount();
+const previousDNSWrites = dnsCount();
 await runtime.initialize(app);
 assert.equal(packageMounts,previousMounts+1);
-assert.equal(nextPid,previousPids,'completed installation must remount without replaying apk');
+assert.equal(bootstrapCount(),previousBootstraps,'completed installation must remount without replaying apk');
+assert.equal(dnsCount(),previousDNSWrites+1,'restart must refresh guest DNS after remounting');
 assert.equal(runtime.ready,true);
 console.log('LINUX_BOOTSTRAP_RESTART_OK persisted marker still restores native readonly bind');

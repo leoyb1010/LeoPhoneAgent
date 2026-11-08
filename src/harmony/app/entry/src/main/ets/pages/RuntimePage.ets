@@ -1,12 +1,12 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit';
-import { router } from '@kit.ArkUI';
+
 import { PushRegistrar } from '../push/PushRegistrar';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct RuntimePage {
+export struct RuntimePage {
   @StorageProp('themeTick') tick: number = 0;
   @State pushLine: string = '';
   @State micLine: string = '还没问麦克风';
@@ -20,6 +20,7 @@ struct RuntimePage {
   }
 
   build() {
+    NavDestination() {
     Scroll() {
       Column() {
         NavBar({ title: '本机运行时' })
@@ -35,10 +36,10 @@ struct RuntimePage {
           this.refreshPush();
         })
         this.card('系统智能体与分享', '通过系统授权入口交互，查看已配置能力和运行状态', '查看系统集成', () => {
-          router.pushUrl({ url: 'pages/SystemIntegrationPage' });
+          AppNavigation.pushUrl({ url: 'pages/SystemIntegrationPage' });
         })
         this.card('本机 Linux', 'App 内置 iSH ARM64 解释器与 Alpine Linux，共享文件位于 /mnt/workspace。首次打开会安装并校验资源。', '打开终端', () => {
-          router.pushUrl({ url: 'pages/TerminalPage' });
+          AppNavigation.pushUrl({ url: 'pages/TerminalPage' });
         })
         if (this.message.length > 0) {
           Text(this.message)
@@ -55,6 +56,10 @@ struct RuntimePage {
     .height('100%')
     .backgroundColor(Tokens.bg)
     .scrollBar(BarState.Off)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   @Builder

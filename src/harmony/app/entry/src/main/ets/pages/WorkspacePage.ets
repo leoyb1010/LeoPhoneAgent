@@ -1,18 +1,18 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
 import { picker } from '@kit.CoreFileKit';
-import { router } from '@kit.ArkUI';
-import { inputMethod } from '@kit.ImeKit';
+
+import { inputMethod } from '@kit.IMEKit';
 import { webview } from '@kit.ArkWeb';
 import { Attachments } from '../chat/Attachments';
 import { WorkspaceFile, WorkspaceStore } from '../store/WorkspaceStore';
 import { NavBar } from '../theme/Widgets';
-import { ActionButton, IconButton } from '../theme/Controls';
+import { ActionButton, IconButton, SurfaceButton } from '../theme/Controls';
 import { Sym } from '../theme/Symbols';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct WorkspacePage {
+export struct WorkspacePage {
   @StorageProp('themeTick') tick: number = 0;
   @StorageProp('keyboardVisible') keyboardVisible: boolean = false;
   @State directory: string = '';
@@ -32,7 +32,16 @@ struct WorkspacePage {
   private controller: webview.WebviewController = new webview.WebviewController();
   private alive: boolean = false;
 
-  aboutToAppear(): void { this.alive = true; this.refresh(); }
+  aboutToAppear(): void {
+    this.alive = true;
+    const params = AppNavigation.getParams();
+    if (typeof params.path === 'string' && params.directory === true) this.directory = params.path as string;
+    this.refresh();
+    if (typeof params.path === 'string' && params.directory !== true) {
+      const file = new WorkspaceFile(); file.path = params.path as string; file.name = file.path.split('/').pop() ?? file.path;
+      this.open(file);
+    }
+  }
   aboutToDisappear(): void { this.alive = false; }
   onBackPress(): boolean {
     if (this.keyboardVisible) { inputMethod.getController().hideSoftKeyboard().catch(() => {}); return true; }
@@ -105,9 +114,23 @@ struct WorkspacePage {
     const policy = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; img-src data:; form-action \'none\'; base-uri \'none\'">';
     this.controller.loadData('<!doctype html><meta charset="UTF-8">' + policy + this.preview, 'text/html', 'UTF-8');
   }
+  @Builder
+  fileButtonContent(row: WorkspaceFile) {
+              Row({ space: 12 }) {
+                Sym({ name: row.directory ? 'folder' : 'doc_text', dim: 22, color: this.selected === row.path ? Tokens.accent : Tokens.secondary })
+                Column({ space: 5 }) {
+                  Text(row.name).fontSize(15).fontWeight(FontWeight.Medium).fontColor(Tokens.text).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                  Text(row.directory ? '文件夹' : this.fileSize(row.size)).fontSize(12).fontColor(Tokens.secondary)
+                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                Sym({ name: 'chevron_right', dim: 12, color: Tokens.muted })
+              }.padding(14).width('100%').constraintSize({ minHeight: 68 })
+
+  }
+
   build() {
+    NavDestination() {
     Column() {
-      NavBar({ title: '沙箱文件', onBack: () => { if (!this.onBackPress()) router.back(); } })
+      NavBar({ title: '沙箱文件', onBack: () => { if (!this.onBackPress()) AppNavigation.back(); } })
       Scroll() {
         Row({ space: 4 }) {
           ActionButton({ label: '工作区', variant: 'quiet', fullWidth: false, onTap: () => this.navigate('') })
@@ -131,6 +154,11 @@ struct WorkspacePage {
     }.width('100%').height('100%').backgroundColor(Tokens.bg)
       .onAreaChange((_old: Area, area: Area) => { const width = Number.parseFloat(`${area.width}`); if (width > 0) this.wide = width >= 720; })
       .bindSheet($$this.showFolder, this.folderSheet(), { height: SheetSize.FIT_CONTENT, backgroundColor: Tokens.card })
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
+    .onBackPressed(() => this.onBackPress())
   }
   @Builder
   fileList() {
@@ -158,16 +186,7 @@ struct WorkspacePage {
         }
         ForEach(this.matches(), (row: WorkspaceFile) => {
           ListItem() {
-            Button({ type: ButtonType.Normal }) {
-              Row({ space: 12 }) {
-                Sym({ name: row.directory ? 'folder' : 'doc_text', dim: 22, color: this.selected === row.path ? Tokens.accent : Tokens.secondary })
-                Column({ space: 5 }) {
-                  Text(row.name).fontSize(15).fontWeight(FontWeight.Medium).fontColor(Tokens.text).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                  Text(row.directory ? '文件夹' : this.fileSize(row.size)).fontSize(12).fontColor(Tokens.secondary)
-                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                Sym({ name: 'chevron_right', dim: 12, color: Tokens.muted })
-              }.padding(14).width('100%').constraintSize({ minHeight: 68 })
-            }.width('100%').padding(0).borderRadius(14).stateEffect(true)
+            SurfaceButton({ content: () => { this.fileButtonContent(row); } }).width('100%').padding(0).borderRadius(14)
               .backgroundColor(this.selected === row.path ? Tokens.accentSoft : Tokens.card)
               .accessibilityText(row.name + '，' + (row.directory ? '文件夹' : this.fileSize(row.size))).onClick(() => this.open(row))
           }

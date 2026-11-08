@@ -1,5 +1,6 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
-import { router } from '@kit.ArkUI';
+
 import { McpOAuthLaunch } from './McpOAuthPage';
 import { McpServer, McpStore, mcpStore } from '../store/McpStore';
 import { McpStdio } from '../local/McpStdio';
@@ -7,9 +8,8 @@ import { ActionButton } from '../theme/Controls';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct McpPage {
+export struct McpPage {
   @StorageProp('themeTick') tick: number = 0;
   @StorageProp('mcpStdioTick') stdioTick: number = 0;
   @State nameDraft: string = '';
@@ -40,6 +40,7 @@ struct McpPage {
     catch (err) { this.rows = mcpStore.rows.slice(); this.message = `${err}`; }
   }
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: 'MCP 工具服务器' })
       Scroll() {
@@ -104,7 +105,7 @@ struct McpPage {
                 ActionButton({ label: '读取工具', variant: 'secondary', fullWidth: false, isEnabled: !this.busy && row.enabled, onTap: () => { this.inspect(row); } })
                 if (row.transport === 'http') {
                   ActionButton({ label: 'OAuth授权', variant: 'secondary', fullWidth: false, isEnabled: !this.busy && row.enabled, onTap: () => {
-                    McpOAuthLaunch.label = row.label; router.pushUrl({ url: 'pages/McpOAuthPage' });
+                    McpOAuthLaunch.label = row.label; AppNavigation.pushUrl({ url: 'pages/McpOAuthPage' });
                   } })
                 }
                 if (row.transport === 'stdio') {
@@ -122,6 +123,10 @@ struct McpPage {
         }.width('100%').constraintSize({ maxWidth: 560 }).alignItems(HorizontalAlign.Start).padding({ left: 24, right: 24, top: 24, bottom: 40 })
       }.layoutWeight(1).scrollBar(BarState.Off)
     }.width('100%').height('100%').backgroundColor(Tokens.grouped)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
   private headerTemplate(headers: Record<string, string>): string {
     const names: Record<string, string> = {}; Object.keys(headers).sort().forEach((name: string) => { names[name] = ''; });

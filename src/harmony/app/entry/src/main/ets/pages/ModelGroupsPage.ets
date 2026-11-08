@@ -1,3 +1,4 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
 import { ModelGroup, ProviderInstance, providerStore } from '../store/ProviderStore';
 import { ActionButton, IconButton } from '../theme/Controls';
@@ -6,9 +7,8 @@ import { Tokens } from '../theme/Tokens';
 
 class ModelChoice { id: string = ''; model: string = ''; provider: string = ''; ready: boolean = false; }
 
-@Entry
 @Component
-struct ModelGroupsPage {
+export struct ModelGroupsPage {
   @StorageProp('themeTick') tick: number = 0;
   @State name: string = '';
   @State editingId: string = '';
@@ -27,6 +27,7 @@ struct ModelGroupsPage {
   aboutToAppear(): void { this.load(); }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '模型组' })
       Scroll() {
@@ -100,7 +101,7 @@ struct ModelGroupsPage {
               ForEach(this.models, (row: ModelChoice) => {
                 Row({ space: 12 }) {
                   Text(this.picked.indexOf(row.id) >= 0 ? `${this.picked.indexOf(row.id) + 1}` : '+')
-                    .fontSize(15).fontWeight(FontWeight.Bold).fontColor(this.picked.indexOf(row.id) >= 0 ? '#FFFFFF' : Tokens.secondary)
+                    .fontSize(15).fontWeight(FontWeight.Bold).fontColor(this.picked.indexOf(row.id) >= 0 ? Tokens.sendGlyph : Tokens.secondary)
                     .width(32).height(32).textAlign(TextAlign.Center).backgroundColor(this.picked.indexOf(row.id) >= 0 ? Tokens.accent : Tokens.surface).borderRadius(16)
                   Column({ space: 4 }) {
                     Text(row.model).fontSize(14).fontColor(Tokens.text).width('100%')
@@ -118,6 +119,10 @@ struct ModelGroupsPage {
         }.width('100%').constraintSize({ maxWidth: 720 }).padding(Tokens.pagePad)
       }.layoutWeight(1).width('100%').align(Alignment.Top).scrollBar(BarState.Auto)
     }.width('100%').height('100%').backgroundColor(Tokens.grouped)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   private async load(): Promise<void> {

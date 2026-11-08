@@ -145,17 +145,29 @@ const backMatch = /onBackPress\(\): boolean \{([\s\S]*?)\n  \}/.exec(homeSource)
 assert.ok(backMatch);
 const backStorage = new Map([['homeSessionId', 'current-chat']]);
 let hiddenKeyboard = 0;
+let poppedPaths = 0;
 const backContext = vm.createContext({
+  AppNavigation: { back: () => { poppedPaths++; } },
   inputMethod: { getController: () => ({ hideSoftKeyboard: async () => { hiddenKeyboard++; } }) },
   AppStorage: { get: key => backStorage.get(key), setOrCreate: (key, value) => backStorage.set(key, value) }
 });
 vm.runInContext(stripTypeScriptTypes('function back() {' + backMatch[1] + '\n} globalThis.back = back;', { mode: 'strip' }), backContext);
-const backView = { keyboardVisible: true, wide: false, tab: 2 };
+const backView = { keyboardVisible: true, wide: false, tab: 2, inspectorVisible: false, pathStack: { size: () => 0 } };
 assert.equal(backContext.back.call(backView), true);
 assert.equal(hiddenKeyboard, 1);
 assert.equal(backView.tab, 2);
 assert.equal(backStorage.get('homeSessionId'), 'current-chat');
 backView.keyboardVisible = false;
+backView.inspectorVisible = true;
+assert.equal(backContext.back.call(backView), true);
+assert.equal(backView.inspectorVisible, false);
+assert.equal(backView.tab, 2, 'inspector closes before navigating');
+backView.pathStack.size = () => 1;
+assert.equal(backContext.back.call(backView), true);
+assert.equal(poppedPaths, 1, 'native destination pops before root tab');
+assert.equal(backView.tab, 2);
+backView.pathStack.size = () => 0;
+
 assert.equal(backContext.back.call(backView), true);
 assert.equal(backView.tab, 0);
 assert.equal(backContext.back.call(backView), true);
@@ -176,7 +188,7 @@ const routeContext = vm.createContext({
   HarnessClient: class { async session() { return { harness: 'zcode' }; } },
   AppStorage: { get: key => storage.get(key) },
   ChatLaunch: launch,
-  router: { pushUrl: async target => { navigations.push(target); } }
+  AppNavigation: { pushUrl: async target => { navigations.push(target); } }
 });
 vm.runInContext(routeSource + '\nglobalThis.route = routePush;', routeContext);
 const view = { pageAlive: true, foreground: true, notesReady: true, showNotes: false, pushRouting: false, pushRequest: 1, consumedPush: 0, pushError: '', onPushRequest() {} };

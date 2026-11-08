@@ -1,3 +1,9 @@
+import { LongAnswer } from '../chat/LongAnswer';
+import { ShareMessage } from '../chat/TurnShare';
+import { Voice } from '../local/Voice';
+import { pasteboard } from '@kit.BasicServicesKit';
+import { AppNavigation } from '../navigation/AppNavigation';
+import { ActionButton } from '../theme/Controls';
 import { http } from '@kit.NetworkKit';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
@@ -6,7 +12,7 @@ import { WorkspaceStore } from '../store/WorkspaceStore';
 import { RemoteAttachment, RemoteCapabilities, RemoteQuestion, RemoteQuestionRequest } from '../remote/RemoteModels';
 import { RemoteWorkspaceLaunch } from '../remote/RemoteWorkspaceLaunch';
 import { common } from '@kit.AbilityKit';
-import { promptAction, router } from '@kit.ArkUI';
+import { promptAction } from '@kit.ArkUI';
 import { Composer } from '../chat/Composer';
 import { AssistantHead, NoticeRow, UserBubble } from '../chat/ChatViews';
 import { MarkdownText } from '../theme/Markdown';
@@ -37,9 +43,14 @@ function choiceLabel(choice: string): string {
 
 @Component
 export struct ChatPane {
+  @StorageProp('themeTick') themeTick: number = 0;
   @Prop machine: string = '';
   /** 手机上推进来的一页:左上角返回。 */
   @Prop showBack: boolean = false;
+  onBack: () => void = () => AppNavigation.back();
+  @State follow: boolean = true;
+  @State unread: number = 0;
+  private scrollGeneration: number = 0;
   /** 每次从列表打开都会变:同一台机器换 Agent、换任务也要重新接上(平板两栏时这一栏不会重建)。 */
   @Prop @Watch('onLaunch') launch: number = 0;
   @State lines: ChatLine[] = [];
@@ -87,6 +98,7 @@ export struct ChatPane {
 
   onLaunch(): void {
     this.teardown();
+    this.follow = true; this.unread = 0;
     this.lines = [];
     this.draft = '';
     this.approval = new ApprovalState();
@@ -143,7 +155,7 @@ export struct ChatPane {
             .width(40)
             .height(40)
             .onClick(() => {
-              router.back();
+              this.onBack();
             })
           }
           Blank()
@@ -180,7 +192,7 @@ export struct ChatPane {
                 if (line.role === 'user') {
                   Row() {
                     Blank()
-                    UserBubble({ text: line.text })
+                    UserBubble({ text: line.text, selectable: false })
                   }
                   .width('100%')
                   .margin({ top: 12, bottom: 4 })
@@ -189,7 +201,7 @@ export struct ChatPane {
                     AssistantHead({ name: this.agentName() })
                       .margin({ top: 10 })
                   }
-                  MarkdownText({ text: line === this.liveLine ? this.liveText : line.text })
+                  LongAnswer({ text: line === this.liveLine ? this.liveText : line.text, live: line === this.liveLine })
                 } else {
                   NoticeRow({ text: line.text })
                 }
@@ -197,6 +209,7 @@ export struct ChatPane {
               .width('100%')
               .alignItems(HorizontalAlign.Start)
               .constraintSize({ maxWidth: Tokens.readable })
+              .bindContextMenu(this.lineMenu(line, index), ResponseType.LongPress)
             }
             .width('100%')
             // key 带上字:key 不变 ForEach 就不重画(流式输出被截断就是这么来的);在流的那段走 liveText
@@ -210,7 +223,16 @@ export struct ChatPane {
         .alignListItem(ListItemAlign.Center)
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.Spring)
+        .onScrollFrameBegin((offset: number, state: ScrollState) => {
+          if ((state === ScrollState.Scroll || state === ScrollState.Fling) && offset < 0) {
+            this.follow = false; this.scrollGeneration++;
+          }
+          return { offsetRemain: offset };
+        })
+        .onReachEnd(() => { this.follow = true; this.unread = 0; })
       }
+      if (!this.follow) ActionButton({ label: this.unread ? `${this.unread} 条新消息 · 回到底部` : '回到底部', variant: 'secondary', fullWidth: false,
+        onTap: () => { this.follow = true; this.unread = 0; this.scrollTail(); } })
 
       if (this.machine.length > 0) {
         Column() {
@@ -247,7 +269,7 @@ export struct ChatPane {
                   Text(choiceLabel(choice))
                     .fontSize(14)
                     .fontWeight(FontWeight.Medium)
-                    .fontColor(choice === 'deny' ? Tokens.text : '#FFFFFF')
+                    .fontColor(choice === 'deny' ? Tokens.text : Tokens.sendGlyph)
                     .padding({ left: 16, right: 16, top: 8, bottom: 8 })
                     .backgroundColor(choice === 'deny' ? Tokens.chip : Tokens.accent)
                     .borderRadius(18)
@@ -282,8 +304,7 @@ export struct ChatPane {
                 Text(item.question).fontSize(14).fontColor(Tokens.text)
                 Flex({ wrap: FlexWrap.Wrap }) {
                   ForEach(item.labels, (label: string) => {
-                    Button((item.selected.includes(label) ? '✓ ' : '') + label).margin(4)
-                      .onClick(() => { this.selectAnswer(index, label); })
+                    ActionButton({ label: (item.selected.includes(label) ? '✓ ' : '') + label, variant: 'secondary', fullWidth: false, onTap: () => { this.selectAnswer(index, label); } }).margin(4)
                   })
                 }
                 TextInput({ text: item.text, placeholder: '补充回答' }).onChange((value: string) => {
@@ -292,16 +313,16 @@ export struct ChatPane {
                 })
               })
               Row({ space: 10 }) {
-                Button('提交回答').enabled(!this.sending).onClick(() => { this.answerQuestion(false); })
-                Button('跳过').enabled(!this.sending).onClick(() => { this.answerQuestion(true); })
+                ActionButton({ label: '提交回答', variant: 'secondary', fullWidth: false, isEnabled: !this.sending, onTap: () => { this.answerQuestion(false); } })
+                ActionButton({ label: '跳过', variant: 'secondary', fullWidth: false, isEnabled: !this.sending, onTap: () => { this.answerQuestion(true); } })
               }
             }.width('100%').padding(12).backgroundColor(Tokens.card).borderRadius(12)
           }
           Row({ space: 10 }) {
-            Button('工作区').onClick(() => { this.openWorkspace(); })
+            ActionButton({ label: '工作区', variant: 'secondary', fullWidth: false, onTap: () => { this.openWorkspace(); } })
             if (this.remoteFeatures.has('attachments')) {
-              Button('照片').onClick(() => { this.pickAttachment(true); })
-              Button('文件').onClick(() => { this.pickAttachment(false); })
+              ActionButton({ label: '照片', variant: 'secondary', fullWidth: false, onTap: () => { this.pickAttachment(true); } })
+              ActionButton({ label: '文件', variant: 'secondary', fullWidth: false, onTap: () => { this.pickAttachment(false); } })
             }
           }.width('100%').padding({ top: 6, bottom: 6 })
           Composer({
@@ -334,6 +355,32 @@ export struct ChatPane {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+  }
+
+  @Builder
+  lineMenu(line: ChatLine, index: number) {
+    Menu() {
+      if (line.role === 'user' || line.role === 'assistant') {
+        MenuItem({ content: '复制' }).onClick(() => {
+          pasteboard.getSystemPasteboard().setData(pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, line.text))
+            .catch(() => { this.status = '复制失败，请重试'; });
+        })
+        MenuItem({ content: '选择文字' }).onClick(() => AppNavigation.pushUrl({ url: 'pages/LongTextPage', params: { title: '选择文字', text: line.text } }))
+        MenuItem({ content: '朗读' }).onClick(() => { Voice.speak(line.text).catch(() => { this.status = '朗读不可用'; }); })
+        MenuItem({ content: '分享为长图' }).enabled(line !== this.liveLine).onClick(() => this.shareLine(index))
+      }
+    }
+  }
+  private shareLine(selected: number): void {
+    let start = selected;
+    while (start > 0 && this.lines[start].role !== 'user') start--;
+    const messages: ShareMessage[] = [];
+    for (let index = start; index < this.lines.length; index++) {
+      if (index > start && this.lines[index].role === 'user') break;
+      const part = new ShareMessage(); part.role = this.lines[index].role; part.text = this.lines[index].text;
+      messages.push(part);
+    }
+    AppNavigation.pushUrl({ url: 'pages/TurnSharePage', params: { messages: messages } });
   }
 
   private agentName(): string {
@@ -379,6 +426,7 @@ export struct ChatPane {
   }
 
   private teardown(): void {
+    this.scrollGeneration++;
     this.alive = false;
     if (this.reconnectTimer >= 0) {
       clearTimeout(this.reconnectTimer);
@@ -563,12 +611,16 @@ export struct ChatPane {
     line.role = role;
     line.text = text;
     this.lines = this.lines.concat([line]);
+    if (!this.follow && role !== 'user') this.unread++;
     this.scrollTail();
     return line;
   }
 
   private scrollTail(): void {
+    if (!this.follow) return;
+    const generation = this.scrollGeneration;
     setTimeout(() => {
+      if (!this.alive || !this.follow || generation !== this.scrollGeneration) return;
       try {
         this.scroller.scrollEdge(Edge.Bottom);
       } catch (_err) {
@@ -603,7 +655,7 @@ export struct ChatPane {
       const picked = await promptAction.showDialog({
         title: '这个任务改成全自动?',
         message: `${this.machine.length > 0 ? displayName(this.machine) : 'Mac'} 上的这个任务会直接执行命令、改文件,不再逐项问你。只对这一个任务有效,重新打开就恢复逐项确认。`,
-        buttons: [{ text: '改成全自动', color: '#D94B16' }, { text: '取消', color: '#007AFF' }]
+        buttons: [{ text: '改成全自动', color: Tokens.warn }, { text: '取消', color: Tokens.accent }]
       });
       if (picked.index === 0 && gen === this.launchGen) {
         this.macAuto = true;
@@ -677,7 +729,7 @@ export struct ChatPane {
   private openWorkspace(): void {
     RemoteWorkspaceLaunch.machine = this.machine;
     RemoteWorkspaceLaunch.sessionId = this.sessionId;
-    router.pushUrl({ url: 'pages/RemoteWorkspacePage' });
+    AppNavigation.pushUrl({ url: 'pages/RemoteWorkspacePage' });
   }
 
   private selectAnswer(index: number, label: string): void {

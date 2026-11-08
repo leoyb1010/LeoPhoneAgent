@@ -192,7 +192,7 @@ try {
     let navigated = false;
     const Page = page('AddProviderPage', ['save'], { ...catalog, ProviderInstance, providerStore: store,
       getContext: () => c, inputMethod: { getController: () => ({ stopInputSession() {} }) },
-      OAuthSession: { bind: async () => {} }, ProviderLaunch: {}, router: { replaceUrl: async () => { navigated = true; } } });
+      OAuthSession: { bind: async () => {} }, ProviderLaunch: {}, AppNavigation: { replaceUrl: async () => { navigated = true; } } });
     const view = new Page(); Object.assign(view, { type, credential: 'apiKey', label: '', root: 'https://a.example',
       seedModels: [], appendV1: true, azureMode: false, keyDraft: 'DUMMY_KEY', message: '' });
     await view.save(); assert.equal(navigated, true, view.message);

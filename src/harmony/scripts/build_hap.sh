@@ -9,6 +9,7 @@ if [[ ! -d "$TOOLCHAIN/sdk/default" ]]; then
 fi
 export DEVECO_SDK_HOME="${DEVECO_SDK_HOME:-$TOOLCHAIN/sdk}"
 
+"${HARMONY_NODE:-node}" "$ROOT/scripts/check_ui_tokens.mjs"
 bash "$ROOT/scripts/verify_harmony_release_notes.sh"
 python3 "$ROOT/scripts/prepare_linux.py"
 python3 "$ROOT/scripts/prepare_ssh.py"

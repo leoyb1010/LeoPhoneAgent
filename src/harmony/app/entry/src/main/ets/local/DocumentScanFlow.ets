@@ -1,5 +1,6 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
-import { router } from '@kit.ArkUI';
+
 import { fileIo } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
 
@@ -19,7 +20,7 @@ export class DocumentScanFlow {
       const pending = new ScanPending(); pending.isCurrent = isCurrent; pending.resolve = resolve; pending.reject = reject;
       pending.timer = setTimeout(() => DocumentScanFlow.cancel(id), 5 * 60 * 1000);
       DocumentScanFlow.pending.set(id, pending);
-      router.pushUrl({ url: 'pages/DocumentScanPage', params: { 'scanId': id } }).catch((error: Error) => {
+      AppNavigation.pushUrl({ url: 'pages/DocumentScanPage', params: { 'scanId': id } }).catch((error: Error) => {
         DocumentScanFlow.cancel(id, `${error}`);
       });
     });

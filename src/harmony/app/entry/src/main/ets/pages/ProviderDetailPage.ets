@@ -1,5 +1,6 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
-import { router } from '@kit.ArkUI';
+
 import { kindByKey } from '../local/ProviderCatalog';
 import { BrowserOAuth } from '../local/BrowserOAuth';
 import { DeviceOAuth } from '../local/DeviceOAuth';
@@ -13,9 +14,8 @@ import { ActionButton } from '../theme/Controls';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct ProviderDetailPage {
+export struct ProviderDetailPage {
   @StorageProp('themeTick') tick: number = 0;
   @State label: string = '';
   @State root: string = '';
@@ -80,6 +80,7 @@ struct ProviderDetailPage {
   }
 
   build() {
+    NavDestination() {
     if (this.authUrl.length > 0) {
       OAuthLoginSheet({
         authUrl: this.authUrl,
@@ -102,6 +103,10 @@ struct ProviderDetailPage {
     } else {
       this.detail()
     }
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   @Builder
@@ -317,7 +322,7 @@ struct ProviderDetailPage {
     }
     .width('100%')
     .padding({ left: 14, right: 14, top: 12, bottom: 12 })
-    .backgroundColor(this.model === id ? Tokens.surface2 : '#00000000')
+    .backgroundColor(this.model === id ? Tokens.surface2 : Tokens.transparent)
     .onClick(() => {
       this.model = id;
       this.customModel = '';
@@ -446,7 +451,7 @@ struct ProviderDetailPage {
     const ctx = getContext(this) as common.UIAbilityContext;
     try {
       await providerStore.remove(ctx, this.rowId);
-      router.back();
+      AppNavigation.back();
     } catch (err) {
       this.message = `${err}`;
     } finally { this.operation = ''; }

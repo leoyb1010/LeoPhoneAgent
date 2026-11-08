@@ -1,6 +1,7 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
-import { router } from '@kit.ArkUI';
-import { inputMethod } from '@kit.ImeKit';
+
+import { inputMethod } from '@kit.IMEKit';
 import {
   defaultAppendV1,
   keyHint,
@@ -19,9 +20,8 @@ import { NavBar, SettingsRow } from '../theme/Widgets';
 import { ActionButton } from '../theme/Controls';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct AddProviderPage {
+export struct AddProviderPage {
   @StorageProp('themeTick') tick: number = 0;
   @State step: number = 0;
   @State saving: boolean = false;
@@ -43,6 +43,7 @@ struct AddProviderPage {
   @State seedModels: string[] = [];
 
   build() {
+    NavDestination() {
     Column() {
       if (this.authUrl.length > 0) {
         OAuthLoginSheet({
@@ -82,6 +83,10 @@ struct AddProviderPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   aboutToDisappear(): void {
@@ -102,7 +107,7 @@ struct AddProviderPage {
         Text('语音服务商').fontSize(13).fontColor(Tokens.secondary).width('100%').margin({ top: 16 })
         Column() {
           ForEach(voiceTemplates(), (tpl: VoiceTemplate, index: number) => {
-            SettingsRow({ icon: 'mic', color: '#8E8E93', title: tpl.name,
+            SettingsRow({ icon: 'mic', color: Tokens.secondary, title: tpl.name,
               subtitle: voiceCapabilityLabel(tpl.capability) + ' · 预填地址和模型', divider: index > 0, onOpen: () => this.pickVoice(tpl) })
           }, (tpl: VoiceTemplate) => tpl.id)
         }.width('100%').backgroundColor(Tokens.card).borderRadius(16).clip(true)
@@ -453,7 +458,7 @@ struct AddProviderPage {
       ProviderLaunch.id = row.id;
       ProviderLaunch.fromAdd = true;
       this.message = '已保存，正在进入选模型';
-      await router.replaceUrl({ url: 'pages/ProviderDetailPage' });
+      await AppNavigation.replaceUrl({ url: 'pages/ProviderDetailPage' });
     } catch (err) {
       this.message = `${err}`;
     } finally { this.saving = false; }

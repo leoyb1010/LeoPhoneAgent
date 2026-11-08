@@ -1,3 +1,4 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
 import { ApprovalMode, SensitiveToolGate } from '../local/SensitiveToolGate';
 import { ActionButton } from '../theme/Controls';
@@ -12,9 +13,8 @@ function choices(): ApprovalChoice[] {
   return [ask, smart, auto];
 }
 
-@Entry
 @Component
-struct ApprovalPage {
+export struct ApprovalPage {
   @StorageProp('themeTick') themeTick: number = 0;
   @State mode: ApprovalMode = 'ask';
   @State saving: string = '';
@@ -28,6 +28,7 @@ struct ApprovalPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '审批方式' })
       Scroll() {
@@ -47,6 +48,10 @@ struct ApprovalPage {
         }.width('100%').constraintSize({ maxWidth: 680 }).padding(Tokens.pagePad)
       }.layoutWeight(1).width('100%').align(Alignment.Top)
     }.width('100%').height('100%').backgroundColor(Tokens.grouped)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   private async save(mode: ApprovalMode): Promise<void> {

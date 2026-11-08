@@ -656,6 +656,7 @@ export class SessionStore {
   }
 
   private upsertSummary(session: LocalSession): void {
+    session.lastMessage = session.messages.length > 0 ? session.messages[session.messages.length - 1].text : '';
     let found = false;
     for (let i = 0; i < this.summaries.length; i++) {
       if (this.summaries[i].id === session.id) {

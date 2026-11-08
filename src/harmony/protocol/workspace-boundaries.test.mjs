@@ -83,10 +83,11 @@ const util = {
     return { decodeToString: (bytes, options) => decoder.decode(bytes, options) };
   } }
 };
+const appStorageValues = new Map();
 const context = vm.createContext({ fileIo, util, console, setTimeout, nativeLinux: { createWorkspaceFile(parent, name) {
   try { return fileIo.openSync('/proc/self/fd/' + parent + '/' + name, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR | fs.constants.O_NOFOLLOW).fd; }
   catch (error) { return error.code === 'EEXIST' ? -17 : -5; }
-} }, Tokens: { apply() {} }, AppStorage: { setOrCreate() {} }, taskStatus: { setCardsEnabled() {} } });
+} }, Tokens: { apply() {} }, AppStorage: { get: key => appStorageValues.get(key), setOrCreate: (key, value) => appStorageValues.set(key, value) }, taskStatus: { setCardsEnabled() {} } });
 const root = new URL('../app/entry/src/main/ets/store/', import.meta.url);
 function execute(name) {
   const source = fs.readFileSync(new URL(name, root), 'utf8')
@@ -177,8 +178,11 @@ try {
   vm.runInContext('globalThis.theme = themeStore;', context);
   const theme = context.theme;
   await theme.load(app); await theme.save(app);
+  const savedRevision = appStorageValues.get('themeTick');
+  assert.equal(savedRevision, 2, 'load and save publish distinct theme revisions');
   theme.mode = 'dark'; shortWrite = true;
   await assert.rejects(theme.save(app), /写入不完整/);
+  assert.equal(appStorageValues.get('themeTick'), savedRevision, 'failed writes must not publish a new palette');
   shortWrite = false; await theme.reload(app);
   assert.equal(theme.mode, 'system', 'A failed appearance write reloads the prior persisted preference');
   assert.equal(descriptors.size, 0, 'All workspace descriptors must close');

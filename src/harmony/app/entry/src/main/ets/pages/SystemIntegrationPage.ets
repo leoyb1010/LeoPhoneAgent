@@ -1,6 +1,7 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { ActionButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
-import { router } from '@kit.ArkUI';
+
 import { notificationManager } from '@kit.NotificationKit';
 import { AgentSettings } from '../agentextension/AgentSettings';
 import { PushRegistrar } from '../push/PushRegistrar';
@@ -9,9 +10,9 @@ import { TaskLiveView } from '../live/TaskLiveView';
 import { NavBar, StatusPill } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct SystemIntegrationPage {
+export struct SystemIntegrationPage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @State agentEnabled: boolean = false;
   @State push: string = '';
   @State message: string = '';
@@ -43,6 +44,7 @@ struct SystemIntegrationPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '系统集成' })
       Scroll() {
@@ -85,7 +87,7 @@ struct SystemIntegrationPage {
               if (this.shareText) { Text(this.shareText.slice(0, 4000)).fontSize(14).fontColor(Tokens.text).lineHeight(22).copyOption(CopyOptions.InApp).width('100%') }
               ForEach(this.shareFiles, (name: string) => { Text(name).fontSize(13).fontColor(Tokens.secondary).width('100%') })
               Flex({ wrap: FlexWrap.Wrap }) {
-                ActionButton({ label: '打开聊天草稿', variant: 'secondary', fullWidth: false, isEnabled: !this.clearingShare, onTap: () => { router.pushUrl({ url: 'pages/LocalChatPage' }); } }).margin({ right: 8, bottom: 8 })
+                ActionButton({ label: '打开聊天草稿', variant: 'secondary', fullWidth: false, isEnabled: !this.clearingShare, onTap: () => { AppNavigation.pushUrl({ url: 'pages/LocalChatPage' }); } }).margin({ right: 8, bottom: 8 })
                 ActionButton({ label: '清除待发送内容', variant: 'danger', fullWidth: false, busy: this.clearingShare, isEnabled: !this.clearingShare, onTap: () => { this.clearShare(); } })
               }.width('100%')
             } else {
@@ -99,6 +101,10 @@ struct SystemIntegrationPage {
         }.width('100%').constraintSize({ maxWidth: 600 }).alignItems(HorizontalAlign.Start).padding({ left: 20, right: 20, top: 24, bottom: 40 })
       }.layoutWeight(1).width('100%')
     }.width('100%').height('100%').backgroundColor(Tokens.grouped)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   private async saveAgent(value: boolean): Promise<void> {

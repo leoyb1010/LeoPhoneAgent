@@ -174,8 +174,7 @@ export default class EntryAbility extends UIAbility {
 
   onConfigurationUpdate(newConfig: Configuration): void {
     if (!this.startupComplete) return;
-    themeStore.systemDark = newConfig.colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK;
-    themeStore.apply();
+    themeStore.onConfigurationUpdate(newConfig.colorMode);
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
@@ -207,9 +206,6 @@ export default class EntryAbility extends UIAbility {
       windowStage.loadContent('pages/RecoveryPage');
       return;
     }
-    windowStage.getMainWindow().then((win: window.Window) => {
-      if (!this.destroyed && generation === this.windowGeneration) themeStore.attachWindow(win);
-    });
     windowStage.loadContent('pages/HomePage', (err) => {
       if (this.destroyed || generation !== this.windowGeneration) return;
       if (err.code) {
@@ -220,6 +216,7 @@ export default class EntryAbility extends UIAbility {
           if (this.destroyed || generation !== this.windowGeneration) return;
           win.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
           this.mainWindow = win;
+          themeStore.attachWindow(win, this.context.getApplicationContext());
           this.windowListener = (_size: window.Size) => { this.publishWindowFrame(win); };
           win.on('windowSizeChange', this.windowListener);
           this.keyboardListener = (height: number) => { AppStorage.setOrCreate('keyboardVisible', height > 0); };
@@ -234,6 +231,7 @@ export default class EntryAbility extends UIAbility {
     try {
       const frame = win.getWindowProperties().windowRect;
       AppStorage.setOrCreate('windowFrameHeight', win.getUIContext().px2vp(frame.height));
+      AppStorage.setOrCreate('windowFrameWidth', win.getUIContext().px2vp(frame.width));
     } catch (_error) {}
   }
 

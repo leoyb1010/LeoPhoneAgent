@@ -1,3 +1,9 @@
+import { LongAnswer } from '../chat/LongAnswer';
+import { FollowState, userScroll, incoming } from '../chat/ChatUXPolicy';
+import { ShareMessage } from '../chat/TurnShare';
+import { Haptics } from '../theme/Haptics';
+import { ChatInteractionStore } from '../store/ChatInteractionStore';
+import { AppNavigation } from '../navigation/AppNavigation';
 import { MediaGallery } from '../chat/MediaGallery';
 import { inputMethod } from '@kit.IMEKit';
 import { ActionButton, IconButton } from '../theme/Controls';
@@ -6,7 +12,8 @@ import { ChatViewState } from '../local/ChatViewState';
 import { ShareInbox } from '../shareextension/ShareInbox';
 import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
-import { router } from '@kit.ArkUI';
+import { promptAction } from '@kit.ArkUI';
+
 import { ChatItem, chatItemKey, chatItems } from '../local/AgentText';
 import { ChatRun, ChatRuns, PendingImage, textLines } from '../local/ChatRun';
 import { Voice } from '../local/Voice';
@@ -84,8 +91,8 @@ const SLASH_COMMANDS: SlashCommand[] = [
 @Component
 export struct LocalChatPane {
 
-  onBack: () => void = () => { router.back(); };
-  onNew: () => void = () => { LocalChatLaunch.sessionId = ''; AppStorage.setOrCreate('homeSessionId', ''); router.back(); };
+  onBack: () => void = () => { AppNavigation.back(); };
+  onNew: () => void = () => { LocalChatLaunch.sessionId = ''; AppStorage.setOrCreate('homeSessionId', ''); AppNavigation.back(); };
   @StorageProp('themeTick') tick: number = 0;
   @StorageProp('providerTick') @Watch('onProviderTick') providerTick: number = 0;
   @StorageProp('chatViewTick') @Watch('onVoiceStateChanged') chatViewTick: number = 0;
@@ -134,6 +141,10 @@ export struct LocalChatPane {
   @State @Watch('draftChanged') pendingImagePath: string = '';
   @State showDown: boolean = false;
   @State unseen: boolean = false;
+  @State unreadCount: number = 0;
+  @State messageBusy: boolean = false;
+  private followState: FollowState = new FollowState();
+  private followGeneration: number = 0;
   private image: PendingImage | null = null;
   private pendingImages: PendingImage[] = [];
   @State @Watch('draftChanged') pendingImagePaths: string[] = [];
@@ -175,12 +186,14 @@ export struct LocalChatPane {
     this.saveViewState(); ChatViewState.flush();
     // 离开页面不再作废正在跑的一轮:它接着跑,说完了 App 在后台就发通知。
     this.alive = false;
+    this.followGeneration++;
     this.detach();
   }
 
   onSessionChange(): void {
     // 切对话:原来那个对话的这一轮接着跑,这里换成看新的。
     this.saveViewState();
+    this.followGeneration++; this.followState = new FollowState(); this.unreadCount = 0;
     this.detach();
     this.lines = [];
     this.items = [];
@@ -225,13 +238,21 @@ export struct LocalChatPane {
           .alignListItem(ListItemAlign.Center)
           .scrollBar(BarState.Off)
           .edgeEffect(EdgeEffect.Spring)
-          .onScrollIndex((start: number, end: number) => {
-            // 往上翻着看旧消息时,流式输出不再把你拽回底部。
-            this.nearBottom = end >= this.items.length - 2;
-            this.showDown = !this.nearBottom;
-            if (this.nearBottom) {
-              this.unseen = false;
+          .onScrollFrameBegin((offset: number, state: ScrollState) => {
+            if (state === ScrollState.Scroll || state === ScrollState.Fling) {
+              if (offset < 0 || !this.nearBottom) {
+                this.followGeneration++;
+                this.followState = userScroll(this.followState, offset, false);
+                this.nearBottom = false;
+                this.showDown = this.followState.distance >= this.availableHeight || this.unreadCount > 0;
+                this.saveViewState();
+              }
             }
+            return { offsetRemain: offset };
+          })
+          .onReachEnd(() => {
+            this.nearBottom = true; this.followState = new FollowState();
+            this.unreadCount = 0; this.unseen = false; this.showDown = false;
           })
         }
         if (this.showDown && this.items.length > 0) {
@@ -273,7 +294,7 @@ export struct LocalChatPane {
             },
             onStop: () => {
               if (this.run) {
-                this.run.stop();
+                this.run.stop(); Haptics.light();
               }
             },
             onPickImage: () => {
@@ -291,7 +312,7 @@ export struct LocalChatPane {
             onModel: () => {
               this.openModelSheet();
             },
-            onApproval: () => { router.pushUrl({ url: 'pages/ApprovalPage' }); },
+            onApproval: () => { AppNavigation.pushUrl({ url: 'pages/ApprovalPage' }); },
             onRemoveFile: (index: number) => {
               this.pendingFiles = this.pendingFiles.filter((_name: string, i: number) => i !== index);
             },
@@ -438,7 +459,7 @@ export struct LocalChatPane {
         Row() {
           Blank()
           UserBubble({
-            text: item.text,
+            text: item.text, selectable: false,
             imagePath: this.lineImage(item.index),
             imagePaths: this.lineImages(item.index),
             files: this.lineFiles(item.index)
@@ -448,7 +469,7 @@ export struct LocalChatPane {
         .margin({ top: 12, bottom: 4 })
       } else if (item.kind === 'assistant') {
         if (this.lineImages(item.index).length) MediaGallery({ paths: this.lineImages(item.index), thumbnailSize: 160 }).width('100%').constraintSize({ maxWidth: 520 }).margin({ bottom: 12 })
-        MarkdownText({ text: item.live ? this.liveText : item.text })
+        LongAnswer({ text: item.live ? this.liveText : item.text, live: item.live, viewportHeight: this.availableHeight })
         if (item.partial) {
           Text('没说完')
             .fontSize(12)
@@ -497,6 +518,7 @@ export struct LocalChatPane {
     .width('100%')
     .alignItems(HorizontalAlign.Start)
     .constraintSize({ maxWidth: Tokens.readable })
+    .bindContextMenu(this.messageMenu(item), ResponseType.LongPress)
   }
 
   @Builder
@@ -504,7 +526,7 @@ export struct LocalChatPane {
     if (this.unseen) {
       Row() {
         Sym({ name: 'arrow_down', dim: 13, color: Tokens.text })
-        Text('新消息')
+        Text(`${this.unreadCount} 条新消息`)
           .fontSize(13)
           .fontColor(Tokens.text)
           .margin({ left: 4 })
@@ -513,7 +535,7 @@ export struct LocalChatPane {
       .padding({ left: 14, right: 14 })
       .backgroundColor(Tokens.card)
       .borderRadius(16)
-      .shadow({ radius: 10, color: '#26000000', offsetY: 2 })
+      .shadow({ radius: 10, color: Tokens.floatingShadow, offsetY: 2 })
       .margin({ bottom: 12 })
       .onClick(() => {
         this.followTail(true);
@@ -530,7 +552,7 @@ export struct LocalChatPane {
         .backgroundColor(Tokens.card)
         .borderRadius(18)
         .border({ width: Tokens.hairline, color: Tokens.separator })
-        .shadow({ radius: 8, color: '#1F000000', offsetY: 2 })
+        .shadow({ radius: 8, color: Tokens.floatingShadow, offsetY: 2 })
         .onClick(() => {
           this.followTail(true);
         })
@@ -961,7 +983,9 @@ export struct LocalChatPane {
     this.askDetails = run.askWrite ? run.writeAskDetails() : '';
     this.askTicket = run.askWrite ? run.approvalToken() : '';
     if (grew && !this.nearBottom && !mine) {
-      this.unseen = true;
+      this.followState.following = false;
+      this.followState = incoming(this.followState, 1);
+      this.unreadCount = this.followState.unread; this.unseen = true; this.showDown = true;
     }
     if (grew || run.active || ended) {
       // 自己发的消息总是滚到底;别的只在本来就在底部附近时跟随。
@@ -1042,7 +1066,7 @@ export struct LocalChatPane {
   }
 
   private async send(): Promise<void> {
-    if (this.sending || this.active || this.run?.submitting) return;
+    if (this.messageBusy || this.sending || this.active || this.run?.submitting) return;
     this.sending = true;
     try { await this.sendDraft(); } finally { this.sending = false; }
   }
@@ -1079,6 +1103,7 @@ export struct LocalChatPane {
     voice.voiceGeneration += 1; if (voice.stopListen) voice.stopListen(); voice.stopListen = null; voice.listening = false; this.listening = false;
     this.saveViewState(); const submission = ChatViewState.beginSubmission(this.currentId);
     await run.send(text, image, files, this.thinking, submission, this.pendingImages.slice());
+    Haptics.light();
     this.onDraftTick();
   }
 
@@ -1119,6 +1144,8 @@ export struct LocalChatPane {
       try {
         if (choice === 'once' || choice === 'session') run.allowWrite(choice === 'session', ticket);
         else run.denyWrite(choice === 'stop', ticket);
+        ChatInteractionStore.record(run.sessionId, choice === 'once' ? '允许一次' : choice === 'session' ? '允许本会话同操作' : choice === 'stop' ? '拒绝并停止' : '拒绝');
+        if (choice === 'once' || choice === 'session') Haptics.light();
       } catch (error) { this.status = `${error}`; }
     };
   }
@@ -1279,21 +1306,80 @@ export struct LocalChatPane {
     }
   }
 
-  private followTail(force: boolean = false): void {
-    if (this.items.length === 0 || (!force && !this.nearBottom)) {
-      return;
+  @Builder
+  messageMenu(item: ChatItem) {
+    Menu() {
+      if (item.kind === 'user' || item.kind === 'assistant') {
+        MenuItem({ content: '复制' }).onClick(() => this.copyText(this.messageText(item)))
+        MenuItem({ content: '选择文字' }).onClick(() => AppNavigation.pushUrl({ url: 'pages/LongTextPage', params: { title: '选择文字', text: this.messageText(item) } }))
+        if (item.kind === 'assistant' && this.isLatest(item)) {
+          MenuItem({ content: '重新生成' }).enabled(!this.active && !this.askWrite && !this.messageBusy).onClick(() => this.regenerate())
+        }
+        MenuItem({ content: '朗读' }).onClick(() => this.speak(this.messageText(item)))
+        MenuItem({ content: '分享为长图' }).enabled(!item.live).onClick(() => this.shareTurn(item))
+        MenuItem({ content: '删除' }).enabled(!this.active && !this.askWrite && !this.messageBusy).onClick(() => this.deleteTurn(item))
+      }
     }
-    this.nearBottom = true;
-    this.showDown = false;
-    this.unseen = false;
+  }
+  private messageText(item: ChatItem): string { return item.live ? this.liveText : item.text; }
+  private turnStart(index: number): number {
+    let start = index;
+    while (start > 0 && this.lines[start]?.role !== 'user') start--;
+    return start;
+  }
+  private shareTurn(item: ChatItem): void {
+    const messages: ShareMessage[] = [];
+    const start = this.turnStart(item.index);
+    for (let index = start; index < this.lines.length; index++) {
+      const line = this.lines[index];
+      if (index > start && line.role === 'user') break;
+      if (line.role !== 'user' && line.role !== 'assistant') continue;
+      const message = new ShareMessage(); message.role = line.role; message.text = line.text;
+      message.images = this.lineImages(index); message.files = line.files.slice(); messages.push(message);
+    }
+    AppNavigation.pushUrl({ url: 'pages/TurnSharePage', params: { messages: messages } }).catch(() => { this.status = '无法打开分享预览，请重试'; });
+  }
+  private async deleteTurn(item: ChatItem): Promise<void> {
+    const run = this.run; const id = this.currentId;
+    if (!run || run.active || run.askWrite || run.submitting || this.messageBusy) return;
+    const original = this.lines.slice();
+    const start = this.turnStart(item.index);
+    let end = start + 1;
+    while (end < original.length && original[end].role !== 'user') end++;
+    this.messageBusy = true;
+    try {
+      const answer = await promptAction.showDialog({ title: '删除这一轮？',
+        message: '为保留工具调用的完整关系，将删除这轮问题、回答和工具记录。其他轮次、草稿及工作区文件不变，无法撤销。',
+        buttons: [{ text: '删除这一轮', color: Tokens.danger }, { text: '取消', color: Tokens.secondary }] });
+      if (answer.index !== 0) return;
+      const context = getContext(this) as common.UIAbilityContext;
+      const session = await sessionStore.get(context, id);
+      if (!session || run !== this.run || this.currentId !== id || run.active || run.askWrite || run.submitting ||
+        JSON.stringify(run.lines) !== JSON.stringify(original) || JSON.stringify(session.messages) !== JSON.stringify(original)) {
+        this.status = '对话已变化，未删除。请重新选择'; return;
+      }
+      const before = session.messages;
+      session.messages = before.slice(0, start).concat(before.slice(end));
+      try { await sessionStore.replaceMessages(context, session); }
+      catch (error) { session.messages = before; throw error as Error; }
+      this.saveViewState(); this.detach(); ChatRuns.invalidateIdle(id);
+      this.openTurns = []; this.attach(context, id); ChatRuns.bump();
+    } catch (_error) { this.status = '删除失败，未确认成功，请检查对话后重试'; }
+    finally { this.messageBusy = false; }
+  }
+
+  private followTail(force: boolean = false): void {
+    if (this.items.length === 0 || (!force && !this.nearBottom)) return;
+    if (force) { this.nearBottom = true; this.followState = new FollowState(); }
+    this.showDown = false; this.unseen = false; this.unreadCount = 0;
     const index = this.items.length - 1;
+    const generation = this.followGeneration; const id = this.currentId;
     setTimeout(() => {
+      if (!this.alive || this.currentId !== id || generation !== this.followGeneration || !this.nearBottom) return;
       try {
         this.chatScroller.scrollToIndex(index, false, ScrollAlign.END);
         this.chatScroller.scrollEdge(Edge.Bottom);
-      } catch (_err) {
-        // list not attached yet
-      }
+      } catch (_err) { /* list not attached yet */ }
     }, 0);
   }
 }

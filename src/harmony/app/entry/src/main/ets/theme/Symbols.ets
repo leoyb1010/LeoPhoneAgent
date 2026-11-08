@@ -1,3 +1,5 @@
+import { Tokens } from './Tokens';
+
 /**
  * 系统符号图标(HarmonyOS Symbol,和 iOS 的 SF Symbols 一类)。$r 只认写死的名字,所以这里一个个列出来。
  */
@@ -5,15 +7,18 @@
 export struct Sym {
   @Prop name: string = 'ellipsis_circle';
   @Prop dim: number = 20;
-  @Prop color: string = '#000000';
+  @StorageProp('themeTick') themeTick: number = 0;
+  @Prop color: string = '';
 
   build() {
     SymbolGlyph(this.res())
       .fontSize(this.dim)
-      .fontColor([this.color])
+      .fontColor(Tokens.reactive(this.themeTick, [this.color || Tokens.text]))
   }
 
   private res(): Resource {
+    if (this.name === 'sun_max') return $r('sys.symbol.sun_max');
+    if (this.name === 'moon') return $r('sys.symbol.moon');
     if (this.name === 'lock') {
       return $r('sys.symbol.lock');
     }
@@ -242,4 +247,27 @@ export struct Sym {
     }
     return $r('sys.symbol.ellipsis_circle');
   }
+}
+
+/** iOS reference → Harmony symbol semantics. Glyph availability is checked by the SDK gate. */
+export class SettingsSymbols {
+  static readonly iosToHarmony: Record<string, string> = {
+    'key.fill': 'lock',
+    'square.stack.3d.up.fill': 'square_grid_2x2',
+    'sparkles': 'wand_and_stars',
+    'puzzlepiece.extension.fill': 'puzzle',
+    'person.crop.circle': 'person',
+    'envelope.fill': 'envelope',
+    'chevron.left.forwardslash.chevron.right': 'keyboard',
+    'brain': 'book',
+    'books.vertical.fill': 'bookshelf',
+    'clock.fill': 'clock',
+    'desktopcomputer': 'computer',
+    'hand.raised.fill': 'hand',
+    'paintbrush.fill': 'lightbulb',
+    'sun.max.fill': 'sun_max',
+    'moon.fill': 'moon',
+    'circle.lefthalf.filled': 'display',
+    'externaldrive.fill': 'externaldrive'
+  };
 }

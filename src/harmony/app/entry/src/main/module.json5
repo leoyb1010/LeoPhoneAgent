@@ -12,6 +12,7 @@
     "installationFree": false,
     "pages": "$profile:main_pages",
     "requestPermissions": [
+      { "name": "ohos.permission.VIBRATE" },
       {
         "name": "ohos.permission.INTERNET"
       },

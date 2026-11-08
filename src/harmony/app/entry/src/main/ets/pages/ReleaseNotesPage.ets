@@ -1,14 +1,15 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { LeoRelease, ReleaseCatalog } from '../release/ReleaseCatalog';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 /** 更新记录:每一版改了什么(最新的在最上面)。 */
-@Entry
 @Component
-struct ReleaseNotesPage {
+export struct ReleaseNotesPage {
   @StorageProp('themeTick') tick: number = 0;
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '更新记录' })
       Scroll() {
@@ -70,5 +71,9 @@ struct ReleaseNotesPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.grouped)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 }

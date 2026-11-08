@@ -1,3 +1,4 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
 import { ReplicaSync, ReplicaConflict } from '../sync/ReplicaSync';
 import { normalizeReplicaRoot } from '../sync/SyncProtocol';
@@ -5,9 +6,8 @@ import { ActionButton } from '../theme/Controls';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct SyncPage {
+export struct SyncPage {
   @StorageProp('themeTick') themeTick: number = 0;
   @State root: string = '';
   @State deviceId: string = '';
@@ -28,6 +28,7 @@ struct SyncPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '跨端同步' })
       Scroll() {
@@ -82,6 +83,10 @@ struct SyncPage {
         }.padding(Tokens.pagePad).width('100%').constraintSize({ maxWidth: 704 })
       }.layoutWeight(1).width('100%').align(Alignment.Top)
     }.width('100%').height('100%').backgroundColor(Tokens.grouped)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   @Builder

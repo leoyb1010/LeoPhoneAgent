@@ -1,3 +1,4 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
 import { webview } from '@kit.ArkWeb';
 import { HarnessClient } from '../net/HarnessClient';
@@ -7,9 +8,9 @@ import { ScreenSessionBridge, ScreenSessionRegistry } from '../remote/ScreenSess
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct ScreenSessionPage {
+export struct ScreenSessionPage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @State ready: boolean = false;
   @State error: string = '';
   @State control: boolean = false;
@@ -51,6 +52,7 @@ struct ScreenSessionPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: 'Mac 视频屏幕' })
       Row({ space: 12 }) {
@@ -71,6 +73,10 @@ struct ScreenSessionPage {
           .layoutWeight(1)
       } else { Blank().layoutWeight(1) }
     }.width('100%').height('100%').backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   private setControl(value: boolean): void {

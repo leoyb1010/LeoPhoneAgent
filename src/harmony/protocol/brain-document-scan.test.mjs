@@ -16,7 +16,7 @@ const fileIo={
 };
 const context=vm.createContext({console,ArrayBuffer,Uint8Array,fileIo,AppStorage:{get:()=>foreground},
   setTimeout:()=>1,clearTimeout(){},util:{generateRandomUUID:()=>String(++sequence)},
-  router:{pushUrl:async options=>{chosenId=options.params.scanId;}}});
+  AppNavigation:{pushUrl:async options=>{chosenId=options.params.scanId;}}});
 vm.runInContext(stripTypeScriptTypes(source,{mode:'strip'})+'\nglobalThis.Scan=DocumentScanFlow;',context);
 const flow=context.Scan,app={filesDir:'/app/files'};
 await assert.rejects(flow.open(app,()=>false),/取消/);

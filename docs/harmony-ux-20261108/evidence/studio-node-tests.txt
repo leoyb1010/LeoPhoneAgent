@@ -1,0 +1,214 @@
+(node:37820) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+HARMONY_AGENT_PARITY_OK actual ETS model merge, stable group references, persistent binding, send admission, fixed turn queue, child isolation/cancellation
+✔ src/harmony/protocol/agent-parity.test.mjs (136.54825ms)
+HARMONY_APPROVAL_PARITY_OK production ETS three modes, strict shell preparation, atomic faults, owner/ticket/category/origin grants and full stale-safe preview
+(node:37821) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/approval-parity.test.mjs (353.406958ms)
+(node:37822) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+HARMONY_BACKUP_ENTRY_GATES_OK actual A2A/WorkScheduler/Schedule/Share/body/router/tool entries reject pending journals or exclusive backup, shared lease held through deferred tool settlement
+HARMONY_STREAMING_BACKUP_OK actual ETS 128MiB disk roundtrip, one-MiB reads, dedup, nested files, legacy-compatible recovery gate, interrupted apply replay, disk rollback, cancellation cleanup and hostile ZIP rejection
+✔ src/harmony/protocol/backup-streaming.test.mjs (10988.336167ms)
+HARMONY_BACKUP_OK production ETS binary roundtrip, SHA256, traversal/symlink rejection, deferred startup recovery and rollback
+(node:37823) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/backup.test.mjs (267.197125ms)
+(node:37824) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+DOCUMENT_SCAN_OK actual ETS cancellation before routing/during read, owned output cleanup, source FD closure and successful save
+DOCUMENT_SCAN_UI_RESULT_OK issued user selection survives parent foreground transition
+✔ src/harmony/protocol/brain-document-scan.test.mjs (93.205958ms)
+(node:37825) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PLATFORM_FIELDS_OK actual ETS main entry, contacts/multiple calendars/reminders, partial-field retention, unsupported scope and permission/read cancellation
+PLATFORM_UI_RESULT_OK confirmed camera survives parent foreground timing, cancelled task discards its own file
+✔ src/harmony/protocol/brain-platform-fields.test.mjs (99.3885ms)
+BRAIN_PLATFORM_OK actual ETS foreground/unattended/owner gates, native write admission and all 29 schemas
+(node:37826) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/brain-platform.test.mjs (99.645833ms)
+BRAIN_SECURITY_OK actual ETS credential isolation, unlock, redirects, stale responses
+BRAIN_WRITE_LEASE_OK hash-bound generation/epoch, exact session rotation, no unknown-outcome replay
+(node:37827) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/brain-security.test.mjs (85.682ms)
+BRAIN_TOOLS_OK actual ETS private/media filtering, source recheck, untrusted escaping, ask contract
+(node:37828) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/brain-tools.test.mjs (90.141083ms)
+BRAIN_UPLOAD_OK actual ETS three-part absolute IO, SHA256, hash-await connection/lock cancellation
+(node:37829) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/brain-upload.test.mjs (95.573042ms)
+HARMONY_CHAT_MEDIA_OK actual ETS four output parsers, anonymous bounded media persistence/cancel, four multi-image inputs, image endpoints/multipart/retry, Gemini modality, Responses image tool, stream images, ChatRun and cold restart
+(node:37830) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/chat-media.test.mjs (476.028834ms)
+TURN_GROUPING_OK short turn one group, measured boundary, Unicode/newlines, images/attachments/order, immutable inputs and 80-page/pixel budgets
+CHAT_UX_OK real policies, Unicode preservation, selected-turn sharing, timed delete/undo/failure and queued-scroll race
+TURN_SHARE_IO_OK one native capture for both roles, pixel guard, short-write/factory failure/cancellation and cleanup (platform mocks, not PNG rendering)
+TURN_DELETE_OK production complete-turn boundary, active-run guard and failed-write rollback
+(node:37831) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/chat-ux.test.mjs (108.204459ms)
+HARMONY_COMPOSER_SHORTCUTS_OK production pre-IME callback, Ctrl/Cmd admission, keyup isolation, no post-send newline and plain Enter behavior
+HARMONY_COMPOSER_FOCUS_OK production ticket/layout gate, recoverable native 150003, exactly-once focus and zero-Session New action
+(node:37832) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/composer-shortcuts.test.mjs (75.45475ms)
+HARMONY_CONFIG_REPLICA_OK production ETS provider/model/group/MCP/env mapping, stable model IDs, member intent union, metadata retention, zero local-secret export
+(node:37833) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/config-replica.test.mjs (190.311834ms)
+HARMONY_GENERATION_TRANSACTION_OK 69 store fault/removal scenarios + stale writers + recovery
+(node:37834) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/configuration-generations.test.mjs (3881.149ms)
+HARMONY_DRAFT_PERSISTENCE_OK production ETS cold restart, no Session creation, debounce, model/privacy restore, private-path checks, durable admission and failed-commit acknowledgement
+(node:37836) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/draft-persistence.test.mjs (424.7935ms)
+HARMONY_UX_POLICY_OK width thresholds, manual cooldown/20 toggles, native stack adapter, stored draft/offset (not UI rendering)
+(node:37838) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/harmony-ux.test.mjs (105.156958ms)
+LINUX_DNS_ACTUAL_ETS_OK SDK phase/errors, no host-file bypass, pre-ready native guest write, failure cleanup, no DNS-address logging, real symlink/non-file rejection
+(node:37839) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/linux-dns.test.mjs (131.980375ms)
+LEOBOT_LINUX_DNS_STATUS {"phase":"ready","serverCount":1,"errorCode":0,"exitCode":0,"target":"/etc/resolv.conf"}
+LINUX_RUNTIME_OK actual ETS owner isolation, bounded input, trusted context paths, cancellation before/after start
+LEOBOT_LINUX_DNS_STATUS {"phase":"ready","serverCount":1,"errorCode":0,"exitCode":0,"target":"/etc/resolv.conf"}
+LEOBOT_LINUX_DNS_STATUS {"phase":"ready","serverCount":1,"errorCode":0,"exitCode":0,"target":"/etc/resolv.conf"}
+LEOBOT_LINUX_DNS_STATUS {"phase":"ready","serverCount":1,"errorCode":0,"exitCode":0,"target":"/etc/resolv.conf"}
+LINUX_BOOTSTRAP_MARKER_OK failed install/storage never commits readiness; explicit retry recovers
+LEOBOT_LINUX_DNS_STATUS {"phase":"ready","serverCount":1,"errorCode":0,"exitCode":0,"target":"/etc/resolv.conf"}
+LINUX_BOOTSTRAP_RESTART_OK persisted marker still restores native readonly bind
+(node:37840) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/linux-runtime.test.mjs (95.691167ms)
+MAIL_PROTOCOL_OK production MIME/UTF7/injection guards, IMAP literal/flags/move, SMTP STARTTLS/auth/dot-stuff/uncertain delivery
+(node:37841) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+MAIL_BOUNDARIES_OK production TLS/SNI/CA settings, socket cancellation, unattended-send denial, owner-cancelled approval and schema
+MAIL_GENERATIONS_OK actual account store mutation, stale-writer rejection and destination/credential binding
+✔ src/harmony/protocol/mail.test.mjs (109.748333ms)
+MCP_HEADERS_ACTUAL_ETS_OK encrypted immutable generations, runtime env expansion, reload, credential-origin binding, reserved/CRLF/duplicate guards, no redirects and single Authorization
+(node:37842) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/mcp-headers.test.mjs (102.114291ms)
+(node:37843) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+MCP_OAUTH_ACTUAL_ETS_OK discovery/DCR/resource binding, PKCE, one-use state/callback, secret generations, shared refresh cancellation, stale-refresh rejection and no redirects
+✔ src/harmony/protocol/mcp-oauth.test.mjs (146.34575ms)
+(node:37844) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+MCP_STDIO_PRESSURE_OK real ETS server request flood, unread stdin, per-server/global byte+frame quotas, active reservation and exact release
+MCP_STDIO_ACTUAL_ETS_OK persistent process, initialize once, reversed concurrent replies, separate-stream isolation and bidirectional ping IDs, cancel/timeout demux, environment injection and detach
+✔ src/harmony/protocol/mcp-stdio.test.mjs (3843.114666ms)
+HARMONY_MEMORY_PRIVACY_OK production ETS four wire schemas/payloads, prompt exclusion, persisted legacy semantics and post-await read/write revocation
+(node:37845) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/memory-privacy.test.mjs (158.196708ms)
+HARMONY_MISC_REPLICA_OK production ETS daily set-union, compaction boundary IDs, artifact/current-version hydration, file bytes, path rejection and tombstones
+(node:37847) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/misc-replica.test.mjs (307.838959ms)
+HARMONY_NATIVE_CANCELLATION_OK actual ETS permission-wait stop, notify/reminder/torch admission, direct fast route, generation-bump child cancellation
+(node:37848) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/native-cancellation.test.mjs (75.683709ms)
+PROTOCOL_MACHINES_OK
+PROTOCOL_OPENCODE_GO_OK
+PROTOCOL_UNATTENDED_OK
+PROTOCOL_HARMONY_AUDIT_OK
+REMOTE_CONTROLS_OK actual transport capability gate, path encoding, mutations and no-duplicate send flow
+SCREEN_BRIDGE_OK exact native operation allowlist, no credential bridge, late-lease cleanup and native-only control grant
+HARMONY_CHAT_MEDIA_OK actual ETS four output parsers, anonymous bounded media persistence/cancel, four multi-image inputs, image endpoints/multipart/retry, Gemini modality, Responses image tool, stream images, ChatRun and cold restart
+HARMONY_SIDE_MODEL_OK actual ETS fixed provider/credential snapshot, image-only exclusion, deterministic empty recovery and unchanged main model selection
+HARMONY_COMPOSER_SHORTCUTS_OK production pre-IME callback, Ctrl/Cmd admission, keyup isolation, no post-send newline and plain Enter behavior
+HARMONY_COMPOSER_FOCUS_OK production ticket/layout gate, recoverable native 150003, exactly-once focus and zero-Session New action
+(node:37849) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/protocol.test.mjs (531.944458ms)
+REMOTE_CONTROLS_OK actual transport capability gate, path encoding, mutations and no-duplicate send flow
+SCREEN_BRIDGE_OK exact native operation allowlist, no credential bridge, late-lease cleanup and native-only control grant
+(node:37850) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/remote-controls.test.mjs (68.434791ms)
+HARMONY_REPLICA_ASSETS_OK production ETS three-chunk resume, absolute offsets, HEAD/PUT/Range receipts, SHA256 roundtrip, origin and path boundaries
+(node:37852) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/replica-assets.test.mjs (181.1785ms)
+HARMONY_SECRET_QUERY_MODELS_OK 30 native-query migration faults + retries + empty controls + OAuth copies + actual add/detail callers
+(node:37854) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/secret-query-models.test.mjs (2399.877292ms)
+(node:37855) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+HARMONY_SECURITY_BOUNDARIES_OK: production ETS attachment, capability, history, claim, atomic-IO regressions
+HARMONY_GENERATION_TRANSACTION_OK 69 store fault/removal scenarios + stale writers + recovery
+HARMONY_SECRET_QUERY_MODELS_OK 30 native-query migration faults + retries + empty controls + OAuth copies + actual add/detail callers
+✔ src/harmony/protocol/security-boundaries.test.mjs (4808.873ms)
+HARMONY_SESSION_REPLICA_OK production ETS iOS ContentPart wire, session hydration, stable source IDs, local-newer protection, message tombstone
+(node:37856) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/session-replica.test.mjs (139.045708ms)
+HARMONY_SIDE_MODEL_OK actual ETS fixed provider/credential snapshot, image-only exclusion, deterministic empty recovery and unchanged main model selection
+(node:37857) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/side-model.test.mjs (92.601208ms)
+HARMONY_SKILL_BUNDLE_OK actual ETS bounded ZIP32 stored/deflate/descriptors, CRC/path/Unicode/link/bomb/trailing rejection, immutable install/resource lookup, atomic timestamped daily memory
+(node:37858) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/skill-bundle.test.mjs (844.394334ms)
+(node:37860) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+SSH_RUNTIME_OK actual DNS/credential cancellation interleavings, background pending-start cancellation, owner isolation, NUL input and byte limits
+✔ src/harmony/protocol/ssh.test.mjs (68.651667ms)
+HARMONY_SYNC_REPLICA_OK production ETS epoch/wire, origin boundary, cursor identity/order, durable retry, unknown retention, local editing preservation
+(node:37862) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/sync-replica.test.mjs (445.415958ms)
+HARMONY_SYNC_TYPE_COVERAGE_OK 19 current iOS registered record types routed to production domain handlers
+(node:37863) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/sync-type-coverage.test.mjs (64.873875ms)
+(node:37864) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+SYSTEM_INTEGRATION_OK A2A opt-in/duplicate/cancel/result, push routing, RIFF bounds
+RECORDING_PERSISTENCE_OK actual capture/write/finalize/recover with relative native offsets
+✔ src/harmony/protocol/system-integration.test.mjs (614.447292ms)
+THEME_STORE_OK real store/palette, persistence, monotonic revisions, pre-setter colors, follow-system, synchronous callback/idempotence, detach and failures
+THEME_BINDING_OK current Builder callbacks, default-color fallbacks and unchanged selection contract (not native rendering)
+THEME_LIFECYCLE_OK production successful/stale/failed content-load gates
+(node:37865) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/theme-reactivity.test.mjs (60.080834ms)
+UI_LIFECYCLE_OK actual ETS browser owner/visibility/grants/cancellation, task aggregation, recovery isolation and push revalidation
+(node:37866) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/ui-lifecycle.test.mjs (64.317375ms)
+UI_TOKENS_OK real token transitions + negative static gate fixtures
+RELEASE_AND_SYMBOL_MAPPING_OK actual catalog + declared whitelist (SDK resource existence not proven)
+(node:37867) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/ui-tokens.test.mjs (75.24425ms)
+HARMONY_VOICE_LIFECYCLE_OK production ETS permission cancellation, final cleanup, owner exclusion, stale callback isolation and late-created microphone release
+(node:37868) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ src/harmony/protocol/voice-lifecycle.test.mjs (55.130792ms)
+(node:37869) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+WORKSPACE_BOUNDARIES_OK actual ETS nested pinned-dirfd IO, ancestor replacement, symlink boundaries, UTF8 bounded paging, export and short-write preservation; OS7 procFD primitive separately verified
+✔ src/harmony/protocol/workspace-boundaries.test.mjs (847.67025ms)
+ℹ tests 43
+ℹ suites 0
+ℹ pass 43
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10997.447292

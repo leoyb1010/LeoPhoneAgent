@@ -3,6 +3,17 @@
  * share the same hierarchy across chat, archives and settings.
  */
 export class Tokens {
+  /** Explicit UI dependency bridge. Read a @StorageProp revision in each paint expression;
+   * the semantic palette remains unchanged and no component identity or view state is reset. */
+  static reactive<T>(_revision: number, value: T): T { return value; }
+
+  static readonly transparent: string = '#00000000';
+  /** Always over dark media, independent of app appearance. */
+  static readonly onMedia: string = '#FFFFFF';
+  static readonly mediaScrim: string = '#B8202A25';
+  static floatingShadow: string = '#26000000';
+  static get avatarColors(): string[] { return [Tokens.accent, Tokens.link, Tokens.online, Tokens.warn, Tokens.secondary]; }
+
   static bg: string = '#FBFCFA';
   /** 设置这类分组页面的底色。 */
   static grouped: string = '#F0F3EF';
@@ -101,6 +112,7 @@ export class Tokens {
 
   static apply(dark: boolean): void {
     Tokens.dark = dark;
+    Tokens.floatingShadow = dark ? '#60000000' : '#26000000';
     if (dark) {
       Tokens.bg = '#101612';
       Tokens.grouped = '#101612';

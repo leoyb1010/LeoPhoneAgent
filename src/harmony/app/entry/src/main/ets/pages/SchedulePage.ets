@@ -1,12 +1,13 @@
+import { AppNavigation } from '../navigation/AppNavigation';
+import { ActionButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
 import { ScheduleRunner } from '../local/ScheduleRunner';
 import { ScheduleStore, ScheduleTask, scheduleStore } from '../store/ScheduleStore';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct SchedulePage {
+export struct SchedulePage {
   @StorageProp('themeTick') tick: number = 0;
   @State titleDraft: string = '';
   @State promptDraft: string = '';
@@ -23,6 +24,7 @@ struct SchedulePage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '定时任务' })
       Text('App 在前台时到点就跑。App 关着或在后台时，系统会隔一阵唤起它补跑今天到点的任务（常用的 App 大约两小时一次，时间不精确），跑完发通知。结果写入「定时·标题」对话，失败原因也在下面。')
@@ -74,15 +76,12 @@ struct SchedulePage {
           }
           .width('100%')
           .margin({ top: 8 })
-          Button('保存任务')
+          ActionButton({ label: '保存任务', variant: 'secondary', fullWidth: false, onTap: () => {
+              this.save();
+            } })
             .width('100%')
             .height(44)
             .margin({ top: 10, bottom: 16 })
-            .backgroundColor(Tokens.accent)
-            .fontColor('#FFFFFF')
-            .onClick(() => {
-              this.save();
-            })
           ForEach(this.rows, (row: ScheduleTask) => {
             Row() {
               Column() {
@@ -129,6 +128,10 @@ struct SchedulePage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   private async save(): Promise<void> {

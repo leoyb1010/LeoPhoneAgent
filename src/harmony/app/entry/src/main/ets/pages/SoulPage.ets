@@ -1,11 +1,12 @@
+import { AppNavigation } from '../navigation/AppNavigation';
+import { ActionButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
 import { soulStore } from '../store/SoulStore';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct SoulPage {
+export struct SoulPage {
   @StorageProp('themeTick') tick: number = 0;
   @State text: string = '';
   @State message: string = '';
@@ -18,6 +19,7 @@ struct SoulPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: 'Soul' })
       Text('SOUL.md 会注入本机对话，用来写你是谁、默认怎么做事。')
@@ -34,20 +36,17 @@ struct SoulPage {
         .backgroundColor(Tokens.surface)
         .fontColor(Tokens.text)
         .borderRadius(Tokens.settingsRadius)
-      Button('保存 SOUL.md')
-        .width('100%')
-        .height(44)
-        .margin({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 24 })
-        .backgroundColor(Tokens.accent)
-        .fontColor('#FFFFFF')
-        .onClick(() => {
+      ActionButton({ label: '保存 SOUL.md', variant: 'secondary', fullWidth: false, onTap: () => {
           const ctx = getContext(this) as common.UIAbilityContext;
           soulStore.save(ctx, this.text).then(() => {
             this.message = '已保存';
           }).catch((err: Error) => {
             this.message = `${err}`;
           });
-        })
+        } })
+        .width('100%')
+        .height(44)
+        .margin({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 24 })
       if (this.message.length > 0) {
         Text(this.message)
           .fontColor(Tokens.online)
@@ -57,5 +56,9 @@ struct SoulPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 }

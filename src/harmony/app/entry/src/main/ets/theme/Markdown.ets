@@ -10,8 +10,10 @@ import { Tokens } from './Tokens';
  */
 @Component
 export struct MarkdownText {
+  @StorageProp('themeTick') themeTick: number = 0;
   @Prop @Watch('onText') text: string = '';
-  @Prop color: string = Tokens.text;
+  @Prop color: string = '';
+  @Prop selectable: boolean = true;
   @Prop fill: boolean = true;
   @Prop textSize: number = Tokens.body;
   @State parts: MdPart[] = [];
@@ -28,7 +30,7 @@ export struct MarkdownText {
     Column() {
       // key 带上字:流式输出时只有长了的那一块重画(key 不变 ForEach 就不重画,会停在旧字上)
       ForEach(this.parts, (part: MdPart, index: number) => {
-        MdPartView({ part: part, color: this.color, textSize: this.textSize, first: index === 0 })
+        MdPartView({ part: part, color: Tokens.reactive(this.themeTick, this.color), textSize: this.textSize, first: index === 0, selectable: this.selectable })
       }, (part: MdPart, index: number) => `${index}|${part.kind}|${part.level}|${part.ordinal}|${part.lang}|${part.text}`)
     }
     .alignItems(HorizontalAlign.Start)
@@ -38,8 +40,10 @@ export struct MarkdownText {
 
 @Component
 struct MdPartView {
+  @StorageProp('themeTick') themeTick: number = 0;
   @Prop part: MdPart = new MdPart();
-  @Prop color: string = Tokens.text;
+  @Prop color: string = '';
+  @Prop selectable: boolean = true;
   @Prop textSize: number = Tokens.body;
   @Prop first: boolean = false;
   @State copied: boolean = false;
@@ -52,7 +56,7 @@ struct MdPartView {
     } else if (this.part.kind === 'hr') {
       Divider()
         .strokeWidth(Tokens.hairline)
-        .color(Tokens.separator)
+        .color(Tokens.reactive(this.themeTick, Tokens.separator))
         .margin({ top: 10, bottom: 10 })
     } else if (this.part.kind === 'quote') {
       Row() {
@@ -60,9 +64,9 @@ struct MdPartView {
           .width(3)
           .height('100%')
           .borderRadius(1.5)
-          .backgroundColor(Tokens.separator)
+          .backgroundColor(Tokens.reactive(this.themeTick, Tokens.separator))
         Column() {
-          this.inline(this.part.text, this.textSize, FontWeight.Regular, Tokens.secondary)
+          this.inline(this.part.text, this.textSize, FontWeight.Regular, () => Tokens.secondary)
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
@@ -75,11 +79,11 @@ struct MdPartView {
       Row() {
         Text(this.part.kind === 'ol' ? `${this.part.ordinal}.` : (this.part.level > 0 ? '◦' : '•'))
           .fontSize(this.textSize)
-          .fontColor(this.part.kind === 'ol' ? this.color : Tokens.secondary)
+          .fontColor(Tokens.reactive(this.themeTick, this.part.kind === 'ol' ? (this.color || Tokens.text) : Tokens.secondary))
           .lineHeight(this.textSize * 1.5)
           .constraintSize({ minWidth: this.part.kind === 'ol' ? 22 : 16 })
         Column() {
-          this.inline(this.part.text, this.textSize, FontWeight.Regular, this.color)
+          this.inline(this.part.text, this.textSize, FontWeight.Regular, () => this.color || Tokens.text)
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
@@ -91,14 +95,14 @@ struct MdPartView {
     } else if (this.part.kind === 'h1' || this.part.kind === 'h2' || this.part.kind === 'h3') {
       Column() {
         this.inline(this.part.text, this.part.kind === 'h1' ? this.textSize + 5 : (this.part.kind === 'h2' ? this.textSize + 3 : this.textSize + 1),
-          FontWeight.Bold, this.color)
+          FontWeight.Bold, () => this.color || Tokens.text)
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
       .margin({ top: this.first ? 0 : 12, bottom: 4 })
     } else {
       Column() {
-        this.inline(this.part.text, this.textSize, FontWeight.Regular, this.color)
+        this.inline(this.part.text, this.textSize, FontWeight.Regular, () => this.color || Tokens.text)
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
@@ -107,15 +111,15 @@ struct MdPartView {
   }
 
   @Builder
-  inline(text: string, size: number, weight: FontWeight, color: string) {
+  inline(text: string, size: number, weight: FontWeight, color: () => string) {
     Text() {
       ForEach(mdInline(text), (run: MdRun, i: number) => {
         if (run.kind === 'code') {
           Span(` ${run.text} `)
             .fontFamily('monospace')
             .fontSize(size - 2)
-            .fontColor(Tokens.inlineCodeText)
-            .textBackgroundStyle({ color: Tokens.inlineCodeBg, radius: 5 })
+            .fontColor(Tokens.reactive(this.themeTick, Tokens.inlineCodeText))
+            .textBackgroundStyle({ color: Tokens.reactive(this.themeTick, Tokens.inlineCodeBg), radius: 5 })
         } else if (run.kind === 'bold') {
           Span(run.text)
             .fontWeight(FontWeight.Bold)
@@ -124,10 +128,10 @@ struct MdPartView {
             .fontStyle(FontStyle.Italic)
         } else if (run.kind === 'strike') {
           Span(run.text)
-            .decoration({ type: TextDecorationType.LineThrough, color: color })
+            .decoration({ type: TextDecorationType.LineThrough, color: Tokens.reactive(this.themeTick, color()) })
         } else if (run.kind === 'link') {
           Span(run.text)
-            .fontColor(Tokens.link)
+            .fontColor(Tokens.reactive(this.themeTick, Tokens.link))
             .onClick(() => {
               InAppBrowser.open(run.url);
             })
@@ -138,9 +142,9 @@ struct MdPartView {
     }
     .fontSize(size)
     .fontWeight(weight)
-    .fontColor(color)
+    .fontColor(Tokens.reactive(this.themeTick, color()))
     .lineHeight(size * 1.5)
-    .copyOption(CopyOptions.LocalDevice)
+    .copyOption(this.selectable ? CopyOptions.LocalDevice : CopyOptions.None)
   }
 
   @Builder
@@ -156,7 +160,7 @@ struct MdPartView {
           Sym({
             name: this.copied ? 'checkmark' : 'doc_filled_on_doc',
             dim: 14,
-            color: this.copied ? Tokens.online : '#8E8E93'
+            color: Tokens.reactive(this.themeTick, this.copied ? Tokens.online : '#8E8E93')
           })
         }
         .padding(4)
@@ -171,8 +175,8 @@ struct MdPartView {
           .fontFamily('monospace')
           .fontSize(13)
           .lineHeight(19)
-          .fontColor(Tokens.codeText)
-          .copyOption(CopyOptions.LocalDevice)
+          .fontColor(Tokens.reactive(this.themeTick, Tokens.codeText))
+          .copyOption(this.selectable ? CopyOptions.LocalDevice : CopyOptions.None)
           .padding({ left: 12, right: 12, top: 4, bottom: 12 })
       }
       .scrollable(ScrollDirection.Free)
@@ -182,7 +186,7 @@ struct MdPartView {
       .constraintSize({ maxHeight: 400 })
     }
     .width('100%')
-    .backgroundColor(Tokens.codeBg)
+    .backgroundColor(Tokens.reactive(this.themeTick, Tokens.codeBg))
     .borderRadius(8)
     .clip(true)
     .margin({ top: 8, bottom: 8 })
@@ -199,21 +203,21 @@ struct MdPartView {
                 ForEach(mdInline(cell), (run: MdRun, i: number) => {
                   Span(run.text)
                     .fontWeight(run.kind === 'bold' || r === 0 ? FontWeight.Medium : FontWeight.Regular)
-                    .fontColor(run.kind === 'link' ? Tokens.link : this.color)
+                    .fontColor(Tokens.reactive(this.themeTick, run.kind === 'link' ? Tokens.link : (this.color || Tokens.text)))
                 }, (run: MdRun, i: number) => `${i}:${run.text}`)
               }
               .fontSize(14)
               .lineHeight(20)
               .width(this.columnWidth(c))
               .padding({ left: 10, right: 10, top: 8, bottom: 8 })
-              .border({ width: { right: c < row.length - 1 ? Tokens.hairline : 0 }, color: Tokens.separator })
+              .border({ width: { right: c < row.length - 1 ? Tokens.hairline : 0 }, color: Tokens.reactive(this.themeTick, Tokens.separator) })
             }, (cell: string, c: number) => `${r}:${c}`)
           }
-          .backgroundColor(r === 0 ? Tokens.surface : '#00000000')
-          .border({ width: { top: r > 0 ? Tokens.hairline : 0 }, color: Tokens.separator })
+          .backgroundColor(Tokens.reactive(this.themeTick, r === 0 ? Tokens.surface : '#00000000'))
+          .border({ width: { top: r > 0 ? Tokens.hairline : 0 }, color: Tokens.reactive(this.themeTick, Tokens.separator) })
         }, (row: string[], r: number) => `${r}`)
       }
-      .border({ width: Tokens.hairline, color: Tokens.separator, radius: 8 })
+      .border({ width: Tokens.hairline, color: Tokens.reactive(this.themeTick, Tokens.separator), radius: 8 })
       .clip(true)
     }
     .scrollable(ScrollDirection.Horizontal)

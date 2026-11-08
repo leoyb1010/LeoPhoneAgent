@@ -6,15 +6,26 @@ export class LeoRelease {
 }
 
 export class ReleaseCatalog {
-  static readonly currentVersion: string = '0.4.0';
-  static readonly currentBuild: number = 100028;
+  static readonly currentVersion: string = '0.5.0';
+  static readonly currentBuild: number = 100029;
 
   static all(): LeoRelease[] {
     const first = new LeoRelease();
-    first.version = '0.4.0';
+    first.version = '0.5.0';
     first.date = '2026-11-08';
-    first.title = '鸿蒙7与折叠屏适配';
+    first.title = '鸿蒙体验升级 · 待验收候选';
     first.highlights = [
+      '统一主题控件、语义颜色和设置图标。设置增加常用卡片与分组跳转，卡片在浅深色均有清晰层次。',
+      '改用原生导航栈。按窗口宽度提供单/双/三栏，本机右栏显示文件、工具结果与本次启动的审批回执。',
+      '本机问答加入长按菜单、分页阅读与选定轮次的分段长图预览；会话支持左滑置顶和 5 秒删除撤销。',
+      '阅读历史消息时暂停流式跟随，使用回到底部入口继续跟随；首屏加载使用骨架，关键操作使用系统触感。',
+      '本版本为待验收候选，尚待 Studio 编译、模拟器、签名覆盖安装与最终实机门禁；未发布。'
+    ];
+    const h040 = new LeoRelease();
+    h040.version = '0.4.0';
+    h040.date = '2026-11-08';
+    h040.title = '鸿蒙7与折叠屏适配';
+    h040.highlights = [
       '更新聊天、设置和输入界面，统一青绿与石墨色层次、按钮反馈和系统减少动态效果。开合折叠屏时保留当前对话、草稿、附件和模型。',
       '多张图片输入、模型生图和本机图片预览支持原生翻页与缩放。错误后可继续，停止后的迟到回复按原任务隔离。',
       '加入本机Alpine ARM64 Linux与离线Python、Node、npm、Git等工具。工作区支持文件夹、文本分页、文件导出与HTML本机预览。',
@@ -253,6 +264,6 @@ export class ReleaseCatalog {
       '填中继钥匙后读取 /machines，不再写死三台 Mac。',
       '可对在线 Mac 或 Android 身体开新任务，断线按序号续上。'
     ];
-    return [first, alpha22, t11, t10, t9, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
+    return [first, h040, alpha22, t11, t10, t9, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
   }
 }

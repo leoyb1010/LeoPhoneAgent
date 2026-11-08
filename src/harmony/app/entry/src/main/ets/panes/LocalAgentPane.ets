@@ -1,9 +1,13 @@
-import { IconButton, ActionButton } from '../theme/Controls';
+import { UndoDeletion, PendingDeletion } from '../store/UndoDeletion';
+import { Haptics } from '../theme/Haptics';
+import { ChatInspector } from './ChatInspector';
+import { AppNavigation } from '../navigation/AppNavigation';
+import { IconButton, ActionButton, Skeleton } from '../theme/Controls';
 import { MotionPolicy } from '../theme/MotionPolicy';
 import { ChatViewState } from '../local/ChatViewState';
 import { Voice } from '../local/Voice';
 import { common } from '@kit.AbilityKit';
-import { promptAction, router } from '@kit.ArkUI';
+import { promptAction } from '@kit.ArkUI';
 import { FirstMessage, LocalChatLaunch, LocalChatPane } from './LocalChatPane';
 import { Attachments } from '../chat/Attachments';
 import { Composer } from '../chat/Composer';
@@ -25,14 +29,13 @@ class HomeAttachment {
 }
 
 /** 对话头像的颜色:按标题挑一个,同一个对话每次一样。 */
-const AVATAR_COLORS: string[] = ['#286F61', '#385D70', '#58623C', '#7B6034', '#79504A', '#3F6B64'];
 
 function avatarColor(title: string): string {
   let hash = 0;
   for (let i = 0; i < title.length; i++) {
     hash = (hash * 31 + title.charCodeAt(i)) | 0;
   }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  return Tokens.avatarColors[Math.abs(hash) % Tokens.avatarColors.length];
 }
 
 /** 一行对话的 key:画面上用到的都在里面(鸿蒙 ForEach key 不变就不重画,改了标题也还显示旧的)。 */
@@ -63,10 +66,15 @@ export struct LocalAgentPane {
   @State listening: boolean = false;
   private voiceVersion: number = 0;
   @Prop wide: boolean = false;
+  @StorageLink('inspectorVisible') inspectorVisible: boolean = false;
+  @StorageProp('windowFrameWidth') windowWidth: number = 0;
+  private listScroller: Scroller = new Scroller();
   onRemote: () => void = () => {};
   onSettings: () => void = () => {};
   @StorageLink('homeSessionId') sessionId: string = '';
   @State groups: SessionGroup[] = [];
+  @State deletions: PendingDeletion[] = [];
+  @StorageProp('deletionTick') @Watch('onDeletion') deletionTick: number = 0;
   @State query: string = '';
   @State importDraft: string = '';
   @State message: string = '';
@@ -97,6 +105,7 @@ export struct LocalAgentPane {
 
   aboutToAppear(): void {
     ChatViewState.initialize(getContext(this) as common.UIAbilityContext);
+    this.deletions = UndoDeletion.entries();
     const saved = ChatViewState.get('home');
     this.restoringHome = true;
     this.draft = saved.draft; this.homeFiles = saved.files.slice();
@@ -112,7 +121,7 @@ export struct LocalAgentPane {
   aboutToDisappear(): void { this.homeDraftChanged(); ChatViewState.flush(); }
   homeDraftChanged(): void { if (!this.restoringHome) this.saveHomeDraft(); }
   onHomeDraftError(): void { if (this.draftError) this.message = this.draftError; }
-  onHomeDraftTick(): void { this.groups = sessionStore.grouped(this.query); }
+  onHomeDraftTick(): void { this.groups = this.visibleGroups(this.query); }
   private saveHomeDraft(): void {
     const row = ChatViewState.get('home');
     // Native view teardown may unbind component properties. Keep the conversation-owned snapshot in that case.
@@ -127,9 +136,20 @@ export struct LocalAgentPane {
 
   onTaskTick(): void {
     this.activeIds = ChatRuns.activeIds();
-    this.groups = sessionStore.grouped(this.query);
+    this.groups = this.visibleGroups(this.query);
   }
 
+  private visibleGroups(query: string): SessionGroup[] {
+    return sessionStore.grouped(query).map((group: SessionGroup) => {
+      const visible = new SessionGroup(); visible.key = group.key; visible.title = group.title;
+      visible.rows = group.rows.filter((row: LocalSessionSummary) => !UndoDeletion.hidden(row.id)); return visible;
+    }).filter((group: SessionGroup) => group.rows.length > 0);
+  }
+  onDeletion(): void {
+    this.deletions = UndoDeletion.entries(); this.groups = this.visibleGroups(this.query);
+    if (UndoDeletion.error) this.message = UndoDeletion.error;
+    if (this.sessionId && !sessionStore.summaries.some((row: LocalSessionSummary) => row.id === this.sessionId)) this.sessionId = '';
+  }
   onOpenSession(): void {
     this.takeOpenRequest();
   }
@@ -149,38 +169,34 @@ export struct LocalAgentPane {
       this.loadingSurface()
     } else if (!this.configured) {
       this.connectionSurface()
-    } else if (this.wide) {
+    } else {
       Row() {
-        Column() {
-          this.listColumn()
-        }
-        .width(this.listWidth())
-        .height('100%')
-        Column()
-          .width(Tokens.hairline)
-          .height('100%')
-          .backgroundColor(Tokens.separator)
+        Column() { this.listColumn() }
+          .width(this.wide ? this.listWidth() : '100%').height('100%')
+          .visibility(this.wide || !this.sessionId ? Visibility.Visible : Visibility.None)
         if (this.sessionId.length > 0) {
-          LocalChatPane({ sessionId: this.sessionId, compact: true, onBack: () => { this.sessionId = ''; }, onNew: () => this.createSession() })
-            .layoutWeight(1)
-        } else {
+          LocalChatPane({ sessionId: this.sessionId, compact: this.wide,
+            onBack: () => { this.sessionId = ''; }, onNew: () => this.createSession() }).layoutWeight(1)
+        } else if (this.wide) {
           Column() {
             Column() { this.pickHint() }.layoutWeight(1).width('100%')
             this.homeComposer()
           }.layoutWeight(1).height('100%')
         }
-      }
-      .width('100%')
-      .height('100%')
-      .onAreaChange((_old: Area, area: Area) => {
-        const width = Number.parseFloat(`${area.width}`); const height = Number.parseFloat(`${area.height}`);
-        if (width > 0) this.viewportWidth = width; if (height > 0) this.viewportHeight = height;
-      })
-    } else if (this.sessionId.length > 0) {
-      LocalChatPane({ sessionId: this.sessionId, onBack: () => { this.sessionId = ''; }, onNew: () => this.createSession() })
-    } else {
-      this.listColumn()
+        if (this.wide && this.windowWidth >= 840 && this.inspectorVisible) {
+          ChatInspector({ sessionId: this.sessionId, onClose: () => this.toggleInspector() }).width(260)
+        }
+      }.width('100%').height('100%')
+        .onAreaChange((_old: Area, area: Area) => {
+          const width = Number.parseFloat(`${area.width}`); const height = Number.parseFloat(`${area.height}`);
+          if (width > 0) this.viewportWidth = width; if (height > 0) this.viewportHeight = height;
+        })
     }
+  }
+
+  private toggleInspector(): void {
+    this.inspectorVisible = !this.inspectorVisible;
+    AppStorage.setOrCreate('inspectorManualAt', Date.now());
   }
 
   @Builder
@@ -220,7 +236,7 @@ export struct LocalAgentPane {
               this.openModelPick();
             },
             onApproval: () => {
-              router.pushUrl({ url: 'pages/ApprovalPage' });
+              AppNavigation.pushUrl({ url: 'pages/ApprovalPage' });
             },
             onRemoveFile: (index: number) => {
               this.homeFiles = this.homeFiles.filter((_name: string, i: number) => i !== index);
@@ -250,29 +266,37 @@ export struct LocalAgentPane {
           .width('100%')
           .padding({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 6 })
       }
-      Scroll() {
-        Column() {
-          if (!this.configured && this.ready) {
-            this.onboarding()
-          } else {
-            this.statusChips()
-            if (this.groups.length === 0 && this.ready) {
-              this.emptyList()
-            } else {
-              ForEach(this.groups, (group: SessionGroup) => {
-                this.section(group)
-              }, (group: SessionGroup) => `${group.key}|${group.rows.map((row: LocalSessionSummary) => sessionKey(row)).join(',')}`)
-            }
-          }
+      ForEach(this.deletions, (entry: PendingDeletion) => {
+        ActionButton({ label: '已移除「' + entry.title + '」 · 撤销', variant: 'secondary',
+          onTap: () => { if (!UndoDeletion.undo(entry.id)) this.message = '撤销时间已过'; } })
+      }, (entry: PendingDeletion) => `${entry.id}|${entry.title}|${entry.expires}`)
+      List({ scroller: this.listScroller }) {
+        ListItem() {
+          Column() {
+            if (!this.configured && this.ready) this.onboarding()
+            else this.statusChips()
+            if (this.groups.length === 0 && this.ready && this.configured) this.emptyList()
+          }.width('100%')
         }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding({ bottom: 24 })
+        ForEach(this.groups, (group: SessionGroup) => {
+          ListItemGroup({ header: this.groupHeader(group) }) {
+            ForEach(group.rows, (row: LocalSessionSummary) => {
+              ListItem() { this.sessionRow(row) }
+                .swipeAction({ end: this.sessionSwipe(row) })
+            }, (row: LocalSessionSummary) => sessionKey(row))
+          }
+        }, (group: SessionGroup) => `${group.key}|${group.rows.map((row: LocalSessionSummary) => sessionKey(row)).join(',')}`)
       }
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .align(Alignment.Top)
       .edgeEffect(EdgeEffect.Spring)
+      .onScrollStop(() => { ChatViewState.get('home').offset = this.listScroller.currentOffset().yOffset; })
+      .onAppear(() => { this.listScroller.scrollTo({ xOffset: 0, yOffset: ChatViewState.get('home').offset }); })
+    .bindSheet($$this.menuOpen, this.menuSheet(), {
+      height: SheetSize.FIT_CONTENT,
+      dragBar: true
+    })
       if (!this.wide && this.configured) this.homeComposer()
     }
     .width('100%')
@@ -288,10 +312,7 @@ export struct LocalAgentPane {
       dragBar: true,
       title: { title: '导入对话' }
     })
-    .bindSheet($$this.menuOpen, this.menuSheet(), {
-      height: SheetSize.FIT_CONTENT,
-      dragBar: true
-    })
+
   }
 
   @Builder
@@ -311,17 +332,20 @@ export struct LocalAgentPane {
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .margin({ left: this.wide ? 10 : 4 })
         .layoutWeight(1)
+      if (this.wide && this.windowWidth >= 840) {
+        IconButton({ icon: 'rectangle_stack', label: this.inspectorVisible ? '关闭右栏' : '打开右栏', selected: this.inspectorVisible, onTap: () => this.toggleInspector() })
+      }
       if (this.configured) {
         this.barIcon('magnifyingglass', () => {
           this.searchOpen = !this.searchOpen;
           if (!this.searchOpen) {
             this.query = '';
-            this.groups = sessionStore.grouped('');
+            this.groups = this.visibleGroups('');
           }
         })
       }
       if (!this.wide) {
-        this.barIcon('bookshelf', () => router.pushUrl({ url: 'pages/BrainSpacePage' }))
+        this.barIcon('bookshelf', () => AppNavigation.pushUrl({ url: 'pages/BrainSpacePage' }))
         this.barIcon('computer', () => this.onRemote())
       }
       if (this.wide && this.configured) {
@@ -336,7 +360,7 @@ export struct LocalAgentPane {
       .height(44)
       .accessibilityText('更多操作')
       .bindMenu(this.wide ? [
-        { value: '第二大脑', action: () => { router.pushUrl({ url: 'pages/BrainSpacePage' }); } },
+        { value: '第二大脑', action: () => { AppNavigation.pushUrl({ url: 'pages/BrainSpacePage' }); } },
         { value: '远程机器', action: () => this.onRemote() },
         {
           value: '设置',
@@ -383,12 +407,12 @@ export struct LocalAgentPane {
         TextInput({ placeholder: Copy.searchPlaceholder, text: this.query })
           .onChange((value: string) => {
             this.query = value;
-            this.groups = sessionStore.grouped(this.query);
+            this.groups = this.visibleGroups(this.query);
           })
           .layoutWeight(1)
           .height(44)
           .fontSize(15)
-          .backgroundColor('#00000000')
+          .backgroundColor(Tokens.transparent)
           .fontColor(Tokens.text)
           .placeholderColor(Tokens.muted)
           .padding({ left: 6 })
@@ -399,7 +423,7 @@ export struct LocalAgentPane {
       .backgroundColor(Tokens.surface)
       .borderRadius(19)
       ActionButton({ label: '取消', variant: 'quiet', fullWidth: false, onTap: () => {
-        this.query = ''; this.searchOpen = false; this.groups = sessionStore.grouped('');
+        this.query = ''; this.searchOpen = false; this.groups = this.visibleGroups('');
       } })
     }
     .width('100%')
@@ -472,29 +496,16 @@ export struct LocalAgentPane {
   }
 
   @Builder
-  section(group: SessionGroup) {
-    Column() {
-      Row() {
-        if (group.key === 'pinned') {
-          Sym({ name: 'pin_fill', dim: 12, color: Tokens.secondary })
-            .margin({ right: 4 })
-        }
-        Text(group.title)
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(Tokens.secondary)
-        Text(`${group.rows.length}`)
-          .fontSize(12)
-          .fontColor(Tokens.muted)
-          .margin({ left: 6 })
-      }
-      .width('100%')
-      .padding({ left: Tokens.pagePad + 4, right: Tokens.pagePad, top: 14, bottom: 4 })
-      ForEach(group.rows, (row: LocalSessionSummary) => {
-        this.sessionRow(row)
-      }, (row: LocalSessionSummary) => sessionKey(row))
-    }
-    .width('100%')
+  groupHeader(group: SessionGroup) {
+    Text(`${group.title} · ${group.rows.length}`).fontSize(13).fontColor(Tokens.secondary)
+      .width('100%').padding({ left: Tokens.pagePad + 4, right: Tokens.pagePad, top: 14, bottom: 8 })
+  }
+  @Builder
+  sessionSwipe(row: LocalSessionSummary) {
+    Row({ space: 8 }) {
+      ActionButton({ label: row.pinned ? '取消置顶' : '置顶', fullWidth: false, variant: 'secondary', onTap: () => this.pinSession(row.id) })
+      ActionButton({ label: '删除', fullWidth: false, variant: 'danger', isEnabled: !ChatRuns.isActive(row.id), onTap: () => this.removeSession(row.id) })
+    }.padding(8)
   }
 
   @Builder
@@ -554,7 +565,7 @@ export struct LocalAgentPane {
     .height(76)
     .padding({ left: this.wide ? 6 : 10, right: this.wide ? 10 : 16 })
     .margin({ left: this.wide ? 8 : 0, right: this.wide ? 8 : 0 })
-    .backgroundColor(this.wide && this.sessionId === row.id ? Tokens.surface : '#00000000')
+    .backgroundColor(this.wide && this.sessionId === row.id ? Tokens.surface : Tokens.transparent)
     .borderRadius(this.wide ? 16 : 0)
     .accessibilityGroup(true)
     .accessibilityText(row.title + '，' + (this.activeIds.indexOf(row.id) >= 0 ? '任务进行中' : relativeTime(row.updatedAt)))
@@ -627,7 +638,7 @@ export struct LocalAgentPane {
     Row() {
       IconButton({ icon: 'gearshape', label: '设置', onTap: () => this.onSettings() })
       Blank()
-      IconButton({ icon: 'bookshelf', label: '第二大脑', onTap: () => router.pushUrl({ url: 'pages/BrainSpacePage' }) })
+      IconButton({ icon: 'bookshelf', label: '第二大脑', onTap: () => AppNavigation.pushUrl({ url: 'pages/BrainSpacePage' }) })
       IconButton({ icon: 'computer', label: '远程机器', onTap: () => this.onRemote() })
     }.height(56).width('100%').padding({ left: 10, right: 10 })
   }
@@ -642,7 +653,7 @@ export struct LocalAgentPane {
           Text(this.message).fontSize(14).fontColor(Tokens.secondary).textAlign(TextAlign.Center)
           ActionButton({ label: '重新读取', fullWidth: false, onTap: () => { this.message = ''; this.reload(); } })
         } else {
-          LoadingProgress().width(28).height(28).color(Tokens.accent).enableLoading(!this.reduced)
+          Skeleton({ label: '正在读取对话' })
           Text('正在读取本机对话').fontSize(15).fontColor(Tokens.secondary)
         }
       }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center).padding(24)
@@ -667,7 +678,7 @@ export struct LocalAgentPane {
       Text('从一件事开始').fontSize(30).fontWeight(FontWeight.Bold).fontColor(Tokens.text).textAlign(TextAlign.Center)
       Text('连接一个 AI 服务商。\n让 LeoBot 帮你整理资料、完成任务。')
         .fontSize(16).lineHeight(25).fontColor(Tokens.secondary).textAlign(TextAlign.Center).constraintSize({ maxWidth: 420 })
-      ActionButton({ label: '连接 AI 服务商', icon: 'plus', onTap: () => router.pushUrl({ url: 'pages/ProviderListPage' }) })
+      ActionButton({ label: '连接 AI 服务商', icon: 'plus', onTap: () => AppNavigation.pushUrl({ url: 'pages/ProviderListPage' }) })
         .width('100%').constraintSize({ maxWidth: 380 }).margin({ top: 12 })
       Text('服务商密钥由设备钥匙串保管。').fontSize(13).fontColor(Tokens.muted).textAlign(TextAlign.Center)
       if (this.draft || this.homeFiles.length > 0 || this.homeImagePath) {
@@ -701,7 +712,7 @@ export struct LocalAgentPane {
       Text('导入')
         .fontSize(16)
         .fontWeight(FontWeight.Medium)
-        .fontColor('#FFFFFF')
+        .fontColor(Tokens.sendGlyph)
         .textAlign(TextAlign.Center)
         .width('100%')
         .height(46)
@@ -766,6 +777,7 @@ export struct LocalAgentPane {
 
   /** 按当前窗口分配侧栏，三折叠全展开保持独立可读正文。 */
   private listWidth(): string | number {
+    if (this.inspectorVisible && this.windowWidth >= 840) return 280;
     if (this.viewportWidth <= 0) return '32%';
     return this.viewportWidth >= Tokens.largeBreak ? Math.min(340, Math.max(280, this.viewportWidth * 0.27)) : Math.max(208, this.viewportWidth * 0.32);
   }
@@ -794,13 +806,14 @@ export struct LocalAgentPane {
       const draft = ChatViewState.get(session.id); draft.draft = this.draft; draft.files = this.homeFiles.slice(); draft.image = this.homeImage; draft.images = this.homeImages.slice();
       first.submissionId = ChatViewState.beginSubmission(session.id);
       LocalChatLaunch.first = first;
+      Haptics.light();
       this.draft = '';
       voice.voiceGeneration += 1; voice.draft = ''; voice.voiceVersion += 1; this.voiceVersion = voice.voiceVersion;
       ChatViewState.changed();
       this.homeFiles = [];
       this.homeImage = null; this.homeImages = []; this.homeImagePaths = [];
       this.homeImagePath = '';
-      this.groups = sessionStore.grouped(this.query);
+      this.groups = this.visibleGroups(this.query);
       this.openSession(session.id);
     } catch (err) {
       this.message = `${err}`;
@@ -900,10 +913,10 @@ export struct LocalAgentPane {
     const row = providerStore.active();
     if (row) {
       ProviderLaunch.id = row.id;
-      router.pushUrl({ url: 'pages/ProviderDetailPage' });
+      AppNavigation.pushUrl({ url: 'pages/ProviderDetailPage' });
       return;
     }
-    router.pushUrl({ url: 'pages/ProviderListPage' });
+    AppNavigation.pushUrl({ url: 'pages/ProviderListPage' });
   }
 
   private reload(): void {
@@ -916,7 +929,7 @@ export struct LocalAgentPane {
       this.configured = providerStore.configured();
       const active = providerStore.active();
       this.modelLine = active ? active.model : '';
-      this.groups = sessionStore.grouped(this.query);
+      this.groups = this.visibleGroups(this.query);
       this.ready = true;
       if (SensitiveToolGate.lastError) this.message = SensitiveToolGate.lastError;
       if (sessionStore.jsonLoadFailed) {
@@ -939,7 +952,7 @@ export struct LocalAgentPane {
       const session: LocalSession = await sessionStore.importArchive(ctx, this.importDraft);
       this.importDraft = '';
       this.importOpen = false;
-      this.groups = sessionStore.grouped(this.query);
+      this.groups = this.visibleGroups(this.query);
       this.openSession(session.id);
     } catch (err) {
       this.message = `${err}`;
@@ -950,7 +963,7 @@ export struct LocalAgentPane {
     const ctx = getContext(this) as common.UIAbilityContext;
     try {
       await sessionStore.togglePin(ctx, id);
-      this.groups = sessionStore.grouped(this.query);
+      this.groups = this.visibleGroups(this.query);
     } catch (err) {
       this.message = `${err}`;
     }
@@ -963,7 +976,7 @@ export struct LocalAgentPane {
       if (this.sessionId === id) {
         this.sessionId = '';
       }
-      this.groups = sessionStore.grouped(this.query);
+      this.groups = this.visibleGroups(this.query);
     } catch (err) {
       this.message = `${err}`;
     }
@@ -975,10 +988,10 @@ export struct LocalAgentPane {
     try {
       const picked = await promptAction.showDialog({
         title: '删除对话?',
-        message: `「${title}」和里面的图片会从这台设备上删掉,不能恢复。`,
+        message: `「${title}」将在 5 秒后从这台设备删除，期间可在列表撤销。正在运行或审批的会话不能删除。`,
         buttons: [
-          { text: '删除', color: '#E5484D' },
-          { text: '取消', color: '#8E8E93' }
+          { text: '删除', color: Tokens.danger },
+          { text: '取消', color: Tokens.secondary }
         ]
       });
       if (picked.index !== 0) {
@@ -987,16 +1000,13 @@ export struct LocalAgentPane {
     } catch (_err) {
       return;
     }
-    try {
-      ChatRuns.forget(id);
+    if (ChatRuns.isActive(id)) { this.message = '请先停止任务或处理审批，再删除对话'; return; }
+    UndoDeletion.stage(id, title, async () => {
+      if (ChatRuns.isActive(id)) throw new Error('会话已开始运行，未删除');
       await sessionStore.remove(ctx, id);
-      if (this.sessionId === id) {
-        this.sessionId = '';
-      }
-      this.groups = sessionStore.grouped(this.query);
-    } catch (err) {
-      this.message = `${err}`;
-    }
+      ChatRuns.invalidateIdle(id);
+    });
+    this.onDeletion();
   }
 
   /** 复制成档案放进剪贴板;另一台设备「导入对话」粘贴就能接着聊。 */
@@ -1015,7 +1025,7 @@ export struct LocalAgentPane {
     const ctx = getContext(this) as common.UIAbilityContext;
     try {
       const copy = await sessionStore.duplicate(ctx, id);
-      this.groups = sessionStore.grouped(this.query);
+      this.groups = this.visibleGroups(this.query);
       this.openSession(copy.id);
     } catch (err) {
       this.message = `${err}`;

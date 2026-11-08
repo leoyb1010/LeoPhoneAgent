@@ -1,13 +1,13 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { webview } from '@kit.ArkWeb';
-import { router } from '@kit.ArkUI';
+
 import { browserStore, BrowserTab } from '../store/BrowserStore';
 import { WebLaunch } from '../local/InAppBrowser';
 import { BrowserAutomation } from '../local/BrowserAutomation';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct WebPage {
+export struct WebPage {
   @StorageProp('themeTick') tick: number = 0;
   @StorageProp('browserTick') @Watch('onBrowserTick') browserTick: number = 0;
   @State url: string = '';
@@ -37,13 +37,14 @@ struct WebPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       Row() {
         Text('关闭')
           .fontSize(14)
           .fontColor(Tokens.accent)
           .onClick(() => {
-            router.back();
+            AppNavigation.back();
           })
         Text('后退')
           .fontSize(13)
@@ -136,6 +137,11 @@ struct WebPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); this.onPageShow(); })
+    .onHidden(() => { this.onPageHide(); })
   }
 
   onBrowserTick(): void {

@@ -1,3 +1,4 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { ActionButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
 import { mailAccountStore, MailAccount } from '../mail/MailAccountStore';
@@ -5,9 +6,9 @@ import { MailService } from '../mail/MailService';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct MailAccountsPage {
+export struct MailAccountsPage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @State accounts: MailAccount[] = [];
   @State editing: MailAccount = new MailAccount();
   @State password: string = '';
@@ -21,6 +22,7 @@ struct MailAccountsPage {
     catch (_err) { this.message = '邮箱配置暂时无法读取，原配置已保留'; }
   }
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '邮箱账户' })
       Scroll() {
@@ -77,6 +79,10 @@ struct MailAccountsPage {
         }.width('100%').constraintSize({ maxWidth: 560 }).alignItems(HorizontalAlign.Start).padding({ left: 24, right: 24, top: 24, bottom: 40 })
       }.layoutWeight(1)
     }.width('100%').height('100%').backgroundColor(Tokens.grouped)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
   private async save(): Promise<void> {
     this.operation = 'save';

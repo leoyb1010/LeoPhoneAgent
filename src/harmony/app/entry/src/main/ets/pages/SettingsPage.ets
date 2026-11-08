@@ -1,17 +1,22 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { SettingsPane } from '../panes/SettingsPane';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct SettingsPage {
+export struct SettingsPage {
   @StorageProp('themeTick') tick: number = 0;
 
   build() {
+    NavDestination() {
     Column() {
       SettingsPane({ showBack: true })
     }
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 }

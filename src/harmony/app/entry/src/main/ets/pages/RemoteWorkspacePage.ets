@@ -1,6 +1,7 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { ActionButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
-import { router } from '@kit.ArkUI';
+
 import { image } from '@kit.ImageKit';
 import { HarnessClient } from '../net/HarnessClient';
 import { gatewayStore } from '../store/GatewayStore';
@@ -9,9 +10,9 @@ import { RemoteWorkspaceLaunch } from '../remote/RemoteWorkspaceLaunch';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct RemoteWorkspacePage {
+export struct RemoteWorkspacePage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @State capabilities: RemoteCapabilities = new RemoteCapabilities();
   @State models: RemoteModel[] = [];
   @State snapshot: image.PixelMap | null = null;
@@ -67,6 +68,7 @@ struct RemoteWorkspacePage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '远程工作区' })
       Scroll() {
@@ -135,7 +137,7 @@ struct RemoteWorkspacePage {
             Text('发送第一条任务后可在这里设置模型、上下文和工作区改动。').fontSize(14).fontColor(Tokens.muted)
           }
           if (this.capabilities.has('screen_session')) {
-            ActionButton({ label: '视频看屏与操控', variant: 'secondary', fullWidth: false, busy: false, isEnabled: true, onTap: () => { router.pushUrl({ url: 'pages/ScreenSessionPage' }); } })
+            ActionButton({ label: '视频看屏与操控', variant: 'secondary', fullWidth: false, busy: false, isEnabled: true, onTap: () => { AppNavigation.pushUrl({ url: 'pages/ScreenSessionPage' }); } })
           }
           if (this.capabilities.has('screen_snapshot')) {
             Divider()
@@ -175,6 +177,10 @@ struct RemoteWorkspacePage {
         }.width('100%').constraintSize({ maxWidth: 720 }).alignItems(HorizontalAlign.Start).padding({ left: 24, right: 24, top: 24, bottom: 40 })
       }.layoutWeight(1)
     }.width('100%').height('100%').backgroundColor(Tokens.grouped)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   private scheduleLabel(row: Record<string, Object>): string {

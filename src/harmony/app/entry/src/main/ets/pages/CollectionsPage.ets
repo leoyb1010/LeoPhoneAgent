@@ -1,11 +1,13 @@
+import { AppNavigation } from '../navigation/AppNavigation';
+import { ActionButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
 import { CollectionItem, collectionStore } from '../store/CollectionStore';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct CollectionsPage {
+export struct CollectionsPage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @State title: string = '';
   @State body: string = '';
   @State rows: CollectionItem[] = [];
@@ -19,6 +21,7 @@ struct CollectionsPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '藏宝阁' })
       Scroll() {
@@ -40,13 +43,7 @@ struct CollectionsPage {
             .backgroundColor(Tokens.surface)
             .fontColor(Tokens.text)
             .borderRadius(Tokens.settingsRadius)
-          Button('收入藏宝阁')
-            .width('100%')
-            .height(44)
-            .margin({ top: 12, bottom: 16 })
-            .backgroundColor(Tokens.accent)
-            .fontColor('#FFFFFF')
-            .onClick(() => {
+          ActionButton({ label: '收入藏宝阁', variant: 'secondary', fullWidth: false, onTap: () => {
               const ctx = getContext(this) as common.UIAbilityContext;
               collectionStore.add(ctx, this.title, this.body).then(() => {
                 this.rows = collectionStore.items.slice();
@@ -56,7 +53,10 @@ struct CollectionsPage {
               }).catch((err: Error) => {
                 this.message = `${err}`;
               });
-            })
+            } })
+            .width('100%')
+            .height(44)
+            .margin({ top: 12, bottom: 16 })
           ForEach(this.rows, (row: CollectionItem) => {
             Column() {
               Text(row.title)
@@ -86,5 +86,9 @@ struct CollectionsPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 }

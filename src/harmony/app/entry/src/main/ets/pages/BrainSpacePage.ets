@@ -1,5 +1,6 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
-import { router, promptAction } from '@kit.ArkUI';
+import { promptAction } from '@kit.ArkUI';
 import { fileIo } from '@kit.CoreFileKit';
 import { webview } from '@kit.ArkWeb';
 import { BrainAPI, BrainJSON, text, object, items, part } from '../brain/BrainAPI';
@@ -7,7 +8,7 @@ import { BrainUpload, BrainUploadJob } from '../brain/BrainUpload';
 import { BrainCache } from '../brain/BrainCache';
 import { BrainImage } from '../brain/BrainImage';
 import { SecretStore } from '../store/SecretStore';
-import { ActionButton, IconButton } from '../theme/Controls';
+import { ActionButton, IconButton, SurfaceButton, Skeleton } from '../theme/Controls';
 import { MotionPolicy } from '../theme/MotionPolicy';
 import { Sym } from '../theme/Symbols';
 import { curves } from '@kit.ArkUI';
@@ -35,9 +36,9 @@ function row(data: BrainJSON, kind: string): BrainRow {
   return r;
 }
 
-@Entry
 @Component
-struct BrainSpacePage {
+export struct BrainSpacePage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @StorageProp('brainLockedAt') @Watch('backgroundLock') backgroundLockAt: number = 0;
   @State authenticating: boolean = false;
   @State viewportWidth: number = 360;
@@ -399,7 +400,7 @@ struct BrainSpacePage {
     this.epoch += 1;
     if (this.mode === 'web' && this.shareToken) { this.mode = 'share'; this.webURL = ''; return; }
     if (this.mode !== 'home') { this.mode = 'home'; this.sections = []; this.answer = ''; this.reload(); }
-    else router.back();
+    else AppNavigation.back();
   }
   @Builder
   private card(r: BrainRow) {
@@ -435,14 +436,26 @@ struct BrainSpacePage {
           ActionButton({ label: '拒绝', variant: 'secondary', fullWidth: false, isEnabled: this.canSteward && !this.busy, onTap: () => this.decide(r, 'reject') })
         }
       } else if (r.kind === 'ocr') {
-        Button(this.chosenPages.indexOf(Number(r.id)) >= 0 ? '已选 ' + r.title : '选择补读 ' + r.title).onClick(() => {
+        ActionButton({ label: this.chosenPages.indexOf(Number(r.id)) >= 0 ? '已选 ' + r.title : '选择补读 ' + r.title, variant: 'secondary', fullWidth: false, onTap: () => {
           const n = Number(r.id);
           this.chosenPages = this.chosenPages.indexOf(n) >= 0 ? this.chosenPages.filter((v: number) => v !== n) : this.chosenPages.concat([n]);
-        })
+        } })
       }
     }.alignItems(HorizontalAlign.Start).padding(18).width('100%').backgroundColor(Tokens.card).borderRadius(20).border({ width: 0.5, color: Tokens.separator }).margin({ bottom: 12 })
   }
+  @Builder
+  tabButtonContent(name: string, index: number) {
+                Column({ space: 5 }) {
+                  Sym({ name: ['calendar', 'photo', 'text_bubble_left_2', 'person', 'doc_text'][index],
+                    dim: 21, color: this.tab === index ? Tokens.accent : Tokens.muted })
+                  Text(name).fontSize(12).fontWeight(this.tab === index ? FontWeight.Bold : FontWeight.Regular)
+                    .fontColor(this.tab === index ? Tokens.accent : Tokens.secondary)
+                }.padding({ top: 9, bottom: 9 }).width('100%')
+
+  }
+
   build() {
+    NavDestination() {
     Column() {
       Row({ space: 12 }) {
         IconButton({ icon: 'chevron_left', label: '返回上一页', onTap: () => this.back() })
@@ -465,7 +478,7 @@ struct BrainSpacePage {
       }
       if (this.busy) {
         Row({ space: 10 }) {
-          LoadingProgress().width(20).height(20).color(Tokens.accent)
+          Skeleton({ label: '正在读取第二大脑' })
           Text('正在处理…').fontSize(13).fontColor(Tokens.secondary)
         }.width('100%').padding({ left: 20, right: 20, top: 6, bottom: 10 })
       }
@@ -492,7 +505,7 @@ struct BrainSpacePage {
           Text('使用设备认证查看家庭影像与资料').fontColor(Tokens.secondary)
           ActionButton({ label: '解锁第二大脑', busy: this.authenticating, fullWidth: false, icon: 'lock', onTap: () => this.enter() })
           ActionButton({ label: '连接设置', variant: 'quiet', fullWidth: false, onTap: () => this.mode = 'settings' })
-          ActionButton({ label: '手机收藏', variant: 'quiet', fullWidth: false, icon: 'bookshelf', onTap: () => router.pushUrl({ url: 'pages/CollectionsPage' }) })
+          ActionButton({ label: '手机收藏', variant: 'quiet', fullWidth: false, icon: 'bookshelf', onTap: () => AppNavigation.pushUrl({ url: 'pages/CollectionsPage' }) })
         }.layoutWeight(1).justifyContent(FlexAlign.Center).width('100%')
       } else if (this.mode === 'web') {
         Web({ src: this.webURL, controller: this.web, incognitoMode: true }).layoutWeight(1).width('100%')
@@ -551,7 +564,7 @@ struct BrainSpacePage {
                   ActionButton({ label: '待审阅', variant: 'quiet', fullWidth: false, onTap: () => this.openWeb('review') })
                 }.width('100%')
               }
-              ActionButton({ label: '手机收藏', variant: 'quiet', fullWidth: false, icon: 'bookshelf', onTap: () => router.pushUrl({ url: 'pages/CollectionsPage' }) })
+              ActionButton({ label: '手机收藏', variant: 'quiet', fullWidth: false, icon: 'bookshelf', onTap: () => AppNavigation.pushUrl({ url: 'pages/CollectionsPage' }) })
             } else if (this.mode === 'uploads') {
               Flex({ wrap: FlexWrap.Wrap }) {
                 ActionButton({ label: '从文件选择', variant: 'secondary', fullWidth: false, icon: 'doc_text', onTap: () => this.pickUpload(false) })
@@ -563,18 +576,18 @@ struct BrainSpacePage {
                   Text(job.name).fontColor(Tokens.text)
                   Text(job.stage + ' · ' + Math.round(job.received / job.size * 100) + '%').fontColor(Tokens.secondary)
                   ActionButton({ label: job.fileId ? '查看处理进度' : '继续上传', busy: this.busy, onTap: () => this.upload(job) })
-                  Button('移除本机副本').enabled(!this.busy).onClick(() => {
+                  ActionButton({ label: '移除本机副本', variant: 'secondary', fullWidth: false, isEnabled: !this.busy, onTap: () => {
                     promptAction.showDialog({ title: '移除上传副本', message: '已上传的服务端资料仍可在资料中查找。', buttons: [{ text: '取消', color: Tokens.text }, { text: '移除', color: Tokens.danger }] })
                       .then((result) => { if (result.index === 1) { this.uploader.remove(job.id); this.jobs = this.uploader.jobs.slice(); } })
                       .catch((error: Error) => this.error = `${error}`);
-                  })
+                  } })
                 }.width('100%').padding(16).backgroundColor(Tokens.card).borderRadius(16)
               }, (job: BrainUploadJob) => `${job.id}:${job.received}:${job.stage}`)
             } else if (this.mode === 'shares') {
               Text('我的分享').fontSize(24).fontColor(Tokens.text)
               if (!this.shares.length) { Text('这台设备还没有创建分享').fontColor(Tokens.secondary) }
               ForEach(this.shares, (r: BrainRow) => {
-                Button(r.title).onClick(() => { this.shareToken = r.id; this.sharePath = text(r.data, 'path'); this.mode = 'share'; })
+                ActionButton({ label: r.title, variant: 'secondary', fullWidth: false, onTap: () => { this.shareToken = r.id; this.sharePath = text(r.data, 'path'); this.mode = 'share'; } })
               }, (r: BrainRow) => r.id)
             } else if (this.mode === 'share') {
               Text('分享有效期 7 天').fontSize(22).fontColor(Tokens.text)
@@ -585,10 +598,10 @@ struct BrainSpacePage {
               if (this.mode === 'answer') {
                 Text(this.answer).fontSize(18).lineHeight(30).fontColor(Tokens.text).copyOption(CopyOptions.InApp).width('100%')
                 if (this.canSave && this.answerId) {
-                  Button('保存成果').onClick(() => {
+                  ActionButton({ label: '保存成果', variant: 'secondary', fullWidth: false, onTap: () => {
                     BrainAPI.post('/answers/save', { 'id': this.answerId, 'title': this.query.substring(0, 80) })
                       .then(() => this.notice = '成果已保存').catch((error: Error) => this.error = `${error}`);
-                  })
+                  } })
                 }
                 ActionButton({ label: '接着问', variant: 'secondary', fullWidth: false, onTap: () => { this.mode = 'home'; this.tab = 2; } })
               }
@@ -601,11 +614,11 @@ struct BrainSpacePage {
                 ActionButton({ label: '问这份资料', variant: 'secondary', onTap: () => { this.askFiles = [this.detail.id]; this.tab = 2; this.query = ''; this.mode = 'home'; } })
               }
               if (this.mode === 'detail' && this.detail.kind === 'person') {
-                Button('查看此人的全部影像').onClick(() => { this.personId = this.detail.id; this.tab = 1; this.mode = 'home'; this.reload(); })
+                ActionButton({ label: '查看此人的全部影像', variant: 'secondary', fullWidth: false, onTap: () => { this.personId = this.detail.id; this.tab = 1; this.mode = 'home'; this.reload(); } })
               }
               ForEach(this.sections, (r: BrainRow, index: number) => { this.card(r) }, (r: BrainRow, index: number) => `${index}:${r.kind}:${r.id}`)
               if (this.mode === 'detail' && this.detail.kind === 'file') {
-                if (this.chosenPages.length) { Button('只补读选中的 ' + this.chosenPages.length + ' 页').onClick(() => this.retryOCR()) }
+                if (this.chosenPages.length) { ActionButton({ label: '只补读选中的 ' + this.chosenPages.length + ' 页', variant: 'secondary', fullWidth: false, onTap: () => this.retryOCR() }) }
                 if (this.pageOffset < this.total) { ActionButton({ label: '再读 12 段', variant: 'secondary', onTap: () => this.moreChunks() }) }
               }
             }
@@ -614,17 +627,10 @@ struct BrainSpacePage {
         if (this.mode === 'home') {
           Row() {
             ForEach(['今日', '影像', '问', '家人', '资料'], (name: string, index: number) => {
-              Button({ type: ButtonType.Normal }) {
-                Column({ space: 5 }) {
-                  Sym({ name: ['calendar', 'photo', 'text_bubble_left_2', 'person', 'doc_text'][index],
-                    dim: 21, color: this.tab === index ? Tokens.accent : Tokens.muted })
-                  Text(name).fontSize(12).fontWeight(this.tab === index ? FontWeight.Bold : FontWeight.Regular)
-                    .fontColor(this.tab === index ? Tokens.accent : Tokens.secondary)
-                }.padding({ top: 9, bottom: 9 }).width('100%')
-              }
+              SurfaceButton({ content: () => { this.tabButtonContent(name, index); } })
               .layoutWeight(1).constraintSize({ minWidth: 44, minHeight: 60 })
               .backgroundColor(this.tab === index ? Tokens.accentSoft : Tokens.card)
-              .borderRadius(16).stateEffect(true).accessibilityText(name)
+              .borderRadius(16).accessibilityText(name)
               .accessibilityDescription(this.tab === index ? '当前页面' : '')
               .onClick(() => {
                 if (this.tab === index) return;
@@ -640,5 +646,11 @@ struct BrainSpacePage {
       }
     }.width('100%').height('100%').backgroundColor(Tokens.grouped)
       .onAreaChange((_oldArea: Area, newArea: Area) => this.viewportWidth = Number(newArea.width))
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
+    .onHidden(() => { this.onPageHide(); })
+    .onBackPressed(() => { this.back(); return true; })
   }
 }

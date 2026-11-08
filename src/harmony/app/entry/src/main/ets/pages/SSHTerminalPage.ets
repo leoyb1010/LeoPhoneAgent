@@ -1,3 +1,4 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { ActionButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
 import { fileIo, picker } from '@kit.CoreFileKit';
@@ -9,9 +10,9 @@ import { SSHTerminalBridge } from '../ssh/SSHTerminalBridge';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct SSHTerminalPage {
+export struct SSHTerminalPage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @State hosts: SSHHost[] = [];
   @State editing: SSHHost = new SSHHost();
   @State secret: string = '';
@@ -38,6 +39,7 @@ struct SSHTerminalPage {
     try { this.hosts = SSHHostStore.list(getContext(this)); } catch (_err) { this.status = 'SSH配置暂不可读取，原配置已保留'; }
   }
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: 'SSH 终端' })
       if (!this.connected) {
@@ -87,6 +89,10 @@ struct SSHTerminalPage {
         .onPermissionRequest((event) => { event?.request.deny(); })
         .layoutWeight(1)
     }.width('100%').height('100%').backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   private async pickKey(): Promise<void> {

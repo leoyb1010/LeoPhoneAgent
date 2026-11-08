@@ -1,3 +1,4 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { ActionButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
 import { media } from '@kit.MediaKit';
@@ -8,9 +9,9 @@ import { RecordingTranscriber } from '../recording/RecordingTranscriber';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct RecordingsPage {
+export struct RecordingsPage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @State records: RecordingRecord[] = [];
   @State selected: RecordingRecord | null = null;
   @State recording: boolean = false;
@@ -38,6 +39,7 @@ struct RecordingsPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '录音与纪要' })
       Row({ space: 12 }) {
@@ -78,6 +80,10 @@ struct RecordingsPage {
         }.padding(20).width('100%').constraintSize({ maxWidth: 720 })
       }.layoutWeight(1)
     }.height('100%').width('100%').backgroundColor(Tokens.grouped)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   private stateLabel(state: string): string {

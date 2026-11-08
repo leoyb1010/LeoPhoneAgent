@@ -1,12 +1,13 @@
+import { AppNavigation } from '../navigation/AppNavigation';
+import { ActionButton, FormField } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
 import { DEFAULT_API_ROOT, RELAY_NOT_CONFIGURED, requireHttpsRoot, sanitizeKey } from '../net/Protocol';
 import { gatewayStore } from '../store/GatewayStore';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct RelayPage {
+export struct RelayPage {
   @StorageProp('themeTick') tick: number = 0;
   @State apiRoot: string = DEFAULT_API_ROOT;
   @State keyDraft: string = '';
@@ -25,6 +26,7 @@ struct RelayPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '中继' })
       Text('远程机器走这条中继。钥匙至少 16 位，不会写进配对码。')
@@ -47,37 +49,20 @@ struct RelayPage {
           .fontColor(Tokens.text)
           .borderRadius(Tokens.settingsRadius)
           .margin({ bottom: 12 })
-        Text('中继钥匙')
-          .fontSize(13)
-          .fontColor(Tokens.muted)
-          .width('100%')
-          .padding({ bottom: 6 })
-        TextInput({ text: this.keyDraft, placeholder: '至少 16 位' })
-          .onChange((value: string) => {
-            this.keyDraft = value;
-          })
-          .type(InputType.Password)
-          .height(44)
-          .backgroundColor(Tokens.bg)
-          .fontColor(Tokens.text)
-          .placeholderColor(Tokens.muted)
-          .borderRadius(Tokens.settingsRadius)
+        FormField({ label: '中继钥匙', value: this.keyDraft, placeholder: '至少 16 位', secret: true,
+          isEnabled: this.ready, onChange: (value: string) => { this.keyDraft = value; } })
       }
       .width('100%')
       .padding(14)
       .margin({ left: Tokens.pagePad, right: Tokens.pagePad })
       .backgroundColor(Tokens.surface)
       .borderRadius(Tokens.settingsRadius)
-      Button(this.ready ? '保存中继' : '读取中')
+      ActionButton({ label: this.ready ? '保存中继' : '读取中', variant: 'secondary', fullWidth: false, isEnabled: this.ready, onTap: () => {
+          this.save();
+        } })
         .width('100%')
         .height(44)
         .margin({ left: Tokens.pagePad, right: Tokens.pagePad, top: 16 })
-        .backgroundColor(Tokens.accent)
-        .fontColor('#FFFFFF')
-        .enabled(this.ready)
-        .onClick(() => {
-          this.save();
-        })
       if (this.message.length > 0) {
         Text(this.message)
           .fontColor(this.message === '已保存' ? Tokens.online : Tokens.warn)
@@ -87,6 +72,10 @@ struct RelayPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   private async save(): Promise<void> {

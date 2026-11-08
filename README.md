@@ -28,6 +28,13 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 iOS 1.72.0 / Mac 1.10.0 起移除了服务器任务（Paperclip）工作区：多模型能力在端侧与 Mac 上已经覆盖，
 不再维护单独的服务器。代码与审计记录保留在 git 历史里（最后包含它的提交是 `0f1e599a`）。
 
+## HarmonyOS 体验候选（未发布）
+
+当前独立快照正在准备 **0.5.0（100029）**，L0–L3 源码与 Node 检查记录见
+`docs/harmony-ux-20261108/RESULT.md`；Studio 编译、模拟器矩阵及最终实机步骤见
+`docs/harmony-ux-20261108/TEST_GUIDE.md`。没有模拟器截图、签名覆盖安装或实机验收证据，
+不能将此候选视为已发布版本。上方 0.4.0 徽标保留既有公开版本口径。
+
 ## 开发 Agent 先读
 
 **任何 Codex、Cursor、Claude Code 或其他 Agent 继续开发前，必须先读完本节和
@@ -498,3 +505,7 @@ pnpm build:bootstrap
 LeoAgent 名称与图标仅标识本 fork。
 
 iOS 1.53.1（146）本次完整审计记录见 [验证范围与结果](docs/IOS_FULL_AUDIT_20261005.md)。
+
+## 鸿蒙 0.5.0 本次交付
+
+新版源码已完成本机构建并原位安装到 Mate XT2，后续真机验收由用户进行。当前状态、安装包指纹和未验证项目见 [交付记录](docs/harmony-ux-20261108/DELIVERY.md)。

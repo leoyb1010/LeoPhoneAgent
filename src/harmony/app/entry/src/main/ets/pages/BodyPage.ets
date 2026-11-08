@@ -1,3 +1,5 @@
+import { AppNavigation } from '../navigation/AppNavigation';
+import { ActionButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
 import { bodyStore } from '../store/BodyStore';
 import { gatewayStore } from '../store/GatewayStore';
@@ -5,9 +7,8 @@ import { outboundClient, startBody } from '../net/OutboundClient';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct BodyPage {
+export struct BodyPage {
   @StorageProp('themeTick') tick: number = 0;
   @StorageProp('bodyTick') bodyTick: number = 0;
   @State on: boolean = false;
@@ -30,6 +31,7 @@ struct BodyPage {
   }
 
   build() {
+    NavDestination() {
     Scroll() {
       Column() {
         NavBar({ title: '当身体' })
@@ -86,15 +88,12 @@ struct BodyPage {
           .fontSize(13)
           .fontColor(Tokens.warn)
           .padding({ top: 16 })
-        Button('保存并连接')
+        ActionButton({ label: '保存并连接', variant: 'secondary', fullWidth: false, onTap: () => {
+            this.save();
+          } })
           .width('100%')
           .height(44)
           .margin({ top: 16 })
-          .backgroundColor(Tokens.accent)
-          .fontColor('#FFFFFF')
-          .onClick(() => {
-            this.save();
-          })
         if (this.message.length > 0) {
           Text(this.message)
             .fontColor(this.message === '已保存' ? Tokens.online : Tokens.warn)
@@ -110,6 +109,10 @@ struct BodyPage {
     .backgroundColor(Tokens.bg)
     .align(Alignment.Top)
     .scrollBar(BarState.Off)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   private save(): void {

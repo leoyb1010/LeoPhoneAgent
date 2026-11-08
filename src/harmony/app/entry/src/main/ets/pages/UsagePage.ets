@@ -1,12 +1,12 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
 import { sessionStore } from '../store/SessionStore';
 import { usageStore } from '../store/UsageStore';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct UsagePage {
+export struct UsagePage {
   @StorageProp('themeTick') tick: number = 0;
   @State sessions: number = 0;
   @State pinned: number = 0;
@@ -27,6 +27,7 @@ struct UsagePage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '用量' })
       Text('本机只统计这台鸿蒙上的对话和 token。没有云端账单。')
@@ -49,6 +50,10 @@ struct UsagePage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 
   @Builder

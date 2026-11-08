@@ -1,3 +1,4 @@
+import { AppNavigation } from '../navigation/AppNavigation';
 import { common } from '@kit.AbilityKit';
 import { webview } from '@kit.ArkWeb';
 import { url } from '@kit.ArkTS';
@@ -11,9 +12,9 @@ import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 export class McpOAuthLaunch { static label: string = ''; }
-@Entry
 @Component
-struct McpOAuthPage {
+export struct McpOAuthPage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @State clientId: string = '';
   @State issuer: string = '';
   @State authorizationEndpoint: string = '';
@@ -46,6 +47,7 @@ struct McpOAuthPage {
     } catch (_err) { this.message = 'OAuth配置暂不可读取，请返回MCP设置重试'; }
   }
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: 'MCP 授权' })
       if (!this.authorizationURL) {
@@ -88,6 +90,10 @@ struct McpOAuthPage {
           .layoutWeight(1)
       }
     }.width('100%').height('100%').backgroundColor(Tokens.grouped)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
   private async begin(): Promise<void> {
     this.cancel(); const generation = this.generation; this.busy = true; this.message = '';

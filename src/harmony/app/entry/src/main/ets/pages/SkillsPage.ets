@@ -1,11 +1,13 @@
+import { AppNavigation } from '../navigation/AppNavigation';
+import { ActionButton } from '../theme/Controls';
 import { common } from '@kit.AbilityKit';
 import { LocalSkill, skillStore } from '../store/SkillStore';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
-@Entry
 @Component
-struct SkillsPage {
+export struct SkillsPage {
+  @StorageProp('themeTick') themeTick: number = 0;
   @State name: string = '';
   @State body: string = '';
   @State rows: LocalSkill[] = [];
@@ -19,6 +21,7 @@ struct SkillsPage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       NavBar({ title: '技能' })
       Scroll() {
@@ -40,13 +43,7 @@ struct SkillsPage {
             .backgroundColor(Tokens.surface)
             .fontColor(Tokens.text)
             .borderRadius(Tokens.settingsRadius)
-          Button('保存技能')
-            .width('100%')
-            .height(44)
-            .margin({ top: 12, bottom: 8 })
-            .backgroundColor(Tokens.accent)
-            .fontColor('#FFFFFF')
-            .onClick(() => {
+          ActionButton({ label: '保存技能', variant: 'secondary', fullWidth: false, onTap: () => {
               const ctx = getContext(this) as common.UIAbilityContext;
               skillStore.upsert(ctx, this.name, this.body).then(() => {
                 this.rows = skillStore.skills.slice();
@@ -56,7 +53,10 @@ struct SkillsPage {
               }).catch((err: Error) => {
                 this.message = `${err}`;
               });
-            })
+            } })
+            .width('100%')
+            .height(44)
+            .margin({ top: 12, bottom: 8 })
           Text('对话里只放技能的名字和说明,模型要用时自己读全文(和 iOS、安卓一样)。点一行可以改。')
             .fontSize(12)
             .fontColor(Tokens.muted)
@@ -122,5 +122,9 @@ struct SkillsPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+
+    }
+    .hideTitleBar(true)
+    .onShown(() => { AppNavigation.changed(); })
   }
 }
