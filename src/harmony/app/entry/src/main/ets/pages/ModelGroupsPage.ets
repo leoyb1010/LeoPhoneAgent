@@ -110,7 +110,7 @@ export struct ModelGroupsPage {
                 }.width('100%').constraintSize({ minHeight: 60 }).padding({ top: 8, bottom: 8 })
                   .opacity(this.busy ? 0.6 : 1).accessibilityText(row.model + '，' + row.provider + (this.picked.indexOf(row.id) >= 0 ? '，已选择' : '，加入模型组'))
                   .onClick(() => { if (!this.busy) this.toggle(row.id); })
-              }, (row: ModelChoice) => row.id)
+              }, (row: ModelChoice) => `${row.id}|${row.model}|${row.provider}|${row.ready}`)
               ActionButton({ label: this.editingId ? '保存修改' : '保存模型组', fullWidth: true, busy: this.busy === 'save',
                 isEnabled: !this.busy && this.picked.length > 0, onTap: () => this.save() })
             }.padding(18).width('100%').backgroundColor(Tokens.card).borderRadius(18)

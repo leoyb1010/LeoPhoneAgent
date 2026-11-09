@@ -588,7 +588,7 @@ export struct BrainSpacePage {
               if (!this.shares.length) { Text('这台设备还没有创建分享').fontColor(Tokens.secondary) }
               ForEach(this.shares, (r: BrainRow) => {
                 ActionButton({ label: r.title, variant: 'secondary', fullWidth: false, onTap: () => { this.shareToken = r.id; this.sharePath = text(r.data, 'path'); this.mode = 'share'; } })
-              }, (r: BrainRow) => r.id)
+              }, (r: BrainRow) => `${r.id}|${r.title}`)
             } else if (this.mode === 'share') {
               Text('分享有效期 7 天').fontSize(22).fontColor(Tokens.text)
               Text(BrainAPI.base() + '/family' + this.sharePath).copyOption(CopyOptions.LocalDevice).fontColor(Tokens.link)

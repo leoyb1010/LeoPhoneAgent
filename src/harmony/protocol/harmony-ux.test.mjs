@@ -10,6 +10,8 @@ function load(file, symbols, globals = {}) {
 const { LayoutState, layoutSize, resolveLayout, toggleInspector } = load('layout/LayoutPolicy.ets', 'LayoutState,layoutSize,resolveLayout,toggleInspector');
 for (const [width, expected] of [[0,'sm'],[599,'sm'],[600,'md'],[839.9,'md'],[840,'lg'],[1200,'lg'],[NaN,'sm']]) assert.equal(layoutSize(width), expected);
 for (const file of ['pages/HomePage.ets', 'panes/LocalAgentPane.ets']) assert.doesNotMatch(fs.readFileSync(new URL(file, root), 'utf8'), /[<>]=?\s*840\b/, `${file} must use Tokens.largeBreak`);
+for (const [file, type] of [['pages/MailAccountsPage.ets','MailAccount'],['pages/SSHTerminalPage.ets','SSHHost'],['pages/ModelGroupsPage.ets','ModelChoice'],['panes/LocalChatPane.ets','ProviderInstance'],['pages/BrainSpacePage.ets','BrainRow']])
+  assert.doesNotMatch(fs.readFileSync(new URL(file, root), 'utf8'), new RegExp(`\\((\\w+): ${type}\\) => \\1\\.id\\)`), `${file}: ForEach key must include displayed fields`);
 let state = resolveLayout(new LayoutState(), 1000, 2000);
 assert.equal(state.inspector, true);
 state = toggleInspector(state, 2100);

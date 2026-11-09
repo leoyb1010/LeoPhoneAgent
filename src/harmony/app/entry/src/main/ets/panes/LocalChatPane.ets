@@ -710,7 +710,7 @@ export struct LocalChatPane {
               .color(Tokens.separator)
           }
           .width('100%')
-        }, (row: ProviderInstance) => row.id)
+        }, (row: ProviderInstance) => `${row.id}|${row.label}|${row.type}`)
       }
       .width('100%')
       .padding({ left: 20, right: 20, bottom: 24 })

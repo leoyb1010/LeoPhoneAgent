@@ -56,7 +56,7 @@ export struct SSHTerminalPage {
                     confirm: { value: '移除', action: () => { SSHHostStore.remove(getContext(this), host.id).then(() => { this.refresh(); }).catch(() => { this.status = '移除失败'; }); } }, cancel: () => {} });
                 } })
               }
-            }, (host: SSHHost) => host.id)
+            }, (host: SSHHost) => `${host.id}|${host.label}|${host.host}`)
             TextInput({ text: this.editing.label, placeholder: '连接名称' }).onChange((value: string) => { this.editing.label = value; })
             TextInput({ text: this.editing.host, placeholder: '主机域名或 IP' }).onChange((value: string) => { this.editing.host = value.trim(); })
             TextInput({ text: String(this.editing.port), placeholder: '端口，默认22' }).type(InputType.Number).onChange((value: string) => { this.editing.port = Number(value); })

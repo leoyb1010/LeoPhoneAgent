@@ -46,7 +46,7 @@ export struct MailAccountsPage {
                 } })
               }
             }.width('100%').alignItems(HorizontalAlign.Start).padding(12).backgroundColor(Tokens.card).borderRadius(12)
-          }, (account: MailAccount) => account.id)
+          }, (account: MailAccount) => `${account.id}|${account.label}|${account.email}|${account.enabled}`)
           Divider()
           Text(this.editing.id ? '编辑邮箱' : '添加邮箱').fontSize(20).fontWeight(FontWeight.Bold).fontColor(Tokens.text)
           TextInput({ text: this.editing.label, placeholder: '名称，例如工作邮箱' }).onChange((value: string) => { this.editing.label = value; })
