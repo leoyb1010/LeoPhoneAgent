@@ -3,6 +3,7 @@ import { promptAction } from '@kit.ArkUI';
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { util } from '@kit.ArkTS';
 import { AtomicTextFile } from '../store/AtomicFile';
+import { Tokens } from '../theme/Tokens';
 import { mailAccountStore, MailAccountStore, MailAccount } from '../mail/MailAccountStore';
 import { MailWatch } from '../mail/MailWatch';
 import { MailService } from '../mail/MailService';
@@ -96,7 +97,7 @@ export class MailTools {
       message: '发起会话 ' + owner.slice(0, 80) + '\n邮箱 ' + account.email + '\n' +
         (name === 'mail_update' ? `${args['action'] ?? ''} · UID ${args['uids'] ?? ''} · 目标 ${args['to_folder'] ?? ''}` :
           `收件人 ${args['to'] ?? '(回复原发件人)'}\n抄送 ${args['cc'] ?? ''}\n密送 ${args['bcc'] ?? ''}\n主题 ${args['subject'] ?? ''}\n\n${args['body'] ?? ''}`),
-      buttons: [{ text: '取消', color: '#007AFF' }, { text: name === 'mail_send' ? '确认发送' : '确认执行', color: '#D94B16' }] });
+      buttons: [{ text: '取消', color: Tokens.accent }, { text: name === 'mail_send' ? '确认发送' : '确认执行', color: Tokens.danger }] });
     operation.check();
     if (decision.index !== 1) { return '用户已取消，邮箱未改动'; }
     const current = await mailAccountStore.resolve(context, account.id);

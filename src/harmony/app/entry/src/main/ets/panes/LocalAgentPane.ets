@@ -183,7 +183,7 @@ export struct LocalAgentPane {
             this.homeComposer()
           }.layoutWeight(1).height('100%')
         }
-        if (this.wide && this.windowWidth >= 840 && this.inspectorVisible) {
+        if (this.wide && this.windowWidth >= Tokens.largeBreak && this.inspectorVisible) {
           ChatInspector({ sessionId: this.sessionId, onClose: () => this.toggleInspector() }).width(260)
         }
       }.width('100%').height('100%')
@@ -332,7 +332,7 @@ export struct LocalAgentPane {
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .margin({ left: this.wide ? 10 : 4 })
         .layoutWeight(1)
-      if (this.wide && this.windowWidth >= 840) {
+      if (this.wide && this.windowWidth >= Tokens.largeBreak) {
         IconButton({ icon: 'rectangle_stack', label: this.inspectorVisible ? '关闭右栏' : '打开右栏', selected: this.inspectorVisible, onTap: () => this.toggleInspector() })
       }
       if (this.configured) {
@@ -777,7 +777,7 @@ export struct LocalAgentPane {
 
   /** 按当前窗口分配侧栏，三折叠全展开保持独立可读正文。 */
   private listWidth(): string | number {
-    if (this.inspectorVisible && this.windowWidth >= 840) return 280;
+    if (this.inspectorVisible && this.windowWidth >= Tokens.largeBreak) return 280;
     if (this.viewportWidth <= 0) return '32%';
     return this.viewportWidth >= Tokens.largeBreak ? Math.min(340, Math.max(280, this.viewportWidth * 0.27)) : Math.max(208, this.viewportWidth * 0.32);
   }

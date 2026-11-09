@@ -193,7 +193,7 @@ struct HomePage {
     }
     .hideTitleBar(true).hideBackButton(true)
     .mode(this.wide && this.navigationTick >= 0 && this.pathStack.size() > 0 ? NavigationMode.Split : NavigationMode.Stack)
-    .navBarWidth(this.windowWidth >= 840 ? this.windowWidth - 360 : '50%')
+    .navBarWidth(this.windowWidth >= Tokens.largeBreak ? this.windowWidth - 360 : '50%')
     .navBarWidthRange([280, Math.max(280, this.windowWidth - 280)])
     .minContentWidth(280)
     .navDestination(destination)
@@ -225,7 +225,7 @@ struct HomePage {
             AppNavigation.pushUrl({ url: 'pages/SettingsPage' });
           }
         })
-          .width(this.wide ? (this.windowWidth >= 840 ? 208 : '40%') : '100%')
+          .width(this.wide ? (this.windowWidth >= Tokens.largeBreak ? 280 : '40%') : '100%')
           .visibility(this.wide || !this.chatMachine ? Visibility.Visible : Visibility.None)
         Column()
           .width(Tokens.hairline)

@@ -97,7 +97,7 @@ let approvalResolve, approvals=0, opened=0;
 const accounts={rows:[account],load:async()=>{},resolve:async()=>account};
 const mailTools=load('local/MailTools.ets',['MailTools','mailToolSchemas'],{
  mailAccountStore:accounts,MailAccountStore:{binding:row=>JSON.stringify([row.id,row.email,row.smtpHost])},
- promptAction:{showDialog:async()=>{approvals++;return await new Promise(resolve=>approvalResolve=resolve);}},
+ Tokens:{accent:'#267B6D',danger:'#BB453E'},promptAction:{showDialog:async()=>{approvals++;return await new Promise(resolve=>approvalResolve=resolve);}},
  MailService:{open:async()=>{opened++;return {close(){},select:async()=>{},update:async()=>{throw new Error('cancelled task wrote mail');}};}},
 });
 await assert.rejects(mailTools.MailTools.run({},'mail_send',JSON.stringify({account:'account-a',to:'to@example.com',body:'hello'}),'owner',true),/本机会话/);
