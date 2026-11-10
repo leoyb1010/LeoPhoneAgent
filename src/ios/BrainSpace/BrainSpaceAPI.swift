@@ -22,11 +22,20 @@ enum BrainSpaceError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: return "还没有连接资料库。先在 设置 → 记忆与资料 → Leo资料库 里连接。"
-        case .noAppScope: return "这台设备的钥匙还没开通第二大脑空间(app 权限)。在 Mac mini 上运行 brainctl token grant 开通。"
+        case .notConfigured: return "还没有连接第二大脑。连接后就能在手机上看照片、读资料、提问。"
+        case .noAppScope: return "这台设备的钥匙还没开通第二大脑空间。请在资料库所在的 Mac 上为这台设备开通 app 权限。"
         case .http(let code, let msg): return msg.isEmpty ? "资料库返回 \(code)" : msg
         case .invalid: return "资料库返回的内容看不懂"
         case .connectionChanged: return "资料库连接已更换,请重新打开"
+        }
+    }
+
+    /// Operator detail for the setup page's 「高级」 section (not shown by default).
+    var advancedHint: String? {
+        switch self {
+        case .notConfigured: return "也可以在资料库所在的 Mac 上生成连接链接或配置文件,手机打开后在设置里确认。"
+        case .noAppScope: return "在资料库所在的 Mac 上运行:brainctl token grant(为这台设备的钥匙加上 app 权限)。"
+        default: return nil
         }
     }
 }
@@ -94,8 +103,10 @@ final class BrainSpaceAPI: NSObject, URLSessionTaskDelegate, @unchecked Sendable
         do { return try Self.decoder.decode(BrainSpaceManifest.self, from: data) } catch { throw BrainSpaceError.invalid }
     }
 
-    func webSession() async throws -> BrainWebSession {
-        let cfg = try config()
+    func webSession() async throws -> BrainWebSession { try await webSession(config: try config()) }
+
+    /// Web-session cookie for the in-app web UI, fetched with the same snapshot the sheet will load pages from.
+    func webSession(config cfg: Config) async throws -> BrainWebSession {
         let data = try await send(request(cfg, cfg.endpoint.url("/v1/app/web-session"), method: "POST"))
         do { return try Self.decoder.decode(BrainWebSession.self, from: data) } catch { throw BrainSpaceError.invalid }
     }

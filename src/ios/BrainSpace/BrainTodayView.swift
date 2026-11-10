@@ -164,7 +164,7 @@ struct BrainTodayView: View {
                 ForEach(answers) { a in
                     Button { model.openAnswer(a.id, question: a.question) } label: {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(a.question).font(.subheadline.weight(.medium)).lineLimit(1)
+                            Text(BrainAskContext.parse(a.question).question).font(.subheadline.weight(.medium)).lineLimit(1)
                             if let s = a.snippet { Text(s).font(.footnote).foregroundStyle(.secondary).lineLimit(2) }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
