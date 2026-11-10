@@ -3426,6 +3426,7 @@ export class ProductProjection {
         freeText: true,
         // [leo][wp-31] 风险档透传给审批卡（guarded 档里单独问的危险命令就是 high/critical）。
         ...(payload.riskLevel ? { riskLevel: payload.riskLevel } : {}),
+        ...(payload.autoApproval === "forbidden" ? { autoApproval: "forbidden" as const } : {}),
         ...(payload.approvalMode !== "user-once" &&
         payload.fullAccessSupported === true &&
         !payload.origin &&

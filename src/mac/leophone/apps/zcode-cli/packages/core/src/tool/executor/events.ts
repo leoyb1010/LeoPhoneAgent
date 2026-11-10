@@ -144,6 +144,7 @@ export async function emitPermissionRequested(
   traceContext: TraceContext,
   approval?: {
     approvalMode?: "user-once";
+    autoApproval?: "forbidden";
     display?: ToolResultDisplayPayload;
     optionsPolicy?: PermissionOptionsPolicy;
   },
@@ -165,6 +166,7 @@ export async function emitPermissionRequested(
       input,
       suggestedPermissionUpdates,
       ...(approval?.approvalMode ? { approvalMode: approval.approvalMode } : {}),
+      ...(approval?.autoApproval ? { autoApproval: approval.autoApproval } : {}),
       ...(approval?.display ? { display: approval.display } : {}),
       ...(approval?.optionsPolicy ? { optionsPolicy: approval.optionsPolicy } : {}),
       ...(approval?.approvalMode !== "user-once" &&

@@ -372,3 +372,41 @@ describe("legacy v3 剥离 dwf run 进度事件", () => {
     ).toBe(true);
   });
 });
+
+// [leo] leo-screen 桌面写操作的禁止代答标记：实时事件与恢复快照两条 legacy 通道都必须带着，且过 strict schema。
+describe("autoApproval=forbidden 透传", () => {
+  const sessionId = "legacy-session" as SessionId;
+  const payload = {
+    requestId: "req-screen",
+    toolCallId: "tc-screen" as ToolCallId,
+    toolName: "mcp__leo-screen__click",
+    riskLevel: "medium",
+    reason: "Desktop control actions require your approval in every permission mode",
+    input: { on: "B1" },
+    autoApproval: "forbidden",
+  };
+
+  it("事件通道保留标记并过 strict schema", () => {
+    const mapped = mapSessionEvent(permissionRequestedEvent(payload));
+    expect(zcodeSessionEventSchema.safeParse(mapped).success).toBe(true);
+    expect(mapped.payload).toHaveProperty("autoApproval", "forbidden");
+  });
+
+  it("恢复快照通道保留标记并过 strict schema；旧 payload 没有标记照常解析", () => {
+    const projection = new EventReducer().reduce([
+      createSessionEvent(SessionEventType.SessionCreated, sessionId, { mode: "yolo", contextWindow: 200_000 }),
+      createSessionEvent(SessionEventType.PermissionRequested, sessionId, payload),
+      createSessionEvent(SessionEventType.PermissionRequested, sessionId, {
+        ...payload,
+        requestId: "req-old",
+        toolCallId: "tc-old" as ToolCallId,
+        autoApproval: undefined,
+      }),
+    ]);
+    expect(projection.pendingPermissions[0]?.autoApproval).toBe("forbidden");
+    const mapped = mapSessionProjection(projection);
+    expect(zcodeSessionProjectionSchema.safeParse(mapped).success).toBe(true);
+    expect(mapped.pendingPermissions[0]).toHaveProperty("autoApproval", "forbidden");
+    expect(mapped.pendingPermissions[1]).not.toHaveProperty("autoApproval");
+  });
+});

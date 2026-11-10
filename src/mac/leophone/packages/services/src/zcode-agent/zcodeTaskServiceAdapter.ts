@@ -5128,6 +5128,7 @@ function permissionRequestToStreamEvent(
     title: request.toolName,
     options: request.options,
     ...(request.origin ? { origin: request.origin } : {}),
+    ...(request.autoApproval === "forbidden" ? { autoApproval: "forbidden" as const } : {}),
     raw: request,
   };
 }
@@ -5146,6 +5147,7 @@ function pendingPermissionToStreamEvent(
     title: permission.toolName,
     options: permission.options,
     ...(permission.origin ? { origin: permission.origin } : {}),
+    ...(permission.autoApproval === "forbidden" ? { autoApproval: "forbidden" as const } : {}),
     raw: permission,
   };
 }
@@ -5379,6 +5381,7 @@ function permissionPayloadToStreamEvent(
     kind: stringValue(payload.toolName) ?? "tool",
     title: stringValue(payload.toolName),
     options: permissionOptionsFromPayload(payload),
+    ...(payload.autoApproval === "forbidden" ? { autoApproval: "forbidden" as const } : {}),
     raw: payload,
   };
 }

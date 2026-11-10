@@ -53,6 +53,8 @@ export type PermissionOptionsPolicy = "no-always-allow" | "session-always-allow"
 
 export interface PermissionBrokerRequest {
   approvalMode?: "user-once";
+  /** [leo] 同 PermissionRequestedPayload.autoApproval。 */
+  autoApproval?: "forbidden";
   requestId: string;
   sessionId: SessionId;
   turnId?: TurnId;

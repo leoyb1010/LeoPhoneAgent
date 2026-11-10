@@ -873,6 +873,8 @@ function mapPendingPermission(
   return {
     input: permission.input,
     ...(permission.origin ? { origin: permission.origin } : {}),
+    // [leo] 安全标记必须进恢复快照：Host 重连后据此拒绝全自动代答（见 leo-screen-write-approval spec）。
+    ...(permission.autoApproval === "forbidden" ? { autoApproval: "forbidden" as const } : {}),
     options: buildProtocolPermissionOptions({
       ...permission,
       optionsPolicy: toLegacyPermissionOptionsPolicy(permission.optionsPolicy),

@@ -130,6 +130,8 @@ export interface TargetCompletionVerificationProjectionInfo {
 
 export interface PendingPermission {
   approvalMode?: "user-once";
+  /** [leo] 同 PermissionRequestedPayload.autoApproval；恢复 pending 时不能丢。 */
+  autoApproval?: "forbidden";
   requestId?: string;
   toolCallId: string;
   toolName: string;

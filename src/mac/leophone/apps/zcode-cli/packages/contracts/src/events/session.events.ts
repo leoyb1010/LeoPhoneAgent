@@ -1011,6 +1011,8 @@ export interface DynamicWorkflowRunProgressPayload {
 
 export interface PermissionRequestedPayload {
   approvalMode?: "user-once";
+  /** [leo] "forbidden" = 不得由全自动代答，只能由人明确作答（缺省 = 旧语义）。 */
+  autoApproval?: "forbidden";
   requestId?: string;
   toolCallId: ToolCallId;
   toolName: string;

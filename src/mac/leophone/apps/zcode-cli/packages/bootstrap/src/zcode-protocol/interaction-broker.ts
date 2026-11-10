@@ -127,6 +127,7 @@ async function requestPermission(
           riskLevel: request.riskLevel,
           sessionId: request.sessionId,
           ...(request.origin ? { origin: request.origin } : {}),
+          ...(request.autoApproval === "forbidden" ? { autoApproval: "forbidden" as const } : {}),
           options: legacyPermissionOptions,
           toolCallId: request.toolCallId,
           toolName: request.toolName,

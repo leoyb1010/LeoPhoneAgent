@@ -48,6 +48,11 @@ export interface PermissionContext {
 
 export interface PermissionToolCapability {
   userApprovalRule?: string;
+  /**
+   * [leo] 任何模式都必须明确审批的规则号（目前只有随包 leo-screen 的桌面写操作）。
+   * 与 userApprovalRule 不同：它不只在 guarded 生效，yolo / build / edit 同样要问，plan 直接拒绝。
+   */
+  explicitApprovalRule?: string;
   allowedInPlanMode?: boolean;
   alwaysAsk?: boolean;
   readOnly?: boolean;
@@ -64,6 +69,11 @@ export type PermissionBehavior = "allow" | "ask" | "deny";
 
 export interface PermissionDecisionResult {
   approvalMode?: "user-once";
+  /**
+   * [leo] "forbidden"：这次 ask 只能由人明确作答。Host 的全自动（手机 full-auto、切到 yolo 时批量放行）
+   * 不得代答；模式本身不算授权。沿 PermissionRequested 事件、broker 请求、pending 快照一路透传。
+   */
+  autoApproval?: "forbidden";
   decision: PermissionBehavior;
   allowed: boolean;
   reason?: string;
@@ -133,6 +143,19 @@ export class PermissionService {
 
     // 独立 Plan 优先于 Guarded 的 YOLO 基础策略，审批不能解除 Plan 的执行限制。
     const planEnabled = context.planEnabled ?? context.mode === "plan";
+
+    // [leo] 桌面写操作（leo-screen 点击 / 输入 / 启动应用等）在所有权限档都要明确审批，
+    // 必须排在 guarded 危险命令与 yolo/guarded 直通之前，否则默认守护档会直接放行。
+    if (toolCapability?.explicitApprovalRule) {
+      return this.checkExplicitApproval(
+        context,
+        capability,
+        toolCapability.explicitApprovalRule,
+        planEnabled,
+        projectRules,
+        rulePolicy,
+      );
+    }
     if (!planEnabled && context.mode === "guarded" && toolCapability?.userApprovalRule) {
       return {
         ...this.ask(
@@ -436,6 +459,80 @@ export class PermissionService {
       "tool.alwaysAsk",
       `Tool ${context.toolName} always requires explicit approval`,
     );
+  }
+
+  /**
+   * [leo] explicitApprovalRule 工具的判定。顺序：auto 保护 → 硬禁用 → 项目 deny → plan 拒绝 →
+   * 项目 / 会话里针对这个实际工具名的 allow 规则 → ask。没有任何模式直通：yolo 与默认 guarded
+   * 都会走到 ask。ask 结果带 alwaysAsk 标记，PreToolUse hook 的整体 allow 不能把它抹掉；
+   * PermissionRequest hook 仍可应答这次弹窗（与 alwaysAsk 工具同一条正规出口）。
+   */
+  private checkExplicitApproval(
+    context: PermissionContext,
+    capability: ResolvedPermissionCapability,
+    ruleId: string,
+    planEnabled: boolean,
+    projectRules?: PermissionRuleset | null,
+    rulePolicy?: ToolPermissionRulePolicy,
+  ): PermissionDecisionResult {
+    if (context.mode === "auto") {
+      return this.deny(
+        context,
+        capability,
+        "mode.auto.unimplemented",
+        "Auto mode is reserved but not implemented yet",
+      );
+    }
+    if (this.config.disallowedTools.has(context.toolName)) {
+      return this.deny(
+        context,
+        capability,
+        "rule.disallowedTools",
+        `Tool ${context.toolName} is explicitly disallowed`,
+      );
+    }
+    if (this.matchesProjectRules(projectRules, "deny", context, capability, rulePolicy)) {
+      return this.deny(
+        context,
+        capability,
+        "rule.project.deny",
+        `Tool ${context.toolName} is denied by project permission rules`,
+      );
+    }
+    if (planEnabled) {
+      return this.deny(
+        context,
+        capability,
+        `${ruleId}.plan`,
+        "Plan mode does not allow desktop write actions",
+      );
+    }
+    if (this.matchesProjectRules(projectRules, "allow", context, capability, rulePolicy)) {
+      return this.allow(
+        context,
+        capability,
+        "rule.project.allow",
+        `Tool ${context.toolName} is allowed by project permission rules`,
+      );
+    }
+    if (this.matchesProjectRules(this.sessionRules, "allow", context, capability, rulePolicy)) {
+      return this.allow(
+        context,
+        capability,
+        "rule.session.allow",
+        `Tool ${context.toolName} was allowed for this session`,
+      );
+    }
+    return {
+      ...this.ask(
+        context,
+        capability,
+        ruleId,
+        "Desktop control actions require your approval in every permission mode",
+      ),
+      alwaysAsk: true,
+      autoApproval: "forbidden",
+    };
   }
 
   /**

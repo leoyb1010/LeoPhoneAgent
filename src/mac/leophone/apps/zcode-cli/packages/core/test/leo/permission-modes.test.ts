@@ -36,3 +36,11 @@ test("guarded 对危险命令仍逐次确认", () => {
   );
   assert.equal(decide("yolo", { userApprovalRule: "guarded.rm", riskLevel: "high" }), "allow");
 });
+
+test("explicitApprovalRule（leo-screen 写操作）在 yolo / guarded 也要询问，不被直通吞掉", () => {
+  const screenWrite = { explicitApprovalRule: "leo.screen.write", riskLevel: "medium" as const };
+  assert.equal(decide("yolo", screenWrite), "ask");
+  assert.equal(decide("guarded", screenWrite), "ask");
+  assert.equal(decide("build", screenWrite), "ask");
+  assert.equal(decide("guarded", screenWrite, true), "deny");
+});

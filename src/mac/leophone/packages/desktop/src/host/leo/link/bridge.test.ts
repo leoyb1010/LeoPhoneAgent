@@ -2687,3 +2687,66 @@ test("[up3-link2] unattended approvals push their answer too (phone, Mac, auto-d
     { automations: automations.service, zcodeModelSelection: async () => sonnet, unattendedApprovalMs: 60 },
   );
 });
+
+// [leo] leo-screen 桌面写操作：core 给 autoApproval=forbidden 的审批，全自动不能代答（docs/specs/leo-screen-write-approval.md）。
+function screenWrite(requestId: string) {
+  return {
+    ...permission(requestId, "mcp__leo-screen__click", { on: "B1" }),
+    autoApproval: "forbidden",
+  };
+}
+
+test("full-auto never auto-answers a forbidden (leo-screen write) approval: new request, switch to yolo, recovered pending", async () => {
+  await withBridge(async ({ bridge, zcode, dir }) => {
+    // 1. 已经是全自动时来的新请求：不代答，下发到手机。
+    const id = await createSession(bridge, dir, { full_auto: true, prompt: "点一下" }, iphone);
+    zcode.fire(id, screenWrite("s1"));
+    zcode.fire(id, permission("b1", "Bash", { command: "ls" }));
+    await tick();
+    assert.deepEqual(
+      zcode.named("respondPermission").map((call) => call["requestId"]),
+      ["b1"],
+      "普通审批照旧代答，桌面写操作不代答",
+    );
+
+    // 2. 先问我时挂着的审批，切到全自动：普通的批量放行，禁止代答的留着。
+    const askId = await createSession(bridge, dir, { prompt: "再点" }, iphone);
+    zcode.fire(askId, screenWrite("s2"));
+    zcode.fire(askId, permission("b2", "Bash", { command: "pwd" }));
+    await tick();
+    await bridge.handle(req("POST", `/harness/sessions/${askId}/mode`, { mode: "yolo" }, iphone));
+    await tick();
+    const answered = zcode.named("respondPermission").map((call) => call["requestId"]);
+    assert.ok(answered.includes("b2"), "切全自动放行普通审批");
+    assert.ok(!answered.includes("s2"), "切全自动不放行桌面写操作");
+
+    // 3. 恢复的 pending（重连 / 接管后补交，形状同 pendingPermissionToStreamEvent）：同样不代答。
+    zcode.fire(id, { ...screenWrite("s3"), raw: { requestId: "s3", toolName: "mcp__leo-screen__type", input: {} } });
+    await tick();
+    assert.ok(!zcode.named("respondPermission").some((call) => call["requestId"] === "s3"));
+
+    const events = await collect(bridge, id, 0, (all) =>
+      ["s1", "s3"].every((approval) => all.some((e) => e.event === "approval.request" && e["approval_id"] === approval)),
+    );
+    assert.deepEqual(
+      events.filter((e) => e.event === "approval.request").map((e) => e["approval_id"]),
+      ["s1", "s3"],
+    );
+
+    // 人在手机上明确批准：照常送进内核。
+    assert.equal((await bridge.handle(req("POST", `/harness/sessions/${id}/approval`, { approval_id: "s1", choice: "once" }, iphone))).status, 200);
+    assert.ok(zcode.named("respondPermission").some((call) => call["requestId"] === "s1"));
+  });
+});
+
+test("an explicit per-task grant for the same tool + target still answers a forbidden approval", async () => {
+  await withBridge(async ({ bridge, zcode, dir }) => {
+    const id = await createSession(bridge, dir, { prompt: "点" }, iphone);
+    zcode.fire(id, screenWrite("g1"));
+    await tick();
+    assert.equal((await bridge.handle(req("POST", `/harness/sessions/${id}/approval`, { approval_id: "g1", choice: "session" }, iphone))).status, 200);
+    zcode.fire(id, screenWrite("g2"));
+    await tick();
+    assert.ok(zcode.named("respondPermission").some((call) => call["requestId"] === "g2"));
+  });
+});

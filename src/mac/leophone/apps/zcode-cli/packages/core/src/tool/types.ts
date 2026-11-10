@@ -416,6 +416,8 @@ export interface ToolPersistedModelContentInput {
 
 export interface ToolRuntimePermissionCapability {
   userApprovalRule?: string;
+  /** [leo] 任何模式都要明确审批（见 PermissionToolCapability.explicitApprovalRule）。 */
+  explicitApprovalRule?: string;
   allowedInPlanMode?: boolean;
   destructive?: boolean;
   needsApproval?: boolean;

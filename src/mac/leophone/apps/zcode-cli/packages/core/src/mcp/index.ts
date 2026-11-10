@@ -30,6 +30,11 @@ import {
   normalizeMcpToolResultForModel,
 } from "./image-normalization.js";
 import { toMcpToolName, toModelVisibleMcpNamePart } from "./name.js";
+import {
+  isLeoScreenMcpServer,
+  isLeoScreenWriteCall,
+  LEO_SCREEN_WRITE_APPROVAL_RULE,
+} from "./leo-screen-policy.js";
 
 export {
   createMcpAppProvidedToolEntry,
@@ -186,6 +191,16 @@ export function createMcpToolEntry(
           // modelContentProtection 是唯一 Host authority；通用 resultBudget / hook
           // 投影据此不能截断、丢弃或重排这组块，避免并行 boolean 漂移。
           modelContentProtection: OFFICIAL_CUA_FRAME_MODEL_CONTENT_PROTECTION,
+        }
+      : {}),
+    // [leo] 随包 leo-screen 的写操作按真实 serverName/toolName 与本次 action 判定，任何权限档都要审批。
+    // 官方 CUA 走自己的可信授权门，不叠加这条规则。
+    ...(isLeoScreenMcpServer(descriptor.serverName) && !officialCuaAuthorityVerified
+      ? {
+          resolvePermissionCapability: (input: unknown) =>
+            isLeoScreenWriteCall(descriptor.toolName, input)
+              ? { explicitApprovalRule: LEO_SCREEN_WRITE_APPROVAL_RULE }
+              : undefined,
         }
       : {}),
     inputSchema: createModelFacingMcpInputSchema(descriptor, isCuaAppObservation),

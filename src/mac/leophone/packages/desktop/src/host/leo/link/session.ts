@@ -378,7 +378,10 @@ export class LinkSession {
     if (this.isFullAuto) {
       // 刚切到全自动:已经挂着的审批一并放行,别让它卡在手机上(计划审批留给人拍板)。
       for (const [approvalId, pending] of [...this.pendingApprovals]) {
-        if (pending.kind === "permission") void this.answer(approvalId, pending, "allow_once", "once");
+        // [leo] 结构化标记 autoApproval=forbidden（leo-screen 桌面写操作）的审批模式本身不算授权，留给人答。
+        if (pending.kind === "permission" && mayAutoApprove(pending.request)) {
+          void this.answer(approvalId, pending, "allow_once", "once");
+        }
       }
     }
   }
@@ -510,7 +513,11 @@ export class LinkSession {
     };
     const pending: Pending = { kind: "permission", request, event, tool: described.tool, target: described.target, announced: false };
     this.pendingApprovals.set(request.requestId, pending);
-    if (this.isFullAuto || this.grants.has(grantKey(described.tool, described.target))) {
+    // 全自动只能代答没有禁止标记的审批；「本任务都允许」是用户对这个工具 + 目标的明确授权，照旧生效。
+    if (
+      (this.isFullAuto && mayAutoApprove(request)) ||
+      this.grants.has(grantKey(described.tool, described.target))
+    ) {
       void this.answer(request.requestId, pending, "allow_once", "once");
       return;
     }
@@ -921,6 +928,11 @@ export class LinkSession {
       })),
     };
   }
+}
+
+/** [leo] 全自动能否代答这次审批：只看 core 给的结构化标记，不看工具名、描述或 UI 别名。 */
+export function mayAutoApprove(request: ZCodePermissionRequest): boolean {
+  return request.autoApproval !== "forbidden";
 }
 
 function pickOption(options: ZCodePermissionOption[], kind: "allow_once" | "deny"): ZCodePermissionOption | undefined {

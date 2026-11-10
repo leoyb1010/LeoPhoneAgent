@@ -646,6 +646,11 @@ export interface ZCodePermissionRequest {
   /** [leo][wp-31] runtime 风险档；审批卡据此画风险条。缺省不画。 */
   riskLevel?: "low" | "medium" | "high" | "critical";
   /**
+   * [leo] "forbidden"：只能由人明确作答，Host 全自动（手机 full-auto / 切 yolo 批量放行）不得代答。
+   * 来自 core 权限判定的结构化标记，不按工具名或描述推断。
+   */
+  autoApproval?: "forbidden";
+  /**
    * 工具自报的确认预览，复用 tool call row 的 display 投影（同一有界形状）。
    * 缺省 = 纯文本 ask（legacy v3 链路会显式剥离该字段）。
    */

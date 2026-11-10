@@ -62,6 +62,7 @@ export async function requestPermissionResponse(params: {
           sideEffectScope: decision.sideEffectScope,
           suggestedPermissionUpdates: params.suggestedPermissionUpdates,
           ...(decision.approvalMode ? { approvalMode: decision.approvalMode } : {}),
+          ...(decision.autoApproval ? { autoApproval: decision.autoApproval } : {}),
           ...(params.approval?.optionsPolicy
             ? { optionsPolicy: params.approval.optionsPolicy }
             : {}),
@@ -85,7 +86,11 @@ export async function requestPermissionResponse(params: {
           decision.reason,
           params.suggestedPermissionUpdates,
           traceContext,
-          { ...params.approval, approvalMode: decision.approvalMode },
+          {
+            ...params.approval,
+            approvalMode: decision.approvalMode,
+            ...(decision.autoApproval ? { autoApproval: decision.autoApproval } : {}),
+          },
         );
       };
       published = registered ? registered.then(publish) : publish();

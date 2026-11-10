@@ -1295,6 +1295,8 @@ export const zcodePendingPermissionSchema = z
     riskLevel: z.enum(["low", "medium", "high", "critical"]),
     input: z.unknown().optional(),
     origin: zcodeInteractionRequestOriginSchema.optional(),
+    // [leo] 同 permission.requested；恢复 pending 时保留。
+    autoApproval: z.literal("forbidden").optional(),
     options: z.array(zcodePermissionOptionSchema).min(1),
     requestedAt: timestampMsSchema,
   })
@@ -1800,6 +1802,8 @@ export const zcodePermissionRequestedEventPayloadSchema = z
     input: z.unknown(),
     suggestedPermissionUpdates: z.array(zcodePermissionUpdateSchema).optional(),
     approvalMode: z.literal("user-once").optional(),
+    // [leo] 不得由全自动代答（leo-screen 桌面写操作）。可选：旧 payload 缺省照常解析。
+    autoApproval: z.literal("forbidden").optional(),
     origin: zcodeInteractionRequestOriginSchema.optional(),
     options: z.array(zcodePermissionOptionSchema).min(1),
     childSessionId: nonEmptyString.optional(),
@@ -2727,6 +2731,8 @@ export const zcodePermissionRequestParamsSchema = z
     riskLevel: z.enum(["low", "medium", "high", "critical"]),
     input: z.unknown(),
     origin: zcodeInteractionRequestOriginSchema.optional(),
+    // [leo] 同 permission.requested；实时反向 RPC 必须带上。
+    autoApproval: z.literal("forbidden").optional(),
     options: z.array(zcodePermissionOptionSchema).min(1),
   })
   .strict();
