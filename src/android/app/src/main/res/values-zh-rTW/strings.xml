@@ -1812,4 +1812,6 @@
     <string name="secure_storage_temporarily_unavailable">安全儲存暫時無法使用。原有憑證已保留；新輸入的憑證只在本次執行有效。請重新啟動應用程式後重試。</string>
     <string name="model_picker_expand_section">展開 %1$s</string>
     <string name="model_picker_collapse_section">收合 %1$s</string>
+    <string name="provider_oauth_unavailable">此版本未設定這種登入方式。可在新增供應商時選擇 API Key，或使用已設定此登入整合的版本。</string>
+    <string name="provider_oauth_login_failed">登入未完成，請重試。</string>
 </resources>

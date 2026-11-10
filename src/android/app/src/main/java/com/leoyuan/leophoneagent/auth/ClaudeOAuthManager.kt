@@ -39,6 +39,10 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
     companion object {
         private const val TAG = "ClaudeOAuth"
 
+        /** Public builds omit the required integration configuration; do not offer a dead login. */
+        val isLoginConfigured: Boolean
+            get() = BuildConfig.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT.isNotBlank()
+
         /**
          * System prompt prefix required by Anthropic for Claude Code OAuth
          * credentials.
@@ -88,6 +92,9 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
          * Returns the access token.
          */
         suspend fun login(context: Context, instanceId: String, providerRepository: ProviderRepository): String {
+            check(isLoginConfigured) {
+                context.getString(com.leoyuan.leophoneagent.R.string.provider_oauth_unavailable)
+            }
             val manager = ClaudeOAuthManager(context, instanceId)
             val token = manager.performLogin(context)
             providerRepository.saveApiKey(instanceId, token)

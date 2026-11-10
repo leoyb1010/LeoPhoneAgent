@@ -1895,4 +1895,6 @@
     <string name="secure_storage_temporarily_unavailable">安全存储暂不可用。原有凭据已保留；新输入的凭据仅在本次运行有效。请重启应用后重试。</string>
     <string name="model_picker_expand_section">展开 %1$s</string>
     <string name="model_picker_collapse_section">收起 %1$s</string>
+    <string name="provider_oauth_unavailable">此版本未配置这种登录方式。可在添加供应商时选择 API Key，或使用已配置此登录集成的版本。</string>
+    <string name="provider_oauth_login_failed">登录未完成，请重试。</string>
 </resources>

@@ -51,6 +51,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -709,6 +712,9 @@ private fun OAuthCredentialBlock(
     // ProviderInstanceDetailView's `oauthRefreshTrigger.toggle()`.
     var displayedKey by remember(instance.id) { mutableStateOf(storedKey) }
     var isAuthenticating by remember(instance.id) { mutableStateOf(false) }
+    var authError by remember(instance.id) { mutableStateOf<String?>(null) }
+    val loginConfigured = instance.providerType != ProviderType.anthropic ||
+        com.leoyuan.leophoneagent.auth.ClaudeOAuthManager.isLoginConfigured
     // [T-kimi-oauth] Device-code dialog state for Kimi re-auth (see
     // AddProviderScreen.OAuthConfigSection for the rationale).
     var kimiDeviceAuth by remember(instance.id) {
@@ -774,6 +780,22 @@ private fun OAuthCredentialBlock(
         }
     }
     Spacer(modifier = Modifier.height(8.dp))
+    if (!loginConfigured) {
+        Text(
+            stringResource(R.string.provider_oauth_unavailable),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    }
+    authError?.let { message ->
+        Text(
+            message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(bottom = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
+        )
+    }
     if (displayedKey.isNotEmpty()) {
         MinisSmallButton(
             onClick = {
@@ -798,10 +820,11 @@ private fun OAuthCredentialBlock(
         ) {
             Text(stringResource(R.string.provider_detail_sign_out))
         }
-    } else {
+    } else if (loginConfigured) {
         MinisSmallButton(
             onClick = {
                 if (isAuthenticating) return@MinisSmallButton
+                authError = null
                 isAuthenticating = true
                 kimiLoginJob = scope.launch {
                     try {
@@ -837,8 +860,16 @@ private fun OAuthCredentialBlock(
                             displayedKey = providerRepository.loadApiKey(instance.id) ?: token
                             AppLogger.info(TAG, "OAuth signed in for ${instance.id}")
                         }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (e: Exception) {
-                        AppLogger.warning(TAG, "OAuth sign-in failed for ${instance.id}: ${e.message}")
+                        // OAuth failures can contain redirect URLs or response bodies. Keep those out of logs/UI.
+                        AppLogger.warning(TAG, "OAuth sign-in failed (${e.javaClass.simpleName})")
+                        authError = context.getString(
+                            if (e is com.leoyuan.leophoneagent.auth.OAuthNetworkUnreachableException)
+                                R.string.add_provider_oauth_network_unreachable
+                            else R.string.provider_oauth_login_failed,
+                        )
                     } finally {
                         isAuthenticating = false
                         kimiDeviceAuth = null

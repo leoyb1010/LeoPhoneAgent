@@ -203,7 +203,9 @@ private fun providerIcon(type: ProviderType): Pair<ImageVector, Color> = when (t
 private fun availableCredentials(type: ProviderType): List<ProviderCredential> {
     return when (type) {
         ProviderType.openRouter -> listOf(ProviderCredential.apiKey, ProviderCredential.oauth)
-        ProviderType.anthropic,
+        ProviderType.anthropic -> if (com.leoyuan.leophoneagent.auth.ClaudeOAuthManager.isLoginConfigured) {
+            listOf(ProviderCredential.apiKey, ProviderCredential.oauth)
+        } else listOf(ProviderCredential.apiKey)
         ProviderType.openAI -> listOf(ProviderCredential.apiKey, ProviderCredential.oauth)
         ProviderType.gemini -> listOf(ProviderCredential.apiKey)
         // xAI Grok primarily targets SuperGrok / X Premium+ OAuth, but also
