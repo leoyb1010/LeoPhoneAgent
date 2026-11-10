@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.90.1",
+            date: "2026-11-10",
+            title: "对话查找与更清楚的审批",
+            highlights: [
+                "对话菜单新增查找当前已加载的文字，点搜索结果回到原消息；回复操作拥有更大的点按区域，可以引用回答后编辑新问题。",
+                "手机审批增加允许一次，命令参数可展开与复制；一次许可不会变成整个会话的许可，已失效的审批不会保存长期授权。",
+                "计划审批在手机、手表与通知中保留本次真实选项；旧审批的拒绝操作不会影响新的审批。",
+                "收紧网页与本机会话文件之间的访问边界；受保护会话不会被其他会话的工具读取。"
+            ]
+        ),
+        LeoRelease(
             version: "1.90.0",
             date: "2026-11-10",
             title: "第二大脑阅读与搜索更顺畅",
