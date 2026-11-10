@@ -1,5 +1,11 @@
 # Tool Change Chain Spec
 
+## leo-screen 桌面写操作审批与禁止代答（2026-11-10）
+
+随包 Peekaboo MCP（serverName `leo-screen`）的写操作按真实 `serverName` + `toolName` + 入参 `action` 分类（`core/src/mcp/leo-screen-policy.ts`）：观察白名单（`see`、`image`、`inspect_ui` 等，以及 `list` 动作、不带 `outputPath` 的 `clipboard get`）之外一律算写操作，未知工具与未知 action 默认写。`createMcpToolEntry` 只给 leo-screen 条目声明 `resolvePermissionCapability`，写操作返回 `explicitApprovalRule: "leo.screen.write"`；官方 CUA 不叠加。PermissionService 在 guarded 危险命令与 yolo/guarded 直通之前处理它：auto/硬禁用/项目 deny/Plan → deny，项目或会话里精确命中该工具名的 allow → allow，其余 ask，并带 `alwaysAsk`（PreToolUse 整体 allow 抹不掉）与结构化 `autoApproval: "forbidden"`。
+
+标记沿既有 approvalMode 同一路径透传，不另建审批流水线：broker request、PermissionRequested payload、reducer PendingPermission、v3 事件与恢复快照（strict schema 增可选字段）、v3 反向 RPC 参数、v4 permission payload、services 三个 `ZCodePermissionRequest` 投影。Host 手机远控两个自动出口（全自动新请求、切全自动批量放行）见标记不代答；用户点过的「本任务都允许」仍生效。工具结果、错误语义、存储不变。规则与验收见 Mac 工程 `docs/specs/leo-screen-write-approval.md`。
+
 ## 工具内部模型请求的会话归因（2026-09-30）
 
 WebSearch、WebFetch processing、ReadSessionContext 的内部模型请求继承发起工具的宿主
