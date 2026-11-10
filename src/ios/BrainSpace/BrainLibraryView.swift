@@ -12,11 +12,9 @@ struct BrainDocTarget: Hashable { let id: String; let title: String }
 
 struct BrainLibraryView: View {
     @EnvironmentObject private var model: BrainSpaceModel
-    @State private var query = ""
-    @State private var results: [BrainSearchPage.Item] = []
-    @State private var total = 0
-    @State private var searching = false
-    @State private var error: String?
+    @ObservedObject private var store = BrainStore.shared
+    /// 搜索状态与任务归 BrainSearchModel 所有(见 BrainSpaceModels.swift);这里只绑定输入和显示。
+    @StateObject private var search = BrainSearchModel(load: BrainLibraryView.loadSearch)
     @State private var uploads: [BrainUploadState] = []
 
     private let webPages: [(String, String, String)] = [
@@ -27,7 +25,7 @@ struct BrainLibraryView: View {
 
     var body: some View {
         List {
-            if query.isEmpty {
+            if search.query.isEmpty {
                 Section {
                     Button { model.showPhoneCollections = true } label: {
                         Label { VStack(alignment: .leading) { Text("手机收藏"); Text("分享进来的链接、语音和文件,不联网也能用").font(.caption).foregroundStyle(.secondary) } }
@@ -62,23 +60,28 @@ struct BrainLibraryView: View {
                     }
                 }
             } else {
-                Section(searching ? "正在搜…" : "找到 \(total) 项") {
-                    ForEach(results) { item in resultRow(item) }
+                Section(search.searching ? "正在搜…" : "找到 \(search.total) 项") {
+                    ForEach(search.results) { item in resultRow(item) }
                 }
-                if let error { BrainErrorRow(message: error) { Task { await search() } } }
+                if let error = search.error { BrainErrorRow(message: error) { search.submit() } }
             }
         }
         .listStyle(.insetGrouped)
         .buttonStyle(.plain)
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜文档、知识卡、照片")
-        .onSubmit(of: .search) { Task { await search() } }
-        .task(id: query) {
-            // Search as you type, after a short pause.
-            if query.trimmingCharacters(in: .whitespaces).isEmpty { results = []; total = 0; error = nil; return }
-            try? await Task.sleep(for: .milliseconds(400))
-            if !Task.isCancelled { await search() }
+        .searchable(text: $search.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜文档、知识卡、照片")
+        // Typing is debounced inside the model (query didSet); submit is immediate.
+        .onSubmit(of: .search) { search.submit() }
+        // 换了连接:旧结果立即失效;页面隐藏时只作废,不发新搜索,回来再按 revision 补一次。
+        .onChange(of: store.connectionRevision) { _, revision in search.connectionChanged(to: revision) }
+        .onAppear { search.appear(revision: store.connectionRevision) }
+        .onDisappear { search.disappear() }
+        .task(id: store.connectionRevision) {
+            let revision = store.connectionRevision
+            uploads = []
+            let list = (try? await BrainSpaceAPI.shared.get("/uploads", query: [("limit", "10")], as: BrainUploadList.self).items) ?? []
+            guard !Task.isCancelled, revision == store.connectionRevision else { return }
+            uploads = list
         }
-        .task { uploads = (try? await BrainSpaceAPI.shared.get("/uploads", query: [("limit", "10")], as: BrainUploadList.self).items) ?? [] }
         .navigationDestination(for: BrainDocTarget.self) { BrainDocView(target: $0) }
         .navigationDestination(for: BrainSpaceMediaRow.self) { BrainSpaceMediaDetailView(row: $0) }
     }
@@ -111,16 +114,13 @@ struct BrainLibraryView: View {
         }
     }
 
-    private func search() async {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return }
-        searching = true; error = nil
-        defer { searching = false }
+    /// Production loader for BrainSearchModel. A cancelled URLSession request surfaces as a cancellation, not a network error.
+    @MainActor private static func loadSearch(_ q: String) async throws -> BrainSearchPage {
         do {
-            let page: BrainSearchPage = try await BrainSpaceAPI.shared.get("/search", query: [("q", q), ("limit", "30")])
-            results = page.items; total = page.total ?? page.items.count
+            return try await BrainSpaceAPI.shared.get("/search", query: [("q", q), ("limit", "30")])
         } catch {
-            results = []; self.error = error.localizedDescription
+            if Task.isCancelled { throw CancellationError() }
+            throw error
         }
     }
 }
