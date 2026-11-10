@@ -208,7 +208,7 @@ export struct LocalAgentPane {
             focusRequest: this.homeFocusTicket,
             onFocusApplied: (ticket: number) => { if (this.homeFocusTicket === ticket) this.homeFocusTicket = 0; },
             ready: this.ready && !this.homeSending,
-            compact: this.viewportHeight < 460,
+            compact: this.viewportHeight < 900,
             listening: this.listening,
             onMic: () => this.toggleHomeVoice(),
             placeholder: '问 Leo，或直接说要做的事',
@@ -318,12 +318,7 @@ export struct LocalAgentPane {
   @Builder
   topBar() {
     Row() {
-      // 分栏时这一列窄,设置收进 ··· 菜单,给标题留地方
-      if (!this.wide) {
-        this.barIcon('gearshape', () => {
-          this.onSettings();
-        })
-      }
+      // Keep the brand visible: secondary destinations stay in the existing 44vp menu.
       Text(this.wide ? '对话' : 'LeoBot')
         .fontSize(this.wide ? 20 : 19)
         .fontWeight(FontWeight.Bold)

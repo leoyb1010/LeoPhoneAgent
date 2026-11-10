@@ -181,6 +181,8 @@ struct HomePage {
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.reactive(this.tick, Tokens.bg))
+    // Extend only the root background; the top bar, list and composer retain safe-area layout.
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     .onAreaChange((_old: Area, now: Area) => {
       this.syncWide(Number(now.width), Number(now.height));
     })

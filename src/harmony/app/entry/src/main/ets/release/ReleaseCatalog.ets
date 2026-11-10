@@ -6,24 +6,33 @@ export class LeoRelease {
 }
 
 export class ReleaseCatalog {
-  static readonly currentVersion: string = '0.5.3';
-  static readonly currentBuild: number = 100032;
+  static readonly currentVersion: string = '0.5.4';
+  static readonly currentBuild: number = 100033;
 
   static all(): LeoRelease[] {
     const current = new LeoRelease();
-    current.version = '0.5.3';
+    current.version = '0.5.4';
     current.date = '2026-11-10';
-    current.title = '长对话按需显示';
+    current.title = '把屏幕还给对话';
     current.highlights = [
+      '首页默认采用紧凑输入区，连续会话拥有更大的滚动空间。',
+      '根背景延伸到系统状态栏与手势区，去掉底部突兀的独立背景横条。',
+      '次级入口收进原生菜单，保留搜索、第二大脑、远程和设置的完整触达路径。'
+    ];
+    const first = new LeoRelease();
+    first.version = '0.5.3';
+    first.date = '2026-11-10';
+    first.title = '长对话按需显示';
+    first.highlights = [
       '本机和远程聊天按可见范围构建消息行，消息变化时更新对应行，减少长对话反复构建。',
       '已解析的相同回答在有限内存中复用；流式文字仍按完整 Markdown 语义解析，未改变会话保存或磁盘缓存。',
       '保留滚动跟随、回到底部、工具状态和折叠展开，沿用原签名覆盖升级；实际流畅度与交互由用户验收。'
     ];
-    const first = new LeoRelease();
-    first.version = '0.5.2';
-    first.date = '2026-11-10';
-    first.title = '第二大脑读取与翻页修复';
-    first.highlights = [
+    const h052 = new LeoRelease();
+    h052.version = '0.5.2';
+    h052.date = '2026-11-10';
+    h052.title = '第二大脑读取与翻页修复';
+    h052.highlights = [
       '今日、家人、影像与管家页面并发读取独立资料，部分请求失败时保留成功的内容并说明失败来源。',
       '资料详情的概要、出处、OCR 与正文独立读取；先到的正文立即可读，不再等待其他分区。重复点击加载更多会合并为一次请求，追加内容去重。',
       '返回、切页、锁定或更换连接后，旧请求不会回写新页面；取消请求只释放一次。',
