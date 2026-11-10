@@ -1,512 +1,91 @@
 # LeoBot
 
-> 原名 LeoPhoneAgent，2026-10-06 先后改名 LOBE、LeoBot；仓库地址、Bundle ID 与数据目录沿用原名。
+个人 AI Agent：iOS、Android、HarmonyOS 客户端与 Mac 运行时，通过配对中继连接；第二大脑由独立资料库服务提供数据。
 
 [![iOS](https://img.shields.io/badge/iOS-1.90.0%20(200)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.20.0-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS source](https://img.shields.io/badge/HarmonyOS_source-0.5.2-0A84FF.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
-[![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
 
-**个人 AI Agent：iPhone 与 Android 都能独立工作，三台 Mac 是“第二具身体”。**
-
-手机端本身是一个完整的端上 Agent（模型接入、Linux 沙箱、浏览器自动化、
-技能与记忆);同时通过自营中继,在任意网络(蜂窝/WiFi)远程指挥任意一台
-Mac 上的编码 CLI(Claude Code / Codex / Cursor / Grok),支持断线续传、远程审批、
-会话接管。Mac 侧当前桌面与运行时主工程是 `src/mac/leophone/`；旧 Cindy 系的 `leocodebox` 已从主分支移除（tag `archive/leocodebox-2.2.13`）。
-
-Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Standard
-与 Power 两种构建；Power 版为 Accessibility、Shizuku 与受控系统操作预留
-独立能力闸门，不改变 iPhone 独立运行或现有 Mac Relay 协议。
-
-> 本仓库是 [OpenMinis](https://github.com/OpenMinis/OpenMinis) 的独立 GPLv3
-> fork,与 OpenMinis 官方产品无关,亦未获其背书。
-
-## 服务器任务（Paperclip）已下架
-
-iOS 1.72.0 / Mac 1.10.0 起移除了服务器任务（Paperclip）工作区：多模型能力在端侧与 Mac 上已经覆盖，
-不再维护单独的服务器。代码与审计记录保留在 git 历史里（最后包含它的提交是 `0f1e599a`）。
-
-## HarmonyOS 源码与实机状态
-
-主线源码版本见上方源码徽标与 `src/harmony/app/AppScope/app.json5`。
-0.5.0 的原生构建、签名与 Mate XT2 覆盖安装证据见
-[交付记录](docs/harmony-ux-20261108/DELIVERY.md)；剩余交互验收见
-[测试清单](docs/harmony-ux-20261108/TEST_GUIDE.md)。源码版本、已安装版本和公开发布分别核对，
-不能用旧候选文档推断当前编译结果，也不能将构建或装机成功等同于全部功能已验收。
+版本徽标指工程源码。已安装版本、对应源码与尚在开发的修改分开记录，不以 main 的当前内容推断设备已更新。
 
 ## 开发 Agent 先读
 
-**任何 Codex、Cursor、Claude Code 或其他 Agent 继续开发前，必须先读完本节和
-[「Android Agent 交接与发布铁律」](#android-agent-交接与发布铁律)。**
-
-- 唯一源码主仓：`https://github.com/leoyb1010/LeoPhoneAgent`，默认分支 `main`。
-- 本机唯一权威开发入口：`~/leophone-mac` 的 `main`，iOS、Mac、Android、HarmonyOS 均从这里开发、集成和发版。开始前先检查 `git status`、获取 `origin` 并核对 `HEAD...origin/main`；只落后且工作区干净时使用 `git pull --ff-only origin main`。旧的文稿目录副本、历史 worktree 和其他机器上的受控构建快照不作为发版源码入口；其中有效的未提交改动先核对、回收到本主仓并提交，禁止直接覆盖、重置或删除。
-- Android 主工程：`src/android/`；iOS：`src/ios/`；Mac 桌面端：
-  `src/mac/leophone/`（当前 1.x 主线）。旧版桌面 leocodebox 已移除（tag `archive/leocodebox-2.2.13`）；
-  `src/mac/leoagent/` 中 relay.py 仍在服务，其他部分是协议兼容/灰度回退，不是 Android UI 工程。
-  藏宝阁 iOS / Android / Mac 三端升级必须先读：
-  [`docs/TREASURY_CROSS_PLATFORM_UPGRADE_PLAN.md`](docs/TREASURY_CROSS_PLATFORM_UPGRADE_PLAN.md)。
-  当前已完成 Phase 0–5 的本机源码与自动化施工；阶段证据见
-  [Phase 0](docs/TREASURY_PHASE0_DELIVERY_EVIDENCE.md)、
-  [Phase 1](docs/TREASURY_PHASE1_DELIVERY_EVIDENCE.md)、
-  [Phase 2](docs/TREASURY_PHASE2_DELIVERY_EVIDENCE.md) 和
-  [Phase 3](docs/TREASURY_PHASE3_DELIVERY_EVIDENCE.md)、
-  [Phase 4](docs/TREASURY_PHASE4_DELIVERY_EVIDENCE.md) 和
-  [Phase 5](docs/TREASURY_PHASE5_DELIVERY_EVIDENCE.md)。游标增量同步、按需正文/附件、
-  冲突/tombstone、Mac 主动工作台与三端 `treasury_search/get/save/update` 契约已落地；
-  [隐私与安全边界](docs/TREASURY_PRIVACY_AND_SECURITY.md)及
-  [设备测试/发版清单](docs/TREASURY_DEVICE_RELEASE_CHECKLIST.md)已发布。Android alpha.27 已完成
-  固定签名、Fold8 API 35、Standard/Power 从 alpha.26 覆盖安装与公开附件门禁；藏宝阁 Phase 5 交付当时的
-  Mac 版本（1.84.0，旧桌面线）已完成 Developer ID 签名、双仓热更新发布和本机安装，当时的 iPhone 版本
-  1.34.0 (109) 已通过 Wi-Fi 真机覆盖安装并启动（均为历史记录，当前版本见下文各端版本节）。
-  iPad 真机与 Mac Apple 公证仍为 HOLD，不能把源码门禁等同于全部实机发版。
-  最新追加审计已补齐三端相关正文/相关收藏、有限重试、用户标题保护、Mac PDF 重试完整性、iOS 持久增强任务执行、三端安全缓存清理、Android 系统快速捕获，以及正文/附件按需读取与 HTTP Range 断点续传；真实弱网、进程死亡和设备 HOLD 边界不变。
-  iPhone / iPad / Apple Watch 体验升级计划（吸收开源项目经验 + iOS 27 新特性；大部分已在 iOS 1.44.0 (126) 落地，见 CHANGELOG 与计划内「落地状态」）：
-  [`docs/upgrade-2026-09-25/PLAN.md`](docs/upgrade-2026-09-25/PLAN.md)。
-  鸿蒙 7 交付计划：
-  [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
-  工程落地在 `src/harmony/`，当前源码版本以 `app/AppScope/app.json5` 为准，采用个人 HDC 签名安装。
-  内置本机Linux与离线工具，系统权限和生态资格受限的扩展按本次范围暂缓。
-- Android 同时交付 Standard 和 Power；修改 `main` 公共源码后必须同时验证两个 flavor。
-- 不得把「能编译」、「CI 是绿的」或「APK 已上传」当成可发布证据。
-  可升级签名、覆盖安装、冷启动、发布附件哈希都必须单独校验。
-- 任务开始先读 `git status`并获取最新 `origin/main`；未知本地改动默认属于用户，
-  不得 `reset --hard`、覆盖或删除。
-
-## HarmonyOS
-
-个人HDC安装，最低HarmonyOS7/API26。包名 `com.leoyuan.leophoneagent.harmony`。
-
-原生ArkUI覆盖聊天、模型与模型组、技能/人格/记忆、浏览器、第二大脑、SSH、录音、邮箱、MCP、Mac远控与看屏、跨端同步及备份恢复。折叠窗口保留会话与草稿，多图和生图使用本机原生预览，按钮与主题跟随系统无障碍设置。
-
-本机Alpine ARM64运行时提供固定校验的离线Python、Node/npm、Git等工具，共享工作区为 `/mnt/workspace`。工作区支持嵌套目录、文本分页、文件导出及本机HTML预览。审批包含逐项确认、智能批准、全自动，并绑定当前会话、操作和参数。
-
-服务商由用户手动配置。系统级受限权限、健康/穿戴等生态资质接入及新增硬件扩展列入暂缓范围。桌面卡片和现有系统入口的实际证据、Pura X Max几何模拟器范围、真机覆盖安装与外部服务资格分别记录在[本次状态](docs/harmony-upgrade-20261108/STATUS.md)。
-
-```bash
-git submodule update --init deps/ish
-# 使用包含API26的官方Release SDK，可用HARMONY_TOOLCHAIN_HOME指定工具链Contents目录
-bash src/harmony/scripts/verify_harmony_release_notes.sh
-bash src/harmony/scripts/build_hap.sh
-# DevEco本机签名材料只留在私有构建舞台
-# /tmp/leo-harmony-app/entry/build/default/outputs/default/entry-default-signed.hap
-```
-
-
-三折叠原生界面实测，图中使用本机测试服务商。
-
-![鸿蒙7三折叠聊天界面](docs/harmony-upgrade-20261108/images/triple-fold-chat.jpeg)
-
-## 直接下载 Android APK
-
-> 当前为个人 Alpha 预发布版，仅支持 ARM64。两个 APK 使用不同包名，可以在
-> 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
-> 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
-
-- [下载 Standard alpha.27](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.27/LeoPhoneAgent-Standard-1.0.0-alpha.27.apk)
-- [下载 Power alpha.27](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.27/LeoPhoneAgent-Power-1.0.0-alpha.27.apk)
-- [查看本次更新记录](CHANGELOG.md#ios-1340-109--android-100-alpha27--mac-1840--三轮全面审计与三端发布---2026-09-07)
-- [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
-
-SHA-256：
-
-```text
-Standard  fed97d46d607e30a73dbaa00b90e1a52325d797fd04308347deb1b8a8ee1c8d1
-Power     74e11977bad918576be72b59b1d8e52e17e7f6e85e1fd8fd13e53b5e321ddba4
-```
-
-本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
-正式升级证书链。正式分发前仍需换成长期托管的发行 keystore；因此从本次
-Alpha 切换到正式版时可能需要先卸载旧包。APK 内已附 GPL、第三方许可、
-隐私说明与源码提供说明。
-个人 Alpha 升级链的证书 SHA-256 固定为
-`f325bc65f4f6ba456938c7d88c96ad2ef418197d1204cfd2bd881aa145bf11df`；
-发布前用 `scripts/verify_android_alpha_release.sh` 强制校验。
-
-## 系统架构
-
-```text
-┌─ iPhone(iOS app,主控制面)──────────────────────────┐
-│  端上 Agent:多模型接入 / iSH Alpine 沙箱 / 浏览器自动化  │
-│  Mac 遥控:对话框直达三台 Mac 的 CLI,审批/转向/接管      │
-└──────────────┬───────────────────────────────────────┘
-┌─ Android(Kotlin/Compose,独立控制面)──────────────────┐
-│  端上 Agent:多模型 / PRoot Alpine / Skills / MCP       │
-│  Power Engine:Accessibility / Shizuku / 受控系统操作    │
-└──────────────┬───────────────────────────────────────┘
-               │ HTTPS(公网,Tailscale Funnel 入口)
-┌──────────────▼───────────────────────────────────────┐
-│  自营中继 relay.py(常驻 Mac mini「cortex」)           │
-│  Mac 出站 WebSocket 注册;手机一把钥匙直达全部机器        │
-└──────┬───────────┬───────────┬───────────────────────┘
-   ws出站│      ws出站│      ws出站│
-┌──────▼───┐ ┌─────▼────┐ ┌────▼─────┐
-│ MacBook  │ │ Mac mini │ │ Mac Studio│   每台跑 leoagent 常驻服务:
-│  Pro     │ │ (cortex) │ │           │   claude/codex/cursor/grok 无头会话
-└──────────┘ └──────────┘ └───────────┘   NDJSON 日志 + SSE 续传 + 审批
-```
-
-- **连接模型**:Mac 主动出站连中继(穿 NAT),手机走公网 HTTPS——两端在
-  任意网络均可,手机无需 VPN/Tailscale 客户端/SSH。
-- **协议**:自研 harness 协议(单调 seq 的 NDJSON 事件日志,SSE `?after=N`
-  回放再跟随),断线不丢事件;审批带独立 `approval_id`,手机/手表均可应答。
-- **CLI 方言**:Claude Code(stream-json)、Codex(app-server JSON-RPC)、
-  Cursor Agent(one-shot stream-json)、Grok(`grok agent stdio`,ACP/Agent Client Protocol)。
-- **Cursor 快捷配置**:在每台 Mac 上安装 Cursor CLI 后执行
-  `cursor-agent login`；Android「我的 Mac」新任务里直接点「Cursor」即可运行。
-  当前 Mac 的 CLI/Provider 配置以 `src/mac/leophone/` 的说明为准；旧 leocodebox 的部署参数不应直接套用。
-- **安全**:一把 ≥16 字符密钥保护中继与全部端点(个人产品,单用户模型);
-  Funnel 只挂中继路径;密钥自动清洗复制残渣(尾部 `%`/换行)。
-
-## 仓库布局
-
-```text
-src/ios/                iOS 主 app(Swift/SwiftUI)+ Share/FileProvider/Widget/Watch
-src/android/            Android 主 app(Kotlin/Compose)+ PRoot/Accessibility/Shizuku
-src/harmony/            HarmonyOS 7 原生端侧Agent与远控客户端（ArkTS + Native）
-src/mac/leophone/       当前 LeoPhoneAgent · Mac 1.x:桌面、CLI/runtime、Leo Link、同步副本
-src/mac/leoagent/       Mac 常驻服务:server.py(harness 会话)、relay.py(中继)、
-                        harness.py(CLI 方言翻译)
-                        ※ 当前桌面主线为 leophone；leoagent 保留作灰度回退，relay.py 继续服役
-deps/  docs/  scripts/  原生依赖构建、文档、工具
-```
-
-## 当前 iOS 版本
-
-- 当前源码版本/构建:`1.77.4 (181)`;Bundle ID `com.leoyuan.leophoneagent`。每一版改了什么以 `src/ios/Views/Settings/LeoReleaseNotesView.swift` 为准，下面只列近几版。
-- 2026-10-21 1.77.0：派给 Mac 的任务做完即可见（事件流 45 秒看门狗、快速重连、完成后不挂错误）；SSH 兜底显示进展；远程机器与设置说人话、设置按要办的事分组；设计值改读共享 token。
-- 2026-10-20 1.76.0：SSH 终端、改动面板与检查点、四种权限模式、接管终端里的 Claude Code、中继端到端加密（Mac 端在 1.13.0 才真正生效）。
-- 2026-10-15 1.74.0：iCloud 拉取拒收已下架模型的旧副本（按服务商最近一次的服务器列表判断）。
-- 2026-10-15 1.73.0：服务商下架的模型不再从 iCloud 复活（刷新时同步删除云端旧副本）。
-- 2026-10-15 1.72.0 / Mac 1.10.0：下架服务器任务（Paperclip），升级自动清理残留；Mac 图标机器人放大。
-- 2026-10-15 1.71.0：邮件可标记 / 移动 / 存草稿 / 发信（可按邮箱始终允许）与邮件监控；开箱内置 5 个技能；默认接好 Exa / Context7 / DeepWiki，MCP 目录清理。
-- 2026-10-14 1.70.0：只聊天不再启动终端内核；日志去掉输入框、命令与回复片段并清洗旧日志；折叠回复的 Copy Markdown 复制全文；补译 57 条文案。
-- 2026-10-14 1.69.0：修复 Claude Sonnet 5.5 / Opus 5.5 / Fable 关闭思考被拒；终端内核按需启动并离开主线程；失效挂载书签退避；超长回复折叠；代码块按语法着色；Leo Link 失败给出明确原因和主按钮；日志不再记录回复原文。
-- 2026-10-14 1.68.0：设置 → AI 服务商 → 右上角「+」→「全部发送到 Mac（含密钥）」，一次把全部服务商和 Key 隔空投送到 LeoBot Mac 1.9「从 iPhone 导入」；文件只在分享面板打开期间存在，ChatGPT / xAI / Kimi 等登录账号不导出。
-- 2026-10-07 Paperclip 中文发行层 1.1.8：全站 UI 审计（竖排/遮挡/裸语法/中英混排/窄屏）、页面可用性（删除组织 500、登录跳转 7.5 s、轮询降 80%、已取消任务收敛）、源站压缩；见 CHANGELOG。
-- 2026-10-12 1.67.0：键盘在任意页面下滑即可收起；图标机器人放大；新对话空白处加 LeoBot 标志。
-- 2026-10-12 1.66.0：修复夜间安静任务重复执行；对话可调用资料库 Gemini 证据问答（brain_ask）；mini 上新增 LeoBot↔资料库契约巡检。
-- 2026-10-11 1.65.0：两轮丝滑度打磨（重复排版、假卡顿、启动日志减半、首次使用引导）。
-- 2026-10-11 1.64.0：藏宝阁与服务器任务设计升级（布局、动效、阅读排版、分组吸顶、状态形状+颜色）。
-- 2026-10-11 1.63.0：藏宝阁两轮审计修复（搜索框常驻、小屏布局、选择与分享、资料库错误恢复），日常对话按需调用藏宝阁与资料库。
-- 2026-10-10 1.62.0：第二大脑——藏宝阁经 `wenjian.leoyuan.top` 接上 Mac mini 资料库（混合检索、知识卡、私密面容 ID、Agent 带出处查询与入库）。
-- 2026-10-10 1.61.0：第三轮——启动/回前台/聊天渲染提速，输入与同步加固，新增录音纪要、提问卡片、工具步骤折叠、本机标题与追问、服务商余额、自我排程。
-- 2026-10-09 1.60.0：移植 OpenMinis v1.14（沙箱内核调速、会话列表与渲染提速、精简旧上下文、子代理、备份与恢复、思考规则与图片识别模型组、同步补齐）；Mac 舰队改为默认隐藏的高级功能。
-- 2026-10-06 1.59.0 / Mac 1.8.0：产品改名 LeoBot，新机器人图标；新增 leobot:// 链接（lobe:// 与 leophoneagent:// 继续可用），覆盖升级、数据保留。
-- 2026-10-06 1.58.0 / Mac 1.7.0：产品改名 LOBE（只改用户可见名称，内部标识与数据不变，覆盖升级），新图标，Siri 简称 LB，新增 lobe:// 链接。
-- 2026-10-06 1.57.1 / Mac 1.6.1：全面审计修复——Mac 恢复本机优先、本机服务常驻、遮挡与安全修复；iOS 冷启动回本机、路径越界与丢消息等 P0/P1 修复；694 项逻辑测试、Paperclip 原生 96+14 通过。
-- 2026-10-06 1.57.0：升级方案 v3 的 E、F、G、H、D 合并发版——回复「下一步」与对话生成技能；三处输入栏统一、青绿强调色、首页情境条；Paperclip 灵动岛、完成通知、停止运行、iPad 两栏、深链与 Spotlight；实时字幕、双轨识别、错字自动更正、流式朗读；「记下此刻」、情境档位、安静任务、专注收尾卡。
-- 2026-10-06 1.56.0：快捷指令深挖——Agent 运行快捷指令能拿回结果；新增记住这个 / 想一想、导出会话、定时任务、Paperclip 派工单与查进度等动作，藏宝阁条目可接给发送提示；锁屏轻动作、专注模式过滤条件、快捷指令配方页，锁屏隐私模式下 Siri 不念正文。
-- 2026-10-06 1.55.0：交付即执行 + 看得见——全自动覆盖所有 Mac CLI 与后台 Agent 回合的手机能力，Paperclip 审批一点即提交并自动核对未知回执；断网显示「重连中」、重试后保留原因，新增常开诊断日志。
-- 2026-10-06 1.54.1：修复 iCloud 同步重建用旧数据库快照覆盖刚刷新的模型列表（GPT-6.1 Sol 在服务商里可见、Agent Loop 与模型选择里搜不到），升级后自动重拉一次 ChatGPT 模型目录；移除 Cursor 云端 Agent。
-- 2026-10-06 1.54.0：ChatGPT 登录可用 GPT-6.1 Sol；新增 Cursor 云端 Agent（设置里填 Cursor API Key，用账号额度在云端仓库编码，启动与追加需审批）；同资源工具调用分道串行，提示缓存键按会话派生；563 项逻辑测试通过。
-- 2026-10-05 1.53.4：实时通道竞态、日志去重、刷新排队与运行中页面提速；537 项逻辑测试、Paperclip 宿主 91 项、Release 构建与发版闸门通过。
-- 2026-10-05 任务过程实时可见：运行中卡片、实时日志、对话线程式新界面，修复发送后卡住；531 项逻辑测试、Paperclip 宿主 79 项与 Release 构建通过，iPhone 18 Pro Max、iPad Pro 13（M4）已安装并回读 `1.53.3 (148)`。
-- 2026-10-05 审计整改：离线发送不再误锁草稿、服务器任务请求量下降、外部入口切回本机、可退出服务器登录与删除服务器；中继地址改由本机未跟踪的 `src/ios/Configs/LocalRelay.xcconfig` 注入（模板 `LocalRelay.example.xcconfig`）。517 项逻辑测试、Paperclip 宿主 61 项与 Release 构建通过；iPhone 18 Pro Max、iPad Pro 13（M4）已无线覆盖安装并回读 `1.53.2 (147)`，详见 [整改记录](docs/AUDIT_REMEDIATION_20261005.md)。
-- 2026-10-04 体验升级：三轮均检查完整 17 模块，修复模型入口、草稿/资料保留和失败恢复。470 项主工程逻辑测试、隔离原生与故障回归、Release/签名通过；iPhone/iPad/Watch 已覆盖安装并启动 1.51.0（138），原配置标识和默认保留。iPhone 真实收发已验证；iPad 锁屏待补，CloudKit 五类查询错误仍待服务端核对，详见 [交付证据与限制](docs/ios-product-audit/DELIVERY_20261004.md)。
-- 2026-10-03 模型管理升级：模型选择、收藏排序与目录批量整理统一；470 项逻辑测试和原生模型/持久化、交互回归完成核验。iPhone/iPad/Watch 已安装 `1.50.0 (137)`，原配置标识与默认设置读回比对保留；手机/平板锁屏后的启动验收待补。
-- 2026-09-30 本机验证：470 项 iOS 逻辑测试通过，Release 构建与签名通过；iPhone 18 Pro Max、iPad Pro 13（M4）已覆盖安装并启动 `1.49.1 (135)`。此版要求 SSH 主机公钥显式核实，直连使用 Ed25519；CloudKit 环境保持 Development。
-- 历史 1.47.0:接入 OpenCode Go;下线 Claude 订阅 / Antigravity / Gemini CLI 登录,订阅令牌只存本机;锁屏批准和 Siri 都要解锁、上锁会话不外露;对话终端链接只填不跑、草稿按对话保存、删符号链接不删目标。证据:Release 真机构建 + 发版门禁 + 新增单测;未装机
-- 1.45.0:设置 → Apple Watch:手表怎么回答(自动 / 总是手表直连 / 只经 iPhone)、手表直连单独选模型(任何 API Key 方式的 OpenAI 兼容或 Anthropic 模型)
-- 1.44.0:审批三档(逐项确认 / 智能批准 / 全自动,风险分级只提示不加步骤);iPad 菜单栏、聊天检查器、
-  多窗口(右键或拖出会话开新窗口、iPadOS 27 关窗确认)、设置双栏、拖入链接与文字;做完的一轮收成
-  「已工作 N 步 · 用时」;灵动岛等待批准变橙并提醒、5 分钟没更新标「可能已中断」、手表 Smart Stack 小尺寸;
-  通知里直接回复与审批;手表朗读礼仪、后台续答、风险着色审批;iOS 27:省资源时停动画、后台任务异步提交、
-  快捷指令长任务、只听不看的 Siri 短回答、导航栏滚动收起、未发草稿关闭确认
-- 1.42.x:ChatGPT 登录读 Codex 实时模型目录(GPT-6-Astra / Sol / Luna);「全自动」在输入框上方一点即开(另有 `/auto`);
-  一轮丝滑改造 —— 新对话不再重铺 rootfs 覆盖层、语音电平独立刷新(≤30 Hz)、首页输入/搜索打字不重算会话列表、
-  键盘弹起时消息列表贴底、回前台不在第一帧同步查钥匙串;能力自检可真发一句话测每个供应商。
-  设置逐项说到做到(权限显示同步、位置追踪开关生效、Soul 语言生效、中文界面不再漏英文)。
-  经 3 轮对抗审查(独立审查员 + 真机自检 / 截图 / perf 日志)逐条修复
-- 1.39–1.41:手机开 LeoPhoneAgent 1.2 Mac 上的任务(审批、全自动、续传、接管 Mac 桌面任务);设置页逐页中文化与打磨
-- 1.38.0:会话行缩放转场;系统 `sensoryFeedback` 触感;长文本粘贴折叠为 `[Pasted#N]`(发送时展开);用户消息「从此处删除」;上翻时「↓ 新消息」胶囊;闹钟/命令面板半屏停靠。经 3 路审计 + 逐条反驳,13 条确认项已修
-- 1.37.0:冷启动回到退出时的页面;面容默认一小时免重复;出图模型直接在对话里回图(Gemini inlineData / OpenAI image_generation / delta.images);首页「系统快捷」可选按钮(手电筒 / 亮度 / 剪贴板 / 设备信息)
-- iPhone / iPad 本机动作：剪贴板读写和设备信息直接走系统能力，写入后读回核对；
-  支持 Foundation Models 的设备用结构化生成整理收藏与语音任务
-- iPad 工作区：分屏、台前调度和窗口缩放按正文/侧栏实际可用空间切换单双栏，
-  保留多窗口、拖放附件与外接键盘快捷键
-- （历史，藏宝阁 Phase 5 当时版本）iPhone/iPad 通用设备目标已完成无签名构建，`MinisLogicTests` 337/337；iPhone 17 Pro Max
-  已通过 Wi-Fi 覆盖安装 `1.34.0 (109)`，版本回读与主 App / Widget 启动通过；
-  当前 iSH 静态库为 iPhoneOS arm64，主 App 模拟器需先重建 simulator 依赖，iPad 实机安装待设备在场后验收
-- 主对话框直达 Mac:「指挥一台 Mac」选机 + 选 CLI 即开聊;发送在会话建立
-  期间自动排队,永不吞点击
-- 会话接管:进入任意 Mac 先列进行中任务,一键接管(全量回放 + 实时跟随)
-- Grok 模型接入恢复 OpenMinis 已验证路径：原生 OAuth、手动 token 和「从 Mac
-  借用登录」三条入口统一使用 `api.x.ai/v1`；内置完整目录不会因在线模型查询失败而缩减
-- 更新机制:每次发版内置更新说明,首启弹「本次更新」卡(发版铁律见
-  [CLAUDE.md](CLAUDE.md))
-
-## 当前 Mac 桌面端(LeoPhoneAgent 1.x)
-
-- 当前源码版本以上方源码徽标及 `src/mac/leophone/package.json` 为准；每一版改了什么以 `packages/ui/src/leo/leoReleaseNotes.ts` 为准。已安装版本以 `/Applications/LeoBot.app` 的 Info.plist 为准，公开热更新版本以发布仓实际 Release 为准，不能由源码版本推断已发布。
-- Leo Link：手机可经中继或已配置的 Tailscale HTTPS 直连同一 Mac Host/runtime，支持会话、审批、全自动、停止与事件续传。直连使用独立设备授权，支持一次性扫码与撤销。
-- 远控操作使用稳定请求编号和持久化回执，保留任务编号与 V4 输入 admission 对账；未知执行结果明确提示，不盲目重放。
-- 「连接手机」中可分别启用同步副本与藏宝阁访问。Tailscale Serve 的 HTTPS 转发需显式配置；不会自动覆盖现有规则。
-- 源码与自动化门禁、签名公证、真实设备覆盖安装分别记录，不能以编译成功替代最终设备验收。
-
-## 当前 Android 版本
-
-- 开发/发布版本：`1.0.0-alpha.27`（versionCode `100027`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
-- Standard 包名：`com.leoyuan.leophoneagent`
-- Power 包名：`com.leoyuan.leophoneagent.power`
-- 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；
-  Power 高权限能力通过独立构建标志和逐次危险命令确认隔离
-- Grok OAuth 与对话恢复 OpenMinis 的 `api.x.ai/v1` 路径；13 项内置目录始终可见，
-  包含 Grok 4.6、4.5、Composer 2.5 与代码/快速变体，不再依赖未登录 Grok CLI 的两项回退目录
-- 出行语句先编译成结构化意图并核对目的地/时间/车次/座位；信息完整后写系统日历、
-  30 分钟提醒和产品自有持久待办。Android 没有统一 Tasks Provider，因此不虚报“系统待办”
-- Standard 不再声明所有文件、无障碍、Shizuku 或应用列表高权限；完整目录挂载和
-  跨应用操控只在 Power 出现。两版的用户发起 Agent 前台服务都使用真实的
-  `dataSync|specialUse` 类型，不再伪装成媒体播放
-- 系统表面：可替换默认数字助手、快捷设置磁贴（新对话 / 语音）、任务状态桌面小组件、
-  App Shortcuts、通知继续/暂停/打开、WorkManager 计划任务补队列、悬浮窗、
-  Android 16 Live Updates 状态胶囊、前台服务、忽略电池优化、预测性返回、16KB 页对齐
-- 进程被杀后遗留任务变成「等待用户继续」，点了才恢复；助手 / 磁贴 / 小组件 / 通知 / 开机走同一条深链路由
-- 兼容既有 `minis://` 内部资源协议，同时新增 `leophoneagent://` 导航入口
-- Fold8 宽折叠适配：1080×1728 封面单栏、1768×2208 展开双栏，并通过
-  200% 系统字体可用性验证
-- Power 无障碍节点绑定当前界面快照，换页后的旧节点无法继续点击；空闲时事件订阅归零，
-  只有明确观察期间才收必要事件。强制停止撤销授权后，已授权 Shizuku 可只恢复本服务
-- 简体中文设置、列表、按钮、弹窗与主操作 TalkBack 标签已资源化，并加入
-  中文资源完整性与设置页英文硬编码构建门禁
-- Claude Code、Codex CLI、Grok Build 与 Cursor CLI 可在本机 Alpine ARM64
-  沙箱安装、更新，也可直接从聊天模型选择器作为本机执行引擎运行，不必进入终端。
-  连接明确分为「CLI 官方账号」与「Leo 模型」：Claude/Codex/Grok 可用兼容 API-key Provider，
-  Cursor 只走官方账号；四家授权链接均在 App 内直接打开。Prompt 走会话私有临时文件，
-  匹配供应商的 API Key 只通过单轮瞬时环境传递；
-  OAuth/订阅令牌不会导出。成功写出的网页、文档、表格、PDF 与媒体会显示交付物卡片。
-- 远程机器工作台使用 `after=seq` 的 SSE 回放 + 实时跟随；网络切换后续传输出、
-  完成状态与审批请求，不再依赖手动刷新。
-- 自动更新每天只在网络可用且电量充足时检查一次；点击通知即可查看更新。
-  APK 下载后必须匹配 Release SHA-256、当前包名和当前安装证书才会打开系统安装器。
-  代码更新仍需 Android 安装确认；签名 App Rules、模型目录和 Skills 可免装包更新。
+- 唯一源码主仓：[leoyb1010/LeoPhoneAgent](https://github.com/leoyb1010/LeoPhoneAgent)，默认分支 main。
+- 本机唯一权威开发入口：`~/leophone-mac` 的 `main`，四端在此集成和发版。旧副本、历史 worktree 与远端受控构建快照不是发版源码入口。
+- 先读 [AGENTS.md](AGENTS.md) 和目标目录规则；先检查 git status，fetch origin 并核对 ahead/behind。仅落后且干净时 pull --ff-only；不得 reset、覆盖或删除未知改动。
+- 有效遗留改动先保留提交，再按当前主线恢复；不要直接搬入过期工作树。每个功能单独提交。
+- iOS：src/ios；Mac：src/mac/leophone（当前 1.x 主线）；Android：src/android；HarmonyOS：src/harmony。
+- src/mac/leoagent/relay.py 仍是中继源码；旧桌面 leocodebox 仅留在 archive/leocodebox-2.2.13 标签中。
+- Mac 代码先读其 AGENTS、相关 spec 与架构边界。Node/pnpm 以 mise.toml 和锁文件为准，不混用旧依赖或将环境错误当源码通过。
+- 业务资料、凭据和私有地址只在用户现有安全配置中；不提交签名材料、真实 token、私密会话或个人基础设施清单。
 
 ## Android Agent 交接与发布铁律
 
-### 1. 开工前确认仓库
+Android 开发或发布前必须完整阅读 [Android 开发与发布规则](docs/ANDROID_RELEASE_RULES.md)。Standard/Power 共享源改动覆盖两种 flavor；固定签名指纹不可迁就机器调试证书，公开 APK 不可仅凭编译成功发布。
 
-每次任务都从仓库根目录执行：
+## 本轮已安装与开发状态
 
-```sh
-git status --short --branch
-git remote -v
-git fetch --prune --tags origin
-git rev-list --left-right --count HEAD...origin/main
-git submodule update --init --recursive
-```
+| 设备线 | 已安装个人版本 | 对应源码 |
+| --- | --- | --- |
+| iPhone Duo、iPhone 17 Pro Max、Apple Watch | 1.90.0 / 200 | 49c23ce7f 的 iOS 源码 |
+| Mate XT2 | 0.5.2 / 100031 | 1295f60c3 的 HarmonyOS 源码 |
 
-- 工作树干净且只是落后时，用 `git pull --ff-only origin main`。
-- 有未提交内容时先识别归属，不自动 stash、删除或覆盖。
-- 不从 ZIP、历史目录或另一个 leocodebox 仓库发布 Android APK。
+首批覆盖安装沿用原签名并保留数据。后续 main 可包含未再次装机的开发修改；功能、界面和性能由用户自测，不以源码审查、编译或版本回读替代。
 
-### 2. 工程边界
+旧 HarmonyOS 候选文档不代表最终构建状态。0.5.0 的原生构建、签名与 Mate XT2 安装事实见 [原交付记录](docs/harmony-ux-20261108/DELIVERY.md)。
 
-| 范围 | 位置 | 硬约束 |
-|---|---|---|
-| Android 公共能力 | `src/android/app/src/main/` | Standard/Power 都会编译进去 |
-| Standard 差异 | `src/android/app/src/standard/` | 不得引入 Power 高权限承诺 |
-| Power 差异 | `src/android/app/src/power/` | Accessibility/Shizuku 继续受系统授权、产品授权和危险操作确认保护 |
-| Android 版本/签名 | `src/android/app/build.gradle.kts` | 每个公开 APK 必须新 `versionCode` 和 `versionName` |
-| 当前 Mac Host/runtime | `src/mac/leophone/` | 改跨端协议时同时验证 Android 调用方 |
-| Mac 中继及灰度回退 | `src/mac/leoagent/` | relay.py 仍在服务；不要把新桌面主实现误写到这里 |
+## 架构与资料索引
 
-Fold8 是 Android 主验收设备：封面屏 `1080×1728`、展开屏 `1768×2208`，
-必须覆盖折叠切换、草稿/会话保留和 200% 字体。没有实际设备或模拟器证据时，
-只能报告「代码/编译已验证」，不得声称 UI 或折叠适配已验收。
+- [工程文档入口](docs/PROJECT_INDEX.md)：当前契约、构建、交付和历史文档。
+- [架构与边界](docs/ARCHITECTURE.md)：运行时所有者、配对中继、第二大脑和隐私通路。
+- [更新记录](CHANGELOG.md)：各版本真实变化；工程内 release catalog 是首启更新说明来源。
+- [Mac 主线说明](docs/mac-3.0/README.md) 与 [Mac 项目规则](src/mac/leophone/AGENTS.md)。
+- [藏宝阁跨端历史计划](docs/TREASURY_CROSS_PLATFORM_UPGRADE_PLAN.md) 只作历史参考，不是当前开发目录或版本依据。
 
-### 3. 个人 Alpha 签名链不可更换
+## 构建与个人安装
 
-当前 alpha.1–alpha.3、alpha.5–alpha.12 的可升级证书 SHA-256 是：
+### iOS / Watch
 
-```text
-f325bc65f4f6ba456938c7d88c96ad2ef418197d1204cfd2bd881aa145bf11df
-```
+使用 Xcode 27 或更新版本，按本机策略复用既有 ARM 模拟器；不自动下载运行时或创建克隆。原生依赖准备见 deps/ 下脚本及 BUILDING.md。
 
-alpha.4 **已损坏，不得继续使用或作为升级基线**：它由另一把调试密钥签名，
-从 alpha.3 安装会返回 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。
-
-- 不得在新电脑/新 CI 上用自动生成的 `debug.keystore` 发布 APK。
-- 不得把 keystore、密码或 base64 密钥提交到 Git、Issue、日志或 Release。
-- 同一台发布 Mac 可显式使用 `-Pleophone.allowDebugReleaseSigning=true`
-  生成个人 Alpha；这不是应用商店生产签名。
-- 如果 `scripts/verify_android_alpha_release.sh` 报证书不匹配，**立即停止发布**。
-  不能更换期望指纹来“让检查通过”。
-
-### 4. 开发闭环
-
-1. 先复现真实问题，记录影响 Standard、Power 还是两者。
-2. 复用现有 Kotlin/Compose/Room/DataStore 结构，修共享根因，不只补报错界面。
-3. 修改中文界面时同步 `values`、`values-zh`、`values-zh-rTW`，包括 TalkBack `contentDescription`。
-4. 修高权限能力时保持 Standard 组件关闭，Power 也必须通过系统和产品两道权限门。
-5. 先跑触发路径的定向测试，再跑双 flavor 完整门禁。
-
-### 5. 唯一允许的个人 Alpha 发布顺序
-
-1. 递增 `src/android/app/build.gradle.kts` 的 `versionCode` 和 `versionName`。
-2. 先写 `CHANGELOG.md` 的根因、可见改动、验证与边界，再更新 README 版本/链接。
-3. 在同一 checkout、同一次源码状态运行：
+真机安装唯一入口：
 
 ```sh
-cd src/android
-./gradlew --no-daemon \
-  :app:verifyChineseResources \
-  :app:verifyChineseSettingsStrings \
-  :app:testStandardDebugUnitTest \
-  :app:testPowerDebugUnitTest \
-  :app:lintStandardRelease \
-  :app:lintPowerRelease \
-  :app:assembleStandardRelease \
-  :app:assemblePowerRelease \
-  -Pleophone.allowDebugReleaseSigning=true
-cd ../..
+./scripts/InstallIOSRelease.sh <设备UDID> ...
 ```
 
-4. **不重新构建，不从其他机器混入附件。**对刚生成的两个 APK 运行：
+用户自行测试的安装模式：
 
 ```sh
-ANDROID_SDK_ROOT=/path/to/Android/sdk \
-  scripts/verify_android_alpha_release.sh \
-  src/android/app/build/outputs/apk/standard/release/app-standard-release.apk \
-  src/android/app/build/outputs/apk/power/release/app-power-release.apk
+LEO_IOS_INSTALL_ONLY=1 ./scripts/InstallIOSRelease.sh <设备UDID> ...
 ```
 
-5. 在 Fold8 API 35 模拟器或真机上先安装「上一个可用版」，再用 `adb install -r`
-   分别覆盖 Standard 和 Power。必须看到 `Success`。
-6. 分别冷启动两包，再走一次系统助手入口：
+该模式仍校验版本/更新说明、编译与签名，再覆盖安装；明确跳过 CI 和性能评估，不表示测试通过。新增设备先使用其单设备 destination 登记；签名不匹配不得卸载或换钥掩盖。
 
-```sh
-pkg=com.leoyuan.leophoneagent
-component="$(adb shell cmd package resolve-activity --brief "$pkg" | tr -d '\r' | tail -1)"
-adb shell am force-stop "$pkg"
-adb shell am start -W -n "$component"
-adb shell am force-stop "$pkg"
-adb shell am start -W -a android.intent.action.ASSIST -p "$pkg"
-adb shell pidof "$pkg"
-adb logcat -d | rg 'FATAL EXCEPTION|AndroidRuntime'
-```
+### Mac
 
-对 `com.leoyuan.leophoneagent.power` 重复。预期是安装 `Success`、启动 `Status: ok`、
-存在 PID、没有本 App 的 `FATAL EXCEPTION`。
+在 src/mac/leophone 内使用锁定依赖及 Node/pnpm。开发、生产构建与签名分发是不同阶段；构建命令以 package.json 为准。个人分发不自动创建公开 Release，运行中的用户任务不因升级被盲目中断。
 
-7. 计算这两个已验收 APK 的 SHA-256 并写回 README。上传后对比 GitHub Release
-   `assets[].digest`；文档、本地文件、远程附件必须三者一致。
-8. 检查 `git diff --check` 和 `git status`，只提交本次内容并推送 `main`；
-   从该提交创建 `android-v<version>` tag 和 pre-release，附件固定命名为
-   `LeoPhoneAgent-Standard-<version>.apk` 和 `LeoPhoneAgent-Power-<version>.apk`。
-   不覆盖旧 tag，不静默替换同版本 APK。
-9. 复核远端 `main` SHA、tag SHA、附件名称/大小/digest 和 CI。CI 没有同一把
-   受保护密钥时，只能证明源码可编译，不能证明 APK 可覆盖升级。
+### HarmonyOS
 
-### 6. 版本状态和完成定义
+源码在 src/harmony/app；原生构建入口 src/harmony/scripts/build_hap.sh。可以使用同项目既有受控舞台复用未变化的原生生成依赖，但必须记录 canonical 源码 SHA、编译结果、签名链与 HAP 摘要，再按原签名覆盖安装。
 
-| 版本 | 状态 | 处理 |
-|---|---|---|
-| alpha.27 | 当前公开附件 | 会话批量导出、设置组件统一、反馈归属修正与三轮审计修复 |
-| alpha.26 | 上一公开附件 | Grok 实时模型目录、自然语言系统动作、中断恢复、长粘贴和受限设置修复 |
-| alpha.25 | 上一公开附件 | 执行凭证、自动安全更新、藏宝阁筛选/空状态和 Fold8 200% 字体优化 |
-| alpha.24 | 上一公开附件 | 藏宝阁三端可调用知识库、系统捕获、按需正文/附件、Range 续传与 Fold8 完整门禁 |
-| alpha.23 | 上一公开附件 | 恢复 OpenMinis Grok OAuth/完整目录，Fold8 更新弹窗与双 flavor 构建稳定性修复 |
-| alpha.22 | 上一公开附件 | 出行双写、无障碍快照与省电恢复；Grok CLI 代理改动已在 alpha.23 回退 |
-| alpha.21 | 上一公开附件 | 本机动作回执、产物格式、权限隔离、减少动态效果与 Fold8 200% 字体修正 |
-| alpha.20 | 上一公开附件 | 打开其他 App 后继续操控；悬浮窗默认开；Power 无障碍默认放行 |
-| alpha.19 | 上一公开附件 | T7 手电筒/待办快路径 + 家页主动卡 |
-| alpha.18 | 上一公开附件 | T6 断线续上 / 短码入列 / 远程会话进列表 |
-| alpha.17 | 上一公开附件 | Fold8 API 35 模拟器 alpha.16→17 覆盖安装已过；真机由用户自装 |
-| alpha.16 | 上一公开附件 | Fold8 API 35 模拟器覆盖安装已过 |
-| alpha.15 | 上一公开附件 | Fold8 API 35 模拟器覆盖安装已过 |
-| alpha.13 | 旧可用版 | 可直接升级到 alpha.15 / 16 |
-| alpha.11 | 旧版 | 可直接升级到 alpha.13 |
-| alpha.10 | 旧版 | 可直接升级到 alpha.13 |
-| alpha.9 | 旧版 | 可直接升级到 alpha.13 |
-| alpha.7 | 旧版 | 可直接升级到 alpha.9 |
-| alpha.6 | 旧版 | 可直接升级到 alpha.9 |
-| alpha.4 | **损坏/禁用** | 签名链错误，不得作为测试或发布基线 |
-| alpha.3 | 旧版 | 存在系统助手闪退，只用于验证升级链 |
+### Android
 
-只有代码/文档/版本一致、双 flavor 门禁通过、签名正确、覆盖安装通过、
-Fold8 冷启动与 Logcat 通过、远端 main/tag/APK 指向同一源码状态、
-GitHub 附件 digest 与 README SHA-256 一致，才能声称 Android 发布完成。
+构建约束与流程见 [完整规则](docs/ANDROID_RELEASE_RULES.md)。开发编译不等于签名发行；Standard 与 Power 不混淆权限或安装包身份。
 
-## 构建
+## 发布与数据边界
 
-iOS(需 Xcode 26+,真机 ARM64):
-
-```sh
-git clone --recurse-submodules https://github.com/leoyb1010/LeoPhoneAgent.git
-cd LeoPhoneAgent
-./deps/build_ffmpeg.sh && ./deps/build_ish.sh && ./deps/prepare_alpine_rootfs.sh
-open src/ios/LeoPhoneAgent.xcodeproj
-```
-
-Android（JDK 17、SDK 36、NDK 27.0.12077973、ARM64）：
-
-```sh
-export JAVA_HOME=/path/to/jdk-17
-export ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/27.0.12077973"
-./deps/build_proot.sh
-./scripts/prepare_android_sandbox.sh
-cd src/android
-./gradlew :app:assembleStandardDebug
-./gradlew :app:assemblePowerDebug
-```
-
-生成与本次附件相同类型的个人 Alpha Release（显式调试证书）及完整门禁：
-
-```sh
-./gradlew \
-  :app:verifyChineseResources \
-  :app:verifyChineseSettingsStrings \
-  :app:testStandardDebugUnitTest \
-  :app:testPowerDebugUnitTest \
-  :app:lintStandardRelease \
-  :app:lintPowerRelease \
-  :app:assembleStandardRelease \
-  :app:assemblePowerRelease \
-  -Pleophone.allowDebugReleaseSigning=true
-```
-
-生成的 PRoot、Alpine、Debug Skill 与 APK 都是可重建产物，不进入 Git。
-完整要求与测试命令见 [BUILDING.md](BUILDING.md#android)。
-
-当前 Mac 桌面主工程是 `src/mac/leophone/`，源码版本以其 `package.json` 为准。
-使用 `mise.toml` 固定的 Node 24.14.0 与 pnpm 10.33.2；这是源码构建检查，
-不是签名、公证或实机验收证明。
-
-```sh
-cd src/mac/leophone
-pnpm install --frozen-lockfile
-pnpm typecheck
-pnpm lint
-pnpm leo:test:agent
-pnpm --dir apps/zcode-cli build
-pnpm build:bootstrap
-```
-
-旧版 2.2.13 桌面 leocodebox 已在 Mac 1.9.0 从主分支移除，源码保留在 tag
-`archive/leocodebox-2.2.13`（需要时 `git checkout archive/leocodebox-2.2.13 -- src/mac/leocodebox`）。
-
-旧版 `src/mac/leoagent/` 保留作协议灰度回退,`relay.py` 继续服务中继。
-合并和迁移边界见
-[REPOSITORY_MERGE_AND_READINESS_2026-08-11.md](docs/REPOSITORY_MERGE_AND_READINESS_2026-08-11.md)。
+- 每次实际安装的新版本更新工程版本及对应 release catalog，首启展示本版真实的“本次更新”。
+- 编译、签名校验、安装、版本回读和用户功能验收分别记录，不互相冒充。
+- 凭据留在钥匙串/平台安全存储，协议或 UI 不把模型访问令牌导出给无关通路。
+- 第二大脑服务不属于此仓库；本仓只维护客户端和已确认契约。私有部署位置在本机维护记录，不写入公共默认值或日志。
+- 本次按用户范围保留现有备份、数据库、同步冲突和持久缓存策略，不做资料迁移或批量清理。
 
 ## 来源与许可
 
-- 主仓库:GPLv3,fork 自 OpenMinis(基线
-  [`9cf3a855`](https://github.com/OpenMinis/OpenMinis/commit/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd),
-  保留 `upstream` remote;升级流程见 [UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md))。
-- Mac 桌面端 `src/mac/leophone/` 基于 ZCode,保留其 Apache-2.0、NOTICE 与第三方归属。
-- 已移除的旧版 leocodebox(tag `archive/leocodebox-2.2.13`)按其 AGPL-3.0-or-later 与 NOTICE 保留在该 tag 中。
-- LeoAgentDesktop(Cindy/Apache-2.0 改造)目录已从仓库移除,仅存于 git 历史,
-  其 NOTICE 随历史保留;未使用其商标。
-- 第三方致谢与许可证文本:[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
+本仓为 [OpenMinis](https://github.com/OpenMinis/OpenMinis) 的独立 GPLv3 fork，与上游官方产品无关、未获其背书。产品名沿用 LeoBot；仓库地址、Bundle ID 与数据目录可能保留历史名称。
 
-分发修改后的二进制须按各自许可证提供对应源码并保留声明。LeoPhoneAgent /
-LeoAgent 名称与图标仅标识本 fork。
-
-iOS 1.53.1（146）本次完整审计记录见 [验证范围与结果](docs/IOS_FULL_AUDIT_20261005.md)。
-
-## 鸿蒙 0.5.0 本次交付
-
-新版源码已完成本机构建并原位安装到 Mate XT2，后续真机验收由用户进行。当前状态、安装包指纹和未验证项目见 [交付记录](docs/harmony-ux-20261108/DELIVERY.md)。
+[GPLv3 许可证](LICENSE) · [历史 README（本次文档收口前）](https://github.com/leoyb1010/LeoPhoneAgent/blob/1295f60c38d01ea71de8835f9a7f9ce82ef40cea/README.md)
