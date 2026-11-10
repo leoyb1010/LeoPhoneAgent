@@ -23,6 +23,7 @@ import {
 } from "./desktopArmsCustomEvent.js";
 import { openFileUrlInDefaultApp, openPathInDefaultApp } from "./desktopMainIpcHelpers.js";
 import { isAllowedExternalOpenUrl } from "./mainWindowNavigationPolicy.js";
+import { isTrustedAppSender } from "./trustedAppSender.js";
 
 // 上游测试与调用方从这里取该判定；规则本体在 mainWindowNavigationPolicy（[leo] webview 访客只能开 http(s)）。
 export { isAllowedExternalOpenUrl };
@@ -120,6 +121,11 @@ export function registerRemoteIpcHandlers(options: {
     }
     // 3.15.1：file: 交给默认应用打开（openPath 语义），不走 shell.openExternal，避免直接启动 .app / .command。
     if (new URL(url).protocol === "file:") {
+      // [leo] http(s) 是显式声明给 webview 访客用的通道；file: 只认应用窗口自己的顶层页面，iframe 和其它 webContents 不行。
+      if (!isTrustedAppSender(event)) {
+        options.logger.warn("[open-external] blocked file url from untrusted sender", url);
+        return;
+      }
       void openFileUrlInDefaultApp(url, options.logger);
       return;
     }
@@ -131,9 +137,14 @@ export function registerRemoteIpcHandlers(options: {
     });
   });
 
-  ipcMain.handle(PlatformChannels.OpenExternalFile, async (_event, rawPath: string) =>
-    openPathInDefaultApp(rawPath, options.logger),
-  );
+  ipcMain.handle(PlatformChannels.OpenExternalFile, async (event, rawPath: string) => {
+    // [leo] 根因：原先任何 webContents（含 webview 访客、iframe）都能调用它打开本机文件。
+    if (!isTrustedAppSender(event)) {
+      options.logger.warn("[open-external] blocked OpenExternalFile from untrusted sender");
+      return { success: false, error: "untrusted_sender" };
+    }
+    return openPathInDefaultApp(rawPath, options.logger);
+  });
 
   ipcMain.on(PlatformChannels.RendererReady, (event) => {
     const hasPendingOAuthCallback = deliverPendingDeepLink(event.sender);

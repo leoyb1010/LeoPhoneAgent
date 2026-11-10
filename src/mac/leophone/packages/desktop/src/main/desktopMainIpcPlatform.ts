@@ -46,6 +46,7 @@ import { resolveDesktopZoomLevelFromFactor } from "./desktopZoom.js";
 import { resolveDesktopWindowChromeState } from "./desktopWindowChromeState.js";
 import { handleWindowUnreadCountSync } from "./desktopWindowLifecycle.js";
 import { captureWindowScreenshot, openPathInFileManager } from "./desktopMainIpcHelpers.js";
+import { isTrustedAppSender } from "./trustedAppSender.js";
 import { registerCuaPermissionIpcHandlers } from "./desktopCuaPermissionIpc.js";
 import {
   registerDesktopBrowserIpcHandlers,
@@ -403,9 +404,14 @@ export function registerPlatformIpcHandlers(options: {
     );
   });
 
-  ipcMain.handle(PlatformChannels.OpenInFileManager, async (_event, rawPath: string) =>
-    openPathInFileManager(rawPath, options.logger),
-  );
+  ipcMain.handle(PlatformChannels.OpenInFileManager, async (event, rawPath: string) => {
+    // [leo] 同 OpenExternalFile：只认应用窗口自己的顶层页面（docs/specs/desktop-renderer-boundary.md §2）。
+    if (!isTrustedAppSender(event)) {
+      options.logger.warn("[open-in-file-manager] blocked request from untrusted sender");
+      return { success: false, error: "untrusted_sender" };
+    }
+    return openPathInFileManager(rawPath, options.logger);
+  });
 
   registerCuaPermissionIpcHandlers({
     logger: options.logger,
@@ -482,8 +488,14 @@ export function registerPlatformIpcHandlers(options: {
   });
   ipcMain.handle(
     PlatformChannels.OpenInEditor,
-    (_event, payload: { editorId: string; path: string; options?: OpenInEditorOptions }) =>
-      openInEditor(payload.editorId, payload.path, payload.options),
+    (event, payload: { editorId: string; path: string; options?: OpenInEditorOptions }) => {
+      // [leo] 会按路径启动本机程序（编辑器 / 访达），与 OpenExternalFile 同等对待：只认应用窗口顶层页面。
+      if (!isTrustedAppSender(event)) {
+        options.logger.warn("[open-in-editor] blocked request from untrusted sender");
+        return { success: false, error: "untrusted_sender" };
+      }
+      return openInEditor(payload.editorId, payload.path, payload.options);
+    },
   );
 
   ipcMain.handle(PlatformChannels.ExecuteDesktopCommand, async (event, command: string) => {

@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+import { ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 
 import { callLeo, LEO_HTTP_PORT, leoOAuthPageUrl, ownHostListening } from "./leoLinkHttp.js";
+import { isTrustedAppSender } from "./trustedAppSender.js";
 import {
   leoScreenHostEnv,
   SCREEN_PRIVACY_URL,
@@ -49,15 +50,9 @@ export function leoHostPairEnv(): Record<string, string> {
   return { [LEO_PAIR_SECRET_ENV]: LEO_PAIR_SECRET, LEO_UI_SECRET, ...leoScreenHostEnv() };
 }
 
+/** 规则见 trustedAppSender.ts（同一套校验已提出来给打开本地文件等通道复用）。 */
 export function isTrustedLeoSender(event: IpcMainInvokeEvent): boolean {
-  const frame = event.senderFrame;
-  if (!frame || frame !== event.sender.mainFrame) return false;
-  // 只认应用窗口自己的页面:内嵌浏览器(webview 访客)里打开的本地 HTML 也是 file://。
-  if (event.sender.getType() !== "window") return false;
-  const url = frame.url ?? "";
-  if (url.startsWith("file://")) return true;
-  // 开发态界面由本机 Vite 提供。
-  return !app.isPackaged && /^http:\/\/(localhost|127\.0\.0\.1):\d+\//.test(url);
+  return isTrustedAppSender(event);
 }
 
 /**

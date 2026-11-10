@@ -1,9 +1,8 @@
 import { execFile } from "node:child_process";
-import { realpath } from "node:fs/promises";
-import { normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { BrowserWindow } from "electron";
 import { shell } from "electron";
+import { resolveExternalOpenTarget } from "./externalFileOpenPolicy.js";
 
 type DesktopIpcLogger = {
   info?: (...args: unknown[]) => void;
@@ -36,25 +35,32 @@ export async function openPathInDefaultApp(
     return { success: false, error };
   }
 
-  const normalized = normalize(trimmed);
-  let target = normalized;
-  try {
-    target = await realpath(normalized);
-  } catch {
-    // 路径不存在或无法解析时仍尝试用规范化后的原路径，让系统返回更具体的错误。
+  // [leo] 根因：原先 realpath 失败仍拿原路径打开，且不看文件类型，.app / .command / .pkg 会被直接启动。
+  // 现在按真实目标判定：解析不了就不打开；可启动类型改为在访达里显示（docs/specs/desktop-renderer-boundary.md §2）。
+  const target = await resolveExternalOpenTarget(trimmed);
+  if (target.kind === "missing") {
+    logger.warn("[open-external] 本地文件不存在或无法解析，不打开", { path: target.requested });
+    return { success: false, error: "path_not_found" };
+  }
+  if (target.kind === "reveal") {
+    logger.warn("[open-external] 可执行 / 应用 / 安装包类文件不直接打开，改为在访达中显示", {
+      path: target.path,
+    });
+    shell.showItemInFolder(target.path);
+    return { success: true };
   }
 
   try {
-    const error = await shell.openPath(target);
+    const error = await shell.openPath(target.path);
     if (error) {
-      logger.warn("[open-external] 本地文件打开失败", { path: target, error });
+      logger.warn("[open-external] 本地文件打开失败", { path: target.path, error });
       return { success: false, error };
     }
-    logger.info?.("[open-external] 本地文件打开成功", { path: target });
+    logger.info?.("[open-external] 本地文件打开成功", { path: target.path });
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.warn("[open-external] 本地文件打开失败", { path: target, error: message });
+    logger.warn("[open-external] 本地文件打开失败", { path: target.path, error: message });
     return { success: false, error: message };
   }
 }
@@ -67,22 +73,26 @@ export async function openPathInFileManager(
   if (!trimmed) {
     return { success: false, error: "empty path" };
   }
-  const normalized = normalize(trimmed);
-  let target = normalized;
-  try {
-    target = await realpath(normalized);
-  } catch {
-    // 路径不存在或无法解析时仍尝试用规范化后的原路径打开，便于定位权限等问题。
+  // [leo] 根因同 openPathInDefaultApp：「在文件管理器中打开」对 .app 包目录或可执行文件调 open / openPath
+  // 会直接启动它们。解析失败不再继续；可启动目标和普通文件都在访达里选中显示，只有普通目录才打开。
+  const target = await resolveExternalOpenTarget(trimmed);
+  if (target.kind === "missing") {
+    logger.warn("[open-in-file-manager] 路径不存在或无法解析，不打开", { path: target.requested });
+    return { success: false, error: "path_not_found" };
+  }
+  if (target.kind === "reveal" || !target.isDirectory) {
+    shell.showItemInFolder(target.path);
+    return { success: true };
   }
 
   if (process.platform === "darwin") {
-    return openDarwinPathInFileManager(target, logger);
+    return openDarwinPathInFileManager(target.path, logger);
   }
 
-  const error = await shell.openPath(target);
+  const error = await shell.openPath(target.path);
   if (error) {
     logger.warn("[open-in-file-manager] shell.openPath 失败", {
-      path: target,
+      path: target.path,
       error,
     });
     return { success: false, error };

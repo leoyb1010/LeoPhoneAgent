@@ -52,6 +52,7 @@ import {
   error,
   expandHome,
   isLinkPath,
+  isLocalOnlyCredentialPath,
   LINK_MODES,
   linkMode,
   macTimeZone,
@@ -429,7 +430,11 @@ export class LinkBridge {
   }
 
   private async dispatch(req: LinkRequest): Promise<LinkResponse> {
+    // [leo] 本机凭据接口（如 grok access token）一律不对手机开放；按原始路径规范化后判定，
+    // 放在 URL 解析与 /e2e 解包之前，内层请求重新进来时也会再判一次（docs/specs/desktop-renderer-boundary.md §3）。
+    if (isLocalOnlyCredentialPath(req.path.split("?")[0] ?? "")) return error(404, "这个接口不对手机开放");
     const url = new URL(req.path, "http://link.invalid");
+    if (isLocalOnlyCredentialPath(url.pathname)) return error(404, "这个接口不对手机开放");
     if (this.deps.directGrants?.isRevoked(req.caller)) return error(403, "设备授权已撤销");
     const method = req.method.toUpperCase();
     // [e2e] 中继只看到密文信封;解开后按内层请求重新走一遍本函数(白名单、回执都照旧),调用方仍是中继鉴过权的那个。
@@ -578,8 +583,6 @@ export class LinkBridge {
       };
     }
     if (pathname === "/v1/capabilities" && method === "GET") return this.capabilities();
-    if (pathname === "/v1/grok/token" && method === "GET")
-      return this.leoagent.request("GET", url.pathname);
     if (pathname === "/harness/full-auto" && method === "POST") return this.fullAutoOff(req);
     if (pathname === "/screen/snapshot") {
       if (method !== "GET") return error(405, "Method not allowed");

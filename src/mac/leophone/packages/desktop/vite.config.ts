@@ -7,6 +7,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { resolveZCodeEndpointOrigin } from "@zcode/shared/zcodeEndpoint";
 import { pdfJsCMapsPlugin } from "../ui/vite/pdfJsCMapsPlugin.js";
+import { rendererCspPlugin } from "./vite/rendererCspPlugin.js";
 import { getBuildMetadata } from "./scripts/build-metadata.mjs";
 import { resolveDesktopProductFlavor } from "./scripts/desktop-product-identity.mjs";
 
@@ -177,6 +178,8 @@ export default defineConfig(({ mode }) => {
     pdfJsCMapsPlugin(),
     react(),
     tailwindcss(),
+    // [leo] 主窗口生产 CSP（只在 build 注入，见 docs/specs/desktop-renderer-boundary.md §1）。
+    rendererCspPlugin(),
   ];
 
   return {

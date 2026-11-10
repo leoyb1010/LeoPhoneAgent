@@ -18,7 +18,6 @@ export function isLinkPath(pathname: string): boolean {
   return (
     pathname === "/health" ||
     pathname === "/v1/capabilities" ||
-    pathname === "/v1/grok/token" ||
     pathname === "/harness/full-auto" ||
     pathname === "/harness/sessions" ||
     // [takeover] Mac 终端里的 Claude Code 会话(接管见 docs/specs/leo-link-takeover.md)。
@@ -35,6 +34,40 @@ export function isLinkPath(pathname: string): boolean {
     // [up-p3-mac] Mac 上的定时任务:/automations、/automations/<id>、/automations/<id>/run(docs/specs/leo-link-automations.md)。
     /^\/automations(\/[^/]+(\/run)?)?$/.test(pathname)
   );
+}
+
+/**
+ * [leo] 只给本机用的凭据接口（契约见 docs/specs/desktop-renderer-boundary.md §3）。
+ *
+ * 根因：/v1/grok/token 原先在上面的白名单里，经中继能把 Mac 上 grok CLI 的真实 access token 拿到手机；
+ * 直连入口单独拦了，中继入口没有。这里把路径规范化后统一判定，两个入口都在白名单之前调用：
+ * 反复解百分号编码（防 %2F / %252F）、大小写不敏感、`\` 当 `/`、合并重复斜杠、解析 `.` 与 `..`、去尾斜杠。
+ */
+const LOCAL_ONLY_CREDENTIAL_PATHS = new Set(["/v1/grok/token"]);
+
+export function canonicalLinkPath(pathname: string): string {
+  let decoded = pathname;
+  for (let round = 0; round < 3; round += 1) {
+    let next: string;
+    try {
+      next = decodeURIComponent(decoded);
+    } catch {
+      break;
+    }
+    if (next === decoded) break;
+    decoded = next;
+  }
+  const segments: string[] = [];
+  for (const segment of decoded.replace(/\\/g, "/").toLowerCase().split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") segments.pop();
+    else segments.push(segment);
+  }
+  return `/${segments.join("/")}`;
+}
+
+export function isLocalOnlyCredentialPath(pathname: string): boolean {
+  return LOCAL_ONLY_CREDENTIAL_PATHS.has(canonicalLinkPath(pathname));
 }
 
 /**

@@ -140,6 +140,15 @@ class LeoAgentServer:
     async def grok_token(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return _unauthorized()
+        # [leo] 根因:经 Mac 桥接 / 中继转发的请求能把 grok CLI 的真实 access token 交给手机。
+        # 转发方都会写 X-Leo-Caller-Kind,只有本机直接持钥匙的调用方不带;带了就拒绝,
+        # 凭据只留在这台 Mac(见 leophone docs/specs/desktop-renderer-boundary.md §3)。
+        # 同 WiFi 直连的手机也持本机钥匙且不带这个头,所以再要求对端是本机回环地址。
+        remote = (request.remote or "").split("%", 1)[0]
+        if request.headers.get(CALLER_HEADER) is not None or remote not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            return web.json_response(
+                {"error": {"message": "grok 登录凭据只在这台 Mac 本机使用,不经中继发给手机"}},
+                status=403)
         import fcntl
         from datetime import datetime, timezone, timedelta
         auth_path = os.path.expanduser("~/.grok/auth.json")

@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 import type { LinkBridge, LinkRequest, LinkResponse } from "./bridge.js";
 import type { DirectGrants } from "./directGrants.js";
-import { isLinkPath, record } from "./linkPolicy.js";
+import { isLinkPath, isLocalOnlyCredentialPath, record } from "./linkPolicy.js";
 
 function reply(res: ServerResponse, result: LinkResponse): void {
   const base = {
@@ -106,10 +106,12 @@ export async function startDirectServer(args: {
       if (!args.grants.hasScope(authorization.slice(7), String(target), "harness"))
         return reply(res, { status: 403, body: { error: "harness_scope_required" } });
       // 不暴露 Grok token 或任何 /api 管理接口；能力列表不等于开放所有本机端口。
+      // [leo] 凭据接口按规范化路径判定（与中继入口同一函数），挡掉 %2F、大小写、`..` 之类的变体。
       if (
         (!isLinkPath(url.pathname) &&
           !/^\/operations\/[a-zA-Z0-9_.:-]{1,200}$/.test(url.pathname)) ||
-        url.pathname === "/v1/grok/token"
+        isLocalOnlyCredentialPath(url.pathname) ||
+        isLocalOnlyCredentialPath((req.url ?? "").split("?")[0] ?? "")
       )
         return reply(res, { status: 404, body: { error: "not_found" } });
       const requestId = req.headers["x-request-id"];

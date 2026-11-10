@@ -1,11 +1,9 @@
 import { execFile } from "node:child_process";
-import { statSync } from "node:fs";
 import { shell } from "electron";
 import type { OpenInEditorOptions, OpenInEditorRemoteTarget } from "@zcode/shared";
 import { getEditorDefsForCurrentPlatform, resolveEditorDefAppPath } from "./editors.js";
+import { resolveExternalOpenTarget } from "./externalFileOpenPolicy.js";
 import { logger } from "./logger.js";
-
-type PathKind = "file" | "directory" | "unknown";
 
 interface OpenInEditorResult {
   success: boolean;
@@ -25,21 +23,6 @@ const execFileAsync = (file: string, args: string[]): Promise<void> =>
 async function openPathViaShell(path: string): Promise<OpenInEditorResult> {
   const error = await shell.openPath(path);
   return error ? { success: false, error } : { success: true };
-}
-
-function detectPathKind(path: string): PathKind {
-  try {
-    const stats = statSync(path);
-    if (stats.isFile()) {
-      return "file";
-    }
-    if (stats.isDirectory()) {
-      return "directory";
-    }
-  } catch {
-    // 非本地路径或路径不存在时保留 unknown，交给后续 fallback 处理。
-  }
-  return "unknown";
 }
 
 function isVSCodeEditor(editorId: string): boolean {
@@ -188,25 +171,15 @@ export async function openInEditor(
     );
   }
 
-  const pathKind = detectPathKind(path);
-
-  if (editorId === "finder") {
-    if (pathKind === "file") {
-      shell.showItemInFolder(path);
+  if (editorId === "finder" || editorId === "explorer") {
+    // 校验和使用必须指向同一个真实目标；不能判完 realpath 又打开原来的可变链接。
+    const target = await resolveExternalOpenTarget(path);
+    if (target.kind === "missing") return { success: false, error: "path_not_found" };
+    if (target.kind === "reveal" || !target.isDirectory) {
+      shell.showItemInFolder(target.path);
       return { success: true };
     }
-    return openPathViaShell(path);
-  }
-
-  if (editorId === "explorer") {
-    if (pathKind !== "file") {
-      return openPathViaShell(path);
-    }
-
-    // Explorer 已委托打开请求后仍可能非零退出，按退出码回退会重复打开窗口。
-    // 本地文件直接使用系统定位 API，只发出一次打开所在目录并选中文件的请求。
-    shell.showItemInFolder(path);
-    return { success: true };
+    return openPathViaShell(target.path);
   }
 
   if (def.command) {
