@@ -3,15 +3,22 @@ package com.leoyuan.leophoneagent.ui.preview
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import android.net.Uri
 import android.webkit.CookieManager
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.WebViewAssetLoader
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.leoyuan.leophoneagent.logging.AppLogger
+import java.io.File
+import java.util.UUID
 
 /**
  * Holds a single WebView instance + the page-state observed from it.
@@ -45,21 +52,42 @@ class WebViewHolder(
         private set
 
     private var mobileUserAgent: String = ""
+    private val localFile = resolvePreviewFile(appContext, initialUrl)
+    private val localRoot = localFile?.parentFile
+    // Each preview gets its own origin. Network pages and other previews cannot
+    // use a shared app-assets origin to read this document's sibling resources.
+    private val assetHost = "preview-${UUID.randomUUID()}.invalid"
+    private val assetLoader = localRoot?.let { directory ->
+        runCatching {
+            WebViewAssetLoader.Builder()
+                .setDomain(assetHost)
+                .addPathHandler("/", WebViewAssetLoader.InternalStoragePathHandler(appContext, directory))
+                .build()
+        }.getOrNull()
+    }
+    private val initialLoadUrl = when (Uri.parse(initialUrl).scheme?.lowercase()) {
+        "file" -> if (localFile != null && assetLoader != null) {
+            val source = Uri.parse(initialUrl)
+            Uri.Builder().scheme("https").authority(assetHost).appendPath(localFile.name)
+                .encodedQuery(source.encodedQuery).encodedFragment(source.encodedFragment).build().toString()
+        } else "about:blank"
+        "http", "https" -> initialUrl
+        else -> "about:blank"
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     val webView: WebView = WebView(appContext).apply {
         settings.javaScriptEnabled = true       // sandbox HTML demos rely on JS
         settings.domStorageEnabled = true
-        settings.allowFileAccess = true         // file:// for sandbox previews
-        settings.allowContentAccess = true
-        // Same-origin file:// access is needed so `<script src="game.js">`
-        // sitting next to a sandbox HTML loads correctly. We accept the small
-        // attack surface because all paths come from PRoot-resolved sandbox
-        // outputs, never untrusted user content from the network.
+        // Local HTML uses the same directory-scoped AndroidX loader as WebAppActivity;
+        // sibling JS/CSS still load, without giving file:// access to the app sandbox.
+        settings.allowFileAccess = false
+        settings.allowContentAccess = false
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         @Suppress("DEPRECATION")
-        settings.allowFileAccessFromFileURLs = true
+        settings.allowFileAccessFromFileURLs = false
         @Suppress("DEPRECATION")
-        settings.allowUniversalAccessFromFileURLs = true
+        settings.allowUniversalAccessFromFileURLs = false
         // T-htmlpreview-2d5c4f3d: pages that use viewport units (`100vh` /
         // `height: 100%`) combined with `overflow: hidden` would render
         // blank inside the bottom-sheet preview, because the WebView starts
@@ -96,10 +124,21 @@ class WebViewHolder(
             setAcceptThirdPartyCookies(wv, true)
         }
         webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                val uri = request.url
+                if (uri.host == assetHost) {
+                    // Never fall through to network resolution for the reserved local origin.
+                    return assetLoader?.shouldInterceptRequest(uri) ?: blockedResource()
+                }
+                if (uri.scheme?.lowercase() in setOf("file", "content")) return blockedResource()
+                return null
+            }
+
             override fun shouldOverrideUrlLoading(
                 view: WebView,
                 request: android.webkit.WebResourceRequest,
             ): Boolean {
+                if (request.url.scheme?.lowercase() in setOf("file", "content")) return true
                 val urlStr = request.url?.toString()
                 // T234: Google permanently disallows WebView for sign-in /
                 // OAuth. Hand auth-domain navigation to Chrome Custom Tab.
@@ -118,7 +157,7 @@ class WebViewHolder(
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 isLoading = true
-                currentUrl = url
+                currentUrl = displayUrl(url)
                 AppLogger.debug(TAG, "onPageStarted url=${url.take(160)}")
             }
 
@@ -199,7 +238,7 @@ class WebViewHolder(
         hasLoaded = true
         if (webView.isAttachedToWindow && webView.width > 0 && webView.height > 0) {
             AppLogger.info(TAG, "loadUrl (attached) ${currentUrl.take(160)}")
-            webView.loadUrl(currentUrl)
+            webView.loadUrl(initialLoadUrl)
             return
         }
         webView.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
@@ -210,7 +249,7 @@ class WebViewHolder(
                 v.post {
                     if (v.width > 0 && v.height > 0) {
                         AppLogger.info(TAG, "loadUrl (post-attach) ${currentUrl.take(160)}")
-                        webView.loadUrl(currentUrl)
+                        webView.loadUrl(initialLoadUrl)
                     } else {
                         v.viewTreeObserver.addOnGlobalLayoutListener(object :
                             android.view.ViewTreeObserver.OnGlobalLayoutListener {
@@ -218,7 +257,7 @@ class WebViewHolder(
                                 if (v.width > 0 && v.height > 0) {
                                     v.viewTreeObserver.removeOnGlobalLayoutListener(this)
                                     AppLogger.info(TAG, "loadUrl (post-layout) ${currentUrl.take(160)}")
-                                    webView.loadUrl(currentUrl)
+                                    webView.loadUrl(initialLoadUrl)
                                 }
                             }
                         })
@@ -289,6 +328,18 @@ class WebViewHolder(
         isLoading = false
     }
 
+    /** Keep share/pin actions pointing at the real selected document, not its private web origin. */
+    private fun displayUrl(url: String): String {
+        val uri = Uri.parse(url)
+        val directory = localRoot ?: return url
+        if (uri.scheme != "https" || uri.host != assetHost) return url
+        val file = runCatching { File(directory, uri.path.orEmpty().removePrefix("/")).canonicalFile }
+            .getOrNull() ?: return url
+        if (!file.path.startsWith(directory.path + File.separator)) return url
+        return Uri.fromFile(file).buildUpon().encodedQuery(uri.encodedQuery)
+            .encodedFragment(uri.encodedFragment).build().toString()
+    }
+
     /**
      * Detach the WebView from any parent. Compose's AndroidView re-parents
      * the same view between the sheet and the fullscreen screen — Android
@@ -318,6 +369,20 @@ class WebViewHolder(
 
     companion object {
         private const val TAG = "WebViewHolder"
+        private fun blockedResource() = WebResourceResponse(
+            "text/plain", "UTF-8", 403, "Forbidden", emptyMap(), ByteArray(0).inputStream(),
+        )
+
+        private fun resolvePreviewFile(context: Context, url: String): File? = runCatching {
+            val uri = Uri.parse(url)
+            if (uri.scheme != "file" || !uri.authority.isNullOrEmpty()) return@runCatching null
+            val file = File(uri.path ?: return@runCatching null).canonicalFile
+            // These are document/workspace roots, never the app files directory as a whole.
+            val roots = listOf("minis-sessions", "minis-global", "alpine-rootfs", "treasury/files")
+                .map { File(context.filesDir, it).canonicalFile } + context.cacheDir.canonicalFile
+            if (file.isFile && roots.any { root -> file.path.startsWith(root.path + File.separator) }) file else null
+        }.getOrNull()
+
         // Match BrowserAction.UserAgentProfile.DESKTOP_CHROME so the in-chat
         // web preview and the Browser tab desktop modes are identical.
         private const val DESKTOP_UA =

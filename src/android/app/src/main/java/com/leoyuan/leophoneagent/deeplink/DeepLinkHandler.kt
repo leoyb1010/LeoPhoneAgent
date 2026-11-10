@@ -9,7 +9,7 @@ import com.leoyuan.leophoneagent.ui.navigation.Routes
  * Supported routes (matching iOS):
  *   minis://share                              → open share flow
  *   minis://views/alarm                        → open alarm list
- *   minis://open_terminal?init_command=...      → open terminal with command
+ *   minis://open_terminal                      → open terminal (command parameters ignored)
  *   minis://session/<id>                        → open specific session
  *   minis://settings                            → Settings home
  *   minis://settings/providers                  → Provider list
@@ -114,9 +114,11 @@ object DeepLinkHandler {
                 "/alarm" -> DeepLinkAction.OpenAlarmList
                 else -> DeepLinkAction.Unknown
             }
-            "open_terminal" -> DeepLinkAction.OpenTerminal(
-                initCommand = uri.getQueryParameter("init_command")
-            )
+            // Deep links are externally callable, even when an extra claims otherwise.
+            // Never send their bytes to an existing interactive TTY: a single character
+            // can trigger an action without a newline. Internal CLI launches use Routes
+            // directly and retain their explicit command/autoRun behavior.
+            "open_terminal" -> DeepLinkAction.OpenTerminal(initCommand = null)
             // Quick-actions surface (app-icon long-press). Path drives which
             // pending action ChatScreen consumes on first compose. Mirrors iOS
             // QuickActionRouter.swift action ids 1:1.

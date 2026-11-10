@@ -282,36 +282,48 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="https" />
                 <data android:mimeType="image/*" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="https" />
                 <data android:mimeType="application/pdf" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="https" />
                 <data android:mimeType="text/*" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="https" />
                 <data android:mimeType="audio/*" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="https" />
                 <data android:mimeType="video/*" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="https" />
                 <data android:mimeType="application/json" />
                 <data android:mimeType="application/xml" />
                 <data android:mimeType="application/zip" />
@@ -320,16 +332,12 @@
                  user taps a file in Files / Photos / any document viewer.
                  The T142 filters above only fire for BROWSABLE intents
                  (web links, deep-links) and never list Minis in the OEM
-                 file manager's chooser. Termux's working pattern is
-                 scheme=file + scheme=content + mimeType=*/* without
-                 BROWSABLE — file managers don't tag intents BROWSABLE.
-                 ShareReceiverActivity.handleView already routes the
-                 intent.data uri through the same T185/T150 attachment
-                 path, so any mime is safe. -->
+                 file manager's chooser. Accept content URIs with a system
+                 read grant; raw file URIs must never be read with our app UID.
+                 File managers don't tag intents BROWSABLE. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="file" />
                 <data android:scheme="content" />
                 <data android:mimeType="*/*" />
             </intent-filter>

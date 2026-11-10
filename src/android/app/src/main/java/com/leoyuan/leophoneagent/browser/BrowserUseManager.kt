@@ -92,7 +92,13 @@ class BrowserUseManager(
                 useWideViewPort = true
                 builtInZoomControls = false
                 setSupportMultipleWindows(true)
-                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                allowFileAccess = false
+                allowContentAccess = false
+                @Suppress("DEPRECATION")
+                allowFileAccessFromFileURLs = false
+                @Suppress("DEPRECATION")
+                allowUniversalAccessFromFileURLs = false
                 val ua = customUA ?: profile.userAgentString
                 if (ua != null) userAgentString = ua
             }

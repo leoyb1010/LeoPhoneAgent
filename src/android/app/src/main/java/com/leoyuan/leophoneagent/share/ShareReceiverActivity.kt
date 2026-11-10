@@ -253,14 +253,7 @@ class ShareReceiverActivity : ComponentActivity() {
             )
             else -> {
                 val uri = getParcelableExtra<Uri>(intent, Intent.EXTRA_STREAM) ?: return
-                copyUriToStaging(uri, type)?.let {
-                    out += PendingShare.Item(
-                        PendingShare.Item.Kind.ATTACHMENT,
-                        it,
-                        mimeType = type.ifBlank { contentResolver.getType(uri) },
-                        displayName = displayName(uri),
-                    )
-                }
+                addSharedUri(uri, type, out)
             }
         }
     }
@@ -296,14 +289,7 @@ class ShareReceiverActivity : ComponentActivity() {
         val type = intent.type ?: ""
         val uris = getParcelableArrayListExtra<Uri>(intent, Intent.EXTRA_STREAM) ?: return
         for (uri in uris.take(MAX_SHARED_ITEMS)) {
-            copyUriToStaging(uri, type)?.let {
-                out += PendingShare.Item(
-                    PendingShare.Item.Kind.ATTACHMENT,
-                    it,
-                    mimeType = type.ifBlank { contentResolver.getType(uri) },
-                    displayName = displayName(uri),
-                )
-            }
+            addSharedUri(uri, type, out)
         }
     }
 
@@ -319,8 +305,21 @@ class ShareReceiverActivity : ComponentActivity() {
             AppLogger.warning(TAG, "ACTION_VIEW with no data uri")
             return
         }
-        val type = intent.type ?: contentResolver.getType(uri) ?: ""
-        AppLogger.info(TAG, "ACTION_VIEW uri=$uri type=$type")
+        addSharedUri(uri, intent.type.orEmpty(), out)
+    }
+
+    private fun addSharedUri(uri: Uri, declaredType: String, out: MutableList<PendingShare.Item>) {
+        // A web URL stays a link; the share receiver never fetches it with app privileges.
+        if (uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank() &&
+            uri.userInfo == null && uri.toString().none { it.isISOControl() }) {
+            addSharedText(uri.toString(), subject = null, out = out)
+            return
+        }
+        if (!canReadSharedContent(uri)) {
+            AppLogger.warning(TAG, "Rejected shared URI without an external content grant")
+            return
+        }
+        val type = declaredType.ifBlank { contentResolver.getType(uri).orEmpty() }
         copyUriToStaging(uri, type)?.let {
             out += PendingShare.Item(
                 PendingShare.Item.Kind.ATTACHMENT,
@@ -331,10 +330,23 @@ class ShareReceiverActivity : ComponentActivity() {
         }
     }
 
+    private fun canReadSharedContent(uri: Uri): Boolean {
+        if (uri.scheme != "content" || uri.authority.isNullOrBlank()) return false
+        // ContentProvider accepts an optional Android user-id prefix. Strip it before
+        // checking our authority so an external sender cannot launder our private files.
+        val authority = uri.authority.orEmpty().substringAfterLast('@')
+        if (authority.equals("$packageName.fileprovider", ignoreCase = true)) return false
+        val read = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        if (intent.flags and read == 0) return false
+        return checkUriPermission(uri, android.os.Process.myPid(), android.os.Process.myUid(), read) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
     /** Copy a ContentResolver-backed URI to the staging dir. Returns
      *  the staged filename (relative to sharedFileDirectory) or null on
      *  failure. */
     private fun copyUriToStaging(uri: Uri, mimeType: String): String? {
+        if (!canReadSharedContent(uri)) return null
         val ext = guessExtension(mimeType, uri)
         val prefix = when {
             mimeType.startsWith("image/") -> "shared-image"
