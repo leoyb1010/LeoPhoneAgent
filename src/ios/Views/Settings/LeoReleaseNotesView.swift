@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.90.2",
+            date: "2026-11-10",
+            title: "iPhone Duo 顶栏不再乱跳",
+            highlights: [
+                "合上的 iPhone Duo 上，首页的设置、搜索和第二大脑按钮固定在顶部横排，进入对话、返回首页时不再在侧边竖排和左上角之间来回跳。",
+                "首页「继续上次」里还没起名的对话与列表一致显示为「新对话」。"
+            ]
+        ),
+        LeoRelease(
             version: "1.90.1",
             date: "2026-11-10",
             title: "对话查找与更清楚的审批",

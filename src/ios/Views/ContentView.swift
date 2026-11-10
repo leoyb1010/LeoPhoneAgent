@@ -1464,9 +1464,11 @@ struct ContentView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sessionList(useNavigationLinks: false)
                 .appFontScale()
+                .modifier(LeoHorizontalSystemBars())
         } detail: {
             detailView
                 .appFontScale()
+                .modifier(LeoHorizontalSystemBars())
         }
         // iPhone pushes the Mac console; on iPad a push would squeeze it into
         // the sidebar column, so it gets a page-sized sheet instead.
@@ -1488,7 +1490,11 @@ struct ContentView: View {
 
     private var stackLayout: some View {
         NavigationStack(path: $navigationPath) {
+            // [duo-bars] 1.90.2: the chat page already forces horizontal bars on a closed
+            // iPhone Duo; the session list must too, or its 设置 / 第二大脑 buttons sit in the
+            // vertical side bar and fly to the top-left every time a chat is pushed or popped.
             sessionList(useNavigationLinks: true)
+                .modifier(LeoHorizontalSystemBars())
                 .navigationDestination(for: String.self) { id in
                     // `.id(id)` mirrors detailView (iPad): navigationDestination
                     // views are identified by stack depth, not path value, so
@@ -4276,7 +4282,7 @@ struct ContentView: View {
                 || states.contains(.paused) || states.contains(.unread)
             let title = session.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return HomeContextSession(id: session.id,
-                                      title: title.isEmpty ? AppLocalized("未命名对话") : title,
+                                      title: title.isEmpty ? AppLocalized("New Chat") : title,
                                       updatedAt: session.updatedAt,
                                       unfinished: unfinished)
         }
