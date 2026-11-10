@@ -11,7 +11,105 @@ import Foundation
 
 private let logger = AppLogger(category: "ConfigOffload")
 
+/// [A102] 一次桥接调用的结果盒。guest 线程等、MainActor 任务写,两边都经锁;等超时就标记放弃,
+/// 迟到的任务据此不再写设置、也不再写结果。
+private final class ConfigBridgeCall<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Value?
+    private var abandonedFlag = false
+    private var committedFlag = false
+    let done = DispatchSemaphore(value: 0)
+
+    /// 写之前原子地占住:已被放弃返回 false(不许写);成功后等待方不再放弃,会等这次写完拿结果。
+    func commit() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard !abandonedFlag else { return false }
+        committedFlag = true
+        return true
+    }
+
+    var committed: Bool { lock.lock(); defer { lock.unlock() }; return committedFlag }
+
+    /// 还没被放弃时记下结果并放行等待方;已放弃则丢掉。
+    func finish(_ result: Value) {
+        lock.lock()
+        let keep = !abandonedFlag
+        if keep { value = result }
+        lock.unlock()
+        if keep { done.signal() }
+    }
+
+    var abandoned: Bool { lock.lock(); defer { lock.unlock() }; return abandonedFlag }
+
+    /// 等待方超时 / Ctrl-C:之后的 finish 一律作废。返回放弃前是否已经有结果(恰好赶上)。
+    /// 已经 commit(正在写)的不放弃,返回 nil 由调用方接着等。
+    func abandon() -> (abandoned: Bool, value: Value?) {
+        lock.lock(); defer { lock.unlock() }
+        if committedFlag && value == nil { return (false, nil) }
+        abandonedFlag = true
+        return (true, value)
+    }
+
+    func take() -> Value? { lock.lock(); defer { lock.unlock() }; return value }
+}
+
 @objc public class ConfigOffloadBridge: NSObject {
+
+    // MARK: - [A102] 有限等待
+
+    /// 与 SessionsOffloadBridge.bridgeWait 同一做法(那份是 private,本包只改这一个桥接文件):
+    /// 以前是无限期 `sem.wait()`,主线程忙 / 确认表单卡住时 guest 线程永久挂起,Ctrl-C 也停不下来。
+    /// 超时或 Ctrl-C 返回 false。
+    private static func bridgeWait(_ sem: DispatchSemaphore, seconds: Double) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        while true {
+            if sem.wait(timeout: .now() + 0.1) == .success { return true }
+            if noff_is_cancelled() || Date() >= deadline { return false }
+        }
+    }
+
+    /// 读 / 列表 / 审计查询:主线程正常时毫秒级。
+    private static let readWaitSeconds: Double = 15
+    /// 写:要等用户在确认表单上点(网关自己 120 s 超时),再留应用与写审计的余量。
+    private static let writeWaitSeconds: Double = ConfigConfirmationGate.timeoutSeconds + 30
+
+    private static func bridgeFailure(_ operation: String, seconds: Double) -> NSDictionary {
+        let cancelled = noff_is_cancelled()
+        return [
+            "ok": false,
+            "error": cancelled ? "cancelled" : "timeout",
+            "reason": cancelled
+                ? "Cancelled before the app finished \(operation)."
+                : "The app did not finish \(operation) within \(Int(seconds))s.",
+            "user_message": cancelled
+                ? "Cancelled. No settings were changed by this request."
+                : "The app didn't respond in time, so this request was abandoned and no settings were changed by it. Please try again.",
+        ] as NSDictionary
+    }
+
+    private static func committedTimeout(_ operation: String) -> NSDictionary {
+        ["ok": false, "error": "apply_in_progress", "outcome_unknown": true,
+         "reason": "The authorized change started, but its result is not available yet: \(operation).",
+         "user_message": "The settings change may have taken effect. Check the current settings before retrying."] as NSDictionary
+    }
+
+    /// 在 MainActor 上跑 `body`,最多等 `seconds`。超时返回 nil,并把调用标记为放弃。
+    /// 会写设置的 `body` 在写之前调 `call.commit()`:放弃之后 commit 失败,迟到的任务不写;
+    /// commit 成功后也只做短有限收尾;结果仍未知时交由调用方给出明确的 unknown 状态。
+    private static func onMain<Value>(seconds: Double, afterCommitTimeout: (() -> Value)? = nil,
+                                      _ body: @escaping @MainActor (ConfigBridgeCall<Value>) async -> Value) -> Value? {
+        let call = ConfigBridgeCall<Value>()
+        Task.detached { @MainActor in
+            guard !call.abandoned else { return }
+            call.finish(await body(call))
+        }
+        if bridgeWait(call.done, seconds: seconds) { return call.take() }
+        let gaveUp = call.abandon()
+        if gaveUp.abandoned { return gaveUp.value }
+        // A write already started: never wait forever and never claim that nothing changed.
+        if bridgeWait(call.done, seconds: 2) { return call.take() }
+        return afterCommitTimeout?()
+    }
 
     // MARK: - Top-level enable check
 
@@ -19,14 +117,9 @@ private let logger = AppLogger(category: "ConfigOffload")
     /// `permissions.minisConfig.enabled` is on (default). Off means
     /// every CLI call short-circuits with exit 126.
     @objc public static func isEnabled() -> Bool {
-        let sem = DispatchSemaphore(value: 0)
-        var enabled = true
-        Task.detached { @MainActor in
-            enabled = MinisConfigPermissionStore.shared.enabled
-            sem.signal()
-        }
-        sem.wait()
-        return enabled
+        // 超时按「开」放行到具体操作:每个读 / 写在 MainActor 上会再查一次开关,
+        // 而且它们自己超时会返回明确的 timeout,不会误报成「已在设置里关闭」。
+        onMain(seconds: readWaitSeconds) { _ in MinisConfigPermissionStore.shared.enabled } ?? true
     }
 
     /// JSON envelope for the "minis-config is disabled" error path.
@@ -58,26 +151,21 @@ private let logger = AppLogger(category: "ConfigOffload")
     /// All visible topics in the registry. Sorted alphabetical. The CLI
     /// prints these in `minis-config --help`.
     @objc public static func allTopics() -> [String] {
-        let sem = DispatchSemaphore(value: 0)
-        var topics: [String] = []
-        Task.detached { @MainActor in
+        // 只读;超时返回空列表(帮助页显示为没有主题,不改任何东西)。
+        onMain(seconds: readWaitSeconds) { _ in
             ConfigRegistry.shared.registerBuiltinsIfNeeded()
-            topics = ConfigRegistry.shared.topics()
-            sem.signal()
-        }
-        sem.wait()
-        return topics
+            return ConfigRegistry.shared.topics()
+        } ?? []
     }
 
     /// All visible field metadata for a topic. Each dict carries:
     ///   path, displayName, description, schema, access, risk, revertable
     /// — plenty for the per-topic `--help` renderer.
     @objc public static func fieldsForTopic(_ topic: String) -> [NSDictionary] {
-        let sem = DispatchSemaphore(value: 0)
-        var out: [NSDictionary] = []
-        Task.detached { @MainActor in
+        // 只读;超时返回空列表。
+        onMain(seconds: readWaitSeconds) { _ in
             ConfigRegistry.shared.registerBuiltinsIfNeeded()
-            out = ConfigRegistry.shared.fields(forTopic: topic).map { f in
+            return ConfigRegistry.shared.fields(forTopic: topic).map { f in
                 [
                     "path": f.path,
                     "display_name": f.displayName,
@@ -88,10 +176,7 @@ private let logger = AppLogger(category: "ConfigOffload")
                     "revertable": f.revertable,
                 ] as NSDictionary
             }
-            sem.signal()
-        }
-        sem.wait()
-        return out
+        } ?? []
     }
 
     // MARK: - Read
@@ -289,14 +374,8 @@ private let logger = AppLogger(category: "ConfigOffload")
     }
 
     private static func readFieldRaw(path: String) -> NSDictionary {
-        let sem = DispatchSemaphore(value: 0)
-        var result: NSDictionary = [:]
-        Task.detached { @MainActor in
-            result = Self.readFieldSync(path: path)
-            sem.signal()
-        }
-        sem.wait()
-        return result
+        onMain(seconds: readWaitSeconds) { _ in Self.readFieldSync(path: path) }
+            ?? bridgeFailure("reading '\(path)'", seconds: readWaitSeconds)
     }
 
     // MARK: - Write (single or batch)
@@ -312,23 +391,15 @@ private let logger = AppLogger(category: "ConfigOffload")
                                          caption: String?,
                                          actorRaw: String,
                                          sessionId: String?) -> NSDictionary {
-        let sem = DispatchSemaphore(value: 0)
-        var result: NSDictionary = [:]
-        Task.detached { @MainActor in
+        onMain(seconds: writeWaitSeconds, afterCommitTimeout: { committedTimeout("writing settings") }) { call in
             ConfigRegistry.shared.registerBuiltinsIfNeeded()
-            guard MinisConfigPermissionStore.shared.enabled else {
-                result = Self.disabledErrorEnvelope()
-                sem.signal()
-                return
-            }
-            result = await Self.performWriteBatch(items: items,
-                                                  caption: caption,
-                                                  actorRaw: actorRaw,
-                                                  sessionId: sessionId)
-            sem.signal()
-        }
-        sem.wait()
-        return result
+            guard MinisConfigPermissionStore.shared.enabled else { return Self.disabledErrorEnvelope() }
+            return await Self.performWriteBatch(items: items,
+                                                caption: caption,
+                                                actorRaw: actorRaw,
+                                                sessionId: sessionId,
+                                                commit: { call.commit() })
+        } ?? bridgeFailure("writing settings", seconds: writeWaitSeconds)
     }
 
     @MainActor
@@ -336,7 +407,8 @@ private let logger = AppLogger(category: "ConfigOffload")
                                           caption: String?,
                                           actorRaw: String,
                                           sessionId: String?,
-                                          skipConfirmation: Bool = false) async -> NSDictionary {
+                                          skipConfirmation: Bool = false,
+                                          commit: () -> Bool = { true }) async -> NSDictionary {
         // 1. Resolve every path; reject the entire batch on any unknown
         //    or hidden path (fail fast before bothering the user).
         // Resolved enum is hoisted to class scope (search for `enum Resolved`)
@@ -608,6 +680,13 @@ private let logger = AppLogger(category: "ConfigOffload")
             outcome = await ConfigConfirmationGate.shared.requestConfirmation(pending)
         }
         logger.info("confirmation outcome=\(Self.describeOutcome(outcome)) resolved=\(resolved.count) caption=\(caption ?? "")")
+
+        // [A102] 等这次确认期间,发起方已经超时 / Ctrl-C 放弃:CLI 已经告诉它「没改」,这里就真的不改、
+        // 也不记审计(迟到的确认不能在没人等结果时悄悄生效)。
+        if !commit() {
+            logger.info("write abandoned by caller before apply; nothing written caption=\(caption ?? "")")
+            return ["ok": false, "error": "timeout", "reason": "Caller stopped waiting before the change was applied."]
+        }
 
         // 3. Map outcome → audit + user_message.
         let actor = ConfigAuditActor(rawValue: actorRaw) ?? .agent
@@ -882,49 +961,28 @@ private let logger = AppLogger(category: "ConfigOffload")
     // MARK: - Audit list / get / revert (read-only operations)
 
     @objc public static func auditList(limit: Int, scope: String?) -> NSDictionary {
-        let sem = DispatchSemaphore(value: 0)
-        var result: NSDictionary = [:]
-        Task.detached { @MainActor in
-            guard MinisConfigPermissionStore.shared.enabled else {
-                result = Self.disabledErrorEnvelope()
-                sem.signal()
-                return
-            }
+        onMain(seconds: readWaitSeconds) { _ -> NSDictionary in
+            guard MinisConfigPermissionStore.shared.enabled else { return Self.disabledErrorEnvelope() }
             let entries = ConfigAuditLog.shared.recent(limit: limit, scope: scope)
             let usage = ConfigAuditLog.shared.usage()
-            result = [
+            return [
                 "ok": true,
                 "count": entries.count,
                 "capacity": usage.capacity,
                 "total_used": usage.count,
                 "entries": entries.map(Self.auditEntryDict),
             ]
-            sem.signal()
-        }
-        sem.wait()
-        return result
+        } ?? bridgeFailure("listing the audit log", seconds: readWaitSeconds)
     }
 
     @objc public static func auditGet(id: String) -> NSDictionary {
-        let sem = DispatchSemaphore(value: 0)
-        var result: NSDictionary = [:]
-        Task.detached { @MainActor in
-            guard MinisConfigPermissionStore.shared.enabled else {
-                result = Self.disabledErrorEnvelope()
-                sem.signal()
-                return
-            }
+        onMain(seconds: readWaitSeconds) { _ -> NSDictionary in
+            guard MinisConfigPermissionStore.shared.enabled else { return Self.disabledErrorEnvelope() }
             guard let e = ConfigAuditLog.shared.get(id: id) else {
-                result = ["ok": false, "error": "not_found",
-                          "reason": "No audit entry with id '\(id)'."]
-                sem.signal()
-                return
+                return ["ok": false, "error": "not_found", "reason": "No audit entry with id '\(id)'."]
             }
-            result = ["ok": true, "entry": Self.auditEntryDict(e)]
-            sem.signal()
-        }
-        sem.wait()
-        return result
+            return ["ok": true, "entry": Self.auditEntryDict(e)]
+        } ?? bridgeFailure("reading audit entry '\(id)'", seconds: readWaitSeconds)
     }
 
     @MainActor
@@ -963,33 +1021,21 @@ private let logger = AppLogger(category: "ConfigOffload")
                                          actorRaw: String,
                                          sessionId: String?,
                                          skipConfirmation: Bool = false) -> NSDictionary {
-        let sem = DispatchSemaphore(value: 0)
-        var result: NSDictionary = [:]
-        Task.detached { @MainActor in
+        onMain(seconds: writeWaitSeconds, afterCommitTimeout: { committedTimeout("reverting settings") }) { call -> NSDictionary in
             ConfigRegistry.shared.registerBuiltinsIfNeeded()
-            guard MinisConfigPermissionStore.shared.enabled else {
-                result = Self.disabledErrorEnvelope()
-                sem.signal()
-                return
-            }
+            guard MinisConfigPermissionStore.shared.enabled else { return Self.disabledErrorEnvelope() }
             guard let entry = ConfigAuditLog.shared.get(id: id) else {
-                result = ["ok": false, "error": "not_found",
-                          "reason": "No audit entry with id '\(id)'."]
-                sem.signal()
-                return
+                return ["ok": false, "error": "not_found",
+                        "reason": "No audit entry with id '\(id)'."]
             }
             guard entry.status == .applied else {
-                result = ["ok": false, "error": "not_revertable",
-                          "reason": "Entry is \(entry.status.rawValue); only applied entries can be reverted."]
-                sem.signal()
-                return
+                return ["ok": false, "error": "not_revertable",
+                        "reason": "Entry is \(entry.status.rawValue); only applied entries can be reverted."]
             }
             guard let field = ConfigRegistry.shared.resolveField(path: entry.key),
                   field.revertable else {
-                result = ["ok": false, "error": "not_revertable",
-                          "reason": "Field '\(entry.key)' no longer registered, or doesn't support revert."]
-                sem.signal()
-                return
+                return ["ok": false, "error": "not_revertable",
+                        "reason": "Field '\(entry.key)' no longer registered, or doesn't support revert."]
             }
             // Build a single-item batch flipping back to oldValue.
             let revertItem: NSDictionary = [
@@ -1001,16 +1047,14 @@ private let logger = AppLogger(category: "ConfigOffload")
                 caption: "minis-config audit revert \(entry.id.prefix(8))",
                 actorRaw: actorRaw,
                 sessionId: sessionId,
-                skipConfirmation: skipConfirmation
+                skipConfirmation: skipConfirmation,
+                commit: { call.commit() }
             )
             // Mark original entry as reverted on success.
             if (res["ok"] as? Bool) == true {
                 ConfigAuditLog.shared.markReverted(id: entry.id)
             }
-            result = res
-            sem.signal()
-        }
-        sem.wait()
-        return result
+            return res
+        } ?? bridgeFailure("reverting audit entry '\(id)'", seconds: writeWaitSeconds)
     }
 }

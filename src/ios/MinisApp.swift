@@ -582,6 +582,15 @@ struct MinisApp: App {
         let currentVersion = LeoReleaseCatalog.currentVersion
         guard LeoReleaseCatalog.currentRelease != nil,
               lastPresentedReleaseVersion != currentVersion else { return }
+        // [A071] 初次安装:从没看过任何「本次更新」、引导没完成、也还没有可用模型 —— 先给新手引导,
+        // 不弹更新说明。把这一版记成已看过,引导宿主(OnboardingHost 监听这个值)随即出引导;
+        // 下一个版本照常弹更新说明。升级用户(看过旧版说明,或已配好模型 / 走完引导)不受影响。
+        let store = ProviderConfigStore.shared
+        let hasModel = store.modelEntries.contains { ModelSwitcher.isAvailable($0, store: store) }
+        if lastPresentedReleaseVersion.isEmpty, !OnboardingGate.isCompleted(), !hasModel {
+            lastPresentedReleaseVersion = currentVersion
+            return
+        }
         isPresentingReleaseNotes = true
     }
 

@@ -87,14 +87,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         let keepAliveOptInKey = "bg.keepAliveDefaultOptIn.v1"
         let hasExistingChoice = UserDefaults.standard.object(forKey: "enhancedBackgroundExecution") != nil
             || UserDefaults.standard.object(forKey: "backgroundSpeakEnabled") != nil
+        //
+        // [A054] 新装不再默认打开:「增强后台运行」+「后台播报」会在后台挂一路静音音频会话(和定位心跳),
+        // 用户没同意就常驻耗电。现在新装两个开关都不写(读出来是关),由用户在设置 / 中断提示里自己打开;
+        // 已经写过任一开关的(老用户、或之前按旧逻辑被默认打开的)一律不动,保留原选择。
+        // 标记照写:之后的版本据此知道首启已经处理过。
         if !UserDefaults.standard.bool(forKey: keepAliveOptInKey) {
             UserDefaults.standard.set(true, forKey: keepAliveOptInKey)
             if hasExistingChoice {
-                logger.info("[KeepAlive] first-run opt-in skipped — user already has a setting")
+                logger.info("[KeepAlive] first-run: keeping the user's existing setting")
             } else {
-                UserDefaults.standard.set(true, forKey: "enhancedBackgroundExecution")
-                UserDefaults.standard.set(true, forKey: "backgroundSpeakEnabled")
-                logger.info("[KeepAlive] enabled by first-run opt-in")
+                logger.info("[KeepAlive] first-run: keep-alive stays off until the user turns it on")
             }
         }
 

@@ -5,6 +5,9 @@
 //  [e2e] 经中继这一段的端到端加密接线。直连不变;中继腿上有固定的 Mac 公钥就把整个请求
 //  (方法、路径、正文、请求编号)封进 POST /e2e 或 GET /e2e/events,Mac 解开后按原样处理。
 //  Mac 不支持 / 解不开 → 退回明文并记成「中继:未加密」;能回退,用户不用做任何事。
+//  [A041] 但这台 Mac 一旦在中继上协商成功过加密(relayE2EVerified,主机表里已有这一项),经中继的 Mac 请求
+//  就再也不走明文:解不开、Mac 回 404 / e2e_rejected、旧中继排队 502、暂时关加密都不降级,宁可这次失败。
+//  中继自己的接口(machineRelative == nil)不含 Mac 内容,不受影响。
 //  加解密与线格式在 Shared/RelayE2E.swift。
 //
 
@@ -21,7 +24,8 @@ extension LeoAgentClient {
 
     /// 把原请求封成 /e2e(或流的 /e2e/events?v=1&k=&c=);没固定公钥、暂时关着、正文不是 JSON 就返回 nil(走明文)。
     func relaySealed(_ original: URLRequest, stream: Bool = false) -> (request: URLRequest, keys: RelayE2E.Keys)? {
-        guard Date() >= relayE2EOffUntil, let macKey = RelayE2E.validKey(relayE2EKey),
+        // 协商过加密的 Mac 不吃「暂时关加密」:关了就只剩明文,而明文已不允许。
+        guard relayE2EVerified || Date() >= relayE2EOffUntil, let macKey = RelayE2E.validKey(relayE2EKey),
               let relative = machineRelative(original), let base = harnessBaseURL,
               let inner = RelayE2E.inner(method: original.httpMethod ?? "GET", path: relative, body: original.httpBody,
                                          requestId: original.value(forHTTPHeaderField: "X-Leo-Request-Id")),
@@ -49,6 +53,15 @@ extension LeoAgentClient {
         return (request, sealed.keys)
     }
 
+    /// [A041] 这个请求要不要拒绝走明文:协商过加密的 Mac,经中继的 Mac 请求一律不降级。
+    func relayPlaintextForbidden(_ original: URLRequest) -> Bool {
+        relayE2EVerified && machineRelative(original) != nil
+    }
+
+    private var relayPlaintextRefused: GatewayError {
+        GatewayError.http(status: 428, message: AppLocalized("这台 Mac 的加密通道暂时不通，这个操作不走明文中继：直连后再试"))
+    }
+
     /// routedData 的中继腿。
     func relayData(for original: URLRequest) async throws -> (Data, URLResponse) {
         if let sealed = relaySealed(original) {
@@ -67,9 +80,13 @@ extension LeoAgentClient {
             case .passthrough:
                 return (data, response)
             case .fallback(let disable):
+                // 协商过加密的 Mac:解不开 / 被拒 / 排队失败都不退明文,也不关加密(关了下一次就只剩明文)。
+                if relayPlaintextForbidden(original) { throw relayPlaintextRefused }
                 if disable { relayE2EOffUntil = Date().addingTimeInterval(600) }
             }
         }
+        // 封不了(公钥无效、正文不是 JSON……)又已协商过加密:同样不走明文。
+        if relayPlaintextForbidden(original) { throw relayPlaintextRefused }
         if let relative = machineRelative(original),
            !RelayE2E.mayFallBackToPlaintext(verified: relayE2EVerified, method: original.httpMethod ?? "GET", path: relative) {
             // 加密通道通过的 Mac,登录凭据 / token / SDP 不降级给中继看:宁可这次失败。
@@ -88,6 +105,8 @@ extension LeoAgentClient {
     }
 
     func relayPlainBytes(_ original: URLRequest) async throws -> (URLSession.AsyncBytes, URLResponse) {
+        // 流的明文腿(LeoAgentRouting 封不了时、或下面加密流一帧没开时调)同样守住:协商过加密就不发明文。
+        if relayPlaintextForbidden(original) { throw relayPlaintextRefused }
         let result = try await RelayRootRouter.shared.perform(original, discard: { $0.task.cancel() }) {
             try await session.bytes(for: $0)
         }
@@ -115,6 +134,8 @@ extension LeoAgentClient {
                         }
                     }
                     if !opener.opened, !Task.isCancelled {
+                        // 协商过加密的 Mac:不关加密、不退明文,断开让调用方按 seq 重连(relayPlainBytes 也会拒)。
+                        if self.relayPlaintextForbidden(original) { throw self.relayPlaintextRefused }
                         self.relayE2EOffUntil = Date().addingTimeInterval(600)
                         let (plain, response) = try await self.relayPlainBytes(original)
                         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
