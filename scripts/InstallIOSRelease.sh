@@ -14,6 +14,19 @@ set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
+# Release only committed source, then verify it stayed unchanged during the build.
+# Private ignored signing/configuration files are deliberately outside this check.
+source_head=$(git -C "$repo_root" rev-parse --verify HEAD)
+require_clean_source() {
+  current_head=$(git -C "$repo_root" rev-parse --verify HEAD)
+  if [ "$current_head" != "$source_head" ] || [ -n "$(git -C "$repo_root" status --porcelain --untracked-files=normal)" ]; then
+    echo "装机停止：源码有未提交改动，或构建期间提交已变化。请先提交再从同一源码重新构建。" >&2
+    return 1
+  fi
+}
+require_clean_source
+echo "==> 源码 $source_head"
+
 # [ios-remote-install] 真机插在另一台 Mac 上(如 Studio)时:LEO_IOS_DEVICE_HOST=studio。
 # 构建与签名仍在本机,设备查询与安装经 ssh 在那台 Mac 上做(先把签好的 .app 同步过去)。
 device_host=${LEO_IOS_DEVICE_HOST:-}
@@ -86,6 +99,7 @@ xcodebuild -project "$project" -scheme LeoPhoneAgent \
 app="$derived/Build/Products/Release-iphoneos/LeoPhoneAgent.app"
 [ -d "$app" ] || { echo "没找到 Release 真机构建产物" >&2; exit 1; }
 codesign --verify --deep --strict "$app" || exit 1
+require_clean_source
 
 # [WP-46] 归档 dSYM:真机崩溃报告只能用同一次构建的 dSYM 符号化。2026-10-17 取证时本机只剩
 # 1.74 的,一份 1.71 的真崩溃(SIGSEGV 在 JSC 线程)因此无法定位。失败不挡装机。
