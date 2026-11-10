@@ -161,3 +161,12 @@ src/ios/LeoPhoneAgent.xcodeproj/project.pbxproj.lock
 /src/harmony/app/entry/src/main/resources/rawfile/linux-rootfs.pack
 
 /src/harmony/app/entry/src/main/resources/rawfile/linux-packages.pack
+
+# Private signing material and developer profiles.
+*.p12
+*.pfx
+*.p8
+*.mobileprovision
+*.provisionprofile
+**/id_rsa
+**/id_ed25519
