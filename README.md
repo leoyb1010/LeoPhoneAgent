@@ -5,7 +5,7 @@
 [![iOS](https://img.shields.io/badge/iOS-1.89.1%20(198)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.20.0-7C3AED.svg)](src/mac/leophone/package.json)
-[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.4.0-D94B16.svg)](src/harmony/app/AppScope/app.json5)
+[![HarmonyOS source](https://img.shields.io/badge/HarmonyOS_source-0.5.0-0A84FF.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
 
@@ -28,12 +28,13 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 iOS 1.72.0 / Mac 1.10.0 起移除了服务器任务（Paperclip）工作区：多模型能力在端侧与 Mac 上已经覆盖，
 不再维护单独的服务器。代码与审计记录保留在 git 历史里（最后包含它的提交是 `0f1e599a`）。
 
-## HarmonyOS 体验候选（未发布）
+## HarmonyOS 源码与实机状态
 
-当前独立快照正在准备 **0.5.0（100029）**，L0–L3 源码与 Node 检查记录见
-`docs/harmony-ux-20261108/RESULT.md`；Studio 编译、模拟器矩阵及最终实机步骤见
-`docs/harmony-ux-20261108/TEST_GUIDE.md`。没有模拟器截图、签名覆盖安装或实机验收证据，
-不能将此候选视为已发布版本。上方 0.4.0 徽标保留既有公开版本口径。
+主线源码版本见上方源码徽标与 `src/harmony/app/AppScope/app.json5`。
+0.5.0 的原生构建、签名与 Mate XT2 覆盖安装证据见
+[交付记录](docs/harmony-ux-20261108/DELIVERY.md)；剩余交互验收见
+[测试清单](docs/harmony-ux-20261108/TEST_GUIDE.md)。源码版本、已安装版本和公开发布分别核对，
+不能用旧候选文档推断当前编译结果，也不能将构建或装机成功等同于全部功能已验收。
 
 ## 开发 Agent 先读
 
@@ -41,7 +42,7 @@ iOS 1.72.0 / Mac 1.10.0 起移除了服务器任务（Paperclip）工作区：�
 [「Android Agent 交接与发布铁律」](#android-agent-交接与发布铁律)。**
 
 - 唯一源码主仓：`https://github.com/leoyb1010/LeoPhoneAgent`，默认分支 `main`。
-- 本机开发入口：`~/Documents/` 下的 `LeoPhoneAgent` checkout（在 iCloud 里）用于 iOS / Android 等日常开发；**Mac 桌面端的构建、打包只在 `~/leophone-mac` 这份独立克隆里做**（不在 iCloud 里，iCloud 会生成 `xxx 2` 副本并把文件换成占位符）。两份都以 `origin/main` 为准，切换前先 `git pull`。
+- 本机唯一权威开发入口：`~/leophone-mac` 的 `main`，iOS、Mac、Android、HarmonyOS 均从这里开发、集成和发版。开始前先检查 `git status`、获取 `origin` 并核对 `HEAD...origin/main`；只落后且工作区干净时使用 `git pull --ff-only origin main`。旧的文稿目录副本、历史 worktree 和其他机器上的受控构建快照不作为发版源码入口；其中有效的未提交改动先核对、回收到本主仓并提交，禁止直接覆盖、重置或删除。
 - Android 主工程：`src/android/`；iOS：`src/ios/`；Mac 桌面端：
   `src/mac/leophone/`（当前 1.x 主线）。旧版桌面 leocodebox 已移除（tag `archive/leocodebox-2.2.13`）；
   `src/mac/leoagent/` 中 relay.py 仍在服务，其他部分是协议兼容/灰度回退，不是 Android UI 工程。
@@ -66,7 +67,7 @@ iOS 1.72.0 / Mac 1.10.0 起移除了服务器任务（Paperclip）工作区：�
   [`docs/upgrade-2026-09-25/PLAN.md`](docs/upgrade-2026-09-25/PLAN.md)。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
-  工程落地在 `src/harmony/`。当前版本为 `0.4.0`，采用个人HDC签名安装。
+  工程落地在 `src/harmony/`，当前源码版本以 `app/AppScope/app.json5` 为准，采用个人 HDC 签名安装。
   内置本机Linux与离线工具，系统权限和生态资格受限的扩展按本次范围暂缓。
 - Android 同时交付 Standard 和 Power；修改 `main` 公共源码后必须同时验证两个 flavor。
 - 不得把「能编译」、「CI 是绿的」或「APK 已上传」当成可发布证据。
@@ -74,7 +75,7 @@ iOS 1.72.0 / Mac 1.10.0 起移除了服务器任务（Paperclip）工作区：�
 - 任务开始先读 `git status`并获取最新 `origin/main`；未知本地改动默认属于用户，
   不得 `reset --hard`、覆盖或删除。
 
-## HarmonyOS 0.4.0
+## HarmonyOS
 
 个人HDC安装，最低HarmonyOS7/API26。包名 `com.leoyuan.leophoneagent.harmony`。
 
@@ -239,7 +240,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Mac 桌面端(LeoPhoneAgent 1.x)
 
-- 当前源码版本：`1.13.1`（Electron 44.5.1），主工程 `src/mac/leophone/`；每一版改了什么以 `packages/ui/src/leo/leoReleaseNotes.ts` 为准。已安装版本以 `/Applications/LeoBot.app` 的 Info.plist 为准，公开热更新版本以发布仓实际 Release 为准，不能由源码版本推断已发布。
+- 当前源码版本以上方源码徽标及 `src/mac/leophone/package.json` 为准；每一版改了什么以 `packages/ui/src/leo/leoReleaseNotes.ts` 为准。已安装版本以 `/Applications/LeoBot.app` 的 Info.plist 为准，公开热更新版本以发布仓实际 Release 为准，不能由源码版本推断已发布。
 - Leo Link：手机可经中继或已配置的 Tailscale HTTPS 直连同一 Mac Host/runtime，支持会话、审批、全自动、停止与事件续传。直连使用独立设备授权，支持一次性扫码与撤销。
 - 远控操作使用稳定请求编号和持久化回执，保留任务编号与 V4 输入 admission 对账；未知执行结果明确提示，不盲目重放。
 - 「连接手机」中可分别启用同步副本与藏宝阁访问。Tailscale Serve 的 HTTPS 转发需显式配置；不会自动覆盖现有规则。
