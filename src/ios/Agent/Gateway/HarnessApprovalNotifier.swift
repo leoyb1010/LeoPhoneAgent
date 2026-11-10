@@ -23,14 +23,15 @@ import UIKit
 import UserNotifications
 
 enum HarnessApprovalNotifier {
-    static let categoryId = "HARNESS_APPROVAL"
-    static let approveAction = "HARNESS_APPROVE_ONCE"
-    static let approveSessionAction = "HARNESS_APPROVE_SESSION"
-    static let denyAction = "HARNESS_DENY"
-    static let denyAndStopAction = "HARNESS_DENY_STOP"
+    // 类别、按钮与「哪些 choices 才能用类别」的规则在 HarnessApprovalNotificationSpec(逻辑测试也编它)。
+    static let categoryId = HarnessApprovalNotificationSpec.categoryId
+    static let approveAction = HarnessApprovalNotificationSpec.approveAction
+    static let approveSessionAction = HarnessApprovalNotificationSpec.approveSessionAction
+    static let denyAction = HarnessApprovalNotificationSpec.denyAction
+    static let denyAndStopAction = HarnessApprovalNotificationSpec.denyAndStopAction
 
     /// 高危命令的审批:按钮相同,「允许」类要先解锁。
-    static let highRiskCategoryId = "HARNESS_APPROVAL_HIGH"
+    static let highRiskCategoryId = HarnessApprovalNotificationSpec.highRiskCategoryId
 
     /// 与 BACKGROUND_TASK 一起注册(setNotificationCategories 是整体替换,
     /// 谁单独 set 谁就把别人的按钮抹掉——两处调用都必须用这份并集)。
@@ -42,23 +43,38 @@ enum HarnessApprovalNotifier {
     private static func makeCategory(_ id: String, allowOptions: UNNotificationActionOptions) -> UNNotificationCategory {
         UNNotificationCategory(
             identifier: id,
-            actions: [
-                UNNotificationAction(identifier: approveAction, title: AppLocalized("允许一次"), options: allowOptions),
-                UNNotificationAction(identifier: approveSessionAction, title: AppLocalized("本次会话允许"),
-                                     options: allowOptions),
-                UNNotificationAction(identifier: denyAction, title: AppLocalized("拒绝"), options: [.destructive]),
-                UNNotificationAction(identifier: denyAndStopAction, title: AppLocalized("拒绝并停止任务"),
-                                     options: [.destructive]),
-            ],
+            actions: HarnessApprovalNotificationSpec.actions(forCategory: id).map { action in
+                UNNotificationAction(identifier: action.identifier, title: title(for: action),
+                                     options: action.allows ? allowOptions : [.destructive])
+            },
             intentIdentifiers: [])
+    }
+
+    private static func title(for action: HarnessApprovalNotificationSpec.Action) -> String {
+        switch action.identifier {
+        case approveAction: return AppLocalized("允许一次")
+        case approveSessionAction: return AppLocalized("本次会话允许")
+        case denyAndStopAction: return AppLocalized("拒绝并停止任务")
+        default: return AppLocalized("拒绝")
+        }
     }
 
     /// 高危类别要在 LeoNotificationCategories.all 里登记过才用:没登记的类别发出去一个按钮都没有,
     /// 比免解锁更糟。没登记就退回普通类别。
-    private static func categoryIdentifier(for approval: GatewayApprovalRequest) async -> String {
-        guard let command = approval.command, CommandRisk.assess(command) == .high else { return categoryId }
-        let registered = await UNUserNotificationCenter.current().notificationCategories()
-        return registered.contains(where: { $0.identifier == highRiskCategoryId }) ? highRiskCategoryId : categoryId
+    /// nil = 服务端 choices 盖不住类别上的全部按钮(只给 deny、once/deny、空、未知值):发无按钮提醒,
+    /// 不让通知替用户提交服务端没给的决定。
+    private static func categoryIdentifier(for approval: GatewayApprovalRequest) async -> String? {
+        let highRisk = approval.command.map { CommandRisk.assess($0) == .high } ?? false
+        let canUseCategory = HarnessApprovalNotificationSpec.categoryIdentifier(
+            choices: approval.choices, highRisk: false, highRiskRegistered: false) != nil
+        guard canUseCategory else { return nil }
+        var registered = false
+        if highRisk {
+            registered = await UNUserNotificationCenter.current().notificationCategories()
+                .contains(where: { $0.identifier == highRiskCategoryId })
+        }
+        return HarnessApprovalNotificationSpec.categoryIdentifier(
+            choices: approval.choices, highRisk: highRisk, highRiskRegistered: registered)
     }
 
     /// app 非前台时为一条审批请求发通知。前台不发(app 内卡片已在最前)。
@@ -81,7 +97,8 @@ enum HarnessApprovalNotifier {
         ]
         let identifier = customIdentifier ?? notificationId(sessionId: sessionId, approvalId: approval.approvalId)
         Task {
-            content.categoryIdentifier = await categoryIdentifier(for: approval)
+            // 无类别 = 无按钮提醒:同一标识(与 APNs 去重)、同样的会话路由,点开进 App 按真实 choices 审批。
+            if let category = await categoryIdentifier(for: approval) { content.categoryIdentifier = category }
             try? await UNUserNotificationCenter.current().add(
                 UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
         }
@@ -137,15 +154,10 @@ enum HarnessApprovalNotifier {
             || approvalId != nil && !machine.isEmpty
         guard isHarness, let approvalId, !approvalId.isEmpty else { return false }
 
-        let choice: String?
-        switch response.actionIdentifier {
-        case approveAction: choice = "once"
-        case approveSessionAction: choice = "session"
-        case denyAction, denyAndStopAction: choice = "deny"
-        default: choice = nil   // 点通知本体 → 只打开 app,不代作决定
-        }
-        guard let choice else { return false }
-        let stopAfter = response.actionIdentifier == denyAndStopAction
+        // 点通知本体 → 只打开 app,不代作决定
+        guard let action = HarnessApprovalNotificationSpec.action(identifier: response.actionIdentifier) else { return false }
+        let choice = action.choice
+        let stopAfter = action.stopsAfter
 
         // APNs 路径的推送里往往只有 machine + approval_id,没有 session_id。
         // 逐级补齐,顺序刻意如此:

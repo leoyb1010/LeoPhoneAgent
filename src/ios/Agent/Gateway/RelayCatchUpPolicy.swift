@@ -24,6 +24,61 @@ struct RelayEventItem {
     }
 }
 
+/// [catch-up 审批元数据] 补拉审批通知要的字段,按中继暂存的原始 `approval.request` 恢复,
+/// 与实时流 `GatewayEvent.parse` 同一口径(tool / description / 未建模字段进 extras,计划正文在 extras["plan"])。
+/// 以前补拉一律写死 once/deny、tool/reason/extras 为空:计划审批会出成普通审批,只给 deny 的也多出「允许」。
+struct RelayApprovalFields: Equatable {
+    /// choices 从哪来:事件里给了(哪怕是空数组)、旧协议没有这个字段、字段在但不是数组。
+    enum ChoicesSource: Equatable { case event, legacyDefault, malformed }
+
+    let approvalId: String
+    let sessionId: String
+    /// 只含服务端原样给出的动作(拒绝首尾空白、去空、去重、保序)。显式空数组 / 坏格式 = 空,绝不补「允许」。
+    let choices: [String]
+    let choicesSource: ChoicesSource
+    let command: String?
+    let tool: String?
+    let reason: String?
+    let extras: [String: String]
+
+    /// 仅为缺 choices 的旧协议保留实时流默认;不覆盖服务端显式提供的集合。
+    static let legacyChoices = ["once", "deny"]
+
+    /// 与 `GatewayEvent.parse` 的 `approval.request` 分支一致:这些键单独建模,其余原样进 extras。
+    static let modelledKeys: Set<String> = ["event", "run_id", "timestamp", "choices", "command",
+                                            "description", "approval_id", "seq", "session_id"]
+
+    static func choices(from raw: Any?) -> (choices: [String], source: ChoicesSource) {
+        guard let raw, !(raw is NSNull) else { return (legacyChoices, .legacyDefault) }
+        guard let list = raw as? [Any] else { return ([], .malformed) }
+        var seen = Set<String>()
+        let cleaned = list.compactMap { $0 as? String }
+            .filter { !$0.isEmpty && $0 == $0.trimmingCharacters(in: .whitespacesAndNewlines) && seen.insert($0).inserted }
+        return (cleaned, .event)
+    }
+}
+
+extension RelayEventItem {
+    /// 不是审批请求、或缺会话 / 审批 id(通知按钮无从寻址)时为 nil。
+    var approvalFields: RelayApprovalFields? {
+        guard eventName == "approval.request",
+              let sessionId, !sessionId.isEmpty,
+              let approvalId, !approvalId.isEmpty else { return nil }
+        let parsed = RelayApprovalFields.choices(from: raw["choices"])
+        var extras: [String: String] = [:]
+        for (key, value) in raw where !RelayApprovalFields.modelledKeys.contains(key) {
+            extras[key] = String(describing: value)
+        }
+        return RelayApprovalFields(
+            approvalId: approvalId, sessionId: sessionId,
+            choices: parsed.choices, choicesSource: parsed.source,
+            command: command,
+            tool: (raw["tool"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            reason: raw["description"] as? String,
+            extras: extras)
+    }
+}
+
 struct RelayEventPayload {
     let items: [RelayEventItem]
     let now: Double

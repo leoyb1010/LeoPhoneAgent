@@ -187,20 +187,25 @@ final class RelayEventCatchUp: ObservableObject {
     }
 
     private func postApproval(_ item: RelayEventItem, hostName: String) {
-        guard let sessionId = item.sessionId, let approvalId = item.approvalId else { return }
+        guard let fields = item.approvalFields else { return }
         // [T-catchup-hostid] 中继报的 machine 名与用户在「我的 Mac」里自取的
         // 名字未必一致;精确匹配失败就退到"唯一一台中继主机",再退到首台。
         // 匹配不上会导致通知按钮回调找不到 host,批准静默失败。
         let hostId = GatewayHostStore.shared.hostMatching(machine: hostName)?.id
-        let approval = GatewayApprovalRequest(
-            approvalId: approvalId, runId: sessionId,
-            choices: ["once", "deny"], command: item.command,
-            tool: nil, reason: nil, extras: [:])
         // [remote-ctl-power] 与中继 APNs 同一个标识(approval.request-<approval_id>):不重复成两条。
+        let identifier = MacFollowLogic.catchUpNotificationId(
+            event: item.eventName, sessionId: fields.sessionId, approvalId: fields.approvalId)
+        // 按中继暂存的原始事件恢复:计划审批(tool = ExitPlanMode、extras["plan"])与服务端收窄的 choices
+        // 才能和实时流出一样的卡;旧协议没有 choices 字段时才用 once/deny 兼容。
+        // 带不带按钮由 HarnessApprovalNotifier 按 choices 决定(HarnessApprovalNotificationSpec):
+        // choices 盖不住类别按钮(含空 / 坏格式)时发无按钮提醒,标识与会话路由不变。
+        let approval = GatewayApprovalRequest(
+            approvalId: fields.approvalId, runId: fields.sessionId,
+            choices: fields.choices, command: fields.command,
+            tool: fields.tool, reason: fields.reason, extras: fields.extras)
         HarnessApprovalNotifier.post(hostId: hostId, hostName: hostName,
-                                     sessionId: sessionId, approval: approval,
-                                     identifier: MacFollowLogic.catchUpNotificationId(
-                                        event: item.eventName, sessionId: sessionId, approvalId: approvalId))
+                                     sessionId: fields.sessionId, approval: approval,
+                                     identifier: identifier)
     }
 
     private func postSimple(title: String, body: String, identifier: String? = nil,

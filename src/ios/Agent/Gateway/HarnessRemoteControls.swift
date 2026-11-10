@@ -457,6 +457,59 @@ enum HarnessApprovalPresentation {
     }
 }
 
+// MARK: - 审批通知的类别与按钮
+
+/// 审批本地通知用哪个类别、类别上有哪些按钮、按钮回调提交什么(App 的 HarnessApprovalNotifier 按这份建类别、
+/// 选类别、解按钮)。规则:通知上能点的每个按钮,提交的都必须是服务端这次给出的 choices 之一。
+/// 现有两个类别(普通 / 高危)按钮相同:允许一次(once)、本次会话允许(session)、拒绝 / 拒绝并停止(deny)。
+/// 所以只有 choices 同时含 once、session、deny 才用类别;否则(只给 deny、只给 once/deny、空、未知值、
+/// 旧协议缺字段兜底的 once/deny)发无按钮的提醒,点开进 App 按真实 choices 审批。
+/// 计划审批的专用类别后续再加。
+enum HarnessApprovalNotificationSpec {
+    static let categoryId = "HARNESS_APPROVAL"
+    /// 高危命令:按钮相同,「允许」类要先解锁。
+    static let highRiskCategoryId = "HARNESS_APPROVAL_HIGH"
+
+    static let approveAction = "HARNESS_APPROVE_ONCE"
+    static let approveSessionAction = "HARNESS_APPROVE_SESSION"
+    static let denyAction = "HARNESS_DENY"
+    static let denyAndStopAction = "HARNESS_DENY_STOP"
+
+    struct Action: Equatable {
+        let identifier: String
+        /// 点了提交给 Mac 的 choice。
+        let choice: String
+        /// 「允许」类:高危类别上要解锁。
+        let allows: Bool
+        /// 提交后再停掉任务。
+        let stopsAfter: Bool
+    }
+
+    /// 两个类别共用的按钮,顺序即通知上的顺序。
+    static let actions: [Action] = [
+        Action(identifier: approveAction, choice: "once", allows: true, stopsAfter: false),
+        Action(identifier: approveSessionAction, choice: "session", allows: true, stopsAfter: false),
+        Action(identifier: denyAction, choice: "deny", allows: false, stopsAfter: false),
+        Action(identifier: denyAndStopAction, choice: "deny", allows: false, stopsAfter: true),
+    ]
+
+    static func action(identifier: String) -> Action? { actions.first { $0.identifier == identifier } }
+
+    /// 这条审批通知用的类别;nil = 发无按钮提醒。`highRiskRegistered`:高危类别没登记时退回普通类别
+    /// (按钮相同,只是不要求解锁;没登记的类别发出去一个按钮都没有)。
+    static func categoryIdentifier(choices: [String], highRisk: Bool, highRiskRegistered: Bool) -> String? {
+        let offered = Set(choices)
+        guard actions.allSatisfy({ offered.contains($0.choice) }) else { return nil }
+        return highRisk && highRiskRegistered ? highRiskCategoryId : categoryId
+    }
+
+    /// 某个类别在通知上实际出现的按钮;nil(无按钮提醒)或不认识的类别为空。
+    static func actions(forCategory category: String?) -> [Action] {
+        guard let category, category == categoryId || category == highRiskCategoryId else { return [] }
+        return actions
+    }
+}
+
 // MARK: - 新建 / 接手时的默认工作目录
 
 enum HarnessLaunchDefaults {
