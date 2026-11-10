@@ -25,8 +25,8 @@ console.log('UI_TOKENS_OK real token transitions + negative static gate fixtures
 const releaseSource = fs.readFileSync(new URL('../app/entry/src/main/ets/release/ReleaseCatalog.ets', import.meta.url), 'utf8').replace(/\bexport\s+/g, '');
 const release = vm.runInNewContext(stripTypeScriptTypes(releaseSource) + '\nReleaseCatalog');
 const notes = release.all();
-assert.equal(release.currentVersion, '0.5.0'); assert.equal(release.currentBuild, 100029);
-assert.equal(notes[0].version, release.currentVersion); assert.equal(notes[1].version, '0.4.0');
+assert.equal(release.currentVersion, '0.5.4'); assert.equal(release.currentBuild, 100033);
+assert.equal(notes[0].version, release.currentVersion); assert.equal(notes[1].version, '0.5.3');
 assert.equal(new Set(notes.map(row => row.version)).size, notes.length, 'release history must not duplicate a version');
 const symbols = fs.readFileSync(new URL('../app/entry/src/main/ets/theme/Symbols.ets', import.meta.url),'utf8');
 const names = new Set([...symbols.matchAll(/\$r\('sys\.symbol\.([^']+)'\)/g)].map(m=>m[1]));

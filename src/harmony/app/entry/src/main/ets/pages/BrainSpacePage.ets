@@ -13,6 +13,7 @@ import { MotionPolicy } from '../theme/MotionPolicy';
 import { Sym } from '../theme/Symbols';
 import { curves } from '@kit.ArkUI';
 import { Tokens } from '../theme/Tokens';
+import { MarkdownText } from '../theme/Markdown';
 
 class BrainRow {
   id: string = '';
@@ -111,11 +112,16 @@ export struct BrainSpacePage {
   private epoch: number = 0;
   private pageRun: number = 0;
   private expiry: number = -1;
+  @State answerWaiting: boolean = false;
+  private answerPollGeneration: number = 0;
 
   aboutToAppear(): void {
     this.uploader.load(getContext(this) as common.UIAbilityContext);
     this.jobs = this.uploader.jobs.slice();
-    BrainAPI.load().then((cfg) => { this.base = cfg.base; this.ready = cfg.token.length > 0; })
+    BrainAPI.load().then((cfg) => {
+      this.base = cfg.base; this.ready = cfg.token.length > 0;
+      if (cfg.token.length > 0) this.enter();
+    })
       .catch((error: Error) => this.error = `${error}`);
     this.expiry = setInterval(() => {
       if (this.unlocked && Date.now() >= BrainAPI.unlockedUntil) this.lock();
@@ -127,7 +133,8 @@ export struct BrainSpacePage {
   /** True only while the page view that issued a read is still current and the Brain lease holds. */
   private live(epoch: number, lease: BrainRequestLease): boolean {
     if (epoch !== this.epoch) return false;
-    try { BrainAPI.assertLease(lease); return true; } catch (_error) { return false; }
+    // Ordinary reads share the device-key generation, not a biometrics session.
+    return lease.generation === BrainAPI.generation() && lease.epoch === BrainAPI.epoch;
   }
   /** Drops any in-flight "load more" so its result can never merge into a newer view. */
   private resetPaging(): void {
@@ -156,12 +163,10 @@ export struct BrainSpacePage {
   private async enter(): Promise<void> {
     if (this.authenticating) return;
     this.authenticating = true;
-    // BrainAPI.unlock() already rejects if a lock/credential change happens during the prompt;
-    // page identity is captured afterwards so the auth sheet itself never discards the unlock.
-    let epoch = -1;
+    const epoch = this.epoch;
     try {
-      await BrainAPI.unlock('解锁第二大脑');
-      epoch = this.epoch;
+      // Metadata is already protected by the device key. Biometrics belong to media/writes,
+      // not to a second full-screen gate before the user can see any content.
       const lease = BrainAPI.lease();
       // Network manifest and locally stored shares are independent; read them together.
       const manifestReq = BrainAPI.manifest();
@@ -169,8 +174,7 @@ export struct BrainSpacePage {
       manifestReq.catch(() => {}); sharesReq.catch(() => {});
       const manifest = await manifestReq;
       const savedShares = await sharesReq;
-      BrainAPI.assertLease(lease);
-      if (epoch !== this.epoch) return;
+      if (epoch !== this.epoch || lease.generation !== BrainAPI.generation() || lease.epoch !== BrainAPI.epoch) return;
       if (manifest['app'] !== true) throw new Error('设备钥匙缺少第二大脑 app 权限');
       const can = object(manifest, 'can');
       this.canUpload = can['upload'] === true; this.canShare = can['share'] === true;
@@ -201,7 +205,6 @@ export struct BrainSpacePage {
     this.busy = true; this.error = ''; this.pageOffset = 0;
     const lease = BrainAPI.lease();
     try {
-      BrainAPI.requireUnlocked();
       const failures: string[] = [];
       let result: BrainRow[] = [];
       if (this.tab === 0) {
@@ -285,7 +288,6 @@ export struct BrainSpacePage {
     this.pagingMedia = true;
     const lease = BrainAPI.lease();
     try {
-      BrainAPI.requireUnlocked();
       const page = await BrainAPI.get('/media/search', this.mediaQuery(offset));
       if (run !== this.pageRun || !this.live(epoch, lease) || offset !== this.pageOffset) return;
       const received = items(page).map((o: BrainJSON) => row(o, 'media'));
@@ -344,7 +346,6 @@ export struct BrainSpacePage {
     this.busy = true;
     const lease = BrainAPI.lease();
     try {
-      BrainAPI.requireUnlocked();
       let sections: BrainRow[] = [];
       if (target.kind === 'continuation') {
         const href = text(target.data, 'href');
@@ -372,7 +373,7 @@ export struct BrainSpacePage {
         sections = sections.concat(items(data, 'companions').map((o: BrainJSON) => row(o, 'person')));
         sections = sections.concat(items(data, 'places').map((o: BrainJSON) => row(o, 'summary')));
       } else if (target.kind === 'answer') {
-        this.answerId = target.id; this.answer = ''; this.mode = 'answer'; await this.pollAnswer(target.id, epoch); return;
+        this.answerId = target.id; this.answer = ''; this.mode = 'answer'; await this.resumeAnswer(); return;
       } else if (target.kind === 'upload') {
         const receipt = object(target.data, 'receipt');
         if (!text(receipt, 'file_id')) throw new Error('文件仍在处理中');
@@ -394,7 +395,6 @@ export struct BrainSpacePage {
     this.pagingChunks = true;
     const lease = BrainAPI.lease();
     try {
-      BrainAPI.requireUnlocked();
       const chunks = await BrainAPI.chunks(id, offset);
       if (run !== this.pageRun || !this.live(epoch, lease) || offset !== this.pageOffset || id !== this.detail.id) return;
       const received = items(chunks, 'chunks').map((o: BrainJSON) => chunkRow(o));
@@ -420,28 +420,48 @@ export struct BrainSpacePage {
     this.busy = true; this.error = '';
     const epoch = ++this.epoch;
     try {
-      BrainAPI.requireUnlocked();
+      await BrainAPI.unlock('确认向资料库提问');
       const receipt = await BrainAPI.post('/ask', { 'question': this.query.trim(), 'mode': 'answer', 'file_ids': this.askFiles });
       if (epoch !== this.epoch) return;
       this.answerId = text(receipt, 'id'); this.answer = ''; this.mode = 'answer'; this.sections = [];
-      await this.pollAnswer(this.answerId, epoch);
+      await this.resumeAnswer();
     } catch (error) { if (epoch === this.epoch) this.error = `${error}`; }
     finally { if (epoch === this.epoch) this.busy = false; }
   }
+  private async resumeAnswer(): Promise<void> {
+    if (!this.answerId || this.answerWaiting) return;
+    this.answerWaiting = true;
+    const generation = this.answerPollGeneration;
+    try {
+      await this.pollAnswer(this.answerId, this.epoch);
+    } catch (error) {
+      if (generation === this.answerPollGeneration) this.error = `${error}。可继续等待，回答不会重复提交。`;
+    } finally {
+      if (generation === this.answerPollGeneration) this.answerWaiting = false;
+    }
+  }
+  private stopAnswerWaiting(): void {
+    this.answerPollGeneration += 1;
+    this.answerWaiting = false;
+    this.notice = '已停止等待；服务端可能仍在生成，可用同一问题继续查看。';
+  }
   private async pollAnswer(id: string, epoch: number): Promise<void> {
-    for (let i = 0; i < 150 && epoch === this.epoch; i++) {
-      BrainAPI.requireUnlocked();
+    const generation = ++this.answerPollGeneration;
+    for (let i = 0; i < 150 && epoch === this.epoch && generation === this.answerPollGeneration; i++) {
       const data = await BrainAPI.get('/answers/' + part(id));
-      if (epoch !== this.epoch) return;
+      if (epoch !== this.epoch || generation !== this.answerPollGeneration) return;
       const result = object(data, 'result'); this.answer = text(result, 'answer') || '正在查找资料与生成回答…';
       this.sections = items(result, 'sources').map((o: BrainJSON) => {
         const source = row(o, 'file'); source.id = text(o, 'file_id'); source.body = text(o, 'locator'); return source;
       });
-      if (text(data, 'status') === 'completed') return;
+      if (text(data, 'status') === 'completed') {
+        if (!this.answer.trim()) throw new Error('问答已完成但没有回答内容，请继续等待或重新提问');
+        return;
+      }
       if (['failed', 'interrupted', 'cancelled'].indexOf(text(data, 'status')) >= 0) throw new Error(text(data, 'error') || '问答已中断');
       await new Promise<void>((resolve) => setTimeout(resolve, 1500));
     }
-    if (epoch === this.epoch) throw new Error('问答仍在处理中，可从历史继续查看');
+    if (epoch === this.epoch && generation === this.answerPollGeneration) throw new Error('问答仍在处理中，可从历史继续查看');
   }
   private async steward(): Promise<void> {
     this.mode = 'steward'; this.sections = []; this.error = ''; this.busy = true;
@@ -449,7 +469,6 @@ export struct BrainSpacePage {
     this.resetPaging();
     const lease = BrainAPI.lease();
     try {
-      BrainAPI.requireUnlocked();
       const dataReq = settle(BrainAPI.get('/steward'));
       const butlerReq = settle(BrainAPI.get('/butler'));
       const data = await dataReq;
@@ -523,7 +542,7 @@ export struct BrainSpacePage {
   }
   private async openWeb(route: string): Promise<void> {
     try {
-      BrainAPI.requireUnlocked();
+      await BrainAPI.unlock('打开资料库网页工作区');
       const session = await BrainAPI.webSession();
       if (!/^(?:[A-Za-z0-9_%/-]+)$/.test(route)) throw new Error('网页路径无效');
       const path = route.startsWith('/api/') ? route : '/#' + route;
@@ -647,23 +666,13 @@ export struct BrainSpacePage {
             ActionButton({ label: '保存并连接', busy: this.busy, onTap: () => this.configure() })
           }.padding(24).width('100%').constraintSize({ maxWidth: 520 }).alignItems(HorizontalAlign.Start)
         }.layoutWeight(1).width('100%')
-      } else if (!this.unlocked) {
-        Column({ space: 20 }) {
-          Row() { Sym({ name: 'lock', dim: 38, color: Tokens.accent }) }.width(88).height(88).justifyContent(FlexAlign.Center).backgroundColor(Tokens.accentSoft).borderRadius(28)
-          Text('资料已锁定').fontSize(30).fontWeight(FontWeight.Bold).fontColor(Tokens.text)
-          Text('使用设备认证查看家庭影像与资料').fontColor(Tokens.secondary)
-          ActionButton({ label: '解锁第二大脑', busy: this.authenticating, fullWidth: false, icon: 'lock', onTap: () => this.enter() })
-          ActionButton({ label: '连接设置', variant: 'quiet', fullWidth: false, onTap: () => this.mode = 'settings' })
-          ActionButton({ label: '手机收藏', variant: 'quiet', fullWidth: false, icon: 'bookshelf', onTap: () => AppNavigation.pushUrl({ url: 'pages/CollectionsPage' }) })
-        }.layoutWeight(1).justifyContent(FlexAlign.Center).width('100%')
       } else if (this.mode === 'web') {
         Web({ src: this.webURL, controller: this.web, incognitoMode: true }).layoutWeight(1).width('100%')
           .javaScriptAccess(true).domStorageAccess(true).fileAccess(false)
           .mixedMode(MixedMode.None).geolocationAccess(false)
           .onPermissionRequest((event: OnPermissionRequestEvent) => { if (event) event.request.deny(); })
           .onLoadIntercept((event: OnLoadInterceptEvent) => !event || !(event.data.getRequestUrl() === BrainAPI.base() || event.data.getRequestUrl().startsWith(BrainAPI.base() + '/')))
-      } else {
-        if (this.mode === 'home') {
+      } else if (this.mode === 'home') {
           Flex({ wrap: FlexWrap.Wrap }) {
             if (this.canUpload) { IconButton({ icon: 'arrow_up', label: '上传到资料库', filled: true, onTap: () => this.mode = 'uploads' }) }
             if (this.canShare) { ActionButton({ label: '我的分享', variant: 'quiet', fullWidth: false, onTap: () => this.mode = 'shares' }) }
@@ -747,7 +756,13 @@ export struct BrainSpacePage {
               ActionButton({ label: '撤销分享', variant: 'danger', busy: this.busy, onTap: () => this.revoke() })
             } else {
               if (this.mode === 'answer') {
-                Text(this.answer).fontSize(18).lineHeight(30).fontColor(Tokens.text).copyOption(CopyOptions.InApp).width('100%')
+                MarkdownText({ content: this.answer }).width('100%')
+                if (this.answerId && !this.answerWaiting) {
+                  ActionButton({ label: '继续等待', variant: 'secondary', fullWidth: false, onTap: () => this.resumeAnswer() })
+                }
+                if (this.answerWaiting) {
+                  ActionButton({ label: '停止等待', variant: 'secondary', fullWidth: false, onTap: () => this.stopAnswerWaiting() })
+                }
                 if (this.canSave && this.answerId) {
                   ActionButton({ label: '保存成果', variant: 'secondary', fullWidth: false, onTap: () => {
                     BrainAPI.post('/answers/save', { 'id': this.answerId, 'title': this.query.substring(0, 80) })

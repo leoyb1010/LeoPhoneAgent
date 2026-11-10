@@ -908,6 +908,8 @@ export class ChatItem {
   text: string = '';
   /** 对应消息在列表里的下标(复制、朗读、展开用)。 */
   index: number = -1;
+  /** 这一条最初来自哪条消息(工具胶囊配上结果后 index 会变,origin 不变;列表行的稳定身份用它)。 */
+  origin: number = -1;
   name: string = '';
   title: string = '';
   /** 工具:running / ok / fail / lost(App 停了没跑完) */
@@ -935,6 +937,7 @@ function item(kind: string, index: number, turn: number): ChatItem {
   const row = new ChatItem();
   row.kind = kind;
   row.index = index;
+  row.origin = index;
   row.turn = turn;
   return row;
 }
@@ -1109,6 +1112,23 @@ export function chatItems(lines: TextLine[], active: boolean, openTurns: number[
 export function chatItemKey(row: ChatItem, at: number): string {
   return `${at}|${row.kind}|${row.index}|${row.name}|${row.title}|${row.status}|${row.seconds}|${row.count}|${row.open}|` +
     `${row.head}|${row.last}|${row.partial}|${row.live}|${row.text}`;
+}
+
+/**
+ * 列表行的稳定身份(LazyForEach 数据源用):同一条消息在流式、配上工具结果、轮次说完前后都不变。
+ * 同一身份出现多次(一条计划里同名工具)由数据源按出现顺序加后缀。
+ */
+export function chatItemId(row: ChatItem): string {
+  return `${row.kind}|${row.origin}|${row.name}`;
+}
+
+/**
+ * 这一行画出来的样子。变了才通知数据源重建这一行;没变的行保持原样。
+ * 正在流式输出的那段(live)不带字:字走页面的 liveText 原地刷新,停下时 live 变 false,这一行带完整字重建。
+ */
+export function chatItemSignature(row: ChatItem): string {
+  return `${row.kind}|${row.index}|${row.turn}|${row.name}|${row.title}|${row.status}|${row.seconds}|${row.count}|${row.open}|` +
+    `${row.head}|${row.last}|${row.partial}|${row.live}|${row.live ? '' : row.text}`;
 }
 
 /** 「已工作 N 步 · 用时」里的用时。 */

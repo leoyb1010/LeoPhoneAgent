@@ -1425,14 +1425,16 @@ function wireShape(source, startsWith) {
   // 回答不套气泡:直接画 Markdown,上面一行「✦ LeoPhoneAgent」
   const pane = src("panes/LocalChatPane.ets");
   assert.ok(/AssistantHead\(\{ name: this\.agentName\(\) \}\)/.test(pane));
-  // 流式输出不截断:key 用 chatItemKey(带字),在流的那段走 liveText 原地刷新;Markdown 的块 key 也带字
-  assert.ok(/\(item: ChatItem, i: number\) => chatItemKey\(item, i\)\)/.test(pane), "聊天列表 key 用 chatItemKey");
+  // 长对话按稳定行身份 + 内容版本懒加载；流式文字仍走 liveText 原地刷新。
+  assert.ok(/LazyForEach\(this\.rowSource, \(row: KeyedRow<ChatItem>\)/.test(pane), "聊天列表使用真实懒加载数据源");
+  assert.ok(pane.includes('this.rowSource.sync(this.items, chatItemId, chatItemSignature)'), "行身份与显示内容版本必须来自同一实现");
   assert.ok(/LongAnswer\(\{ text: item\.live \? this\.liveText : item\.text, live: item\.live/.test(pane) && /this\.liveText = run\.lines\[run\.lines\.length - 1\]\.text/.test(pane));
   const longAnswer = src("chat/LongAnswer.ets");
   assert.ok(/if \(!this\.live && this\.long\(\) && !this\.expanded\)/.test(longAnswer) && /else MarkdownText\(\{ text: this\.text, selectable: false \}\)/.test(longAnswer), "流式全文仍直接传给 Markdown；只有完成的长回答折叠");
   const remote = src("panes/ChatPane.ets");
-  assert.ok(/\(line: ChatLine, index: number\) => `\$\{index\}\|\$\{line\.role\}\|\$\{line\.text\}`/.test(remote), "远程对话 key 带字");
-  assert.ok(/LongAnswer\(\{ text: line === this\.liveLine \? this\.liveText : line\.text, live: line === this\.liveLine/.test(remote));
+  assert.ok(/LazyForEach\(this\.rowSource, \(row: KeyedRow<ChatLine>\)/.test(remote), "远程聊天使用真实懒加载数据源");
+  assert.ok(remote.includes('this.rowSource.sync(lines,'), "远程行使用稳定身份和显示签名同步");
+  assert.ok(/LongAnswer\(\{ text: row\.value === this\.liveLine \? this\.liveText : row\.value\.text, live: row\.value === this\.liveLine/.test(remote));
   assert.ok(/\$\{part\.kind\}\|\$\{part\.level\}\|\$\{part\.ordinal\}\|\$\{part\.lang\}\|\$\{part\.text\}/.test(src("theme/Markdown.ets")), "Markdown 块 key 带字");
   assert.ok(/chatItems\(textLines\(run\.lines\), run\.active \|\| run\.askWrite, this\.openTurns, !themeStore\.toolPreview\)/.test(pane));
   // 设置四组,和 iOS / 安卓同顺序

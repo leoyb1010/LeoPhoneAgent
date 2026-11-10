@@ -8,6 +8,9 @@ const read = file => fs.readFileSync(new URL(file, root), 'utf8');
 test('首页默认使用紧凑输入区，把连续滚动空间留给会话', () => {
   const pane = read('panes/LocalAgentPane.ets');
   assert.ok(pane.includes('compact: this.viewportHeight < 900'));
+  const composer = read('chat/Composer.ets');
+  assert.ok(composer.includes('this.showMic && (!this.compactActions() || !this.canSend() || this.running)'));
+  assert.ok(composer.includes('if (!this.compactActions() || this.canSend() || this.running) SurfaceButton'));
 });
 
 test('首页背景延伸覆盖底部手势区且没有独立背景假横条', () => {
