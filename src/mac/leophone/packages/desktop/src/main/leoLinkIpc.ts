@@ -27,6 +27,8 @@ export const LEO_LINK_PAIR_CHANNEL = "leo:link:pair";
 export const LEO_LINK_REVOKE_CHANNEL = "leo:link:revoke";
 /** [G3] 首页「大脑」卡片:Host 代问第二大脑网关(key 只在 Host,界面拿不到)。 */
 export const LEO_BRAIN_STATUS_CHANNEL = "leo:brain:status";
+/** [leo] 第二大脑工作区(只读,docs/specs/leo-brain-workspace.md):Host 要内存口令,界面拿不到 key。 */
+export const LEO_BRAIN_WORKSPACE_CHANNEL = "leo:brain:workspace";
 
 export type { LeoLinkIpcResult } from "./leoLinkHttp.js";
 
@@ -182,6 +184,29 @@ export function registerLeoLinkIpc(): void {
       ? callLeo("/api/leo/brain/status", "GET")
       : { ok: false, error: "forbidden" },
   );
+  ipcMain.handle(LEO_BRAIN_WORKSPACE_CHANNEL, async (event, request: unknown) => {
+    // [leo] 根因:工作区会读出资料正文,只能给应用自己的顶层页面,且只把口令交给我们自己的 Host。
+    // 请求原样转给 Host,由 Host 做运行时校验;这里不信任也不解析请求内容。
+    const fail = (code: "forbidden" | "host_unavailable", message: string) => ({
+      ok: false as const,
+      error: { code, message },
+    });
+    if (!isTrustedLeoSender(event)) return fail("forbidden", "只能在 LeoBot 界面上使用");
+    if (!(await ownHostListening())) return fail("host_unavailable", PORT_TAKEN);
+    const result = await callLeo(
+      "/api/leo/brain/workspace",
+      "POST",
+      { "x-leo-pair": LEO_PAIR_SECRET },
+      request ?? {},
+    );
+    // callLeo 把 Host 的 JSON 包成 { ok, data };Host 返回的本身就是 { ok, data | error },这里拆掉一层,
+    // 不让 UI 看到双层结构。Host 不可用或返回非 2xx 时,统一给 host_unavailable。
+    if (!result.ok) return fail("host_unavailable", "本机 Leo 服务暂时不可用");
+    const inner = result.data;
+    return inner && typeof inner === "object" && typeof inner["ok"] === "boolean"
+      ? inner
+      : fail("host_unavailable", "本机 Leo 服务暂时不可用");
+  });
   ipcMain.handle(LEO_LINK_PAIR_CHANNEL, async (event) => {
     if (!isTrustedLeoSender(event)) return { ok: false, error: "forbidden" };
     if (!(await ownHostListening())) return { ok: false, error: PORT_TAKEN };

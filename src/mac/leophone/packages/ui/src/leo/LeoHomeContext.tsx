@@ -7,6 +7,8 @@ import type { WorkspaceTabState } from "@/store/tabStore.js";
  * 草稿页深处直接取,不必沿着上游组件一层层加 props。
  */
 export interface LeoHomeContextValue {
+  /** Open the read-only Brain workspace without changing the active task. */
+  onOpenBrain?: () => void;
   workspaceTabs: WorkspaceTabState[];
   onSelectTask: (
     workspacePath: string,

@@ -2,6 +2,7 @@ import { PluginUiWorkspaceProvider } from "@/plugin-ui/index.js";
 /* eslint-disable max-lines -- App 当前集中编排 workspace 级状态、导航、Git 派生数据和 shell wiring；已将新增 side pane memory 桥接抽出，剩余拆分需要按 shell 边界单独重构。 */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LeoHomeProvider } from "@/leo/LeoHomeContext.js";
+import { LeoBrainWorkspace } from "@/leo/LeoBrainWorkspace.js";
 import { useLeoQuickOpenTask } from "@/leo/useLeoQuickOpenTask.js";
 import { useShallow } from "zustand/react/shallow";
 import { resolveWorkspaceKey, type GitChangeSourceId, type WorkspacePurpose } from "@zcode/shared";
@@ -306,6 +307,7 @@ export function App({
   ]);
   const [testMessages, setTestMessages] = useState<TestChatMessage[] | null>(null);
   const [isQuickPickOpen, setIsQuickPickOpen] = useState(false);
+  const [isBrainOpen, setIsBrainOpen] = useState(false);
   const [isTaskFindOpen, setIsTaskFindOpen] = useState(false);
   const [taskFindFocusRequestId, setTaskFindFocusRequestId] = useState(0);
   const [conversationFindState, setConversationFindState] = useState(createTaskFindNavigationState);
@@ -1082,6 +1084,7 @@ export function App({
   const leoHomeValue = useMemo(
     () => ({
       workspaceTabs: commandCenterWorkspaceTabs,
+      onOpenBrain: () => setIsBrainOpen(true),
       onSelectTask: handleSelectTask,
       // [leo][WP-27] 并行任务组的任务开在 worktree 里:先把它作为工作区 tab 打开,再定位任务。
       onOpenWorkspaceTask: (workspacePath: string, taskId: string) => {
@@ -1105,6 +1108,7 @@ export function App({
   return (
     // [leo] 首页状态清单跨项目读任务、点一下打开:把已打开项目和「打开任务」交给草稿页。
     <LeoHomeProvider value={leoHomeValue}>
+      <LeoBrainWorkspace open={isBrainOpen} onOpenChange={setIsBrainOpen} />
       <CommandCenterDialog
         open={isQuickPickOpen}
         commands={quickPickCommands}

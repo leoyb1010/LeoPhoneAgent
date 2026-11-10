@@ -228,6 +228,15 @@ export type {
   UpdateStatePayload,
   WSLDistro,
   ZCodeStdioTapDevState,
+  LeoBrainCardSummary,
+  LeoBrainFileChunk,
+  LeoBrainPlatformPort,
+  LeoBrainSearchItem,
+  LeoBrainSearchScope,
+  LeoBrainWorkspaceData,
+  LeoBrainWorkspaceErrorCode,
+  LeoBrainWorkspaceRequest,
+  LeoBrainWorkspaceResult,
 } from "./platform.js";
 export type {
   CuaAccessibilitySettingsResult,

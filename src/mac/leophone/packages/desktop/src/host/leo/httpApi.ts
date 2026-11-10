@@ -31,6 +31,7 @@ import {
 import type { LeoQuickEntry } from "./quickEntry.js";
 import { handlePairedLeoRoute, isPairedLeoRoute } from "./pairedRoutes.js";
 import { readBrainStatus } from "./brainGateway.js";
+import { queryBrainWorkspace } from "./brainWorkspace.js";
 import type { LeoTaskGroups } from "./taskGroups/service.js";
 import {
   closeAllScreenSessions,
@@ -273,6 +274,16 @@ export function startLeoHttpApi(deps: {
         readBody: () => readJsonBody(req, 256 * 1024),
         send: (status, body) => json(res, status, body),
       });
+      return;
+    }
+    // [leo] 第二大脑工作区(只读,docs/specs/leo-brain-workspace.md):主钥匙之外还要主进程内存口令,光有持久主钥匙
+    // 读不到正文;不在手机 Link 白名单。结果一律 200 + 结构化 ok/error。
+    if (url.pathname === "/api/leo/brain/workspace") {
+      if (req.method !== "POST") return json(res, 405, { error: "method not allowed" });
+      if (!isPairSecret(req.headers["x-leo-pair"] as string | undefined))
+        return json(res, 403, { error: "第二大脑工作区只能在 LeoBot 界面上使用" });
+      const body = await readJsonBody(req, 4096).catch(() => null);
+      json(res, 200, body ? await queryBrainWorkspace(body) : { ok: false, error: { code: "invalid_request", message: "请求格式不对" } });
       return;
     }
     // 只读状态:连手机状态;[G3] 首页「大脑」卡片(网关 /v1/health,Host 缓存 5 分钟;没 key 时 enabled=false)。

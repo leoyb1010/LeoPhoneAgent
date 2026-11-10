@@ -642,6 +642,136 @@ export type CuaOsSupport =
  * 比如 native dialog、窗口生命周期控制等。
  * 业务服务（文件、终端、凭据等）走 IServiceAccessor 的 RPC 通道。
  */
+// ---------------------------------------------------------------------------
+// [leo] 第二大脑工作区（只读）：公共请求 / 结果契约。契约见 docs/specs/leo-brain-workspace.md。
+// 请求是固定 op 的判别联合；Host 端会在运行时重新校验，这里的类型只约束 UI 调用方。
+// ---------------------------------------------------------------------------
+
+export type LeoBrainSearchScope = "all" | "files" | "cards";
+
+export type LeoBrainWorkspaceRequest =
+  | { op: "status" }
+  | { op: "cards"; offset?: number }
+  | { op: "search"; query: string; scope?: LeoBrainSearchScope; offset?: number }
+  | { op: "read"; kind: "card" | "file"; id: string; offset?: number };
+
+export type LeoBrainWorkspaceErrorCode =
+  | "not_configured"
+  | "unauthorized"
+  | "forbidden"
+  | "not_found"
+  | "unreachable"
+  | "invalid_request"
+  | "invalid_response"
+  | "host_unavailable";
+
+export interface LeoBrainCardSummary {
+  id: string;
+  title: string;
+  category?: string;
+  status?: string;
+  version?: number;
+  updatedAt?: string;
+  summary?: string;
+}
+
+export interface LeoBrainSearchItem {
+  type: "file" | "card";
+  id: string;
+  title: string;
+  path?: string;
+  source?: string;
+  ext?: string;
+  category?: string;
+  project?: string;
+  privacy?: string;
+  status?: string;
+  score?: number;
+  size?: number;
+  mtime?: string;
+  match?: { locator?: string; excerpt?: string };
+}
+
+export interface LeoBrainFileChunk {
+  id: string;
+  locator?: string;
+  text: string;
+  method?: string;
+}
+
+export type LeoBrainWorkspaceData =
+  | { op: "status"; cards: number | null; files: number | null }
+  | {
+      op: "cards";
+      items: LeoBrainCardSummary[];
+      total: number;
+      offset: number;
+      nextOffset: number | null;
+    }
+  | {
+      op: "search";
+      query: string;
+      scope: LeoBrainSearchScope;
+      items: LeoBrainSearchItem[];
+      total: number;
+      mode?: string;
+      semanticUsed?: boolean;
+      /** 网关因隐私过滤掉的条目数；UI 要提示，不能当作“没有更多”。 */
+      hiddenSensitive: number;
+      offset: number;
+      /** 直接取网关的 next_offset；null 表示没有下一页。 */
+      nextOffset: number | null;
+    }
+  | {
+      op: "read";
+      kind: "card";
+      id: string;
+      title: string;
+      category?: string;
+      status?: string;
+      version?: number;
+      createdAt?: string;
+      updatedAt?: string;
+      /** 正文从 bodyOffset 开始的一段（按字符计）；nextOffset 为 null 才表示已经读完。 */
+      body: string;
+      bodyOffset: number;
+      bodyLength: number;
+      nextOffset: number | null;
+      sources: Array<{ fileId: string; locator?: string }>;
+    }
+  | {
+      op: "read";
+      kind: "file";
+      id: string;
+      title: string;
+      path?: string;
+      source?: string;
+      ext?: string;
+      size?: number;
+      mtime?: string;
+      category?: string;
+      project?: string;
+      privacy?: string;
+      status?: string;
+      summary?: string;
+      chunkTotal: number;
+      originalAvailable: boolean;
+      backupAvailable: boolean;
+      /** 从 chunkOffset 开始最多 12 片；按 nextOffset 继续读，不能把一页当成全文。 */
+      chunks: LeoBrainFileChunk[];
+      chunkOffset: number;
+      nextOffset: number | null;
+    };
+
+export type LeoBrainWorkspaceResult =
+  | { ok: true; data: LeoBrainWorkspaceData }
+  | { ok: false; error: { code: LeoBrainWorkspaceErrorCode; message: string } };
+
+/** 只有 Mac 桌面端实现；Web / 手机远控为 undefined，UI 据此隐藏入口。 */
+export interface LeoBrainPlatformPort {
+  query(request: LeoBrainWorkspaceRequest): Promise<LeoBrainWorkspaceResult>;
+}
+
 export interface IPlatformService {
   /** 当前平台的文件选择框是否能返回 agent 可访问的本地绝对路径 */
   canSelectFilePath?: boolean;
@@ -651,6 +781,12 @@ export interface IPlatformService {
    * web / 手机远控为 undefined，plugin-ui 据此回退到普通 MCP 工具卡片。
    */
   pluginSandbox?: PluginSandboxPlatformPort;
+
+  /**
+   * [leo] 第二大脑工作区（只读，见 docs/specs/leo-brain-workspace.md）。只有 Mac 桌面端实现；
+   * UI 只能经这里访问，不直接读 window.leoLink / window.zcode。
+   */
+  leoBrain?: LeoBrainPlatformPort;
 
   /** 打开系统目录选择框，返回选中路径或 null */
   selectDirectory(): Promise<string | null>;

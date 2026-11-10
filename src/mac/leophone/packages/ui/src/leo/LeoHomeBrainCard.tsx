@@ -1,123 +1,63 @@
 import { Brain } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { usePlatform } from "@/hooks/usePlatform.js";
+import { useLeoHome } from "./LeoHomeContext.js";
 
-/** Host 的 /api/leo/brain/status(packages/desktop/src/host/leo/brainGateway.ts)。 */
-export type LeoBrainStatus = {
-  enabled: boolean;
-  cards: number | null;
-  files: number | null;
-  error?: string;
-};
-
+export type LeoBrainStatus = { enabled: boolean; cards: number | null; files: number | null; error?: string };
 type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
-type LeoBrainBridge = { brainStatus?: () => Promise<IpcResult<LeoBrainStatus>> };
-
-function getBrainStatusReader(): (() => Promise<IpcResult<LeoBrainStatus>>) | null {
-  if (typeof window === "undefined") return null;
-  const bridge = (window as unknown as { leoLink?: LeoBrainBridge }).leoLink;
-  const brainStatus = bridge?.brainStatus;
-  return brainStatus ? () => brainStatus() : null;
-}
-
-/**
- * [leo][G3] 首页「大脑」小卡:第二大脑里有多少卡片 / 文件。
- *
- * 数据由 Host 代问网关(key 只在 Host,界面拿不到);本机没发第二大脑 key 时整块不出现。
- * 读不到时一行说明 + 重试,不留空白。
- */
+/** 首页和主侧栏都打开同一个只读工作区；UI不再读取原生全局桥。 */
 export function LeoHomeBrainCard({ className }: { className?: string }) {
-  // 只取一次:每次渲染都新建函数会让下面的 effect 反复重跑。
-  const [read] = useState(getBrainStatusReader);
-  if (!read) return null;
-  return <LeoHomeBrainCardBody read={read} className={className} />;
+  const port = usePlatform().leoBrain;
+  const home = useLeoHome();
+  const read = useCallback(async (): Promise<IpcResult<LeoBrainStatus>> => {
+    if (!port) return { ok: false, error: "host_unavailable" };
+    const result = await port.query({ op: "status" });
+    if (result.ok && result.data.op === "status") return { ok: true, data: { enabled: true, cards: result.data.cards, files: result.data.files } };
+    if (!result.ok && result.error.code === "not_configured") return { ok: true, data: { enabled: false, cards: null, files: null } };
+    return { ok: false, error: "unreachable" };
+  }, [port]);
+  if (!port) return null;
+  return <LeoHomeBrainCardBody read={read} className={className} onOpen={home?.onOpenBrain} />;
 }
 
-export function LeoHomeBrainCardBody({
-  read,
-  className,
-}: {
-  read: () => Promise<IpcResult<LeoBrainStatus>>;
-  className?: string;
+export function LeoHomeBrainCardBody({ read, className, onOpen }: {
+  read: () => Promise<IpcResult<LeoBrainStatus>>; className?: string; onOpen?: () => void;
 }) {
   const { intl, locale } = useZCodeIntl();
   const [status, setStatus] = useState<LeoBrainStatus | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async (): Promise<boolean> => {
+  const epoch = useRef(0);
+  const load = useCallback(async (): Promise<void> => {
+    const current = ++epoch.current;
     setLoading(true);
     try {
       const result = await read();
-      // 出错时保留「本机有 key」的判断,只把数字清掉;还不知道有没有 key(Host 没起来)就继续不占位。
-      setStatus((previous) =>
-        result.ok
-          ? result.data
-          : previous
-            ? { ...previous, cards: null, files: null, error: result.error }
-            : null,
-      );
-      return result.ok;
+      if (current !== epoch.current) return;
+      setStatus(result.ok ? result.data : { enabled: true, cards: null, files: null, error: result.error });
     } catch {
-      return false;
-    } finally {
-      setLoading(false);
-    }
+      if (current === epoch.current) setStatus({ enabled: true, cards: null, files: null, error: "unreachable" });
+    } finally { if (current === epoch.current) setLoading(false); }
   }, [read]);
-
-  useEffect(() => {
-    let alive = true;
-    let timer: number | undefined;
-    // 刚启动时 Host 可能还没抢到端口:隔 5 秒再问,最多 6 次。
-    const attempt = (left: number) =>
-      void load().then((ok) => {
-        if (alive && !ok && left > 0) timer = window.setTimeout(() => attempt(left - 1), 5_000);
-      });
-    attempt(6);
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
-  }, [load]);
-
-  // 第一次结果回来之前、或本机没 key:不占位。
-  if (!status || !status.enabled) return null;
-  const failed = status.cards === null && status.files === null;
-
+  useEffect(() => { void load(); return () => { ++epoch.current; }; }, [load]);
+  const label = loading ? intl.formatMessage({ id: "brain.workspace.loading" })
+    : !status?.enabled ? intl.formatMessage({ id: "brain.workspace.error.not_configured" })
+    : status.error ? intl.formatMessage({ id: "leoHome.brain.unreachable" })
+    : intl.formatMessage({ id: "leoHome.brain.counts" }, {
+      cards: status.cards == null ? "—" : new Intl.NumberFormat(locale).format(status.cards),
+      files: status.files == null ? "—" : new Intl.NumberFormat(locale).format(status.files),
+    });
   return (
-    <section
-      aria-label={intl.formatMessage({ id: "leoHome.brain.title" })}
-      data-testid="leo-home-brain"
-      className={cn("leo-home-recent flex w-full max-w-2xl", className)}
-    >
-      <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
-        <Brain aria-hidden="true" className="size-4 shrink-0 text-brand" />
-        <span className="shrink-0 text-ui-caption font-medium text-foreground">
-          {intl.formatMessage({ id: "leoHome.brain.title" })}
-        </span>
-        {failed ? (
-          <>
-            <span className="min-w-0 truncate text-ui-sm text-foreground-subtle">
-              {intl.formatMessage({ id: "leoHome.brain.unreachable" })}
-            </span>
-            <Button type="button" variant="ghost" size="xs" disabled={loading} onClick={() => void load()}>
-              {intl.formatMessage({ id: "leoHome.brain.retry" })}
-            </Button>
-          </>
-        ) : (
-          <span className="min-w-0 truncate text-ui-sm text-foreground-subtle tabular-nums">
-            {intl.formatMessage(
-              { id: "leoHome.brain.counts" },
-              {
-                cards: new Intl.NumberFormat(locale).format(status.cards ?? 0),
-                files: new Intl.NumberFormat(locale).format(status.files ?? 0),
-              },
-            )}
-          </span>
-        )}
+    <section aria-label={intl.formatMessage({ id: "leoHome.brain.title" })} data-testid="leo-home-brain" className={cn("leo-home-recent w-full max-w-2xl", className)}>
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
+        <Brain aria-hidden="true" className="size-4 shrink-0 text-icon-blue" />
+        <span className="text-ui-caption font-medium text-foreground">{intl.formatMessage({ id: "leoHome.brain.title" })}</span>
+        <span className="min-w-0 flex-1 text-ui-sm text-foreground">{label}</span>
+        {status?.error ? <Button variant="ghost" size="xs" disabled={loading} onClick={() => void load()}>{intl.formatMessage({ id: "leoHome.brain.retry" })}</Button> : null}
+        {onOpen ? <Button type="button" variant="outline" onClick={onOpen}>{intl.formatMessage({ id: "brain.workspace.open" })}</Button> : null}
       </div>
     </section>
   );

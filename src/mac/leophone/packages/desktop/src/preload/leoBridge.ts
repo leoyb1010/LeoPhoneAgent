@@ -10,6 +10,11 @@ contextBridge.exposeInMainWorld("leoLink", {
   status: () => ipcRenderer.invoke("leo:link:status"),
   /** [G3] 第二大脑状态(卡片 / 文件数);本机没 key 时 data.enabled=false。 */
   brainStatus: () => ipcRenderer.invoke("leo:brain:status"),
+  /**
+   * [leo] 第二大脑工作区(只读)。请求是固定 op 的对象,原样交给主进程,由 Host 校验;preload 不读 key、不拼网关地址。
+   * 界面不要直接调这里,要经 usePlatform().leoBrain(见 renderer/src/desktopPlatform.ts)。
+   */
+  brainWorkspace: (request: unknown) => ipcRenderer.invoke("leo:brain:workspace", request),
   pair: () => ipcRenderer.invoke("leo:link:pair"),
   revoke: (payload: string) => ipcRenderer.invoke("leo:link:revoke", payload),
   /** 在系统浏览器里打开订阅账号登录页(主进程带上本次启动的口令与实际端口)。 */

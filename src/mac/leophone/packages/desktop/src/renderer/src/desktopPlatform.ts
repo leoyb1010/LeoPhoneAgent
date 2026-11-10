@@ -1,8 +1,42 @@
 import { recordArmsCustomEventForE2E } from "@zcode/ui";
-import { DesktopCommandIds, buildLocalMediaPreviewUrl, type IPlatformService } from "@zcode/shared";
+import {
+  DesktopCommandIds,
+  buildLocalMediaPreviewUrl,
+  type IPlatformService,
+  type LeoBrainPlatformPort,
+  type LeoBrainWorkspaceResult,
+} from "@zcode/shared";
 
 import { desktopBrowserPlatformBridge } from "./desktopBrowserPlatformBridge.js";
 import { createDesktopPluginSandboxPlatform } from "./plugin-sandbox/desktopPluginSandboxPlatform.js";
+
+/**
+ * [leo] 第二大脑工作区的平台端口(docs/specs/leo-brain-workspace.md)。渲染进程里只有这里读原生桥 window.leoLink;
+ * UI 一律经 usePlatform().leoBrain。preload 没暴露这个方法(非 macOS 或旧 preload)时返回 undefined,UI 据此隐藏入口。
+ */
+function createLeoBrainPlatform(): LeoBrainPlatformPort | undefined {
+  const bridge = (window as unknown as {
+    leoLink?: { brainWorkspace?: (request: unknown) => Promise<unknown> };
+  }).leoLink;
+  const call = bridge?.brainWorkspace;
+  if (!call) return undefined;
+  const unavailable: LeoBrainWorkspaceResult = {
+    ok: false,
+    error: { code: "host_unavailable", message: "本机 Leo 服务暂时不可用" },
+  };
+  return {
+    query: async (request) => {
+      try {
+        const result = await call(request);
+        return result && typeof result === "object" && typeof (result as { ok?: unknown }).ok === "boolean"
+          ? (result as LeoBrainWorkspaceResult)
+          : unavailable;
+      } catch {
+        return unavailable;
+      }
+    },
+  };
+}
 
 export function createDesktopPlatform(options: {
   isLocalDevelopmentRuntime: boolean;
@@ -10,6 +44,7 @@ export function createDesktopPlatform(options: {
   return {
     canSelectFilePath: true,
     pluginSandbox: createDesktopPluginSandboxPlatform(),
+    leoBrain: createLeoBrainPlatform(),
     createLocalMediaPreviewUrl: buildLocalMediaPreviewUrl,
     isLocalDevelopmentRuntime: options.isLocalDevelopmentRuntime,
     selectDirectory: () => window.zcode.selectDirectory(),
