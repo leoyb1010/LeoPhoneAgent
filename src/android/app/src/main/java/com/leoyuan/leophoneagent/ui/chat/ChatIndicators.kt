@@ -18,7 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -105,7 +105,7 @@ internal fun TypingIndicator() {
     // that's updated on save (SoulSettingsScreen) and at app start
     // (MinisApp.onCreate via refreshCache); collectAsState makes Compose
     // recompose the indicator immediately when it changes.
-    val soulMeta by com.leoyuan.leophoneagent.agent.SoulStore.cachedMetadata.collectAsState()
+    val soulMeta by com.leoyuan.leophoneagent.agent.SoulStore.cachedMetadata.collectAsStateWithLifecycle()
     val soulName = soulMeta.name.trim().ifEmpty { "LeoPhoneAgent" }
     val reduceMotion = rememberReduceMotion()
     val infiniteTransition = if (reduceMotion) null else rememberInfiniteTransition(label = "typing")

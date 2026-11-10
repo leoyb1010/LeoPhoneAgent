@@ -164,6 +164,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -599,23 +600,23 @@ fun ChatScreen(
     // grows in steps when the user reaches the top via [viewModel.loadOlderMessages].
     // Callers needing the full history (compact / fork / regenerate / send)
     // continue to read viewModel.messages directly inside the VM.
-    val messages by viewModel.uiMessages.collectAsState()
-    val hasOlderMessages by viewModel.hasOlderMessages.collectAsState()
-    val isStreaming by viewModel.isStreaming.collectAsState()
-    val canResume by viewModel.canResume.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val modelName by viewModel.modelName.collectAsState()
-    val sessionTitle by viewModel.sessionTitle.collectAsState()
-    val sessionCategory by viewModel.sessionCategory.collectAsState()
-    val attachments by viewModel.attachments.collectAsState()
-    val availableGroups by viewModel.availableGroups.collectAsState()
-    val selectedGroupId by viewModel.selectedGroupId.collectAsState()
-    val showBrowserSheet by viewModel.showBrowserSheet.collectAsState()
-    val showMemorySheet by viewModel.showMemorySheet.collectAsState()
-    val memoryToolRecords by viewModel.memoryToolRecords.collectAsState()
-    val selectedGroupName by viewModel.selectedGroupName.collectAsState()
-    val providerName by viewModel.providerName.collectAsState()
-    val thinkingLevel by viewModel.thinkingLevel.collectAsState()
+    val messages by viewModel.uiMessages.collectAsStateWithLifecycle()
+    val hasOlderMessages by viewModel.hasOlderMessages.collectAsStateWithLifecycle()
+    val isStreaming by viewModel.isStreaming.collectAsStateWithLifecycle()
+    val canResume by viewModel.canResume.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val modelName by viewModel.modelName.collectAsStateWithLifecycle()
+    val sessionTitle by viewModel.sessionTitle.collectAsStateWithLifecycle()
+    val sessionCategory by viewModel.sessionCategory.collectAsStateWithLifecycle()
+    val attachments by viewModel.attachments.collectAsStateWithLifecycle()
+    val availableGroups by viewModel.availableGroups.collectAsStateWithLifecycle()
+    val selectedGroupId by viewModel.selectedGroupId.collectAsStateWithLifecycle()
+    val showBrowserSheet by viewModel.showBrowserSheet.collectAsStateWithLifecycle()
+    val showMemorySheet by viewModel.showMemorySheet.collectAsStateWithLifecycle()
+    val memoryToolRecords by viewModel.memoryToolRecords.collectAsStateWithLifecycle()
+    val selectedGroupName by viewModel.selectedGroupName.collectAsStateWithLifecycle()
+    val providerName by viewModel.providerName.collectAsStateWithLifecycle()
+    val thinkingLevel by viewModel.thinkingLevel.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // [T-android-voice-panel] Shared 3-stage RECORD_AUDIO permission flow
@@ -663,7 +664,7 @@ fun ChatScreen(
     // T325: draft persists on the VM so navigation (e.g. push EnvVars and
     // pop back) doesn't wipe what the user has typed. Mirrors iOS
     // `AIChatView` which binds the composer against `vm.inputText`.
-    val inputText by viewModel.inputText.collectAsState()
+    val inputText by viewModel.inputText.collectAsStateWithLifecycle()
 
     // ─── T51: Share Injection + Move-to capsule ───────────────────────
     // Drain any pending share buffered by ShareCoordinator (cold start =
@@ -876,7 +877,7 @@ fun ChatScreen(
     // the menu and slash-command entry points share a single confirmation
     // dialog instance. ack the VM flag immediately to avoid re-firing on
     // recomposition.
-    val clearChatRequested by viewModel.clearChatConfirmRequested.collectAsState()
+    val clearChatRequested by viewModel.clearChatConfirmRequested.collectAsStateWithLifecycle()
     LaunchedEffect(clearChatRequested) {
         if (clearChatRequested) {
             showClearChatDialog = true
@@ -2167,7 +2168,7 @@ fun ChatScreen(
                             platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
                         )
                         // Fallback pulse animation (iOS: 3× red pulse on model switch)
-                        val fallbackTrigger by viewModel.fallbackTrigger.collectAsState()
+                        val fallbackTrigger by viewModel.fallbackTrigger.collectAsStateWithLifecycle()
                         val fallbackPulseAlpha = remember { androidx.compose.animation.core.Animatable(0f) }
                         LaunchedEffect(fallbackTrigger) {
                             if (fallbackTrigger == 0) return@LaunchedEffect
@@ -2229,7 +2230,7 @@ fun ChatScreen(
                                     }
                                     .padding(horizontal = 4.dp, vertical = 2.dp),
                             )
-                            val routeChip by viewModel.actionRouteChip.collectAsState()
+                            val routeChip by viewModel.actionRouteChip.collectAsStateWithLifecycle()
                             if (routeChip.isNotBlank()) {
                                 Text(
                                     text = routeChip,
@@ -2321,7 +2322,7 @@ fun ChatScreen(
                                 // keeps its intrinsic width and always renders in
                                 // full — the level label never gets clipped.
                                 if (!compactChrome && (providerName.isNotEmpty() || modelName.isNotEmpty())) {
-                                    val thinkingLevelBadgeState by viewModel.thinkingLevel.collectAsState()
+                                    val thinkingLevelBadgeState by viewModel.thinkingLevel.collectAsStateWithLifecycle()
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -2332,8 +2333,8 @@ fun ChatScreen(
                                         // is enabled AND the active model is
                                         // eligible (iOS 9e3c76ef row-3 placement,
                                         // 09944220 9pt sizing).
-                                        val fastBadgeEligible by viewModel.showFastModeToggle.collectAsState()
-                                        val fastBadgeOn by viewModel.fastModeEnabled.collectAsState()
+                                        val fastBadgeEligible by viewModel.showFastModeToggle.collectAsStateWithLifecycle()
+                                        val fastBadgeOn by viewModel.fastModeEnabled.collectAsStateWithLifecycle()
                                         if (fastBadgeEligible && fastBadgeOn) {
                                             Box(
                                                 contentAlignment = Alignment.Center,
@@ -2416,7 +2417,7 @@ fun ChatScreen(
                             // disappears, consistent with the per-session gating
                             // of the memory_get / memory_write tools and the
                             // system-prompt injection.
-                            val menuMemoryEnabled by viewModel.memoryEnabled.collectAsState()
+                            val menuMemoryEnabled by viewModel.memoryEnabled.collectAsStateWithLifecycle()
                             // [T-new-chat-menu-entry] New Chat — first item
                             // (iOS parity: square.and.pencil at the top of the
                             // "..." menu). Streaming sessions confirm first.
@@ -2538,8 +2539,8 @@ fun ChatScreen(
                             // providers) — showEnhancedCacheToggle recomputes on
                             // model/provider switch. First enable prompts a
                             // one-time extra-billing confirmation.
-                            val showEnhancedCache by viewModel.showEnhancedCacheToggle.collectAsState()
-                            val enhancedCacheOn by viewModel.enhancedCacheEnabled.collectAsState()
+                            val showEnhancedCache by viewModel.showEnhancedCacheToggle.collectAsStateWithLifecycle()
+                            val enhancedCacheOn by viewModel.enhancedCacheEnabled.collectAsStateWithLifecycle()
                             if (showEnhancedCache) {
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.chat_menu_enhanced_cache)) },
@@ -2583,8 +2584,8 @@ fun ChatScreen(
                             // subscription) and the nav model row shows a ⚡
                             // badge. Sits next to Enhanced Cache — both are
                             // model-invocation controls (iOS 09944220 grouping).
-                            val showFastMode by viewModel.showFastModeToggle.collectAsState()
-                            val fastModeOn by viewModel.fastModeEnabled.collectAsState()
+                            val showFastMode by viewModel.showFastModeToggle.collectAsStateWithLifecycle()
+                            val fastModeOn by viewModel.fastModeEnabled.collectAsStateWithLifecycle()
                             if (showFastMode) {
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.chat_menu_fast_mode)) },
@@ -2749,7 +2750,7 @@ fun ChatScreen(
                 // mount uses `lastToolBlocks.isNotEmpty()` over the merged
                 // view; we mirror that semantically by checking the same
                 // filter on both sources.
-                val streamingById by viewModel.streamingById.collectAsState()
+                val streamingById by viewModel.streamingById.collectAsStateWithLifecycle()
                 val hasFloatingTools = remember(messages, streamingById) {
                     val merged = if (streamingById.isEmpty()) messages
                                  else mergeStreamingOverlay(messages, streamingById)
@@ -3195,10 +3196,10 @@ fun ChatScreen(
                 // tap-spy below can react to it. The popup itself, declared
                 // further down near the composer, reads viewModel.showSlashMenu
                 // again — both subscriptions snap to the same StateFlow.
-                val slashMenuOpen by viewModel.showSlashMenu.collectAsState()
+                val slashMenuOpen by viewModel.showSlashMenu.collectAsStateWithLifecycle()
                 // T4: mirror state hoist for the mention picker so the chat-list
                 // tap-spy can dismiss it the same way as the slash popup.
-                val mentionMenuOpenForSpy by viewModel.showMentionMenu.collectAsState()
+                val mentionMenuOpenForSpy by viewModel.showMentionMenu.collectAsStateWithLifecycle()
                 // Intercept back press to dismiss slash/mention menus before
                 // navigating away from the chat screen.
                 androidx.activity.compose.BackHandler(
@@ -3906,7 +3907,7 @@ fun ChatScreen(
                 // block disappears (T258 retry-preserve removes in-flight
                 // tools, clearChat, etc.). Reuses lastToolBlocks (already
                 // computed above) so we don't traverse messages twice.
-                val selectedToolDetailId by viewModel.selectedToolDetailId.collectAsState()
+                val selectedToolDetailId by viewModel.selectedToolDetailId.collectAsStateWithLifecycle()
                 LaunchedEffect(selectedToolDetailId, lastToolBlocks) {
                     val id = selectedToolDetailId ?: return@LaunchedEffect
                     if (lastToolBlocks.none { it.id == id }) viewModel.closeToolDetail()
@@ -4071,18 +4072,18 @@ fun ChatScreen(
                 // instead of pushing them up. Anchored above the composer via
                 // PopupProperties so its bottom edge sits just above this Column.
                 // Tap-outside dismisses via dismissOnClickOutside.
-                val showSlashMenu by viewModel.showSlashMenu.collectAsState()
+                val showSlashMenu by viewModel.showSlashMenu.collectAsStateWithLifecycle()
                 val filteredSlashCommands = remember(
                     showSlashMenu,
-                    viewModel.slashFilter.collectAsState().value,
-                    viewModel.memoryEnabled.collectAsState().value,
-                    viewModel.thinkingLevel.collectAsState().value,
+                    viewModel.slashFilter.collectAsStateWithLifecycle().value,
+                    viewModel.memoryEnabled.collectAsStateWithLifecycle().value,
+                    viewModel.thinkingLevel.collectAsStateWithLifecycle().value,
                 ) { viewModel.filteredSlashCommands() }
 
                 if (showSlashMenu && filteredSlashCommands.isNotEmpty()) {
-                    val thinkingLevelState by viewModel.thinkingLevel.collectAsState()
+                    val thinkingLevelState by viewModel.thinkingLevel.collectAsStateWithLifecycle()
                     val thinkingSupported = viewModel.currentModelSupportsReasoning
-                    val memoryOnState by viewModel.memoryEnabled.collectAsState()
+                    val memoryOnState by viewModel.memoryEnabled.collectAsStateWithLifecycle()
                     androidx.compose.ui.window.Popup(
                         popupPositionProvider = remember {
                             object : androidx.compose.ui.window.PopupPositionProvider {
@@ -4269,10 +4270,10 @@ fun ChatScreen(
                 // contract as the slash popup (mutually exclusive in the VM,
                 // so they never both render). Reuses Popup so the bar over
                 // the composer is consistent and respects IME inset.
-                val showMentionMenu by viewModel.showMentionMenu.collectAsState()
-                val mentionEntries by viewModel.mentionEntries.collectAsState()
-                val isMentionScanning by viewModel.isMentionScanning.collectAsState()
-                val mentionSelectedIndex by viewModel.mentionSelectedIndex.collectAsState()
+                val showMentionMenu by viewModel.showMentionMenu.collectAsStateWithLifecycle()
+                val mentionEntries by viewModel.mentionEntries.collectAsStateWithLifecycle()
+                val isMentionScanning by viewModel.isMentionScanning.collectAsStateWithLifecycle()
+                val mentionSelectedIndex by viewModel.mentionSelectedIndex.collectAsStateWithLifecycle()
                 if (showMentionMenu) {
                     androidx.compose.ui.window.Popup(
                         popupPositionProvider = remember {
@@ -4457,7 +4458,7 @@ fun ChatScreen(
                 // free overlay primitive that doesn't need a Box wrapper,
                 // and an in-flow Row at the top with Arrangement.End is the
                 // cleanest equivalent.
-                val showMoveCapsule by viewModel.hasInjectedShareContent.collectAsState()
+                val showMoveCapsule by viewModel.hasInjectedShareContent.collectAsStateWithLifecycle()
                 // Mirrors iOS swipe-up-to-send: drag the input bar upward —
                 // if it holds text, a floating send-arrow + "Release to send"
                 // capsule track the finger; releasing past `swipeArmFraction`
@@ -5209,7 +5210,7 @@ fun ChatScreen(
                         // is non-null. Tap clears the edit flag + composer text
                         // without truncating history. iOS parity:
                         // AIChatView.swift L1586 editExitButton.
-                        val editingId by viewModel.editingMessageId.collectAsState()
+                        val editingId by viewModel.editingMessageId.collectAsStateWithLifecycle()
                         if (editingId != null) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Surface(
@@ -5732,7 +5733,7 @@ fun ChatScreen(
     // the navbar thinking badge. Mirrors iOS ThinkingLevelSheetView: an Off row
     // plus every level the current model supports, each selectable.
     if (showThinkingLevelSheet) {
-        val currentThinkingLevel by viewModel.thinkingLevel.collectAsState()
+        val currentThinkingLevel by viewModel.thinkingLevel.collectAsStateWithLifecycle()
         ThinkingLevelSheet(
             currentLevel = currentThinkingLevel,
             availableLevels = viewModel.availableThinkingLevels,
@@ -5747,8 +5748,8 @@ fun ChatScreen(
     // Model Picker bottom sheet
     if (showModelPicker) {
         val config by providerRepository.config.collectAsState()
-        val activeEntryId by viewModel.activeEntryId.collectAsState()
-        val activeCliToolId by viewModel.activeCliToolId.collectAsState()
+        val activeEntryId by viewModel.activeEntryId.collectAsStateWithLifecycle()
+        val activeCliToolId by viewModel.activeCliToolId.collectAsStateWithLifecycle()
         var cliStatuses by remember {
             mutableStateOf<Map<com.leoyuan.leophoneagent.sandbox.CliToolId, com.leoyuan.leophoneagent.sandbox.CliStatusEntry>>(emptyMap())
         }
@@ -6051,19 +6052,20 @@ private fun ThinkingLevelBadge(
             // Faint translucent-grey capsule (iOS Color.secondary.opacity(0.10)).
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
             // Own clickable → consumes the tap, opens the thinking sheet.
-            .clickable(onClick = onClick)
-            .padding(horizontal = 5.dp, vertical = 1.dp),
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .heightIn(min = 32.dp)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
     ) {
         Icon(
             imageVector = Icons.Default.Lightbulb,
             contentDescription = null,
             tint = badgeColor,
-            modifier = Modifier.size(9.dp),
+            modifier = Modifier.size(14.dp),
         )
         Text(
             text = level.localizedName(context),
-            fontSize = 9.sp,
-            lineHeight = 11.sp,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
             fontWeight = FontWeight.Medium,
             color = badgeColor,
             maxLines = 1,

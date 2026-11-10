@@ -101,7 +101,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -300,20 +300,20 @@ fun SessionListScreen(
     val viewModel: SessionListViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         factory = SessionListViewModel.factory(chatRepository, providerRepository, context),
     )
-    val sessions by viewModel.displayedSessions.collectAsState()
-    val isInitialLoadComplete by viewModel.isInitialLoadComplete.collectAsState()
-    val isSearchActive by viewModel.isSearchActive.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val isSearching by viewModel.isSearching.collectAsState()
-    val searchSnippets by viewModel.searchSnippets.collectAsState()
-    val isSelecting by viewModel.isSelecting.collectAsState()
-    val selectedIds by viewModel.selectedIds.collectAsState()
-    val regeneratingIds by viewModel.regeneratingIds.collectAsState()
-    val runningSessions by SessionActivityTracker.activeSessions.collectAsState()
-    val pendingApprovals by SessionTaskStatus.pendingApprovals.collectAsState()
-    val remoteSessions by SessionTaskStatus.remoteSessions.collectAsState()
-    val homeCardsEnabled by SessionTaskStatus.cardsEnabled.collectAsState()
-    val torchOn by SessionTaskStatus.torchOn.collectAsState()
+    val sessions by viewModel.displayedSessions.collectAsStateWithLifecycle()
+    val isInitialLoadComplete by viewModel.isInitialLoadComplete.collectAsStateWithLifecycle()
+    val isSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
+    val searchSnippets by viewModel.searchSnippets.collectAsStateWithLifecycle()
+    val isSelecting by viewModel.isSelecting.collectAsStateWithLifecycle()
+    val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
+    val regeneratingIds by viewModel.regeneratingIds.collectAsStateWithLifecycle()
+    val runningSessions by SessionActivityTracker.activeSessions.collectAsStateWithLifecycle()
+    val pendingApprovals by SessionTaskStatus.pendingApprovals.collectAsStateWithLifecycle()
+    val remoteSessions by SessionTaskStatus.remoteSessions.collectAsStateWithLifecycle()
+    val homeCardsEnabled by SessionTaskStatus.cardsEnabled.collectAsStateWithLifecycle()
+    val torchOn by SessionTaskStatus.torchOn.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
         SessionTaskStatus.setCardsEnabled(
             com.leoyuan.leophoneagent.ui.settings.homeCardsEnabled(context),
@@ -344,7 +344,7 @@ fun SessionListScreen(
             kotlinx.coroutines.delay(15_000)
         }
     }
-    val providerConfig by providerRepository.config.collectAsState()
+    val providerConfig by providerRepository.config.collectAsStateWithLifecycle()
     val hasProviders = providerConfig.instances.isNotEmpty()
     val hasGroups = providerConfig.modelGroups.isNotEmpty()
     // [T-android-startup-config-stall] Provider config now loads off-thread, so
@@ -352,7 +352,7 @@ fun SessionListScreen(
     // Gate the onboarding/list render on this too (alongside the sessions
     // initial-load flag) so an existing user with providers but zero sessions
     // doesn't flash the "add a provider" onboarding before the real config emits.
-    val configLoaded by providerRepository.configLoaded.collectAsState()
+    val configLoaded by providerRepository.configLoaded.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     // [主题一致性] 跟应用内主题，不跟系统主题。应用内浅/深覆盖设置下，
     // isSystemInDarkTheme() 会和同屏其它用 MaterialTheme/ChatColors 的元素反色。
@@ -431,7 +431,7 @@ fun SessionListScreen(
     val scheduledTaskCount by remember {
         com.leoyuan.leophoneagent.scheduled.ScheduledTaskStore(context).observe()
             .map { list -> list.count { it.enabled } }
-    }.collectAsState(initial = 0)
+    }.collectAsStateWithLifecycle(initialValue = 0)
 
     Scaffold(
         modifier = modifier,
@@ -1523,13 +1523,13 @@ private fun SessionRow(
         }
 
         // Category icon in colored circle (18% opacity matching iOS)
-        val activeSessions by SessionActivityTracker.activeSessions.collectAsState()
+        val activeSessions by SessionActivityTracker.activeSessions.collectAsStateWithLifecycle()
         val isActive = session.id in activeSessions
         // [T-android-session-paused-badge] Head of this session's badge queue
         // — null for the common case. Renders as an overlay in the icon's
         // bottom-right corner, mirroring where iOS's iCloud badge sits so
         // future ICLOUD_SYNCING uses the same anchor.
-        val badgeMap by com.leoyuan.leophoneagent.service.SessionBadgeStore.byId.collectAsState()
+        val badgeMap by com.leoyuan.leophoneagent.service.SessionBadgeStore.byId.collectAsStateWithLifecycle()
         val badgeHead = badgeMap[session.id]?.firstOrNull()
         Box(
             modifier = Modifier.size(44.dp),

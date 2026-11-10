@@ -163,7 +163,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -277,7 +277,7 @@ internal fun AssistantHeader() {
     // canonical sparkle (iOS: sparkles SF Symbol + gradient). Only the
     // `name` field is user-customizable — defaults to "LeoPhoneAgent" when
     // SOUL.md is missing the field or set to the default value.
-    val soulMeta by com.leoyuan.leophoneagent.agent.SoulStore.cachedMetadata.collectAsState()
+    val soulMeta by com.leoyuan.leophoneagent.agent.SoulStore.cachedMetadata.collectAsStateWithLifecycle()
     val displayName = soulMeta.name.ifBlank { com.leoyuan.leophoneagent.agent.SoulMetadata.DEFAULT.name }
     Row(
         verticalAlignment = Alignment.CenterVertically,

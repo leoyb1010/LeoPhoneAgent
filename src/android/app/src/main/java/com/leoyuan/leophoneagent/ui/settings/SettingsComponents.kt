@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -130,14 +132,17 @@ fun SettingsScaffold(
         // keyboard" rect to scroll a focused TextField into. Without it,
         // adjustResize + edge-to-edge leaves the scrollable column at
         // full height behind the IME and bringIntoView is a no-op.
-        val baseMod = Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .imePadding()
-        Column(
-            modifier = if (scrollable) baseMod.verticalScroll(rememberScrollState()) else baseMod,
-            content = content,
-        )
+        Box(
+            modifier = Modifier.fillMaxSize().padding(padding).imePadding(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            // Keep forms readable on unfolded phones/tablets without changing their routes.
+            val body = Modifier.widthIn(max = 840.dp).fillMaxWidth().fillMaxHeight()
+            Column(
+                modifier = if (scrollable) body.verticalScroll(rememberScrollState()) else body,
+                content = content,
+            )
+        }
     }
 }
 
