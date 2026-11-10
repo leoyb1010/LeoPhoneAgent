@@ -14,7 +14,8 @@ import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { promptAction } from '@kit.ArkUI';
 
-import { ChatItem, chatItemKey, chatItems } from '../local/AgentText';
+import { ChatItem, chatItemId, chatItemSignature, chatItems } from '../local/AgentText';
+import { KeyedListSource, KeyedRow } from '../chat/KeyedListSource';
 import { ChatRun, ChatRuns, PendingImage, textLines } from '../local/ChatRun';
 import { Voice } from '../local/Voice';
 import { FailoverSlot, LocalChatMessage, nextThinking, thinkingLabel } from '../local/LocalProtocol';
@@ -101,8 +102,10 @@ export struct LocalChatPane {
   @StorageProp('approvalTick') @Watch('onApprovalTick') approvalTick: number = 0;
   @Prop compact: boolean = false;
   @State lines: LocalChatMessage[] = [];
-  @State items: ChatItem[] = [];
-  /** 正在流式输出的那段回答的字(见 chatItemKey)。 */
+  @State @Watch('itemsChanged') items: ChatItem[] = [];
+  /** 长对话按需构建:List 里只建看得见的行(LazyForEach),行身份见 chatItemId,内容变化见 chatItemSignature。 */
+  private rowSource: KeyedListSource<ChatItem> = new KeyedListSource<ChatItem>();
+  /** 正在流式输出的那段回答的字(这一行的签名不含字,字走这里原地刷新,见 chatItemSignature)。 */
   @State liveText: string = '';
   @State fullAuto: boolean = false;
   @State title: string = 'LeoBot';
@@ -223,13 +226,14 @@ export struct LocalChatPane {
           }
         } else {
           List({ scroller: this.chatScroller }) {
-            ForEach(this.items, (item: ChatItem, i: number) => {
+            LazyForEach(this.rowSource, (row: KeyedRow<ChatItem>) => {
               ListItem() {
-                this.itemView(item)
+                this.itemView(row.value)
               }
               .width('100%')
-            }, (item: ChatItem, i: number) => chatItemKey(item, i))
+            }, (row: KeyedRow<ChatItem>) => row.key)
           }
+          .cachedCount(4)
           .width('100%')
           .height('100%')
           .padding({ left: Tokens.pagePad, right: Tokens.pagePad })
@@ -940,6 +944,12 @@ export struct LocalChatPane {
       this.status = `${err}`;
     });
     return run;
+  }
+
+  /** items 每次整体换掉时同步数据源:只通知真正变了的行,流式输出的字不经过这里。 */
+  itemsChanged(): void {
+    if (this.items.length === 0) { this.rowSource.reset(); return; }
+    this.rowSource.sync(this.items, chatItemId, chatItemSignature);
   }
 
   private detach(): void {

@@ -5,6 +5,60 @@ import { Sym } from './Symbols';
 import { Tokens } from './Tokens';
 
 /**
+ * 同一段文字的块解析在进程内复用(只存内存,不落盘):滚动回看时 LazyForEach 会反复建同一条回答。
+ * 按确切全文命中;有条数和总字数上限,最久没用的先丢。超长文字不进缓存。
+ * 这不是增量解析:流式输出时每一帧仍整段重解析(mdBlocks 的块跨行语义 —— 未收尾代码块、列表、表格 ——
+ * 无法可靠地只解析尾块),onText 的前缀增长不写缓存;重新挂载的快照仍受同一容量上限约束。
+ */
+const MD_CACHE_ENTRIES = 64;
+const MD_CACHE_CHARS = 256 * 1024;
+const MD_CACHE_ENTRY_CHARS = 32 * 1024;
+
+class MdBlockCache {
+  private entries: Map<string, MdPart[]> = new Map<string, MdPart[]>();
+  private chars: number = 0;
+
+  get(text: string): MdPart[] | undefined {
+    const hit = this.entries.get(text);
+    if (hit !== undefined) {
+      // Map keeps insertion order: re-insert to mark as most recently used.
+      this.entries.delete(text);
+      this.entries.set(text, hit);
+    }
+    return hit;
+  }
+
+  put(text: string, parts: MdPart[]): void {
+    if (text.length > MD_CACHE_ENTRY_CHARS || this.entries.has(text)) return;
+    this.entries.set(text, parts);
+    this.chars += text.length;
+    if (this.entries.size <= MD_CACHE_ENTRIES && this.chars <= MD_CACHE_CHARS) return;
+    const evict: string[] = [];
+    let size = this.entries.size;
+    this.entries.forEach((_parts: MdPart[], key: string) => {
+      if (size > MD_CACHE_ENTRIES || this.chars > MD_CACHE_CHARS) {
+        evict.push(key); size -= 1; this.chars -= key.length;
+      }
+    });
+    evict.forEach((key: string) => { this.entries.delete(key); });
+  }
+}
+const mdCache = new MdBlockCache();
+
+/**
+ * previous:这个组件上一次画的字。新字是它往后长出来的(流式输出的一帧)就只解析不入缓存。
+ * 返回新数组:各组件的 @State 不共用同一个数组。
+ */
+function cachedBlocks(text: string, previous: string): MdPart[] {
+  const hit = mdCache.get(text);
+  if (hit !== undefined) return hit.slice();
+  const parts = mdBlocks(text);
+  const streaming = previous.length > 0 && text.length > previous.length && text.startsWith(previous);
+  if (!streaming) mdCache.put(text, parts);
+  return parts.slice();
+}
+
+/**
  * 回答里的 Markdown,画法对齐 iOS / 安卓:段落里的粗体、斜体、`代码`、链接;标题、列表、引用;
  * 代码块黑底绿字、左上角语言、右上角复制(点完变 ✓);表格带边框、太宽左右滑。文字可以长按选中复制。
  */
@@ -17,13 +71,17 @@ export struct MarkdownText {
   @Prop fill: boolean = true;
   @Prop textSize: number = Tokens.body;
   @State parts: MdPart[] = [];
+  private parsed: string = '';
 
   aboutToAppear(): void {
-    this.parts = mdBlocks(this.text);
+    this.parts = cachedBlocks(this.text, '');
+    this.parsed = this.text;
   }
 
   onText(): void {
-    this.parts = mdBlocks(this.text);
+    if (this.text === this.parsed) return;
+    this.parts = cachedBlocks(this.text, this.parsed);
+    this.parsed = this.text;
   }
 
   build() {

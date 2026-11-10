@@ -1,4 +1,5 @@
 import { LongAnswer } from '../chat/LongAnswer';
+import { KeyedListSource, KeyedRow } from '../chat/KeyedListSource';
 import { ShareMessage } from '../chat/TurnShare';
 import { Voice } from '../local/Voice';
 import { pasteboard } from '@kit.BasicServicesKit';
@@ -53,7 +54,12 @@ export struct ChatPane {
   private scrollGeneration: number = 0;
   /** 每次从列表打开都会变:同一台机器换 Agent、换任务也要重新接上(平板两栏时这一栏不会重建)。 */
   @Prop @Watch('onLaunch') launch: number = 0;
-  @State lines: ChatLine[] = [];
+  @State @Watch('linesChanged') lines: ChatLine[] = [];
+  /** 长对话按需构建(LazyForEach)。ChatLine 没有 id,这里给每条消息发一个稳定号。 */
+  private rowSource: KeyedListSource<ChatLine> = new KeyedListSource<ChatLine>();
+  private lineIds: Map<ChatLine, string> = new Map<ChatLine, string>();
+  private lineHeads: Map<ChatLine, boolean> = new Map<ChatLine, boolean>();
+  private nextLineId: number = 0;
   @State liveText: string = '';
   @State draft: string = '';
   @State status: string = '准备中';
@@ -186,35 +192,37 @@ export struct ChatPane {
         .padding(24)
       } else {
         List({ scroller: this.scroller }) {
-          ForEach(this.lines, (line: ChatLine, index: number) => {
+          // 头像使用当前行的分组投影;位置只在操作时现查,避免每个行视图订阅整个lines。
+          LazyForEach(this.rowSource, (row: KeyedRow<ChatLine>) => {
             ListItem() {
               Column() {
-                if (line.role === 'user') {
+                if (row.value.role === 'user') {
                   Row() {
                     Blank()
-                    UserBubble({ text: line.text, selectable: false })
+                    UserBubble({ text: row.value.text, selectable: false })
                   }
                   .width('100%')
                   .margin({ top: 12, bottom: 4 })
-                } else if (line.role === 'assistant') {
-                  if (index === 0 || this.lines[index - 1].role !== 'assistant') {
+                } else if (row.value.role === 'assistant') {
+                  if (this.lineHeads.get(row.value) !== false) {
                     AssistantHead({ name: this.agentName() })
                       .margin({ top: 10 })
                   }
-                  LongAnswer({ text: line === this.liveLine ? this.liveText : line.text, live: line === this.liveLine })
+                  LongAnswer({ text: row.value === this.liveLine ? this.liveText : row.value.text, live: row.value === this.liveLine })
                 } else {
-                  NoticeRow({ text: line.text })
+                  NoticeRow({ text: row.value.text })
                 }
               }
               .width('100%')
               .alignItems(HorizontalAlign.Start)
               .constraintSize({ maxWidth: Tokens.readable })
-              .bindContextMenu(this.lineMenu(line, index), ResponseType.LongPress)
+              .bindContextMenu(this.lineMenu(row.value), ResponseType.LongPress)
             }
             .width('100%')
-            // key 带上字:key 不变 ForEach 就不重画(流式输出被截断就是这么来的);在流的那段走 liveText
-          }, (line: ChatLine, index: number) => `${index}|${line.role}|${line.text}`)
+            // key = 稳定消息号#内容版本:字、角色、头像、是否在流变了才换 key 重建;在流的那段字走 liveText
+          }, (row: KeyedRow<ChatLine>) => row.key)
         }
+        .cachedCount(4)
         .layoutWeight(1)
         .width('100%')
         .padding({ left: Tokens.pagePad, right: Tokens.pagePad })
@@ -358,7 +366,7 @@ export struct ChatPane {
   }
 
   @Builder
-  lineMenu(line: ChatLine, index: number) {
+  lineMenu(line: ChatLine) {
     Menu() {
       if (line.role === 'user' || line.role === 'assistant') {
         MenuItem({ content: '复制' }).onClick(() => {
@@ -367,7 +375,10 @@ export struct ChatPane {
         })
         MenuItem({ content: '选择文字' }).onClick(() => AppNavigation.pushUrl({ url: 'pages/LongTextPage', params: { title: '选择文字', text: line.text } }))
         MenuItem({ content: '朗读' }).onClick(() => { Voice.speak(line.text).catch(() => { this.status = '朗读不可用'; }); })
-        MenuItem({ content: '分享为长图' }).enabled(line !== this.liveLine).onClick(() => this.shareLine(index))
+        MenuItem({ content: '分享为长图' }).enabled(line !== this.liveLine).onClick(() => {
+          const index = this.lines.indexOf(line);
+          if (index >= 0) this.shareLine(index);
+        })
       }
     }
   }
@@ -563,6 +574,7 @@ export struct ChatPane {
       }
       this.liveLine = null;
       this.liveText = '';
+      this.linesChanged();
       this.ended = true;
     } else if (name === 'approval.request') {
       this.ended = false;
@@ -601,6 +613,30 @@ export struct ChatPane {
     this.approvalQueue = this.approvalQueue.filter((row: ApprovalState) => row.id !== id);
     this.approval = this.approvalQueue.length > 0 ? this.approvalQueue[0] : new ApprovalState();
     this.status = this.approval.id.length > 0 ? '需要审批' : '进行中';
+  }
+
+  private headAt(index: number): boolean {
+    return index <= 0 || index >= this.lines.length || this.lines[index - 1].role !== 'assistant';
+  }
+  private lineId(line: ChatLine): string {
+    let id = this.lineIds.get(line);
+    if (id === undefined) { id = `l${this.nextLineId++}`; this.lineIds.set(line, id); }
+    return id;
+  }
+  /** lines 整体换掉、或流式那段停下(liveLine 清空)时同步数据源;流式的字不经过这里。 */
+  linesChanged(): void {
+    if (this.lines.length === 0) {
+      this.lineIds.clear(); this.lineHeads.clear(); this.rowSource.reset(); return;
+    }
+    const lines = this.lines;
+    const heads: Map<ChatLine, boolean> = new Map<ChatLine, boolean>();
+    for (let i = 0; i < lines.length; i++) heads.set(lines[i], this.headAt(i));
+    const ids: Map<ChatLine, string> = new Map<ChatLine, string>();
+    lines.forEach((line: ChatLine) => ids.set(line, this.lineId(line)));
+    this.lineIds = ids;
+    this.lineHeads = heads;
+    this.rowSource.sync(lines, (line: ChatLine) => ids.get(line) ?? '', (line: ChatLine) =>
+      `${line.role}|${heads.get(line) === true}|${line === this.liveLine ? 'live|' : 'done|' + line.text}`);
   }
 
   private push(role: string, text: string): ChatLine | null {
@@ -643,6 +679,8 @@ export struct ChatPane {
     // 第一段,或中间插进来一条说明:另起一段(原来会接在那条说明后面)
     this.liveLine = this.push('assistant', delta);
     this.liveText = delta;
+    // 上一段(若还挂着 live)此刻定稿:带完整字重建;新的一段改走 liveText。
+    this.linesChanged();
   }
 
   private async toggleMacAuto(): Promise<void> {
