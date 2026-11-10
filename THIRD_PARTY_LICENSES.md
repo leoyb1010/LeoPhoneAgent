@@ -21,9 +21,20 @@ Direct packages declared in `src/ios/LeoPhoneAgent.xcodeproj`:
 | Package | Version | Repository | License |
 |---|---|---|---|
 | SwiftAnthropic | 2.2.0 (exact) | https://github.com/jamesrochabrun/SwiftAnthropic | **MIT** |
-| swift-cmark (`cmark-gfm`, `cmark-gfm-extensions`) | 0.7.1 | https://github.com/swiftlang/swift-cmark | **BSD-2-Clause** (with some MIT-licensed vendored files, see its `COPYING`) |
+| swift-cmark (`cmark-gfm`, `cmark-gfm-extensions`) | 0.8.0 | https://github.com/swiftlang/swift-cmark | **BSD-2-Clause** (with some MIT-licensed vendored files, see its `COPYING`) |
 | SwiftMath | 1.7.3 | https://github.com/mgriebling/SwiftMath | **MIT** |
 | RealTimeCutVADLibrary | 1.0.14 | https://github.com/helloooideeeeea/RealTimeCutVADLibrary | **MIT** |
+| SwiftTerm | 1.10.1 | https://github.com/migueldeicaza/SwiftTerm | [MIT notice](https://github.com/migueldeicaza/SwiftTerm/blob/v1.10.1/LICENSE) |
+| Citadel | 0.12.1 | https://github.com/orlandos-nl/Citadel | [MIT](https://github.com/orlandos-nl/Citadel/blob/0.12.1/LICENSE) |
+| BigInt | 5.7.0 | https://github.com/attaswift/BigInt | [MIT](https://github.com/attaswift/BigInt/blob/v5.7.0/LICENSE.md) |
+| WebRTC Swift package / Google WebRTC | 154.0.0 | https://github.com/stasel/WebRTC | [BSD-3-Clause notices](https://github.com/stasel/WebRTC/blob/154.0.0/LICENSE.md); retain the binary's additional notices when distributing it |
+| swift-configuration | 1.2.0 | https://github.com/apple/swift-configuration | [Apache-2.0](https://github.com/apple/swift-configuration/blob/1.2.0/LICENSE.txt) |
+| swift-argument-parser | 1.8.2 | https://github.com/apple/swift-argument-parser | [Apache-2.0](https://github.com/apple/swift-argument-parser/blob/1.8.2/LICENSE.txt) |
+| swift-nio-ssh fork | 0.3.7 | https://github.com/Wellz26/swift-nio-ssh | [Apache-2.0](https://github.com/Wellz26/swift-nio-ssh/blob/0.3.7/LICENSE.txt) |
+
+The versions above were reconciled with the checked-in `Package.resolved` on
+2026-11-10; the linked notices belong to those versions. This source inventory
+does not replace the full notices in a distributed framework or native archive.
 
 Transitive packages (pinned in `Package.resolved`), all **Apache-2.0**, maintained by Apple / the Swift Server Workgroup: `async-http-client`, `swift-algorithms`, `swift-asn1`, `swift-async-algorithms`, `swift-atomics`, `swift-certificates`, `swift-collections`, `swift-crypto`, `swift-distributed-tracing`, `swift-http-structured-headers`, `swift-http-types`, `swift-log`, `swift-nio` (+ `-extras`, `-http2`, `-ssl`, `-transport-services`), `swift-numerics`, `swift-service-context`, `swift-service-lifecycle`, `swift-system`.
 
