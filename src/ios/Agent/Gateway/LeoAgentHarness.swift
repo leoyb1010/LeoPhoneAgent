@@ -28,6 +28,8 @@ struct HarnessSessionSummary: Sendable, Identifiable, Hashable {
     /// 队首待审批(Siri「批准」与通知按钮按它寻址);无待审批为 nil。
     var pendingApprovalId: String? = nil
     var pendingApprovalCommand: String? = nil
+    /// 队首待审批的 choices(原样、严格过滤;旧 Mac 没有这个字段时按 once/deny 兼容)。无待审批为 nil。
+    var pendingApprovalChoices: [String]? = nil
     var windowLabel: String? = nil
     /// 任务标题(LeoPhoneAgent 任务有;同一个项目里的几个任务靠它区分)。
     var title: String? = nil
@@ -99,6 +101,7 @@ extension LeoAgentClient {
                 waitingForApproval: row["waiting_for_approval"] as? Bool ?? false,
                 pendingApprovalId: pending?["approval_id"] as? String,
                 pendingApprovalCommand: pending?["command"] as? String,
+                pendingApprovalChoices: pending.map { RelayApprovalFields.choices(from: $0["choices"]).choices },
                 windowLabel: {
                     guard let window = row["window"] as? [String: Any] else { return nil }
                     let app = window["app"] as? String ?? ""
@@ -537,9 +540,30 @@ final class HarnessSessionDriver: ObservableObject {
     var showsModePicker: Bool { modeSupport != false }
     var showsChanges: Bool { changesSupport == true && sessionId != nil }
 
-    /// 先计划模式下这一轮交出了计划:给「按计划执行」。
+    /// 先计划模式下这一轮交出了计划:给「按计划执行」。这一轮的计划被拒了(或拿不准有没有被拒)就不给:
+    /// 一点就等于替用户批准刚拒掉的计划。手动发消息照常可用。
     var offersExecutePlan: Bool {
         mode == .plan && modeSupport == true && sessionId != nil && status == "idle" && !lastTurnFailed
+            && !planShortcutBlocked
+    }
+
+    /// [up3-ios-plan] 这一轮的计划审批没有被批准:任何一端答了 deny、回执没带 choice、这一轮结束时审批作废
+    /// (Mac 发 deny 回执),或续传跳过了一段事件说不准。新的用户消息 / 新的计划审批 / 批准后清掉。
+    /// 只在内存里;接手会话从 seq 0 回放,按日志里的同一串事件重算。
+    @Published private(set) var planShortcutBlocked = false
+    /// 当前计划审批的 id:卡片收掉后仍认得回执,更早计划的迟到回执不能改变新计划的状态。
+    private var currentPlanApprovalId: String?
+
+    private func notePlanRequested(_ approval: GatewayApprovalRequest) {
+        guard HarnessApprovalPresentation.isPlan(tool: approval.tool) else { return }
+        currentPlanApprovalId = approval.approvalId
+        planShortcutBlocked = false
+    }
+
+    /// 计划审批的结果:once / session(Mac 把计划的 session 当 once)= 批准;deny、没带 choice、不认识的值都按没批准。
+    private func notePlanAnswered(approvalId: String, choice: String?) {
+        guard currentPlanApprovalId == approvalId else { return }
+        planShortcutBlocked = !(choice == "once" || choice == "session")
     }
 
     private static let modeSupportKey = "leo.harness.modeSupport"
@@ -1160,6 +1184,8 @@ final class HarnessSessionDriver: ObservableObject {
     func steer(_ text: String, attachments: [HarnessAttachment] = []) -> Bool {
         guard !text.isEmpty else { return false }
         lastUserText = text
+        planShortcutBlocked = false
+        currentPlanApprovalId = nil
         guard let sessionId else {
             append(GatewayTranscriptItem(kind: .notice, text: "→ " + text))
             if turns.submit(text) {
@@ -1228,6 +1254,8 @@ final class HarnessSessionDriver: ObservableObject {
         guard let sessionId, approval.choices.contains(choice) else { return }
         WatchBridge.shared.clearApprovalRequest(approvalId: approval.approvalId)
         problem = nil
+        // 先按这次的选择记下(Mac 的回执随后到,结果一样);没送到时卡片回来,再清掉。
+        notePlanAnswered(approvalId: approval.approvalId, choice: choice)
         pendingApprovals.removeAll { $0.approvalId == approval.approvalId }
         status = pendingApprovals.isEmpty ? "running" : "waiting_for_approval"
         if let next = pendingApprovals.first { armWatch(for: next) }
@@ -1246,6 +1274,8 @@ final class HarnessSessionDriver: ObservableObject {
                     if !self.pendingApprovals.contains(where: { $0.approvalId == approval.approvalId }) {
                         self.pendingApprovals.insert(approval, at: 0)
                     }
+                    // 计划卡回来了:还没答,不算拒(卡片在时快捷按钮本来也不出现)。
+                    if self.currentPlanApprovalId == approval.approvalId { self.planShortcutBlocked = false }
                     self.status = "waiting_for_approval"
                     self.lastError = error.localizedDescription
                     self.report(error)
@@ -1370,6 +1400,9 @@ final class HarnessSessionDriver: ObservableObject {
             } catch {
                 if case GatewayError.resumeGap(let minAfter) = error {
                     await MainActor.run {
+                        // 跳过的那段里可能有计划审批的回执:说不准有没有被拒,先收起「按计划执行」(手动发消息照常)。
+                        self.planShortcutBlocked = true
+                        self.currentPlanApprovalId = nil
                         self.lastSeq = T6RelayLogic.advance(current: self.lastSeq, minAfter: minAfter)
                     }
                 } else {
@@ -1484,6 +1517,7 @@ final class HarnessSessionDriver: ObservableObject {
         case .approvalRequest(let approval):
             guard !pendingApprovals.contains(where: { $0.approvalId == approval.approvalId }) else { return }
             pendingApprovals.append(approval)
+            notePlanRequested(approval)
             status = "waiting_for_approval"
             // The wrist shows one card at a time; arm it only for the front of
             // the queue, and the next one when this front resolves.
@@ -1496,9 +1530,13 @@ final class HarnessSessionDriver: ObservableObject {
                                              sessionId: sid, approval: approval)
             }
             HarnessLiveActivityBridge.shared.refresh()
-        case .approvalResponded(_, let approvalId, let auto):
+        case .approvalResponded(let choice, let approvalId, let auto):
             // [A1] 全自动:Mac 直接应答,手机上没有审批卡,只在时间线记一笔。
             if let auto { note(AppLocalized("已自动允许 · \(auto)")) }
+            // 计划审批在哪一端答的都算(手表 / 通知 / Mac 桌面 / 这一轮结束作废);回执里的 choice 原样用。
+            if let answered = approvalId ?? pendingApprovals.first?.approvalId {
+                notePlanAnswered(approvalId: answered, choice: choice)
+            }
             if let approvalId {
                 if let resolved = pendingApprovals.first(where: { $0.approvalId == approvalId }) {
                     WatchBridge.shared.clearApprovalRequest(approvalId: resolved.approvalId)
@@ -1562,6 +1600,9 @@ final class HarnessSessionDriver: ObservableObject {
                 let echo = "→ " + text
                 if !text.isEmpty, items.last?.text != echo { note(echo) }
                 if status == "idle" { status = "running" }
+                // 新的一条用户消息(本机或别的端发的、或回放出来的):上一轮的拒绝不再挡快捷按钮。
+                planShortcutBlocked = false
+                currentPlanApprovalId = nil
                 return
             }
             if name == "session.created" { return }   // metadata, already shown by the launcher
@@ -1622,9 +1663,7 @@ final class HarnessSessionDriver: ObservableObject {
             self.respond(to: pending, choice: choice)
             return true
         }
-        WatchBridge.shared.sendApprovalRequest(
-            approvalId: approval.approvalId,
-            command: approval.command, reason: approval.reason, choices: approval.choices)
+        WatchBridge.shared.sendApprovalRequest(approval)
     }
 
     private func note(_ text: String) {

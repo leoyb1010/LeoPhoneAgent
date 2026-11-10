@@ -50,8 +50,12 @@ struct WatchApproval: Identifiable, Equatable {
     let choices: [String]
     /// "low" | "medium" | "high", assessed on the phone from the command.
     let risk: String
+    /// [up3-ios-plan] 计划审批:`detail` 是计划正文,按钮换成「批准计划并执行 / 不批准」(回传的仍是原样的 choice)。
+    var isPlan = false
+    /// 计划正文被手机截短了:卡片提示去 iPhone 看全文。
+    var planTruncated = false
     var id: String { runId }
-    var isHighRisk: Bool { risk == "high" }
+    var isHighRisk: Bool { !isPlan && risk == "high" }
 }
 
 @MainActor
@@ -493,7 +497,7 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     func reopenApproval(_ row: WatchMacStatus.Row) {
         guard row.waiting, let approvalId = row.approvalId, !approvalId.isEmpty else { return }
         pendingApproval = WatchApproval(runId: approvalId, detail: row.detail ?? "",
-                                        choices: ["once", "deny"], risk: row.risk ?? "medium")
+                                        choices: row.choices ?? ["once", "deny"], risk: row.risk ?? "medium")
     }
 
     /// Answer a pending gateway approval from the wrist.
@@ -576,7 +580,9 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
                 if pendingApproval?.runId == runId || runId.isEmpty { pendingApproval = nil }
             } else {
                 pendingApproval = WatchApproval(runId: runId, detail: detail, choices: choices,
-                                                risk: (message["risk"] as? String) ?? "medium")
+                                                risk: (message["risk"] as? String) ?? "medium",
+                                                isPlan: (message["plan"] as? Bool) ?? false,
+                                                planTruncated: (message["planTruncated"] as? Bool) ?? false)
                 WKInterfaceDevice.current().play(.notification)
             }
         case "askReply":

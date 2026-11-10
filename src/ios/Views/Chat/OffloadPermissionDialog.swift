@@ -107,6 +107,8 @@ extension UIWindowScene {
 
 private struct OffloadPermissionDialogContent: View {
     let request: PermissionRequest
+    @State private var showsFullArguments = false
+    @State private var copiedArgumentIndex: Int?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -121,7 +123,7 @@ private struct OffloadPermissionDialogContent: View {
                     VStack(spacing: LeoTheme.Spacing.xs) {
                         Image(systemName: "shield.lefthalf.filled")
                             .font(.system(size: 28, weight: .semibold))
-                            .foregroundStyle(LeoTheme.ColorToken.warning)
+                            .foregroundStyle(LeoTheme.ColorToken.accent)
 
                         Text("Allow \(request.displayLabel)?")
                             .font(.title3.bold())
@@ -157,30 +159,59 @@ private struct OffloadPermissionDialogContent: View {
                         .padding(.bottom, 12)
                     }
 
-                    // Arguments
+                    // 参数默认保留紧凑预览；展开后不截断，复制始终使用完整值。
                     let args = request.parsedArguments
                     if !args.isEmpty {
-                        VStack(spacing: 0) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack {
+                                Text("调用参数")
+                                    .font(.footnote.weight(.semibold))
+                                Spacer()
+                                Button {
+                                    showsFullArguments.toggle()
+                                } label: {
+                                    Text(showsFullArguments ? "收起" : "展开全文")
+                                        .font(.footnote.weight(.semibold))
+                                        .frame(minWidth: 44, minHeight: 44)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(LeoTheme.ColorToken.accent)
+                            }
                             ForEach(Array(args.enumerated()), id: \.offset) { idx, arg in
-                                HStack {
-                                    Text(arg.key)
-                                        .font(.footnote.bold())
-                                        .foregroundStyle(.secondary)
-                                        .frame(minWidth: 80, alignment: .trailing)
-                                        .fixedSize()
+                                VStack(alignment: .leading, spacing: LeoTheme.Spacing.xs) {
+                                    HStack {
+                                        Text(arg.key)
+                                            .font(.footnote.bold())
+                                            .foregroundStyle(.secondary)
+                                            .textSelection(.enabled)
+                                        Spacer()
+                                        Button {
+                                            UIPasteboard.general.string = arg.value
+                                            copiedArgumentIndex = idx
+                                        } label: {
+                                            Text(copiedArgumentIndex == idx ? "已复制" : "复制")
+                                                .font(.footnote)
+                                                .frame(minWidth: 44, minHeight: 44)
+                                                .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .foregroundStyle(LeoTheme.ColorToken.accent)
+                                        .accessibilityLabel(Text("复制参数 \(arg.key) 的完整值"))
+                                    }
                                     Text(arg.value)
                                         .font(.footnote.monospaced())
-                                        .lineLimit(6)
-                                        .truncationMode(.middle)
-                                    Spacer()
+                                        .lineLimit(showsFullArguments ? nil : 6)
+                                        .truncationMode(.tail)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .textSelection(.enabled)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 8)
-                                if idx < args.count - 1 {
-                                    Divider().padding(.leading, 108)
-                                }
+                                .padding(.bottom, 12)
+                                if idx < args.count - 1 { Divider() }
                             }
                         }
+                        .padding(.horizontal, 16)
                         .background(Color(.secondarySystemGroupedBackground))
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                         .padding(.horizontal, 20)
@@ -194,17 +225,26 @@ private struct OffloadPermissionDialogContent: View {
             VStack(spacing: 10) {
                 Button {
                     LeoHaptics.notification(.success)
-                    OffloadPermissionManager.shared.respond(to: request.id, allowed: true)
+                    OffloadPermissionManager.shared.respondOnce(to: request.id)
                 } label: {
-                    // [#24] Same wording as every other approval: 允许一次 /
-                    // 本次会话允许 / 拒绝. This button grants the session.
-                    Text("本次会话允许")
+                    Text("允许一次")
                         .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.glassProminent)
                 .tint(LeoTheme.ColorToken.accent)
+
+                Button {
+                    LeoHaptics.notification(.success)
+                    OffloadPermissionManager.shared.respond(to: request.id, allowed: true)
+                } label: {
+                    Text("本次会话允许")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.glass)
 
                 // [T-approval-vocab] 不再为同一件事反复点头:放行并记住。
                 if !request.command.isEmpty {
@@ -214,8 +254,8 @@ private struct OffloadPermissionDialogContent: View {
                     } label: {
                         Text("始终允许")
                             .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.glass)
                 }
@@ -227,11 +267,10 @@ private struct OffloadPermissionDialogContent: View {
                     // Denies this request only; the next one asks again.
                     Text("拒绝")
                         .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.glassProminent)
-                .tint(LeoTheme.ColorToken.destructive)
+                .buttonStyle(.glass)
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)

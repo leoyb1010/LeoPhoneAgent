@@ -135,9 +135,9 @@ final class MacFollowLogicTests: XCTestCase {
     func testWatchStatusCarriesApprovalAndStaysCompatible() throws {
         let status = WatchMacStatus.summarize(approvals: [
             (id: "h1", title: "跑测试", status: "等你审批", waiting: true, running: false,
-             approvalId: "ap1", detail: "rm -rf build", risk: "high"),
+             approvalId: "ap1", detail: "rm -rf build", risk: "high", choices: nil),
             (id: "h2", title: "重构", status: "运行中", waiting: false, running: true,
-             approvalId: nil, detail: nil, risk: nil),
+             approvalId: nil, detail: nil, risk: nil, choices: nil),
         ], now: Date(timeIntervalSince1970: 100))
         XCTAssertEqual(status.rows[0].approvalId, "ap1")
         XCTAssertEqual(status.rows[0].detail, "rm -rf build")

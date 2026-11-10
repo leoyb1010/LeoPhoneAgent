@@ -27,6 +27,8 @@ enum MacFollowLogic {
         var title: String
         var pendingApprovalId: String?
         var pendingApprovalCommand: String?
+        /// 队首待审批的 choices(Mac `pending_approvals[0].choices`);nil = 不知道。
+        var pendingApprovalChoices: [String]? = nil
 
         var isFollowed: Bool { MacFollowLogic.isFollowed(following) }
         var isRunning: Bool { ["running", "starting"].contains(status) }
@@ -115,6 +117,7 @@ enum MacFollowLogic {
         /// 等审批的行带上审批 id 与命令,手表点这一行就能重开审批卡。
         var approvalId: String?
         var detail: String?
+        var choices: [String]? = nil
     }
 
     /// 只给手表关注的会话;标题用任务标题,不用会话类型名。
@@ -124,7 +127,8 @@ enum MacFollowLogic {
             return WatchItem(id: f.hostId + f.sessionId, title: f.title, status: row.statusText,
                              waiting: f.waiting, running: f.isRunning,
                              approvalId: f.waiting ? f.pendingApprovalId : nil,
-                             detail: f.waiting ? f.pendingApprovalCommand : nil)
+                             detail: f.waiting ? f.pendingApprovalCommand : nil,
+                             choices: f.waiting ? f.pendingApprovalChoices : nil)
         }
     }
 

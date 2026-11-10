@@ -17,7 +17,7 @@ import WebKit
 /// Owns a single WKWebView and publishes its navigation state.
 /// Both the sheet preview and the fullscreen Safari-style view share this instance
 /// so the webview is re-parented rather than re-created on mode switch.
-final class WebViewHolder: NSObject, ObservableObject {
+final class WebViewHolder: NSObject, ObservableObject, MinisResourceScopeProviding {
     let webView: WKWebView
     @Published var pageTitle: String = ""
     @Published var currentURL: String = ""
@@ -36,6 +36,22 @@ final class WebViewHolder: NSObject, ObservableObject {
     /// The initial file grant is retained across navigation and retries.
     /// Following a link must never grant access to a different directory.
     private let localFileReadAccessURL: URL?
+
+    // The initial native file grant pins the preview's session. A later URL or
+    // page script cannot broaden it; global/non-session previews get no custom-scheme grant.
+    var minisResourceSessionID: String? {
+        guard let scope = localFileReadAccessURL else { return nil }
+        let sid = scope.lastPathComponent
+        guard let root = AIChatViewModel.minisResourceRoot(for: sid),
+              scope.standardizedFileURL.resolvingSymlinksInPath().path == root.path else { return nil }
+        return sid
+    }
+
+    var minisResourceDocumentURL: URL? {
+        guard let sid = minisResourceSessionID, let url = webView.url ?? pendingURL,
+              AIChatViewModel.isMinisResourceURL(url, inSession: sid) else { return nil }
+        return url
+    }
     private var activeNavigation: WKNavigation?
     private var didStart: Bool = false
     private var windowWaitRetries: Int = 0

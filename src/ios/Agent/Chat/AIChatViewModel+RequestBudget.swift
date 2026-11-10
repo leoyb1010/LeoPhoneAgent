@@ -305,50 +305,53 @@ extension AIChatViewModel {
         minisConfigRoot.appendingPathComponent("mcp-servers", isDirectory: true)
     }
 
-    /// Resolve a `leophoneagent://` URL to a host filesystem URL.
-    /// Shared resolution logic used by Markdown link handlers and the browser's WKURLSchemeHandler.
+    /// Resolve a chat resource without searching other conversations. Non-browser
+    /// callers retain their existing explicitly named shared resource directories.
     nonisolated static func resolveMinisURL(_ url: URL) -> URL? {
-        guard url.scheme == "leophoneagent", let host = url.host else { return nil }
-        // Tolerate double-encoded links (%25E6…) alongside the correct
-        // single-encoded form. [T-fix-double-encoding]
-        let subPaths = MinisURLPathDecoding.subPathCandidates(for: url)
-        let fm = FileManager.default
-
-        // Primary: resolve via active session
-        if let sid = activeSessionId {
-            for subPath in subPaths {
-                let candidate = minisPersistentBase
-                    .appendingPathComponent(sid, isDirectory: true)
-                    .appendingPathComponent(host, isDirectory: true)
-                    .appendingPathComponent(subPath)
-                if fm.fileExists(atPath: candidate.path) { return candidate }
-            }
-        }
-
-        // Global directories (skills, memory, shared)
-        let globalDirs: [(String, URL)] = [
-            ("skills", minisSkillsPersistentDir),
-            ("memory", minisMemoryPersistentDir),
-            ("shared", minisSharedPersistentDir),
+        if let sid = activeSessionId, let file = resolveMinisURL(url, inSession: sid) { return file }
+        guard url.scheme?.lowercased() == "leophoneagent", let host = url.host else { return nil }
+        let globalDirs: [String: URL] = [
+            "skills": minisSkillsPersistentDir,
+            "memory": minisMemoryPersistentDir,
+            "shared": minisSharedPersistentDir,
         ]
-        for (subdir, dir) in globalDirs where host == subdir {
-            for subPath in subPaths {
-                let candidate = dir.appendingPathComponent(subPath)
-                if fm.fileExists(atPath: candidate.path) { return candidate }
-            }
-        }
+        guard let root = globalDirs[host] else { return nil }
+        return resolveMinisResource(url, beneath: root, directory: nil)
+    }
 
-        // Scan all sessions
-        if let sessions = try? fm.contentsOfDirectory(atPath: minisPersistentBase.path) {
-            for sid in sessions {
-                for subPath in subPaths {
-                    let candidate = minisPersistentBase
-                        .appendingPathComponent(sid, isDirectory: true)
-                        .appendingPathComponent(host, isDirectory: true)
-                        .appendingPathComponent(subPath)
-                    if fm.fileExists(atPath: candidate.path) { return candidate }
-                }
-            }
+    /// Browser authority comes from its native session owner, never activeSessionId
+    /// or a session identifier supplied by the page. No global-directory fallback.
+    nonisolated static func resolveMinisURL(_ url: URL, inSession sid: String) -> URL? {
+        guard url.scheme?.lowercased() == "leophoneagent", let host = url.host,
+              !host.isEmpty, ![".", ".."].contains(host), !host.contains("/"), !host.contains("\\"),
+              let root = minisResourceRoot(for: sid) else { return nil }
+        return resolveMinisResource(url, beneath: root, directory: host)
+    }
+
+    /// A session directory itself cannot redirect authority through a symlink.
+    nonisolated static func minisResourceRoot(for sid: String) -> URL? {
+        guard !sid.isEmpty, ![".", ".."].contains(sid), !sid.contains("/"), !sid.contains("\\") else { return nil }
+        let root = minisPersistentBase.standardizedFileURL.resolvingSymlinksInPath()
+            .appendingPathComponent(sid, isDirectory: true).standardizedFileURL
+        guard root.resolvingSymlinksInPath().path == root.path else { return nil }
+        return root
+    }
+
+    nonisolated static func isMinisResourceURL(_ url: URL, inSession sid: String) -> Bool {
+        guard url.isFileURL, let root = minisResourceRoot(for: sid) else { return false }
+        let target = url.standardizedFileURL.resolvingSymlinksInPath().path
+        return target.hasPrefix(root.path + "/")
+    }
+
+    private nonisolated static func resolveMinisResource(_ url: URL, beneath scope: URL, directory: String?) -> URL? {
+        let root = scope.standardizedFileURL.resolvingSymlinksInPath()
+        let directory = directory.map { root.appendingPathComponent($0, isDirectory: true) } ?? root
+        for subPath in MinisURLPathDecoding.subPathCandidates(for: url) {
+            let candidate = directory.appendingPathComponent(subPath).standardizedFileURL.resolvingSymlinksInPath()
+            // 字符串路径无 .. 不代表安全：同会话内的符号链接也不能读到其他会话或 App 私有文件。
+            guard candidate.path.hasPrefix(root.path + "/"),
+                  (try? candidate.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
+            return candidate
         }
         return nil
     }

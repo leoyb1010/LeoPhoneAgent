@@ -422,11 +422,7 @@ final class GatewayRunDriver: ObservableObject {
             self.respond(to: pending, choice: choice)
             return true
         }
-        WatchBridge.shared.sendApprovalRequest(
-            approvalId: approval.approvalId,
-            command: approval.command,
-            reason: approval.reason,
-            choices: approval.choices)
+        WatchBridge.shared.sendApprovalRequest(approval)
     }
 
     private func note(_ text: String) {

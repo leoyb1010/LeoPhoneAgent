@@ -42,7 +42,8 @@ final class MacLiveSessionsStore: ObservableObject {
             MacFollowLogic.Facts(hostId: hostId, sessionId: session.id, status: session.status, seq: session.seq,
                                  waiting: session.waitingForApproval, following: session.following,
                                  title: session.displayTitle, pendingApprovalId: session.pendingApprovalId,
-                                 pendingApprovalCommand: session.pendingApprovalCommand)
+                                 pendingApprovalCommand: session.pendingApprovalCommand,
+                                 pendingApprovalChoices: session.pendingApprovalChoices)
         }
 
         /// 比显示、轮询、手表要用的全部事实:以前比的是会话类型名,改了标题、关注都不刷新。
@@ -201,7 +202,7 @@ final class MacLiveSessionsStore: ObservableObject {
         return WatchMacStatus.summarize(approvals: items.map { item in
             (id: item.id, title: item.title, status: item.status, waiting: item.waiting, running: item.running,
              approvalId: item.approvalId, detail: item.detail,
-             risk: item.detail.map { CommandRisk.assess($0).rawValue })
+             risk: item.detail.map { CommandRisk.assess($0).rawValue }, choices: item.choices)
         })
     }
 
@@ -214,8 +215,11 @@ final class MacLiveSessionsStore: ObservableObject {
             guard let approvalId = facts.pendingApprovalId, !watchArmedApprovals.contains(approvalId) else { continue }
             watchArmedApprovals.insert(approvalId)
             guard !WatchBridge.shared.hasApprovalHandler(approvalId: approvalId) else { continue }
+            // 列表只带 approval_id / command / choices(没有工具名与计划正文):按 Mac 给的 choices 原样出按钮,
+            // 旧 Mac 不带 choices 时按 once/deny 兼容。计划审批在这条路径上显示成普通卡(按钮仍只是事件给的)。
             WatchBridge.shared.sendApprovalRequest(approvalId: approvalId, command: facts.pendingApprovalCommand,
-                                                   reason: nil, choices: ["once", "deny"])
+                                                   reason: nil,
+                                                   choices: facts.pendingApprovalChoices ?? RelayApprovalFields.legacyChoices)
         }
         for gone in watchArmedApprovals.subtracting(current) {
             watchArmedApprovals.remove(gone)
@@ -233,6 +237,12 @@ final class MacLiveSessionsStore: ObservableObject {
         // 列表里已经没有这条审批:别处答过了(或 Mac 已不在等),什么都不发。
         guard let row = rows.first(where: { $0.session.pendingApprovalId == approvalId }),
               let client = client(for: row.hostId) else { return false }
+        // 腕上回来的 choice 必须是这条审批 Mac 给过的;不在其中(旧手表补出的按钮)就不送。
+        let offered = row.session.pendingApprovalChoices ?? RelayApprovalFields.legacyChoices
+        guard offered.contains(choice) else {
+            answeredApprovals.remove(approvalId)
+            return false
+        }
         do {
             try await client.approveHarness(sessionId: row.session.id, choice: choice, approvalId: approvalId)
         } catch {

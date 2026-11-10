@@ -196,11 +196,13 @@ extension OffloadPermissionPolicy {
 }
 
 enum OffloadPermissionDecision: Equatable, Sendable {
+    // 仅用于审批队列到 manager 的内部传递；完成运行身份、撤销和前台校验后归一为 allowed。
+    case allowedOnce, allowedAlways
     case allowed, denied, disabled, needsForeground, cancelled, timedOut, busy, unknownCapability
 
     var errorCode: String? {
         switch self {
-        case .allowed: return nil
+        case .allowed, .allowedOnce, .allowedAlways: return nil
         case .denied, .disabled: return "authorization_denied"
         case .needsForeground: return "needs_foreground"
         case .cancelled: return "cancelled"
@@ -212,7 +214,7 @@ enum OffloadPermissionDecision: Equatable, Sendable {
 
     func message(command: String) -> String? {
         switch self {
-        case .allowed: return nil
+        case .allowed, .allowedOnce, .allowedAlways: return nil
         case .disabled: return OffloadPermissionPolicy.disabledDenial(command: command)
         case .denied: return OffloadPermissionPolicy.declinedDenial(command: command)
         case .timedOut: return OffloadPermissionPolicy.timeoutDenial(command: command)

@@ -350,7 +350,7 @@ final class OffloadPermissionManager: ObservableObject {
             let invocation = pending.invocation
             return (invocation.command == command || invocation.registeredCommand == command)
                 && (action == nil || invocation.action == action)
-        }, decision: level == .notAllowed ? .disabled : (level == .bypass ? .allowed : .cancelled))
+        }, decision: level == .notAllowed ? .disabled : (level == .bypass ? .allowedOnce : .cancelled))
     }
 
     /// 能力自检专用的会话 id(CapabilitySelfTestView 用它跑命令)。每个进程随机一段,
@@ -455,18 +455,31 @@ final class OffloadPermissionManager: ObservableObject {
         if let sid, let requestingRunID,
            !OffloadPermissionPolicy.isSameActiveRun(requestedRunID: requestingRunID,
                currentRunID: tracker.currentRunId(for: sid), isActive: tracker.isActive(sid)) { return .cancelled }
-        guard decision == .allowed else { return decision }
+        guard decision == .allowed || decision == .allowedOnce || decision == .allowedAlways else { return decision }
         // Revocation wins over a late response from the former sheet.
         if permissionLevel(for: command) == .notAllowed
             || permissionLevel(for: invocation.command, action: invocation.action) == .notAllowed { return .disabled }
         guard UIApplication.shared.applicationState == .active, !presenters.isEmpty else { return .needsForeground }
+        // Persist only after cancellation, run identity and revocation have been checked.
+        // A stale sheet response must never outlive the invocation it was approving.
+        if decision == .allowedAlways {
+            setPermissionLevel(.bypass, for: invocation.command,
+                               action: invocation.action.isEmpty ? nil : invocation.action)
+        }
         // Context-free terminal/native invocations get one approval only; never
         // share a process-wide "global session" grant with unrelated callers.
-        if let sid { sessionGrants[sid, default: []].insert(invocation.grantScope) }
+        // 一次许可不留下会话授权；只有旧接口/「本次会话允许」的 allowed 才记住作用域。
+        if decision == .allowed, let sid { sessionGrants[sid, default: []].insert(invocation.grantScope) }
         logger.info("Native permission granted: \(invocation.command).\(invocation.action)")
         return .allowed
     }
 
+    /// 只批准当前一次调用，不改变会话授权或持久权限。
+    func respondOnce(to requestId: String) {
+        queue.respond(id: requestId, decision: .allowedOnce)
+    }
+
+    // 保留旧调用方语义：allowed=true 仍表示本次会话允许。
     func respond(to requestId: String, allowed: Bool) {
         queue.respond(id: requestId, decision: allowed ? .allowed : .denied)
     }
@@ -474,9 +487,10 @@ final class OffloadPermissionManager: ObservableObject {
     /// [T-approval-vocab] 「始终允许」:放行这一次,并把这个能力的这个动作设成
     /// 不再询问。设置 → 权限 里改这个能力的档位,就一并收回。
     func respondAlwaysAllow(_ request: PermissionRequest) {
-        respond(to: request.id, allowed: true)
-        guard !request.command.isEmpty else { return }
-        setPermissionLevel(.bypass, for: request.command, action: request.action.isEmpty ? nil : request.action)
+        // 超时、取消或队列前移后，旧卡片不得为后续请求写入持久授权。
+        guard let pending = queue.current, pending.id == request.id else { return }
+        guard !pending.invocation.command.isEmpty else { return }
+        queue.respond(id: pending.id, decision: .allowedAlways)
     }
 
     func cancelRequest(_ id: String) {

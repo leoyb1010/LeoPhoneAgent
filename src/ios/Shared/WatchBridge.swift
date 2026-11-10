@@ -61,6 +61,11 @@ enum WatchPayloadKey {
     /// CommandRisk raw value; the wrist colors the card, and for a high-risk
     /// command drops double-tap and asks for a confirming tap.
     static let risk = "risk"
+    /// [up3-ios-plan] true = 计划审批(ExitPlanMode):`text` 是计划正文,按钮是「批准计划并执行 / 不批准」。
+    /// 旧手表不认这两个键,照普通审批显示(按钮仍是事件原样的 choice)。
+    static let plan = "plan"
+    /// 计划正文超过手表上限被截短:手表提示去 iPhone 看全文。
+    static let planTruncated = "planTruncated"
     // [T-watch-standalone] phone → watch (transferUserInfo): the model the
     // watch calls directly when the phone is out of reach.
     static let kindStandaloneConfig = "standaloneConfig"
@@ -346,15 +351,43 @@ final class WatchBridge: NSObject, ObservableObject {
     /// worthless once stale, and the phone-side card remains the source of
     /// truth if the watch is unreachable.
     func sendApprovalRequest(approvalId: String, command: String?, reason: String?, choices: [String]) {
+        sendApprovalRequest(approvalId: approvalId, command: command, reason: reason, choices: choices,
+                            tool: nil, plan: nil)
+    }
+
+    /// 控制台 driver 用:带上工具名与计划正文,计划审批在手表上显示成计划卡。
+    func sendApprovalRequest(_ approval: GatewayApprovalRequest) {
+        sendApprovalRequest(approvalId: approval.approvalId, command: approval.command, reason: approval.reason,
+                            choices: approval.choices, tool: approval.tool, plan: approval.extras["plan"])
+    }
+
+    /// 手表上计划正文的上限(字):sendMessage 有大小限制,腕上也读不完 Mac 给的 4000 字;超了提示去 iPhone 看。
+    static let wristPlanLimit = 1_200
+
+    private func sendApprovalRequest(approvalId: String, command: String?, reason: String?, choices: [String],
+                                     tool: String?, plan: String?) {
         guard let session, session.isReachable else { return }
-        let risk = command.map(CommandRisk.assess) ?? .medium
-        session.sendMessage([
+        let isPlan = HarnessApprovalPresentation.isPlan(tool: tool)
+        let wrist = Self.wristChoices(choices, plan: isPlan)
+        // 没有手表能表达的选项(空 / 只有 always / 计划没有 once、deny):不推卡,手机卡片照常可答。
+        guard !wrist.isEmpty else { return }
+        var payload: [String: Any] = [
             WatchPayloadKey.kind: WatchPayloadKey.kindApprovalRequest,
             WatchPayloadKey.requestId: approvalId,
-            WatchPayloadKey.text: WatchTextSanitizer.plain(command ?? reason ?? ""),
-            WatchPayloadKey.choices: Self.wristChoices(choices),
-            WatchPayloadKey.risk: risk.rawValue,
-        ], replyHandler: nil, errorHandler: { _ in })
+            WatchPayloadKey.choices: wrist,
+        ]
+        if isPlan {
+            let body = WatchTextSanitizer.plain(HarnessApprovalPresentation.planText(plan: plan, description: reason))
+            let truncated = body.count > Self.wristPlanLimit
+            payload[WatchPayloadKey.text] = truncated ? String(body.prefix(Self.wristPlanLimit)) + "…" : body
+            payload[WatchPayloadKey.risk] = CommandRisk.medium.rawValue
+            payload[WatchPayloadKey.plan] = true
+            payload[WatchPayloadKey.planTruncated] = truncated
+        } else {
+            payload[WatchPayloadKey.text] = WatchTextSanitizer.plain(command ?? reason ?? "")
+            payload[WatchPayloadKey.risk] = (command.map(CommandRisk.assess) ?? .medium).rawValue
+        }
+        session.sendMessage(payload, replyHandler: nil, errorHandler: { _ in })
     }
 
     /// "Always" writes a permanent allow rule on the Mac (Claude Code project
@@ -362,6 +395,14 @@ final class WatchBridge: NSObject, ObservableObject {
     /// never offers it, and neither does the wrist, whatever the risk.
     static func wristChoices(_ choices: [String]) -> [String] {
         choices.filter { $0 != "always" }
+    }
+
+    /// 计划审批在腕上只有「批准计划并执行(once)/ 不批准(deny)」:只留事件里原样给了的这两个,
+    /// 不把 session 当成 once 显示,也不补事件没给的按钮。普通审批同上(去掉 always)。
+    static func wristChoices(_ choices: [String], plan: Bool) -> [String] {
+        var seen = Set<String>()
+        let offered = wristChoices(choices).filter { !$0.isEmpty && seen.insert($0).inserted }
+        return plan ? offered.filter { $0 == "once" || $0 == "deny" } : offered
     }
 
     /// Tell the wrist the card is gone (answered on the phone, or timed out).

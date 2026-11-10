@@ -75,10 +75,12 @@ private let logger = AppLogger(category: "SessionsOffload")
         }
         guard bridgeWait(sem, seconds: 60) else { return bridgeTimeout("querySessions", seconds: 60) }
 
-        return [
-            "count": result.count,
-            "sessions": result,
-        ] as NSDictionary
+        // 使用与 Spotlight/Shortcuts 相同的私密标记；当前曾解锁不等于允许跨会话工具读取。
+        let visible = result.filter { row in
+            guard let sid = row["session_id"] as? String else { return false }
+            return !SessionLockStore.isHiddenFromSystemSurfaces(sid)
+        }
+        return ["count": visible.count, "sessions": visible] as NSDictionary
     }
 
     // MARK: - Search Messages
@@ -124,10 +126,11 @@ private let logger = AppLogger(category: "SessionsOffload")
         }
         guard bridgeWait(sem, seconds: 60) else { return bridgeTimeout("searchMessages", seconds: 60) }
 
-        return [
-            "count": result.count,
-            "messages": result,
-        ] as NSDictionary
+        let visible = result.filter { row in
+            guard let sid = row["session_id"] as? String else { return false }
+            return !SessionLockStore.isHiddenFromSystemSurfaces(sid)
+        }
+        return ["count": visible.count, "messages": visible] as NSDictionary
     }
 
     // MARK: - Load Messages by Session ID
@@ -145,6 +148,7 @@ private let logger = AppLogger(category: "SessionsOffload")
         var result: [[String: Any]] = []
         var totalCount = 0
         let maxChars = full ? 50_000 : 1_000
+        guard !SessionLockStore.isHiddenFromSystemSurfaces(sessionId) else { return unavailableSession() }
 
         Task.detached {
             let messages = await ChatStore.shared.loadMessagePage(
@@ -171,6 +175,8 @@ private let logger = AppLogger(category: "SessionsOffload")
             sem.signal()
         }
         guard bridgeWait(sem, seconds: 60) else { return bridgeTimeout("loadMessages", seconds: 60) }
+        // ChatStore await 期间可能重新上锁；返回正文和总数前再次检查。
+        guard !SessionLockStore.isHiddenFromSystemSurfaces(sessionId) else { return unavailableSession() }
 
         return [
             "session_id": sessionId,
@@ -185,6 +191,10 @@ private let logger = AppLogger(category: "SessionsOffload")
     }
 
     // MARK: - Shared helpers
+
+    private static func unavailableSession() -> NSDictionary {
+        ["ok": false, "error": "session_not_found"] as NSDictionary
+    }
 
     /// Resolve a binding source to a readable model display name.
     /// Returns nil when no matching entry is found.
@@ -266,7 +276,8 @@ private let logger = AppLogger(category: "SessionsOffload")
 
         Task { @MainActor in
             // 能力自检保留的 id 不是聊天会话:不能往里发消息(它的探测命令免审批)。
-            if let sid = sessionId, OffloadPermissionManager.isReservedSessionId(sid) {
+            if let sid = sessionId,
+               OffloadPermissionManager.isReservedSessionId(sid) || SessionLockStore.shared.isHiddenFromSystemSurfaces(sid) {
                 output = ["ok": false, "error": "session_unavailable"]
                 sem.signal()
                 return
@@ -291,6 +302,12 @@ private let logger = AppLogger(category: "SessionsOffload")
                     "ok": false,
                     "error": "session_unavailable",
                 ]
+                sem.signal()
+                return
+            }
+
+            guard !SessionLockStore.shared.isHiddenFromSystemSurfaces(sid) else {
+                output = ["ok": false, "error": "session_not_found"]
                 sem.signal()
                 return
             }
@@ -369,7 +386,8 @@ private let logger = AppLogger(category: "SessionsOffload")
         var output: [String: Any] = [:]
 
         Task { @MainActor in
-            if OffloadPermissionManager.isReservedSessionId(sessionId) {
+            if OffloadPermissionManager.isReservedSessionId(sessionId)
+                || SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId) {
                 output = ["ok": false, "error": "session_not_found"]
                 sem.signal()
                 return
@@ -381,6 +399,13 @@ private let logger = AppLogger(category: "SessionsOffload")
             // so retry doesn't race the active stream.
             if vm.isProcessing {
                 _ = await waitForCompletion(vm: vm, timeoutSeconds: 30)
+            }
+
+            // loadSession / waitForCompletion 会挂起；触碰正文或重跑前重新检查私密边界。
+            guard !SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId) else {
+                output = ["ok": false, "error": "session_not_found"]
+                sem.signal()
+                return
             }
 
             // Locate the target user message.
@@ -445,6 +470,7 @@ private let logger = AppLogger(category: "SessionsOffload")
     /// navigation. Returns immediately — UI navigation happens on the
     /// main actor on the next runloop.
     @objc public static func openSession(sessionId: String) -> NSDictionary {
+        guard !SessionLockStore.isHiddenFromSystemSurfaces(sessionId) else { return unavailableSession() }
         let sem = DispatchSemaphore(value: 0)
         var output: [String: Any] = [:]
 
@@ -460,19 +486,25 @@ private let logger = AppLogger(category: "SessionsOffload")
                 sem.signal()
                 return
             }
-            await MainActor.run {
+            let opened = await MainActor.run {
+                guard !SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId) else { return false }
                 NotificationCenter.default.post(
                     name: .openSessionFromIntent,
                     object: nil,
                     userInfo: ["sessionId": session.id]
                 )
+                return true
             }
-            output = [
-                "ok": true,
-                "action": "open",
-                "session_id": session.id,
-                "title": session.title ?? "",
-            ]
+            if opened, !SessionLockStore.isHiddenFromSystemSurfaces(sessionId) {
+                output = [
+                    "ok": true,
+                    "action": "open",
+                    "session_id": session.id,
+                    "title": session.title ?? "",
+                ]
+            } else {
+                output = ["ok": false, "error": "session_not_found"]
+            }
             sem.signal()
         }
         guard bridgeWait(sem, seconds: 30) else { return bridgeTimeout("openSession", seconds: 30) }
@@ -487,13 +519,18 @@ private let logger = AppLogger(category: "SessionsOffload")
         var output: [String: Any] = [:]
 
         Task { @MainActor in
+            guard !SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId) else {
+                output = ["ok": false, "error": "session_not_found"]
+                sem.signal()
+                return
+            }
             // SessionActivityTracker is the authoritative is-running signal —
             // VM may have been evicted from cache but the tracker survives.
             let isRunning = SessionActivityTracker.shared.isActive(sessionId)
 
             // Pull canonical session metadata from the DB.
             let session = await ChatStore.shared.getSession(sessionId)
-            guard let session else {
+            guard !SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId), let session else {
                 output = [
                     "ok": false,
                     "error": "session_not_found",

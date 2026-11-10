@@ -460,24 +460,31 @@ enum HarnessApprovalPresentation {
 // MARK: - 审批通知的类别与按钮
 
 /// 审批本地通知用哪个类别、类别上有哪些按钮、按钮回调提交什么(App 的 HarnessApprovalNotifier 按这份建类别、
-/// 选类别、解按钮)。规则:通知上能点的每个按钮,提交的都必须是服务端这次给出的 choices 之一。
-/// 现有两个类别(普通 / 高危)按钮相同:允许一次(once)、本次会话允许(session)、拒绝 / 拒绝并停止(deny)。
-/// 所以只有 choices 同时含 once、session、deny 才用类别;否则(只给 deny、只给 once/deny、空、未知值、
-/// 旧协议缺字段兜底的 once/deny)发无按钮的提醒,点开进 App 按真实 choices 审批。
-/// 计划审批的专用类别后续再加。
+/// 登记、选类别、解按钮;这是唯一来源)。规则:通知上能点的每个按钮,提交的都必须是服务端这次给出的 choices 之一。
+/// - 普通 / 高危类别按钮相同:允许一次(once)、本次会话允许(session)、拒绝 / 拒绝并停止(deny)。
+///   只有 choices 同时含 once、session、deny 才用;否则发无按钮提醒,点开进 App 按真实 choices 审批。
+/// - [up3-ios-plan] 计划审批(ExitPlanMode)单独的类别:「批准计划并执行」(once)、「不批准」(deny),
+///   按事件实际给出的子集选(两个都有 / 只有 deny / 只有 once)。不出「本次会话允许」;只给 session 的
+///   计划不拿它冒充 once,发无按钮提醒。空 / 未知 / 非法集合一律无按钮。
 enum HarnessApprovalNotificationSpec {
     static let categoryId = "HARNESS_APPROVAL"
     /// 高危命令:按钮相同,「允许」类要先解锁。
     static let highRiskCategoryId = "HARNESS_APPROVAL_HIGH"
+    /// 计划审批:批准 + 不批准 / 只有不批准 / 只有批准。
+    static let planCategoryId = "HARNESS_PLAN_APPROVAL"
+    static let planDenyOnlyCategoryId = "HARNESS_PLAN_DENY_ONLY"
+    static let planApproveOnlyCategoryId = "HARNESS_PLAN_APPROVE_ONLY"
 
     static let approveAction = "HARNESS_APPROVE_ONCE"
     static let approveSessionAction = "HARNESS_APPROVE_SESSION"
     static let denyAction = "HARNESS_DENY"
     static let denyAndStopAction = "HARNESS_DENY_STOP"
+    static let planApproveAction = "HARNESS_PLAN_APPROVE"
+    static let planDenyAction = "HARNESS_PLAN_DENY"
 
     struct Action: Equatable {
         let identifier: String
-        /// 点了提交给 Mac 的 choice。
+        /// 点了提交给 Mac 的 choice(原样,不改写)。
         let choice: String
         /// 「允许」类:高危类别上要解锁。
         let allows: Bool
@@ -485,7 +492,7 @@ enum HarnessApprovalNotificationSpec {
         let stopsAfter: Bool
     }
 
-    /// 两个类别共用的按钮,顺序即通知上的顺序。
+    /// 普通 / 高危两个类别共用的按钮,顺序即通知上的顺序。
     static let actions: [Action] = [
         Action(identifier: approveAction, choice: "once", allows: true, stopsAfter: false),
         Action(identifier: approveSessionAction, choice: "session", allows: true, stopsAfter: false),
@@ -493,20 +500,49 @@ enum HarnessApprovalNotificationSpec {
         Action(identifier: denyAndStopAction, choice: "deny", allows: false, stopsAfter: true),
     ]
 
-    static func action(identifier: String) -> Action? { actions.first { $0.identifier == identifier } }
+    /// 计划审批的按钮。批准 = Mac 退出计划模式开始执行;不批准 = 留在计划模式结束这一轮。
+    static let planActions: [Action] = [
+        Action(identifier: planApproveAction, choice: "once", allows: true, stopsAfter: false),
+        Action(identifier: planDenyAction, choice: "deny", allows: false, stopsAfter: false),
+    ]
+
+    /// 每个类别 → 它的按钮。登记(LeoNotificationCategories)、建类别、前台横幅判断都按这张表。
+    static let categories: [(id: String, actions: [Action])] = [
+        (categoryId, actions),
+        (highRiskCategoryId, actions),
+        (planCategoryId, planActions),
+        (planDenyOnlyCategoryId, planActions.filter { $0.choice == "deny" }),
+        (planApproveOnlyCategoryId, planActions.filter { $0.choice == "once" }),
+    ]
+
+    static var categoryIds: [String] { categories.map(\.id) }
+
+    /// 按钮回调:不认识的动作(点通知本体)= nil,只打开 App,不代作决定。
+    static func action(identifier: String) -> Action? {
+        (actions + planActions).first { $0.identifier == identifier }
+    }
 
     /// 这条审批通知用的类别;nil = 发无按钮提醒。`highRiskRegistered`:高危类别没登记时退回普通类别
-    /// (按钮相同,只是不要求解锁;没登记的类别发出去一个按钮都没有)。
-    static func categoryIdentifier(choices: [String], highRisk: Bool, highRiskRegistered: Bool) -> String? {
+    /// (按钮相同,只是不要求解锁;没登记的类别发出去一个按钮都没有)。`plan`:计划审批(见上)。
+    static func categoryIdentifier(choices: [String], highRisk: Bool, highRiskRegistered: Bool,
+                                   plan: Bool = false) -> String? {
         let offered = Set(choices)
+        if plan {
+            switch (offered.contains("once"), offered.contains("deny")) {
+            case (true, true): return planCategoryId
+            case (false, true): return planDenyOnlyCategoryId
+            case (true, false): return planApproveOnlyCategoryId
+            case (false, false): return nil
+            }
+        }
         guard actions.allSatisfy({ offered.contains($0.choice) }) else { return nil }
         return highRisk && highRiskRegistered ? highRiskCategoryId : categoryId
     }
 
     /// 某个类别在通知上实际出现的按钮;nil(无按钮提醒)或不认识的类别为空。
     static func actions(forCategory category: String?) -> [Action] {
-        guard let category, category == categoryId || category == highRiskCategoryId else { return [] }
-        return actions
+        guard let category else { return [] }
+        return categories.first { $0.id == category }?.actions ?? []
     }
 }
 

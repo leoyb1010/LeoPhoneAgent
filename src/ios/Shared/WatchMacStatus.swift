@@ -22,6 +22,8 @@ struct WatchMacStatus: Codable, Equatable {
         var approvalId: String? = nil
         var detail: String? = nil
         var risk: String? = nil
+        /// 这条审批 Mac 给的 choices(原样);旧手机不带时手表按 once/deny 兼容。
+        var choices: [String]? = nil
     }
 
     var running: Int
@@ -39,13 +41,14 @@ struct WatchMacStatus: Codable, Equatable {
                           now: Date = Date()) -> WatchMacStatus {
         summarize(approvals: items.map {
             (id: $0.id, title: $0.title, status: $0.status, waiting: $0.waiting, running: $0.running,
-             approvalId: nil, detail: nil, risk: nil)
+             approvalId: nil, detail: nil, risk: nil, choices: nil)
         }, now: now)
     }
 
     /// [remote-ctl-power] 同上,等审批的行带上审批(手表点行重开审批卡)。
     static func summarize(approvals items: [(id: String, title: String, status: String, waiting: Bool, running: Bool,
-                                             approvalId: String?, detail: String?, risk: String?)],
+                                             approvalId: String?, detail: String?, risk: String?,
+                                             choices: [String]?)],
                           now: Date = Date()) -> WatchMacStatus {
         let sorted = items.sorted { lhs, rhs in
             if lhs.waiting != rhs.waiting { return lhs.waiting }
@@ -60,7 +63,8 @@ struct WatchMacStatus: Codable, Equatable {
                     status: String($0.status.prefix(40)), waiting: $0.waiting,
                     approvalId: $0.approvalId.map { String($0.prefix(120)) },
                     // 手表审批卡上的命令;applicationContext 有大小上限,截短。
-                    detail: $0.detail.map { String($0.prefix(300)) }, risk: $0.risk)
+                    detail: $0.detail.map { String($0.prefix(300)) }, risk: $0.risk,
+                    choices: $0.choices.map { Array($0.filter { $0 != "always" }.prefix(4)) })
             },
             updatedAt: now)
     }

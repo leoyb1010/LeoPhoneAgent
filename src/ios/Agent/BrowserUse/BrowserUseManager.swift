@@ -5,8 +5,16 @@ import os.log
 
 private let logger = AppLogger(category: "BrowserUse")
 
+/// Native WebView owners supply resource authority. Page URLs and JavaScript
+/// cannot select a different session or grant themselves local-file access.
 @MainActor
-final class BrowserUseManager: NSObject, ObservableObject {
+protocol MinisResourceScopeProviding: AnyObject {
+    var minisResourceSessionID: String? { get }
+    var minisResourceDocumentURL: URL? { get }
+}
+
+@MainActor
+final class BrowserUseManager: NSObject, ObservableObject, MinisResourceScopeProviding {
 
     // MARK: - Published State
 
@@ -55,6 +63,48 @@ final class BrowserUseManager: NSObject, ObservableObject {
     /// Returns the chat session id owning this browser — wired by BrowserTabPool.
     /// Downloads are saved into that session's /var/minis/workspace/ directory.
     var sessionIdProvider: (() -> String?)?
+    private var pendingNativeMinisURL: URL?
+    private var localResourceDocumentURL: URL?
+    private var localResourceSessionID: String?
+    var minisResourceSessionID: String? {
+        guard let sid = localResourceSessionID, sid == sessionIdProvider?() else { return nil }
+        return sid
+    }
+    var minisResourceDocumentURL: URL? { localResourceDocumentURL }
+
+    private func prepareNativeResourceNavigation(to url: URL) {
+        let localURL = url.scheme?.lowercased() == "leophoneagent" ? url : nil
+        pendingNativeMinisURL = localURL
+        localResourceDocumentURL = localURL
+        localResourceSessionID = localURL == nil ? nil : sessionIdProvider?()
+    }
+
+    private func permitsResourceNavigation(_ action: WKNavigationAction) -> Bool {
+        guard let url = action.request.url else { return true }
+        guard url.scheme?.lowercased() == "leophoneagent" else {
+            if action.targetFrame?.isMainFrame == true {
+                pendingNativeMinisURL = nil
+                localResourceDocumentURL = nil
+                localResourceSessionID = nil
+            }
+            return true
+        }
+        guard let sid = sessionIdProvider?(), !SessionLockStore.shared.isVisuallyLocked(sid),
+              AIChatViewModel.resolveMinisURL(url, inSession: sid) != nil else { return false }
+        let nativeLoad = action.targetFrame?.isMainFrame == true
+            && pendingNativeMinisURL == url && localResourceSessionID == sid
+        let sourceOwner = action.sourceFrame.webView?.navigationDelegate as? any MinisResourceScopeProviding
+        let localSource = action.sourceFrame.securityOrigin.protocol.lowercased() == "leophoneagent"
+            && sourceOwner?.minisResourceSessionID == sid
+        // 外部网页的重定向、脚本和链接都不是本地文件授权；只有原生导航或已有本地页面可继续。
+        guard nativeLoad || localSource else { return false }
+        if nativeLoad { pendingNativeMinisURL = nil }
+        if action.targetFrame?.isMainFrame != false {
+            localResourceDocumentURL = url
+            localResourceSessionID = sid
+        }
+        return true
+    }
 
     /// Returns this tab's pool id — wired by BrowserTabPool. Diagnostics only,
     /// so WebContent-process death can be attributed to a tab. [BrowserToolDiag]
@@ -709,6 +759,7 @@ final class BrowserUseManager: NSObject, ObservableObject {
 
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: Self.navigationTimeout)
         lastRequestedURL = url          // [T-ios-webview-error-ui]
+        prepareNativeResourceNavigation(to: url)
         loadError = nil                 // clear any prior failure overlay
         webView.load(request)
         isLoading = true
@@ -1826,7 +1877,9 @@ final class BrowserUseManager: NSObject, ObservableObject {
 
         webView = newView
 
-        if let url = oldURL {
+        if let url = oldURL,
+           url.scheme?.lowercased() != "leophoneagent" || minisResourceSessionID != nil {
+            prepareNativeResourceNavigation(to: url)
             webView.load(URLRequest(url: url))
         }
 
@@ -1849,7 +1902,9 @@ final class BrowserUseManager: NSObject, ObservableObject {
 
         let oldURL = webView.url
         webView = newView
-        if let url = oldURL {
+        if let url = oldURL,
+           url.scheme?.lowercased() != "leophoneagent" || minisResourceSessionID != nil {
+            prepareNativeResourceNavigation(to: url)
             webView.load(URLRequest(url: url))
         }
     }
@@ -2215,6 +2270,22 @@ extension BrowserUseManager: WKNavigationDelegate {
     ) {
         let allowedSchemes: Set<String> = ["http", "https", "about", "blob", "leophoneagent"]
 
+        let resourceNavigationAllowed = MainActor.assumeIsolated { permitsResourceNavigation(navigationAction) }
+        guard resourceNavigationAllowed else {
+            decisionHandler(.cancel, preferences)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let error = URLError(.noPermissionsToReadFile)
+                self.isLoading = false
+                self.loadError = WebLoadError(error: error, failedURL: navigationAction.request.url)
+                if let cont = self.navigationContinuation {
+                    self.navigationContinuation = nil
+                    cont.resume(throwing: error)
+                }
+            }
+            return
+        }
+
         // <a download> anchors (including blob: URLs) mark the action as a
         // download — route it through WKDownload instead of navigating.
         if navigationAction.shouldPerformDownload {
@@ -2511,38 +2582,57 @@ extension BrowserUseManager: WKScriptMessageHandler {
 
 // MARK: - MinisURLSchemeHandler
 
-/// Handles `leophoneagent://` URLs in WKWebView by resolving them to local files.
-/// Supports `leophoneagent://workspace/file.html`, `leophoneagent://shared/...`, etc.
+/// Serves only resources of the native WebView owner's session, and only while
+/// that WebView is displaying an authorized local document.
+@MainActor
 final class MinisURLSchemeHandler: NSObject, WKURLSchemeHandler {
     private let logger = AppLogger(category: "MinisScheme")
 
     func webView(_ webView: WKWebView, start urlSchemeTask: any WKURLSchemeTask) {
-        let url = urlSchemeTask.request.url!
-        logger.info("[MinisScheme] start host=\(url.host ?? "local") pathLength=\(url.path.count)")
+        serve(webView, task: urlSchemeTask)
+    }
 
-        guard let fileURL = AIChatViewModel.resolveMinisURL(url) else {
-            logger.warning("[MinisScheme] not found host=\(url.host ?? "local") pathLength=\(url.path.count)")
-            urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist))
+    private func serve(_ webView: WKWebView, task: any WKURLSchemeTask) {
+        guard let url = task.request.url,
+              let owner = webView.navigationDelegate as? any MinisResourceScopeProviding,
+              let sid = owner.minisResourceSessionID,
+              !SessionLockStore.shared.isVisuallyLocked(sid),
+              let documentURL = owner.minisResourceDocumentURL,
+              isLocalDocument(documentURL, sessionID: sid) else {
+            task.didFailWithError(URLError(.noPermissionsToReadFile))
             return
         }
-
+        // mainDocumentURL / Origin are supplied by WebKit, not a tool argument.
+        // A remote page never inherits the local grant when this tab navigates away.
+        if let initiator = task.request.mainDocumentURL, !isLocalDocument(initiator, sessionID: sid) {
+            task.didFailWithError(URLError(.noPermissionsToReadFile))
+            return
+        }
+        if let origin = task.request.value(forHTTPHeaderField: "Origin"),
+           origin != "null", URL(string: origin)?.scheme?.lowercased() != "leophoneagent" {
+            task.didFailWithError(URLError(.noPermissionsToReadFile))
+            return
+        }
+        guard let fileURL = AIChatViewModel.resolveMinisURL(url, inSession: sid) else {
+            task.didFailWithError(URLError(.fileDoesNotExist))
+            return
+        }
         guard let data = try? Data(contentsOf: fileURL) else {
-            logger.warning("[MinisScheme] read failed extension=\(fileURL.pathExtension)")
-            urlSchemeTask.didFailWithError(URLError(.cannotOpenFile))
+            task.didFailWithError(URLError(.cannotOpenFile))
             return
         }
-
         let mimeType = Self.mimeType(for: fileURL.pathExtension)
-        let response = URLResponse(
-            url: url,
-            mimeType: mimeType,
-            expectedContentLength: data.count,
-            textEncodingName: mimeType.hasPrefix("text/") ? "utf-8" : nil
-        )
-        urlSchemeTask.didReceive(response)
-        urlSchemeTask.didReceive(data)
-        urlSchemeTask.didFinish()
-        logger.info("[MinisScheme] served host=\(url.host ?? "local") bytes=\(data.count) mime=\(mimeType)")
+        let response = URLResponse(url: url, mimeType: mimeType,
+            expectedContentLength: data.count, textEncodingName: mimeType.hasPrefix("text/") ? "utf-8" : nil)
+        task.didReceive(response)
+        task.didReceive(data)
+        task.didFinish()
+        logger.info("[MinisScheme] served scoped resource bytes=\(data.count) mime=\(mimeType)")
+    }
+
+    private func isLocalDocument(_ url: URL, sessionID: String) -> Bool {
+        if url.isFileURL { return AIChatViewModel.isMinisResourceURL(url, inSession: sessionID) }
+        return AIChatViewModel.resolveMinisURL(url, inSession: sessionID) != nil
     }
 
     func webView(_ webView: WKWebView, stop urlSchemeTask: any WKURLSchemeTask) {

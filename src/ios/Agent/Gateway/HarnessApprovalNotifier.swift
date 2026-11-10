@@ -35,13 +35,22 @@ enum HarnessApprovalNotifier {
 
     /// 与 BACKGROUND_TASK 一起注册(setNotificationCategories 是整体替换,
     /// 谁单独 set 谁就把别人的按钮抹掉——两处调用都必须用这份并集)。
-    static var category: UNNotificationCategory { makeCategory(categoryId, allowOptions: []) }
-    static var highRiskCategory: UNNotificationCategory {
-        makeCategory(highRiskCategoryId, allowOptions: [.authenticationRequired])
+    static var category: UNNotificationCategory { makeCategory(categoryId) }
+    static var highRiskCategory: UNNotificationCategory { makeCategory(highRiskCategoryId) }
+    /// 审批用到的全部类别(普通、高危、计划及其子集),按 HarnessApprovalNotificationSpec.categories 建。
+    static var allCategories: [UNNotificationCategory] {
+        HarnessApprovalNotificationSpec.categoryIds.map(makeCategory)
     }
 
-    private static func makeCategory(_ id: String, allowOptions: UNNotificationActionOptions) -> UNNotificationCategory {
-        UNNotificationCategory(
+    /// 前台横幅判断:这条通知是不是审批(含无按钮提醒以外的全部审批类别)。
+    static func isApprovalCategory(_ id: String) -> Bool {
+        HarnessApprovalNotificationSpec.categoryIds.contains(id)
+    }
+
+    private static func makeCategory(_ id: String) -> UNNotificationCategory {
+        // [up-home] 「允许」类免解锁,只有高危类别要先解锁;拒绝类一律标红。
+        let allowOptions: UNNotificationActionOptions = id == highRiskCategoryId ? [.authenticationRequired] : []
+        return UNNotificationCategory(
             identifier: id,
             actions: HarnessApprovalNotificationSpec.actions(forCategory: id).map { action in
                 UNNotificationAction(identifier: action.identifier, title: title(for: action),
@@ -55,6 +64,8 @@ enum HarnessApprovalNotifier {
         case approveAction: return AppLocalized("允许一次")
         case approveSessionAction: return AppLocalized("本次会话允许")
         case denyAndStopAction: return AppLocalized("拒绝并停止任务")
+        case HarnessApprovalNotificationSpec.planApproveAction: return AppLocalized("批准计划并执行")
+        case HarnessApprovalNotificationSpec.planDenyAction: return AppLocalized("不批准")
         default: return AppLocalized("拒绝")
         }
     }
@@ -63,18 +74,19 @@ enum HarnessApprovalNotifier {
     /// 比免解锁更糟。没登记就退回普通类别。
     /// nil = 服务端 choices 盖不住类别上的全部按钮(只给 deny、once/deny、空、未知值):发无按钮提醒,
     /// 不让通知替用户提交服务端没给的决定。
+    /// 计划审批用计划类别(按事件给的 once / deny 子集);计划类别没登记(旧安装首启前)时发无按钮提醒,
+    /// 绝不退回带「本次会话允许」的通用类别。
     private static func categoryIdentifier(for approval: GatewayApprovalRequest) async -> String? {
-        let highRisk = approval.command.map { CommandRisk.assess($0) == .high } ?? false
-        let canUseCategory = HarnessApprovalNotificationSpec.categoryIdentifier(
-            choices: approval.choices, highRisk: false, highRiskRegistered: false) != nil
-        guard canUseCategory else { return nil }
-        var registered = false
-        if highRisk {
-            registered = await UNUserNotificationCenter.current().notificationCategories()
-                .contains(where: { $0.identifier == highRiskCategoryId })
-        }
-        return HarnessApprovalNotificationSpec.categoryIdentifier(
-            choices: approval.choices, highRisk: highRisk, highRiskRegistered: registered)
+        let plan = HarnessApprovalPresentation.isPlan(tool: approval.tool)
+        let highRisk = !plan && (approval.command.map { CommandRisk.assess($0) == .high } ?? false)
+        guard let wanted = HarnessApprovalNotificationSpec.categoryIdentifier(
+            choices: approval.choices, highRisk: highRisk, highRiskRegistered: true, plan: plan) else { return nil }
+        guard wanted != categoryId else { return wanted }
+        let registered = await UNUserNotificationCenter.current().notificationCategories()
+            .contains(where: { $0.identifier == wanted })
+        if registered { return wanted }
+        return plan ? nil : HarnessApprovalNotificationSpec.categoryIdentifier(
+            choices: approval.choices, highRisk: highRisk, highRiskRegistered: false)
     }
 
     /// app 非前台时为一条审批请求发通知。前台不发(app 内卡片已在最前)。
@@ -84,7 +96,8 @@ enum HarnessApprovalNotifier {
                      approval: GatewayApprovalRequest, identifier customIdentifier: String? = nil) {
         guard UIApplication.shared.applicationState != .active else { return }
         let content = UNMutableNotificationContent()
-        content.title = "🖥 \(hostName ?? "Mac") 等你审批"
+        let isPlan = HarnessApprovalPresentation.isPlan(tool: approval.tool)
+        content.title = isPlan ? "🖥 \(hostName ?? "Mac") 有计划等你批准" : "🖥 \(hostName ?? "Mac") 等你审批"
         content.body = lockScreenBody(for: approval)
         content.sound = .default
         // 时效性:锁屏置顶 + AirPods「Siri 播报通知」可念出来
@@ -108,6 +121,10 @@ enum HarnessApprovalNotifier {
     /// asking (the command's executable), never its arguments.
     @MainActor
     static func lockScreenBody(for approval: GatewayApprovalRequest) -> String {
+        // 计划正文可能很长、也可能有隐私:锁屏只说有计划在等,全文进 App 看(手机计划卡完整显示)。
+        if HarnessApprovalPresentation.isPlan(tool: approval.tool) {
+            return AppLocalized("有一份计划等你批准，打开 App 查看全文")
+        }
         let command = (approval.command ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard BackgroundKeepAliveManager.shared.liveActivityPrivacyMode else {
             return String(command.prefix(120))

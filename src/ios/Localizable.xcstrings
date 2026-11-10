@@ -79300,6 +79300,50 @@
           }
         }
       }
+    },
+    "有一份计划等你批准，打开 App 查看全文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A plan is waiting for your approval. Open the app to read it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有一份计划等你批准，打开 App 查看全文"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有一份計畫等你批准，打開 App 查看全文"
+          }
+        }
+      }
+    },
+    "计划较长，完整内容请在 iPhone 上查看": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The plan is long. Read the full plan on iPhone."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计划较长，完整内容请在 iPhone 上查看"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "計畫較長，完整內容請在 iPhone 上查看"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

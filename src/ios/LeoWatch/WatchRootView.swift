@@ -119,6 +119,14 @@ private struct WatchApprovalSheet: View {
     @State private var answered: String?
 
     private func label(for choice: String) -> String {
+        if approval.isPlan {
+            // 计划只有批准 / 不批准;session 等其它值手机不会推过来,万一来了照原样显示,不冒充批准。
+            switch choice {
+            case "once": return String(localized: "批准计划并执行")
+            case "deny": return String(localized: "不批准")
+            default: break
+            }
+        }
         switch choice {
         case "once": return "允许一次"
         case "session": return "本次会话允许"
@@ -176,23 +184,35 @@ private struct WatchApprovalSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
-                    Image(systemName: "hand.raised.fill").foregroundStyle(riskColor)
-                    Text("需要审批").font(.headline)
-                    Spacer(minLength: 4)
-                    Text(riskLabel)
-                        .font(.caption2.weight(.semibold))
+                    Image(systemName: approval.isPlan ? "list.bullet.clipboard.fill" : "hand.raised.fill")
                         .foregroundStyle(riskColor)
+                    Text(approval.isPlan ? LocalizedStringKey("计划等你批准") : LocalizedStringKey("需要审批"))
+                        .font(.headline)
+                    Spacer(minLength: 4)
+                    if !approval.isPlan {
+                        Text(riskLabel)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(riskColor)
+                    }
                 }
                 if !approval.detail.isEmpty {
                     // Capped and scrollable on its own: a long diff must not
                     // push the buttons off the first screen.
                     ScrollView {
-                        Text(approval.detail)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(approval.detail)
+                                .font(.system(size: 12, design: approval.isPlan ? .default : .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if approval.planTruncated {
+                                Text("计划较长，完整内容请在 iPhone 上查看")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
                     }
-                    .frame(maxHeight: 64)
+                    // 计划正文要能读:比命令摘要高,仍留出按钮在第一屏。
+                    .frame(maxHeight: approval.isPlan ? 120 : 64)
                     .padding(6)
                     .background(riskColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
                 }
@@ -203,7 +223,8 @@ private struct WatchApprovalSheet: View {
                         Text(buttonTitle(for: choice)).frame(maxWidth: .infinity)
                     }
                     .tint(choice == "deny" ? .gray : riskColor)
-                    .handGestureShortcut(.primaryAction, isEnabled: choice == "once" && !approval.isHighRisk)
+                    // 批准计划会让 Mac 开始执行:和高危一样不给双指互点,只能点按钮。
+                    .handGestureShortcut(.primaryAction, isEnabled: choice == "once" && !approval.isHighRisk && !approval.isPlan)
                     .symbolEffect(.bounce, value: answered == choice)
                 }
             }
