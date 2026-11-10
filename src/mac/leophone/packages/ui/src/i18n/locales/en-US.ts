@@ -1,5 +1,10 @@
 /** English translations */
 const enUS: Record<string, string> = {
+  "leoWhatsNew.title": "What's new",
+  "leoWhatsNew.confirm": "Got it",
+  "settings.manualDistribution": "App updates",
+  "settings.manualDistributionDescription": "This build uses manual distribution. Get the updated installer from your trusted distribution channel, quit LeoBot, then replace the app. Automatic downloads are unavailable in this build.",
+  "settings.manualDistributionState": "Manual distribution",
   "leoHome.tasksLoadFailed": "Could not load tasks.",
   "leoHome.tasksLoading": "Loading tasks…",
   "leoHome.tasksLastResults": "Showing the last available results.",

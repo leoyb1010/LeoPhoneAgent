@@ -1,5 +1,10 @@
 /** 中文翻译 */
 const zhCN: Record<string, string> = {
+  "leoWhatsNew.title": "本次更新",
+  "leoWhatsNew.confirm": "知道了",
+  "settings.manualDistribution": "应用更新",
+  "settings.manualDistributionDescription": "此安装包采用手动分发。请从受信分发渠道获取新版安装包，退出 LeoBot 后覆盖安装；当前构建不自动下载安装。",
+  "settings.manualDistributionState": "手动分发",
   "leoHome.tasksLoadFailed": "暂时无法加载任务。",
   "leoHome.tasksLoading": "正在加载任务…",
   "leoHome.tasksLastResults": "暂时显示上次获取的结果。",

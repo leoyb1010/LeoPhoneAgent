@@ -56,7 +56,8 @@ export const ZCODE_ARMS_RUM_ENDPOINT: string = "";
 export const ZCODE_TELEMETRY_REPORT_ENDPOINT: string = "";
 /**
  * 桌面自动更新是否启用。
- * [leo] 3.15.1 起默认关;Leo 的更新链(leocodebox-updates)靠 `leo:bundle:mac` 注入 ZCODE_AUTO_UPDATE=1 打开。
+ * [leo] Leo 私有机群通过受信安装包手动分发；`leo:bundle:mac` 明确注入 ZCODE_AUTO_UPDATE=0。
+ * 通用更新能力仍由构建值决定，界面不得把关闭能力的构建显示成可自动更新。
  */
 export const ZCODE_AUTO_UPDATE_ENABLED: boolean =
   typeof __ZCODE_AUTO_UPDATE_ENABLED__ !== "undefined" ? __ZCODE_AUTO_UPDATE_ENABLED__ : false;

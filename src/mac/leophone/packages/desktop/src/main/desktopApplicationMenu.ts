@@ -6,6 +6,7 @@ import {
   isValidShortcutBinding,
   ZCODE_ENV,
   ZCODE_PRODUCT_FLAVOR,
+  ZCODE_AUTO_UPDATE_ENABLED,
   type DesktopCommandId,
   type Locale,
 } from "@zcode/shared";
@@ -118,8 +119,8 @@ function buildApplicationMenuTemplate(options: {
                 label: getLabel(desktopMenuMessageIds.helpAbout),
                 click: () => void options.executeDesktopCommand(DesktopCommandIds.ShowAbout),
               },
-              // 更新入口跟随产品身份：Preview 禁用更新器，生产后端的 Preview 也不例外。
-              ...(ZCODE_PRODUCT_FLAVOR === "production"
+              // 原生菜单与设置页一致：产品形态和构建能力都允许时才显示更新入口。
+              ...(ZCODE_PRODUCT_FLAVOR === "production" && ZCODE_AUTO_UPDATE_ENABLED
                 ? [
                     {
                       id: CHECK_FOR_UPDATE_MENU_ID,
@@ -260,7 +261,7 @@ function buildApplicationMenuTemplate(options: {
                 label: getLabel(desktopMenuMessageIds.helpAbout),
                 click: () => void options.executeDesktopCommand(DesktopCommandIds.ShowAbout),
               },
-              ...(ZCODE_PRODUCT_FLAVOR === "production"
+              ...(ZCODE_PRODUCT_FLAVOR === "production" && ZCODE_AUTO_UPDATE_ENABLED
                 ? [
                     {
                       id: CHECK_FOR_UPDATE_MENU_ID,

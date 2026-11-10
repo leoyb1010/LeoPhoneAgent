@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input.js";
 import { Button } from "@/components/ui/button.js";
 import { SettingsGroupCard, SettingsRow } from "@/settings/SettingsPageParts.js";
 import { DataBaseDirControl } from "@/settings/DataBaseDirControl.js";
+import { shouldShowDesktopUpdateEntry } from "@/lib/desktopUpdateMenu.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useOptionalServices } from "@/hooks/useServices.js";
 import { DynamicWorkflowModeSetting } from "@/settings/DynamicWorkflowModeSetting.js";
@@ -395,7 +396,7 @@ export function GeneralSectionContent({
             }
           />
         ) : null}
-        {isDesktop ? (
+        {isDesktop && shouldShowDesktopUpdateEntry() ? (
           <SettingsRow
             rowId="autoUpdate"
             label={intl.formatMessage({
@@ -414,6 +415,17 @@ export function GeneralSectionContent({
                   void onAutoDownloadAndInstallUpdatesChange(checked);
                 }}
               />
+            }
+          />
+        ) : isDesktop ? (
+          <SettingsRow
+            rowId="autoUpdate"
+            label={intl.formatMessage({ id: "settings.manualDistribution" })}
+            description={intl.formatMessage({ id: "settings.manualDistributionDescription" })}
+            control={
+              <span className="text-ui-caption text-foreground">
+                {intl.formatMessage({ id: "settings.manualDistributionState" })}
+              </span>
             }
           />
         ) : null}
