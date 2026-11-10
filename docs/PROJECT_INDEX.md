@@ -7,6 +7,7 @@
 | 系统边界 | [ARCHITECTURE](ARCHITECTURE.md) |
 | 数据流与隐私 | [PRIVACY](PRIVACY.md) |
 | 当前实施顺序 | [ROADMAP](ROADMAP.md) |
+| 本轮未关闭项 | [OPEN_ISSUES](OPEN_ISSUES.md) |
 | Android 签名与发布 | [完整规则](ANDROID_RELEASE_RULES.md) |
 | Mac 1.x | [Mac 主线](mac-3.0/README.md)、[项目规则](../src/mac/leophone/AGENTS.md) |
 | 屏幕写操作授权 | [spec](../src/mac/leophone/docs/specs/leo-screen-write-approval.md) |
