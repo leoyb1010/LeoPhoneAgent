@@ -134,7 +134,7 @@ export struct BrainSpacePage {
   private live(epoch: number, lease: BrainRequestLease): boolean {
     if (epoch !== this.epoch) return false;
     // Ordinary reads share the device-key generation, not a biometrics session.
-    return lease.generation === BrainAPI.generation() && lease.epoch === BrainAPI.epoch;
+    return BrainAPI.isLeaseCurrent(lease);
   }
   /** Drops any in-flight "load more" so its result can never merge into a newer view. */
   private resetPaging(): void {
@@ -174,7 +174,7 @@ export struct BrainSpacePage {
       manifestReq.catch(() => {}); sharesReq.catch(() => {});
       const manifest = await manifestReq;
       const savedShares = await sharesReq;
-      if (epoch !== this.epoch || lease.generation !== BrainAPI.generation() || lease.epoch !== BrainAPI.epoch) return;
+      if (epoch !== this.epoch || !BrainAPI.isLeaseCurrent(lease)) return;
       if (manifest['app'] !== true) throw new Error('设备钥匙缺少第二大脑 app 权限');
       const can = object(manifest, 'can');
       this.canUpload = can['upload'] === true; this.canShare = can['share'] === true;
@@ -756,7 +756,7 @@ export struct BrainSpacePage {
               ActionButton({ label: '撤销分享', variant: 'danger', busy: this.busy, onTap: () => this.revoke() })
             } else {
               if (this.mode === 'answer') {
-                MarkdownText({ content: this.answer }).width('100%')
+                MarkdownText({ text: this.answer }).width('100%')
                 if (this.answerId && !this.answerWaiting) {
                   ActionButton({ label: '继续等待', variant: 'secondary', fullWidth: false, onTap: () => this.resumeAnswer() })
                 }
@@ -812,8 +812,6 @@ export struct BrainSpacePage {
       }
     }.width('100%').height('100%').backgroundColor(Tokens.grouped)
       .onAreaChange((_oldArea: Area, newArea: Area) => this.viewportWidth = Number(newArea.width))
-
-    }
     .hideTitleBar(true)
     .onShown(() => { AppNavigation.changed(); })
     .onHidden(() => { this.onPageHide(); })

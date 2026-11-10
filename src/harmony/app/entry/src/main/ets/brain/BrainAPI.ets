@@ -89,6 +89,9 @@ export class BrainAPI {
   static lease(): BrainRequestLease {
     const value = new BrainRequestLease(); value.generation = BrainAPI.generation(); value.epoch = BrainAPI.epoch; return value;
   }
+  static isLeaseCurrent(value: BrainRequestLease): boolean {
+    return value.generation === BrainAPI.generation() && value.epoch === BrainAPI.epoch;
+  }
   static assertLease(value: BrainRequestLease): void {
     if (value.generation !== BrainAPI.generation() || value.epoch !== BrainAPI.epoch) throw new Error('连接或解锁状态已改变');
     BrainAPI.requireUnlocked();
