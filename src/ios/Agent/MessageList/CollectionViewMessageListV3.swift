@@ -56,6 +56,7 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
     /// [T-new-message-pill] Shared "content arrived below the fold" flag the
     /// coordinator drives; AIChatView renders the "↓ 新消息" pill from it.
     var followState: MessageListFollowState? = nil
+    var searchScrollRequest: ChatSearchScrollRequest? = nil
 
     func makeUIViewController(context: Context) -> MessageListViewController {
         let vc = MessageListViewController()
@@ -181,6 +182,7 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
                 }
             }
         }
+        coord.revealSearchResult(searchScrollRequest)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -382,6 +384,7 @@ private struct ReplyActionBarV3: View {
     @ObservedObject var bridge: CellStateBridgeV2
     @State private var copied = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var actionGlyphSize: CGFloat = 14
     /// [output-render] The row eases in once, right after a reply finishes on screen. Replies
     /// loaded from history, re-shown by scrolling, or seen with Reduce Motion appear as-is.
     @State private var entranceShown = false
@@ -469,16 +472,22 @@ private struct ReplyActionBarV3: View {
         }
     }
 
+    private func actionIcon(_ name: String) -> some View {
+        Image(systemName: name)
+            .frame(width: LeoTheme.TouchTarget.minimum, height: LeoTheme.TouchTarget.minimum)
+            .contentShape(Rectangle())
+    }
+
     var body: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 0) {
             Button {
                 UIPasteboard.general.string = defaultCopyPayload
                 LeoHaptics.impact(.light)
                 copied = true
                 Task { try? await Task.sleep(nanoseconds: 1_200_000_000); copied = false }
             } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .contentTransition(.symbolEffect(.replace))
+                actionIcon(copied ? "checkmark" : "doc.on.doc")
+                    .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
             }
             .accessibilityLabel(Text("Copy reply"))
 
@@ -486,7 +495,7 @@ private struct ReplyActionBarV3: View {
                 Button {
                     bridge.onQuote?(plainReply)
                 } label: {
-                    Image(systemName: "quote.opening")
+                    actionIcon("quote.opening")
                 }
                 .accessibilityLabel(Text("Quote"))
             }
@@ -495,7 +504,7 @@ private struct ReplyActionBarV3: View {
                 Button {
                     bridge.onReadAloud?()
                 } label: {
-                    Image(systemName: "speaker.wave.2")
+                    actionIcon("speaker.wave.2")
                 }
                 .accessibilityLabel(Text("Read aloud"))
             }
@@ -510,12 +519,8 @@ private struct ReplyActionBarV3: View {
                         } label: { Label(action.title, systemImage: action.symbolName) }
                     }
                 } label: {
-                    // 图标还是 14pt,点按区 44×44;负边距让它不撑大这一行、不挤动左右按钮。
-                    Image(systemName: "arrow.turn.down.right")
-                        .frame(width: LeoTheme.TouchTarget.minimum, height: LeoTheme.TouchTarget.minimum)
-                        .contentShape(Rectangle())
+                    actionIcon("arrow.turn.down.right")
                 }
-                .padding(-13)
                 .accessibilityLabel(Text("下一步"))
                 .accessibilityIdentifier("reply.nextStep")
             }
@@ -532,11 +537,19 @@ private struct ReplyActionBarV3: View {
                     Label(AppLocalized("Share as Text"), systemImage: "doc.plaintext")
                 }
             } label: {
-                Image(systemName: "square.and.arrow.up")
+                actionIcon("square.and.arrow.up")
             }
             .accessibilityLabel(Text("Share"))
 
             Menu {
+                if bridge.onQuote != nil {
+                    Section("继续对话") {
+                        Button {
+                            // Stage an editable follow-up; never replay the previous agent/tool turn.
+                            bridge.onQuote?(plainReply)
+                        } label: { Label("引用后重新提问", systemImage: "square.and.pencil") }
+                    }
+                }
                 Button {
                     UIPasteboard.general.string = plainReply
                 } label: { Label("Copy Text", systemImage: "doc.plaintext") }
@@ -597,13 +610,13 @@ private struct ReplyActionBarV3: View {
                     }
                 }
             } label: {
-                Image(systemName: "ellipsis")
+                actionIcon("ellipsis")
             }
             .accessibilityLabel(Text("More actions"))
 
             Spacer()
         }
-        .font(.system(size: 14))
+        .font(.system(size: min(actionGlyphSize, 22)))
         .foregroundStyle(.secondary)
         .buttonStyle(.plain)
         .padding(.top, 2)
@@ -3817,6 +3830,29 @@ extension CollectionViewMessageListV3 {
         /// session load — so the next tap re-anchors to the current viewport
         /// instead of continuing from a stale turn.
         var lastJumpedUserId: UUID?
+        private var handledSearchRequest: UUID?
+        private var pendingSearchRequest: UUID?
+
+        func revealSearchResult(_ request: ChatSearchScrollRequest?) {
+            guard let request, request.id != handledSearchRequest else { return }
+            pendingSearchRequest = request.id
+            // Wait until the representable update and any pending collection snapshot have completed.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.pendingSearchRequest == request.id, self.handledSearchRequest != request.id,
+                      let vm = self.vm, request.owner == ObjectIdentifier(vm),
+                      let cv = self.viewController?.collectionView, let ds = self.dataSource,
+                      let item = ds.snapshot().itemIdentifiers.first(where: { Self.messageId(of: $0) == request.messageID }),
+                      let path = ds.indexPath(for: item),
+                      path.section < cv.numberOfSections, path.item < cv.numberOfItems(inSection: path.section) else { return }
+                if let sid = vm.sessionId, SessionLockStore.shared.isVisuallyLocked(sid) { return }
+                self.handledSearchRequest = request.id
+                self.scrollMode = .userBrowsing
+                self.lastJumpedUserId = nil
+                cv.layoutIfNeeded()
+                cv.scrollToItem(at: path, at: .top, animated: false)
+                vm.isNearBottom = self.isNearBottom()
+            }
+        }
 
         /// Diagnostics: which user turn the current viewport TOP is in.
         /// Returns (turnIndex, totalTurns); turnIndex is 0-based into the ordered

@@ -1517,6 +1517,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         } else {
             inputText += "\n" + quoted + "\n\n"
         }
+        requestComposerFocusSignal.send()
     }
 
     /// Speak user-selected text once, even when automatic read-replies is off.

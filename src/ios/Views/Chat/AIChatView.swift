@@ -368,6 +368,8 @@ struct AIChatView: View {
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
     @State private var showMoveToSheet = false
+    @State private var showConversationSearch = false
+    @State private var conversationSearchScroll: ChatSearchScrollRequest?
     /// [WP-42] Composer shell + floating glass morphing (GlassEffectContainer ids).
     @Namespace private var chatComposerGlassNS
     @State private var showClearChatConfirm = false
@@ -1136,6 +1138,13 @@ struct AIChatView: View {
             TokenUsageSheet(vm: cached.vm)
                 .presentationDetents([.fraction(0.8), .large])
         }
+        .sheet(isPresented: $showConversationSearch) {
+            ChatConversationSearch(vm: vm) { messageID in
+                guard !titleIsVisuallyLocked else { return }
+                inputFocused = false
+                conversationSearchScroll = ChatSearchScrollRequest(owner: ObjectIdentifier(vm), messageID: messageID)
+            }
+        }
         .sheet(item: $screenshotPreview) { preview in
             ChatScreenshotPreviewSheet(image: preview.image)
         }
@@ -1861,6 +1870,7 @@ struct AIChatView: View {
             isEditing: vm.editingMessageIndex != nil,
             isLocked: titleIsVisuallyLocked,
             onNewChat: { requestNewChatFromMenu() },
+            onFindInChat: { inputFocused = false; showConversationSearch = true },
             // [T-chat-menu-compact-entry] Same effect as the /compact slash
             // command (AIChatViewModel+SlashCommands case "compact").
             onCompact: { vm.compactAll() },
@@ -2676,7 +2686,8 @@ struct AIChatView: View {
                     // the menu item is hidden rather than refused here.
                     deleteFromHereMessageId = msgId
                 },
-                followState: listFollowState
+                followState: listFollowState,
+                searchScrollRequest: conversationSearchScroll
             )
             // Empty/loading overlay for tap-to-dismiss-keyboard.
             // Placed BEFORE the directory timeline in the ZStack so the
@@ -5575,6 +5586,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     let isLocked: Bool
 
     let onNewChat: () -> Void
+    let onFindInChat: () -> Void
     let onCompact: () -> Void
     let onClearChat: () -> Void
     let onForceSync: () -> Void
@@ -5684,6 +5696,9 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         groups.append(UIMenu(options: .displayInline, children: [
             UIAction(title: AppLocalized("New Chat"),
                      image: UIImage(systemName: "square.and.pencil")) { _ in coordinator.parent.onNewChat() },
+            UIAction(title: AppLocalized("查找对话内容"),
+                     image: UIImage(systemName: "magnifyingglass"),
+                     attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onFindInChat() },
         ]))
 
         // [T-session-export] Whole-conversation export; disabled while empty.

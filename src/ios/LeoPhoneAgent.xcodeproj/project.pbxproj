@@ -64,6 +64,7 @@
 		E5E15701A /* ReplyNextStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15701F /* ReplyNextStep.swift */; };
 		E5E15701T /* ReplyNextStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15701F /* ReplyNextStep.swift */; };
 		E5E15702A /* ReplyNextStepViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15702F /* ReplyNextStepViews.swift */; };
+		E5C20261110A /* ChatConversationSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C20261110F /* ChatConversationSearch.swift */; };
 		E5E15704A /* MacResultInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15704F /* MacResultInbox.swift */; };
 		E5E15704T /* MacResultInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15704F /* MacResultInbox.swift */; };
 		E5E15705A /* WatchContinueOnPhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15705F /* WatchContinueOnPhone.swift */; };
@@ -1237,6 +1238,7 @@
 		E5E15709F /* SkillDraftEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Skills/SkillDraftEditorView.swift; sourceTree = SOURCE_ROOT; };
 		E5E15701F /* ReplyNextStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Chat/ReplyNextStep.swift; sourceTree = SOURCE_ROOT; };
 		E5E15702F /* ReplyNextStepViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Chat/ReplyNextStepViews.swift; sourceTree = SOURCE_ROOT; };
+		E5C20261110F /* ChatConversationSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Chat/ChatConversationSearch.swift; sourceTree = SOURCE_ROOT; };
 		E5E15704F /* MacResultInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/MacResultInbox.swift; sourceTree = SOURCE_ROOT; };
 		E5E15705F /* WatchContinueOnPhone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/WatchContinueOnPhone.swift; sourceTree = SOURCE_ROOT; };
 		E5E15706F /* SessionHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/SessionHandoff.swift; sourceTree = SOURCE_ROOT; };
@@ -3303,6 +3305,7 @@
 				E5LEO0013 /* SelectableMarkdownTheme.swift */,
 				E53000012 /* AIChatView.swift */,
 				E5E15702F /* ReplyNextStepViews.swift */,
+				E5C20261110F /* ChatConversationSearch.swift */,
 				E5F200011 /* MarkdownPrepRegex.swift */,
 				E5F200012 /* MinisMediaViews.swift */,
 				E5F200013 /* AssistantBlockView.swift */,
@@ -4198,6 +4201,7 @@
 				E5E15709A /* SkillDraftEditorView.swift in Sources */,
 				E5E15701A /* ReplyNextStep.swift in Sources */,
 				E5E15702A /* ReplyNextStepViews.swift in Sources */,
+				E5C20261110A /* ChatConversationSearch.swift in Sources */,
 				E5E15704A /* MacResultInbox.swift in Sources */,
 				E5E15705A /* WatchContinueOnPhone.swift in Sources */,
 				E5E15706A /* SessionHandoff.swift in Sources */,
