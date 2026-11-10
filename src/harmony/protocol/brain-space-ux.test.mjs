@@ -26,7 +26,7 @@ test('问答支持停止等待、同 id 继续等待与 Markdown 回答', () => 
   assert.ok(page.includes('private async resumeAnswer(): Promise<void>'));
   assert.ok(page.includes("'停止等待'"));
   assert.ok(page.includes("'继续等待'"));
-  assert.ok(page.includes('MarkdownText({ content: this.answer })'));
+  assert.ok(page.includes('MarkdownText({ text: this.answer })'));
 });
 
 test('版本测试跟随当前目录且检查真实相邻历史', () => {
