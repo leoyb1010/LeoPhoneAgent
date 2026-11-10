@@ -290,3 +290,307 @@ final class BrainSearchModelTests: XCTestCase {
         XCTAssertEqual(gate.calls.map(\.query), ["A"])
     }
 }
+
+// MARK: - BrainReaderModel lifecycle (actual production model, controlled loader order)
+
+/// Every reader loader call parks on a continuation; the test decides order and outcome.
+@MainActor
+private final class ReaderGate {
+    enum Kind: String { case info, provenance, ocr, chunks }
+    final class Call {
+        let kind: Kind; let doc: String; let offset: Int
+        /// The reply stays on the main actor; only a Void wake-up crosses the continuation.
+        var value: Any?
+        var resume: ((Result<Void, Error>) -> Void)?
+        init(kind: Kind, doc: String, offset: Int) { self.kind = kind; self.doc = doc; self.offset = offset }
+    }
+    var calls: [Call] = []
+    var factoryCount = 0
+    var factoryError: Error?
+
+    private func park<T>(_ kind: Kind, _ doc: String, _ offset: Int = 0) async throws -> T {
+        let call = Call(kind: kind, doc: doc, offset: offset)
+        calls.append(call)
+        try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+            call.resume = { result in c.resume(with: result) }
+        }
+        return call.value as! T
+    }
+
+    func loaders() throws -> BrainReaderModel.Loaders {
+        factoryCount += 1
+        if let factoryError { throw factoryError }
+        return BrainReaderModel.Loaders(
+            info: { [unowned self] id in try await self.park(.info, id) },
+            provenance: { [unowned self] id in try await self.park(.provenance, id) },
+            ocr: { [unowned self] id in try await self.park(.ocr, id) },
+            chunks: { [unowned self] id, offset in try await self.park(.chunks, id, offset) })
+    }
+
+    func pending(_ kind: Kind, doc: String? = nil, offset: Int? = nil) -> [Call] {
+        calls.filter { $0.kind == kind && $0.resume != nil && (doc == nil || $0.doc == doc) && (offset == nil || $0.offset == offset) }
+    }
+
+    func count(_ kind: Kind) -> Int { calls.filter { $0.kind == kind }.count }
+
+    private func finish(_ call: Call?, _ result: Result<Void, Error>, value: Any? = nil, line: UInt) {
+        guard let call, let resume = call.resume else { return XCTFail("no pending loader call", line: line) }
+        call.resume = nil
+        call.value = value
+        resume(result)
+    }
+
+    func reply(_ kind: Kind, doc: String? = nil, offset: Int? = nil, _ value: Any, line: UInt = #line) {
+        finish(pending(kind, doc: doc, offset: offset).first, .success(()), value: value, line: line)
+    }
+
+    func fail(_ kind: Kind, doc: String? = nil, offset: Int? = nil, _ error: Error = SearchFixtureError(), line: UInt = #line) {
+        finish(pending(kind, doc: doc, offset: offset).first, .failure(error), line: line)
+    }
+
+    func drain() {
+        for call in calls { if let r = call.resume { call.resume = nil; r(.failure(CancellationError())) } }
+    }
+}
+
+@MainActor
+final class BrainReaderModelTests: XCTestCase {
+    private var gate: ReaderGate!
+
+    private func makeModel() -> BrainReaderModel {
+        let gate = ReaderGate()
+        self.gate = gate
+        addTeardownBlock { @MainActor in gate.drain() }
+        return BrainReaderModel(makeLoaders: { try gate.loaders() })
+    }
+
+    private func settle() async { for _ in 0..<60 { await Task.yield() } }
+
+    private func page(_ ids: [String], total: Int) -> BrainChunkPage {
+        let items = ids.map { #"{"id":"\#($0)","text":"段落 \#($0)"}"# }.joined(separator: ",")
+        return try! JSONDecoder().decode(BrainChunkPage.self, from: Data(#"{"chunks":[\#(items)],"total":\#(total)}"#.utf8))
+    }
+    private func info(_ title: String) -> BrainFileInfo {
+        try! BrainSpaceJSON.decoder.decode(BrainFileInfo.self, from: Data(#"{"id":"f","title":"\#(title)","sha256":"ab"}"#.utf8))
+    }
+    private func ocr(pending: [Int]) -> BrainOCRStatus {
+        try! BrainSpaceJSON.decoder.decode(BrainOCRStatus.self, from: Data(#"{"sha256":"ab","required_pages":[1,2,3],"pending_pages":\#(pending)}"#.utf8))
+    }
+    private var provenance: BrainProvenance {
+        try! BrainSpaceJSON.decoder.decode(BrainProvenance.self, from: Data(#"{"locations":[{"id":"l","role":"original"}]}"#.utf8))
+    }
+    private func ids(_ m: BrainReaderModel) -> [String] { m.chunks.map(\.id) }
+
+    func testAllFourReadsStartTogetherAndBodyIsReadableBeforeSlowOCR() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        XCTAssertEqual(Set(gate.calls.map(\.kind)), [.info, .provenance, .ocr, .chunks], "metadata and first body page are concurrent")
+        XCTAssertTrue(m.bodyLoading)
+        gate.reply(.chunks, page(["c1", "c2"], total: 5)); await settle()
+        XCTAssertEqual(ids(m), ["c1", "c2"], "body is shown while provenance / OCR are still pending")
+        XCTAssertFalse(m.bodyLoading); XCTAssertTrue(m.hasMore)
+        XCTAssertNil(m.ocr); XCTAssertNil(m.info)
+        gate.fail(.ocr); gate.fail(.provenance); await settle()
+        XCTAssertEqual(ids(m), ["c1", "c2"], "optional metadata failure never drops body")
+        XCTAssertNil(m.bodyError)
+    }
+
+    func testMetadataFailureKeepsBodyAndRetryOnlyRefetchesMissing() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        gate.reply(.chunks, page(["c1"], total: 1))
+        gate.fail(.info)
+        gate.reply(.provenance, provenance)
+        gate.reply(.ocr, ocr(pending: [3])); await settle()
+        XCTAssertEqual(ids(m), ["c1"]); XCTAssertNotNil(m.infoError)
+        XCTAssertEqual(m.pickedPages, [3])
+        m.retry(); await settle()
+        XCTAssertEqual(gate.count(.chunks), 1, "body already shown is not re-read")
+        XCTAssertEqual(gate.count(.info), 2)
+        XCTAssertEqual(gate.count(.ocr), 1); XCTAssertEqual(gate.count(.provenance), 1)
+        gate.reply(.info, info("标题")); await settle()
+        XCTAssertEqual(m.info?.title, "标题"); XCTAssertNil(m.infoError); XCTAssertEqual(ids(m), ["c1"])
+    }
+
+    func testBodyFailureIsRetryableAndClosesLoading() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        gate.fail(.chunks); await settle()
+        XCTAssertFalse(m.bodyLoading); XCTAssertNotNil(m.bodyError); XCTAssertFalse(m.hasMore)
+        gate.drain(); await settle()
+        m.retry(); await settle()
+        XCTAssertTrue(m.bodyLoading); XCTAssertNil(m.bodyError)
+        gate.reply(.chunks, page(["c1"], total: 1)); await settle()
+        XCTAssertEqual(ids(m), ["c1"]); XCTAssertFalse(m.bodyLoading)
+    }
+
+    func testCancelledBodyClosesLoadingWithoutError() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        gate.fail(.chunks, CancellationError()); await settle()
+        XCTAssertFalse(m.bodyLoading); XCTAssertNil(m.bodyError)
+    }
+
+    func testOldDocumentResponsesNeverLandOnNewDocument() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        m.disappear()
+        m.appear(docId: "B", revision: 1); await settle()
+        XCTAssertEqual(gate.factoryCount, 2, "a new document starts a new reading cycle (new client)")
+        gate.reply(.chunks, doc: "A", page(["a1"], total: 9))
+        gate.reply(.info, doc: "A", info("A 的标题")); await settle()
+        XCTAssertEqual(ids(m), []); XCTAssertNil(m.info); XCTAssertTrue(m.bodyLoading, "late A cannot end B's loading")
+        gate.reply(.chunks, doc: "B", page(["b1"], total: 1)); await settle()
+        XCTAssertEqual(ids(m), ["b1"]); XCTAssertFalse(m.hasMore)
+    }
+
+    func testHiddenLateResponsesDoNotWriteAndReturnFillsOnlyMissingOnce() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        gate.reply(.chunks, page(["c1"], total: 1))
+        gate.reply(.info, info("t")); await settle()
+        m.disappear()
+        gate.reply(.ocr, ocr(pending: [2])); gate.reply(.provenance, provenance); await settle()
+        XCTAssertNil(m.ocr, "responses arriving while hidden are dropped")
+        XCTAssertNil(m.provenance)
+        m.appear(docId: "A", revision: 1); await settle()
+        XCTAssertEqual(gate.count(.chunks), 1); XCTAssertEqual(gate.count(.info), 1)
+        XCTAssertEqual(gate.count(.ocr), 2); XCTAssertEqual(gate.count(.provenance), 2, "only the missing parts are re-read")
+        XCTAssertEqual(ids(m), ["c1"])
+        gate.reply(.ocr, ocr(pending: [2])); gate.reply(.provenance, provenance); await settle()
+        m.disappear(); m.appear(docId: "A", revision: 1); await settle()
+        XCTAssertEqual(gate.calls.count, 6, "everything loaded: reappearing issues nothing")
+    }
+
+    func testHiddenConnectionChangeDoesNotFetchAndReturnReloadsOnce() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        gate.reply(.chunks, page(["old"], total: 3)); await settle()
+        m.disappear()
+        m.connectionChanged(to: 2); await settle()
+        XCTAssertEqual(gate.calls.count, 4, "hidden page never fetches")
+        XCTAssertEqual(ids(m), [], "old-connection body is invalid at once")
+        gate.reply(.info, info("old")); await settle()
+        XCTAssertNil(m.info)
+        m.appear(docId: "A", revision: 2); await settle()
+        XCTAssertEqual(gate.factoryCount, 2, "new connection, new client")
+        XCTAssertEqual(gate.count(.chunks), 2)
+        m.connectionChanged(to: 2); m.appear(docId: "A", revision: 2); await settle()
+        XCTAssertEqual(gate.count(.chunks), 2, "same revision is a no-op")
+    }
+
+    func testVisibleConnectionChangeDropsOldPagingAndBody() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        gate.reply(.chunks, offset: 0, page(["c1", "c2"], total: 4)); await settle()
+        m.loadMore(); await settle()
+        XCTAssertEqual(gate.pending(.chunks, offset: 2).count, 1)
+        m.connectionChanged(to: 2); await settle()
+        XCTAssertEqual(ids(m), []); XCTAssertFalse(m.moreLoading); XCTAssertTrue(m.bodyLoading)
+        gate.reply(.chunks, offset: 2, page(["old3", "old4"], total: 4)); await settle()
+        XCTAssertEqual(ids(m), [], "old connection's page cannot land")
+        gate.reply(.chunks, offset: 0, page(["n1"], total: 1)); await settle()
+        XCTAssertEqual(ids(m), ["n1"]); XCTAssertFalse(m.hasMore)
+    }
+
+    func testMoreWaitsForFirstPageAndCoalescesRepeatedTaps() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        m.loadMore(); await settle()
+        XCTAssertEqual(gate.count(.chunks), 1, "no more before the first page")
+        gate.reply(.chunks, page(["c1", "c2"], total: 6)); await settle()
+        m.loadMore(); m.loadMore(); m.loadMore(); await settle()
+        XCTAssertEqual(gate.pending(.chunks, offset: 2).count, 1, "repeated taps are one request")
+        XCTAssertTrue(m.moreLoading)
+        gate.reply(.chunks, offset: 2, page(["c2", "c3", "c4"], total: 6)); await settle()
+        XCTAssertEqual(ids(m), ["c1", "c2", "c3", "c4"], "overlapping chunk is not duplicated")
+        XCTAssertFalse(m.moreLoading)
+        m.loadMore(); await settle()
+        XCTAssertEqual(gate.pending(.chunks, offset: 5).count, 1, "offset advances by the accepted page size")
+        gate.reply(.chunks, offset: 5, page([], total: 5)); await settle()
+        XCTAssertFalse(m.hasMore, "server total shrank to what we already have: done, no error")
+        XCTAssertNil(m.moreError)
+        m.loadMore(); await settle()
+        XCTAssertEqual(gate.count(.chunks), 3, "no more past the last page")
+    }
+
+    func testMoreFailureAndZeroProgressAreRetryableWithoutLooping() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        gate.reply(.chunks, page(["c1"], total: 3)); await settle()
+        m.loadMore(); await settle()
+        gate.fail(.chunks, offset: 1); await settle()
+        XCTAssertNotNil(m.moreError); XCTAssertFalse(m.moreLoading); XCTAssertTrue(m.hasMore)
+        XCTAssertEqual(gate.count(.chunks), 2, "failure does not auto-retry")
+        m.loadMore(); await settle()
+        gate.reply(.chunks, offset: 1, page([], total: 3)); await settle()
+        XCTAssertNotNil(m.moreError, "zero progress is reported, not looped")
+        XCTAssertFalse(m.moreLoading); XCTAssertEqual(gate.count(.chunks), 3)
+        m.loadMore(); await settle()
+        XCTAssertEqual(gate.pending(.chunks, offset: 1).count, 1, "retry asks the same offset")
+        gate.reply(.chunks, offset: 1, page(["c2", "c3"], total: 3)); await settle()
+        XCTAssertEqual(ids(m), ["c1", "c2", "c3"]); XCTAssertNil(m.moreError); XCTAssertFalse(m.hasMore)
+    }
+
+    func testCancelledMoreClosesLoadingWithoutError() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        gate.reply(.chunks, page(["c1"], total: 2)); await settle()
+        m.loadMore(); await settle()
+        gate.fail(.chunks, offset: 1, CancellationError()); await settle()
+        XCTAssertFalse(m.moreLoading); XCTAssertNil(m.moreError)
+        m.loadMore(); await settle()
+        XCTAssertEqual(gate.pending(.chunks, offset: 1).count, 1, "still at the same offset")
+    }
+
+    func testDisappearDuringMoreDropsPageAndReturnKeepsOffset() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        gate.reply(.chunks, page(["c1"], total: 3)); await settle()
+        m.loadMore(); await settle()
+        m.disappear()
+        XCTAssertFalse(m.moreLoading)
+        gate.reply(.chunks, offset: 1, page(["c2"], total: 3)); await settle()
+        XCTAssertEqual(ids(m), ["c1"], "page arriving while hidden is dropped")
+        m.appear(docId: "A", revision: 1); await settle()
+        m.loadMore(); await settle()
+        XCTAssertEqual(gate.pending(.chunks, offset: 1).count, 1, "next offset was not advanced by the dropped page")
+    }
+
+    func testRetryDuringMoreDoesNotLetOldPageLand() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        gate.reply(.chunks, page(["c1"], total: 3))
+        gate.fail(.info); await settle()
+        m.loadMore(); await settle()
+        m.retry(); await settle()                    // re-reads info, cancels the in-flight page
+        XCTAssertFalse(m.moreLoading)
+        gate.reply(.chunks, offset: 1, page(["c2"], total: 3)); await settle()
+        XCTAssertEqual(ids(m), ["c1"])
+        m.loadMore(); await settle()
+        gate.reply(.chunks, offset: 1, page(["c2"], total: 3)); await settle()
+        XCTAssertEqual(ids(m), ["c1", "c2"])
+    }
+
+    func testMissingConnectionShowsRetryableBodyError() async {
+        let m = makeModel()
+        gate.factoryError = SearchFixtureError()
+        m.appear(docId: "A", revision: 1); await settle()
+        XCTAssertTrue(gate.calls.isEmpty); XCTAssertNotNil(m.bodyError); XCTAssertFalse(m.bodyLoading)
+        gate.factoryError = nil
+        m.retry(); await settle()
+        XCTAssertEqual(gate.count(.chunks), 1)
+    }
+
+    func testReloadOCRStaysInCycle() async {
+        let m = makeModel()
+        m.appear(docId: "A", revision: 1); await settle()
+        gate.reply(.ocr, ocr(pending: [1])); await settle()
+        guard let cycle = m.currentCycle else { return XCTFail("no reading cycle") }
+        let refresh = Task { await m.reloadOCR(for: cycle) }
+        await settle()
+        m.disappear()
+        gate.reply(.ocr, ocr(pending: [])); await refresh.value
+        XCTAssertEqual(m.ocr?.pendingPages, [1], "OCR refresh arriving after leaving is dropped")
+    }
+}

@@ -129,29 +129,28 @@ struct BrainLibraryView: View {
 
 struct BrainDocView: View {
     @EnvironmentObject private var model: BrainSpaceModel
+    @ObservedObject private var store = BrainStore.shared
     let target: BrainDocTarget
-    @State private var info: BrainFileInfo?
-    @State private var provenance: BrainProvenance?
-    @State private var ocr: BrainOCRStatus?
-    @State private var chunks: [BrainChunk] = []
-    @State private var chunkTotal = 0
-    @State private var error: String?
-    @State private var retrying = false
-    @State private var pickedPages: Set<Int> = []
+    /// 读取周期、分页与身份校验归 BrainReaderModel(BrainSpaceModels.swift);这里只显示和驱动生命周期。
+    @StateObject private var reader = BrainReaderModel(makeLoaders: BrainDocView.makeLoaders)
+    /// The OCR retry in flight. Leaving or switching connection clears it; an older retry's cleanup never clears a newer one.
+    @State private var ocrRetry: UUID?
+    private var retrying: Bool { ocrRetry != nil }
 
     var body: some View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(info?.title ?? target.title).font(.title3.weight(.semibold))
-                    Text([info?.category, info?.ext, info.map { BrainFormat.bytes($0.size) }].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text(reader.info?.title ?? target.title).font(.title3.weight(.semibold))
+                    Text([reader.info?.category, reader.info?.ext, reader.info.map { BrainFormat.bytes($0.size) }].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Button { model.ask("这份资料讲了什么?有哪些关键结论?", fileIds: [target.id]) } label: {
                     Label("问这份资料", systemImage: "bubble.left")
                 }
+                if let infoError = reader.infoError { BrainErrorRow(message: infoError) { reader.retry() } }
             }
-            if let locs = provenance?.locations, !locs.isEmpty {
+            if let locs = reader.provenance?.locations, !locs.isEmpty {
                 Section("原件在哪") {
                     ForEach(locs) { l in
                         HStack(alignment: .top) {
@@ -167,23 +166,53 @@ struct BrainDocView: View {
                     }
                 }
             }
-            if let o = ocr, let required = o.requiredPages, !required.isEmpty { ocrSection(o, required: required) }
-            Section(chunkTotal > 0 ? "正文 · 共 \(chunkTotal) 段" : "正文") {
-                if chunks.isEmpty && error == nil { Text(info?.summary.flatMap { $0.isEmpty ? nil : $0 } ?? "还没有可读的正文").font(.subheadline).foregroundStyle(.secondary) }
-                ForEach(chunks) { c in
+            if let o = reader.ocr, let required = o.requiredPages, !required.isEmpty { ocrSection(o, required: required) }
+            Section(reader.chunkTotal > 0 ? "正文 · 共 \(reader.chunkTotal) 段" : "正文") {
+                if let bodyError = reader.bodyError {
+                    BrainErrorRow(message: bodyError) { reader.retry() }
+                } else if reader.bodyLoading {
+                    HStack(spacing: 8) { ProgressView(); Text("正在读正文…").font(.subheadline).foregroundStyle(.secondary) }
+                } else if !reader.bodyLoaded {
+                    // Not loading and not loaded (e.g. the read was cancelled): offer a way back instead of a stuck spinner.
+                    Button("重新读取正文") { reader.retry() }
+                } else if reader.chunks.isEmpty {
+                    Text(reader.info?.summary.flatMap { $0.isEmpty ? nil : $0 } ?? "还没有可读的正文").font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(reader.chunks) { c in
                     VStack(alignment: .leading, spacing: 4) {
                         if let l = c.locator { Text(l).font(.caption).foregroundStyle(.tertiary) }
                         Text(c.text).font(.subheadline).textSelection(.enabled)
                     }
                 }
-                if chunks.count < chunkTotal { Button("再读 12 段") { Task { await moreChunks() } } }
+                if let moreError = reader.moreError {
+                    Text(moreError).font(.footnote).foregroundStyle(.secondary)
+                }
+                if reader.hasMore {
+                    Button(reader.moreLoading ? "正在读…" : (reader.moreError == nil ? "再读 12 段" : "重试读取下一批")) { reader.loadMore() }
+                        .disabled(reader.moreLoading)
+                }
             }
-            if let error { BrainErrorRow(message: error) { Task { await load() } } }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("阅读")
         .navigationBarTitleDisplayMode(.inline)
-        .task { if info == nil { await load() } }
+        .onAppear { reader.appear(docId: target.id, revision: store.connectionRevision) }
+        .onDisappear { reader.disappear(); ocrRetry = nil }
+        .onChange(of: store.connectionRevision) { _, revision in ocrRetry = nil; reader.connectionChanged(to: revision) }
+    }
+
+    /// One reading cycle = one BrainClient (memory only): pages reuse its session; a new cycle or connection gets a new one.
+    /// Body pages keep going through BrainClient.chunks (the existing access path), not the raw app API.
+    @MainActor private static func makeLoaders() throws -> BrainReaderModel.Loaders {
+        guard let client = BrainStore.shared.client() else { throw BrainSpaceError.notConfigured }
+        let api = BrainSpaceAPI.shared
+        // The cycle's metadata reads use one captured configuration, like its chunk pages use one client.
+        let cfg = try api.config()
+        return BrainReaderModel.Loaders(
+            info: { id in try await api.get("/files/\(id)", config: cfg) },
+            provenance: { id in try await api.get("/files/\(id)/provenance", config: cfg) },
+            ocr: { id in try await api.get("/files/\(id)/ocr", config: cfg) },
+            chunks: { id, offset in try await client.chunks(id, offset: offset).0 })
     }
 
     private func ocrSection(_ o: BrainOCRStatus, required: [Int]) -> some View {
@@ -193,52 +222,40 @@ struct BrainDocView: View {
             if !missing.isEmpty {
                 ForEach(missing.prefix(20), id: \.self) { page in
                     Button {
-                        if pickedPages.contains(page) { pickedPages.remove(page) } else { pickedPages.insert(page) }
+                        if reader.pickedPages.contains(page) { reader.pickedPages.remove(page) } else { reader.pickedPages.insert(page) }
                     } label: {
                         Label("第 \(page) 页 · \((o.failedPages ?? []).contains(page) ? "没读出来" : "待识别")",
-                              systemImage: pickedPages.contains(page) ? "checkmark.circle.fill" : "circle")
+                              systemImage: reader.pickedPages.contains(page) ? "checkmark.circle.fill" : "circle")
                     }
                 }
-                Button(retrying ? "正在补读…" : "只补读选中的 \(pickedPages.count) 页") { Task { await retry(o) } }
-                    .disabled(pickedPages.isEmpty || retrying || model.manifest?.can.upload != true)
+                Button(retrying ? "正在补读…" : "只补读选中的 \(reader.pickedPages.count) 页") { Task { await retry(o) } }
+                    .disabled(reader.pickedPages.isEmpty || retrying || model.manifest?.can.upload != true)
             }
         } header: { Text("文字识别") } footer: {
             Text("补读只处理选中的页;已读好的页、正文和笔记都保留。")
         }
     }
 
-    private func load() async {
-        error = nil
-        let api = BrainSpaceAPI.shared
-        async let p: BrainProvenance = api.get("/files/\(target.id)/provenance")
-        async let o: BrainOCRStatus = api.get("/files/\(target.id)/ocr")
-        do {
-            info = try await api.get("/files/\(target.id)")
-        } catch {
-            self.error = error.localizedDescription
-        }
-        provenance = try? await p
-        ocr = try? await o
-        pickedPages = Set(((ocr?.pendingPages ?? []) + (ocr?.failedPages ?? [])).prefix(20))
-        await moreChunks()
-    }
-
-    private func moreChunks() async {
-        guard let client = BrainStore.shared.client(),
-              let page = try? await client.chunks(target.id, offset: chunks.count) else { return }
-        chunkTotal = page.0.total
-        chunks += page.0.chunks
-    }
-
     private func retry(_ o: BrainOCRStatus) async {
-        guard let sha = o.sha256 ?? info?.sha256 else { return }
-        retrying = true
-        defer { retrying = false }
+        // Freeze everything this write acts on before the first await: cycle (doc + connection + generation),
+        // connection configuration, sha and the chosen pages. Later changes on screen never feed into it.
+        guard ocrRetry == nil, let cycle = reader.currentCycle, cycle.docId == target.id,
+              let sha = o.sha256 ?? reader.info?.sha256 else { return }
+        let pages = reader.pickedPages.sorted()
+        guard !pages.isEmpty else { return }
+        let cfg: BrainSpaceAPI.Config
+        do { cfg = try BrainSpaceAPI.shared.config() } catch { model.say(error.localizedDescription); return }
+        let op = UUID()
+        ocrRetry = op
+        defer { if ocrRetry == op { ocrRetry = nil } }
         do {
-            let _: BrainOK = try await BrainSpaceAPI.shared.post("/files/\(target.id)/ocr/retry", ["sha256": sha, "pages": pickedPages.sorted()])
-            model.say("已开始补读 \(pickedPages.count) 页")
-            ocr = try? await BrainSpaceAPI.shared.get("/files/\(target.id)/ocr")
-        } catch { model.say(error.localizedDescription) }
+            let _: BrainOK = try await BrainSpaceAPI.shared.post("/files/\(cycle.docId)/ocr/retry", ["sha256": sha, "pages": pages], config: cfg)
+            guard ocrRetry == op, reader.isCurrent(cycle) else { return }
+            model.say("已开始补读 \(pages.count) 页")
+            await reader.reloadOCR(for: cycle)
+        } catch {
+            guard ocrRetry == op, reader.isCurrent(cycle), !(error is CancellationError) else { return }
+            model.say(error.localizedDescription)
+        }
     }
 }
-

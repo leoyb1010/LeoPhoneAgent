@@ -474,3 +474,236 @@ final class BrainSearchModel: ObservableObject {
         resultsQuery = ""
     }
 }
+
+// MARK: - Reader lifecycle
+
+/// 阅读页的读取周期(只在内存,不落盘)。概要、出处、OCR、首批正文在一个结构化任务组里并发,各自到达即发布:
+/// 正文先到就能读,不等慢的出处 / OCR;元数据失败不吞掉已到的正文。
+/// 周期身份 = (文档, 连接 revision, generation);离开、换文档、换连接都会作废整个周期和进行中的分页。
+/// 隐藏时不发请求;重新出现只补还没拿到的部分。网络由 View 注入,这里不引用 BrainStore / BrainSpaceAPI。
+@MainActor
+final class BrainReaderModel: ObservableObject {
+    struct Loaders: Sendable {
+        var info: @MainActor @Sendable (String) async throws -> BrainFileInfo
+        var provenance: @MainActor @Sendable (String) async throws -> BrainProvenance
+        var ocr: @MainActor @Sendable (String) async throws -> BrainOCRStatus
+        /// (file id, offset) → one page. The view keeps one BrainClient per reading cycle behind this.
+        var chunks: @MainActor @Sendable (String, Int) async throws -> BrainChunkPage
+    }
+    /// Called once per reading cycle; throws when there is no usable connection.
+    typealias Factory = @MainActor () throws -> Loaders
+
+    private enum Part: CaseIterable { case info, provenance, ocr, body }
+
+    @Published private(set) var info: BrainFileInfo?
+    @Published private(set) var provenance: BrainProvenance?
+    @Published private(set) var ocr: BrainOCRStatus?
+    @Published private(set) var chunks: [BrainChunk] = []
+    @Published private(set) var chunkTotal = 0
+    @Published private(set) var bodyLoading = false
+    @Published private(set) var bodyLoaded = false
+    @Published private(set) var bodyError: String?
+    @Published private(set) var infoError: String?
+    @Published private(set) var moreLoading = false
+    @Published private(set) var moreError: String?
+    @Published var pickedPages: Set<Int> = []
+
+    private let makeLoaders: Factory
+    private var loaders: Loaders?
+    private var docId: String?
+    private var revision: Int?
+    private var visible = false
+    private var generation = 0
+    private var cycle: Task<Void, Never>?
+    private var more: Task<Void, Never>?
+    private var loaded = Set<Part>()
+    /// Server position of the next page: advances by what an accepted page actually covered.
+    private var nextOffset = 0
+
+    init(makeLoaders: @escaping Factory) { self.makeLoaders = makeLoaders }
+
+    var hasMore: Bool { bodyLoaded && nextOffset < chunkTotal }
+
+    // MARK: Inputs from the view
+
+    func appear(docId newDoc: String, revision newRevision: Int) {
+        if newDoc != docId || newRevision != revision {
+            invalidate()
+            docId = newDoc
+            revision = newRevision
+        }
+        visible = true
+        fillMissing()
+    }
+
+    func disappear() {
+        visible = false
+        cancelAll()
+    }
+
+    func connectionChanged(to newRevision: Int) {
+        guard newRevision != revision else { return }
+        invalidate()
+        revision = newRevision
+        fillMissing()
+    }
+
+    /// Error rows' retry: re-read whatever is still missing (never re-fetches parts already shown).
+    func retry() {
+        guard visible else { return }
+        cancelAll()
+        fillMissing()
+    }
+
+    /// 「再读 12 段」. Coalesces repeated taps; never runs before the first page or past the last.
+    func loadMore() {
+        guard visible, more == nil, !bodyLoading, hasMore, let loaders, let id = docId, let r = revision else { return }
+        let g = generation
+        let offset = nextOffset
+        moreLoading = true
+        moreError = nil
+        more = Task { [weak self] in
+            guard let self else { return }
+            defer { self.finishMore(g) }
+            do {
+                let page = try await loaders.chunks(id, offset)
+                guard self.isCurrent(g, id, r), offset == self.nextOffset else { return }
+                self.chunkTotal = page.total
+                guard !page.chunks.isEmpty else {
+                    if offset < page.total { self.moreError = "这一批没有读到新段落,可以再试一次" }
+                    return
+                }
+                // Drop ids already shown and ids repeated inside this page; the offset still advances by the raw page size.
+                var seen = Set(self.chunks.map(\.id))
+                self.chunks += page.chunks.filter { seen.insert($0.id).inserted }
+                self.nextOffset = offset + page.chunks.count
+            } catch {
+                guard self.isCurrent(g, id, r), !(error is CancellationError) else { return }
+                self.moreError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Identity of the reading cycle on screen. A write started in one cycle (OCR retry) acts only while it is still current.
+    struct Cycle: Equatable, Sendable {
+        let docId: String
+        let revision: Int
+        let generation: Int
+    }
+
+    var currentCycle: Cycle? {
+        guard visible, let docId, let revision else { return nil }
+        return Cycle(docId: docId, revision: revision, generation: generation)
+    }
+
+    func isCurrent(_ c: Cycle) -> Bool { c == currentCycle }
+
+    /// After the existing OCR retry POST: refresh the OCR status, only for the cycle that started the retry.
+    func reloadOCR(for c: Cycle) async {
+        guard isCurrent(c), let loaders else { return }
+        guard let o = try? await loaders.ocr(c.docId), isCurrent(c) else { return }
+        ocr = o
+    }
+
+    // MARK: Cycle
+
+    private func fillMissing() {
+        guard visible, cycle == nil, let id = docId, let r = revision else { return }
+        let missing = Part.allCases.filter { !loaded.contains($0) }
+        guard !missing.isEmpty else { return }
+        let l: Loaders
+        do {
+            l = try makeLoaders()
+        } catch {
+            bodyError = error.localizedDescription
+            return
+        }
+        loaders = l
+        let g = generation
+        if missing.contains(.body) { bodyLoading = true; bodyError = nil }
+        if missing.contains(.info) { infoError = nil }
+        cycle = Task { [weak self] in
+            guard let self else { return }
+            defer { self.finishCycle(g) }
+            await withTaskGroup(of: Void.self) { group in
+                for part in missing {
+                    group.addTask { await self.load(part, g, id, r, l) }
+                }
+            }
+        }
+    }
+
+    private func load(_ part: Part, _ g: Int, _ id: String, _ r: Int, _ l: Loaders) async {
+        do {
+            switch part {
+            case .body:
+                let page = try await l.chunks(id, 0)
+                guard isCurrent(g, id, r) else { return }
+                var seen = Set<String>()
+                chunks = page.chunks.filter { seen.insert($0.id).inserted }
+                chunkTotal = page.total
+                nextOffset = page.chunks.count
+                bodyLoaded = true
+                bodyLoading = false
+            case .info:
+                let v = try await l.info(id)
+                guard isCurrent(g, id, r) else { return }
+                info = v
+            case .provenance:
+                let v = try await l.provenance(id)
+                guard isCurrent(g, id, r) else { return }
+                provenance = v
+            case .ocr:
+                let v = try await l.ocr(id)
+                guard isCurrent(g, id, r) else { return }
+                ocr = v
+                pickedPages = Set(((v.pendingPages ?? []) + (v.failedPages ?? [])).prefix(20))
+            }
+            loaded.insert(part)
+        } catch {
+            guard isCurrent(g, id, r) else { return }
+            if part == .body { bodyLoading = false }
+            guard !(error is CancellationError) else { return }
+            switch part {
+            case .body: bodyError = error.localizedDescription
+            case .info: infoError = error.localizedDescription
+            case .provenance, .ocr: break   // optional sections; refilled on the next appear / retry
+            }
+        }
+    }
+
+    private func isCurrent(_ g: Int, _ id: String, _ r: Int) -> Bool {
+        !Task.isCancelled && visible && g == generation && id == docId && r == revision
+    }
+
+    private func finishCycle(_ g: Int) {
+        guard g == generation else { return }
+        cycle = nil
+        bodyLoading = false
+    }
+
+    private func finishMore(_ g: Int) {
+        guard g == generation else { return }
+        more = nil
+        moreLoading = false
+    }
+
+    private func cancelAll() {
+        cycle?.cancel(); cycle = nil
+        more?.cancel(); more = nil
+        generation &+= 1
+        bodyLoading = false
+        moreLoading = false
+    }
+
+    /// New document or new connection: nothing from the old one may stay on screen or be written later.
+    private func invalidate() {
+        cancelAll()
+        loaders = nil
+        loaded = []
+        info = nil; provenance = nil; ocr = nil
+        chunks = []; chunkTotal = 0; nextOffset = 0
+        bodyLoaded = false; bodyError = nil; infoError = nil; moreError = nil
+        pickedPages = []
+    }
+}

@@ -17,6 +17,8 @@ enum BrainSpaceError: LocalizedError, Equatable {
     case noAppScope
     case http(Int, String)
     case invalid
+    /// A request built for one connection configuration met a different one (switched or disconnected meanwhile).
+    case connectionChanged
 
     var errorDescription: String? {
         switch self {
@@ -24,6 +26,7 @@ enum BrainSpaceError: LocalizedError, Equatable {
         case .noAppScope: return "这台设备的钥匙还没开通第二大脑空间(app 权限)。在 Mac mini 上运行 brainctl token grant 开通。"
         case .http(let code, let msg): return msg.isEmpty ? "资料库返回 \(code)" : msg
         case .invalid: return "资料库返回的内容看不懂"
+        case .connectionChanged: return "资料库连接已更换,请重新打开"
         }
     }
 }
@@ -42,13 +45,16 @@ final class BrainSpaceAPI: NSObject, URLSessionTaskDelegate, @unchecked Sendable
         return URLSession(configuration: cfg, delegate: self, delegateQueue: nil)
     }()
     private let lock = NSLock()
-    private var leoToken: String?
+    /// Archive page token, memory only, bound to the exact configuration (endpoint + auth headers) that fetched it.
+    private var leoToken: (config: Config, token: String)?
 
     static var decoder: JSONDecoder { BrainSpaceJSON.decoder }
 
     // MARK: Config
 
-    struct Config {
+    /// One snapshot of the connection. A request captures it once and uses it for URL, headers and page-token
+    /// refreshes, so switching connections mid-request can never send an old request to a new endpoint (or the reverse).
+    struct Config: Equatable, Sendable {
         let endpoint: BrainEndpoint
         let headers: [String: String]
     }
@@ -73,39 +79,51 @@ final class BrainSpaceAPI: NSObject, URLSessionTaskDelegate, @unchecked Sendable
     // MARK: Requests
 
     func get<T: Decodable>(_ path: String, query: [(String, String)] = [], as type: T.Type = T.self) async throws -> T {
-        let data = try await raw(try apiURL(path, query: query))
+        try await get(path, query: query, config: try config(), as: type)
+    }
+
+    /// GET with an already captured configuration (URL and headers from the same snapshot).
+    func get<T: Decodable>(_ path: String, query: [(String, String)] = [], config cfg: Config, as type: T.Type = T.self) async throws -> T {
+        let data = try await send(request(cfg, cfg.endpoint.url("/v1/app/api" + path, query: query)))
         do { return try Self.decoder.decode(T.self, from: data) } catch { throw BrainSpaceError.invalid }
     }
 
     func manifest() async throws -> BrainSpaceManifest {
         let cfg = try config()
-        let data = try await raw(cfg.endpoint.url("/v1/app/manifest"))
+        let data = try await send(request(cfg, cfg.endpoint.url("/v1/app/manifest")))
         do { return try Self.decoder.decode(BrainSpaceManifest.self, from: data) } catch { throw BrainSpaceError.invalid }
     }
 
     func webSession() async throws -> BrainWebSession {
         let cfg = try config()
-        var req = URLRequest(url: cfg.endpoint.url("/v1/app/web-session"))
-        req.httpMethod = "POST"
-        cfg.headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-        let data = try await send(req)
+        let data = try await send(request(cfg, cfg.endpoint.url("/v1/app/web-session"), method: "POST"))
         do { return try Self.decoder.decode(BrainWebSession.self, from: data) } catch { throw BrainSpaceError.invalid }
     }
 
     /// POST JSON to the archive. Writes need the archive's page token (same as the web UI); refetched once if it rotated.
     func post<T: Decodable>(_ path: String, _ body: [String: Any], as type: T.Type = T.self) async throws -> T {
+        try await post(path, body, config: try config(), as: type)
+    }
+
+    /// POST with an already captured configuration: the caller froze it together with the identity it acts for.
+    func post<T: Decodable>(_ path: String, _ body: [String: Any], config cfg: Config, as type: T.Type = T.self) async throws -> T {
         let payload = try JSONSerialization.data(withJSONObject: body)
-        let data = try await postData(path, query: [], body: payload, contentType: "application/json", extra: [:])
+        let data = try await postData(path, query: [], body: payload, contentType: "application/json", extra: [:], config: cfg)
         do { return try Self.decoder.decode(T.self, from: data) } catch { throw BrainSpaceError.invalid }
     }
 
     func postData(_ path: String, query: [(String, String)], body: Data, contentType: String,
                   extra: [String: String]) async throws -> Data {
+        try await postData(path, query: query, body: body, contentType: contentType, extra: extra, config: try config())
+    }
+
+    /// Every attempt (and the page-token fetch / refresh between them) uses the one captured `cfg`.
+    func postData(_ path: String, query: [(String, String)], body: Data, contentType: String,
+                  extra: [String: String], config cfg: Config) async throws -> Data {
+        let url = cfg.endpoint.url("/v1/app/api" + path, query: query)
         for attempt in 0..<2 {
-            let token = try await pageToken(refresh: attempt > 0)
-            var req = URLRequest(url: try apiURL(path, query: query))
-            req.httpMethod = "POST"
-            try config().headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
+            let token = try await pageToken(refresh: attempt > 0, config: cfg)
+            var req = request(cfg, url, method: "POST")
             req.setValue(token, forHTTPHeaderField: "X-Leo-Token")
             req.setValue(contentType, forHTTPHeaderField: "Content-Type")
             extra.forEach { req.setValue($1, forHTTPHeaderField: $0) }
@@ -117,21 +135,30 @@ final class BrainSpaceAPI: NSObject, URLSessionTaskDelegate, @unchecked Sendable
         throw BrainSpaceError.invalid
     }
 
-    private func pageToken(refresh: Bool) async throws -> String {
-        if !refresh, let t = lock.withLock({ leoToken }) { return t }
-        let s: BrainArchiveSession = try await get("/session")
-        lock.withLock { leoToken = s.token }
+    private func pageToken(refresh: Bool, config cfg: Config) async throws -> String {
+        if !refresh, let t = lock.withLock({ leoToken.flatMap { $0.config == cfg ? $0.token : nil } }) { return t }
+        let s: BrainArchiveSession = try await get("/session", config: cfg)
+        lock.withLock { leoToken = (cfg, s.token) }
         return s.token
     }
 
+    /// For URLs built earlier with `apiURL` (image cache). Current credentials are attached only if the URL still
+    /// points at the current endpoint's origin; a URL from a previous connection is refused, never re-authorized.
     func raw(_ url: URL) async throws -> Data {
-        var req = URLRequest(url: url)
-        try config().headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-        return try await send(req)
+        let cfg = try config()
+        guard BrainEndpoint.allowsRedirect(from: cfg.endpoint.base, to: url) else { throw BrainSpaceError.connectionChanged }
+        return try await send(request(cfg, url))
     }
 
     /// Authorized request for media players (AVURLAsset needs the same headers).
     func authorizedHeaders() -> [String: String] { (try? config().headers) ?? [:] }
+
+    private func request(_ cfg: Config, _ url: URL, method: String = "GET") -> URLRequest {
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        cfg.headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
+        return req
+    }
 
     private func send(_ req: URLRequest) async throws -> Data {
         let (data, response): (Data, URLResponse)
@@ -150,7 +177,8 @@ final class BrainSpaceAPI: NSObject, URLSessionTaskDelegate, @unchecked Sendable
 
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
-        guard let base = webBase, let target = request.url, BrainEndpoint.allowsRedirect(from: base, to: target) else {
+        // Judge against the origin this task was created for, not whatever the connection is now.
+        guard let base = task.originalRequest?.url, let target = request.url, BrainEndpoint.allowsRedirect(from: base, to: target) else {
             completionHandler(nil); return
         }
         completionHandler(request)
