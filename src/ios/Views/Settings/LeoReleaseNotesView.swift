@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.90.3",
+            date: "2026-11-10",
+            title: "iPhone Duo 按钮悬浮在右侧",
+            highlights: [
+                "合上的 iPhone Duo 上，设置、搜索、第二大脑收进右侧偏下的透明悬浮按钮，不再挤在顶栏挡住标题；首页内容保持全宽，不为按钮让出侧边。",
+                "首页和对话页的顶栏样式一致，进出对话时按钮和顶栏不再来回跳。"
+            ]
+        ),
+        LeoRelease(
             version: "1.90.2",
             date: "2026-11-10",
             title: "iPhone Duo 顶栏不再乱跳",

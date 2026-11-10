@@ -5375,9 +5375,8 @@ private struct NavBarStyleModifier: ViewModifier {
         content
             .ignoresSafeArea(.container, edges: .top)
             .toolbarBackgroundVisibility(.visible, for: .navigationBar)
-            // [duo-bars] Closed iPhone Duo: horizontal bars for the whole chat
-            // page (P0-3 interim; see LeoHorizontalSystemBars). Lives in this
-            // modifier so the chat body's generic depth doesn't grow.
+            // [duo-bars] Closed iPhone Duo: horizontal bars, full-width content. The home
+            // page does the same (1.90.3), so pushing / popping never changes the bar shape.
             .modifier(LeoHorizontalSystemBars())
     }
 }

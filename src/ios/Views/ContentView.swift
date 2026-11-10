@@ -1464,11 +1464,9 @@ struct ContentView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sessionList(useNavigationLinks: false)
                 .appFontScale()
-                .modifier(LeoHorizontalSystemBars())
         } detail: {
             detailView
                 .appFontScale()
-                .modifier(LeoHorizontalSystemBars())
         }
         // iPhone pushes the Mac console; on iPad a push would squeeze it into
         // the sidebar column, so it gets a page-sized sheet instead.
@@ -1490,11 +1488,24 @@ struct ContentView: View {
 
     private var stackLayout: some View {
         NavigationStack(path: $navigationPath) {
-            // [duo-bars] 1.90.2: the chat page already forces horizontal bars on a closed
-            // iPhone Duo; the session list must too, or its 设置 / 第二大脑 buttons sit in the
-            // vertical side bar and fly to the top-left every time a chat is pushed or popped.
             sessionList(useNavigationLinks: true)
+                // [duo-bars] 1.90.3: horizontal bars like the chat page, so the list keeps the
+                // full width (no side column) and nothing changes shape on push / pop.
                 .modifier(LeoHorizontalSystemBars())
+                .overlay {
+                    // Closed iPhone Duo: 设置 / 搜索 / 第二大脑 float over the right edge a bit
+                    // below the middle — clear of the title, status and signal area at the top.
+                    if duoFloatingButtons, !isSelecting {
+                        LeoDuoSideButtons(buttons: [
+                            .init(systemImage: "magnifyingglass", label: "搜索对话") {
+                                withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { showSearchBar = true }
+                                searchFocused = true
+                            },
+                            .init(systemImage: "brain.head.profile", label: "第二大脑") { showBrainSpace = true },
+                            .init(systemImage: "gear", label: "设置") { activeToolSheet = .settings },
+                        ])
+                    }
+                }
                 .navigationDestination(for: String.self) { id in
                     // `.id(id)` mirrors detailView (iPad): navigationDestination
                     // views are identified by stack depth, not path value, so
@@ -2770,7 +2781,7 @@ struct ContentView: View {
                     isSelecting = false
                     selectedIds.removeAll()
                 }
-            } else {
+            } else if !duoFloatingButtons {
                 Button {
                     activeToolSheet = .settings
                 } label: {
@@ -2782,7 +2793,7 @@ struct ContentView: View {
         // [T-home-simplify-1.41] iPhone 标题栏只留:设置、搜索、藏宝阁。
         ToolbarItem(placement: .topBarTrailing) {
             // iPad 侧栏也给搜索按钮(以前靠浮动按钮行,现在那一行换成了输入栏)。
-            if !isSelecting {
+            if !isSelecting, !duoFloatingButtons {
                 Button {
                     withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { showSearchBar = true }
                     searchFocused = true
@@ -2813,7 +2824,7 @@ struct ContentView: View {
         // [T-collections] 收藏一级入口:分享进来的东西从这里翻。iPad 在「更多」菜单里(整页面板)。
         // [brain-space] 1.89:藏宝阁升级为「第二大脑」全屏空间,手机收藏和分类检索在它的「资料」里。
         ToolbarItem(placement: .topBarTrailing) {
-            if !isSelecting, !isWideLayout {
+            if !isSelecting, !isWideLayout, !duoFloatingButtons {
                 Button { showBrainSpace = true } label: {
                     Image(systemName: "brain.head.profile")
                 }
@@ -3352,6 +3363,11 @@ struct ContentView: View {
     @State private var showBrightnessOptions = false
     @State private var showMacConsole = false
     @State private var showBrainSpace = false
+    /// [duo-bars] 1.90.3: the system laid this page's bar out vertically (closed iPhone Duo).
+    /// The main buttons then go to the bottom of the right-side column instead of the top.
+    /// [duo-bars] 1.90.3: closed iPhone Duo outer display (quick-home window shape). The main
+    /// buttons then float on the right edge instead of sitting in the top bar.
+    private var duoFloatingButtons: Bool { usesQuickHome }
     @State private var homeRoutingError: String?
     @State private var homeRoutingInProgress = false
     /// [T-home-sensory-feedback] Bumped when a NATIVE action starts (not the

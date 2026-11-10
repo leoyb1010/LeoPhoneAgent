@@ -140,6 +140,46 @@ struct LeoHorizontalSystemBars: ViewModifier {
     }
 }
 
+/// [duo-bars] 1.90.3: the home page's main buttons on a closed iPhone Duo — a translucent glass
+/// capsule floating over the right edge at ~60% of the page height. It overlays the content
+/// (no column is reserved, the list keeps its full width) and its position depends only on the
+/// page size, so it never moves on its own.
+struct LeoDuoSideButtons: View {
+    struct Item: Identifiable {
+        let systemImage: String
+        let label: String
+        let action: () -> Void
+        var id: String { systemImage }
+    }
+
+    let buttons: [Item]
+    /// Vertical position of the capsule's centre as a fraction of the page height.
+    static let verticalFraction: CGFloat = 0.6
+
+    var body: some View {
+        GeometryReader { geo in
+            VStack(spacing: 2) {
+                ForEach(buttons) { item in
+                    Button(action: item.action) {
+                        Image(systemName: item.systemImage)
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(.primary)
+                            .frame(width: LeoChromeMetrics.hitTarget, height: LeoChromeMetrics.hitTarget)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(item.label))
+                }
+            }
+            .padding(.vertical, 4)
+            .glassEffect(.clear.interactive(), in: .capsule)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.trailing, 8)
+            .position(x: geo.size.width / 2, y: geo.size.height * Self.verticalFraction)
+        }
+    }
+}
+
 /// [duo-fold] P1-2: keeps a bottom-anchored floating control (composer card,
 /// activity strip, ↑↓ discs, new-message pill) off the fold of a half-open
 /// iPhone Duo. Reads the active `.division` regions over the control and pads
