@@ -23,6 +23,26 @@ enum MCPDaemonBridge {
     static let callsFileName = "calls.jsonl"
     static let portFileName = "daemon.port"
 
+    private struct Endpoint: Decodable {
+        let version: Int
+        let port: UInt16
+        let token: String
+    }
+
+    private static func authenticatedEndpoint(in directory: URL) -> Endpoint? {
+        let url = directory.appendingPathComponent(portFileName)
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              attributes[.type] as? FileAttributeType == .typeRegular,
+              let size = attributes[.size] as? NSNumber, (1...4096).contains(size.intValue),
+              let permissions = attributes[.posixPermissions] as? NSNumber,
+              permissions.intValue & 0o077 == 0,
+              let data = try? Data(contentsOf: url), data.count <= 4096,
+              let endpoint = try? JSONDecoder().decode(Endpoint.self, from: data),
+              endpoint.version == 1, endpoint.port > 0, endpoint.token.utf8.count == 64,
+              endpoint.token.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else { return nil }
+        return endpoint
+    }
+
     /// 逐行解析;坏行跳过(守护进程被杀时最后一行可能只写了一半)。
     static func parse(_ data: Data) -> [CallRow] {
         let decoder = JSONDecoder()
@@ -58,6 +78,8 @@ enum MCPDaemonBridge {
 
     /// 读守护进程公布的端口;没有、坏了或越界返回 nil。
     static func daemonPort(in directory: URL) -> UInt16? {
+        if let endpoint = authenticatedEndpoint(in: directory) { return endpoint.port }
+        // Legacy numeric records remain readable for diagnostics only, never for sending control requests.
         guard let text = try? String(contentsOf: directory.appendingPathComponent(portFileName), encoding: .utf8),
               let value = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)),
               (1...65535).contains(value) else { return nil }
@@ -66,13 +88,17 @@ enum MCPDaemonBridge {
 
     /// 请空闲的守护进程退出(它答完 `{"ok":true}` 再走)。没在跑就什么也不发生。
     static func requestShutdown(in directory: URL, timeout: TimeInterval = 2) {
-        guard let port = daemonPort(in: directory), let nwPort = NWEndpoint.Port(rawValue: port) else { return }
+        guard let endpoint = authenticatedEndpoint(in: directory),
+              let nwPort = NWEndpoint.Port(rawValue: endpoint.port),
+              var payload = try? JSONSerialization.data(withJSONObject: ["cmd": "shutdown", "_auth": endpoint.token]) else { return }
+        payload.append(0x0A)
+        let requestPayload = payload
         let connection = NWConnection(host: "127.0.0.1", port: nwPort, using: .tcp)
         let queue = DispatchQueue(label: "com.leoyuan.leophoneagent.mcpDaemonShutdown")
         connection.stateUpdateHandler = { state in
             switch state {
             case .ready:
-                connection.send(content: Data(#"{"cmd":"shutdown"}"#.utf8 + [0x0A]), completion: .contentProcessed { _ in
+                connection.send(content: requestPayload, completion: .contentProcessed { _ in
                     connection.receive(minimumIncompleteLength: 1, maximumLength: 512) { _, _, _, _ in connection.cancel() }
                 })
             case .failed, .waiting:

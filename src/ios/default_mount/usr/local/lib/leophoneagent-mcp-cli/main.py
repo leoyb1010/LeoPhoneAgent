@@ -42,7 +42,7 @@ from utils import config  # noqa: E402
 LOG_PATH = "/var/minis/mcp-servers/mcp-cli.log"
 
 PID_FILE = "/tmp/leophoneagent-mcp-daemon.pid"
-PORT_FILE = "/tmp/leophoneagent-mcp-daemon.port"  # daemon publishes its 127.0.0.1 port here
+PORT_FILE = "/tmp/leophoneagent-mcp-daemon.port"  # private runtime record: port, PID and per-process auth token
 LOCK_FILE = "/tmp/leophoneagent-mcp-daemon.lock"  # cold-start fork guard (one winner forks)
 CONN_TIMEOUT = 310.0  # socket recv timeout: covers a respawn + handshake + one 120s RPC
 LOCK_STALE_SECONDS = 12.0  # reclaim a cold-start lock older than this (crashed start)
@@ -79,22 +79,43 @@ def _require_server(name, pretty):
 
 # --- daemon lifecycle + IPC -------------------------------------------------
 
-def _read_daemon_port():
-    """Return the daemon's published 127.0.0.1 port, or None if absent/bad."""
+def _read_daemon_endpoint():
+    """Only a complete authenticated runtime record can authorize a connection.
+    Legacy integer port files never enable an unauthenticated fallback."""
     try:
-        with open(PORT_FILE, "r", encoding="utf-8") as f:
-            return int(f.read().strip())
+        fd = os.open(PORT_FILE, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "r", encoding="utf-8") as f:
+            info = os.fstat(f.fileno())
+            if info.st_mode & 0o077 or not 0 < info.st_size <= 4096:
+                return None
+            value = json.loads(f.read(4096))
+        if not isinstance(value, dict) or value.get("version") != 1:
+            return None
+        port, pid, token = value.get("port"), value.get("pid"), value.get("token")
+        if type(port) is not int or not 1 <= port <= 65535 or type(pid) is not int or pid <= 0:
+            return None
+        if not isinstance(token, str) or len(token) != 64 or any(c not in "0123456789abcdef" for c in token):
+            return None
+        return value
     except (ValueError, OSError):
         return None
 
 
+def _read_daemon_port():
+    endpoint = _read_daemon_endpoint()
+    return endpoint["port"] if endpoint else None
+
+
 def daemon_alive():
     """True if the daemon's port file is present and its recorded PID is live."""
-    if not os.path.exists(PORT_FILE) or not os.path.exists(PID_FILE):
+    endpoint = _read_daemon_endpoint()
+    if endpoint is None or not os.path.exists(PID_FILE):
         return False
     try:
         with open(PID_FILE, "r", encoding="utf-8") as f:
             pid = int(f.read().strip())
+        if pid != endpoint["pid"]:
+            return False
         os.kill(pid, 0)  # signal 0: liveness probe only
         return True
     except (ValueError, OSError):
@@ -105,7 +126,7 @@ def _wait_for_port(deadline):
     """Block until the daemon publishes its port file, or the deadline passes.
     Returns True if the port appeared."""
     while time.time() < deadline:
-        if os.path.exists(PORT_FILE):
+        if _read_daemon_endpoint() is not None:
             time.sleep(0.05)  # let bind()+listen()+port publish settle
             return True
         time.sleep(0.1)
@@ -224,14 +245,16 @@ def maybe_start_daemon():
 def send_to_daemon(request, timeout=CONN_TIMEOUT):
     """Send one newline-delimited JSON request over 127.0.0.1, return the parsed
     reply dict."""
-    port = _read_daemon_port()
-    if port is None:
+    endpoint = _read_daemon_endpoint()
+    if endpoint is None:
         return {"ok": False, "error": "daemon not running", "code": "NO_DAEMON"}
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(timeout)
     try:
-        sock.connect(("127.0.0.1", port))
-        sock.sendall((json.dumps(request, ensure_ascii=False) + "\n").encode())
+        sock.connect(("127.0.0.1", endpoint["port"]))
+        payload = dict(request)
+        payload["_auth"] = endpoint["token"]
+        sock.sendall((json.dumps(payload, ensure_ascii=False) + "\n").encode())
         buf = b""
         while b"\n" not in buf:
             chunk = sock.recv(65536)

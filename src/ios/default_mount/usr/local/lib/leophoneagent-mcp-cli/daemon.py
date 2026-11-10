@@ -34,11 +34,14 @@ frozen (archive/android-harmony); port these when it is revived.
 """
 
 import json
+import hmac
 import logging
 import os
+import secrets
 import signal
 import socket
 import subprocess
+import tempfile
 import threading
 import time
 
@@ -468,6 +471,8 @@ class DaemonServer:
         self.host_port_file = host_port_file
         self.calls_log = calls_log
         self.port = None
+        # Fresh for every process; never reuse a server credential or print this token.
+        self.auth_token = secrets.token_hex(32)
         self._running = True
         self._empty_since = None
         self.pool = MCPPool(on_empty=self._on_pool_empty)
@@ -492,6 +497,13 @@ class DaemonServer:
             log.info("pool empty, daemon will exit in %ss if no new calls", DAEMON_EXIT_GRACE)
 
     def handle_request(self, data):
+        if not isinstance(data, dict):
+            return {"ok": False, "error": "invalid request", "code": "PARSE_ERROR"}
+        token = data.get("_auth")
+        if (not isinstance(token, str) or len(token) != 64
+                or any(c not in "0123456789abcdef" for c in token)
+                or not hmac.compare_digest(token, self.auth_token)):
+            return {"ok": False, "error": "daemon authorization required", "code": "UNAUTHORIZED"}
         start = time.time()
         resp = self._handle_request(data)
         cmd = data.get("cmd", "")
@@ -571,6 +583,9 @@ class DaemonServer:
                 if not chunk:
                     break
                 buf += chunk
+                if len(buf) > MAX_LINE_CHARS:
+                    conn.sendall(b'{"ok":false,"error":"daemon request too large","code":"PARSE_ERROR"}\n')
+                    return
             if not buf.strip():
                 return
             try:
@@ -603,8 +618,8 @@ class DaemonServer:
                     break
 
     def run(self):
-        # Loopback TCP on an ephemeral port (AF_UNIX is unavailable on iSH
-        # fakefs). Publish the chosen port so the CLI knows where to connect.
+        # Loopback is not an authorization boundary. Publish port + a process-local
+        # token atomically in the existing private runtime records used by CLI and host.
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         srv.bind(("127.0.0.1", 0))
@@ -617,10 +632,17 @@ class DaemonServer:
                 continue
             try:
                 os.makedirs(os.path.dirname(path), exist_ok=True)
-                tmp = path + ".tmp"
-                with open(tmp, "w", encoding="utf-8") as f:
-                    f.write(str(port))
-                os.replace(tmp, path)
+                fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".tmp-", dir=os.path.dirname(path))
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                        os.fchmod(f.fileno(), 0o600)
+                        json.dump({"version": 1, "port": port, "pid": os.getpid(), "token": self.auth_token}, f)
+                    os.replace(tmp, path)
+                finally:
+                    try:
+                        os.unlink(tmp)
+                    except OSError:
+                        pass
             except OSError as exc:
                 if path == self.port_file:
                     raise
@@ -667,7 +689,14 @@ class DaemonServer:
             if not path:
                 continue
             try:
+                # A late shutdown must not erase a newer daemon's runtime record.
+                with open(path, "r", encoding="utf-8") as f:
+                    if path == self.pid_file:
+                        if int(f.read().strip()) != os.getpid():
+                            continue
+                    elif json.load(f).get("token") != self.auth_token:
+                        continue
                 os.unlink(path)
-            except OSError:
+            except (OSError, ValueError, AttributeError):
                 pass
         log.info("daemon exited cleanly")
