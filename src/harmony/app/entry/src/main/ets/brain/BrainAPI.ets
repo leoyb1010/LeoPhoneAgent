@@ -68,8 +68,18 @@ export class BrainAPI {
     BrainAPI.epoch += 1;
     BrainAPI.pageToken = '';
     BrainAPI.unlockedUntil = 0;
-    BrainAPI.requests.forEach((req: http.HttpRequest) => req.destroy());
+    // Lock / credential change destroys every in-flight request exactly once. The request's own
+    // finally then sees it is no longer tracked and does not destroy it a second time.
+    const active: http.HttpRequest[] = [];
+    BrainAPI.requests.forEach((req: http.HttpRequest) => { active.push(req); });
     BrainAPI.requests.clear();
+    active.forEach((req: http.HttpRequest) => { try { req.destroy(); } catch (_error) { } });
+  }
+  /** Destroys a request only if it is still tracked; returns false when invalidate() already did. */
+  private static release(req: http.HttpRequest): boolean {
+    if (!BrainAPI.requests.delete(req)) return false;
+    try { req.destroy(); } catch (_error) { }
+    return true;
   }
   static base(): string { return BrainAPI.config.base; }
   static async webSession(): Promise<BrainJSON> {
@@ -172,7 +182,7 @@ export class BrainAPI {
         if (epoch !== BrainAPI.epoch) throw new Error('连接已改变');
         if (fileIo.writeSync(file.fd, data) !== data.byteLength) throw new Error('视频暂存不完整');
         size += data.byteLength;
-      } catch (error) { failure = `${error}`; req.destroy(); }
+      } catch (error) { failure = `${error}`; BrainAPI.release(req); }
     });
     let complete = false;
     try {
@@ -186,7 +196,8 @@ export class BrainAPI {
       fileIo.fsyncSync(file.fd);
       complete = true;
     } finally {
-      req.off('dataReceive'); req.destroy(); BrainAPI.requests.delete(req); fileIo.closeSync(file);
+      try { req.off('dataReceive'); } catch (_error) { }
+      BrainAPI.release(req); fileIo.closeSync(file);
       if (!complete && fileIo.accessSync(destination)) fileIo.unlinkSync(destination);
     }
   }
@@ -218,6 +229,7 @@ export class BrainAPI {
       headers['CF-Access-Client-Secret'] = cfg.accessSecret;
     }
     Object.keys(extra).forEach((key: string) => headers[key] = extra[key]);
+    // @ohos.net.http: each HttpRequest is one request task and is not reusable, so no pooling.
     const req = http.createHttp();
     BrainAPI.requests.add(req);
     try {
@@ -234,6 +246,6 @@ export class BrainAPI {
         throw new BrainHTTPError(response.responseCode, expired);
       }
       return response.result as string | ArrayBuffer;
-    } finally { BrainAPI.requests.delete(req); req.destroy(); }
+    } finally { BrainAPI.release(req); }
   }
 }

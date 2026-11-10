@@ -192,10 +192,10 @@ struct HomePage {
     })
     }
     .hideTitleBar(true).hideBackButton(true)
-    .mode(this.wide && this.navigationTick >= 0 && this.pathStack.size() > 0 ? NavigationMode.Split : NavigationMode.Stack)
-    .navBarWidth(this.windowWidth >= Tokens.largeBreak ? this.windowWidth - 360 : '50%')
-    .navBarWidthRange([280, Math.max(280, this.windowWidth - 280)])
-    .minContentWidth(280)
+    // Pushed pages are full-screen (own top bar, own internal split). Split mode kept the home
+    // nav bar beside them and covered their back/action row on the tri-fold. The home page's own
+    // wide layout lives in wideBody() and is unaffected.
+    .mode(NavigationMode.Stack)
     .navDestination(destination)
     .width('100%').height('100%')
   }

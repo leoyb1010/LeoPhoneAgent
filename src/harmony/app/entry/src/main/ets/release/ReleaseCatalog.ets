@@ -6,20 +6,38 @@ export class LeoRelease {
 }
 
 export class ReleaseCatalog {
-  static readonly currentVersion: string = '0.5.0';
-  static readonly currentBuild: number = 100029;
+  static readonly currentVersion: string = '0.5.2';
+  static readonly currentBuild: number = 100031;
 
   static all(): LeoRelease[] {
     const first = new LeoRelease();
-    first.version = '0.5.0';
-    first.date = '2026-11-08';
-    first.title = '鸿蒙体验升级 · 待验收候选';
+    first.version = '0.5.2';
+    first.date = '2026-11-10';
+    first.title = '第二大脑读取与翻页修复';
     first.highlights = [
+      '今日、家人、影像与管家页面并发读取独立资料，部分请求失败时保留成功的内容并说明失败来源。',
+      '资料详情的概要、出处、OCR 与正文独立读取；先到的正文立即可读，不再等待其他分区。重复点击加载更多会合并为一次请求，追加内容去重。',
+      '返回、切页、锁定或更换连接后，旧请求不会回写新页面；取消请求只释放一次。',
+      '三折叠上的二级页面使用整屏导航，避免首页栏遮住返回和操作按钮；首页自身的宽屏布局保留。',
+      '内嵌网页关闭文件访问、混合内容、定位和网页权限申请，保留浏览及受控自动化。'
+    ];
+    const h051 = new LeoRelease();
+    h051.version = '0.5.1';
+    h051.date = '2026-11-09';
+    h051.title = '第二大脑与三折叠候选版本';
+    h051.highlights = [
+      '已在 Mate XT2 安装的上一候选版本。本次 0.5.2 将第二大脑读取与三折叠导航修正归入权威主仓，并修正旧版更新记录中未经证实的连接复用说明。'
+    ];
+    const h050 = new LeoRelease();
+    h050.version = '0.5.0';
+    h050.date = '2026-11-08';
+    h050.title = '鸿蒙体验升级';
+    h050.highlights = [
       '统一主题控件、语义颜色和设置图标。设置增加常用卡片与分组跳转，卡片在浅深色均有清晰层次。',
       '改用原生导航栈。按窗口宽度提供单/双/三栏，本机右栏显示文件、工具结果与本次启动的审批回执。',
       '本机问答加入长按菜单、分页阅读与选定轮次的分段长图预览；会话支持左滑置顶和 5 秒删除撤销。',
       '阅读历史消息时暂停流式跟随，使用回到底部入口继续跟随；首屏加载使用骨架，关键操作使用系统触感。',
-      '本版本为待验收候选，尚待 Studio 编译、模拟器、签名覆盖安装与最终实机门禁；未发布。'
+      '已完成原生编译、原签名校验及 Mate XT2 覆盖安装，功能体验由用户验收；未作公开发行。'
     ];
     const h040 = new LeoRelease();
     h040.version = '0.4.0';
@@ -264,6 +282,6 @@ export class ReleaseCatalog {
       '填中继钥匙后读取 /machines，不再写死三台 Mac。',
       '可对在线 Mac 或 Android 身体开新任务，断线按序号续上。'
     ];
-    return [first, h040, alpha22, t11, t10, t9, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
+    return [first, h051, h050, h040, alpha22, t11, t10, t9, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
   }
 }

@@ -107,6 +107,13 @@ export struct WebPage {
           .layoutWeight(1)
           .javaScriptAccess(true)
           .domStorageAccess(true)
+          .fileAccess(false)
+          .mixedMode(MixedMode.None)
+          .geolocationAccess(false)
+          .onPermissionRequest((event: OnPermissionRequestEvent) => {
+            // Camera / microphone / MIDI / protected media requests from web pages are denied.
+            if (event) event.request.deny();
+          })
           .onControllerAttached(() => {
             this.attached = true;
             BrowserAutomation.attach(this.controller, WebLaunch.owner);

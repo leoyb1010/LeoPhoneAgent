@@ -3,12 +3,12 @@ import { common } from '@kit.AbilityKit';
 import { promptAction } from '@kit.ArkUI';
 import { fileIo } from '@kit.CoreFileKit';
 import { webview } from '@kit.ArkWeb';
-import { BrainAPI, BrainJSON, text, object, items, part } from '../brain/BrainAPI';
+import { BrainAPI, BrainJSON, BrainRequestLease, text, object, items, part } from '../brain/BrainAPI';
 import { BrainUpload, BrainUploadJob } from '../brain/BrainUpload';
 import { BrainCache } from '../brain/BrainCache';
 import { BrainImage } from '../brain/BrainImage';
 import { SecretStore } from '../store/SecretStore';
-import { ActionButton, IconButton, SurfaceButton, Skeleton } from '../theme/Controls';
+import { ActionButton, IconButton, SurfaceButton } from '../theme/Controls';
 import { MotionPolicy } from '../theme/MotionPolicy';
 import { Sym } from '../theme/Symbols';
 import { curves } from '@kit.ArkUI';
@@ -34,6 +34,30 @@ function row(data: BrainJSON, kind: string): BrainRow {
     if (r.title === '资料') r.title = text(data, 'media_kind') === 'video' ? '一段视频' : '一张照片';
   }
   return r;
+}
+
+/** Outcome of one independent read; a failure never discards the reads that succeeded. */
+class BrainResult {
+  data: BrainJSON | null = null;
+  error: string = '';
+}
+function settle(req: Promise<BrainJSON>): Promise<BrainResult> {
+  return req.then((data: BrainJSON) => { const r = new BrainResult(); r.data = data; return r; })
+    .catch((error: Error) => { const r = new BrainResult(); r.error = `${error}`; return r; });
+}
+/** Rows without a server id (some text segments) are keyed by their visible content. */
+function rowKey(r: BrainRow): string { return r.kind + ':' + (r.id || (r.title + '\u0000' + r.body)); }
+function appendUnique(current: BrainRow[], incoming: BrainRow[]): BrainRow[] {
+  const seen = new Set<string>(current.map((r: BrainRow) => rowKey(r)));
+  const fresh = incoming.filter((r: BrainRow) => {
+    const key = rowKey(r);
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+  return current.concat(fresh);
+}
+function chunkRow(o: BrainJSON): BrainRow {
+  const c = row(o, 'chunk'); c.title = text(o, 'locator'); c.body = text(o, 'text'); return c;
 }
 
 @Component
@@ -78,11 +102,14 @@ export struct BrainSpacePage {
   @State videoPath: string = '';
   @State webURL: string = '';
   @State chosenPages: number[] = [];
+  @State pagingMedia: boolean = false;
+  @State pagingChunks: boolean = false;
   private uploader: BrainUpload = new BrainUpload();
   private web: webview.WebviewController = new webview.WebviewController();
   private cookieName: string = '';
   private cookieBase: string = '';
   private epoch: number = 0;
+  private pageRun: number = 0;
   private expiry: number = -1;
 
   aboutToAppear(): void {
@@ -97,8 +124,18 @@ export struct BrainSpacePage {
   backgroundLock(): void { this.lock(); }
   onPageHide(): void { this.lock(); }
   aboutToDisappear(): void { this.lock(); clearInterval(this.expiry); }
+  /** True only while the page view that issued a read is still current and the Brain lease holds. */
+  private live(epoch: number, lease: BrainRequestLease): boolean {
+    if (epoch !== this.epoch) return false;
+    try { BrainAPI.assertLease(lease); return true; } catch (_error) { return false; }
+  }
+  /** Drops any in-flight "load more" so its result can never merge into a newer view. */
+  private resetPaging(): void {
+    this.pageRun += 1; this.pagingMedia = false; this.pagingChunks = false;
+  }
   private lock(): void {
     this.epoch += 1;
+    this.resetPaging();
     if (this.cookieName && this.cookieBase) {
       try { webview.WebCookieManager.configCookieSync(this.cookieBase, this.cookieName + '=; Max-Age=0; Path=/; Secure; HttpOnly', true); } catch (_error) { }
       this.cookieName = ''; this.cookieBase = '';
@@ -119,20 +156,29 @@ export struct BrainSpacePage {
   private async enter(): Promise<void> {
     if (this.authenticating) return;
     this.authenticating = true;
+    // BrainAPI.unlock() already rejects if a lock/credential change happens during the prompt;
+    // page identity is captured afterwards so the auth sheet itself never discards the unlock.
+    let epoch = -1;
     try {
       await BrainAPI.unlock('解锁第二大脑');
+      epoch = this.epoch;
       const lease = BrainAPI.lease();
-      const manifest = await BrainAPI.manifest();
+      // Network manifest and locally stored shares are independent; read them together.
+      const manifestReq = BrainAPI.manifest();
+      const sharesReq = SecretStore.read('leo.harmony.brain.shares.' + lease.generation);
+      manifestReq.catch(() => {}); sharesReq.catch(() => {});
+      const manifest = await manifestReq;
+      const savedShares = await sharesReq;
+      BrainAPI.assertLease(lease);
+      if (epoch !== this.epoch) return;
       if (manifest['app'] !== true) throw new Error('设备钥匙缺少第二大脑 app 权限');
       const can = object(manifest, 'can');
       this.canUpload = can['upload'] === true; this.canShare = can['share'] === true;
       this.canSteward = can['steward'] === true; this.canSave = can['save'] === true; this.canWeb = can['web'] === true;
-      const savedShares = await SecretStore.read('leo.harmony.brain.shares.' + BrainAPI.generation());
-      BrainAPI.assertLease(lease);
       this.shares = savedShares ? JSON.parse(savedShares) as BrainRow[] : [];
       this.unlocked = true;
       await this.reload();
-    } catch (error) { this.error = `${error}`; }
+    } catch (error) { if (epoch < 0 || epoch === this.epoch) this.error = `${error}`; }
     finally { this.authenticating = false; }
   }
   private async configure(): Promise<void> {
@@ -145,66 +191,158 @@ export struct BrainSpacePage {
     } catch (error) { this.error = `${error}`; }
     finally { this.busy = false; }
   }
-  private mediaQuery(): string {
-    return '?q=' + encodeURIComponent(this.query) + '&kind=' + this.mediaKind + '&smart=1&limit=60&offset=' + this.pageOffset +
+  private mediaQuery(offset: number): string {
+    return '?q=' + encodeURIComponent(this.query) + '&kind=' + this.mediaKind + '&smart=1&limit=60&offset=' + offset +
       (this.personId ? '&people=' + part(this.personId) : '');
   }
-  private async reload(append: boolean = false): Promise<void> {
+  private async reload(): Promise<void> {
     const epoch = ++this.epoch;
-    this.busy = true; this.error = '';
-    if (!append) this.pageOffset = 0;
+    this.resetPaging();
+    this.busy = true; this.error = ''; this.pageOffset = 0;
+    const lease = BrainAPI.lease();
     try {
       BrainAPI.requireUnlocked();
+      const failures: string[] = [];
       let result: BrainRow[] = [];
       if (this.tab === 0) {
-        const wall = await BrainAPI.get('/home/wall', '?limit=12');
-        result = items(wall).map((o: BrainJSON) => row(o, 'media'));
-        const butler = await BrainAPI.get('/butler');
-        const summary = row(butler, 'summary'); summary.body = text(object(butler, 'brief'), 'text') || text(butler, 'sub');
-        result.unshift(summary);
-        const continues = await BrainAPI.get('/continuations');
-        result = result.concat(items(continues).map((o: BrainJSON) => row(o, 'continuation')));
-        const years = await BrainAPI.get('/media/onthisday');
-        items(years, 'years').forEach((year: BrainJSON) => {
-          const heading = row(year, 'summary'); heading.title = text(year, 'ago') + ' 年前的今天'; result.push(heading);
-          result = result.concat(items(year).map((o: BrainJSON) => row(o, 'media')));
-        });
-        const recent = await BrainAPI.get('/answers', '?limit=5');
-        result = result.concat(items(recent).map((o: BrainJSON) => row(o, 'answer')));
-        result = result.concat(items(butler, 'today').map((o: BrainJSON) => row(o, 'summary')));
+        // Five independent reads go out together; each section shows if its own read succeeded.
+        const wallReq = settle(BrainAPI.get('/home/wall', '?limit=12'));
+        const butlerReq = settle(BrainAPI.get('/butler'));
+        const continuesReq = settle(BrainAPI.get('/continuations'));
+        const yearsReq = settle(BrainAPI.get('/media/onthisday'));
+        const recentReq = settle(BrainAPI.get('/answers', '?limit=5'));
+        const wall = await wallReq;
+        const butler = await butlerReq;
+        const continues = await continuesReq;
+        const years = await yearsReq;
+        const recent = await recentReq;
+        if (butler.data) {
+          const summary = row(butler.data, 'summary');
+          summary.body = text(object(butler.data, 'brief'), 'text') || text(butler.data, 'sub');
+          result.push(summary);
+        } else failures.push('管家摘要：' + butler.error);
+        if (wall.data) result = result.concat(items(wall.data).map((o: BrainJSON) => row(o, 'media')));
+        else failures.push('影像墙：' + wall.error);
+        if (continues.data) result = result.concat(items(continues.data).map((o: BrainJSON) => row(o, 'continuation')));
+        else failures.push('继续阅读：' + continues.error);
+        if (years.data) {
+          items(years.data, 'years').forEach((year: BrainJSON) => {
+            const heading = row(year, 'summary'); heading.title = text(year, 'ago') + ' 年前的今天'; result.push(heading);
+            result = result.concat(items(year).map((o: BrainJSON) => row(o, 'media')));
+          });
+        } else failures.push('那年今日：' + years.error);
+        if (recent.data) result = result.concat(items(recent.data).map((o: BrainJSON) => row(o, 'answer')));
+        else failures.push('最近问答：' + recent.error);
+        if (butler.data) result = result.concat(items(butler.data, 'today').map((o: BrainJSON) => row(o, 'summary')));
       } else if (this.tab === 1) {
-        if (!this.family.length) {
-          const family = await BrainAPI.get('/family');
-          if (epoch !== this.epoch) return;
-          this.family = items(family).map((o: BrainJSON) => row(o, 'person'));
+        const familyReq: Promise<BrainResult> | null = this.family.length ? null : settle(BrainAPI.get('/family'));
+        const pageReq = settle(BrainAPI.get('/media/search', this.mediaQuery(0)));
+        if (familyReq) {
+          const family = await familyReq;
+          if (family.data) {
+            if (this.live(epoch, lease)) this.family = items(family.data).map((o: BrainJSON) => row(o, 'person'));
+          } else failures.push('家人筛选：' + family.error);
         }
-        const page = await BrainAPI.get('/media/search', this.mediaQuery());
-        if (epoch !== this.epoch) return;
-        result = items(page).map((o: BrainJSON) => row(o, 'media'));
-        this.total = Number(page['total'] ?? 0);
-        this.pageOffset += result.length;
+        const page = await pageReq;
+        if (page.data) {
+          result = items(page.data).map((o: BrainJSON) => row(o, 'media'));
+          if (this.live(epoch, lease)) { this.total = Number(page.data['total'] ?? 0); this.pageOffset = result.length; }
+        } else failures.push('影像：' + page.error);
       } else if (this.tab === 2) {
-        result = items(await BrainAPI.get('/answers', '?limit=30')).map((o: BrainJSON) => row(o, 'answer'));
+        const recent = await settle(BrainAPI.get('/answers', '?limit=30'));
+        if (recent.data) result = items(recent.data).map((o: BrainJSON) => row(o, 'answer'));
+        else failures.push('问答记录：' + recent.error);
       } else if (this.tab === 3) {
-        result = items(await BrainAPI.get('/family')).map((o: BrainJSON) => row(o, 'person'));
-        const report = await BrainAPI.get('/family/report');
-        result = items(report, 'people').map((o: BrainJSON) => row(o, 'person')).concat(result);
+        const peopleReq = settle(BrainAPI.get('/family'));
+        const reportReq = settle(BrainAPI.get('/family/report'));
+        const people = await peopleReq;
+        const report = await reportReq;
+        if (report.data) result = items(report.data, 'people').map((o: BrainJSON) => row(o, 'person'));
+        else failures.push('家庭报告：' + report.error);
+        if (people.data) result = result.concat(items(people.data).map((o: BrainJSON) => row(o, 'person')));
+        else failures.push('家人名册：' + people.error);
       } else {
-        if (this.query.trim()) {
-          const page = await BrainAPI.get('/search', '?q=' + encodeURIComponent(this.query.trim()) + '&limit=30');
-          result = items(page).map((o: BrainJSON) => row(o, text(o, 'kind') === 'card' ? 'card' : text(o, 'media_kind') ? 'media' : 'file'));
-        } else {
-          result = items(await BrainAPI.get('/uploads', '?limit=20')).map((o: BrainJSON) => row(o, 'upload'));
-        }
+        const found = this.query.trim()
+          ? await settle(BrainAPI.get('/search', '?q=' + encodeURIComponent(this.query.trim()) + '&limit=30'))
+          : await settle(BrainAPI.get('/uploads', '?limit=20'));
+        if (!found.data) failures.push((this.query.trim() ? '搜索：' : '上传记录：') + found.error);
+        else if (this.query.trim()) {
+          result = items(found.data).map((o: BrainJSON) => row(o, text(o, 'kind') === 'card' ? 'card' : text(o, 'media_kind') ? 'media' : 'file'));
+        } else result = items(found.data).map((o: BrainJSON) => row(o, 'upload'));
       }
-      if (epoch === this.epoch) this.rows = append ? this.rows.concat(result) : result;
-    } catch (error) { if (epoch === this.epoch) this.error = `${error}`; }
-    finally { if (epoch === this.epoch) this.busy = false; }
+      if (!this.live(epoch, lease)) return;
+      this.rows = result;
+      this.error = failures.join('\n');
+    } catch (error) { if (this.live(epoch, lease)) this.error = `${error}`; }
+    finally { if (this.live(epoch, lease)) this.busy = false; }
+  }
+  /** Next media page. Repeated taps merge into one request; it never invalidates other reads. */
+  private async moreMedia(): Promise<void> {
+    if (this.pagingMedia || this.busy || this.pageOffset >= this.total) return;
+    const epoch = this.epoch;
+    const run = ++this.pageRun;
+    const offset = this.pageOffset;
+    this.pagingMedia = true;
+    const lease = BrainAPI.lease();
+    try {
+      BrainAPI.requireUnlocked();
+      const page = await BrainAPI.get('/media/search', this.mediaQuery(offset));
+      if (run !== this.pageRun || !this.live(epoch, lease) || offset !== this.pageOffset) return;
+      const received = items(page).map((o: BrainJSON) => row(o, 'media'));
+      this.pageOffset = offset + received.length;
+      this.total = received.length ? Number(page['total'] ?? this.total) : this.pageOffset;
+      this.rows = appendUnique(this.rows, received);
+    } catch (error) { if (run === this.pageRun && this.live(epoch, lease)) this.error = `${error}`; }
+    finally { if (run === this.pageRun && this.live(epoch, lease)) this.pagingMedia = false; }
+  }
+  /** File detail: four independent reads; summary and text render as soon as each arrives. */
+  private async openFile(target: BrainRow, epoch: number, lease: BrainRequestLease): Promise<void> {
+    const fid = part(target.id);
+    let info: BrainRow[] = [];
+    let locations: BrainRow[] = [];
+    let pages: BrainRow[] = [];
+    let text0: BrainRow[] = [];
+    const failures: string[] = [];
+    const show = (): void => {
+      if (this.live(epoch, lease)) this.sections = info.concat(locations).concat(pages).concat(text0);
+    };
+    const dataReq = settle(BrainAPI.get('/files/' + fid)).then((r: BrainResult) => {
+      if (!r.data) { failures.push('概要：' + r.error); return; }
+      const summary = row(r.data, 'summary'); summary.body += '\n原件可达 ' + text(r.data, 'original_available');
+      info = [summary]; show();
+    });
+    const provenanceReq = settle(BrainAPI.get('/files/' + fid + '/provenance')).then((r: BrainResult) => {
+      if (!r.data) { failures.push('出处：' + r.error); return; }
+      locations = items(r.data, 'locations').map((o: BrainJSON) => {
+        const location = row(o, 'summary'); location.title = text(o, 'source_name');
+        location.body = text(o, 'relative_path') + '\n当前可达 ' + text(o, 'available'); return location;
+      });
+      show();
+    });
+    const ocrReq = settle(BrainAPI.get('/files/' + fid + '/ocr')).then((r: BrainResult) => {
+      if (!r.data) { failures.push('OCR：' + r.error); return; }
+      const ocr = r.data;
+      const required = (ocr['required_pages'] as number[]) ?? [];
+      pages = required.map((n: number) => { const page = row({ 'id': String(n), 'title': '第 ' + n + ' 页' }, 'ocr'); page.data = ocr; return page; });
+      show();
+    });
+    const chunksReq = settle(BrainAPI.chunks(target.id, 0)).then((r: BrainResult) => {
+      if (!r.data) { failures.push('正文：' + r.error); return; }
+      const received = items(r.data, 'chunks');
+      text0 = received.map((o: BrainJSON) => chunkRow(o));
+      if (this.live(epoch, lease)) { this.pageOffset = received.length; this.total = Number(r.data['total'] ?? received.length); }
+      show();
+    });
+    await Promise.all([dataReq, provenanceReq, ocrReq, chunksReq]);
+    if (this.live(epoch, lease)) this.error = failures.join('\n');
   }
   private async open(target: BrainRow): Promise<void> {
     const epoch = ++this.epoch;
+    this.resetPaging();
     this.detail = target; this.sections = []; this.error = ''; this.chosenPages = []; this.mode = 'detail';
+    this.pageOffset = 0; this.total = 0;
     this.busy = true;
+    const lease = BrainAPI.lease();
     try {
       BrainAPI.requireUnlocked();
       let sections: BrainRow[] = [];
@@ -217,7 +355,7 @@ export struct BrainSpacePage {
         await this.openWeb('card/' + part(target.id)); return;
       } else if (target.kind === 'media') {
         const data = await BrainAPI.get('/media/' + part(target.id));
-        if (epoch !== this.epoch) return;
+        if (!this.live(epoch, lease)) return;
         this.detail = row(data, 'media');
         const info = row(data, 'summary');
         info.body = text(object(data, 'ai'), 'description') || text(data, 'caption');
@@ -225,6 +363,7 @@ export struct BrainSpacePage {
         sections.push(info);
       } else if (target.kind === 'person') {
         const data = await BrainAPI.get('/family/' + part(target.id));
+        if (!this.live(epoch, lease)) return;
         const info = row(data, 'summary'); info.body = text(data, 'body'); sections.push(info);
         items(data, 'years').forEach((year: BrainJSON) => {
           const title = row(year, 'summary'); title.title = text(year, 'year') + ' 年 · ' + text(year, 'photos') + ' 张照片'; sections.push(title);
@@ -239,37 +378,31 @@ export struct BrainSpacePage {
         if (!text(receipt, 'file_id')) throw new Error('文件仍在处理中');
         await this.open(row({ 'id': text(receipt, 'file_id'), 'title': target.title }, 'file')); return;
       } else if (target.kind === 'file') {
-        const data = await BrainAPI.get('/files/' + part(target.id));
-        const info = row(data, 'summary'); info.body += '\n原件可达 ' + text(data, 'original_available'); sections.push(info);
-        const provenance = await BrainAPI.get('/files/' + part(target.id) + '/provenance');
-        items(provenance, 'locations').forEach((o: BrainJSON) => {
-          const location = row(o, 'summary'); location.title = text(o, 'source_name');
-          location.body = text(o, 'relative_path') + '\n当前可达 ' + text(o, 'available'); sections.push(location);
-        });
-        const ocr = await BrainAPI.get('/files/' + part(target.id) + '/ocr');
-        if (epoch !== this.epoch) return;
-        const required = (ocr['required_pages'] as number[]) ?? [];
-        required.forEach((n: number) => { const page = row({ 'id': String(n), 'title': '第 ' + n + ' 页' }, 'ocr'); page.data = ocr; sections.push(page); });
-        const chunks = await BrainAPI.chunks(target.id, 0);
-        if (epoch !== this.epoch) return;
-        sections = sections.concat(items(chunks, 'chunks').map((o: BrainJSON) => { const chunk = row(o, 'chunk'); chunk.title = text(o, 'locator'); chunk.body = text(o, 'text'); return chunk; }));
-        this.total = Number(chunks['total'] ?? sections.length);
-        this.pageOffset = items(chunks, 'chunks').length;
+        await this.openFile(target, epoch, lease); return;
       }
-      if (epoch === this.epoch) this.sections = sections;
-    } catch (error) { if (epoch === this.epoch) this.error = `${error}`; }
-    finally { if (epoch === this.epoch) this.busy = false; }
+      if (this.live(epoch, lease)) this.sections = sections;
+    } catch (error) { if (this.live(epoch, lease)) this.error = `${error}`; }
+    finally { if (this.live(epoch, lease)) this.busy = false; }
   }
+  /** Next 12 text segments. Repeated taps merge; waits for the detail reads to settle first. */
   private async moreChunks(): Promise<void> {
+    if (this.pagingChunks || this.busy || this.pageOffset >= this.total) return;
     const epoch = this.epoch;
+    const run = ++this.pageRun;
+    const offset = this.pageOffset;
+    const id = this.detail.id;
+    this.pagingChunks = true;
+    const lease = BrainAPI.lease();
     try {
-      const chunks = await BrainAPI.chunks(this.detail.id, this.pageOffset);
-      if (epoch !== this.epoch) return;
-      this.pageOffset += items(chunks, 'chunks').length;
-      this.sections = this.sections.concat(items(chunks, 'chunks').map((o: BrainJSON) => {
-        const c = row(o, 'chunk'); c.title = text(o, 'locator'); c.body = text(o, 'text'); return c;
-      }));
-    } catch (error) { this.error = `${error}`; }
+      BrainAPI.requireUnlocked();
+      const chunks = await BrainAPI.chunks(id, offset);
+      if (run !== this.pageRun || !this.live(epoch, lease) || offset !== this.pageOffset || id !== this.detail.id) return;
+      const received = items(chunks, 'chunks').map((o: BrainJSON) => chunkRow(o));
+      this.pageOffset = offset + received.length;
+      this.total = received.length ? Number(chunks['total'] ?? this.total) : this.pageOffset;
+      this.sections = appendUnique(this.sections, received);
+    } catch (error) { if (run === this.pageRun && this.live(epoch, lease)) this.error = `${error}`; }
+    finally { if (run === this.pageRun && this.live(epoch, lease)) this.pagingChunks = false; }
   }
   private async retryOCR(): Promise<void> {
     try {
@@ -313,15 +446,30 @@ export struct BrainSpacePage {
   private async steward(): Promise<void> {
     this.mode = 'steward'; this.sections = []; this.error = ''; this.busy = true;
     const epoch = ++this.epoch;
+    this.resetPaging();
+    const lease = BrainAPI.lease();
     try {
-      const data = await BrainAPI.get('/steward');
-      const butler = await BrainAPI.get('/butler');
-      if (epoch !== this.epoch) return;
-      this.sections = items(data, 'brief').map((o: BrainJSON) => row(o, 'summary')).concat(
-        items(data, 'proposals').map((o: BrainJSON) => row(o, 'proposal'))).concat(
-          items(butler, 'log').map((o: BrainJSON) => { const log = row(o, 'summary'); log.body = text(o, 'state') + ' ' + text(o, 'sub'); return log; }));
-    } catch (error) { this.error = `${error}`; }
-    finally { if (epoch === this.epoch) this.busy = false; }
+      BrainAPI.requireUnlocked();
+      const dataReq = settle(BrainAPI.get('/steward'));
+      const butlerReq = settle(BrainAPI.get('/butler'));
+      const data = await dataReq;
+      const butler = await butlerReq;
+      if (!this.live(epoch, lease)) return;
+      const failures: string[] = [];
+      let sections: BrainRow[] = [];
+      if (data.data) {
+        sections = items(data.data, 'brief').map((o: BrainJSON) => row(o, 'summary')).concat(
+          items(data.data, 'proposals').map((o: BrainJSON) => row(o, 'proposal')));
+      } else failures.push('管家提案：' + data.error);
+      if (butler.data) {
+        sections = sections.concat(items(butler.data, 'log').map((o: BrainJSON) => {
+          const log = row(o, 'summary'); log.body = text(o, 'state') + ' ' + text(o, 'sub'); return log;
+        }));
+      } else failures.push('管家记录：' + butler.error);
+      this.sections = sections;
+      this.error = failures.join('\n');
+    } catch (error) { if (this.live(epoch, lease)) this.error = `${error}`; }
+    finally { if (this.live(epoch, lease)) this.busy = false; }
   }
   private async decide(proposal: BrainRow, action: string): Promise<void> {
     if (this.busy) return;
@@ -398,6 +546,7 @@ export struct BrainSpacePage {
   }
   private back(): void {
     this.epoch += 1;
+    this.resetPaging();
     if (this.mode === 'web' && this.shareToken) { this.mode = 'share'; this.webURL = ''; return; }
     if (this.mode !== 'home') { this.mode = 'home'; this.sections = []; this.answer = ''; this.reload(); }
     else AppNavigation.back();
@@ -478,7 +627,7 @@ export struct BrainSpacePage {
       }
       if (this.busy) {
         Row({ space: 10 }) {
-          Skeleton({ label: '正在读取第二大脑' })
+          LoadingProgress().width(20).height(20).color(Tokens.accent)
           Text('正在处理…').fontSize(13).fontColor(Tokens.secondary)
         }.width('100%').padding({ left: 20, right: 20, top: 6, bottom: 10 })
       }
@@ -510,6 +659,8 @@ export struct BrainSpacePage {
       } else if (this.mode === 'web') {
         Web({ src: this.webURL, controller: this.web, incognitoMode: true }).layoutWeight(1).width('100%')
           .javaScriptAccess(true).domStorageAccess(true).fileAccess(false)
+          .mixedMode(MixedMode.None).geolocationAccess(false)
+          .onPermissionRequest((event: OnPermissionRequestEvent) => { if (event) event.request.deny(); })
           .onLoadIntercept((event: OnLoadInterceptEvent) => !event || !(event.data.getRequestUrl() === BrainAPI.base() || event.data.getRequestUrl().startsWith(BrainAPI.base() + '/')))
       } else {
         if (this.mode === 'home') {
@@ -555,7 +706,7 @@ export struct BrainSpacePage {
               } else {
                 ForEach(this.rows, (r: BrainRow, index: number) => { this.card(r) }, (r: BrainRow, index: number) => `${index}:${r.kind}:${r.id}`)
               }
-              if (this.tab === 1 && this.pageOffset < this.total) { ActionButton({ label: '继续加载', variant: 'secondary', busy: this.busy, onTap: () => this.reload(true) }) }
+              if (this.tab === 1 && this.pageOffset < this.total) { ActionButton({ label: '继续加载', variant: 'secondary', busy: this.busy || this.pagingMedia, onTap: () => this.moreMedia() }) }
               if (this.canWeb) {
                 Flex({ wrap: FlexWrap.Wrap }) {
                   ActionButton({ label: '设备与存储', variant: 'quiet', fullWidth: false, onTap: () => this.openWeb('devices') })
@@ -619,7 +770,7 @@ export struct BrainSpacePage {
               ForEach(this.sections, (r: BrainRow, index: number) => { this.card(r) }, (r: BrainRow, index: number) => `${index}:${r.kind}:${r.id}`)
               if (this.mode === 'detail' && this.detail.kind === 'file') {
                 if (this.chosenPages.length) { ActionButton({ label: '只补读选中的 ' + this.chosenPages.length + ' 页', variant: 'secondary', fullWidth: false, onTap: () => this.retryOCR() }) }
-                if (this.pageOffset < this.total) { ActionButton({ label: '再读 12 段', variant: 'secondary', onTap: () => this.moreChunks() }) }
+                if (this.pageOffset < this.total) { ActionButton({ label: '再读 12 段', variant: 'secondary', busy: this.busy || this.pagingChunks, onTap: () => this.moreChunks() }) }
               }
             }
           }.width('100%').constraintSize({ maxWidth: this.mode === 'home' && this.tab === 1 ? 1200 : Tokens.readable }).padding(20).alignItems(HorizontalAlign.Start)
