@@ -4,6 +4,8 @@ set -eu
 # iOS 真机装机的唯一入口。用法:
 #   ./scripts/InstallIOSRelease.sh              # 装到所有在线真机
 #   ./scripts/InstallIOSRelease.sh <UDID> ...   # 装到指定设备
+#   LEO_IOS_INSTALL_ONLY=1 ./scripts/InstallIOSRelease.sh <UDID> ...
+#     用户自行测试时只做版本说明校验、编译签名和安装，不拉取性能数据或等待 CI。
 #
 # [T-gate-on-real-path] 闸门焊在第一步:更新记录漏写就装不进去。
 # 血的教训:IOSReleaseReadinessAudit 以前只挂在 .github/workflows/ios-tests.yml,
@@ -15,6 +17,8 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 # [ios-remote-install] 真机插在另一台 Mac 上(如 Studio)时:LEO_IOS_DEVICE_HOST=studio。
 # 构建与签名仍在本机,设备查询与安装经 ssh 在那台 Mac 上做(先把签好的 .app 同步过去)。
 device_host=${LEO_IOS_DEVICE_HOST:-}
+install_only=${LEO_IOS_INSTALL_ONLY:-0}
+case "$install_only" in 0|1) ;; *) echo "LEO_IOS_INSTALL_ONLY 只能是 0 或 1" >&2; exit 2 ;; esac
 dc() {
   if [ -n "$device_host" ]; then ssh -o BatchMode=yes "$device_host" xcrun devicectl "$@"; else xcrun devicectl "$@"; fi
 }
@@ -24,7 +28,11 @@ echo "==> [1/4] 发版闸门"
 "$repo_root/scripts/IOSReleaseReadinessAudit.sh"
 # [up-b-ci] CI 闸门:HEAD 在 GitHub 上是红的就不装(LEO_CI_GATE=warn 显式放行);
 # 还在跑 / 查不到(离线)只大声警告,不挡离线发版。
-"$repo_root/scripts/LeoCIStatus.sh" --gate
+if [ "$install_only" = 1 ]; then
+  echo "    SKIPPED: 用户自行测试，本轮不评估 CI（不是测试通过）"
+else
+  "$repo_root/scripts/LeoCIStatus.sh" --gate
+fi
 
 # [T-icloud-xattr] DerivedData 绝不能落在仓库里:这个仓在 iCloud 同步盘上,
 # FileProvider 会给构建产物挂 xattr,codesign 直接报 "detritus not allowed"。
@@ -51,7 +59,9 @@ perf_udid=""
 for u in $udids; do
   if ! printf '%s\n' "$devices_now" | grep "$u" | grep -qi 'Watch'; then perf_udid="$u"; break; fi
 done
-if [ -n "$device_host" ]; then
+if [ "$install_only" = 1 ]; then
+  echo "    SKIPPED: 用户自行测试，本轮不拉取或评估性能数据（不是性能通过）"
+elif [ -n "$device_host" ]; then
   # 性能数据要从设备拷到本机,跨机暂不支持:明确打印跳过,不算通过。
   echo "    SKIPPED: 设备在 $device_host 上,本次未跑性能预算闸门(不是通过)"
 else
