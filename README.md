@@ -2,7 +2,7 @@
 
 > 原名 LeoPhoneAgent，2026-10-06 先后改名 LOBE、LeoBot；仓库地址、Bundle ID 与数据目录沿用原名。
 
-[![iOS](https://img.shields.io/badge/iOS-1.89.1%20(198)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.90.0%20(200)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.20.0-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS source](https://img.shields.io/badge/HarmonyOS_source-0.5.0-0A84FF.svg)](src/harmony/app/AppScope/app.json5)
