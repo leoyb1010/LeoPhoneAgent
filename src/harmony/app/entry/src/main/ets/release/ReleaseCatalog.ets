@@ -6,10 +6,19 @@ export class LeoRelease {
 }
 
 export class ReleaseCatalog {
-  static readonly currentVersion: string = '0.5.2';
-  static readonly currentBuild: number = 100031;
+  static readonly currentVersion: string = '0.5.3';
+  static readonly currentBuild: number = 100032;
 
   static all(): LeoRelease[] {
+    const current = new LeoRelease();
+    current.version = '0.5.3';
+    current.date = '2026-11-10';
+    current.title = '长对话按需显示';
+    current.highlights = [
+      '本机和远程聊天按可见范围构建消息行，消息变化时更新对应行，减少长对话反复构建。',
+      '已解析的相同回答在有限内存中复用；流式文字仍按完整 Markdown 语义解析，未改变会话保存或磁盘缓存。',
+      '保留滚动跟随、回到底部、工具状态和折叠展开，沿用原签名覆盖升级；实际流畅度与交互由用户验收。'
+    ];
     const first = new LeoRelease();
     first.version = '0.5.2';
     first.date = '2026-11-10';
@@ -282,6 +291,6 @@ export class ReleaseCatalog {
       '填中继钥匙后读取 /machines，不再写死三台 Mac。',
       '可对在线 Mac 或 Android 身体开新任务，断线按序号续上。'
     ];
-    return [first, h051, h050, h040, alpha22, t11, t10, t9, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
+    return [current, first, h051, h050, h040, alpha22, t11, t10, t9, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
   }
 }
