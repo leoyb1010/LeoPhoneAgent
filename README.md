@@ -29,10 +29,10 @@ Android 开发或发布前必须完整阅读 [Android 开发与发布规则](doc
 
 | 设备线 | 已安装个人版本 | 对应源码 |
 | --- | --- | --- |
-| iPhone Duo、iPhone 17 Pro Max、Apple Watch | 1.90.0 / 200 | 49c23ce7f 的 iOS 源码 |
+| iPhone Duo、iPhone 17 Pro Max、Apple Watch | 1.90.1 / 201 | 58f1089ba 的 iOS 源码 |
 | Mate XT2 | 0.5.3 / 100032 | e4e6b96f8 的 HarmonyOS 源码 |
 
-首批覆盖安装沿用原签名并保留数据。后续 main 可包含未再次装机的开发修改；功能、界面和性能由用户自测，不以源码审查、编译或版本回读替代。
+两轮覆盖安装均沿用原签名并保留数据，第二轮四台版本已回读确认。Mac与Android本轮只交付源码及编译证据，未分发新安装包。后续 main 可包含未再次装机的开发修改；功能、界面和性能由用户自测，不以源码审查、编译或版本回读替代。
 
 旧 HarmonyOS 候选文档不代表最终构建状态。0.5.0 的原生构建、签名与 Mate XT2 安装事实见 [原交付记录](docs/harmony-ux-20261108/DELIVERY.md)。
 
