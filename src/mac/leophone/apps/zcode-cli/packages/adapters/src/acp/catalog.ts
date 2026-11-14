@@ -1,13 +1,10 @@
 // [leo][WP-21] ACP 外部 agent 的启动命令。检测逻辑与 UI 共用（@zcode/shared/acp-detect）。
-import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter } from "node:path";
 import type { AcpAgentId } from "@zcode/shared/acp";
 import { systemProxyEnabled, withSystemProxy } from "@zcode/shared/system-proxy";
 import {
   acpSearchPath,
-  CODEX_ACP_PACKAGE,
   ACP_HOST_ENV_KEYS,
-  CODEX_ACP_VERSION,
   detectAcpAgent,
   findExecutable,
   geminiAuthPreference,
@@ -80,14 +77,8 @@ export function resolveAcpLaunch(
       }
       const adapter = findExecutable("codex-acp", env);
       if (adapter) return { command: adapter, args: [], env: { ...base, ...codexPath } };
-      // 最后兜底：npx 拉钉死版本，npm 缓存放到临时目录（用户的缓存目录可能不可写）。
-      const npx = findExecutable("npx", env);
-      if (!npx) return undefined;
-      return {
-        command: npx,
-        args: ["-y", `${CODEX_ACP_PACKAGE}@${CODEX_ACP_VERSION}`],
-        env: { ...base, ...codexPath, npm_config_cache: join(tmpdir(), "leobot-npm-cache") },
-      };
+      // 选择本机Agent不应触发隐式安装；适配器缺失交给可读恢复路径，不运行npx。
+      return undefined;
     }
     case "gemini": {
       // [fix-remote] ~/.gemini/.env 里的 key（env 没有时）；HOME 用子进程实际的 HOME（LEO_ACP_AGENT_HOME 时是它）。

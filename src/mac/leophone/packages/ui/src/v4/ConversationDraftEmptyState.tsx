@@ -95,7 +95,7 @@ export function ConversationDraftEmptyState({
   className?: string;
   compactForRemoteControl?: boolean;
 }) {
-  const { intl } = useZCodeIntl();
+  const { intl, locale } = useZCodeIntl();
   const [greetingDate, setGreetingDate] = useState(() => new Date());
   const [greetingFontSizePx, setGreetingFontSizePx] = useState(
     GREETING_MAX_FONT_SIZE_PX,
@@ -186,6 +186,13 @@ export function ConversationDraftEmptyState({
       observer.disconnect();
     };
   }, [compactForRemoteControl, greeting]);
+
+  if (!compactForRemoteControl) {
+    return <header className={cn("leo-workbench-heading mb-6 w-full max-w-2xl text-left", className)}>
+      <h1 className="text-ui-xl font-semibold leading-snug tracking-tight text-foreground">{locale.startsWith("zh") ? "今天，先完成哪件事？" : "What would you like to get done?"}</h1>
+      <p className="mt-2 text-ui-base leading-relaxed text-foreground-subtle">{locale.startsWith("zh") ? "说出目标，接下来交给 LeoBot。" : "Describe your goal. LeoBot takes it from here."}</p>
+    </header>;
+  }
 
   return (
     <div

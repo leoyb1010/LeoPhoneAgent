@@ -50,3 +50,20 @@ describe("login shell PATH", () => {
     expect(loginShellPath({ HOME: "/nowhere", SHELL: "/bin/false" })).toEqual([]);
   });
 });
+
+describe("native Codex availability", () => {
+  it("requires the local CLI and a ready adapter without implicitly installing packages", async () => {
+    const { mkdirSync } = await import("node:fs");
+    const { detectAcpAgent } = await import("../src/acp-detect.js");
+    const home = mkdtempSync(join(tmpdir(), "leo-codex-detection-"));
+    const bin = join(home, ".local", "bin");
+    mkdirSync(bin, { recursive: true });
+    const cli = join(bin, process.platform === "win32" ? "codex.exe" : "codex");
+    writeFileSync(cli, "#!/bin/sh\nexit 0\n");
+    chmodSync(cli, 0o755);
+    const environment = { env: { HOME: home, PATH: bin }, resolveCodexAcpEntry: () => undefined };
+    expect(detectAcpAgent("codex", environment)).toEqual(expect.objectContaining({ available: false, cliPath: cli }));
+    expect(detectAcpAgent("codex", { ...environment, resolveCodexAcpEntry: () => "/bundled/codex-acp.js" }))
+      .toEqual(expect.objectContaining({ available: true, cliPath: cli }));
+  });
+});

@@ -8,7 +8,6 @@ import {
   type AssistantPreviewCardFileStatService,
   type AssistantPreviewCardsAutoOpenRequest,
   getAssistantPreviewCardFilePath,
-  shouldOpenAssistantHtmlInBrowser,
 } from "@/lib/assistantPreviewCards.js";
 import {
   getAssistantPreviewCardsValidationSignature,
@@ -83,7 +82,7 @@ interface AssistantPreviewCardsProps {
 
 export function shouldRenderAssistantPreviewCardAsFile(
   card: AssistantPreviewCard,
-  scope: {
+  _scope: {
     workspaceIdentity?: string;
     workspaceRemoteSessionId?: string;
     compactForRemoteControl?: boolean;
@@ -93,8 +92,7 @@ export function shouldRenderAssistantPreviewCardAsFile(
   return (
     card.type !== "website" ||
     (card.url.startsWith("file://") &&
-      filePath !== null &&
-      !shouldOpenAssistantHtmlInBrowser({ path: filePath, ...scope }))
+      filePath !== null)
   );
 }
 

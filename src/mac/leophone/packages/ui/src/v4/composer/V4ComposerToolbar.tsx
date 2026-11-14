@@ -194,7 +194,7 @@ function V4ComposerModelControlsImpl({
 
   const modelSelectGroups = useMemo<ModelSelectGroup[]>(() => {
     if (!modelSelectionView) return [];
-    return buildRegistryModelSelectGroups(displayProvider, modelSelectionView);
+    return buildRegistryModelSelectGroups(displayProvider, modelSelectionView).filter((group) => group.key !== `registry-provider:${ACP_PROVIDER_ID}`);
   }, [displayProvider, modelSelectionView]);
 
   // 修复：恢复「管理模型」入口（老版 onManageModels = 打开设置页并定位模型供应商区）。
@@ -411,7 +411,7 @@ function V4ComposerModelControlsImpl({
   // 模式循环（Ctrl+Shift+M）由 V4ComposerModeSwitch 单独绑定（modeOption 在彼处）。
   // 模型留空是正常的待选择状态，包括已有会话；不能因为没有已选模型隐藏重选入口。
   // 有可选组时正常显示；无组但有「管理模型」入口时也显示，避免用户零模型入口。
-  const modelMenuVisible = modelSelectGroups.length > 0 || showManageModelsAction;
+  const modelMenuVisible = effectiveConfig?.provider !== ACP_PROVIDER_ID && (modelSelectGroups.length > 0 || showManageModelsAction);
   const providerSubmenuClassName = undefined;
   useToolbarShortcutBindings({
     hasAnyOption: Boolean(modelOption) || Boolean(thoughtOption),

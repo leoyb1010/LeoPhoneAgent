@@ -411,9 +411,10 @@ export function detectAcpAgent(id: AcpAgentId, environment: AcpEnvironment = {})
     }
     case "codex": {
       const cliPath = findNewestExecutable("codex", env);
-      const adapter = findExecutable("codex-acp", env);
-      if (!cliPath && !adapter) return { id, available: false, unavailableReason: notInstalled("codex") };
-      return { id, available: true, ...(cliPath ? { cliPath } : {}), loginCommand: "codex login" };
+      if (!cliPath) return { id, available: false, unavailableReason: notInstalled("codex") };
+      const adapter = (environment.resolveCodexAcpEntry ?? resolveCodexAcpEntry)() ?? findExecutable("codex-acp", env);
+      if (!adapter) return { id, available: false, cliPath, unavailableReason: "Codex 适配器未就绪，请修复应用安装" };
+      return { id, available: true, cliPath, loginCommand: "codex login" };
     }
     case "gemini": {
       const cliPath = findExecutable("gemini", env);

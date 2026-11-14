@@ -11,6 +11,7 @@ or the composer's `$` skill picker. The runtime discovers its `skills/` director
 
 | Skill               | Feature                                           | Contract                             |
 | ------------------- | ------------------------------------------------- | ------------------------------------ |
+| `html-workbench` | HTML pages, browser reports, previews, iteration and real delivery checks | Mac `docs/specs/leobot-mac-workbench.md` |
 | `dynamic-workflows` | dynamic workflows (`/workflow`, `CreateWorkflow`) | `docs/dynamic-workflow/authoring.md` |
 
 ## How it reaches users

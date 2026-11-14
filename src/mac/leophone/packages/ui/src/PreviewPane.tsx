@@ -1778,6 +1778,9 @@ export function PreviewPane({
             resolvedTheme={resolvedTheme}
             theme={theme}
             workspacePath={sourceWorkspacePath}
+            workspaceIdentity={source.workspaceIdentity}
+            htmlRefineSessionId={markdownSelectionTarget?.sessionId}
+            htmlRefineAllowed={Boolean(workspacePath && sourceWorkspacePath === workspacePath && (!source.workspaceIdentity || markdownSelectionTarget?.workspaceKey === source.workspaceIdentity.trim()))}
             onOpenBrowserUrl={onOpenBrowserUrl}
             markdownSelectionTarget={
               markdownSelectionTarget &&

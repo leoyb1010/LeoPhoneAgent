@@ -1,3 +1,4 @@
+import type { HtmlArtifactPreviewPort } from "./html-artifact.js";
 /* eslint-disable max-lines -- 跨端 platform contract 集中声明 renderer 能力；OAuth 与 browser lifecycle 必须保持 desktop/web 类型合同，本 MR 不拆分平台边界。 */
 import type {
   DockerConnectOptions,
@@ -781,6 +782,9 @@ export interface IPlatformService {
    * web / 手机远控为 undefined，plugin-ui 据此回退到普通 MCP 工具卡片。
    */
   pluginSandbox?: PluginSandboxPlatformPort;
+
+  /** Isolated, bounded HTML artifact documents; no task or credential state. */
+  htmlPreview?: HtmlArtifactPreviewPort;
 
   /**
    * [leo] 第二大脑工作区（只读，见 docs/specs/leo-brain-workspace.md）。只有 Mac 桌面端实现；

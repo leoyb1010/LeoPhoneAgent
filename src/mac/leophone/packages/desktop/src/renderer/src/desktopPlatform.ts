@@ -45,6 +45,10 @@ export function createDesktopPlatform(options: {
     canSelectFilePath: true,
     pluginSandbox: createDesktopPluginSandboxPlatform(),
     leoBrain: createLeoBrainPlatform(),
+    htmlPreview: window.zcode.createHtmlPreview ? {
+      create: (request) => window.zcode.createHtmlPreview(request),
+      release: (id) => window.zcode.releaseHtmlPreview(id),
+    } : undefined,
     createLocalMediaPreviewUrl: buildLocalMediaPreviewUrl,
     isLocalDevelopmentRuntime: options.isLocalDevelopmentRuntime,
     selectDirectory: () => window.zcode.selectDirectory(),

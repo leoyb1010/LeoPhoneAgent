@@ -354,3 +354,6 @@ export {
 } from "./request-security-edition/policy.js";
 export * from "./request-security-edition/verification-policy.js";
 export * from "./acp.js"; // [leo][WP-21]
+
+export { HTML_ARTIFACT_MAX_BYTES, buildHtmlArtifactCsp, htmlArtifactPreviewRequestSchema } from "./html-artifact.js";
+export type { HtmlArtifactPreviewRequest, HtmlArtifactPreviewHandle, HtmlArtifactPreviewPort } from "./html-artifact.js";

@@ -14,6 +14,7 @@ import {
 import {
   Archive,
   Blocks,
+  BookOpen,
   CalendarClock,
   Clock3,
   Cloud,
@@ -70,6 +71,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.js";
+import { useLeoHome } from "@/leo/LeoHomeContext.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
 import { logger } from "@/logger.js";
@@ -287,7 +289,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   pluginStoreActive?: boolean;
   onFileTreeOpenChange?: (open: boolean) => void;
 }) {
-  const { intl, localePreference, setLocalePreference } = useZCodeIntl();
+  const { intl, locale, localePreference, setLocalePreference } = useZCodeIntl();
+  const leoHome = useLeoHome();
   const handleTaskRowSelect = useCallback(
     (
       targetWorkspacePath: string,
@@ -1242,48 +1245,17 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                 }}
               />
             </WorkspaceNewTaskTooltip>
-            <Button
-              variant="ghost"
-              onClick={onOpenCommandCenter}
-              data-icon="inline-start"
-              className="w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground"
-            >
-              <Search className="size-4" />
-              <span className="min-w-0 flex-1 truncate text-left">
-                {intl.formatMessage({ id: "commandCenter.open" })}
-              </span>
-              <span className="ml-auto shrink-0 text-ui-xs font-normal text-foreground-subtlest">
-                {commandCenterShortcutLabel}
-              </span>
+            <Button variant="ghost" onClick={() => activeTaskId ? onSelectTask(workspacePath, activeTaskId, workspaceIdentity, workspaceRemoteSessionId) : onStartDraftInWorkspace(workspacePath, workspaceIdentity)} data-testid="leo-nav-tasks" aria-pressed={!automationsActive && !pluginStoreActive} className={cn("w-full justify-start gap-2 text-ui-caption text-foreground", !automationsActive && !pluginStoreActive && "bg-accent text-brand")}>
+              <MessageCircleCheck className="size-4" />{locale.startsWith("zh") ? "任务" : "Tasks"}
             </Button>
-            <Button
-              variant="ghost"
-              onClick={handleOpenAutomationsMain}
-              data-icon="inline-start"
-              data-testid={TID_AUTOMATIONS_OPEN}
-              aria-pressed={automationsActive}
-              className={cn(
-                "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
-                automationsActive && "bg-selected text-foreground",
-              )}
-            >
-              <CalendarClock className="size-4" />
-              {intl.formatMessage({ id: "workspace.openScheduledSettings" })}
+            {leoHome?.onOpenBrain ? <Button variant="ghost" onClick={leoHome.onOpenBrain} data-testid="leo-nav-library" className="w-full justify-start gap-2 text-ui-caption text-foreground"><BookOpen className="size-4" />{locale.startsWith("zh") ? "资料" : "Library"}</Button> : null}
+            <Button variant="ghost" onClick={handleOpenAutomationsMain} data-testid={TID_AUTOMATIONS_OPEN} aria-pressed={automationsActive} className={cn("w-full justify-start gap-2 text-ui-caption text-foreground", automationsActive && "bg-selected")}>
+              <CalendarClock className="size-4" />{intl.formatMessage({ id: "workspace.openScheduledSettings" })}
             </Button>
-            <Button
-              variant="ghost"
-              onClick={handleOpenPluginStoreMain}
-              data-icon="inline-start"
-              data-testid="plugin-store-sidebar-open"
-              aria-pressed={pluginStoreActive}
-              className={cn(
-                "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
-                pluginStoreActive && "bg-selected text-foreground",
-              )}
-            >
-              <Blocks className="size-4" />
-              {intl.formatMessage({ id: "workspace.openPluginsSettings" })}
-            </Button>
+            <div className="mt-1 flex items-center gap-1 border-t border-border pt-2">
+              <Button variant="ghost" onClick={onOpenCommandCenter} className="min-w-0 flex-1 justify-start gap-2 text-ui-sm text-foreground-subtle"><Search className="size-3.5" /><span className="truncate">{intl.formatMessage({ id: "commandCenter.open" })}</span><span className="ml-auto text-ui-xs">{commandCenterShortcutLabel}</span></Button>
+              <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={intl.formatMessage({ id: "common.more" })}><Blocks className="size-3.5" /></Button></DropdownMenuTrigger><DropdownMenuContent align="start"><DropdownMenuItem onSelect={handleOpenPluginStoreMain} data-testid="plugin-store-sidebar-open">{intl.formatMessage({ id: "workspace.openPluginsSettings" })}</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+            </div>
           </div>
 
           <div className="relative flex min-h-0 flex-1 flex-col">
@@ -1563,6 +1535,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
           </div>
 
           <WorkspaceSidebarFooter
+            showBrainShortcut={!leoHome?.onOpenBrain}
             className="pr-3"
             theme={theme}
             localeMenuValue={localeMenuValue}

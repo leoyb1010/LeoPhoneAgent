@@ -2,10 +2,10 @@
 
 个人 AI Agent：iOS、Android、HarmonyOS 客户端与 Mac 运行时，通过配对中继连接；第二大脑由独立资料库服务提供数据。
 
-[![iOS](https://img.shields.io/badge/iOS-1.90.1%20(201)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.90.3%20(203)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
-[![macOS source](https://img.shields.io/badge/macOS_source-1.20.0-7C3AED.svg)](src/mac/leophone/package.json)
-[![HarmonyOS source](https://img.shields.io/badge/HarmonyOS_source-0.5.3-0A84FF.svg)](src/harmony/app/AppScope/app.json5)
+[![macOS source](https://img.shields.io/badge/macOS_source-1.21.0-7C3AED.svg)](src/mac/leophone/package.json)
+[![HarmonyOS source](https://img.shields.io/badge/HarmonyOS_source-0.5.4-0A84FF.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
 版本徽标指工程源码。已安装版本、对应源码与尚在开发的修改分开记录，不以 main 的当前内容推断设备已更新。
@@ -16,7 +16,7 @@
 - 本机唯一权威开发入口：`~/leophone-mac` 的 `main`，四端在此集成和发版。旧副本、历史 worktree 与远端受控构建快照不是发版源码入口。
 - 先读 [AGENTS.md](AGENTS.md) 和目标目录规则；先检查 git status，fetch origin 并核对 ahead/behind。仅落后且干净时 pull --ff-only；不得 reset、覆盖或删除未知改动。
 - 有效遗留改动先保留提交，再按当前主线恢复；不要直接搬入过期工作树。每个功能单独提交。
-- iOS：src/ios；Mac：src/mac/leophone（当前 1.x 主线）；Android：src/android；HarmonyOS：src/harmony。
+- iOS：src/ios；Mac：`src/mac/leophone/`（当前 1.x 主线）；Android：src/android；HarmonyOS：src/harmony。
 - src/mac/leoagent/relay.py 仍是中继源码；旧桌面 leocodebox 仅留在 archive/leocodebox-2.2.13 标签中。
 - Mac 代码先读其 AGENTS、相关 spec 与架构边界。Node/pnpm 以 mise.toml 和锁文件为准，不混用旧依赖或将环境错误当源码通过。
 - 业务资料、凭据和私有地址只在用户现有安全配置中；不提交签名材料、真实 token、私密会话或个人基础设施清单。

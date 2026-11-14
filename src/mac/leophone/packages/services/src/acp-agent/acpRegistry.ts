@@ -52,7 +52,7 @@ export interface AcpAgentListing extends AcpAgentStatus {
 
 export function listAcpAgents(options: { claudeAgentAcpEntry?: string } = {}): AcpAgentListing[] {
   const entry = options.claudeAgentAcpEntry ?? resolveClaudeAgentAcpEntry();
-  const statuses = detectAcpAgents({ resolveClaudeAgentAcpEntry: () => entry });
+  const statuses = detectAcpAgents({ resolveClaudeAgentAcpEntry: () => entry, resolveCodexAcpEntry: hostCodexAcpEntry });
   return statuses.map((status) => {
     const info = ACP_AGENTS.find((agent) => agent.id === status.id)!;
     return { ...status, name: info.name, harnessKey: info.harnessKey };

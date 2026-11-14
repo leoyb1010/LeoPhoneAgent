@@ -21,7 +21,7 @@ export const RENDERER_PRODUCTION_CSP = [
   "media-src 'self' data: blob: file: zcode-media: https: http:",
   "font-src 'self' data:",
   "connect-src 'self' data: blob: file: zcode-media: zcode-sandbox: https: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*",
-  "frame-src 'self' zcode-sandbox: blob: file: https: http:",
+  "frame-src 'self' leo-html: zcode-sandbox: blob: file: https: http:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

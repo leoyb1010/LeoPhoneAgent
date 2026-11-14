@@ -137,7 +137,8 @@ export interface ComposerTextInsertRequest {
   requestId: number;
   text: string;
   mention?: ComposerMentionPrefill;
-  mode?: "replace" | "prepend-if-missing";
+  mode?: "replace" | "prepend-if-missing" | "append-if-missing";
+  targetSessionId?: string | null;
 }
 
 export interface WorkspaceZCodeUIState {
@@ -236,7 +237,8 @@ export interface ZCodeSessionStoreState {
     text: string,
     workspaceIdentity?: string,
     mention?: ComposerMentionPrefill,
-    mode?: "replace" | "prepend-if-missing",
+    mode?: "replace" | "prepend-if-missing" | "append-if-missing",
+    targetSessionId?: string | null,
   ) => number;
   clearComposerTextInsertRequest: (
     workspacePath: string,

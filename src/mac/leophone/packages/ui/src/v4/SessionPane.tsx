@@ -1,3 +1,6 @@
+import { fetchFileChangesWithAuthorityRecovery } from "@/v4/fileChangesAuthorityRecovery.js";
+import { canApplyLeoComposerInsert } from "@/leo/leoWorkbenchPrompts.js";
+import { isSameLeoAgentRoute } from "@/leo/leoAgentSelection.js";
 import type { SessionCreateSource } from "@zcode/shared";
 import { reportSessionCreate } from "@/lib/sessionCreateTelemetry.js";
 import { getLocalTtftObserver } from "@/v4/telemetry/localTtftObserver.js";
@@ -100,7 +103,7 @@ import { LeoHomeSetupCard } from "@/leo/LeoHomeSetupCard.js";
 import { ConversationDraftEmptyState } from "@/v4/ConversationDraftEmptyState.js";
 import { LeoDraftStatusList } from "@/leo/LeoDraftStatusList.js";
 import { LeoRecentWorkspaces } from "@/leo/LeoRecentWorkspaces.js";
-import { LeoHomeBrainCard } from "@/leo/LeoHomeBrainCard.js";
+import { LeoWorkbenchMore, LeoWorkbenchStarters } from "@/leo/LeoWorkbenchHome.js";
 import { ConversationDraftSuggestedPromptsContainer } from "@/v4/ConversationDraftSuggestedPromptsContainer.js";
 import { ConversationHeader, type PaneWorkspaceBadge } from "@/v4/ConversationHeader.js";
 import { ConversationQueuePanel } from "@/v4/ConversationQueuePanel.js";
@@ -510,7 +513,7 @@ export function SessionPane({
   const platform = useOptionalPlatform();
   const { modelSelectionService, zcodeSessionService, zcodeTaskService } = useServices();
   const baseWorkspaceServices = useBaseWorkspaceServices();
-  const { intl } = useZCodeIntl();
+  const { intl, locale } = useZCodeIntl();
   const slashCommands = useSlashCommands(workspacePath, workspaceIdentity);
   const workspaceHomePath = useWorkspaceHomePath({
     workspacePath,
@@ -1222,12 +1225,12 @@ export function SessionPane({
       // 虚拟行卸载会丢失行内 state，复挂载后预览卡片会重复拉取包含完整
       // patch 的 fileChanges；缓存必须放在 SessionPane，才能与文件变更面板共享同一请求。
       let request: Promise<V4ConversationFileChangesResult>;
-      request = fileChanges({
+      request = fetchFileChangesWithAuthorityRecovery(fileChanges, {
         sessionId,
         target,
         baseRevision: current.revision,
         baseLogEpoch: current.logEpoch,
-      }).then(
+      }, lease?.store).then(
         (result) => {
           // 运行中成功结果仍可能只是当前 revision 的局部 diff；只共享
           // in-flight Promise，settled 后删除，避免最终卡片复用早期结果。
@@ -3098,6 +3101,13 @@ export function SessionPane({
   // 在 Submission 真正开跑（Guide 为下一次 model-step）时由 CLI/Core 更新。
   const handleSelectModel = useCallback(
     (modelProvider: string, model: string, sourceModel: ModelSelectionSource | null) => {
+      if (sessionId && snapshot?.config && !isSameLeoAgentRoute(
+        { provider: snapshot.config.provider, model: snapshot.config.model },
+        { provider: modelProvider || draftConfigRef.current.provider || sourceModel?.provider || "", model },
+      )) {
+        toast(locale.startsWith("zh") ? "当前任务的 Agent 已固定，请新建任务后切换。" : "This task keeps its Agent. Start a new task to switch.");
+        return;
+      }
       const resolvedProvider =
         modelProvider || draftConfigRef.current.provider || sourceModel?.provider || "";
       logger.debug("[v4-pane] onSelectModel", {
@@ -3107,7 +3117,7 @@ export function SessionPane({
       });
       handleDraftSelectModel(resolvedProvider, model);
     },
-    [draftConfigRef, handleDraftSelectModel],
+    [draftConfigRef, handleDraftSelectModel, sessionId, snapshot?.config, locale],
   );
 
   const handleSelectThought = useCallback(
@@ -3611,7 +3621,7 @@ export function SessionPane({
       centered={isDraft}
       blockingRequestId={blockingInteractionId}
       listenAddToChatEvents={focused}
-      externalTextInsertRequest={focused && sessionId === null ? composerTextInsertRequest : null}
+      externalTextInsertRequest={canApplyLeoComposerInsert(composerTextInsertRequest, sessionId, focused) ? composerTextInsertRequest : null}
       onExternalTextInsertApplied={handleExternalTextInsertApplied}
       autoFocusEnabled={focused}
       disabled={
@@ -3710,17 +3720,13 @@ export function SessionPane({
           }
         />
       ) : null}
-      {/* [leo][wp-31] 首页三段式第一段:最近工作区卡(≤5),一键继续;没有就不占位。
-          独立条件槽位,不改变 composerNode 在 fragment 里的位置,草稿 → 会话时输入框不重挂。 */}
-      {isDraft && !compactForRemoteControl ? <LeoHomeSetupCard className="mb-3" /> : null}
-      {isDraft ? <LeoRecentWorkspaces className="mb-4" /> : null}
-      {/* [leo][G3] 首页「大脑」小卡:第二大脑的卡片 / 文件数;本机没 key 不出现。 */}
-      {isDraft && !compactForRemoteControl ? <LeoHomeBrainCard className="mb-4" /> : null}
       {composerNode}
-      {/* [leo] 首页输入框下方:等你确认 / 在跑 / 做完待看,没有就不占位。 */}
-      {isDraft ? <LeoDraftStatusList className="mt-7" /> : null}
-      {/* [leo][WP-27] 并行方案:几个 agent 各在一个 worktree 里做同一件事,对比后采纳一个。 */}
-      {isDraft && !compactForRemoteControl ? <LeoTaskGroupsHome workspacePath={workspacePath} className="mt-5" /> : null}
+      {isDraft && !compactForRemoteControl ? <LeoWorkbenchStarters workspacePath={workspacePath} workspaceIdentity={workspaceIdentity} className="mt-5" /> : null}
+      {isDraft ? <LeoDraftStatusList className="mt-5" /> : null}
+      {isDraft ? <LeoRecentWorkspaces className="mt-5" /> : null}
+      {isDraft && !compactForRemoteControl ? <LeoHomeSetupCard className="mt-4" /> : null}
+      {isDraft && !compactForRemoteControl ? <LeoWorkbenchMore>
+        <LeoTaskGroupsHome workspacePath={workspacePath} />
       {isDraft ? (
         <ConversationDraftSuggestedPromptsContainer
           className="mt-6"
@@ -3735,7 +3741,7 @@ export function SessionPane({
           isWebRemoteControl={compactForRemoteControl}
           isDesktop={isDesktop}
         />
-      ) : null}
+      ) : null}      </LeoWorkbenchMore> : null}
     </>
   );
   // 插件 ui/message 的图片走与粘贴截图相同的 v4 attachmentPut；草稿（无 sessionId）没有插件 UI。

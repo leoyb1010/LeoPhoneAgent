@@ -424,7 +424,8 @@ export function createWorkspaceSlice(set: SetFn) {
       text: string,
       workspaceIdentity?: string,
       mention?: ComposerMentionPrefill,
-      mode?: "replace" | "prepend-if-missing",
+      mode?: "replace" | "prepend-if-missing" | "append-if-missing",
+      targetSessionId?: string | null,
     ) => {
       let nextRequestId = 0;
       set((state) =>
@@ -442,6 +443,7 @@ export function createWorkspaceSlice(set: SetFn) {
                 text,
                 ...(mention ? { mention } : {}),
                 ...(mode ? { mode } : {}),
+                ...(targetSessionId !== undefined ? { targetSessionId } : {}),
               },
             };
           },

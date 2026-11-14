@@ -1151,3 +1151,23 @@ describe("desktopWindowChrome", () => {
     expect(setIcon).toHaveBeenCalledWith(dockImage);
   });
 });
+
+describe("inline HTML preview navigation", () => {
+  it("blocks a srcdoc frame navigating itself without blocking the app or ordinary guests", async () => {
+    const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
+    createBrowserWindow({ iconPath: "icon.png", preloadPath: "preload.js", logger: { warn: vi.fn() } });
+    const handler = electronMocks.browserWindowInstance.webContents.on.mock.calls
+      .find(([name]) => name === "will-frame-navigate")?.[1];
+    expect(handler).toBeTypeOf("function");
+    const preventDefault = vi.fn();
+    handler({ isMainFrame: false, frame: { url: "about:srcdoc" }, preventDefault });
+    expect(preventDefault).toHaveBeenCalledOnce();
+    preventDefault.mockClear();
+    handler({ isMainFrame: false, frame: { url: "leo-html://preview-123/" }, preventDefault });
+    expect(preventDefault).toHaveBeenCalledOnce();
+    preventDefault.mockClear();
+    handler({ isMainFrame: false, frame: { url: "https://example.com" }, preventDefault });
+    handler({ isMainFrame: true, frame: { url: "file:///app/index.html" }, preventDefault });
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+});

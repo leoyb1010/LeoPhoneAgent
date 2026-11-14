@@ -19,8 +19,10 @@ export function LeoComposerAgentTools({
   agentKind = LEO_DEFAULT_AGENT_KIND,
   disabled = false,
   onPickAgent,
+  hideAgent = false,
 }: {
   agentKind?: LeoAgentKind;
+  hideAgent?: boolean;
   disabled?: boolean;
   /** 点徽标换执行者：打开模型菜单（里面有「外部 Agent」）。以前徽标只是个标签，看着能点却点不动。 */
   onPickAgent?: () => void;
@@ -53,7 +55,7 @@ export function LeoComposerAgentTools({
   const micLabel = hotkey ? `语音输入（按住 ${hotkey}，或点一下开始 / 结束）` : "";
   return (
     <span className="flex shrink-0 items-center gap-1" data-leo-composer-agent-tools>
-      {onPickAgent ? (
+      {hideAgent ? null : onPickAgent ? (
         <ControlHintTooltip title="换一个执行者（LeoBot / Claude Code / Codex …）">
           <button
             type="button"

@@ -194,6 +194,7 @@ const officialPluginPackages = [
 const bundledSkillPack = {
   relativePath: "apps/zcode-cli/packages/bundled-skills",
   requiredPaths: [
+    "skills/html-workbench/SKILL.md",
     "skills/dynamic-workflows/SKILL.md",
     "skills/dynamic-workflows/patterns.md",
     "skills/dynamic-workflows/examples.md",

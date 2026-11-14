@@ -13,6 +13,7 @@ export const bundledSkillPackSkillsDirectory = "skills";
 // 与 bootstrap 的 BUNDLED_SKILL_PACK_REQUIRED_PATHS 对齐：缺任一项即中止 SEA 构建，
 // 不把一个引用文件残缺的技能包发进正式二进制。
 export const bundledSkillPackRequiredPaths = [
+  "skills/html-workbench/SKILL.md",
   "skills/dynamic-workflows/SKILL.md",
   "skills/dynamic-workflows/patterns.md",
   "skills/dynamic-workflows/examples.md",

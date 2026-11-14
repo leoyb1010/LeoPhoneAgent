@@ -1,5 +1,14 @@
 # Tool Change Chain Spec
 
+## 本机Agent启动边界（2026-11-14）
+
+Codex必须有本机CLI和就绪ACP适配器。移除隐式npx安装；缺适配器返回既有不可用错误，不替换执行者。Host显式解析随包适配器；不修改Claude认证、权限、工具schema、会话归属或事件链。回归覆盖随包适配器绑定本机Codex和缺适配器拒绝启动。
+
+## HTML workbench bundled skill（2026-11-14）
+
+新增只读的 `html-workbench` 内置Skill资产，复用现有Skill发现/加载与文件、终端和浏览器工具。bootstrap与SEA构建required paths同时纳入该文件，缺失拒绝整个内置包；不新增模型调用、权限绕过、工具schema或执行队列。HTML产物的静态预览、显式脚本运行、原文下载与追加修改要求由Mac既有PreviewPane/Composer承接，边界见Mac `docs/specs/leobot-mac-workbench.md`。
+
+
 ## leo-screen 桌面写操作审批与禁止代答（2026-11-10）
 
 随包 Peekaboo MCP（serverName `leo-screen`）的写操作按真实 `serverName` + `toolName` + 入参 `action` 分类（`core/src/mcp/leo-screen-policy.ts`）：观察白名单（`see`、`image`、`inspect_ui` 等，以及 `list` 动作、不带 `outputPath` 的 `clipboard get`）之外一律算写操作，未知工具与未知 action 默认写。`createMcpToolEntry` 只给 leo-screen 条目声明 `resolvePermissionCapability`，写操作返回 `explicitApprovalRule: "leo.screen.write"`；官方 CUA 不叠加。PermissionService 在 guarded 危险命令与 yolo/guarded 直通之前处理它：auto/硬禁用/项目 deny/Plan → deny，项目或会话里精确命中该工具名的 allow → allow，其余 ask，并带 `alwaysAsk`（PreToolUse 整体 allow 抹不掉）与结构化 `autoApproval: "forbidden"`。

@@ -73,8 +73,7 @@ import { toast } from "@/components/ui/toast.js";
 import { getGitDirtyFileCount } from "@/git-branch-switcher/display.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
-import { getPathLeaf, toFileUrl } from "@/lib/path.js";
-import { shouldOpenAssistantHtmlInBrowser } from "@/lib/assistantPreviewCards.js";
+import { getPathLeaf } from "@/lib/path.js";
 import { setWorkspaceSidebarResizeActive } from "@/lib/workspaceSidebarResizeState.js";
 import { buildTaskWorkspaceKey } from "@/lib/taskQueryCache.js";
 import {
@@ -1238,16 +1237,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
           path: target.path,
         });
         if (fileStat.type === "file") {
-          if (
-            shouldOpenAssistantHtmlInBrowser({
-              path: target.path,
-              workspaceIdentity: target.workspaceIdentity,
-              workspaceRemoteSessionId: target.workspaceRemoteSessionId,
-            })
-          ) {
-            handleOpenBrowserUrl(toFileUrl(target.path));
-            return;
-          }
+          // 真实ACP输出常用正文文件链接；统一进入产物面板，避免HTML绕过预览/下载和静态许可。
           handleOpenCodeViewer({
             type: "file",
             title: getPathLeaf(target.path),
@@ -1323,7 +1313,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     [
       findFileLinkOwnerWorkspace,
       baseServices.fileService,
-      handleOpenBrowserUrl,
       handleOpenCodeViewer,
       intl,
       openFileTreeRequest,

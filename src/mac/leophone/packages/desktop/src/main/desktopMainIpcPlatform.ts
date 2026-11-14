@@ -1,3 +1,4 @@
+import { registerHtmlArtifactPreviewIpc } from "./htmlArtifactPreview.js";
 import { decorateRequestSecurityLogArgs } from "./request-security-edition/index.js";
 /* eslint-disable max-lines -- 桌面平台 IPC 集中装配，拆散会让权限边界更难审计；行数随平台能力增长。 */
 import { BrowserWindow, dialog, ipcMain, nativeTheme } from "electron";
@@ -166,6 +167,7 @@ export function registerPlatformIpcHandlers(options: {
   });
 
   registerDesktopSaveFileIpcHandler(options.logger);
+  registerHtmlArtifactPreviewIpc();
   registerDesktopPrintToPdfIpcHandler(options.logger);
 
   ipcMain.handle(

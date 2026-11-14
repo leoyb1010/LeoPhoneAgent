@@ -48,6 +48,12 @@ Avoid:
 - bright full-surface brand fills
 - ambiguous hierarchy between background, card, and popover surfaces
 
+## Mac workbench (approved 2026-11-14)
+
+The Mac skin uses the blue palette in root `design/tokens.json.mac.color`, generated as scoped CSS variables for `html.platform-mac-desktop[data-leo-skin]`. Shared/iOS values remain unchanged. Brand text, primary controls, focus and ordinary completion states use semantic blue; error/warning retain functional meaning. Dark surfaces use a lighter blue foreground role and a separate primary background for readable contrast. Existing `text-ui-*`, spacing, radius and motion roles remain mandatory.
+
+Home prioritizes the goal and composer; HTML/code/research starters append to the current draft. Local Agent selection is separate from advanced model controls and fixed after session creation. HTML artifacts default to static, isolated preview, with explicit script execution for the current content version only.
+
 ## Theme Modes
 
 ### Full-page desktop overlays

@@ -108,7 +108,7 @@ describe("WorkspaceSidebar task view switcher", () => {
     expect(source).not.toContain("data-workspace-grouped-system-stack");
     // 闲时组头「+」路由到 Automations：Section 通过该 prop 拿到入口。
     expect(source).toContain("onOpenAutomations={handleOpenAutomationsMain}");
-    expect(source).toContain("onClick={handleOpenPluginStoreMain}");
+    expect(source).toContain("onSelect={handleOpenPluginStoreMain}");
     expect(source).not.toContain("handleOpenPluginsSettings");
   });
 

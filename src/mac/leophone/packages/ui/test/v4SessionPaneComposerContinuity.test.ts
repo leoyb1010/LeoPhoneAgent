@@ -21,6 +21,9 @@ const recoveryCapture = vi.hoisted(() => ({
   entries: [] as PendingCommandEntry[],
   onResend: null as null | (() => void),
 }));
+// 页面壳连续性测试使用精简DOM；工作台的SVG/折叠交互由独立组件和Electron旅程验证。
+vi.mock("@/leo/LeoWorkbenchHome.js", () => ({ LeoWorkbenchStarters: () => null, LeoWorkbenchMore: () => null }));
+
 vi.mock("@/v4/usePendingCommandRecovery.js", () => ({
   usePendingCommandRecovery: () => recoveryCapture.entries,
 }));

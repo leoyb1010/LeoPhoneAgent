@@ -23,7 +23,7 @@
 | `media-src` | `'self' data: blob: file: zcode-media: https: http:` | 本机音视频预览、远程媒体 |
 | `font-src` | `'self' data:` | |
 | `connect-src` | `'self' data: blob: file: zcode-media: zcode-sandbox: https: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*` | 本机服务、配置的模型服务（https）、插件沙箱协议 |
-| `frame-src` | `'self' zcode-sandbox: blob: file: https: http:` | 插件 UI 在 `zcode-sandbox:` 的隔离 frame（自带 header CSP）；网页预览 iframe |
+| `frame-src` | `'self' leo-html: zcode-sandbox: blob: file: https: http:` | 插件 UI 在 `zcode-sandbox:` 的隔离 frame（自带 header CSP）；网页预览 iframe |
 | `object-src` | `'none'` | |
 | `base-uri` | `'self'` | |
 | `form-action` | `'self'` | |
@@ -66,3 +66,7 @@
 - 如果 Pro 实机发现某个依赖必须 `'unsafe-eval'`，只能按依赖逐个处理，不全局放开。zod 4 会先探测 `new Function` 能否使用，不能用时退回非 JIT 解析，所以不需要放开。
 - `'self'` 在 file:// 页面里能否匹配打包产物，靠 Chromium 对 file 协议的处理。Pro 实机要确认主窗口能正常加载；如果被拦，只给 `script-src` 补 `file:`，并记录这样做的风险。
 - 其余特权 IPC 的逐个调用方校验（统一注册器）本节点只覆盖了上面四个通道，其余通道留给后续节点。
+
+### 2026-11-14 HTML产物预览
+
+主窗口script-src不变。`leo-html:`只承载可信主页面通过IPlatformService创建的有界一次性HTML视图，响应单独的CSP；sandbox不含same-origin，Main拒绝其自导航。内容不进入URL/日志，句柄释放和窗口关闭清理；详见Mac工作台spec。

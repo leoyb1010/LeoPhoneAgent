@@ -1,6 +1,10 @@
 // [leo] 必须是第一个 import:进程内一切联网之前先装上官方服务拦截。
 import "@zcode/shared/leo-network-guard";
 import "./leoEarlyEnv.js";
+import {
+  HTML_ARTIFACT_PRIVILEGED_SCHEME,
+  installHtmlArtifactPreviewProtocol,
+} from "./htmlArtifactPreview.js";
 import { installLeoSessionGuard } from "./leoSessionGuard.js";
 import { registerLeoLinkIpc } from "./leoLinkIpc.js";
 import { installRequestSecurityDiagnostics } from "./request-security-edition/index.js";
@@ -274,7 +278,7 @@ import {
   installPluginSandboxHost,
 } from "./pluginSandbox/index.js";
 
-registerLocalMediaPreviewScheme(protocol, [PLUGIN_SANDBOX_PRIVILEGED_SCHEME]);
+registerLocalMediaPreviewScheme(protocol, [PLUGIN_SANDBOX_PRIVILEGED_SCHEME, HTML_ARTIFACT_PRIVILEGED_SCHEME]);
 const localMediaPreviewPathRegistry = createLocalMediaPreviewPathRegistry();
 
 // e2e 由 Chromedriver 管理远程调试端口；如果这里继续固定到 9229，
@@ -1982,6 +1986,7 @@ app.whenReady().then(async () => {
   registerSpeechIpc(logger);
   markMainLaunchAppReady();
   installRequestSecurityDiagnostics(session.defaultSession.webRequest, logger);
+  installHtmlArtifactPreviewProtocol(session.defaultSession.protocol);
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {
     isPathAuthorized: localMediaPreviewPathRegistry.isAuthorized,
   });

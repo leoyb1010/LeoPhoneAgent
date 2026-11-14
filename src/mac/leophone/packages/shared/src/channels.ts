@@ -1,3 +1,4 @@
+import type { HtmlArtifactPreviewRequest, HtmlArtifactPreviewHandle } from "./html-artifact.js";
 /* eslint-disable max-lines -- 通信频道和请求响应映射必须集中定义，避免跨进程 channel 字符串散落。 */
 import type {
   ResourceUsageSnapshot,
@@ -191,6 +192,8 @@ export const PlatformChannels = {
   MaterializeWorkflowArtifactFile: "zcode:materialize-workflow-artifact-file",
   /** Renderer → Main：通过原生另存为对话框保存文件 */
   SaveFile: "zcode:save-file",
+  CreateHtmlPreview: "zcode:html-preview:create",
+  ReleaseHtmlPreview: "zcode:html-preview:release",
   /** Renderer → Main：用 Chromium 打印引擎把当前页面 print 媒体版面导出为 PDF */
   PrintToPdf: "zcode:print-to-pdf",
   /** Main → Renderer：转发远程连接过程日志 */
@@ -703,6 +706,8 @@ export interface PlatformChannelMap {
     request: MaterializeWorkflowArtifactFileRequest;
     response: MaterializeWorkflowArtifactFileResult;
   };
+  [PlatformChannels.CreateHtmlPreview]: { request: HtmlArtifactPreviewRequest; response: HtmlArtifactPreviewHandle };
+  [PlatformChannels.ReleaseHtmlPreview]: { request: string; response: void };
   [PlatformChannels.SaveFile]: {
     request: SaveFileRequest;
     response: SaveFileResult;

@@ -35,6 +35,7 @@ export { DYNAMIC_WORKFLOW_SKILL_NAME };
 
 /** 技能包里每个文件都是必需资产：丢任何一个都拒绝整包，而不是装出一个引用文件缺失的技能。 */
 export const BUNDLED_SKILL_PACK_REQUIRED_PATHS = [
+  "skills/html-workbench/SKILL.md",
   `skills/${DYNAMIC_WORKFLOW_SKILL_NAME}/SKILL.md`,
   `skills/${DYNAMIC_WORKFLOW_SKILL_NAME}/patterns.md`,
   `skills/${DYNAMIC_WORKFLOW_SKILL_NAME}/examples.md`,

@@ -462,7 +462,7 @@ test("[fix-remote] L: codex runs the bundled codex-acp with the bundled Node and
   assert.equal(launch?.env.ELECTRON_RUN_AS_NODE, "1");
 });
 
-test("[fix-remote] L: without the bundled adapter, npx is the last resort with a writable temp npm cache", () => {
+test("[fix-remote] L: without a ready adapter, never silently install one through npx", () => {
   const home = mkdtempSync(join(tmpdir(), "leo-acp-npx-"));
   makeExecutable(join(home, "bin"), "codex");
   makeExecutable(join(home, "bin"), "npx");
@@ -470,6 +470,5 @@ test("[fix-remote] L: without the bundled adapter, npx is the last resort with a
     env: { PATH: join(home, "bin"), HOME: home },
     resolveCodexAcpEntry: () => undefined,
   });
-  assert.match(launch?.command ?? "", /npx$/);
-  assert.match(launch?.env.npm_config_cache ?? "", /leobot-npm-cache$/);
+  assert.equal(launch, undefined);
 });

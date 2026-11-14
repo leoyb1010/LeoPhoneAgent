@@ -15,6 +15,16 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.21.0",
+    date: "2026-11-14",
+    items: [
+      "Mac工作台更简约：目标输入优先，任务、资料与自动化更容易找到；HTML、代码和研究起步项直接加入草稿，更多工作流按需展开。",
+      "输入框可选择ZCode、Codex CLI或Claude Code；本机CLI使用自身登录与权限，已有任务保持原执行者，不会静默安装或替换Agent。",
+      "HTML产物支持预览、源码、下载和同任务继续修改。默认静态隔离，运行交互仅对当前版本生效；外部资源和页面跳转受限。",
+      "内置HTML工作流，并修复晚到修订号导致产物卡片不显示的问题；Mac蓝色主题独立于iOS共享配色。",
+    ],
+  },
+  {
     version: "1.20.0",
     date: "2026-10-24",
     items: [

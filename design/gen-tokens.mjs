@@ -66,6 +66,12 @@ function css() {
     ...themed("light"),
     "}",
     "",
+    ...["light", "dark"].flatMap((mode) => [
+      `html.platform-mac-desktop[data-leo-skin].theme-zai-${mode} {`,
+      ...Object.entries(tokens.mac?.color ?? {}).map(([key, value]) => `  --leo-${kebab(key)}: ${lowerHex(value[mode])};`),
+      "}",
+      "",
+    ]),
   ].join("\n");
 }
 

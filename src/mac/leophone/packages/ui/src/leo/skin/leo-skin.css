@@ -431,3 +431,32 @@ html[data-leo-skin] [data-leo-approval-risk="high"] > :first-child::before {
     transform-origin: center;
   }
 }
+
+/* 2026-11-14 Mac workbench: semantic blue is generated from design/tokens.json.mac.
+   Keep shared/iOS tokens untouched; disabling the skin still respects that preference. */
+html.platform-mac-desktop[data-leo-skin] {
+  --color-brand: var(--leo-brand);
+  --color-primary: var(--leo-primary);
+  --color-primary-foreground: #fff;
+  --color-accent: var(--leo-brand-soft);
+  --color-success: var(--leo-brand);
+  --color-diff-added: var(--leo-brand);
+  --leo-attention: var(--leo-brand);
+  --color-input-border-focused: var(--leo-brand);
+  --color-interaction-ask-surface: var(--leo-brand-soft);
+  --color-interaction-ask-foreground: var(--leo-brand);
+  --color-terminal-cursor: var(--leo-brand);
+  --color-terminal-selection: var(--leo-brand-soft);
+  --leo-mark-from: var(--leo-brand);
+  --leo-mark-to: var(--leo-brand);
+}
+html.platform-mac-desktop[data-leo-skin].theme-zai-dark {
+  --color-foreground-inverse: #111827;
+}
+html.platform-mac-desktop[data-leo-skin] .leo-workbench-heading { margin-bottom: var(--leo-space-5); }
+html.platform-mac-desktop[data-leo-skin] .leo-workbench-starters button {
+  transition: background-color var(--leo-dur-1) var(--leo-ease), border-color var(--leo-dur-1) var(--leo-ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-leo-skin] .leo-workbench-starters button { transition: none; }
+}

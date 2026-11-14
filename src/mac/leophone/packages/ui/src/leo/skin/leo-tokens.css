@@ -79,3 +79,15 @@ html.theme-zai-light {
   --leo-shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px -16px rgba(0, 0, 0, 0.18);
   --leo-shadow-card: 0 18px 44px -22px rgba(0, 0, 0, 0.24);
 }
+
+html.platform-mac-desktop[data-leo-skin].theme-zai-light {
+  --leo-brand: #1761dc;
+  --leo-brand-soft: rgba(23, 97, 220, 0.08);
+  --leo-primary: #1761dc;
+}
+
+html.platform-mac-desktop[data-leo-skin].theme-zai-dark {
+  --leo-brand: #6b9fff;
+  --leo-brand-soft: rgba(107, 159, 255, 0.14);
+  --leo-primary: #2563eb;
+}

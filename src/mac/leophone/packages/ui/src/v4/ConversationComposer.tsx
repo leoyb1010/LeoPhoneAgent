@@ -1,3 +1,4 @@
+import { ACP_PROVIDER_ID } from "@zcode/shared/acp";
 /* oxlint-disable eslint(max-lines) -- composer 集中收口输入区 wiring（附件/草稿/历史/mention），拆分会打散收口粒度。 */
 import { getLocalTtftObserver } from "@/v4/telemetry/localTtftObserver.js";
 /**
@@ -169,8 +170,12 @@ import {
 import { WebElementContextAttachmentChip } from "@/v4/composer/WebElementContextAttachmentChip.js";
 import { ConversationSelectionReferenceChip } from "@/v4/composer/ConversationSelectionReferenceChip.js";
 import type { AttachmentPutFn } from "@/v4/composer/attachmentUpload.js";
+import { appendLeoDraftPrompt } from "@/leo/leoWorkbenchPrompts.js";
+import { resolveLeoComposerAgentSelection } from "@/leo/leoAgentSelection.js";
+import { LeoAgentSelect } from "@/leo/LeoAgentSelect.js";
+import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
 import { LeoComposerAgentTools } from "@/leo/LeoComposerAgentTools.js";
-import { resolveLeoAgentKind } from "@/leo/leoAgentKind.js";
+import { useOptionalTabStore } from "@/store/TabStoreProvider.js";
 import { useScopedConversationTelemetrySupervisor } from "@/v4/telemetry/ConversationTelemetryAttachment.js";
 import type { ConversationPromptTelemetrySeed } from "@/v4/telemetry/conversationTelemetrySupervisor.js";
 import type { ComposerSubmissionConfig } from "@/v4/composer/composerSubmissionConfig.js";
@@ -211,7 +216,8 @@ export interface ExternalTextInsertRequest {
   requestId: number;
   text: string;
   mention?: ComposerMentionPrefill;
-  mode?: "replace" | "prepend-if-missing";
+  mode?: "replace" | "prepend-if-missing" | "append-if-missing";
+  targetSessionId?: string | null;
 }
 
 export function restorePersistedComposerDraftIntoInput({
@@ -271,6 +277,19 @@ export function applyExternalTextInsertRequestToComposer({
   }
   if (!inputApi) {
     return appliedRequestId;
+  }
+  if (request.mode === "append-if-missing") {
+    const current = inputApi.getMarkdown();
+    const merged = appendLeoDraftPrompt(current, request.text);
+    if (merged !== current) {
+      // 追加明确的新要求，保留用户此刻的文本与插件提及，不覆盖点击后继续编辑的草稿。
+      if (merged.includes("](plugin://")) inputApi.setTextWithPluginMentions(merged);
+      else inputApi.setText(merged);
+      updateText(merged);
+      scheduleDraftPersist();
+    }
+    requestFocus();
+    return request.requestId;
   }
   if (request.mode === "prepend-if-missing" && request.mention) {
     if (!inputApi.prependMentionIfMissing(request.mention)) {
@@ -543,6 +562,11 @@ function ConversationComposerImpl({
   onDropTargetControllerChange,
 }: ConversationComposerProps) {
   const { intl, locale } = useZCodeIntl();
+  const openSettingsTab = useOptionalTabStore((state) => state.openSettingsTab);
+  const handleManageLocalAgents = useCallback((section: "modelProvider" | "externalAgents" = "externalAgents") => {
+    setPendingSettingsSectionIntent(section);
+    openSettingsTab?.();
+  }, [openSettingsTab]);
   const services = useOptionalServices();
   const conversationTelemetry = useScopedConversationTelemetrySupervisor({
     workspacePath,
@@ -2049,6 +2073,8 @@ function ConversationComposerImpl({
   // 避免每个 token 批次都重建 Tooltip/Select 子树。
   const composerUsage = snapshot?.usage ?? null;
   const composerPhase = snapshot?.control.phase ?? null;
+  const composerAgentSelection = resolveLeoComposerAgentSelection(draftMode, draftConfig, snapshot?.config);
+  const localCliSelected = composerAgentSelection.provider === ACP_PROVIDER_ID;
   const handleSelectModelTrace = useCallback(
     (nextProvider: string, nextModel: string, sourceModel: ModelSelectionSource | null) =>
       runUserAction({
@@ -2167,7 +2193,7 @@ function ConversationComposerImpl({
   const leadingActionsNode = useMemo(
     () => (
       <>
-        <V4ComposerModeSwitch
+        {!localCliSelected ? <V4ComposerModeSwitch
           workspacePath={workspacePath}
           workspaceIdentity={workspaceIdentity}
           provider={provider}
@@ -2176,16 +2202,25 @@ function ConversationComposerImpl({
           activeConfigPicker={activeConfigPicker}
           onConfigPickerOpenChange={handleConfigPickerOpenChange}
           onSwitchMode={onSwitchMode}
-        />
+        /> : null}
         {/* [leo][wp-31] 工具条五件：模型(右侧) · 模式 · agent · 附件(+ 菜单) · 麦克风。 */}
-        <LeoComposerAgentTools
+        <LeoAgentSelect
+          view={modelSelectionView}
+          current={composerAgentSelection}
+          draftMode={draftMode}
           disabled={disabled}
-          agentKind={resolveLeoAgentKind({
-            provider: snapshot?.config?.provider ?? draftConfig?.provider ?? draftConfig?.modelSelection?.providerId,
-            model: snapshot?.config?.model ?? draftConfig?.model ?? draftConfig?.modelSelection?.modelId,
-          })}
-          onPickAgent={() => handleConfigPickerOpenChange("model", true)}
+          open={activeConfigPicker === "agent"}
+          onOpenChange={(open) => handleConfigPickerOpenChange("agent", open)}
+          onSelect={(selection) => {
+            const currentProvider = draftConfig?.provider ?? draftConfig?.modelSelection?.providerId;
+            const currentModel = draftConfig?.model ?? draftConfig?.modelSelection?.modelId;
+            handleSelectModelTrace(selection.provider, selection.model,
+              currentProvider && currentModel ? { provider: currentProvider, model: currentModel } : null);
+          }}
+          onReload={modelSelectionReload}
+          onManage={handleManageLocalAgents}
         />
+        <LeoComposerAgentTools disabled={disabled} hideAgent />
         {/* Bug 原因：附件画廊 rebase 曾整段覆盖 leadingActions，误删 staging 的 CUA 常驻入口。
             入口自身继续负责平台、远程与设置可见性，不在 composer 重复判定。 */}
         <V4ComposerCuaEntry
@@ -2204,6 +2239,14 @@ function ConversationComposerImpl({
     ),
     [
       activeConfigPicker,
+      localCliSelected,
+      composerAgentSelection.provider,
+      composerAgentSelection.model,
+      modelSelectionView,
+      modelSelectionReload,
+      handleSelectModelTrace,
+      handleManageLocalAgents,
+      draftMode,
       canStop,
       disabled,
       draftConfig,

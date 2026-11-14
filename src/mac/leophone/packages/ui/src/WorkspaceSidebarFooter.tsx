@@ -64,6 +64,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   workspaceRemoteSessionId,
   activeTaskId,
   isDesktop = false,
+  showBrainShortcut = true,
   className,
 }: {
   theme: Theme;
@@ -81,6 +82,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   workspaceRemoteSessionId?: string;
   activeTaskId?: string | null;
   isDesktop?: boolean;
+  showBrainShortcut?: boolean;
   className?: string;
 }) {
   const { intl } = useZCodeIntl();
@@ -153,7 +155,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   return (
     // footer 被 Settings 复用，页面专属边距由调用方传入，避免修改共享默认样式。
     <footer className={cn("flex shrink-0 flex-col gap-2.5 px-4 pt-2 pb-4", className)}>
-      {platform.leoBrain && home?.onOpenBrain ? (
+      {showBrainShortcut && platform.leoBrain && home?.onOpenBrain ? (
         <Button type="button" variant="ghost" className="justify-start gap-2" onClick={home.onOpenBrain}>
           <Brain aria-hidden="true" className="size-4 text-icon-blue" />
           {intl.formatMessage({ id: "brain.workspace.title" })}

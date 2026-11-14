@@ -409,6 +409,7 @@ export function createBrowserWindow(options: {
       preload: options.preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
+      nodeIntegrationInSubFrames: false,
       // CDP-on-guest pivot：内置浏览器改回 `<webview>` 渲染，宿主需开 webviewTag。
       webviewTag: true,
       // 永久 backgroundThrottling=false 会唤醒整窗 renderer、所有 webview guest
@@ -425,6 +426,10 @@ export function createBrowserWindow(options: {
     if (isSameAppDocument(win.webContents.getURL(), url)) return;
     event.preventDefault();
     options.logger.warn("[window] blocked main window navigation", url.slice(0, 200));
+  });
+  // HTML产物的sandbox禁止顶层导航和弹窗，但不能阻止srcdoc自行跳转；由原生层补齐该边界。
+  win.webContents.on("will-frame-navigate", (event) => {
+    if (!event.isMainFrame && (event.frame?.url === "about:srcdoc" || event.frame?.url.startsWith("leo-html:"))) event.preventDefault();
   });
   win.webContents.setWindowOpenHandler(({ url }) => {
     const external = externalUrlForWindowOpen(url);

@@ -9,6 +9,8 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import type { CodePreviewSettings } from "@/store/index.js";
 import type { CodeCommentLabels } from "@/components/ui/code-viewer.js";
 import { MarkdownPreviewContent } from "@/previewPaneMarkdownContent.js";
+import { LeoHtmlPreview } from "@/leo/LeoHtmlPreview.js";
+import { canPreviewLeoHtmlFile, isLeoHtmlPath, LEO_HTML_PREVIEW_LIMIT } from "@/leo/htmlArtifactPolicy.js";
 import { CodeContent } from "@/previewPaneCodeContent.js";
 import { ImagePreviewContent, SvgPreviewContent } from "@/previewPaneImageContent.js";
 import { PreviewPaneMediaContent } from "@/previewPaneMediaContent.js";
@@ -57,6 +59,9 @@ interface PreviewPaneContentProps {
   /** 应用主题（store 耦合剥离）：透传给 markdown/mermaid 预览，缺省按 "system" 兜底。 */
   theme?: Theme;
   workspacePath?: string;
+  workspaceIdentity?: string;
+  htmlRefineAllowed?: boolean;
+  htmlRefineSessionId?: string | null;
   onOpenBrowserUrl?: (url: string) => void;
   markdownSelectionTarget?: MarkdownSelectionTarget;
   markdownViewMode: "preview" | "code";
@@ -117,6 +122,9 @@ export function PreviewPaneContent({
   resolvedTheme,
   theme,
   workspacePath,
+  workspaceIdentity,
+  htmlRefineAllowed = false,
+  htmlRefineSessionId,
   onOpenBrowserUrl,
   markdownSelectionTarget,
   markdownViewMode,
@@ -221,7 +229,7 @@ export function PreviewPaneContent({
       return <SvgPreviewContent title={source.title} svgContent={source.content} />;
     }
 
-    return (
+    const codeContent = (
       <CodeContent
         code={source.content}
         language={source.language}
@@ -239,6 +247,10 @@ export function PreviewPaneContent({
         scrollContainerRef={scrollContainerRef}
       />
     );
+    if ((source.language === "html" || isLeoHtmlPath(source.path)) && new TextEncoder().encode(source.content).byteLength <= LEO_HTML_PREVIEW_LIMIT) {
+      return <LeoHtmlPreview key={source.path ?? source.title} content={source.content} title={source.title} sourcePath={source.path} sourceView={codeContent} targetSessionId={htmlRefineSessionId} workspacePath={htmlRefineAllowed ? workspacePath : undefined} workspaceIdentity={workspaceIdentity} />;
+    }
+    return codeContent;
   }
 
   if (source.type === "image") {
@@ -431,7 +443,7 @@ export function PreviewPaneContent({
     return <SvgPreviewContent title={source.title} svgContent={filePreview.content} />;
   }
 
-  return (
+  const codeContent = (
     <CodeContent
       code={filePreview.content}
       language={fileLanguage}
@@ -458,4 +470,8 @@ export function PreviewPaneContent({
       scrollContainerRef={scrollContainerRef}
     />
   );
+  if (source.type !== "code-review" && (fileLanguage === "html" || isLeoHtmlPath(source.path)) && canPreviewLeoHtmlFile(filePreview)) {
+    return <LeoHtmlPreview key={source.path ?? source.title} content={filePreview.content} title={source.title} sourcePath={source.path} sourceView={codeContent} targetSessionId={htmlRefineSessionId} workspacePath={htmlRefineAllowed ? workspacePath : undefined} workspaceIdentity={workspaceIdentity} />;
+  }
+  return codeContent;
 }

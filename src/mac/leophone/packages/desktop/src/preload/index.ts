@@ -1,3 +1,4 @@
+import type { HtmlArtifactPreviewRequest, HtmlArtifactPreviewHandle } from "@zcode/shared";
 import { installPluginSandboxHostBridge } from "./pluginSandbox/hostBridge.js";
 import {
   databaseStartupControlSchema,
@@ -277,6 +278,8 @@ contextBridge.exposeInMainWorld("zcode", {
   /** 打开系统多文件选择框，返回选中文件路径；取消时返回空数组 */
   selectFiles: (): Promise<string[]> => ipcRenderer.invoke(PlatformChannels.SelectFiles),
   /** 通过 main process 的原生另存为对话框明确落盘 */
+  createHtmlPreview: (payload: HtmlArtifactPreviewRequest): Promise<HtmlArtifactPreviewHandle> => ipcRenderer.invoke(PlatformChannels.CreateHtmlPreview, payload),
+  releaseHtmlPreview: (id: string): Promise<void> => ipcRenderer.invoke(PlatformChannels.ReleaseHtmlPreview, id),
   saveFile: (payload: SaveFileRequest): Promise<SaveFileResult> =>
     ipcRenderer.invoke(PlatformChannels.SaveFile, payload),
   /** 将当前页面的 print 媒体版面导出为 PDF（Chromium 打印引擎，矢量文本） */
