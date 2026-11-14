@@ -24,7 +24,23 @@ echo "LeoBot $V  sha256 ${SUM[1,16]}…"
 fail=()
 MNT=$(hdiutil attach -nobrowse -readonly "$DMG" | awk '/\/Volumes\//{print substr($0, index($0,"/Volumes/"))}')
 [[ -d "$MNT/LeoBot.app" ]] || { echo "DMG 里没有 LeoBot.app" >&2; exit 2; }
-trap 'hdiutil detach "$MNT" -quiet 2>/dev/null' EXIT
+APP_SOURCE_STAGE=""
+trap 'hdiutil detach "$MNT" -quiet 2>/dev/null; [[ -n "$APP_SOURCE_STAGE" ]] && rm -rf "$APP_SOURCE_STAGE"' EXIT
+APP_SOURCE="$MNT/LeoBot.app"
+# 公证流程只给 DMG 外壳和配套 ZIP 的 App 钉章；DMG 内 App 仍可能没有本地票据。
+# 必须在安装前分发已钉章的同一 App，不能依赖 SSH 在 /Applications 里补写（App Management 会拒绝）。
+if ! xcrun stapler validate "$APP_SOURCE" >/dev/null 2>&1; then
+  notarized_zip="${DMG%.dmg}.zip"
+  [[ -f "$notarized_zip" ]] || { echo "缺少含已钉章 App 的配套 ZIP" >&2; exit 2; }
+  APP_SOURCE_STAGE=$(mktemp -d /tmp/leobot-deploy-source.XXXXXX)
+  ditto -x -k "$notarized_zip" "$APP_SOURCE_STAGE" || exit 2
+  APP_SOURCE="$APP_SOURCE_STAGE/LeoBot.app"
+  codesign --verify --deep --strict "$APP_SOURCE" || exit 2
+  xcrun stapler validate "$APP_SOURCE" || exit 2
+  dmg_code_hash=$(codesign -d --verbose=4 "$MNT/LeoBot.app" 2>&1 | sed -n 's/^CDHash=//p')
+  source_code_hash=$(codesign -d --verbose=4 "$APP_SOURCE" 2>&1 | sed -n 's/^CDHash=//p')
+  [[ -n "$dmg_code_hash" && "$dmg_code_hash" = "$source_code_hash" ]] || { echo "DMG 与 ZIP 的 App 签名内容不一致" >&2; exit 2; }
+fi
 STAGE=/tmp/LeoBot-$V.stage
 
 relay_has() {   # relay_has <relay-name> <version> → 0 表示该 Mac 以该版本连在中继上
@@ -58,7 +74,7 @@ PREFETCH
   fi
   sent=1
   for try in 1 2 3 4 5; do
-    stats=$(rsync -a --delete --stats -e "ssh -o BatchMode=yes -o ServerAliveInterval=15" "$MNT/LeoBot.app/" "$h:$STAGE/LeoBot.app/" 2>&1) && { sent=0; break; }
+    stats=$(rsync -a --delete --stats -e "ssh -o BatchMode=yes -o ServerAliveInterval=15" "$APP_SOURCE/" "$h:$STAGE/LeoBot.app/" 2>&1) && { sent=0; break; }
     echo "  传输中断,重试 $try:$(echo "$stats" | grep -v -i -E "^(total|file list|literal|matched|sent|number)" | tail -2 | tr '\n' ' ')"; sleep 5
   done
   (( sent == 0 )) || { echo "  ✗ 传输失败"; fail+=$h; continue; }
