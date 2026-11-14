@@ -1,6 +1,6 @@
 # LeoBot Mac 工作台 · 实装证据
 
-2026-11-14，Pro 本机，canonical main（改造基线 7dd6115b2）。实现验收 PASS；正式发布验收未进行。
+2026-11-14，Pro 本机，canonical main（改造基线 7dd6115b2）。实现及个人四机安装验收 PASS；公开发布未进行。
 
 ## 渲染与流程
 
@@ -27,6 +27,6 @@
 
 ## 交付边界
 
-- 交付本机源码构建和独立数据目录启动器；没有替换 /Applications/LeoBot.app，没有签名、公证、发布或推送。
+- 首阶段交付独立预览；后续按明确授权完成 1.21.0 签名、公证和个人四机覆盖，逐台验证后清理 App 副本。源码构建 ae4903ec0；完整发布门禁与安装证据见仓库 docs/mac-3.0/RELEASE-1.21.0.md。未公开发布或推送。
 - HTML 预览是 1MiB 内完整离线单文件；复杂工程继续使用原工程工具链。未在本阶段接入实验 Harness 或新增 Office 转换。
 - 证据目录：当前聊天 `work/implementation/workbench-link-final`。面向用户的截图/HTML验收与启动器位于当前聊天 outputs。

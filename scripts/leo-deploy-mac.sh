@@ -25,10 +25,10 @@ fail=()
 MNT=$(hdiutil attach -nobrowse -readonly "$DMG" | awk '/\/Volumes\//{print substr($0, index($0,"/Volumes/"))}')
 [[ -d "$MNT/LeoBot.app" ]] || { echo "DMG 里没有 LeoBot.app" >&2; exit 2; }
 APP_SOURCE_STAGE=""
-trap 'hdiutil detach "$MNT" -quiet 2>/dev/null; [[ -n "$APP_SOURCE_STAGE" ]] && rm -rf "$APP_SOURCE_STAGE"' EXIT
+trap 'hdiutil detach "$MNT" -quiet 2>/dev/null; [[ -n "$APP_SOURCE_STAGE" ]] && rm -rf "$APP_SOURCE_STAGE"; true' EXIT
 APP_SOURCE="$MNT/LeoBot.app"
 # 公证流程只给 DMG 外壳和配套 ZIP 的 App 钉章；DMG 内 App 仍可能没有本地票据。
-# 必须在安装前分发已钉章的同一 App，不能依赖 SSH 在 /Applications 里补写（App Management 会拒绝）。
+# 必须在安装前分发已钉章的同一 App，不能依赖 SSH 在 /Applications 里补写（系统可能拒绝）。
 if ! xcrun stapler validate "$APP_SOURCE" >/dev/null 2>&1; then
   notarized_zip="${DMG%.dmg}.zip"
   [[ -f "$notarized_zip" ]] || { echo "缺少含已钉章 App 的配套 ZIP" >&2; exit 2; }

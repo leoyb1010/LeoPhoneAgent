@@ -23,4 +23,4 @@
 
 ## 本地公证票据的安装边界
 
-本轮实际 Studio 验证发现：同一签名已获 Gatekeeper 接受，但 SSH 在已安装 App 内补写票据会被系统 App Management 拒绝。发行公证脚本产出的 ZIP 包含已钉章 App，DMG 内 App 未重新写入票据。部署入口先验证 DMG 内 App 的本地票据；缺失时只接受配套 ZIP 中通过深度签名和本地票据验证、且主 CDHash 与 DMG 一致的 App，之后再进入原暂存/覆盖/健康流程。不得以修改 TCC、关闭 Gatekeeper、放宽权限或忽略票据错误处理。
+本轮实际 Studio 验证发现：同一签名已获 Gatekeeper 接受，但 SSH 在已安装 App 内补写票据返回 Error 73，直接写入也被拒绝，尽管目录元数据仍显示所有者可写。发行公证脚本产出的 ZIP 包含已钉章 App，DMG 内 App 未重新写入票据。部署入口先验证 DMG 内 App 的本地票据；缺失时只接受配套 ZIP 中通过深度签名和本地票据验证、且主 CDHash 与 DMG 一致的 App，之后再进入原暂存/覆盖/健康流程。不得以修改 TCC、关闭 Gatekeeper、放宽权限或忽略票据错误处理。
