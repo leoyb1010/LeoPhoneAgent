@@ -91,7 +91,14 @@ test("写操作在 guarded（默认）/ yolo / build / edit 都要审批", () =>
 test("观察工具保持原模式语义，不增加摩擦", () => {
   assert.equal(decide("guarded", SEE, readCapability).decision, "allow");
   assert.equal(decide("yolo", SEE, readCapability).decision, "allow");
-  assert.equal(decide("build", SEE, { ...readCapability, needsApproval: false }).decision, "allow");
+  // PermissionService 优先读嵌套 permission；两层一致才代表无需审批的只读工具。
+  assert.equal(decide("build", SEE, {
+    ...readCapability,
+    needsApproval: false,
+    permission: { ...readCapability.permission, needsApproval: false },
+  }).decision, "allow");
+  // 真实 MCP 元数据要求审批时，外层 false 不能把更具体的声明抹掉。
+  assert.equal(decide("build", SEE, { ...readCapability, needsApproval: false }).decision, "ask");
 });
 
 test("Plan、auto、硬禁用、项目 deny 都直接拒绝写操作", () => {
