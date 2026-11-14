@@ -170,8 +170,9 @@ describe("WindowsCaptionMenuButton", () => {
     const { shouldShowDesktopUpdateEntry } = await import("@/WindowsCaptionMenuButton.js");
 
     // 更新入口跟随产品身份：生产后端的 Preview 同样隐藏。
-    expect(shouldShowDesktopUpdateEntry("preview")).toBe(false);
-    expect(shouldShowDesktopUpdateEntry("production")).toBe(true);
+    expect(shouldShowDesktopUpdateEntry("preview", true)).toBe(false);
+    expect(shouldShowDesktopUpdateEntry("production", true)).toBe(true);
+    expect(shouldShowDesktopUpdateEntry("production", false)).toBe(false);
 
     const html = await renderButton("header");
     expect(html).not.toContain("titleBar.menu.help.checkForUpdates");

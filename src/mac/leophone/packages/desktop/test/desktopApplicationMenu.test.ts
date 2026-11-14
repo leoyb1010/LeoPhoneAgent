@@ -30,6 +30,7 @@ vi.mock("electron", () => ({
 // Bugfix: 这个用例只验证菜单模板，不能通过 importActual 拉完整 shared/services/main 依赖。
 // 全量 pre-push 并发时真实依赖加载会撞 5s 超时，并让 ZCODE_ENV 的模块缓存污染后续断言。
 vi.mock("@zcode/shared", () => ({
+  ZCODE_AUTO_UPDATE_ENABLED: true,
   DesktopCommandIds: {
     NewTask: "newTask",
     OpenWorkspace: "openWorkspace",

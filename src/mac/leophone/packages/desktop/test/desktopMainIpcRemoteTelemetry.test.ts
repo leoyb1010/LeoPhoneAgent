@@ -1,4 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, realpathSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlatformChannels } from "@zcode/shared";
 import { isAllowedExternalOpenUrl } from "../src/main/desktopMainIpcRemote.js";
 
@@ -6,6 +10,20 @@ type IpcHandler = (...args: unknown[]) => unknown;
 type RemoteIpcOptions = Parameters<
   typeof import("../src/main/desktopMainIpcRemote.js").registerRemoteIpcHandlers
 >[0];
+
+let fixtureDir: string;
+let fixtureFile: string;
+beforeEach(() => {
+  fixtureDir = realpathSync(mkdtempSync(join(tmpdir(), "leo-open-file-")));
+  fixtureFile = join(fixtureDir, "04 素材 preview page.html");
+  writeFileSync(fixtureFile, "<!doctype html><title>fixture</title>");
+});
+afterEach(() => rmSync(fixtureDir, { recursive: true, force: true }));
+
+function trustedAppEvent() {
+  const frame = { url: "file:///test/renderer/index.html" };
+  return { senderFrame: frame, sender: { mainFrame: frame, getType: () => "window" } };
+}
 
 const h = vi.hoisted(() => ({
   handlers: new Map<string, IpcHandler>(),
@@ -113,14 +131,14 @@ describe("desktop main IPC openExternal", () => {
 
     listener?.({}, "https://example.com/docs");
     listener?.({}, "http://localhost:3000/index.html");
-    listener?.({}, "file:///tmp/secret");
+    listener?.(trustedAppEvent(), pathToFileURL(fixtureFile).href);
     listener?.({}, "javascript:alert(1)");
     listener?.({}, "not a url");
 
     expect(h.shellOpenExternal).toHaveBeenCalledTimes(2);
     expect(h.shellOpenExternal).toHaveBeenCalledWith("https://example.com/docs");
     expect(h.shellOpenExternal).toHaveBeenCalledWith("http://localhost:3000/index.html");
-    await vi.waitFor(() => expect(h.shellOpenPath).toHaveBeenCalledWith("/tmp/secret"));
+    await vi.waitFor(() => expect(h.shellOpenPath).toHaveBeenCalledWith(fixtureFile));
     expect(options.logger.warn).toHaveBeenCalledTimes(2);
   });
 

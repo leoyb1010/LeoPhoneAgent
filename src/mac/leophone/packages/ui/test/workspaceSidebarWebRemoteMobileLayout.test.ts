@@ -127,6 +127,7 @@ vi.mock("@/i18n/IntlProvider.js", () => ({
     intl: {
       formatMessage: ({ id }: { id: string }) => id,
     },
+    locale: "en-US",
     localePreference: "en-US",
     setLocalePreference: vi.fn(),
   }),
@@ -213,7 +214,8 @@ describe("WorkspaceSidebar Web remote mobile layout", () => {
     const onOpenPluginStore = vi.fn();
 
     render(await createSidebarElement({ onOpenPluginStore }));
-    fireEvent.click(screen.getByRole("button", { name: "workspace.openPluginsSettings" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "common.more" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "workspace.openPluginsSettings" }));
 
     expect(onOpenPluginStore).toHaveBeenCalledTimes(1);
     expect(setPendingSettingsSectionMock).not.toHaveBeenCalled();
@@ -232,15 +234,14 @@ describe("WorkspaceSidebar Web remote mobile layout", () => {
     expect(screen.getByRole("button", { name: "common.close" })).toBe(archiveButton);
   });
 
-  it("places plugins immediately after automations on the desktop home sidebar", async () => {
+  it("keeps plugin management in More after primary navigation", async () => {
 
     render(await createSidebarElement({ webRemoteControlWorkspaceSwitcher: undefined }));
     const automationsButton = screen.getByRole("button", {
       name: "workspace.openScheduledSettings",
     });
-    const pluginsButton = screen.getByRole("button", {
-      name: "workspace.openPluginsSettings",
-    });
+    const pluginsButton = screen.getByRole("button", { name: "common.more" });
+    expect(screen.queryByRole("menuitem", { name: "workspace.openPluginsSettings" })).toBeNull();
 
     expect(pluginsButton.querySelector("svg")?.classList.contains("lucide-blocks")).toBe(true);
     expect(

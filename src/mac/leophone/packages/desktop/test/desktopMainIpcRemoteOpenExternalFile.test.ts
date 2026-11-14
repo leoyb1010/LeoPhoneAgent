@@ -1,10 +1,28 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, realpathSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlatformChannels } from "@zcode/shared";
 
 type IpcHandler = (...args: unknown[]) => unknown;
 type RemoteIpcOptions = Parameters<
   typeof import("../src/main/desktopMainIpcRemote.js").registerRemoteIpcHandlers
 >[0];
+
+let fixtureDir: string;
+let fixtureFile: string;
+beforeEach(() => {
+  fixtureDir = realpathSync(mkdtempSync(join(tmpdir(), "leo-open-file-")));
+  fixtureFile = join(fixtureDir, "04 素材 preview page.html");
+  writeFileSync(fixtureFile, "<!doctype html><title>fixture</title>");
+});
+afterEach(() => rmSync(fixtureDir, { recursive: true, force: true }));
+
+function trustedAppEvent() {
+  const frame = { url: "file:///test/renderer/index.html" };
+  return { senderFrame: frame, sender: { mainFrame: frame, getType: () => "window" } };
+}
 
 const h = vi.hoisted(() => ({
   handlers: new Map<string, IpcHandler>(),
@@ -103,22 +121,18 @@ describe("OpenExternal 对 file URL 的分流", () => {
 
   it("中文与空格的 file URL 走 shell.openPath 且收到解码后的本地路径", async () => {
     const { listener } = await registerOpenExternalListener();
-    const sender = { getURL: vi.fn(() => "about:blank") };
-
-    listener({ sender }, "file:///E:/04%20%E7%B4%A0%E6%9D%90/page.html");
+    listener(trustedAppEvent(), pathToFileURL(fixtureFile).href);
 
     await vi.waitFor(() => expect(h.shellOpenPath).toHaveBeenCalledTimes(1));
     expect(h.shellOpenPath).toHaveBeenCalledWith(expect.stringContaining("04 素材"));
-    expect(h.shellOpenPath).toHaveBeenCalledWith(expect.stringContaining("page.html"));
+    expect(h.shellOpenPath).toHaveBeenCalledWith(expect.stringContaining("preview page.html"));
     expect(h.shellOpenPath).not.toHaveBeenCalledWith(expect.stringContaining("%"));
     expect(h.shellOpenExternal).not.toHaveBeenCalled();
   });
 
   it("带锚点的 file URL 剥掉 hash 后仍走 shell.openPath", async () => {
     const { listener } = await registerOpenExternalListener();
-    const sender = { getURL: vi.fn(() => "about:blank") };
-
-    listener({ sender }, "file:///tmp/report.html#section");
+    listener(trustedAppEvent(), `${pathToFileURL(fixtureFile).href}#section`);
 
     await vi.waitFor(() => expect(h.shellOpenPath).toHaveBeenCalledTimes(1));
     expect(h.shellOpenPath).not.toHaveBeenCalledWith(expect.stringContaining("#"));

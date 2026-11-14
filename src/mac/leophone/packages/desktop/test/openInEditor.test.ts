@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -22,7 +22,8 @@ vi.mock("node:child_process", () => ({
   execFile: execFileMock,
 }));
 
-vi.mock("node:fs/promises", () => ({
+vi.mock("node:fs/promises", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:fs/promises")>()),
   access: accessMock,
 }));
 
@@ -81,7 +82,7 @@ describe("openInEditor", () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), "zcode-open-in-editor-"));
+    tempDir = realpathSync(mkdtempSync(join(tmpdir(), "zcode-open-in-editor-")));
     accessMock.mockReset();
     accessMock.mockResolvedValue(undefined);
     execFileMock.mockReset();
