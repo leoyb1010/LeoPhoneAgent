@@ -97,7 +97,8 @@ launch_gui() {
   done
   echo "warn-no-gui-agent"; open -g -a /Applications/LeoBot.app
 }
-osascript -e 'tell application "LeoBot" to quit' 2>/dev/null
+# 不运行时不能 tell ... quit：AppleScript 会先唤醒已注册的旧副本再退出。
+osascript -e 'if application id "com.leoyuan.leocodebox" is running then tell application id "com.leoyuan.leocodebox" to quit' 2>/dev/null
 for i in {1..30}; do pgrep -xq LeoBot || break; sleep 1; done
 pgrep -xq LeoBot && pkill -x LeoBot && sleep 2
 mkdir -p ~/LeoBot-archives; archived=""
