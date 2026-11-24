@@ -412,7 +412,13 @@ export function useDraftConfigControl(params: {
   const handleDraftSelectModel = useCallback(
     (modelProvider: string, model: string) => {
       const modelId = modelProvider ? `${modelProvider}/${model}` : model;
-      const parsedSelection = parseModelPickerValue(modelId);
+      const exact = modelSelectionView?.providers.some(
+        (provider) => provider.providerId === modelProvider &&
+          provider.models.some((entry) => entry.modelId === model),
+      );
+      const parsedSelection = exact
+        ? { providerId: modelProvider, modelId: model }
+        : parseModelPickerValue(modelId);
       // 用户点击模型只确定模型身份；Reasoning 没有默认值，保持为空并等待用户选择。
       const modelSelection = modelSelectionView
         ? (completeNewModelSelection(modelSelectionView, parsedSelection) ?? parsedSelection)

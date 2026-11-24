@@ -450,7 +450,7 @@ describe("useDraftConfigControl slash command hydration", () => {
 
   it("Registry revision 只影响有效选择，正文和模式编辑保留原意图，配置恢复后重新有效", async () => {
     const workspacePath = "/live-selection-invalidated";
-    const firstView = modelSelectionView(1, ["old", "preferred"], "preferred");
+    const firstView = modelSelectionView(1, ["router/model$variant", "preferred"], "preferred");
     const nextView = modelSelectionView(2, ["preferred"], "preferred");
     useZCodeSessionStore.getState().setSlashCommands(workspacePath, CUSTOM_COMMANDS);
     useZCodeSessionStore.getState().setConfigOptions(workspacePath, WORKSPACE_PRESENTATION);
@@ -470,10 +470,10 @@ describe("useDraftConfigControl slash command hydration", () => {
     await act(async () => {
       root.render(createElement(Probe, { view: firstView }));
     });
-    act(() => control!.handleDraftSelectModel("provider", "old"));
+    act(() => control!.handleDraftSelectModel("provider", "router/model$variant"));
     expect(control!.draftConfig.modelSelection).toEqual({
       providerId: "provider",
-      modelId: "old",
+      modelId: "router/model$variant",
       options: { reasoningLevel: "high" },
     });
 
@@ -489,14 +489,14 @@ describe("useDraftConfigControl slash command hydration", () => {
       mode: "guarded", // [leo] 新任务默认档 guarded（leo/leoDefaultTaskMode.ts）
       planEnabled: true,
       text: "保留原选择",
-      modelSelection: { providerId: "provider", modelId: "old" },
+      modelSelection: { providerId: "provider", modelId: "router/model$variant" },
     });
     await act(async () => {
       root.render(createElement(Probe, { view: { ...firstView, revision: 3 } }));
     });
     expect(control!.draftConfig.modelSelection).toEqual({
       providerId: "provider",
-      modelId: "old",
+      modelId: "router/model$variant",
       options: { reasoningLevel: "high" },
     });
     expect(toastMock).not.toHaveBeenCalled();
