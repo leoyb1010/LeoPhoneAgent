@@ -9,7 +9,7 @@ import {
   type SessionConfigOption,
   type Stream,
 } from "@agentclientprotocol/sdk";
-import type { AcpLaunchSpec } from "./catalog.js";
+import type { AcpLaunchSpec, AcpProviderBinding } from "./catalog.js";
 import type { AcpSessionHost } from "./session.js";
 
 export interface AcpAgentConnection {
@@ -29,6 +29,7 @@ export interface ConnectAcpAgentOptions {
   /** 上次的 ACP 会话 id；agent 支持 loadSession 时优先恢复。 */
   resumeSessionId?: string;
   customModelId?: string;
+  providerBinding?: AcpProviderBinding;
   clientVersion?: string;
   onStderr?: (chunk: string) => void;
   /** [fix-remote] agent 进程退出（握手后也算）：管理器据此丢掉死连接、让进行中的回合以可读错误结束。 */
@@ -88,6 +89,7 @@ export async function connectAcpStream(
   dispose: () => void = () => undefined,
 ): Promise<AcpAgentConnection> {
   const handlers = options.host.clientHandlers();
+  const gateway = options.providerBinding;
   let configOptions: readonly SessionConfigOption[] = [];
   const connection = new ClientSideConnection(() => ({
     ...handlers,
@@ -102,12 +104,31 @@ export async function connectAcpStream(
     connection.initialize({
       protocolVersion: PROTOCOL_VERSION,
       // 不声明 fs / terminal：文件读写与命令由 agent 自己执行，LeoBot 只负责审批与展示。
-      clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+      clientCapabilities: {
+        fs: { readTextFile: false, writeTextFile: false },
+        terminal: false,
+        ...(gateway ? { auth: { _meta: { gateway: true } } } : {}),
+      },
       clientInfo: { name: "LeoBot", version: options.clientVersion ?? "0" },
     }),
     "initialize",
     options,
   );
+  if (gateway) {
+    if (!initialize.authMethods?.some((method) => method.id === "gateway")) {
+      throw new Error("当前 CLI 适配器无法使用已配置的供应商，请重新选择执行路径。");
+    }
+    // Use the adapter's task-scoped routing, which takes precedence over local settings and login.
+    await withStageTimeout(connection.authenticate({
+      methodId: "gateway",
+      _meta: {
+        gateway: {
+          baseUrl: gateway.baseUrl.replace(/\/+$/u, ""),
+          headers: { Authorization: `Bearer ${gateway.apiKey}` },
+        },
+      },
+    }), "authenticate", options);
+  }
   // [fix-remote] 已登录的 agent 通常不需要 authenticate；只有开会话报 auth_required 时，按本机登录状态挑方法
   // 调一次 authenticate 再重试（grok 即使已登录也要先选方法，否则报 no auth method id provided）。
   let authenticated = false;
@@ -132,7 +153,7 @@ export async function connectAcpStream(
     try {
       return await withStageTimeout(run(), "newSession", options);
     } catch (error) {
-      if (!isAuthRequired(error)) throw error;
+      if (options.providerBinding || !isAuthRequired(error)) throw error;
       await authenticate(error);
       return withStageTimeout(run(), "newSession", options);
     }
@@ -155,11 +176,14 @@ export async function connectAcpStream(
       sessionId = options.resumeSessionId;
       resumed = true;
     } catch (error) {
-      if (error instanceof AcpStageTimeoutError || isAuthRequired(error)) throw error;
+      if (gateway || error instanceof AcpStageTimeoutError || isAuthRequired(error)) throw error;
       sessionId = undefined;
     }
   }
   if (!sessionId) {
+    if (gateway && options.resumeSessionId) {
+      throw new Error("当前 CLI 无法恢复原任务，请新建任务后再发送。");
+    }
     const created = await open(() => connection.newSession({ cwd: options.cwd, mcpServers: [] }));
     sessionId = created.sessionId;
     rememberSessionConfig(created);

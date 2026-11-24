@@ -1,5 +1,14 @@
 import type { ModelSelectionView } from "@zcode/services";
-import { ACP_PROVIDER_ID, ACP_AGENTS, isAcpAgentId, parseAcpModelId, type AcpAgentId } from "@zcode/shared/acp";
+import {
+  ACP_PROVIDER_ID,
+  ACP_AGENTS,
+  acpAgentForConfiguredProvider,
+  formatAcpModelId,
+  isAcpAgentId,
+  isValidAcpCustomModelId,
+  parseAcpModelId,
+  type AcpAgentId,
+} from "@zcode/shared/acp";
 
 export type LeoSelectableAgent = "leobot" | AcpAgentId;
 export interface LeoAgentModelSelection {
@@ -33,7 +42,10 @@ export function resolveLeoAgentChoice(
         provider.models.some((model) => model.modelId === agent),
     );
     if (!exists) return null;
-    if (current?.provider === ACP_PROVIDER_ID && parseAcpModelId(current.model)?.agentId === agent) {
+    if (
+      current?.provider === ACP_PROVIDER_ID &&
+      parseAcpModelId(current.model)?.agentId === agent
+    ) {
       return current;
     }
     return { provider: ACP_PROVIDER_ID, model: agent };
@@ -48,6 +60,18 @@ export function resolveLeoAgentChoice(
     )
   )
     return current;
+  const cli = current?.provider === ACP_PROVIDER_ID ? parseAcpModelId(current.model) : null;
+  if (
+    cli?.configuredProviderId &&
+    cli.customModelId &&
+    providers.some(
+      (provider) =>
+        provider.providerId === cli.configuredProviderId &&
+        provider.models.some((model) => model.modelId === cli.customModelId),
+    )
+  ) {
+    return { provider: cli.configuredProviderId, model: cli.customModelId };
+  }
   // 返回默认引擎时只选目录内真实存在的模型，绝不把ACP占位模型作为默认模型。
   const preferred = view.preferredSelection;
   if (
@@ -86,6 +110,38 @@ export function buildLeoAgentChoices(
   });
 }
 
+export function listLeoConfiguredModels(
+  view: ModelSelectionView | null | undefined,
+  currentCli: AcpAgentId,
+) {
+  const installed = view?.providers.find((provider) => provider.providerId === ACP_PROVIDER_ID);
+  return (view?.providers ?? []).flatMap((provider) => {
+    if (provider.providerId === ACP_PROVIDER_ID) return [];
+    const target = acpAgentForConfiguredProvider(provider.config);
+    const agent =
+      target &&
+      (target === currentCli || installed?.models.some((model) => model.modelId === target))
+        ? target
+        : undefined;
+    return provider.models.map(({ modelId, config }) => {
+      const compatible = agent && isValidAcpCustomModelId(modelId) ? agent : undefined;
+      return {
+        providerId: provider.providerId,
+        providerName: provider.providerName,
+        modelId,
+        enabled: config.enabled !== false,
+        agent: compatible,
+        selection: compatible
+          ? {
+              provider: ACP_PROVIDER_ID,
+              model: formatAcpModelId(compatible, modelId, provider.providerId),
+            }
+          : { provider: provider.providerId, model: modelId },
+      };
+    });
+  });
+}
+
 /** 已创建任务的执行引擎固定；API模型可以在同一ZCode引擎内更换。 */
 export function isSameLeoAgentRoute(
   current: LeoAgentModelSelection,
@@ -93,9 +149,14 @@ export function isSameLeoAgentRoute(
 ): boolean {
   if (!current.provider || !next.provider) return false;
   if (current.provider === ACP_PROVIDER_ID || next.provider === ACP_PROVIDER_ID) {
-    const currentAgent = parseAcpModelId(current.model)?.agentId;
-    return current.provider === next.provider && currentAgent !== undefined
-      && currentAgent === parseAcpModelId(next.model)?.agentId;
+    const from = parseAcpModelId(current.model);
+    const to = parseAcpModelId(next.model);
+    return (
+      current.provider === next.provider &&
+      from !== null &&
+      from.agentId === to?.agentId &&
+      from.configuredProviderId === to.configuredProviderId
+    );
   }
   return true;
 }
@@ -117,6 +178,7 @@ export function resolveLeoComposerAgentSelection(
     model: draft?.model ?? draft?.modelSelection?.modelId ?? "",
   };
   if (draftMode) return pending;
-  if (snapshot?.provider === ACP_PROVIDER_ID && isSameLeoAgentRoute(snapshot, pending)) return pending;
+  if (snapshot?.provider === ACP_PROVIDER_ID && isSameLeoAgentRoute(snapshot, pending))
+    return pending;
   return snapshot ?? { provider: "", model: "" };
 }

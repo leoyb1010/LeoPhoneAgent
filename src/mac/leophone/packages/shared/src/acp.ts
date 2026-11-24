@@ -45,30 +45,60 @@ export interface AcpModelSelectionLike {
 export interface AcpModelRoute {
   agentId: AcpAgentId;
   customModelId?: string;
+  configuredProviderId?: string;
 }
 
 export function isValidAcpCustomModelId(id: string): boolean {
   return id.length > 0 && id.length <= 240 && !/[\s\p{Cc}\p{Cs}]/u.test(id);
 }
 
+/** CLI pathways that can use a saved service's protocol and per-task credentials. */
+export function acpAgentForConfiguredProvider(config: {
+  access?: { type?: string | null } | null;
+  api?: {
+    type?: string | null;
+    baseUrl?: string | null;
+    headers?: Readonly<Record<string, string>> | null;
+  } | null;
+}): AcpAgentId | undefined {
+  const api = config.api;
+  if (config.access?.type !== "api-key" || !api?.baseUrl || Object.keys(api.headers ?? {}).length)
+    return;
+  let endpoint: URL;
+  try {
+    endpoint = new URL(api.baseUrl);
+  } catch {
+    return;
+  }
+  // Protocol-compatible gateways can still reject the native coding clients.
+  // The built-in runner already owns those providers' request compatibility.
+  if (endpoint.protocol !== "https:" || endpoint.port || endpoint.search || endpoint.hash) return;
+  const path = endpoint.pathname.replace(/\/+$/u, "");
+  if (api.type === "openai-responses" && endpoint.hostname === "api.openai.com" && path === "/v1")
+    return "codex";
+}
+
 /** 将 CLI 模型带进既有任务选择、恢复与提交链路。旧 `acp/<agent>` 表示 CLI 默认。 */
-export function formatAcpModelId(agentId: AcpAgentId, customModelId: string): string {
+export function formatAcpModelId(
+  agentId: AcpAgentId,
+  customModelId: string,
+  configuredProviderId?: string,
+): string {
   if (!isValidAcpCustomModelId(customModelId)) throw new Error("CLI 模型 ID 无效");
-  return `${agentId}@${encodeURIComponent(customModelId)}`;
+  const id = `${agentId}@${encodeURIComponent(customModelId)}`;
+  return configuredProviderId ? `${id}@${encodeURIComponent(configuredProviderId)}` : id;
 }
 
 export function parseAcpModelId(value: unknown): AcpModelRoute | null {
   if (isAcpAgentId(value)) return { agentId: value };
   if (typeof value !== "string") return null;
-  const separator = value.indexOf("@");
-  if (separator < 0) return null;
-  const agentId = value.slice(0, separator);
-  if (!isAcpAgentId(agentId)) return null;
+  const [agentId, model, provider, ...extra] = value.split("@");
+  if (!isAcpAgentId(agentId) || !model || extra.length) return null;
   try {
-    const customModelId = decodeURIComponent(value.slice(separator + 1));
-    return isValidAcpCustomModelId(customModelId) && formatAcpModelId(agentId, customModelId) === value
-      ? { agentId, customModelId }
-      : null;
+    const customModelId = decodeURIComponent(model);
+    const configuredProviderId = provider ? decodeURIComponent(provider) : undefined;
+    if (formatAcpModelId(agentId, customModelId, configuredProviderId) !== value) return null;
+    return { agentId, customModelId, ...(configuredProviderId ? { configuredProviderId } : {}) };
   } catch {
     return null;
   }
@@ -89,7 +119,11 @@ export function acpModelSelection(id: AcpAgentId): {
   modelId: AcpAgentId;
   options: { reasoningLevel: string };
 } {
-  return { providerId: ACP_PROVIDER_ID, modelId: id, options: { reasoningLevel: ACP_REASONING_LEVEL } };
+  return {
+    providerId: ACP_PROVIDER_ID,
+    modelId: id,
+    options: { reasoningLevel: ACP_REASONING_LEVEL },
+  };
 }
 
 /** ACP 工具调用（AcpToolCall）的入参：由 CLI 的 ACP 模型发出，UI 渲染器读取。 */
@@ -128,7 +162,9 @@ export interface AcpAgentCommand {
 
 export interface AcpCommandsStore {
   version: 1;
-  agents: Partial<Record<string, Record<string, { commands: AcpAgentCommand[]; updatedAt: number }>>>;
+  agents: Partial<
+    Record<string, Record<string, { commands: AcpAgentCommand[]; updatedAt: number }>>
+  >;
 }
 
 export const ACP_COMMANDS_FILE = "acp-commands.json";
@@ -166,7 +202,11 @@ export function recordAcpAgentCommands(
 }
 
 /** 这个目录记过就用它；没记过（这个目录还没开过该 agent 的会话）退回该 agent 最近一次的命令表。 */
-export function pickAcpAgentCommands(store: AcpCommandsStore, agentId: string, cwd: string): AcpAgentCommand[] {
+export function pickAcpAgentCommands(
+  store: AcpCommandsStore,
+  agentId: string,
+  cwd: string,
+): AcpAgentCommand[] {
   const entries = store.agents[agentId];
   if (!entries) return [];
   const exact = entries[cwd];

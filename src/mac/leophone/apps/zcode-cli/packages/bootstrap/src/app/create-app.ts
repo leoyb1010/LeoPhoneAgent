@@ -614,6 +614,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     const modelFactory = wrapModelFactoryForAcp(providerModelRuntime.modelFactory, {
       sessionId,
       workingDirectory: () => workingDirectory,
+      registry: options.providerRegistry,
       logger,
     });
     const scriptWorkflowFacade = createScriptWorkflowBridge({

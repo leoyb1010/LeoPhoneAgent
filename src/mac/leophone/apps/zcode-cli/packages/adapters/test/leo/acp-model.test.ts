@@ -92,22 +92,40 @@ function fakeClaudeEnvironment() {
 
 for (const acceptsModel of [true, false]) {
   test(`ACP confirms a custom model before sending, accepted=${acceptsModel}`, async () => {
-    const requested = "private/claude-compatible";
+    const requested = "private/openai-compatible";
     const seen: string[] = [];
-    const environment = fakeClaudeEnvironment();
+    const { env } = fakeClaudeEnvironment();
+    const bin = join(env.HOME, "bin");
+    writeFileSync(join(bin, "codex"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const environment = { env, resolveCodexAcpEntry: () => "/fake/codex-acp.js" };
+    const providerBinding = {
+      providerId: "private-gateway", baseUrl: "https://gateway.example/gateway/v1/", apiKey: "synthetic-provider-key",
+    };
     const manager = new AcpSessionManager({
       environment,
       statePath: "/dev/null/acp-sessions.json",
       connect: async (launch, options) => {
-        assert.equal(launch.env?.ANTHROPIC_MODEL, requested);
+        assert.equal(JSON.parse(launch.env?.CODEX_CONFIG ?? "{}").model, requested);
+        assert(!Object.values(launch.env ?? {}).includes(providerBinding.apiKey));
         const { clientStream, agentStream } = pipePair();
         const catalog = (currentValue: string): SessionConfigOption[] => [{
           id: "model", name: "Model", category: "model", type: "select", currentValue,
           options: [{ value: "default", name: "Default" }, { value: requested, name: requested }],
         }];
         const agent: Agent = {
-          initialize: async () => ({ protocolVersion: PROTOCOL_VERSION }),
-          authenticate: async () => ({}),
+          initialize: async (params) => {
+            assert.equal(params.clientCapabilities?.auth?._meta?.gateway, true);
+            return { protocolVersion: PROTOCOL_VERSION, authMethods: [{ id: "gateway", name: "Gateway" }] };
+          },
+          authenticate: async (params) => {
+            assert.equal(params.methodId, "gateway");
+            assert.deepEqual(params._meta?.gateway, {
+              baseUrl: "https://gateway.example/gateway/v1",
+              headers: { Authorization: `Bearer ${providerBinding.apiKey}` },
+            });
+            seen.push("gateway");
+            return {};
+          },
           newSession: async () => ({ sessionId: "custom-1", configOptions: catalog("default") }),
           setSessionConfigOption: async ({ value }) => {
             assert.equal(value, requested);
@@ -128,15 +146,16 @@ for (const acceptsModel of [true, false]) {
         return connectAcpStream(clientStream, options);
       },
     });
-    const model = new AcpModel({ agentId: "claude-code", customModelId: requested, leoSessionId: "custom-test",
-      cwd: () => "/w", manager });
+    const model = new AcpModel({ agentId: "codex", customModelId: requested, leoSessionId: "custom-test",
+      cwd: () => "/w", manager, providerBinding });
+    assert.equal(model.modelId, "codex@private%2Fopenai-compatible@private-gateway");
     const stream = collect(model.streamText({ messages: [user("hello")] }));
     if (acceptsModel) {
       assert.equal(textOf(await stream), "selected");
-      assert.deepEqual(seen, ["select", "prompt"]);
+      assert.deepEqual(seen, ["gateway", "select", "prompt"]);
     } else {
       await assert.rejects(stream, /未确认模型/);
-      assert.deepEqual(seen, ["select"]);
+      assert.deepEqual(seen, ["gateway", "select"]);
     }
     manager.disposeAll();
   });

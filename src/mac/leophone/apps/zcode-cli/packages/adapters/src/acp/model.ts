@@ -19,6 +19,7 @@ import {
   type ModelResult,
 } from "@zcode/contracts";
 import { ACP_PROVIDER_ID, ACP_TOOL_NAME, acpAgentInfo, formatAcpModelId, type AcpAgentId } from "@zcode/shared/acp";
+import type { AcpProviderBinding } from "./catalog.js";
 import type { AcpSessionManager } from "./manager.js";
 import type { AcpSessionHost } from "./session.js";
 
@@ -47,6 +48,7 @@ const ACP_OPTION_SPECS: ModelOptionSpecs = {
 export interface AcpModelOptions {
   agentId: AcpAgentId;
   customModelId?: string;
+  providerBinding?: AcpProviderBinding;
   leoSessionId: string;
   cwd: () => string;
   manager: AcpSessionManager;
@@ -129,7 +131,7 @@ export class AcpModel implements Model {
     this.#options = options;
     this.agentId = options.agentId;
     this.modelId = createModelId(options.customModelId
-      ? formatAcpModelId(options.agentId, options.customModelId)
+      ? formatAcpModelId(options.agentId, options.customModelId, options.providerBinding?.providerId)
       : options.agentId);
     this.displayName = options.customModelId ?? acpAgentInfo(options.agentId).name;
   }
@@ -146,12 +148,12 @@ export class AcpModel implements Model {
   }
 
   async *streamText(request: ModelRequest): AsyncIterable<ModelEvent> {
-    const { manager, leoSessionId, agentId, customModelId, cwd } = this.#options;
+    const { manager, leoSessionId, agentId, customModelId, providerBinding, cwd } = this.#options;
     const signal = request.abortSignal;
     signal?.throwIfAborted();
     let host: AcpSessionHost;
     try {
-      ({ host } = await manager.ensure(leoSessionId, agentId, cwd(), customModelId));
+      ({ host } = await manager.ensure(leoSessionId, agentId, cwd(), customModelId, providerBinding));
     } catch (error) {
       throw manager.describeFailure(leoSessionId, agentId, error);
     }

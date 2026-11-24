@@ -18,7 +18,7 @@ export const LEO_RELEASE_NOTES: LeoRelease[] = [
     version: "1.22.1",
     date: "2026-11-24",
     items: [
-      "选中本机 CLI 后可以填自定义模型 ID，任务保留该 CLI 的服务商和登录配置。",
+      "输入框旁直接选择已配置的模型，LeoBot 会按供应商自动匹配可用执行器。",
       "发送前由 CLI 确认实际模型。更换模型不改变任务的执行器。",
     ],
   },

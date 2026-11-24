@@ -20,6 +20,12 @@ import {
 export * from "@zcode/shared/acp-detect";
 export { ACP_AGENT_IDS, type AcpAgentId } from "@zcode/shared/acp";
 
+export interface AcpProviderBinding {
+  providerId: string;
+  baseUrl: string;
+  apiKey: string;
+}
+
 function launchEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(env)) {

@@ -11,7 +11,7 @@ import {
   type AcpAgentCommand,
   type AcpAgentId,
 } from "@zcode/shared/acp";
-import { detectAcpAgent, resolveAcpLaunch, type AcpEnvironment } from "./catalog.js";
+import { detectAcpAgent, resolveAcpLaunch, type AcpEnvironment, type AcpProviderBinding } from "./catalog.js";
 import {
   acpUnavailableError,
   appendStderrTail,
@@ -43,6 +43,7 @@ type AcpEntry = {
   /** 不支持 session/load 的 agent 闲置时只记一次日志、不回收。 */
   idleLogged?: boolean;
   customModelId?: string;
+  providerBinding?: AcpProviderBinding;
 };
 
 /** 每个 LeoBot 会话一个 agent 进程；会话 id 落盘，重启后用 session/load 接上。 */
@@ -84,9 +85,19 @@ export class AcpSessionManager {
     agentId: AcpAgentId,
     cwd: string,
     customModelId?: string,
+    providerBinding?: AcpProviderBinding,
   ): Promise<{ host: AcpSessionHost; connection: AcpAgentConnection }> {
     let entry = this.#entries.get(leoSessionId);
     if (entry && entry.host.agentId !== agentId) {
+      this.dispose(leoSessionId);
+      entry = undefined;
+    }
+    if (entry && entry.providerBinding?.providerId !== providerBinding?.providerId) {
+      throw new Error("当前 CLI 任务已连接到另一个供应商，请在新任务中切换供应商。");
+    }
+    if (entry && (entry.providerBinding?.baseUrl !== providerBinding?.baseUrl
+      || entry.providerBinding?.apiKey !== providerBinding?.apiKey)) {
+      if (entry.host.turnActive) throw new Error("当前 CLI 任务仍在运行，请在下一轮应用供应商更新。");
       this.dispose(leoSessionId);
       entry = undefined;
     }
@@ -106,13 +117,16 @@ export class AcpSessionManager {
         if (stderrBuffer) this.#logger?.debug?.("ACP agent stderr", { agentId, chunk: redactAgentOutput(stderrBuffer.slice(-2000)) });
         stderrBuffer = "";
       };
+      const saved = this.#readState()[leoSessionId];
       const connection = launch
         ? this.#connect(launch, {
             host,
             cwd,
             customModelId,
-            resumeSessionId: this.#readState()[leoSessionId]?.acpSessionId,
+            providerBinding,
+            resumeSessionId: saved?.agentId === agentId ? saved.acpSessionId : undefined,
             onStderr: (chunk) => {
+              if (providerBinding?.apiKey) chunk = chunk.replaceAll(providerBinding.apiKey, "[redacted]");
               appendStderrTail(tail, chunk);
               stderrBuffer = (stderrBuffer + chunk).slice(-8000);
               stderrTimer ??= setTimeout(flushStderr, ACP_STDERR_FLUSH_MS);
@@ -133,7 +147,7 @@ export class AcpSessionManager {
         : Promise.reject(
             acpUnavailableError(agentId, detectAcpAgent(agentId, this.#environment).unavailableReason),
           );
-      const created: AcpEntry = { host, connection, customModelId };
+      const created: AcpEntry = { host, connection, customModelId, providerBinding };
       entry = created;
       this.#entries.set(leoSessionId, entry);
       this.#startSweep();

@@ -2212,7 +2212,7 @@ function ConversationComposerImpl({
           view={modelSelectionView}
           current={composerAgentSelection}
           draftSettings={compactDraftSettings ? {
-            model: localCliSelected ? "" : composerAgentSelection.model || (locale.startsWith("zh") ? "选模型" : "Choose model"),
+            model: localCliSelected ? "" : composerAgentSelection.model || (locale.startsWith("zh") ? "选择模型" : "Choose model"),
             onChooseModel: localCliSelected ? undefined : () => {
               if (!modelSelectionView?.providers.some((p) => p.providerId !== ACP_PROVIDER_ID && p.models.length)) {
                 handleManageLocalAgents("modelProvider");

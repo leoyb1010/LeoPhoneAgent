@@ -4,6 +4,7 @@ import { formatAcpModelId, parseAcpModelId } from "@zcode/shared/acp";
 import { resolveLeoAgentKind } from "@/leo/leoAgentKind.js";
 import {
   buildLeoAgentChoices,
+  listLeoConfiguredModels,
   resolveLeoAgentChoice,
   isSameLeoAgentRoute,
   resolveLeoComposerAgentSelection,
@@ -28,15 +29,87 @@ const view = {
 } as unknown as ModelSelectionView;
 
 describe("Leo local Agent selection", () => {
+  it("lists saved models across CLI choices and preserves their exact providers", () => {
+    const api = view.providers[0]!;
+    const available = view.providers[1]!;
+    const catalogue = {
+      ...view,
+      providers: [
+        {
+          ...api,
+          providerId: "team@anthropic",
+          config: {
+            access: { type: "api-key" },
+            api: { type: "anthropic-messages", baseUrl: "https://api.anthropic.com/v1" },
+          },
+        },
+        {
+          ...api,
+          providerId: "team-openai",
+          config: {
+            access: { type: "api-key" },
+            api: { type: "openai-responses", baseUrl: "https://api.openai.com/v1" },
+          },
+        },
+        {
+          ...api,
+          providerId: "no-compatible-cli",
+          config: {
+            access: { type: "api-key" },
+            api: { type: "anthropic-messages", baseUrl: "https://gateway.example/anthropic/v1" },
+          },
+        },
+        { ...available, models: [...available.models, { modelId: "claude-code", config: {} }] },
+      ],
+    } as ModelSelectionView;
+    const options = listLeoConfiguredModels(catalogue, "codex");
+    const codex = options[1]!.selection;
+    expect(options[0]!.selection).toEqual({ provider: "team@anthropic", model: "model-a" });
+    expect(parseAcpModelId(codex.model)).toEqual({
+      agentId: "codex",
+      customModelId: "model-a",
+      configuredProviderId: "team-openai",
+    });
+    expect(options[2]!.selection).toEqual({ provider: "no-compatible-cli", model: "model-a" });
+    expect(listLeoConfiguredModels(catalogue, "gemini").map((option) => option.selection)).toEqual(
+      options.map((option) => option.selection),
+    );
+    expect(resolveLeoAgentChoice("leobot", catalogue, codex)).toEqual({
+      provider: "team-openai",
+      model: "model-a",
+    });
+    expect(isSameLeoAgentRoute({ provider: "acp", model: "codex" }, codex)).toBe(false);
+    expect(
+      isSameLeoAgentRoute(codex, {
+        provider: "acp",
+        model: formatAcpModelId("codex", "model-b", "team-openai"),
+      }),
+    ).toBe(true);
+    expect(
+      listLeoConfiguredModels(
+        {
+          ...catalogue,
+          providers: catalogue.providers.slice(0, 3),
+        },
+        "claude-code",
+      )[1]!.selection,
+    ).toEqual({ provider: "team-openai", model: "model-a" });
+  });
+
   it("keeps a custom model on the selected CLI route, even with a provider-qualified ID", () => {
     const model = formatAcpModelId("codex", "router/custom-model:beta");
     const custom = { provider: "acp", model };
-    expect(parseAcpModelId(model)).toEqual({ agentId: "codex", customModelId: "router/custom-model:beta" });
+    expect(parseAcpModelId(model)).toEqual({
+      agentId: "codex",
+      customModelId: "router/custom-model:beta",
+    });
     expect(resolveLeoAgentKind(custom)).toBe("codex");
     expect(resolveLeoAgentChoice("codex", view, custom)).toEqual(custom);
     expect(isSameLeoAgentRoute({ provider: "acp", model: "codex" }, custom)).toBe(true);
     expect(isSameLeoAgentRoute({ provider: "acp", model: "claude-code" }, custom)).toBe(false);
-    expect(resolveLeoComposerAgentSelection(false, custom, { provider: "acp", model: "codex" })).toEqual(custom);
+    expect(
+      resolveLeoComposerAgentSelection(false, custom, { provider: "acp", model: "codex" }),
+    ).toEqual(custom);
     expect(parseAcpModelId("codex@bad%20model")).toBeNull();
   });
   it("shows the draft Agent instead of a stale prewarm snapshot, and pins an existing task's actual Agent", () => {
