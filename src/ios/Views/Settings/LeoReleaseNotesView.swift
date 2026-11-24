@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.91.0",
+            date: "2026-11-24",
+            title: "iPhone 独立使用与预览接续",
+            highlights: [
+                "首页和对话更快切换常用模型。新对话默认有独立入口，单独使用手机时可先开始对话。",
+                "默认字号跟随系统，主按钮、选中态和完成标记统一为蓝色或中性色。对话菜单优先显示查找、产物和分享。",
+                "可收起网页、本地 HTML 或 PDF 预览，继续聊天后回到原预览。",
+                "手机打开远程任务通知时立即显示目标，等待 Mac 返回真实任务状态。"
+            ]
+        ),
+        LeoRelease(
             version: "1.90.3",
             date: "2026-11-10",
             title: "iPhone Duo 按钮悬浮在右侧",

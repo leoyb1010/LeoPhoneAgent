@@ -34,7 +34,7 @@ struct MacTerminalSessionsButton: View {
                             .overlay(alignment: .topTrailing) {
                                 // 终端里有还开着的 claude:一个小绿点,不用点开也知道。
                                 if store.hasRunning(hostIds) {
-                                    Circle().fill(Color.green)
+                                    Circle().fill(Color.blue)
                                         .frame(width: 6, height: 6)
                                         .offset(x: 3, y: -2)
                                 }
@@ -150,7 +150,7 @@ struct MacTerminalSessionsView: View {
 
     /// [codex-sessions] Claude 橙色、Codex 青色,一眼分得清是哪个 agent 的会话。
     private func tint(_ session: MacExternalSession) -> Color {
-        session.agent == "codex" ? Color.teal : Color.orange
+        session.agent == "codex" ? Color.indigo : Color.orange
     }
 
     private func row(_ session: MacExternalSession, host: GatewayHost, busy: Bool) -> some View {
@@ -194,11 +194,11 @@ struct MacTerminalSessionsView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "circle.fill")
                                         .font(.system(size: 6))
-                                        .foregroundStyle(.green)
+                                        .foregroundStyle(.blue)
                                         .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
                                     Text(openLabel(session, busy: busy))
                                 }
-                                .foregroundStyle(.green)
+                                .foregroundStyle(.blue)
                             }
                             if session.leobotSessionId != nil {
                                 Text("已在手机上接管")

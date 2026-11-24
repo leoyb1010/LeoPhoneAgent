@@ -114,11 +114,11 @@ private struct SharedFolderRow: View {
         if entry.isWritableFromFiles {
             Text("R/W")
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(.green)
+                .foregroundStyle(.blue)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 1)
                 .background(
-                    Capsule().strokeBorder(Color.green.opacity(0.5), lineWidth: 1)
+                    Capsule().strokeBorder(Color.blue.opacity(0.5), lineWidth: 1)
                 )
         } else {
             Text("Read-only")

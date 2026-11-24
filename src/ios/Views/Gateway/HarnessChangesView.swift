@@ -203,10 +203,10 @@ private struct FileStatusBadge: View {
 
     private var style: (String, Color) {
         switch status {
-        case "A": return ("A", .green)
+        case "A": return ("A", .blue)
         case "D": return ("D", .red)
         case "R": return ("R", .blue)
-        case "?": return ("U", .green)
+        case "?": return ("U", .blue)
         default: return ("M", LeoTheme.ColorToken.attention)
         }
     }
@@ -227,7 +227,7 @@ private struct DiffStat: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            if additions > 0 { Text("+\(additions)").foregroundStyle(.green) }
+            if additions > 0 { Text("+\(additions)").foregroundStyle(.blue) }
             if deletions > 0 { Text("−\(deletions)").foregroundStyle(.red) }
         }
         .font(.system(size: 12, weight: .medium, design: .monospaced))
@@ -417,7 +417,7 @@ private struct DiffLineRow: View {
 
     private var tint: Color? {
         switch line.kind {
-        case .added: return .green
+        case .added: return .blue
         case .removed: return .red
         default: return nil
         }
@@ -425,7 +425,7 @@ private struct DiffLineRow: View {
 
     private var background: Color {
         switch line.kind {
-        case .added: return Color.green.opacity(dark ? 0.18 : 0.12)
+        case .added: return Color.blue.opacity(dark ? 0.18 : 0.12)
         case .removed: return Color.red.opacity(dark ? 0.18 : 0.10)
         case .hunk: return Color.accentColor.opacity(dark ? 0.16 : 0.08)
         default: return .clear

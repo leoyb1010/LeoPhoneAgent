@@ -258,7 +258,7 @@ struct MailAccountEditor: View {
                 .disabled(!canTest || testing)
                 if let result {
                     Label(result, systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.blue)
                         .font(.footnote)
                 }
                 if let failure {

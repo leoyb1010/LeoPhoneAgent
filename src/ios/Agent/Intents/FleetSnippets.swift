@@ -46,7 +46,7 @@ struct FleetStatusSnippet: View {
             ForEach(rows) { row in
                 HStack(alignment: .top, spacing: 8) {
                     Circle()
-                        .fill(row.reachable ? (row.waitingCount > 0 ? Color.orange : .green) : .secondary)
+                        .fill(row.reachable ? (row.waitingCount > 0 ? Color.orange : .blue) : .secondary)
                         .frame(width: 8, height: 8)
                         .padding(.top, 5)
                     VStack(alignment: .leading, spacing: 2) {
@@ -98,7 +98,7 @@ struct MacDispatchSnippet: View {
             Label(ok ? "已开工" : "没能开工",
                   systemImage: ok ? "play.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.headline)
-                .foregroundStyle(ok ? .green : .orange)
+                .foregroundStyle(ok ? .blue : .orange)
             Text("\(machine) · \(cli)")
                 .font(.system(size: 15, weight: .medium))
             Text(task)
@@ -129,7 +129,7 @@ struct ApprovalResultSnippet: View {
             Label(approved ? "已批准" : "未能批准",
                   systemImage: approved ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
                 .font(.headline)
-                .foregroundStyle(approved ? .green : .orange)
+                .foregroundStyle(approved ? .blue : .orange)
             Text(machine).font(.system(size: 15, weight: .medium))
             Text(command)
                 .font(.caption)

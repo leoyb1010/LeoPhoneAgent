@@ -237,7 +237,7 @@ struct EnvironmentVariablesView: View {
                 } label: {
                     Image(systemName: copiedId == entry.id ? "checkmark" : "doc.on.clipboard")
                         .font(.system(size: 13))
-                        .foregroundStyle(copiedId == entry.id ? .green : .secondary)
+                        .foregroundStyle(copiedId == entry.id ? .blue : .secondary)
                 }
                 .buttonStyle(.plain)
             }

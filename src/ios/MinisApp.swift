@@ -97,7 +97,6 @@ struct MinisApp: App {
     @AppStorage("appLanguage") private var appLanguage: String = ""
     @AppStorage("leo.releaseNotes.lastPresentedVersion") private var lastPresentedReleaseVersion: String = ""
     @StateObject private var shareCoordinator = ShareCoordinator.shared
-    @ObservedObject private var fontSettings = FontSettings.shared
     @ObservedObject private var configConfirmGate = ConfigConfirmationGate.shared
     @ObservedObject private var sessionLockStore = SessionLockStore.shared
     @Environment(\.scenePhase) private var scenePhase
@@ -245,7 +244,7 @@ struct MinisApp: App {
                     appearanceMode == 1 ? .light : appearanceMode == 2 ? .dark : nil
                 )
                 .environment(\.locale, appLanguage.isEmpty ? .current : Locale(identifier: appLanguage))
-                .dynamicTypeSize(fontSettings.appBaseScale.dynamicTypeSize)
+                .appFontScale()
                 .onOpenURL { url in
                     shareLog.info("[Share] onOpenURL scheme=\(url.scheme ?? "nil") host=\(url.host ?? "nil")")
                     AppURLEntry.open(url, source: "onOpenURL")

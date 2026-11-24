@@ -347,6 +347,9 @@ struct AIChatView: View {
     @State private var showArtifactTray = false
     /// [T-delivery-tray] Live artifact count for the permanent toolbar badge.
     @State private var artifactCount = 0
+    @State private var macReceiptCount = 0
+    @State private var macReceiptTarget: MacReceiptTarget?
+    private var deliveryCount: Int { artifactCount + macReceiptCount }
     // [T-browser-download-ux-v2] Downloads panel + "Show in Files" locate target.
     @State private var showDownloadsPanel = false
     @State private var locateDownloadTarget: DownloadLocateTarget?
@@ -510,6 +513,18 @@ struct AIChatView: View {
     @State private var safariURL: URL?
     @State private var fullBrowserURL: URL?
     @State private var fullBrowserIsLocal = false
+    private struct ParkedPreview {
+        enum Content {
+            case website(WebViewHolder)
+            case html(WebViewHolder)
+            case pdf(MinisPDFPreviewPosition)
+        }
+        let sessionId: String?
+        let url: URL
+        let content: Content
+    }
+    @State private var parkedPreview: ParkedPreview?
+    @State private var reopenedPreview: ParkedPreview?
     /// Filename to show in the "file missing" alert. Set by `handleMinisURLTap`
     /// when `resolveMinisFileURL` returns nil for a tapped `leophoneagent://` link
     /// (file was deleted, the session was pruned, or iCloud hasn't synced yet).
@@ -535,6 +550,7 @@ struct AIChatView: View {
                     }
                     // [F2-countdown] This conversation's next scheduled follow-up.
                     ScheduledFollowUpHeaderPill(sessionId: vm.sessionId)
+                    parkedPreviewStrip
                     // Error banner
                     if let error = vm.errorMessage {
                         errorBanner(error)
@@ -776,17 +792,17 @@ struct AIChatView: View {
                     // "where did my file go" kept happening.
                     // Prior #2: hidden while the chat is Face ID-locked
                     // (titleLocked is part of the host key, so it re-renders).
-                    if artifactCount > 0, !titleIsVisuallyLocked {
+                    if deliveryCount > 0, !titleIsVisuallyLocked {
                         Button {
                             showArtifactTray = true
                         } label: {
                             Image(systemName: "tray.full")
                                 .overlay(alignment: .topTrailing) {
-                                    Text("\(min(artifactCount, 99))")
+                                    Text("\(min(deliveryCount, 99))")
                                         .font(.system(size: 9, weight: .bold))
                                         .foregroundStyle(.white)
                                         .padding(.horizontal, 3).padding(.vertical, 1)
-                                        .background(.teal, in: Capsule())
+                                        .background(.indigo, in: Capsule())
                                         .offset(x: 8, y: -6)
                                 }
                         }
@@ -1010,26 +1026,37 @@ struct AIChatView: View {
         .sheet(item: $previewMarkdownFile) { fileURL in
             MinisMarkdownPreviewView(fileURL: fileURL)
         }
-        .sheet(item: $previewDocumentFile) { fileURL in
-            // [T-artifact-preview-exit] Done button: a page or image in QuickLook
-            // takes the drag, so the sheet could not be swiped away.
-            NavigationStack {
-                MinisDocumentPreviewView(fileURL: fileURL)
-                    .ignoresSafeArea(edges: .bottom)
-                    .navigationTitle(fileURL.lastPathComponent)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button(AppLocalized("Done")) { previewDocumentFile = nil }
+        .sheet(item: $previewDocumentFile, onDismiss: clearReopenedPreview) { fileURL in
+            if fileURL.pathExtension.lowercased() == "pdf" {
+                let position = reopenedPDFPosition(for: fileURL) ?? MinisPDFPreviewPosition()
+                MinisPausablePDFPreview(fileURL: fileURL, position: position) {
+                    parkPreview(fileURL, as: .pdf(position))
+                    previewDocumentFile = nil
+                }
+            } else {
+                NavigationStack {
+                    MinisDocumentPreviewView(fileURL: fileURL)
+                        .ignoresSafeArea(edges: .bottom)
+                        .navigationTitle(fileURL.lastPathComponent)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button(AppLocalized("Done")) { previewDocumentFile = nil }
+                            }
                         }
-                    }
+                }
             }
         }
         .sheet(item: $shareFile) { fileURL in
             MinisShareSheet(url: fileURL)
         }
-        .sheet(item: $safariURL) { url in
-            MinisLinkPreviewView(url: url, browserPool: vm.browserTabPool, onExpand: { holder in
+        .sheet(item: $safariURL, onDismiss: clearReopenedPreview) { url in
+            MinisLinkPreviewView(url: url, browserPool: vm.browserTabPool,
+                retainedHolder: reopenedWebHolder(for: url, local: false),
+                onPark: { holder in
+                    parkPreview(url, as: .website(holder))
+                    safariURL = nil
+                }, onExpand: { holder in
                 fullBrowserIsLocal = false
                 let targetURL = holder.actionURL(fallback: url)
                 safariURL = nil
@@ -1073,8 +1100,12 @@ struct AIChatView: View {
             }
             MinisOpenURLBroker.shared.consume()
         }
-        .sheet(item: $previewHTMLFile) { fileURL in
-            MinisHTMLPreviewView(fileURL: fileURL, onExpand: { _ in
+        .sheet(item: $previewHTMLFile, onDismiss: clearReopenedPreview) { fileURL in
+            MinisHTMLPreviewView(fileURL: fileURL, retainedHolder: reopenedWebHolder(for: fileURL, local: true),
+                onPark: { holder in
+                    parkPreview(fileURL, as: .html(holder))
+                    previewHTMLFile = nil
+                }, onExpand: { _ in
                 fullBrowserIsLocal = true
                 let targetURL = fileURL
                 previewHTMLFile = nil
@@ -1427,6 +1458,8 @@ struct AIChatView: View {
         }
         .observingQuickActions(modifier: quickActionObserver)
         .onChange(of: vm.sessionId) { _ in
+            if parkedPreview?.sessionId != vm.sessionId { parkedPreview = nil }
+            if reopenedPreview?.sessionId != vm.sessionId { reopenedPreview = nil }
             refreshTitlePillSession()
         }
         .onReceive(NotificationCenter.default.publisher(for: .sessionDidUpdate)) { note in
@@ -1694,9 +1727,19 @@ struct AIChatView: View {
             // primary workspace, where the user can attach local context or
             // switch models before execution.
             QuickActionWorkflow.shared.markCoverPresented()
-        case .sendPrompt(let prompt):
+        case .sendPrompt(let prompt), .sendHomeDraft(_, let prompt, _, _):
+            if case .sendHomeDraft(_, _, let files, _) = action {
+                vm.attachments.append(contentsOf: files.map { file in
+                    let kind: InputAttachment.Kind = switch file.kind {
+                    case .image: .image
+                    case .video: .video
+                    case .document: .document
+                    }
+                    return InputAttachment(id: file.id, fileName: file.name, cacheURL: file.url, kind: kind)
+                })
+            }
             let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else {
+            guard !trimmed.isEmpty || !vm.attachments.isEmpty else {
                 QuickActionWorkflow.shared.markCoverPresented()
                 return
             }
@@ -2060,7 +2103,7 @@ struct AIChatView: View {
             : (chatColumnWidth > 0 ? chatColumnWidth : LeoWindowMetrics.bounds.width)
         // "…" always; the iPad split adds the inspector toggle beside it.
         var trailing = inspectorRoute != nil ? 2 : 1
-        if artifactCount > 0 && !titleIsVisuallyLocked { trailing += 1 }
+        if deliveryCount > 0 && !titleIsVisuallyLocked { trailing += 1 }
         let cap = ChatHeaderLayout.principalCap(columnWidth: column,
                                                 leadingItems: hSizeClass == .regular ? 2 : 1,
                                                 trailingItems: trailing,
@@ -2086,7 +2129,7 @@ struct AIChatView: View {
             fastModeEnabled: codexFastModeEnabled,
             isProcessing: vm.isProcessing,
             isEditing: vm.editingMessageIndex != nil,
-            artifactCount: artifactCount,
+            artifactCount: deliveryCount,
             principalCap: headerPrincipalCap
         )
     }
@@ -2289,7 +2332,7 @@ struct AIChatView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(isAuthed ? Color.green : Color.orange)
+                            .fill(isAuthed ? Color.blue : Color.orange)
                             .frame(width: 6, height: 6)
                         if isGroupBound {
                             Image(systemName: "square.stack.3d.up")
@@ -3252,6 +3295,75 @@ struct AIChatView: View {
         return img
     }
 
+    private var parkedPreviewStrip: AnyView {
+        guard let preview = parkedPreview, preview.sessionId == vm.sessionId else {
+            return AnyView(EmptyView())
+        }
+        let title = preview.url.isFileURL ? preview.url.lastPathComponent : (preview.url.host ?? preview.url.absoluteString)
+        return AnyView(
+            HStack(spacing: 8) {
+                Button {
+                    if preview.url.isFileURL && !FileManager.default.fileExists(atPath: preview.url.path) {
+                        parkedPreview = nil
+                        missingMinisFileName = title
+                        return
+                    }
+                    reopenedPreview = preview
+                    parkedPreview = nil
+                    switch preview.content {
+                    case .website: safariURL = preview.url
+                    case .html: previewHTMLFile = preview.url
+                    case .pdf: previewDocumentFile = preview.url
+                    }
+                } label: {
+                    Label(title, systemImage: "rectangle.expand.vertical")
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(Text(AppLocalized("继续预览 \(title)")))
+                .accessibilityIdentifier("chat-preview.resume")
+                Button {
+                    parkedPreview = nil
+                } label: {
+                    Image(systemName: "xmark").frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel(Text("Close"))
+                .accessibilityIdentifier("chat-preview.discard")
+            }
+            .font(.subheadline.weight(.medium))
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            .padding(.leading, 12)
+            .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 12)
+        )
+    }
+
+    private func parkPreview(_ url: URL, as content: ParkedPreview.Content) {
+        parkedPreview = ParkedPreview(sessionId: vm.sessionId, url: url, content: content)
+    }
+
+    private func clearReopenedPreview() {
+        reopenedPreview = nil
+    }
+
+    private func reopenedWebHolder(for url: URL, local: Bool) -> WebViewHolder? {
+        guard let preview = reopenedPreview, preview.url == url, preview.sessionId == vm.sessionId else { return nil }
+        switch preview.content {
+        case .website(let holder) where !local: return holder
+        case .html(let holder) where local: return holder
+        default: return nil
+        }
+    }
+
+    private func reopenedPDFPosition(for url: URL) -> MinisPDFPreviewPosition? {
+        guard let preview = reopenedPreview, preview.url == url, preview.sessionId == vm.sessionId,
+              case .pdf(let position) = preview.content else { return nil }
+        return position
+    }
+
     private func handleMinisURLTap(_ url: URL) -> OpenURLAction.Result {
         let url = AppURLScheme.canonicalize(url)
         if let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
@@ -3865,7 +3977,9 @@ struct AIChatView: View {
                     if choice.hasPrefix("group:") {
                         vm.initialGroupId = String(choice.dropFirst(6)); vm.initialEntryKey = nil
                     } else { vm.initialEntryKey = choice; vm.initialGroupId = nil }
-                } : nil)
+                } : nil,
+                scopeNote: vm.sessionId == nil ? AppLocalized("用于这次新对话")
+                    : AppLocalized("用于此对话后续消息"))
     }
 
     private var composerSheetsHost: AnyView {
@@ -3880,7 +3994,6 @@ struct AIChatView: View {
         }
         .sheet(isPresented: $showQuickModelSwitch) {
             sessionModelSelection
-            .presentationDetents([.large])
         }
         .onReceive(NotificationCenter.default.publisher(for: .leoOpenQuickModelSwitch, object: vm)) { _ in
             showQuickModelSwitch = true
@@ -3914,9 +4027,18 @@ struct AIChatView: View {
             consumeMacResults()
         }
         .onChange(of: vm.isLoadingSession) { _, _ in consumeMacResults() }
+        .onChange(of: titleIsVisuallyLocked) { _, locked in
+            if locked { macReceiptTarget = nil } else { consumeMacResults() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: MacResultInbox.changed)) { note in
             guard note.userInfo?["sessionId"] as? String == vm.sessionId else { return }
             consumeMacResults()
+        }
+        .sheet(item: $macReceiptTarget) { target in
+            NavigationStack {
+                MacReceiptHistoryView(sessionId: target.phoneSessionId, target: target)
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { macReceiptTarget = nil } } }
+            }
         }
         .onDisappear { SessionHandoff.stop(sessionId: vm.sessionId) }
         // GatewayHostStore 的路由状态变化很频繁：订阅挪到这个小 modifier 里，不再让整个聊天页跟着重算。
@@ -3981,16 +4103,16 @@ struct AIChatView: View {
         SessionHandoff.advertise(sessionId: sid)
     }
 
-    /// [E5] 这个对话派到 Mac 的任务结束了:作为一条提示放在对话最后并滚过去(只显示一次)。
-    /// 等历史加载完再放,否则加载会把它冲掉。
     private func consumeMacResults() {
-        guard let sid = vm.sessionId, !vm.isLoadingSession, !vm.messages.isEmpty else { return }
-        let results = MacResultInbox.take(phoneSessionId: sid)
-        guard !results.isEmpty else { return }
-        for result in results {
+        guard let sid = vm.sessionId else { macReceiptCount = 0; return }
+        macReceiptCount = MacResultInbox.history(phoneSessionId: sid).count
+        guard !titleIsVisuallyLocked else { return }
+        if let target = NotificationNavigationStore.shared.takeReceipt(sessionId: sid) { macReceiptTarget = target }
+        guard !vm.isLoadingSession, !vm.messages.isEmpty else { return }
+        for result in MacResultInbox.take(phoneSessionId: sid) {
             vm.appendSystemInfo(result.noticeText, icon: result.failed ? "exclamationmark.triangle" : "desktopcomputer")
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { vm.forceScrollToBottom.send() }
+        // The transcript’s existing follow state owns scrolling when new content arrives.
     }
 
     /// [T-local-brain] 本机改写菜单。结果直接替换输入框内容;失败保留原文。
@@ -4985,7 +5107,7 @@ struct AIChatView: View {
                 if cmd.id == "memory" {
                     Image(systemName: memoryEnabled ? "checkmark.circle.fill" : "slash.circle")
                         .font(.system(size: 16))
-                        .foregroundStyle(memoryEnabled ? (isSelected ? .white : .green) : (isSelected ? .white.opacity(0.6) : .secondary))
+                        .foregroundStyle(memoryEnabled ? (isSelected ? .white : .blue) : (isSelected ? .white.opacity(0.6) : .secondary))
                 }
                 if cmd.id == "thinking" && thinkingSupported {
                     thinkingLevelPicker
@@ -5693,24 +5815,27 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         let contentGate: UIMenuElement.Attributes = key.isLocked ? [.disabled] : []
 
         groups.append(UIMenu(options: .displayInline, children: [
-            UIAction(title: AppLocalized("New Chat"),
-                     image: UIImage(systemName: "square.and.pencil")) { _ in coordinator.parent.onNewChat() },
             UIAction(title: AppLocalized("查找对话内容"),
                      image: UIImage(systemName: "magnifyingglass"),
                      attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onFindInChat() },
+            UIAction(title: AppLocalized("Artifacts"),
+                     image: UIImage(systemName: "shippingbox"),
+                     attributes: contentGate) { _ in coordinator.parent.onArtifacts() },
+            UIAction(title: AppLocalized("分享为长图"),
+                     image: UIImage(systemName: "photo.on.rectangle"),
+                     attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onShareLongImage() },
+            UIAction(title: AppLocalized("New Chat"),
+                     image: UIImage(systemName: "square.and.pencil")) { _ in coordinator.parent.onNewChat() },
         ]))
 
         // [T-session-export] Whole-conversation export; disabled while empty.
-        groups.append(UIMenu(options: .displayInline, children: [
+        groups.append(UIMenu(title: AppLocalized("Export"), image: UIImage(systemName: "square.and.arrow.up"), children: [
             UIAction(title: AppLocalized("Export as Markdown"),
                      image: UIImage(systemName: "arrow.down.doc"),
                      attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onExportMarkdown() },
             UIAction(title: AppLocalized("Export as PDF"),
                      image: UIImage(systemName: "doc.richtext"),
                      attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onExportPDF() },
-            UIAction(title: AppLocalized("分享为长图"),
-                     image: UIImage(systemName: "photo.on.rectangle"),
-                     attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onShareLongImage() },
         ]))
 
         // [T-chat-menu-compact-entry] Compact sits ABOVE Clear Chat in its own
@@ -5750,9 +5875,6 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
             UIAction(title: AppLocalized("Browse Chat Files"),
                      image: UIImage(systemName: "folder"),
                      attributes: contentGate) { _ in coordinator.parent.onBrowseFiles() },
-            UIAction(title: AppLocalized("Artifacts"),
-                     image: UIImage(systemName: "shippingbox"),
-                     attributes: contentGate) { _ in coordinator.parent.onArtifacts() },
         ]))
 
         var sessionGroup: [UIMenuElement] = [
@@ -5776,7 +5898,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
                                      state: key.speakEnabled ? .on : .off) { _ in
             coordinator.parent.setSpeakEnabled(!key.speakEnabled)
         })
-        groups.append(UIMenu(options: .displayInline, children: sessionGroup))
+        groups.append(UIMenu(title: AppLocalized("对话设置"), image: UIImage(systemName: "slider.horizontal.3"), children: sessionGroup))
 
         // [T-codex-fast-mode-menu-group] Model-control toggles (they shape how
         // the MODEL is invoked, unlike the session-scoped rows above) live in
@@ -6306,7 +6428,7 @@ struct CompactSummarySheet: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
                     } label: {
                         Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc.fill")
-                            .foregroundStyle(copied ? .green : .secondary)
+                            .foregroundStyle(copied ? .blue : .secondary)
                     }
                 }
             }
@@ -6937,4 +7059,151 @@ private struct FileMentionIndexObserver: View {
     let content: () -> AnyView
 
     var body: some View { content() }
+}
+
+/// The tray shows all retained turns. A notification filters this same surface to its
+/// machine, session and (where supported) terminal event, even before networking finishes.
+struct MacReceiptHistoryView: View {
+    let sessionId: String
+    var target: MacReceiptTarget? = nil
+    @State private var entries: [MacResultEntry] = []
+    @State private var checking = false
+
+    var body: some View {
+        Group {
+            if target?.identifiesTurn == true, let entry = entries.first {
+                MacReceiptDetail(entry: entry)
+            } else if entries.isEmpty {
+                VStack(spacing: 14) {
+                    Image(systemName: "desktopcomputer").font(.title)
+                    Text(target?.machine ?? "Mac 任务").font(.headline)
+                    if let task = target?.harnessSessionId { Text(task).font(.caption).foregroundStyle(.secondary) }
+                    Text("这次结果尚未同步到此设备。")
+                    Button(checking ? "正在检查…" : "重新检查") {
+                        Task { await check() }
+                    }
+                    .disabled(checking)
+                    if let target {
+                        NavigationLink("回到 Mac 原任务") { MacReceiptTaskView(machine: target.machine, hostId: target.hostId, harnessSessionId: target.harnessSessionId) }
+                    }
+                }
+                .padding()
+            } else {
+                List(entries) { entry in
+                    NavigationLink {
+                        MacReceiptDetail(entry: entry)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(entry.machine) · \(entry.failed ? "失败" : "完成")").font(.headline)
+                            Text(entry.receivedAt.formatted()).font(.caption).foregroundStyle(.secondary)
+                            Text(entry.output).lineLimit(2)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Mac 任务回执")
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: sessionId) {
+            reload()
+            if target != nil && entries.isEmpty { await check() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: MacResultInbox.changed)) { note in
+            if note.userInfo?["sessionId"] as? String == sessionId { reload() }
+        }
+    }
+
+    private func reload() {
+        entries = MacResultInbox.history(phoneSessionId: sessionId).filter { target?.matches($0) ?? true }
+    }
+
+    private func check() async {
+        guard !checking else { return }
+        checking = true
+        await RelayEventCatchUp.shared.catchUp()
+        reload()
+        checking = false
+    }
+}
+
+private struct MacReceiptDetail: View {
+    let entry: MacResultEntry
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("\(entry.machine) · \(entry.failed ? "任务失败" : "已完成")").font(.headline)
+                Text(entry.receivedAt.formatted()).foregroundStyle(.secondary)
+                Text(entry.harnessSessionId).font(.caption.monospaced()).textSelection(.enabled)
+                if let seq = entry.eventSequence { Text("完成事件 #\(seq)").font(.caption) }
+                if let run = entry.runId { Text("运行 \(run)").font(.caption).textSelection(.enabled) }
+                Divider()
+                Text(entry.output.isEmpty ? "主机未返回结果正文。" : entry.output)
+                    .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                if !entry.output.isEmpty {
+                    ShareLink(item: entry.output) { Label("分享回执正文", systemImage: "square.and.arrow.up") }
+                        .frame(minHeight: 44)
+                }
+                NavigationLink { MacReceiptTaskView(machine: entry.machine, hostId: entry.hostId, harnessSessionId: entry.harnessSessionId) } label: {
+                    Label("回到 Mac 原任务", systemImage: "arrow.uturn.forward")
+                }
+                .frame(minHeight: 44)
+            }
+            .padding()
+        }
+        .navigationTitle("本轮结果")
+    }
+}
+
+private struct MacReceiptTaskView: View {
+    let machine: String
+    let hostId: String?
+    let harnessSessionId: String
+    @State private var summary: HarnessSessionSummary?
+    @State private var errorMessage: String?
+    @State private var attempt = 0
+
+    var body: some View {
+        Group {
+            if let host = GatewayHostStore.shared.taskHost(hostId: hostId, machine: machine),
+               let client = GatewayHostStore.shared.client(for: host) {
+                if let summary {
+                    HarnessConsoleView(driver: HarnessSessionDriver(client: client,
+                        harness: HarnessKind(key: summary.harness, name: summary.name), cwd: summary.cwd),
+                        firstPrompt: "", attachSessionId: harnessSessionId, attachStatus: summary.status)
+                } else if let errorMessage {
+                    VStack(spacing: 12) {
+                        Text(errorMessage).multilineTextAlignment(.center)
+                        Button("重新连接") { self.errorMessage = nil; attempt += 1 }
+                    }
+                    .padding()
+                } else {
+                    ProgressView("正在确认原任务…")
+                        .task(id: attempt) {
+                            do {
+                                let sessions = try await client.harnessSessions()
+                                if let task = sessions.first(where: { $0.id == harnessSessionId }) { summary = task }
+                                else { errorMessage = "这台 Mac 已没有这个任务。本轮回执仍可离线查看。" }
+                            } catch { errorMessage = error.localizedDescription }
+                        }
+                }
+            } else {
+                Text("原主机尚未连接。可返回查看已保存的回执。").padding()
+            }
+        }
+        .navigationTitle(machine)
+    }
+}
+
+
+struct MacStandaloneReceiptSheet: View {
+    let target: MacReceiptTarget
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            MacReceiptHistoryView(sessionId: "", target: target)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } } }
+        }
+    }
 }

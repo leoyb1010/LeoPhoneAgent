@@ -104,7 +104,7 @@ class ShareViewController: UIViewController {
 
     private func sendToMac(_ target: ShareMacTarget) {
         guard let vm, let secrets = ShareMacTargetSecrets.load() else { return finish() }
-        let requests = target.requests(text: vm.macShareText, secrets: secrets)
+        let requests = target.attempts(text: vm.macShareText, secrets: secrets)
         Task { @MainActor [weak self] in
             let outcome = await Self.deliver(requests)
             guard let self else { return }
@@ -116,37 +116,67 @@ class ShareViewController: UIViewController {
 
     /// Direct first, then relay (queued when the Mac is offline). Same request id on both,
     /// so a direct attempt that timed out after reaching the Mac is not delivered twice.
-    private static func deliver(_ requests: [URLRequest]) async -> (title: String, detail: String?) {
+    private static func deliver(_ requests: [ShareMacTarget.Attempt]) async -> (title: String, detail: String?) {
         let started = Date()
         var lastError = "没有可用的连接"
-        for request in requests {
-            var req = request
+        for attempt in requests {
+            var req = attempt.request
             let remaining = ShareMacTarget.totalBudget - Date().timeIntervalSince(started)
             guard remaining > 1 else { break }
-            req.timeoutInterval = min(req.timeoutInterval, remaining)
+            req.timeoutInterval = min(req.timeoutInterval, max(1, remaining - 4))
             do {
                 let (data, response) = try await URLSession.shared.data(for: req)
-                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                // [e2e] Mac 不认加密信封(旧版)或旧中继不排它:下一条是同编号的明文,Mac 按编号去重。
-                if ShareMacTarget.isSealed(req), case .fallback = RelayE2E.classify(status: status, data: data, queued: true) {
-                    continue
+                var status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                var body = data
+                if let keys = attempt.keys {
+                    switch RelayE2E.reply(status: status, data: data, keys: keys, queued: true) {
+                    case let .opened(innerStatus, innerBody): status = innerStatus; body = innerBody
+                    case .fallback:
+                        // Only an explicit unsupported-envelope response permits plaintext fallback.
+                        if case .fallback = RelayE2E.classify(status: status, data: data, queued: true) { continue }
+                        return await resolveShare(attempt, started: started)
+                    case .passthrough: break
+                    }
                 }
                 if (200..<300).contains(status) {
-                    let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-                    return (obj?["queued"] as? Bool) == true
-                        ? ("已排队", "Mac 现在不在线,上线后按顺序送达。")
-                        : ("已发给 Mac", nil)
+                    let result = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any]
+                    return status == 202 || result?["queued"] as? Bool == true
+                        ? ("已接收，待主机确认", "可在原 Mac 任务中查看进度。")
+                        : ("Mac 已确认接收", nil)
                 }
                 if status == 401 || status == 403 { return ("Mac 拒绝了这次发送", "打开 LeoBot 重新连接这台 Mac 后再试。") }
                 if ![502, 503, 504].contains(status) { return ("没发出去", "Mac 返回 \(status)。") }
-                lastError = "Mac 返回 \(status)"
+                return await resolveShare(attempt, started: started)
             } catch {
                 lastError = error.localizedDescription
+                if ![URLError.notConnectedToInternet, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed].contains((error as? URLError)?.code ?? .unknown) {
+                    return await resolveShare(attempt, started: started)
+                }
                 // 加密那条连中继都没连上:不再拿明文去试(可能只是慢,明文会让中继看到内容)。
                 if ShareMacTarget.isSealed(req) { break }
             }
         }
         return ("没发出去", lastError)
+    }
+
+    /// A timeout may follow a successful write. Ask about that exact operation on the
+    /// same authenticated route and do not submit a second prompt on an ambiguous result.
+    private static func resolveShare(_ attempt: ShareMacTarget.Attempt, started: Date) async -> (title: String, detail: String?) {
+        let unknown = ("发送状态待确认", "请打开原 Mac 任务查看本次分享。")
+        var request = attempt.receipt
+        let remaining = ShareMacTarget.totalBudget - Date().timeIntervalSince(started)
+        guard remaining > 0 else { return unknown }
+        request.timeoutInterval = min(remaining, 4)
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let receipt = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let requestId = attempt.request.value(forHTTPHeaderField: "X-Leo-Request-Id"),
+              receipt["requestId"] as? String == requestId else { return unknown }
+        if receipt["state"] as? String == "uncertain" { return ("已接收，待主机确认", nil) }
+        guard receipt["state"] as? String == "completed", let saved = receipt["response"] as? [String: Any],
+              let status = saved["status"] as? Int else { return unknown }
+        if status == 202 { return ("已接收，待主机确认", nil) }
+        return (200..<300).contains(status) ? ("Mac 已确认接收", nil) : ("Mac 未接受分享", "Mac 返回 \(status)。")
     }
 
     private func finish() {

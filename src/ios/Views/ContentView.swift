@@ -1,4 +1,5 @@
 import CryptoKit
+import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 import WidgetKit
@@ -733,6 +734,18 @@ struct ContentView: View {
                 if runningSessionIds != ids { runningSessionIds = ids }
             }
             .onReceive(QuickActionWorkflow.shared.$state) { newState in
+                switch newState {
+                case .coverPresenting(.sendHomeDraft(let id, let text, let files, let choice), _) where pendingHomeSend == id:
+                    // The target chat has received this exact submission. Preserve later edits.
+                    if homeDraft.trimmed == text { homeDraft.text = "" }
+                    let submitted = Set(files.map(\.id))
+                    homeDraft.attachments.removeAll { submitted.contains($0.id) }
+                    if homeModelChoice == choice { homeModelChoice = nil }
+                    pendingHomeSend = nil
+                case .idle:
+                    pendingHomeSend = nil
+                default: break
+                }
                 // Workflow advanced to pendingDispatch (either same-runloop
                 // because we were already home, or after markHome fired
                 // from a navigation change). Open the new session now.
@@ -1601,11 +1614,12 @@ struct ContentView: View {
             }
             VStack(spacing: 14) {
                 homeComposerStack
+                if !sessions.isEmpty, !homePromptFocused { homeRecentLinks }
                 if sessions.isEmpty {
                     HStack(spacing: 8) {
                         ForEach(HomeEmptyState.suggestions, id: \.self) { item in
                             Button {
-                                homeDraft.text = item
+                                appendHomeSuggestion(item)
                                 homePromptFocused = true
                             } label: {
                                 Text(item)
@@ -1896,31 +1910,13 @@ struct ContentView: View {
             HomeMacScreenCover(target: target)
         }
         .fullScreenCover(item: $macAttachTarget) { row in
-            NavigationStack {
-                if let host = gatewayStore.activeHosts.first(where: { $0.id == row.hostId }),
-                   let client = gatewayStore.client(for: host) {
-                    HarnessConsoleView(
-                        driver: HarnessSessionDriver(
-                            client: client,
-                            harness: HarnessKind(key: row.session.harness, name: row.session.name),
-                            cwd: row.session.cwd),
-                        firstPrompt: "",
-                        attachSessionId: row.session.id,
-                        attachStatus: row.session.status)
-                    .navigationTitle("\(row.hostName) · \(row.session.displayTitle)")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") { macAttachTarget = nil }
-                        }
-                    }
-                } else {
-                    VStack(spacing: 10) {
-                        Text("缺少访问密钥")
-                        Button("关闭") { macAttachTarget = nil }
-                    }
-                }
+            let host = gatewayStore.activeHosts.first(where: { $0.id == row.hostId })
+            HomeMacSessionCover(row: row, client: host.flatMap { gatewayStore.client(for: $0) }) {
+                macAttachTarget = nil
             }
+        }
+        .sheet(item: $macRemoteReceiptTarget) { target in
+            MacStandaloneReceiptSheet(target: target)
         }
         .fullScreenCover(item: $macChatTarget) { target in
             NavigationStack {
@@ -1954,11 +1950,21 @@ struct ContentView: View {
                 }
             }
         }
+        .onChange(of: showHomeModelPicker) { _, visible in
+            if !visible, restoreHomeModelFocus {
+                restoreHomeModelFocus = false
+                homePromptFocused = true
+            }
+        }
+        .onReceive(AskUserCenter.shared.$revision) { _ in
+            waitingForLocalAnswer = AskUserCenter.shared.waitingSessionIds
+        }
+        .modifier(HomeAttachmentPicking(picker: $homeAttachmentPicker, draft: homeDraft))
         .sheet(isPresented: $showAddProvider) {
             NavigationStack { AddProviderView() }
         }
         .sheet(isPresented: $showSelectModels) {
-            NavigationStack { ModelLibraryView() }
+            NavigationStack { ModelConnectionRecoveryView() }
         }
         // iPhone: bottom sheet. iPad: a popover on the chip (see `homeComposerStack`).
         .sheet(isPresented: Binding(get: { showHomeModelPicker && !isWideLayout },
@@ -2148,7 +2154,7 @@ struct ContentView: View {
     }
 
     private func macLiveRow(_ row: MacLiveSessionsStore.Row) -> some View {
-        let busy = row.isWaiting || ["running", "starting"].contains(row.session.status)
+        let busy = !row.isStale && (row.isWaiting || ["running", "starting"].contains(row.session.status))
         let stopping = macLive.stopping.contains(row.id)
         return Button {
             macAttachTarget = row
@@ -2156,18 +2162,18 @@ struct ContentView: View {
             HStack(spacing: 10) {
                 Circle()
                     // Idle = a turn finished, the CLI waits for you: not "working".
-                    .fill(row.isWaiting ? Color.orange : row.session.status == "idle" ? Color.gray : Color.green)
+                    .fill(row.isStale || row.session.status == "idle" ? Color.gray : row.isWaiting ? Color.orange : Color.accentColor)
                     .frame(width: 7, height: 7)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(row.hostName) · \(row.session.displayTitle)")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.primary)
-                    Text(stopping ? "正在停止…"
+                    Text(row.isStale ? row.statusText : stopping ? "正在停止…"
                          : row.isWaiting
                          ? (row.session.pendingApprovalCommand.map { "等你审批:" + String($0.prefix(40)) } ?? "等你审批")
                          : row.statusText)
                         .font(.caption)
-                        .foregroundStyle(row.isWaiting && !stopping ? .orange : .secondary)
+                        .foregroundStyle(row.isWaiting && !row.isStale && !stopping ? .orange : .secondary)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -2695,7 +2701,7 @@ struct ContentView: View {
         case .none, .upToDate:
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.green)
+                .foregroundStyle(.blue)
         case .paused:
             Image(systemName: "pause.circle.fill")
                 .font(.system(size: 11, weight: .semibold))
@@ -3036,13 +3042,18 @@ struct ContentView: View {
     /// can match.
     fileprivate func openSessionForPendingQuickAction() {
         defer { quickActionStartedAtHome = false }
-        guard case .pendingDispatch = QuickActionWorkflow.shared.state else {
+        guard case .pendingDispatch(let action) = QuickActionWorkflow.shared.state else {
             draftLog.info("[QuickAction] openSessionForPendingQuickAction skipped — state moved on")
             return
         }
         // [T-home-model-pick] The capsule's pick is for this one chat; the capsule goes back to the default.
-        let newId = Self.makeNewSessionId(homeChoice: homeModelChoice)
-        homeModelChoice = nil
+        let newId: String
+        if case .sendHomeDraft(_, _, _, let choice) = action {
+            newId = Self.makeNewSessionId(homeChoice: choice)
+        } else {
+            newId = Self.makeNewSessionId(homeChoice: homeModelChoice ?? soleHomeModel?.id)
+            homeModelChoice = nil
+        }
         if isWideLayout {
             openSession(newId)
         } else if quickActionStartedAtHome && !reduceMotion {
@@ -3343,6 +3354,7 @@ struct ContentView: View {
     // [T-mac-in-main-list] Mac 上进行中的会话,直接摆主列表顶部
     @ObservedObject private var macLive = MacLiveSessionsStore.shared
     @State private var macAttachTarget: MacLiveSessionsStore.Row?
+    @State private var macRemoteReceiptTarget: MacReceiptTarget?
     @State private var macChatTarget: MacChatTarget?
     /// [E7] 接力请求在等会话同步过来。
     @State private var handoffSyncing = false
@@ -3448,6 +3460,10 @@ struct ContentView: View {
     /// per-session picker inside a chat.
     @State private var homeModelChoice: String?
     @State private var showHomeModelPicker = false
+    @State private var pendingHomeSend: UUID?
+    @State private var homeAttachmentPicker: HomeAttachmentPicker?
+    @State private var restoreHomeModelFocus = false
+    @State private var waitingForLocalAnswer: Set<String> = []
 
     @ViewBuilder
     private var sessionFilterChips: some View {
@@ -3494,7 +3510,7 @@ struct ContentView: View {
         HomeEmptyState(
             hasModel: homeHasAvailableModel,
             onSuggestion: { text in
-                homeDraft.text = text
+                appendHomeSuggestion(text)
                 homePromptFocused = true
             },
             onConnectModel: {
@@ -3562,8 +3578,29 @@ struct ContentView: View {
         }
     }
 
+    private func appendHomeSuggestion(_ suggestion: String) {
+        if homeDraft.trimmed.isEmpty { homeDraft.text = suggestion }
+        else if !homeDraft.text.hasSuffix(suggestion) { homeDraft.text += "\n" + suggestion }
+    }
+
+    private var recentLocalChats: [ChatSession] {
+        Array(displaySessions.lazy.filter {
+            !$0.isRemote && !$0.isChild && !sessionExtras.isArchived($0.id) && !SessionLockStore.shared.isLocked($0.id)
+        }.sorted { $0.updatedAt > $1.updatedAt }.prefix(2))
+    }
+
+    private var homeRecentLinks: some View {
+        ForEach(recentLocalChats) { session in
+            Button { jumpToSession(session.id) } label: {
+                Label(session.title.flatMap { $0.isEmpty ? nil : $0 } ?? AppLocalized("New Chat"),
+                      systemImage: "clock.arrow.circlepath")
+                    .lineLimit(1).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            }.buttonStyle(.plain)
+        }
+    }
+
     private var homeModelPickerContent: some View {
-        QuickModelSwitchSheet(sessionId: nil, ensureSessionId: nil, pickedKey: homeModelChoice,
+        QuickModelSwitchSheet(sessionId: nil, ensureSessionId: nil, pickedKey: homeModelChoice ?? soleHomeModel?.id,
                               onPick: { homeModelChoice = $0 },
                               onResetToDefault: { homeModelChoice = nil })
     }
@@ -3587,7 +3624,10 @@ struct ContentView: View {
                 isFocused: $homePromptFocused,
                 capsule: homeCapsuleLabel,
                 capsuleMenu: AnyView(homeCapsuleMenuContent),
-                onChooseModel: homeTargetIsIPhone ? { showHomeModelPicker = true } : nil,
+                onChooseModel: homeTargetIsIPhone ? {
+                    restoreHomeModelFocus = homePromptFocused
+                    showHomeModelPicker = true
+                } : nil,
                 modelPopover: isWideLayout ? HomeModelPopover(isPresented: $showHomeModelPicker,
                                                               content: AnyView(homeModelPickerContent)) : nil,
                 brightnessDialog: HomeBrightnessDialog(isPresented: $showBrightnessOptions,
@@ -3671,7 +3711,8 @@ struct ContentView: View {
         if homeTargetIsIPhone {
             return HomeCapsuleLabel(icon: isIPad ? "ipad" : "iphone",
                                     place: isIPad ? "此 iPad" : "此 iPhone",
-                                    model: homeChoiceLabel ?? ModelSwitcher.defaultLabel())
+                                    model: homeChoiceLabel ?? ModelSwitcher.defaultLabel() ?? soleHomeModel?.model.displayName,
+                                    showsTarget: gatewayStore.activeHosts.contains { macFleetEnabled || $0.isAndroidBody })
         }
         return HomeCapsuleLabel(icon: homeTargetMenuIcon, place: homeExecutionTargetTitle, model: nil)
     }
@@ -3719,6 +3760,16 @@ struct ContentView: View {
         }
     }
 
+    private var soleHomeModel: ModelEntry? {
+        guard providerStore.defaultPrimaryGroupId == nil else { return nil }
+        let entries = providerStore.modelEntries.lazy.filter {
+            let capabilities = $0.model.capabilities.supportedModalities
+            return capabilities.contains(.textInput) && capabilities.contains(.textOutput)
+                && ModelSwitcher.isAvailable($0, store: providerStore)
+        }.prefix(2)
+        return entries.count == 1 ? entries.first : nil
+    }
+
     private var homeHasAvailableModel: Bool {
         providerStore.modelEntries.contains { ModelSwitcher.isAvailable($0, store: providerStore) }
     }
@@ -3754,13 +3805,13 @@ struct ContentView: View {
         // [fix-home-plus] 以前只有「拍照识别 / 本机文件 / 录音」:选不了照片视频,「本机文件」直接进文件管理而不是当附件。
         // 现在和对话里的「+」一致:拍照、照片与视频、文件都开一个新对话并把选中的东西作为附件;文件管理留在「/」面板。
         // [up3-ios] 文案直接用对话「+」的同一组键(Localizable.xcstrings 里有 en / zh-Hans / zh-Hant)。
-        Button { startHomeChatAction(.openCamera) } label: {
+        Button { homeAttachmentPicker = .camera } label: {
             Label("Take Photo", systemImage: "camera")
         }
-        Button { startHomeChatAction(.pickPhotos) } label: {
+        Button { homeAttachmentPicker = .photos } label: {
             Label("Choose Photos & Videos", systemImage: "photo.on.rectangle")
         }
-        Button { startHomeChatAction(.pickFiles) } label: {
+        Button { homeAttachmentPicker = .files } label: {
             Label("Add File", systemImage: "doc")
         }
         // [V-rec] 录音 → 转写 → 纪要。
@@ -3773,7 +3824,7 @@ struct ContentView: View {
     private var homeActions: [HomeAction] {
         var list: [HomeAction] = [
             HomeAction(id: "voice", title: "语音模式", icon: "waveform", tint: .orange) { startHomeChatAction(.startVoice) },
-            HomeAction(id: "camera", title: "拍照识别", icon: "camera.viewfinder", tint: .pink) { startHomeChatAction(.openCamera) },
+            HomeAction(id: "camera", title: "拍照识别", icon: "camera.viewfinder", tint: .blue) { homeAttachmentPicker = .camera },
             HomeAction(id: "recording", title: "录音纪要", icon: "waveform", tint: .red) { RecordingPresenter.present(.recorder) },
         ]
         if torchSupported {
@@ -3786,9 +3837,9 @@ struct ContentView: View {
         }
         list += [
             HomeAction(id: "files", title: "本机文件", icon: "folder.fill", tint: .blue) { activeToolSheet = .rootfsManagement },
-            HomeAction(id: "web", title: "网页研究", icon: "globe", tint: .teal) { activeToolSheet = .browser },
+            HomeAction(id: "web", title: "网页研究", icon: "globe", tint: .indigo) { activeToolSheet = .browser },
             HomeAction(id: "automation", title: "快捷任务", icon: "bolt.fill", tint: .indigo) { activeToolSheet = .quickTasks },
-            HomeAction(id: "terminal", title: "iSH 终端", icon: "terminal.fill", tint: .green) { showTerminal = true },
+            HomeAction(id: "terminal", title: "iSH 终端", icon: "terminal.fill", tint: .blue) { showTerminal = true },
             HomeAction(id: "clipboard", title: "读剪贴板", icon: "doc.on.clipboard", tint: .gray) {
                 runHomeNative(.init(path: .native, kind: .readClipboard, hour: nil, minute: nil, tomorrow: false, label: ""))
             },
@@ -3813,7 +3864,7 @@ struct ContentView: View {
     private var homeActionSheet: some View {
         HomeActionSheet(
             actions: homeActions,
-            quickTasks: providerStore.modelGroups.isEmpty ? [] : quickTaskStore.composerTasks.map { task in
+            quickTasks: quickTaskStore.composerTasks.map { task in
                 HomeAction(id: "qt-\(task.id)", title: task.displayName, icon: task.symbolName, tint: .accentColor) {
                     openQuickTask(task)
                 }
@@ -3872,7 +3923,7 @@ struct ContentView: View {
     }
 
     private var canRunHomePrompt: Bool {
-        !homeRoutingInProgress && !homeDraft.trimmed.isEmpty
+        !homeRoutingInProgress && pendingHomeSend == nil && homeDraft.canSubmit
     }
 
     private var homeExecutionTargetTitle: String {
@@ -3968,17 +4019,20 @@ struct ContentView: View {
         guard canRunHomePrompt else { return }
         switch homeExecutionTarget {
         case .iphone:
-            let native = ActionRouter.decide(text: prompt, imageCount: 0)
-            if native.path == .native {
+            let native = ActionRouter.decide(text: prompt, imageCount: homeDraft.attachments.count)
+            if homeDraft.attachments.isEmpty, native.path == .native {
                 runHomeNative(native, clearingPrompt: prompt)
                 return
             }
-            if native.path == .clarify {
+            if homeDraft.attachments.isEmpty, native.path == .clarify {
                 homeNativeResult = .init(text: native.spoken(), outcome: .waitingForUser)
                 return
             }
             if let choice = homeModelChoice, !homeChoiceIsAvailable(choice) {
                 homeRoutingError = AppLocalized("This model is no longer available. Choose another model.")
+                if homeHasAvailableModel { showHomeModelPicker = true }
+                else if providerStore.instances.isEmpty { showAddProvider = true }
+                else { showSelectModels = true }
                 return
             }
             guard homeHasAvailableModel else {
@@ -3986,11 +4040,27 @@ struct ContentView: View {
                 else { showSelectModels = true }
                 return
             }
+            if homeModelChoice == nil, providerStore.defaultPrimaryGroupId == nil, soleHomeModel == nil {
+                showHomeModelPicker = true
+                return
+            }
             homeRoutingError = nil
-            homeDraft.text = ""
+            let attachments = homeDraft.attachments
+            guard attachments.allSatisfy({ FileManager.default.fileExists(atPath: $0.url.path) }) else {
+                homeDraft.attachmentError = AppLocalized("附件文件已不可用，请移除后重新添加。")
+                return
+            }
             LeoHaptics.impact(.medium)
-            startHomeChatAction(.sendPrompt(prompt))
+            let id = UUID()
+            pendingHomeSend = id
+            homeDraft.attachmentError = nil
+            startHomeChatAction(.sendHomeDraft(id: id, prompt: prompt, files: attachments,
+                                               modelChoice: homeModelChoice ?? soleHomeModel?.id))
         case .mac(let target):
+            guard homeDraft.attachments.isEmpty else {
+                homeRoutingError = AppLocalized("请选此设备发送附件，或移除附件后派给 Mac。")
+                return
+            }
             guard let host = gatewayStore.activeHosts.first(where: { $0.id == target.hostId }) else {
                 homeRoutingError = AppLocalized("这台机器已不可用，请重新选择执行目标")
                 LeoHaptics.notification(.error)
@@ -4187,7 +4257,8 @@ struct ContentView: View {
 
     private var attentionSessions: [ChatSession] {
         displaySessions.filter { session in
-            guard let states = badgeStore.badgeStates[session.id] else { return false }
+            if waitingForLocalAnswer.contains(session.id) { return true }
+            let states = badgeStore.badgeStates[session.id] ?? []
             return states.contains(.unread) || states.contains(.paused)
         }
     }
@@ -4196,11 +4267,12 @@ struct ContentView: View {
     private var attentionBar: some View {
         let pending = attentionSessions
         let missed = relayCatchUp.missedApprovals
+        let questions = pending.filter { waitingForLocalAnswer.contains($0.id) }
         if !pending.isEmpty || !missed.isEmpty {
             Button {
                 if let item = missed.first {
                     openMissedRelayApproval(item)
-                } else if let target = pending.last {
+                } else if let target = questions.first ?? pending.last {
                     jumpToSession(target.id)
                 }
             } label: {
@@ -4211,7 +4283,7 @@ struct ContentView: View {
                         .frame(width: 22, height: 22)
                         .background(Color.orange, in: Circle())
                         .leoPulse(active: true)
-                    Text(attentionBarTitle(sessionCount: pending.count, approvalCount: missed.count))
+                    Text(!questions.isEmpty && missed.isEmpty ? AppLocalized("\(questions.count) 个对话等你回答") : attentionBarTitle(sessionCount: pending.count, approvalCount: missed.count))
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.primary)
                     Spacer(minLength: 0)
@@ -4319,10 +4391,22 @@ struct ContentView: View {
         )
     }
 
+    /// Use history locally when there is no unfinished session. Locked titles
+    /// stay out of this compact surface, including after the cache was filled.
+    private var safeHomeSnapshot: HomeContextSnapshot {
+        var value = homeContextSnapshot
+        if let resume = value.resume, SessionLockStore.shared.isLocked(resume.sessionId) { value.resume = nil }
+        if value.resume == nil, sessionExtras.filter == .all, let recent = recentLocalChats.first {
+            value.resume = .init(sessionId: recent.id, title: recent.title ?? AppLocalized("New Chat"),
+                                 updatedAt: recent.updatedAt, pinned: false)
+        }
+        return value
+    }
+
     @ViewBuilder
     private var homeContextSection: some View {
         if homeCardsEnabled, !isSelecting, !showSearchBar {
-            let snapshot = homeContextSnapshot
+            let snapshot = safeHomeSnapshot
             if !snapshot.isEmpty {
                 Section {
                     HomeContextStrip(
@@ -4348,57 +4432,40 @@ struct ContentView: View {
     }
 
     private func openMissedRelayApproval(_ item: RelayEventItem) {
-        guard let sid = item.sessionId else { return }
-        openMacSession(hostId: nil, machine: item.machine, sessionId: sid, seq: item.seq,
+        guard let sid = item.sessionId,
+              let host = gatewayStore.taskHost(machine: item.machine) else { return }
+        openMacSession(hostId: host.id, machine: item.machine, sessionId: sid, seq: item.seq,
                        approvalId: item.approvalId, command: item.command)
+        relayCatchUp.markApprovalRead(item)
     }
 
     /// A Mac session tapped in a notification (see ShortcutNotificationDelegate).
     private func openMacSession(_ target: [String: String]) {
+        if let receipt = MacReceiptTarget(remoteNotification: target) {
+            macRemoteReceiptTarget = receipt
+            return
+        }
         guard let sid = target["macSessionId"], !sid.isEmpty else { return }
         openMacSession(hostId: target["hostId"], machine: target["machine"] ?? "", sessionId: sid)
     }
 
-    /// The live row when the store has it, else the Mac's own summary, else a stub the console fills in on attach.
+    /// 先显示目标；冷启动的摘要和连接状态在呈现后的页面内加载。
     private func openMacSession(hostId: String?, machine: String, sessionId sid: String, seq: Int = 0,
                                 approvalId: String? = nil, command: String? = nil) {
-        guard let host = GatewayHostStore.shared.hostMatching(hostId: hostId ?? "", machine: machine) else { return }
-        relayCatchUp.clearMissedApprovals()
+        guard let host = gatewayStore.taskHost(hostId: hostId, machine: machine) else { return }
         if let row = macLive.rows.first(where: { $0.hostId == host.id && $0.session.id == sid }) {
             macAttachTarget = row
             return
         }
-        // [up-home] 冷启动点通知时内存里没有这一行:以前写死 harness "claude",Codex / LeoBot 的任务
-        // 就按 Claude 的方式接上去。先问 Mac 要真实的摘要(最多等 3 秒),取不到才用默认。
-        Task { @MainActor in
-            let summary = await Self.fetchMacSummary(host: host, sessionId: sid)
-            macAttachTarget = MacLiveSessionsStore.Row(
-                hostId: host.id,
-                hostName: host.name,
-                session: summary ?? HarnessSessionSummary(
-                    id: sid,
-                    harness: host.runsLeoPhoneAgent ? "zcode" : "claude",
-                    name: "远程会话",
-                    cwd: "~",
-                    status: "running",
-                    seq: seq,
-                    waitingForApproval: approvalId != nil,
-                    pendingApprovalId: approvalId,
-                    pendingApprovalCommand: command
-                )
+        macAttachTarget = MacLiveSessionsStore.Row(
+            hostId: host.id,
+            hostName: host.name,
+            session: HarnessSessionSummary(
+                id: sid, harness: "", name: "远程会话", cwd: "",
+                status: "unknown", seq: seq, waitingForApproval: approvalId != nil,
+                pendingApprovalId: approvalId, pendingApprovalCommand: command
             )
-        }
-    }
-
-    private static func fetchMacSummary(host: GatewayHost, sessionId: String) async -> HarnessSessionSummary? {
-        guard let client = GatewayHostStore.shared.client(for: host) else { return nil }
-        return await withTaskGroup(of: HarnessSessionSummary?.self) { group in
-            group.addTask { try? await client.harnessSessions().first { $0.id == sessionId && !$0.harness.isEmpty } }
-            group.addTask { try? await Task.sleep(for: .seconds(3)); return nil }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
-        }
+        )
     }
 
     // MARK: - [WP-43] ⌘K palette commands
@@ -6069,7 +6136,7 @@ private struct SessionRow: View, Equatable {
                             .offset(x: 2, y: 2)
                     } else if session.source == "watch" {
                         // [E4] 手表上问起的会话:手机上一眼认出来,接着问。
-                        badgeCircle(icon: "applewatch", color: .teal)
+                        badgeCircle(icon: "applewatch", color: .indigo)
                             .offset(x: 2, y: 2)
                             .accessibilityLabel(Text("来自 Apple Watch"))
                     } else if session.isRemote {
@@ -6262,14 +6329,14 @@ private struct SessionRow: View, Equatable {
         switch session.category {
         case "code":         return ("terminal.fill", .orange)
         case "writing":      return ("doc.text.fill", .blue)
-        case "research":     return ("globe.americas.fill", .teal)
+        case "research":     return ("globe.americas.fill", .indigo)
         case "analysis":     return ("chart.pie.fill", .indigo)
         case "creative":     return ("paintbrush.pointed.fill", .pink)
-        case "chat":         return ("bubble.left.fill", .green)
+        case "chat":         return ("bubble.left.fill", .blue)
         case "math":         return ("number.circle.fill", .purple)
         case "translation":  return ("character.bubble", .cyan)
         case "health":       return ("heart.fill", .red)
-        case "finance":      return ("banknote.fill", .mint)
+        case "finance":      return ("banknote.fill", .gray)
         case "travel":       return ("map.fill", .orange)
         case "education":    return ("book.closed.fill", .blue)
         case "design":       return ("paintpalette.fill", .pink)
@@ -6433,14 +6500,14 @@ private struct RemoteSessionRow: View {
         switch session.category {
         case "code":         return ("terminal.fill", .orange)
         case "writing":      return ("doc.text.fill", .blue)
-        case "research":     return ("globe.americas.fill", .teal)
+        case "research":     return ("globe.americas.fill", .indigo)
         case "analysis":     return ("chart.pie.fill", .indigo)
         case "creative":     return ("paintbrush.pointed.fill", .pink)
-        case "chat":         return ("bubble.left.fill", .green)
+        case "chat":         return ("bubble.left.fill", .blue)
         case "math":         return ("number.circle.fill", .purple)
         case "translation":  return ("character.bubble", .cyan)
         case "health":       return ("heart.fill", .red)
-        case "finance":      return ("banknote.fill", .mint)
+        case "finance":      return ("banknote.fill", .gray)
         case "travel":       return ("map.fill", .orange)
         case "education":    return ("book.closed.fill", .blue)
         case "design":       return ("paintpalette.fill", .pink)
@@ -6487,14 +6554,14 @@ struct SessionEditSheet: View {
     private static let categories: [(key: String, label: String, icon: String, color: Color)] = [
         ("code",         "Code",         "terminal.fill",               .orange),
         ("writing",      "Writing",      "doc.text.fill",               .blue),
-        ("research",     "Research",     "globe.americas.fill",         .teal),
+        ("research",     "Research",     "globe.americas.fill",         .indigo),
         ("analysis",     "Analysis",     "chart.pie.fill",              .indigo),
         ("creative",     "Creative",     "paintbrush.pointed.fill",     .pink),
-        ("chat",         "Chat",         "bubble.left.fill",            .green),
+        ("chat",         "Chat",         "bubble.left.fill",            .blue),
         ("math",         "Math",         "number.circle.fill",          .purple),
         ("translation",  "Translation",  "character.bubble",            .cyan),
         ("health",       "Health",       "heart.fill",                  .red),
-        ("finance",      "Finance",      "banknote.fill",               .mint),
+        ("finance",      "Finance",      "banknote.fill",               .gray),
         ("travel",       "Travel",       "map.fill",                    .orange),
         ("education",    "Education",    "book.closed.fill",            .blue),
         ("design",       "Design",       "paintpalette.fill",           .pink),
@@ -6699,7 +6766,7 @@ struct FeedbackComposerSheet: View {
                             }
                         } icon: {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
+                                .foregroundStyle(.blue)
                         }
                         Text("You can view, share or delete this record in Settings → Logs.")
                             .font(.footnote)
@@ -6770,4 +6837,101 @@ struct FeedbackComposerSheet: View {
 
 #Preview {
     ContentView()
+}
+
+enum HomeAttachmentPicker { case camera, photos, files }
+
+/// Keep selection on the original draft. Only a confirmed send enters a chat.
+struct HomeAttachmentPicking: ViewModifier {
+    @Binding var picker: HomeAttachmentPicker?
+    let draft: HomeDraft
+    @State private var photos: [PhotosPickerItem] = []
+
+    private func presented(_ kind: HomeAttachmentPicker) -> Binding<Bool> {
+        Binding(get: { picker == kind }, set: { if !$0 && picker == kind { picker = nil } })
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .fileImporter(isPresented: presented(.files), allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+                switch result {
+                case .success(let urls):
+                    startImports {
+                        for url in urls {
+                            do {
+                                let item = try await Task.detached(priority: .userInitiated) {
+                                    let scoped = url.startAccessingSecurityScopedResource()
+                                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                                    let values = try url.resourceValues(forKeys: [.isDirectoryKey, .contentTypeKey])
+                                    guard values.isDirectory != true else { throw CocoaError(.fileReadUnsupportedScheme) }
+                                    let type = values.contentType ?? UTType(filenameExtension: url.pathExtension)
+                                    let kind: HomeDraftAttachment.Kind = type?.conforms(to: .image) == true ? .image
+                                        : type?.conforms(to: .movie) == true ? .video : .document
+                                    return try HomeDraftAttachment.stage(name: url.lastPathComponent, kind: kind) {
+                                        try FileManager.default.copyItem(at: url, to: $0)
+                                    }
+                                }.value
+                                draft.attachments.append(item)
+                            } catch { draft.attachmentError = error.localizedDescription }
+                        }
+                    }
+                case .failure(let error):
+                    if (error as NSError).code != NSUserCancelledError { draft.attachmentError = error.localizedDescription }
+                }
+            }
+            .photosPicker(isPresented: presented(.photos), selection: $photos, maxSelectionCount: 15,
+                          matching: .any(of: [.images, .videos]))
+            .onChange(of: photos) { _, items in
+                guard !items.isEmpty else { return }
+                photos = []
+                startImports {
+                    for item in items {
+                        do {
+                            let attachment: HomeDraftAttachment
+                            if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }) {
+                                guard let video = try await item.loadTransferable(type: VideoFileTransferable.self)
+                                else { throw CocoaError(.fileReadCorruptFile) }
+                                attachment = try await Task.detached {
+                                    defer { try? FileManager.default.removeItem(at: video.url) }
+                                    return try HomeDraftAttachment.stage(name: video.url.lastPathComponent, kind: .video) {
+                                        try FileManager.default.copyItem(at: video.url, to: $0)
+                                    }
+                                }.value
+                            } else {
+                                guard let bytes = try await item.loadTransferable(type: Data.self)
+                                else { throw CocoaError(.fileReadCorruptFile) }
+                                let ext = item.supportedContentTypes.first { $0.conforms(to: .image) }?.preferredFilenameExtension ?? "jpg"
+                                attachment = try await Task.detached {
+                                    try HomeDraftAttachment.stage(name: "Photo." + ext, kind: .image) { try bytes.write(to: $0, options: .atomic) }
+                                }.value
+                            }
+                            draft.attachments.append(attachment)
+                        } catch { draft.attachmentError = error.localizedDescription }
+                    }
+                }
+            }
+            .fullScreenCover(isPresented: presented(.camera)) {
+                CameraPicker { image in
+                    guard let data = AIChatViewModel.downsampledCameraJPEG(image) ?? image.jpegData(compressionQuality: 0.82)
+                    else { draft.attachmentError = AppLocalized("Could not load image"); return }
+                    startImports {
+                        do {
+                            let attachment = try await Task.detached {
+                                try HomeDraftAttachment.stage(name: "Photo.jpg", kind: .image) { try data.write(to: $0, options: .atomic) }
+                            }.value
+                            draft.attachments.append(attachment)
+                        } catch { draft.attachmentError = error.localizedDescription }
+                    }
+                }
+            }
+    }
+
+    private func startImports(_ work: @escaping @MainActor () async -> Void) {
+        draft.attachmentError = nil
+        draft.importsInFlight += 1
+        Task { @MainActor in
+            defer { draft.importsInFlight -= 1 }
+            await work()
+        }
+    }
 }

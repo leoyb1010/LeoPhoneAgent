@@ -62,10 +62,10 @@ struct AIDataSharingConsentView: View {
 
                             VStack(alignment: .leading, spacing: 8) {
                                 providerRow("Anthropic", description: "Claude models (anthropic.com)", color: .purple)
-                                providerRow("OpenAI", description: "GPT and o-series models (openai.com)", color: .green)
+                                providerRow("OpenAI", description: "GPT and o-series models (openai.com)", color: .blue)
                                 providerRow("Google", description: "Gemini models (google.com)", color: .blue)
                                 providerRow("OpenRouter", description: "Multi-provider routing (openrouter.ai)", color: .cyan)
-                                providerRow("OpenCode Go", description: "Kimi, GLM, DeepSeek, Qwen, MiniMax and more (opencode.ai)", color: .teal)
+                                providerRow("OpenCode Go", description: "Kimi, GLM, DeepSeek, Qwen, MiniMax and more (opencode.ai)", color: .indigo)
                                 providerRow("Custom Endpoints", description: "Self-hosted or third-party compatible APIs you configure", color: .gray)
                             }
 
@@ -636,7 +636,7 @@ struct AddProviderView: View {
             if pendingOAuthDone {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.blue)
                     Text("Authenticated")
                         .font(.body.weight(.medium))
                 }
@@ -1242,16 +1242,16 @@ struct AddProviderView: View {
                 .foregroundStyle(.blue)
         case .openAI:
             Image(systemName: "circle.hexagongrid")
-                .foregroundStyle(.green)
+                .foregroundStyle(.blue)
         case .openCodeGo:
             Image(systemName: "chevron.left.forwardslash.chevron.right")
-                .foregroundStyle(.teal)
+                .foregroundStyle(.indigo)
         case .openRouter:
             Image(systemName: "arrow.triangle.branch")
                 .foregroundStyle(.cyan)
         case .openAIResponses:
             Image(systemName: "arrow.trianglehead.2.counterclockwise")
-                .foregroundStyle(.mint)
+                .foregroundStyle(.gray)
         case .xAI:
             Image(systemName: "x.circle")
                 .foregroundStyle(.gray)
@@ -1268,10 +1268,10 @@ struct AddProviderView: View {
         switch type {
         case .anthropic: return .purple
         case .gemini: return .blue
-        case .openAI: return .green
-        case .openCodeGo: return .teal
+        case .openAI: return .blue
+        case .openCodeGo: return .indigo
         case .openRouter: return .cyan
-        case .openAIResponses: return .mint
+        case .openAIResponses: return .gray
         case .xAI: return .gray
         case .kimiCode: return .indigo
         case .unsupported: return .gray

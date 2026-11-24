@@ -162,6 +162,13 @@ def main():
         path = 'src/ios/Views/Home/HomeComposer.swift'
         data = read_source(args.source_ref, path)
         (production / 'HomeComposer.swift').write_bytes(data)
+        if 'HomeDraftAttachment' in data.decode():
+            router = read_source(args.source_ref, 'src/ios/Shared/QuickActionRouter.swift').decode()
+            attachment = router[router.index('struct HomeDraftAttachment:'):router.index('enum ChatLaunchAction:')]
+            (production / 'HomeDraftAttachment.swift').write_text('import Foundation\n' + attachment)
+            manifest['sources'].append({'path': 'src/ios/Shared/QuickActionRouter.swift',
+                'generated_file': 'HomeDraftAttachment.swift', 'sha256': hashlib.sha256(router.encode()).hexdigest(),
+                'transformation': 'Unchanged production home draft attachment descriptor.'})
         manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(), 'transformation': 'none'})
         path = 'src/ios/Agent/Session/FullAuto.swift'
         data = read_source(args.source_ref, path)

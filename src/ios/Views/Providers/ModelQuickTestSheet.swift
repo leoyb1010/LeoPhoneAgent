@@ -414,7 +414,7 @@ private struct TestCard: View {
             Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
         default:
             HStack(spacing: 4) {
-                Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+                Image(systemName: "checkmark.seal.fill").foregroundStyle(.blue)
                 if run.elapsed > 0 {
                     Text(String(format: "%.1fs", run.elapsed))
                         .font(.caption2).foregroundStyle(.tertiary)

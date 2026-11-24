@@ -78,7 +78,7 @@ struct SettingsHomeView: View {
     private static var macConsoleEntries: [SettingsEntry] {
         guard MacFleetFeature.isEnabled() else { return [] }
         return [SettingsEntry("Mac 控制台", keywords: "控制台 console 编码 任务 遥控",
-                              icon: "terminal.fill", color: .teal,
+                              icon: "terminal.fill", color: .indigo,
                               hint: "在已连接的 Mac 上发任务、看进度、审批") { GatewayEntryView() }]
     }
 
@@ -88,6 +88,10 @@ struct SettingsHomeView: View {
     static var groups: [SettingsGroup] {
         [
             SettingsGroup(id: "models", title: "模型与推理", entries: [
+                SettingsEntry("新对话默认", keywords: "默认 换模型 默认模型 model default 分组",
+                              icon: "cpu", color: .blue) {
+                    SessionModelPicker(sessionId: nil, editsNewChatDefault: true, prefersQuickSelection: true)
+                },
                 SettingsEntry("AI 服务商", keywords: "provider api key oauth 模型 llm 模型供应商",
                               icon: "key.fill", color: .indigo) { ProviderInstancesView() },
                 SettingsEntry("模型分组", keywords: "model group 回退 负载",
@@ -109,7 +113,7 @@ struct SettingsHomeView: View {
                 SettingsEntry("工具开关", keywords: "tools 工具 开关 浏览器 browser 子代理 定时跟进 关闭",
                               icon: "switch.2", color: .purple,
                               hint: "浏览器、子代理、定时跟进可以分别关掉") { ToolTogglesSettingsView() },
-                SettingsEntry("手机能力与授权", keywords: "能力中心 capabilities 权限 能干什么",
+                SettingsEntry("手机能力与授权", keywords: "相机 拍照 能力中心 capabilities 权限 能干什么",
                               icon: "square.grid.2x2.fill", color: .purple,
                               hint: "Agent 能调用哪些手机能力，系统授权到哪一步") { CapabilitiesView() },
                 SettingsEntry("子代理", keywords: "sub agent subagent helper 子代理 委派 角色 并行",
@@ -148,22 +152,22 @@ struct SettingsHomeView: View {
             ]),
             SettingsGroup(id: "devices", title: "设备与连接", entries: macConsoleEntries + [
                 SettingsEntry("远程机器", keywords: "mac android 舰队 中继 relay 密钥 macbook cortex studio fold ipad",
-                              icon: "desktopcomputer", color: .teal,
+                              icon: "desktopcomputer", color: .indigo,
                               hint: "连接哪几台 Mac、中继地址与密钥") { GatewaySettingsView() },
                 SettingsEntry("Apple Watch", keywords: "手表 watch 蜂窝 直连 独立 模型 cellular",
-                              icon: "applewatch", color: .teal,
+                              icon: "applewatch", color: .indigo,
                               hint: "手表用哪个模型、离开 iPhone 能不能自己回答") { WatchSettingsView() },
                 SettingsEntry("iCloud 同步", keywords: "icloud sync 同步 云",
-                              icon: "icloud.fill", color: .teal) { CloudSyncSettingsV2View() },
+                              icon: "icloud.fill", color: .indigo) { CloudSyncSettingsV2View() },
                 SettingsEntry("远程主机(SSH·备用)", keywords: "ssh remote host 备用",
-                              icon: "server.rack", color: .teal,
+                              icon: "server.rack", color: .indigo,
                               hint: "旧通道，只在中继不可用时使用") { RemoteHostSettingsView() },
             ]),
             SettingsGroup(id: "general", title: "通用", entries: [
                 SettingsEntry("权限", keywords: "permission 审批 offload 全自动 自动批准 不再询问 yolo",
                               icon: "hand.raised.fill", color: .blue,
                               hint: "全自动开关；Agent 动用某项能力前，是直接放行还是先问你") { OffloadPermissionSettingsView() },
-                SettingsEntry("外观", keywords: "appearance 深色 浅色 主题 语言 字体 字号 图标 启动 回车 复制 language font icon mac 进行中",
+                SettingsEntry("外观", keywords: "文字 appearance 深色 浅色 主题 语言 字体 字号 图标 启动 回车 复制 language font icon mac 进行中",
                               icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
                 // 以前只能从 权限 → 后台 进去,搜「后台」「通知」「灵动岛」都搜不到。
                 SettingsEntry("后台与通知", keywords: "background 后台 保活 keep alive 通知 notification 实时活动 灵动岛 live activity 定位 位置追踪 朗读 语音 音色 隐私模式",
@@ -218,7 +222,7 @@ struct SettingsHomeView: View {
     }
 
     /// 首页顶部的「常用」快捷方块(条目仍只属于各自分组;iPad 侧栏不渲染这一块,免得同一个选中标签出现两次)。
-    static let pinnedTitles = ["AI 服务商", "远程机器", "权限", "外观"]
+    static let pinnedTitles = ["新对话默认", "AI 服务商", "快捷任务", "外观"]
 
 
     private var searching: Bool {
@@ -237,6 +241,8 @@ struct SettingsHomeView: View {
             case .smart: return "智能批准"
             case .ask: return "逐项确认"
             }
+        case "新对话默认": return ModelSwitcher.defaultLabel(store: providers) ?? AppLocalized("No model selected")
+        case "快捷任务": return "\(QuickTaskStore.shared.composerTasks.count) 个常用"
         case "AI 服务商":
             let count = providers.config.instances.filter(\.isEnabled).count
             return count == 0 ? "未添加" : "\(count) 个"
@@ -489,7 +495,7 @@ struct SettingsHomeView: View {
         case "abilities": return .purple
         case "knowledge": return .pink
         case "automation": return .orange
-        case "devices": return .teal
+        case "devices": return .indigo
         case "general": return .blue
         default: return .gray
         }

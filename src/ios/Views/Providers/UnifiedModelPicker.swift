@@ -106,6 +106,9 @@ struct ModelPickerConfig {
     var onAddMulti: (@MainActor (Set<String>) -> Void)?
     /// Ordered callback for routing groups: tap order becomes fallback priority.
     var onAddOrdered: (@MainActor ([String]) -> Bool)?
+    var allowsDefaultEdit = false
+    var quickScopeTitle: LocalizedStringKey = "Current selection"
+    var scopeNote: String?
     var prefersQuickSelection = false
     var onResetToDefault: (@MainActor () -> Void)?
     var onExpand: (@MainActor () -> Void)?
@@ -322,6 +325,7 @@ struct UnifiedModelPicker: View {
     /// so users can reconfigure groups without dismissing the picker and digging
     /// through Settings.
     @State private var showGroupsManager = false
+    @State private var showDefaultEditor = false
     @State private var showModelLibrary = false
     /// The model row whose Quick Test sheet is open (nil = none). Set by the
     /// per-row bolt button so any model — cloud, group member, or System voice —
@@ -489,6 +493,9 @@ struct UnifiedModelPicker: View {
             }
         }
         .environment(\.editMode, $editMode)
+        .sheet(isPresented: $showDefaultEditor) {
+            NavigationStack { SessionModelPicker(sessionId: nil, editsNewChatDefault: true, prefersQuickSelection: true) }
+        }
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search model, ID or provider")
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle(config.title)
@@ -576,12 +583,25 @@ struct UnifiedModelPicker: View {
                 }
             } header: { Text("Favorites").foregroundStyle(ModelPickerText.secondary) }
         }
-        if !quickRecentEntries.isEmpty {
+        let recentGroups = supportsGroups ? ModelSwitcher.recentGroups(store: store) : []
+        if !quickRecentEntries.isEmpty || !recentGroups.isEmpty {
             Section {
-                ForEach(quickRecentEntries) { entry in entryRow(entry) }
+                ForEach(ModelSwitcher.normalizedChoiceKeys(ModelSwitcher.recentKeys, store: store), id: \.self) { key in
+                    if let group = recentGroups.first(where: { "group:\($0.id)" == key }) {
+                        Button { config.onSelectGroup?(group); dismissIfNeeded() } label: {
+                            Label(group.name, systemImage: "square.stack.3d.up")
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        }
+                        .disabled(availableMemberEntryIds(group).isEmpty)
+                        .accessibilityLabel(Text("模型分组：\(group.name)"))
+                        .accessibilityIdentifier("model-picker.recent-group.\(group.id)")
+                    } else if let entry = quickRecentEntries.first(where: { $0.id == key }) {
+                        entryRow(entry)
+                    }
+                }
             } header: { Text("Recently used").foregroundStyle(ModelPickerText.secondary) }
         }
-        if favoriteEntries.isEmpty && quickRecentEntries.isEmpty {
+        if favoriteEntries.isEmpty && quickRecentEntries.isEmpty && recentGroups.isEmpty {
             let available = candidateEntries.filter { memberUnavailableReason($0.id) == nil }
             if available.isEmpty {
                 emptySection
@@ -632,7 +652,8 @@ struct UnifiedModelPicker: View {
                     Text(reason).font(.caption).foregroundStyle(.orange)
                 }
             }.padding(.vertical, 4)
-        } header: { Text(isQuickBrowse ? "当前模型 · 仅更改此对话" : "Current selection").foregroundStyle(ModelPickerText.secondary) }
+        } header: { Text(isQuickBrowse ? config.quickScopeTitle : "Current selection").foregroundStyle(ModelPickerText.secondary) }
+        footer: { if let note = config.scopeNote { Text(note) } }
     }
 
 
@@ -799,6 +820,9 @@ struct UnifiedModelPicker: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    if config.allowsDefaultEdit {
+                        Button { showDefaultEditor = true } label: { Label("设为新对话默认", systemImage: "checkmark.circle") }
+                    }
                     Button { showModelLibrary = true } label: { Label("Model Library", systemImage: "slider.horizontal.3") }
                         .accessibilityIdentifier("model-picker.library")
                     if supportsGroups {
@@ -1058,7 +1082,7 @@ struct UnifiedModelPicker: View {
                     Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(isQuickBrowse ? entry.model.id : entry.model.displayName).font(.body).foregroundStyle(Color.primary)
+                        Text(entry.model.displayName).font(.body).foregroundStyle(Color.primary)
                         Text(store.instance(for: entry.providerInstanceId)?.label ?? entry.model.provider)
                             .font(.caption).foregroundStyle(ModelPickerText.secondary)
                         if isActive { Text("Active in this group").font(.caption).foregroundStyle(.tint) }
@@ -1197,7 +1221,7 @@ struct UnifiedModelPicker: View {
                         .foregroundStyle(selected ? Color.accentColor : Color.secondary)
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text(isQuickBrowse ? entry.model.id : entry.model.displayName).font(.body).foregroundStyle(Color.primary)
+                            Text(entry.model.displayName).font(.body).foregroundStyle(Color.primary)
                                 .multilineTextAlignment(.leading)
                                 .fixedSize(horizontal: false, vertical: true)
                             if isLatest {

@@ -809,6 +809,7 @@ struct MinisSafariView: View {
 struct MinisLinkPreviewView: View {
     let url: URL
     let browserPool: BrowserTabPool?
+    var onPark: ((WebViewHolder) -> Void)? = nil
     var onExpand: ((WebViewHolder) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
@@ -816,11 +817,13 @@ struct MinisLinkPreviewView: View {
     @State private var showShareSheet = false
     @State private var desktopMode: Bool = false
 
-    init(url: URL, browserPool: BrowserTabPool?, onExpand: ((WebViewHolder) -> Void)? = nil) {
+    init(url: URL, browserPool: BrowserTabPool?, retainedHolder: WebViewHolder? = nil,
+         onPark: ((WebViewHolder) -> Void)? = nil, onExpand: ((WebViewHolder) -> Void)? = nil) {
         self.url = url
         self.browserPool = browserPool
+        self.onPark = onPark
         self.onExpand = onExpand
-        _holder = StateObject(wrappedValue: WebViewHolder(url: url, localFile: false))
+        _holder = StateObject(wrappedValue: retainedHolder ?? WebViewHolder(url: url, localFile: false))
     }
 
     var body: some View {
@@ -861,6 +864,14 @@ struct MinisLinkPreviewView: View {
                     ToolbarItem(placement: .cancellationAction) {
                         Button { dismiss() } label: {
                             Image(systemName: "xmark")
+                        }
+                    }
+                    if let onPark {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button { onPark(holder) } label: {
+                                Label(AppLocalized("收起预览"), systemImage: "rectangle.compress.vertical")
+                            }
+                            .accessibilityIdentifier("chat-preview.park")
                         }
                     }
                     ToolbarItem(placement: .primaryAction) {

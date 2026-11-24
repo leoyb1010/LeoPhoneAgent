@@ -404,8 +404,8 @@ struct CloudSyncSettingsV2View: View {
         case .sessionFiles: return .indigo
         case .artifacts:    return .purple
         case .skills:       return .orange
-        case .providers:    return .teal
-        case .envVars:      return .green
+        case .providers:    return .indigo
+        case .envVars:      return .blue
         case .memory:       return .pink
         }
     }

@@ -224,7 +224,7 @@ struct HelperBlockView: View {
             if case .neverStarted = state { return (AppLocalized("未开始"), .orange) }
             if live != nil { return (AppLocalized("运行中"), ChatColors.accent) }
             switch info.status {
-            case "completed": return (AppLocalized("已完成"), .green)
+            case "completed": return (AppLocalized("已完成"), .blue)
             case "queued": return (AppLocalized("排队中"), .secondary)
             case "running", "starting": return (AppLocalized("运行中"), ChatColors.accent)
             case "rejected": return (AppLocalized("被拒绝"), .orange)

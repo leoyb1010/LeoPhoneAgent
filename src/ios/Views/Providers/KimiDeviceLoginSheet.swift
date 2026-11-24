@@ -44,7 +44,7 @@ struct KimiDeviceLoginSheet: View {
                 case .success:
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 44))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.blue)
                     Text(AppLocalized("Signed in to Kimi Code"))
                         .font(.headline)
 

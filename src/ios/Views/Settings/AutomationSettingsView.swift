@@ -110,7 +110,7 @@ struct AutomationSettingsView: View {
             if rule.isEnabled {
                 Button("暂停") { store.setEnabled(id: rule.id, false) }.tint(.orange)
             } else {
-                Button("恢复") { store.setEnabled(id: rule.id, true) }.tint(.green)
+                Button("恢复") { store.setEnabled(id: rule.id, true) }.tint(.blue)
             }
         }
     }

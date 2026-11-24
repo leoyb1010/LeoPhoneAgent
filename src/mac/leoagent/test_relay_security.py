@@ -741,11 +741,15 @@ class RelayCompletionPushTests(unittest.IsolatedAsyncioTestCase):
 
             relay.apns = types.SimpleNamespace(enabled=True, send_alert=send_alert)
             await relay._push_apns("MacBook", {"event": "run.completed", "session_id": "hs_1",
-                                               "phone_session_id": "chat-42"})
+                                               "phone_session_id": "chat-42", "seq": 9, "run_id": "r3"})
             await relay._push_apns("MacBook", {"event": "run.completed", "session_id": "hs_2"})
             first, second = (call["user_info"] for call in sent)
             self.assertEqual((first["harnessSessionId"], first["phoneSessionId"]), ("hs_1", "chat-42"))
             self.assertEqual(first["machine"], "MacBook")
+            self.assertEqual((first["eventSequence"], first["runId"]), (9, "r3"))
+            self.assertEqual(len(sent[0]["collapse_id"]), 64)
+            await relay._push_apns("MacBook", {"event": "run.completed", "session_id": "hs_1", "seq": 10})
+            self.assertNotEqual(sent[0]["collapse_id"], sent[-1]["collapse_id"])
             self.assertNotIn("phoneSessionId", second)
 
 

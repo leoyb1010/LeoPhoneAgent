@@ -532,7 +532,7 @@ struct QuickCommandButton: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(isActive ? Color.blue : Color(white: 0.25))
-            .foregroundColor(isActive ? .white : .green)
+            .foregroundColor(isActive ? .white : .blue)
             .cornerRadius(6)
         }
     }

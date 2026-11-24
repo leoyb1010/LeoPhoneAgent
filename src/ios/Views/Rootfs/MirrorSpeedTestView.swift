@@ -33,7 +33,7 @@ enum MirrorCategory: String, CaseIterable, Identifiable {
     var iconColor: Color {
         switch self {
         case .alpine: return .blue
-        case .pip: return .green
+        case .pip: return .blue
         case .npm: return .red
         }
     }
@@ -524,10 +524,10 @@ struct MirrorsSectionView: View {
             if let ms {
                 Text("\(ms)ms")
                     .font(.caption.monospaced())
-                    .foregroundStyle(ms < 200 ? .green : ms < 500 ? .orange : .red)
+                    .foregroundStyle(ms < 200 ? .blue : ms < 500 ? .orange : .red)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background((ms < 200 ? Color.green : ms < 500 ? Color.orange : Color.red).opacity(0.12))
+                    .background((ms < 200 ? Color.blue : ms < 500 ? Color.orange : Color.red).opacity(0.12))
                     .clipShape(Capsule())
             }
         }
@@ -682,7 +682,7 @@ struct MirrorCategoryDetailView: View {
             if let ms = result.latencyMs {
                 Text("\(ms)ms")
                     .font(.caption.monospaced())
-                    .foregroundStyle(ms < 200 ? .green : ms < 500 ? .orange : .red)
+                    .foregroundStyle(ms < 200 ? .blue : ms < 500 ? .orange : .red)
             } else {
                 Text(AppLocalized("Timeout"))
                     .font(.caption)

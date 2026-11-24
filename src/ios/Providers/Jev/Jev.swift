@@ -141,7 +141,7 @@ struct JevSettingsView: View {
             Section {
                 if hasKey {
                     Label("已填好,只存在这台设备的钥匙串里", systemImage: "checkmark.seal.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.blue)
                     Button(testing ? "测试中…" : "测一下") { Task { await test() } }
                         .disabled(testing)
                     Button("删除 Key", role: .destructive) {

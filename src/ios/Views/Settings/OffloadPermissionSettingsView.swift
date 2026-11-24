@@ -167,7 +167,7 @@ private enum CapabilityAuthorizationState: Equatable {
 
     var tint: Color {
         switch self {
-        case .authorized, .ready: return .green
+        case .authorized, .ready: return .blue
         case .limited, .managed, .notDetermined, .unknown: return .orange
         case .denied: return .red
         case .unavailable: return .secondary

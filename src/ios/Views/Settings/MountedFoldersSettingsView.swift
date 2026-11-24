@@ -360,7 +360,7 @@ private struct MountedFolderRow: View {
         } else if !entry.userAllowWrite {
             badgePill(text: AppLocalized("Locked"), color: .purple)
         } else {
-            badgePill(text: AppLocalized("R/W"), color: .green)
+            badgePill(text: AppLocalized("R/W"), color: .blue)
         }
     }
 

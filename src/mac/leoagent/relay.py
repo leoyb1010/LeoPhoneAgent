@@ -1633,18 +1633,28 @@ class Relay:
             # 事件本身照样进 recent_events,手机回前台拉 /relay/api/events 仍能补齐。
             elif kind == "run.completed":
                 user_info = {"harnessSessionId": str(event.get("session_id") or ""),
+                             "completionReceipt": True,
                              "machine": machine_name,
                              "sent_at": time.time()}
                 # [E5] 手机建任务时带了自己的会话 id:点通知直达手机上的那个会话。
                 phone_session_id = event.get("phone_session_id")
                 if isinstance(phone_session_id, str) and phone_session_id.strip():
                     user_info["phoneSessionId"] = phone_session_id.strip()[:200]
+                collapse_id = f"{kind}-{event.get('session_id', '')}"
+                seq = event.get("seq")
+                if type(seq) is int:
+                    user_info["eventSequence"] = seq
+                    identity = f"{machine_name}\0{user_info['harnessSessionId']}\0{kind}\0{seq}"
+                    collapse_id = hashlib.sha256(identity.encode()).hexdigest()
+                run_id = event.get("run_id")
+                if isinstance(run_id, str) and run_id:
+                    user_info["runId"] = run_id[:200]
                 await self.apns.send_alert(
                     title=f"✅ {machine_name} 任务完成",
                     body="任务已结束,打开 App 查看结果",
                     user_info=user_info,
 
-                    collapse_id=f"{kind}-{event.get('session_id', '')}",
+                    collapse_id=collapse_id,
                 )
             # [up-p3-mac] Mac 上的定时任务跑完(成功和失败都推:无人值守,失败也得让人知道)。
             # 见 src/mac/leophone/docs/specs/leo-link-automations.md。

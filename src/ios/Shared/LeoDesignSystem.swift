@@ -15,12 +15,14 @@ enum LeoTheme {
         static let secondaryText = Color(uiColor: .secondaryLabel)
         static let tertiaryText = Color(uiColor: .tertiaryLabel)
         static let separator = Color(uiColor: .separator)
-        /// [F1] The one accent: teal, from the AccentColor asset (light #2A8282,
-        /// dark #2E9C9C — white glyphs on it stay legible in both). `ChatColors`
-        /// only forwards here; new code reads this token.
+        /// 交互与完成状态使用共用蓝色，AccentColor 由设计色板生成。
         static let accent = Color.accentColor
+        static let primaryButton = Color(uiColor: UIColor { trait in
+            let token = trait.userInterfaceStyle == .dark ? LeoTokens.Color.primary.dark : LeoTokens.Color.primary.light
+            return UIColor(red: token.r / 255, green: token.g / 255, blue: token.b / 255, alpha: token.a)
+        })
         static let destructive = Color(uiColor: .systemRed)
-        static let success = Color(uiColor: .systemGreen)
+        static let success = accent
         static let warning = Color(uiColor: .systemOrange)
         /// [WP-42] 跨端 token `attention`(审批卡、等你确认):浅 #B86E12 / 深 #F0B86E,与 Mac `--leo-attention` 同值。
         static let attention = Color(uiColor: UIColor { trait in

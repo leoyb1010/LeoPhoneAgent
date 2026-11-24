@@ -23,10 +23,17 @@ final class MacLiveSessionsStore: ObservableObject {
         let hostId: String
         let hostName: String
         let session: HarnessSessionSummary
+        var lastConfirmed: Date? = nil
+        var lastActivity: Date? = nil
+        var isStale = false
         var id: String { hostId + session.id }
 
         var isWaiting: Bool { session.waitingForApproval }
         var statusText: String {
+            if isStale {
+                if let lastConfirmed { return "连接中断 · 上次确认 " + lastConfirmed.formatted(date: .abbreviated, time: .shortened) }
+                return "连接中断 · 等待主机确认"
+            }
             if session.waitingForApproval { return "等你审批" }
             switch session.status {
             case "running", "starting": return "运行中"
@@ -48,7 +55,7 @@ final class MacLiveSessionsStore: ObservableObject {
 
         /// 比显示、轮询、手表要用的全部事实:以前比的是会话类型名,改了标题、关注都不刷新。
         static func == (a: Row, b: Row) -> Bool {
-            a.hostName == b.hostName && a.facts == b.facts
+            a.hostName == b.hostName && a.session == b.session && a.isStale == b.isStale && a.lastActivity == b.lastActivity && (!a.isStale || a.lastConfirmed == b.lastConfirmed)
         }
     }
 
@@ -86,7 +93,45 @@ final class MacLiveSessionsStore: ObservableObject {
     /// 才 20 秒一轮,否则 60 秒 —— 桌面上没关注的活不让手机勤快醒。
     var interval: TimeInterval { MacFollowLogic.pollInterval(rows.map(\.facts)) }
 
-    private init() {}
+    private var unfollowedByHost: [String: Set<String>] = [:]
+    private var confirmationByHost: [String: Date] = [:]
+    private static let cacheKey = "leo.macLive.lastConfirmed.v1"
+
+    // Only display metadata survives a cold launch. Pending decisions and commands must
+    // come from a live, authenticated host before the phone or watch can act on them.
+    private struct CachedRow: Codable {
+        var hostId, sessionId, harness, title, status: String
+        var seq: Int
+        var waiting: Bool
+        var following: Bool?
+        var confirmed: Date
+        var activity: Date?
+    }
+
+    private init() {
+        guard let data = UserDefaults.standard.data(forKey: Self.cacheKey),
+              let cached = try? JSONDecoder().decode([CachedRow].self, from: data) else { return }
+        let hosts = GatewayHostStore.shared.activeHosts
+        rows = cached.compactMap { c in
+            guard let host = hosts.first(where: { $0.id == c.hostId }),
+                  Date().timeIntervalSince(c.confirmed) < MacResultInbox.maxAge else { return nil }
+            return Row(hostId: host.id, hostName: host.name, session: HarnessSessionSummary(
+                id: c.sessionId, harness: c.harness, name: c.title, cwd: "~", status: c.status,
+                seq: c.seq, waitingForApproval: c.waiting, following: c.following),
+                lastConfirmed: c.confirmed, lastActivity: c.activity, isStale: true)
+        }
+    }
+
+    private func saveCachedRows() {
+        let cached = rows.prefix(100).compactMap { row -> CachedRow? in
+            guard let confirmed = confirmationByHost[row.hostId] ?? row.lastConfirmed else { return nil }
+            let s = row.session
+            return CachedRow(hostId: row.hostId, sessionId: s.id, harness: s.harness, title: s.displayTitle,
+                             status: s.status, seq: s.seq, waiting: s.waitingForApproval, following: s.following,
+                             confirmed: confirmed, activity: row.lastActivity)
+        }
+        if let data = try? JSONEncoder().encode(cached) { UserDefaults.standard.set(data, forKey: Self.cacheKey) }
+    }
 
     func start() {
         guard pollTask == nil else { return }
@@ -118,80 +163,85 @@ final class MacLiveSessionsStore: ObservableObject {
 
     private func load() async {
         let hosts = GatewayHostStore.shared.activeHosts
-        guard !hosts.isEmpty else {
-            if !rows.isEmpty { rows = [] }
-            unfollowedSessionIds = []
+        let active = Set(hosts.map(\.id))
+        unfollowedByHost = unfollowedByHost.filter { active.contains($0.key) }
+        confirmationByHost = confirmationByHost.filter { active.contains($0.key) }
+        publish(rows.filter { active.contains($0.hostId) })
+        await withTaskGroup(of: Void.self) { group in
+            for host in hosts { group.addTask { await self.refreshHost(host) } }
+        }
+        saveCachedRows()
+    }
+
+    private var hostRequests: [String: Task<Void, Never>] = [:]
+
+    func refreshHost(_ host: GatewayHost) async {
+        if let pending = hostRequests[host.id] { return await pending.value }
+        let store = GatewayHostStore.shared
+        guard !store.isLinkPaused(host.id), let client = store.client(for: host) else {
+            markStale(host.id)
             return
         }
+        let request = Task { @MainActor in
+            defer { hostRequests[host.id] = nil }
+            do {
+                let sessions = try await client.harnessSessions()
+                guard store.activeHosts.contains(where: { $0.id == host.id }) else { return }
+                store.recordLinkProblem(nil, for: host.id)
+                accept(sessions, from: host)
+            } catch {
+                guard !LeoLinkProblem.isCancellation(error) else { return }
+                markStale(host.id)
+                let problem = LeoLinkProblem.from(error: error, context: .init(
+                    .session, host: host.harnessBase?.host, machineName: host.name))
+                if problem.pausesAutoReconnect { store.recordLinkProblem(problem, for: host.id) }
+            }
+        }
+        hostRequests[host.id] = request
+        await request.value
+    }
 
-        // 请求失败 ≠ 没有会话。网络抖动时保留该主机上一轮的行,
-        // 否则整节一闪一闪;只有确认成功且为空才移除。
-        var collected: [Row] = []
-        var failedHosts: Set<String> = []
-        /// 成功的主机列出的全部会话(任何状态):不再出现的,「已清理」记录随之删掉。
-        var listed: Set<String> = []
-        /// 成功的主机这次报的会话,以及其中明说不关注的。
-        var fetchedSessionIds: Set<String> = []
-        var unfollowedListed: Set<String> = []
-        let store = GatewayHostStore.shared
-        await withTaskGroup(of: (GatewayHost, Result<[HarnessSessionSummary], Error>).self) { group in
-            for host in hosts {
-                // [T-link-problem] 已确认要用户处理的问题(密钥被拒、Mac 撤销授权…):在用户点主按钮之前
-                // 不再每 20 秒敲一次门。上一轮的行照旧保留(同下面的「请求失败 ≠ 没有会话」)。
-                if store.isLinkPaused(host.id) { failedHosts.insert(host.id); continue }
-                guard let client = store.client(for: host) else { continue }
-                group.addTask {
-                    do { return (host, .success(try await client.harnessSessions())) }
-                    catch { return (host, .failure(error)) }
-                }
-            }
-            for await (host, result) in group {
-                let sessions: [HarnessSessionSummary]
-                switch result {
-                case .success(let fetched):
-                    sessions = fetched
-                    store.recordLinkProblem(nil, for: host.id)
-                case .failure(let error):
-                    failedHosts.insert(host.id)
-                    // 只有「要用户处理」的问题才记下并暂停;瞬时失败沿用 20 秒一轮的节奏。
-                    guard !LeoLinkProblem.isCancellation(error) else { continue }
-                    let problem = LeoLinkProblem.from(
-                        error: error, context: .init(.session, host: host.harnessBase?.host, machineName: host.name))
-                    if problem.pausesAutoReconnect { store.recordLinkProblem(problem, for: host.id) }
-                    continue
-                }
-                for session in sessions {
-                    fetchedSessionIds.insert(session.id)
-                    if session.following == false { unfollowedListed.insert(session.id) }
-                    let row = Row(hostId: host.id, hostName: host.name, session: session)
-                    listed.insert(row.id)
-                    if Self.liveStatuses.contains(session.status), !isDismissed(row) { collected.append(row) }
-                }
-            }
+    private func markStale(_ id: String) {
+        publish(rows.map { row in
+            guard row.hostId == id else { return row }
+            var retained = row
+            retained.isStale = true
+            retained.lastConfirmed = confirmationByHost[id] ?? row.lastConfirmed
+            return retained
+        })
+    }
+
+    private func accept(_ sessions: [HarnessSessionSummary], from host: GatewayHost) {
+        let now = Date()
+        let previous = rows.filter { $0.hostId == host.id }
+        confirmationByHost[host.id] = now
+        unfollowedByHost[host.id] = Set(sessions.filter { $0.following == false }.map(\.id))
+        let live = sessions.compactMap { session -> Row? in
+            guard Self.liveStatuses.contains(session.status) else { return nil }
+            let last = previous.first { $0.session.id == session.id }
+            let activity = session.updatedAt ?? (last?.session.seq == session.seq ? last?.lastActivity : now)
+            let row = Row(hostId: host.id, hostName: host.name, session: session, lastConfirmed: now,
+                          lastActivity: activity)
+            return isDismissed(row) ? nil : row
         }
-        collected.append(contentsOf: rows.filter { failedHosts.contains($0.hostId) })
-        // 有主机没拉到:它的会话沿用上一轮的关注记录;都拉到了就以这一轮为准。
-        unfollowedSessionIds = failedHosts.isEmpty ? unfollowedListed
-            : unfollowedSessionIds.subtracting(fetchedSessionIds).union(unfollowedListed)
-        if failedHosts.isEmpty, dismissed.keys.contains(where: { !listed.contains($0) }) {
-            dismissed = dismissed.filter { listed.contains($0.key) }
-            UserDefaults.standard.set(dismissed, forKey: Self.dismissedKey)
-        }
-        let busy = Set(collected.filter { $0.isWaiting || ["running", "starting"].contains($0.session.status) }.map(\.id))
-        if !stopping.isSubset(of: busy) { stopping.formIntersection(busy) }
-        // 等审批的排最前(要人拍板的最要紧),其余按 seq 新的在前
-        collected.sort { a, b in
+        publish(rows.filter { $0.hostId != host.id } + live)
+    }
+
+    private func publish(_ updated: [Row]) {
+        unfollowedSessionIds = Set(unfollowedByHost.values.flatMap { $0 })
+        let ordered = updated.sorted { a, b in
             if a.isWaiting != b.isWaiting { return a.isWaiting }
-            return a.session.seq > b.session.seq
+            if a.lastActivity != b.lastActivity { return (a.lastActivity ?? .distantPast) > (b.lastActivity ?? .distantPast) }
+            return a.id < b.id
         }
-        if collected != rows {
+        let busy = Set(ordered.filter { $0.isWaiting || ["running", "starting"].contains($0.session.status) }.map(\.id))
+        if !stopping.isSubset(of: busy) { stopping.formIntersection(busy) }
+        if rows != ordered {
             let watchBefore = watchStatus.signature
-            rows = collected
-            // [WP-44] Mirror to the watch's Mac page / complications — [remote-ctl-power] only
-            // when what the watch shows changed (unfollowed rows never reach it).
+            rows = ordered
             if watchStatus.signature != watchBefore { WatchBridge.shared.pushStatus() }
+            syncWatchApprovals()
         }
-        syncWatchApprovals()
     }
 
     /// [WP-44] What the watch shows: counts plus the first few rows, waiting first.
@@ -209,7 +259,7 @@ final class MacLiveSessionsStore: ObservableObject {
     /// [remote-ctl-power] 关注的会话等审批时,控制台没开也把审批卡推到手表(控制台开着时 driver 已推、
     /// 已登记处理者的不重复推);审批不在了就收卡。只在前台轮询时发生。
     private func syncWatchApprovals() {
-        let pending = MacFollowLogic.watchApprovals(rows.map(\.facts))
+        let pending = MacFollowLogic.watchApprovals(rows.filter { !$0.isStale }.map(\.facts))
         let current = Set(pending.compactMap(\.pendingApprovalId))
         for facts in pending {
             guard let approvalId = facts.pendingApprovalId, !watchArmedApprovals.contains(approvalId) else { continue }
@@ -280,6 +330,7 @@ final class MacLiveSessionsStore: ObservableObject {
         dismissed[row.id] = row.session.seq
         UserDefaults.standard.set(dismissed, forKey: Self.dismissedKey)
         rows.removeAll { $0.id == row.id }
+        saveCachedRows()
         guard let client = client(for: row.hostId) else { return }
         Task { try? await client.archiveHarness(sessionId: row.session.id) }
     }
@@ -295,5 +346,16 @@ final class MacLiveSessionsStore: ObservableObject {
                 await refresh()
             }
         }
+    }
+}
+
+
+// Receipt destinations use a verified host id or an unambiguous machine match. An
+// unrelated, sole remaining paired host cannot inherit a removed machine's receipts.
+extension GatewayHostStore {
+    func taskHost(hostId: String? = nil, machine: String) -> GatewayHost? {
+        if let hostId, !hostId.isEmpty { return activeHosts.first { $0.id == hostId } }
+        let matches = activeHosts.filter { RelayMachinesClient.hostMatches(hostId: $0.id, displayName: $0.name, machine: machine) }
+        return matches.count == 1 ? matches.first : nil
     }
 }

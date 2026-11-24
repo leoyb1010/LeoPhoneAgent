@@ -159,7 +159,7 @@ struct ConfigAuditView: View {
 
     private func badgeColor(_ status: ConfigAuditStatus) -> Color {
         switch status {
-        case .applied: return .green
+        case .applied: return .blue
         case .rejected: return .gray
         case .timeout: return .orange
         case .reverted: return .purple

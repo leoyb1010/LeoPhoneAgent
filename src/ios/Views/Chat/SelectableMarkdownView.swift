@@ -1617,7 +1617,7 @@ final class CodeBlockAttachment: NSTextAttachment {
             var config = UIButton.Configuration.plain()
             config.image = UIImage(systemName: copied ? "checkmark" : "doc.on.doc", withConfiguration: iconConfig)
             config.imagePadding = 4
-            config.baseForegroundColor = copied ? .systemGreen : chromeColor
+            config.baseForegroundColor = copied ? .systemBlue : chromeColor
             var title = AttributedString(copied ? AppLocalized("Copied") : AppLocalized("Copy"))
             title.font = .systemFont(ofSize: 12, weight: .medium)
             config.attributedTitle = title

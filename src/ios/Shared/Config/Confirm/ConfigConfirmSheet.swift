@@ -157,7 +157,7 @@ private struct ConfigConfirmRow: View {
     private var verbBackground: Color {
         switch item.verb.lowercased() {
         case "remove", "delete": return .red
-        case "add", "create":    return .green
+        case "add", "create":    return .blue
         case "hide":             return .gray
         case "show":             return .blue
         case "revert":           return .purple

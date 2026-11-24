@@ -42,7 +42,7 @@ struct ShadowVoiceProviderDetailView: View {
                         Label {
                             Text("Endpoint", comment: "Shadow voice endpoint label")
                         } icon: {
-                            styledIcon("link", color: .teal)
+                            styledIcon("link", color: .indigo)
                         }
                     }
                 }
@@ -62,7 +62,7 @@ struct ShadowVoiceProviderDetailView: View {
             if let tts = shadow?.outputModels, !tts.isEmpty {
                 Section(AppLocalized("Text to Speech", comment: "TTS section")) {
                     ForEach(tts) { entry in
-                        modelRow(entry, systemImage: "speaker.wave.2.fill", color: .green)
+                        modelRow(entry, systemImage: "speaker.wave.2.fill", color: .blue)
                     }
                 }
             }

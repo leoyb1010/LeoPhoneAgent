@@ -11,6 +11,7 @@ import SwiftUI
 // 和 HomeComposer 一样只用具体类型,不加深 ContentView 的类型链。
 
 struct HomeContextStrip: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let snapshot: HomeContextSnapshot
     let onResume: (String) -> Void
     let onToggleInbox: () -> Void
@@ -25,10 +26,12 @@ struct HomeContextStrip: View {
                 resumeRow(resume)
             }
             if snapshot.showsToday || snapshot.showsInboxToggle {
-                HStack(spacing: LeoTheme.Spacing.xs) {
+                let layout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: LeoTheme.Spacing.xs))
+                    : AnyLayout(HStackLayout(spacing: LeoTheme.Spacing.xs))
+                layout {
                     if snapshot.showsToday { todayChip }
                     if snapshot.showsInboxToggle { inboxChip }
-                    Spacer(minLength: 0)
                 }
             }
         }
@@ -89,16 +92,19 @@ struct HomeContextStrip: View {
                     Text("继续上次")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(resume.title)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.primary)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 }
                 Spacer(minLength: LeoTheme.Spacing.xs)
-                Text(resume.updatedAt, format: .relative(presentation: .named))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Text(resume.updatedAt, format: .relative(presentation: .named))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.tertiary)
@@ -120,16 +126,17 @@ struct HomeContextStrip: View {
         HStack(spacing: 5) {
             Image(systemName: "sun.max")
                 .font(.caption.weight(.semibold))
-            Text(todayText)
+            Text(dynamicTypeSize.isAccessibilitySize ? compactTodayText : todayText)
                 .font(.footnote.weight(.medium))
                 .monospacedDigit()
-                .lineLimit(1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
         }
         .foregroundStyle(.secondary)
         .padding(.horizontal, 10)
         .frame(minHeight: 32)
-        .background(Color.primary.opacity(0.06), in: Capsule())
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(todayText))
         .accessibilityIdentifier("home.context-today")
     }
 
@@ -138,6 +145,13 @@ struct HomeContextStrip: View {
             return "今日 \(snapshot.todaySessions) 个会话 · \(snapshot.pendingCount) 待处理"
         }
         return "今日 \(snapshot.todaySessions) 个会话"
+    }
+
+    private var compactTodayText: String {
+        if snapshot.pendingCount > 0 {
+            return "今日 \(snapshot.todaySessions) · 待办 \(snapshot.pendingCount)"
+        }
+        return "今日 \(snapshot.todaySessions)"
     }
 
     private var inboxChip: some View {
@@ -155,7 +169,7 @@ struct HomeContextStrip: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
                         .frame(minHeight: 18)
-                        .background(LeoTheme.ColorToken.accent, in: Capsule())
+                    .background(LeoTheme.ColorToken.primaryButton, in: Capsule())
                         .accessibilityLabel(Text("\(snapshot.quietUnread) 条未读"))
                 }
             }

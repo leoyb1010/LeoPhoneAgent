@@ -310,7 +310,7 @@ private extension AgentWidgetSnapshot.State {
         switch self {
         case .idle, .running: return .accentColor
         case .suspended: return .orange
-        case .completed: return .green
+        case .completed: return .blue
         case .failed: return .red
         case .cancelled, .unknown: return .secondary
         case .waitingForUser: return .orange
@@ -1200,7 +1200,7 @@ private struct QuickTaskChip: View {
     private var runStateTint: Color {
         switch task.lastRunState {
         case .idle, .running: return Color.accentColor
-        case .succeeded: return .green
+        case .succeeded: return .blue
         case .failed: return .orange
         case .suspended, .waitingForUser: return .orange
         case .cancelled, .unknown: return .secondary
@@ -2256,7 +2256,7 @@ extension LiveSessionSnapshot.RestingOutcome {
     // [leo] 图标和文案在 Shared(AgentActivityAttributes.swift),App 和这里共用;这里只管颜色。
     var tint: Color {
         switch self {
-        case .done: .green
+        case .done: .blue
         // [leo] 只有真失败是警示色;以前「等你 / 中断 / 没回执」也是这个橙色感叹号。
         case .attention: .red
         case .stopped, .unknown: .gray

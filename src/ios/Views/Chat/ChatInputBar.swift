@@ -26,12 +26,9 @@ struct SwipeToSendHint: View {
             let capsuleStart = max(0, armFraction - 0.4)
             let capsuleSpan = max(0.0001, armFraction - capsuleStart)
             let capsuleAlpha = max(0, min(1, (progress - capsuleStart) / capsuleSpan))
-            // [F1] `ChatColors.sendButton` is the teal accent now. The glyph
-            // and capsule text use `systemBackground` (white in light, black in
-            // dark): both clear 4.5:1 on the light/dark teal, and the old
-            // white-on-white dark-mode bug (2026-05-18) cannot come back.
+            // 发送按钮使用主按钮蓝，明暗外观都保留可辨识的白色图标和文字。
             let chipBg = ChatColors.sendButton
-            let chipFg = Color(UIColor.systemBackground)
+            let chipFg = Color.white
             HStack(spacing: 8) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 34))

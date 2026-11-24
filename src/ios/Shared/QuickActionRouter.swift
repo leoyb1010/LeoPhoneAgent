@@ -27,6 +27,27 @@ private let logger = AppLogger(category: "QuickAction")
 
 /// One-shot action consumed by `AIChatView` when a new chat opens from
 /// a Home Screen shortcut.
+/// Home keeps a relative reference so the draft survives a container relocation.
+struct HomeDraftAttachment: Identifiable, Codable, Equatable, Sendable {
+    enum Kind: String, Codable, Sendable { case image, video, document }
+    let id: UUID
+    let name: String
+    let kind: Kind
+    var url: URL {
+        let ext = (name as NSString).pathExtension
+        let file = ext.isEmpty ? id.uuidString : id.uuidString + "." + ext
+        return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("InputAttachments").appendingPathComponent(file)
+    }
+    static func stage(name: String, kind: Kind, write: (URL) throws -> Void) throws -> Self {
+        let value = Self(id: UUID(), name: (name as NSString).lastPathComponent, kind: kind)
+        try FileManager.default.createDirectory(at: value.url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        do { try write(value.url) }
+        catch { try? FileManager.default.removeItem(at: value.url); throw error }
+        return value
+    }
+}
+
 enum ChatLaunchAction: Equatable {
     case startVoice
     case openCamera
@@ -40,6 +61,7 @@ enum ChatLaunchAction: Equatable {
     /// This is deliberately distinct from `prefillPrompt`: the Home CTA says
     /// "开始", so a second send tap would violate the control's promise.
     case sendPrompt(String)
+    case sendHomeDraft(id: UUID, prompt: String, files: [HomeDraftAttachment], modelChoice: String?)
 }
 
 @MainActor

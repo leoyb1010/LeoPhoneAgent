@@ -201,10 +201,10 @@ struct EnhancedBackgroundSettingsView: View {
                     case .extended(let location, let audio):
                         HStack(spacing: 4) {
                             Circle()
-                                .fill(.green)
+                                .fill(.blue)
                                 .frame(width: 8, height: 8)
                             Text(extendedTierLabel(location: location, audio: audio))
-                                .foregroundColor(.green)
+                                .foregroundColor(.blue)
                         }
                     }
                 }
@@ -315,7 +315,7 @@ struct EnhancedBackgroundSettingsView: View {
 
     private var locationStatusColor: Color {
         switch keepAlive.locationAuthStatus {
-        case .authorizedAlways: return .green
+        case .authorizedAlways: return .blue
         case .authorizedWhenInUse: return .orange
         case .denied, .restricted: return .red
         default: return .secondary

@@ -75,13 +75,25 @@ struct ShareMacTarget: Codable, Equatable {
         var directToken: String?
     }
 
-    /// 按尝试顺序给出要发的请求(直连在前)。凭证缺了哪条就少哪条。
+    struct Attempt {
+        var request: URLRequest
+        let receipt: URLRequest
+        var keys: RelayE2E.Keys?
+    }
+
+    /// This API is also used to verify the two transports share one operation identifier.
     func requests(text: String, secrets: Secrets, requestId: String = UUID().uuidString.lowercased(),
                   now: Date = Date()) -> [URLRequest] {
+        attempts(text: text, secrets: secrets, requestId: requestId, now: now).map(\.request)
+    }
+
+    /// 按尝试顺序给出要发的请求(直连在前)。凭证缺了哪条就少哪条。
+    func attempts(text: String, secrets: Secrets, requestId: String = UUID().uuidString.lowercased(),
+                  now: Date = Date()) -> [Attempt] {
         let path = "/harness/sessions/\(sessionId)/send"
         let body = try? JSONSerialization.data(withJSONObject: ["text": text])
-        var out: [URLRequest] = []
-        func make(base: String, token: String, timeout: TimeInterval, extra: [String: String]) -> URLRequest? {
+        var out: [Attempt] = []
+        func make(base: String, token: String, timeout: TimeInterval, extra: [String: String]) -> Attempt? {
             let trimmed = base.hasSuffix("/") ? String(base.dropLast()) : base
             guard !token.isEmpty, let url = URL(string: trimmed + path) else { return nil }
             var req = URLRequest(url: url)
@@ -93,7 +105,13 @@ struct ShareMacTarget: Codable, Equatable {
             req.setValue(requestId, forHTTPHeaderField: "X-Leo-Request-Id")
             req.setValue(requestId, forHTTPHeaderField: "X-Request-ID")
             for (k, v) in extra { req.setValue(v, forHTTPHeaderField: k) }
-            return req
+            guard let receiptURL = URL(string: trimmed + "/operations/")?.appendingPathComponent(requestId) else { return nil }
+            var receipt = req
+            receipt.url = receiptURL
+            receipt.httpMethod = "GET"
+            receipt.httpBody = nil
+            receipt.setValue(nil, forHTTPHeaderField: "X-Leo-Queue")
+            return Attempt(request: req, receipt: receipt)
         }
         if directUsable(now: now), let directBase, let token = secrets.directToken,
            let req = make(base: directBase, token: token, timeout: Self.directTimeout,
@@ -110,7 +128,8 @@ struct ShareMacTarget: Codable, Equatable {
     }
 
     /// 中继那条的加密版:同一个请求编号,封进 `<relayBase>/e2e`。
-    static func sealed(_ plain: URLRequest, path: String, requestId: String, macKey: String?) -> URLRequest? {
+    static func sealed(_ attempt: Attempt, path: String, requestId: String, macKey: String?) -> Attempt? {
+        let plain = attempt.request
         guard let key = RelayE2E.validKey(macKey), let url = plain.url?.absoluteString, url.hasSuffix(path),
               let target = URL(string: String(url.dropLast(path.count)) + "/e2e"),
               let inner = RelayE2E.inner(method: "POST", path: path, body: plain.httpBody, requestId: requestId),
@@ -119,7 +138,7 @@ struct ShareMacTarget: Codable, Equatable {
         var req = plain
         req.url = target
         req.httpBody = body
-        return req
+        return Attempt(request: req, receipt: attempt.receipt, keys: envelope.keys)
     }
 
     static func isSealed(_ request: URLRequest) -> Bool { request.url?.lastPathComponent == "e2e" }

@@ -568,7 +568,7 @@ private struct GatewayHostRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Circle()
-                .fill(isReachable == true ? Color.green : (isReachable == false ? Color.secondary.opacity(0.4) : Color.orange))
+                .fill(isReachable == true ? Color.blue : (isReachable == false ? Color.secondary.opacity(0.4) : Color.orange))
                 .frame(width: 8, height: 8)
                 .leoPulse(active: isReachable == nil)
             VStack(alignment: .leading, spacing: 2) {
@@ -1133,7 +1133,7 @@ private struct GatewayToolRow: View {
                 HStack(spacing: 8) {
                     Image(systemName: isRunning ? "gearshape.2" : (isError ? "exclamationmark.triangle" : "checkmark.circle"))
                         .font(.system(size: 13))
-                        .foregroundStyle(isError ? .red : (isRunning ? .orange : .green))
+                        .foregroundStyle(isError ? .red : (isRunning ? .orange : .blue))
                         .leoPulse(active: isRunning)
                     Text(name).font(.system(size: 13, weight: .medium, design: .monospaced))
                     if !item.text.isEmpty, !expanded {

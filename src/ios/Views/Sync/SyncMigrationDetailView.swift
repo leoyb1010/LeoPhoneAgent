@@ -119,7 +119,7 @@ struct SyncMigrationDetailView: View {
             Section("Status") {
                 LabeledContent("iCloud Sync") {
                     Text(vm.v2Enabled ? "On" : "Off")
-                        .foregroundStyle(vm.v2Enabled ? .green : .secondary)
+                        .foregroundStyle(vm.v2Enabled ? .blue : .secondary)
                 }
                 if vm.v2Enabled {
                     LabeledContent("Status", value: vm.cloudState.localizedLabel)
@@ -313,7 +313,7 @@ struct SyncMigrationDetailView: View {
                         // instead. Survives relaunches via @AppStorage.
                         HStack(spacing: 8) {
                             Image(systemName: "checkmark.seal.fill")
-                                .foregroundStyle(.green)
+                                .foregroundStyle(.blue)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("V1 zone deleted")
                                     .foregroundStyle(.primary)
@@ -647,7 +647,7 @@ struct SyncMigrationDetailView: View {
     }
     private func badgeColor(for kind: ZoneRow.Kind) -> Color {
         switch kind {
-        case .v2:     return .green
+        case .v2:     return .blue
         case .v1:     return .orange
         case .system: return .gray
         case .other:  return .secondary

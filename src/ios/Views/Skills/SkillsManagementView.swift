@@ -257,7 +257,7 @@ struct SkillsManagementView: View {
         case .bundled:
             Image(systemName: "shippingbox")
                 .font(.caption2)
-                .foregroundStyle(.green)
+                .foregroundStyle(.blue)
         case .session:
             Image(systemName: "bubble.left.and.text.bubble.right")
                 .font(.caption2)
@@ -652,7 +652,7 @@ private struct SkillDetailView: View {
                             }
                             Spacer()
                             if showRescanDone {
-                                Text(AppLocalized("Done")).foregroundStyle(.green).font(.caption)
+                                Text(AppLocalized("Done")).foregroundStyle(.blue).font(.caption)
                             }
                         }
                     }
@@ -676,7 +676,7 @@ private struct SkillDetailView: View {
                                 }
                                 Spacer()
                                 if showForceSyncDone {
-                                    Text(AppLocalized("Queued")).foregroundStyle(.green).font(.caption)
+                                    Text(AppLocalized("Queued")).foregroundStyle(.blue).font(.caption)
                                 }
                             }
                         }
@@ -802,7 +802,7 @@ private struct SkillDetailView: View {
         case .never:  return .secondary
         case .low:    return .blue
         case .regular: return .orange
-        case .high:   return .green
+        case .high:   return .blue
         }
     }
 
@@ -1066,7 +1066,7 @@ struct MinisSkillsBrowserView: View {
                     .foregroundStyle(.white)
             case .success(let name):
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(.blue)
                 Text(AppLocalized("\(name) imported"))
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -1567,7 +1567,7 @@ private struct SkillCatalogSheet: View {
                     ProgressView()
                 case .installed:
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.green)
+                        .foregroundStyle(Color.blue)
                 case .failed:
                     Button(AppLocalized("Retry")) { install(entry) }
                         .buttonStyle(.glass)

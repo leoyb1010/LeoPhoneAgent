@@ -96,7 +96,7 @@ struct VoiceProviderTemplate: Identifiable {
                 LLMModel(id: "aura-orion-en", displayName: "Aura Orion (TTS, EN M)", provider: "deepgram", modalityOverride: .audioOutput),
             ],
             symbol: "mic.and.signal.meter",
-            tint: .green,
+            tint: .blue,
             note: nil
         ),
         VoiceProviderTemplate(

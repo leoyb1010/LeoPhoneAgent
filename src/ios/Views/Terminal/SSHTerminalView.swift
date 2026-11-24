@@ -101,7 +101,7 @@ struct SSHTerminalScreen: View {
 
     private var statusColor: Color {
         switch session.status {
-        case .connected: return .green
+        case .connected: return .blue
         case .connecting, .reconnecting: return .orange
         case .disconnected: return .red
         }

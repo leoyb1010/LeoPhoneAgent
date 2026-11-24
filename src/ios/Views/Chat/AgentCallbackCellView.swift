@@ -84,7 +84,7 @@ struct AgentCallbackCellView: View {
 
     private var tint: Color {
         switch callback.status {
-        case "done", "completed": return .green
+        case "done", "completed": return .blue
         case "failed", "timeout": return .orange
         case "cancelled", "no_deliverable": return .secondary
         default: return ChatColors.accent

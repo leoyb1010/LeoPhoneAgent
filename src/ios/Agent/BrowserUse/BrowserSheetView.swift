@@ -667,7 +667,7 @@ private struct BrowserDownloadPanelRow: View {
                 .symbolEffectPulseIfAvailable()
         case .completed:
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(.blue)
         case .failed:
             Image(systemName: "xmark.circle.fill")
                 .foregroundStyle(.red)
@@ -738,7 +738,7 @@ struct BrowserDownloadCardRow: View {
                 .symbolEffectPulseIfAvailable()
         case .completed:
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(.blue)
         case .failed:
             Image(systemName: "xmark.circle.fill")
                 .foregroundStyle(.red)

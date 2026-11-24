@@ -88,7 +88,7 @@ struct CommandPaletteView: View {
                     HStack(spacing: 10) {
                         Image(systemName: item.symbol)
                             .frame(width: 24)
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(.indigo)
                         Text(item.title).foregroundStyle(.primary)
                         Spacer()
                         Text(item.subtitle)

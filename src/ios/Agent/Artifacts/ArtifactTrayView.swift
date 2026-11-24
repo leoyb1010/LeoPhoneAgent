@@ -94,12 +94,15 @@ struct ArtifactTrayView: View {
     @State private var versionHistory: ArtifactSnapshot?
     @State private var pendingPurge: ArtifactSnapshot?
     @State private var actionError: String?
+    @State private var macReceiptCount = 0
     /// Inside the iPad inspector column there is nothing to dismiss.
     private let embedded: Bool
+    private let receiptSessionId: String?
 
     init(sessionId: String?, embedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: ArtifactTrayViewModel(sessionId: sessionId))
         self.embedded = embedded
+        self.receiptSessionId = sessionId
     }
 
     /// iPad: a page-sized sheet, not a small card in the middle of the screen
@@ -113,9 +116,9 @@ struct ArtifactTrayView: View {
         NavigationStack {
             Group {
                 switch viewModel.state {
-                case .loading where viewModel.artifacts.isEmpty:
+                case .loading where viewModel.artifacts.isEmpty && macReceiptCount == 0:
                     loadingState
-                case .failed(let message) where viewModel.artifacts.isEmpty:
+                case .failed(let message) where viewModel.artifacts.isEmpty && macReceiptCount == 0:
                     errorState(message)
                 default:
                     artifactList
@@ -140,7 +143,13 @@ struct ArtifactTrayView: View {
                 }
             }
             .refreshable { await viewModel.load() }
-            .task { await viewModel.load() }
+            .task {
+                refreshMacReceipts()
+                await viewModel.load()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: MacResultInbox.changed)) { _ in
+                refreshMacReceipts()
+            }
             .sheet(item: $previewURL) { url in
                 // [T-artifact-preview-exit] A bare QLPreviewController in a sheet has
                 // no bar of its own, and a web page / zoomed image swallows the
@@ -190,6 +199,16 @@ struct ArtifactTrayView: View {
 
     private var artifactList: some View {
         List {
+            if let receiptSessionId, macReceiptCount > 0, !viewModel.showsTrash {
+                Section {
+                    NavigationLink {
+                        MacReceiptHistoryView(sessionId: receiptSessionId)
+                    } label: {
+                        Label("Mac 任务回执", systemImage: "desktopcomputer")
+                        Text(macReceiptCount.formatted())
+                    }
+                }
+            }
             if viewModel.artifacts.isEmpty {
                 ArtifactEmptyState(showsTrash: viewModel.showsTrash)
                     .listRowBackground(Color.clear)
@@ -252,6 +271,10 @@ struct ArtifactTrayView: View {
         }
         .listStyle(.insetGrouped)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: viewModel.artifacts)
+    }
+
+    private func refreshMacReceipts() {
+        macReceiptCount = receiptSessionId.map { MacResultInbox.history(phoneSessionId: $0).count } ?? 0
     }
 
     @ViewBuilder
@@ -613,7 +636,7 @@ private extension ArtifactKind {
         case .image: return .purple
         case .audio: return .orange
         case .video: return .pink
-        case .code: return .green
+        case .code: return .blue
         case .archive: return .brown
         case .file: return .gray
         }

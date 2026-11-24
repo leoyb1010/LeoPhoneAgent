@@ -438,6 +438,16 @@ enum ShortcutNotification {
 final class NotificationNavigationStore {
     static let shared = NotificationNavigationStore()
 
+    private var pendingReceipt: (target: MacReceiptTarget, at: Date)?
+
+    func setPendingReceipt(_ target: MacReceiptTarget) { pendingReceipt = (target, Date()) }
+
+    func takeReceipt(sessionId: String) -> MacReceiptTarget? {
+        guard let pendingReceipt, pendingReceipt.target.phoneSessionId == sessionId else { return nil }
+        self.pendingReceipt = nil
+        return Date().timeIntervalSince(pendingReceipt.at) < 30 ? pendingReceipt.target : nil
+    }
+
     private var pendingSessionId: String?
     private var pendingSetAt: Date?
     private var handledAt: Date?
@@ -555,22 +565,39 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
             }
         } else if let macSessionId = userInfo["harnessSessionId"] as? String, !macSessionId.isEmpty {
             // A Mac's "waiting for you" / "done": open that Mac session, not just the app.
-            let target = ["macSessionId": macSessionId,
+            var targetFields = ["macSessionId": macSessionId,
                           "hostId": userInfo["hostId"] as? String ?? "",
                           "machine": userInfo["machine"] as? String ?? ""]
+            let title = response.notification.request.content.title
+            let isCompletion = userInfo["completionReceipt"] as? Bool == true ||
+                (title.hasPrefix("✅ ") && title.hasSuffix("任务完成"))
+            if isCompletion, userInfo["phoneSessionId"] == nil {
+                targetFields["completionReceipt"] = "1"
+                targetFields["eventSequence"] = (userInfo["eventSequence"] as? Int).map { String($0) }
+                targetFields["runId"] = userInfo["runId"] as? String
+                targetFields["receivedAt"] = (userInfo["receivedAt"] as? Double).map { String($0) }
+            }
+            let target = targetFields
             let openMac: @MainActor () -> Void = {
                 SessionLockStore.shared.runWhenUnlocked {
                     NotificationNavigationStore.shared.setPendingMac(target)
                     NotificationCenter.default.post(name: .openSessionFromIntent, object: nil, userInfo: target)
                 }
             }
-            // [E5] 从手机对话派出的任务完成:回到那个对话(结果由回前台补齐写进 MacResultInbox,打开时显示并滚到底)。
+            // A completion from a phone conversation opens its retained turn under the chat lock.
             // 没带对话 id,或那个对话已经删了:照旧打开 Mac 任务。
             if let phoneSessionId = HarnessFullAuto.phoneSessionValue(userInfo["phoneSessionId"] as? String) {
                 Task { @MainActor in
                     guard await ChatStore.shared.sessionExists(id: phoneSessionId) else { openMac(); return }
                     SessionLockStore.shared.runWhenUnlocked {
+                        let receipt = MacReceiptTarget(phoneSessionId: phoneSessionId,
+                            machine: target["machine"] ?? "", hostId: userInfo["hostId"] as? String,
+                            harnessSessionId: macSessionId, eventSequence: userInfo["eventSequence"] as? Int,
+                            runId: userInfo["runId"] as? String, receivedAt: userInfo["receivedAt"] as? Double)
+                        NotificationNavigationStore.shared.setPendingReceipt(receipt)
                         NotificationNavigationStore.shared.setPending(phoneSessionId)
+                        NotificationCenter.default.post(name: MacResultInbox.changed, object: nil,
+                                                        userInfo: ["sessionId": phoneSessionId])
                         NotificationCenter.default.post(name: .openSessionFromIntent, object: nil,
                                                         userInfo: ["sessionId": phoneSessionId])
                     }

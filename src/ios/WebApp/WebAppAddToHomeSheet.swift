@@ -349,14 +349,14 @@ enum LauncherCategory: String, CaseIterable, Hashable {
         switch self {
         case .code:         return .orange
         case .writing:      return .blue
-        case .research:     return .teal
+        case .research:     return .indigo
         case .analysis:     return .indigo
         case .creative:     return .pink
-        case .chat:         return .green
+        case .chat:         return .blue
         case .math:         return .purple
         case .translation:  return .cyan
         case .health:       return .red
-        case .finance:      return .mint
+        case .finance:      return .gray
         case .travel:       return .orange
         case .education:    return .blue
         case .design:       return .pink

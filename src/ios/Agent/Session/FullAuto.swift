@@ -97,7 +97,7 @@ extension FullAutoGate.Mode {
     var tint: Color {
         switch self {
         case .ask: .secondary
-        case .smart: .teal
+        case .smart: .indigo
         case .full: .orange
         }
     }
@@ -405,7 +405,7 @@ enum SystemPermissionStatus: Equatable {
     var color: Color {
         switch self {
         case .notDetermined: return .orange
-        case .granted: return .green
+        case .granted: return .blue
         case .denied: return .secondary
         }
     }

@@ -73,7 +73,7 @@ struct AssistantBlockView: View {
             AskUserCardView(block: block, messageId: message.id)
         case .shellTool:
             VStack(alignment: .leading, spacing: 6) {
-                ToolCapsuleView(block: block, icon: "terminal", accentColor: .green,
+                ToolCapsuleView(block: block, icon: "terminal", accentColor: .blue,
                                 commandStartTime: commandStartTime, onStop: onStop, browserPool: browserPool,
                                 toolSnapshots: toolSnapshots, detailBlock: $detailBlock)
                 // [T-inline-image-render] A generated image is user-facing
@@ -610,7 +610,7 @@ struct ToolCapsuleView: View {
 
     private var iconColor: Color {
         switch block.toolStatus {
-        case .success: return .green
+        case .success: return .blue
         case .failed: return .red
         case .cancelled: return .yellow
         default: return accentColor

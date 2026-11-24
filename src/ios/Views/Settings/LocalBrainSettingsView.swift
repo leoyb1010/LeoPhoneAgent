@@ -33,7 +33,7 @@ struct LocalBrainSettingsView: View {
             Section {
                 HStack(spacing: 10) {
                     Image(systemName: brain.isReady ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                        .foregroundStyle(brain.isReady ? .green : .orange)
+                        .foregroundStyle(brain.isReady ? .blue : .orange)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(brain.statusText).font(.system(size: 15, weight: .medium))
                         if !brain.isReady {

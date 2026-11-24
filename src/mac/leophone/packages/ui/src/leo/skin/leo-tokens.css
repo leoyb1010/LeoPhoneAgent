@@ -31,8 +31,9 @@
 }
 
 :root {
-  --leo-brand: #2a8282;
-  --leo-brand-soft: rgba(42, 130, 130, 0.10);
+  --leo-brand: #1761dc;
+  --leo-brand-soft: rgba(23, 97, 220, 0.08);
+  --leo-primary: #1761dc;
   --leo-attention: #b86e12;
   --leo-bg: #fafafa;
   --leo-panel: #ffffff;
@@ -44,8 +45,9 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --leo-brand: #2e9c9c;
-    --leo-brand-soft: rgba(46, 156, 156, 0.14);
+    --leo-brand: #6b9fff;
+    --leo-brand-soft: rgba(107, 159, 255, 0.14);
+    --leo-primary: #2563eb;
     --leo-attention: #f0b86e;
     --leo-bg: #131315;
     --leo-panel: #18181b;
@@ -57,8 +59,9 @@
 }
 
 html.theme-zai-dark {
-  --leo-brand: #2e9c9c;
-  --leo-brand-soft: rgba(46, 156, 156, 0.14);
+  --leo-brand: #6b9fff;
+  --leo-brand-soft: rgba(107, 159, 255, 0.14);
+  --leo-primary: #2563eb;
   --leo-attention: #f0b86e;
   --leo-bg: #131315;
   --leo-panel: #18181b;
@@ -69,8 +72,9 @@ html.theme-zai-dark {
 }
 
 html.theme-zai-light {
-  --leo-brand: #2a8282;
-  --leo-brand-soft: rgba(42, 130, 130, 0.10);
+  --leo-brand: #1761dc;
+  --leo-brand-soft: rgba(23, 97, 220, 0.08);
+  --leo-primary: #1761dc;
   --leo-attention: #b86e12;
   --leo-bg: #fafafa;
   --leo-panel: #ffffff;

@@ -444,8 +444,8 @@ private struct MCPCatalogSheet: View {
                                                     .font(.caption2.weight(.semibold))
                                                     .padding(.horizontal, 5)
                                                     .padding(.vertical, 1.5)
-                                                    .background(Color.green.opacity(0.15), in: Capsule())
-                                                    .foregroundStyle(.green)
+                                                    .background(Color.blue.opacity(0.15), in: Capsule())
+                                                    .foregroundStyle(.blue)
                                             }
                                         }
                                         Text(entry.subtitle)

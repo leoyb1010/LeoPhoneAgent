@@ -33,3 +33,9 @@ Direct-only pairing does not manufacture a relay credential. Existing relay-pair
 - `scripts/DirectRouteSmoke.swift` executes production descriptor validation, identity pinning, expiration, direct QR expiry, scopes and HTTPS credential boundaries.
 - `scripts/DirectRoutingIntegrationSmoke.swift` compiles the production `LeoAgentRouting.swift` extension with an isolated host shell and URLProtocol fault injection. It verifies wrong target receives no mutation, direct/relay credentials stay separate, 503 retains operation ID, 403 does not replay, SSE keeps `after=41`, and a harness grant does not enable sync.
 - No physical-device installation was performed for intermediate builds. Full app build, actual target identity/serve configuration, final one-time installation, task restart/notification and network transition checks remain the parent release gates.
+
+## iPhone task receipts and freshness
+
+A terminal event for a phone conversation identifies the machine and harness session. The terminal event sequence identifies a turn inside that session. Clients may fall back to the run identifier or the relay's received timestamp for older events. Replaying the same terminal event must not add another receipt or overwrite another turn. Retained output is the text delivered by the relay. Actual artifact bytes and immutable artifact references require a separate artifact contract.
+
+Opening a chat preserves its reading position. A terminal notification with a turn identity opens that receipt even when host polling is slow. A legacy notification without a turn identity opens the task’s available receipts. Content stays in the local app sandbox. A queued share is accepted pending host confirmation. The phone publishes successful host snapshots independently and labels retained rows when a host poll fails. Cross-session ordering uses activity time, never an event sequence from another session.

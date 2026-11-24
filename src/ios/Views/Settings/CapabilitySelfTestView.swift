@@ -347,7 +347,7 @@ struct CapabilitySelfTestView: View {
         List {
             Section {
                 HStack(spacing: 14) {
-                    stat(test.summary.passed, "通过", .green)
+                    stat(test.summary.passed, "通过", .blue)
                     stat(test.summary.unauthorized, "未授权", .orange)
                     stat(test.summary.failed, "失败", .red)
                     Spacer()
@@ -418,7 +418,7 @@ struct CapabilitySelfTestView: View {
         case .running:
             ProgressView().controlSize(.small)
         case .passed:
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.blue)
         case .unauthorized:
             Image(systemName: "lock.circle.fill").foregroundStyle(.orange)
         case .failed:

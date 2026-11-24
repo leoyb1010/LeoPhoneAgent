@@ -1806,6 +1806,32 @@ final class ProviderConfigStore: ObservableObject {
 
     // MARK: - Defaults
 
+    /// A direct model choice uses the same durable route as existing defaults.
+    /// Reuse a single-member fallback group; never rewrite a user's group.
+    func setNewChatDefault(choice: String) -> Bool {
+        let groupId: String
+        if choice.hasPrefix("group:") {
+            let id = String(choice.dropFirst(6))
+            guard let group = group(for: id),
+                  group.memberEntryIds.contains(where: { entry(for: $0).map { ModelSwitcher.isAvailable($0, store: self) } == true })
+            else { return false }
+            groupId = id
+        } else {
+            guard let model = entry(for: choice), ModelSwitcher.isAvailable(model, store: self) else { return false }
+            if let existing = modelGroups.first(where: {
+                $0.strategy == .fallback && $0.memberEntryIds.map { normalizeEntryRef($0) } == [model.id]
+            }) {
+                groupId = existing.id
+            } else {
+                let group = ModelGroup(name: model.model.displayName, memberEntryIds: [model.id], strategy: .fallback)
+                config.modelGroups.append(group)
+                groupId = group.id
+            }
+        }
+        config.defaultPrimaryGroupId = groupId
+        return save()
+    }
+
     var defaultPrimaryGroupId: String? {
         get { config.defaultPrimaryGroupId }
         set {

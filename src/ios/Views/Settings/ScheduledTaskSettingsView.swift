@@ -233,7 +233,7 @@ struct ScheduledTaskSettingsView: View {
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: status == .success ? "checkmark.circle.fill"
                       : status == .failure ? "xmark.circle.fill" : "minus.circle.fill")
-                    .foregroundStyle(status == .success ? Color.green : status == .failure ? Color.red : Color.secondary)
+                    .foregroundStyle(status == .success ? Color.blue : status == .failure ? Color.red : Color.secondary)
                 Text("\(status.title) · \(preview)")
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

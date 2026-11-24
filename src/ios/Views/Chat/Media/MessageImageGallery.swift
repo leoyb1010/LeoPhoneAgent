@@ -162,7 +162,7 @@ struct MessageImageGallery: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copyDone = false }
             } label: {
                 chromeIcon(copyDone ? "checkmark" : "doc.on.doc",
-                           tint: copyDone ? .green : nil)
+                           tint: copyDone ? .blue : nil)
             }
             .disabled(copyDone || currentImage == nil)
 
@@ -176,7 +176,7 @@ struct MessageImageGallery: View {
                     case .saving:
                         ProgressView().tint(ChatColors.primaryText)
                     case .saved:
-                        Image(systemName: "checkmark").foregroundStyle(.green)
+                        Image(systemName: "checkmark").foregroundStyle(.blue)
                     case .failed:
                         Image(systemName: "exclamationmark.triangle")
                     }

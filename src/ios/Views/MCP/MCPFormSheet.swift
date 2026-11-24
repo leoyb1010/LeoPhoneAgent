@@ -321,7 +321,7 @@ struct MCPFormSheet: View {
                 HStack {
                     if isAuthorized {
                         Label(AppLocalized("Authorized"), systemImage: "checkmark.seal.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(.blue)
                             .font(.subheadline)
                     } else {
                         Label(AppLocalized("Not authorized"), systemImage: "xmark.seal")

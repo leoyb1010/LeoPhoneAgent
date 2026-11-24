@@ -98,7 +98,7 @@ struct CapabilitiesView: View {
 
     private func statusTint(_ s: CapabilityAuthorizationProbe.Status) -> Color {
         switch s {
-        case .authorized: return .green
+        case .authorized: return .blue
         case .limited: return .blue
         case .denied, .unavailable: return .orange
         case .notDetermined, .unknown: return .secondary

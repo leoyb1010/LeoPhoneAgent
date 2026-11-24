@@ -180,7 +180,7 @@ struct AgentActivityLogView: View {
 
     private func color(for phase: AgentActivityPhase) -> Color {
         return switch phase {
-        case .completed: .green
+        case .completed: .blue
         case .failed: .red
         case .cancelled, .unverified: .secondary
         case .waitingForPermission, .waitingForUser, .suspended: .orange

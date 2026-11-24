@@ -138,7 +138,7 @@ struct SessionInspectorView: View {
 
     private var contextTint: Color {
         switch contextFraction {
-        case ..<0.6: return .green
+        case ..<0.6: return .blue
         case ..<0.85: return .orange
         default: return .red
         }
@@ -161,7 +161,7 @@ struct SessionInspectorView: View {
     private func statusRow(_ title: String, isOn: Bool, detail: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(isOn ? Color.green : Color.secondary)
+                .foregroundStyle(isOn ? Color.blue : Color.secondary)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.body)
                 Text(detail).font(.caption).foregroundStyle(.secondary)

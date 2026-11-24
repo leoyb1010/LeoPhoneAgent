@@ -358,7 +358,7 @@ struct ImagePreviewView: View {
                     } label: {
                         Image(systemName: copyDone ? "checkmark" : "doc.on.doc")
                             .font(.body.weight(.semibold))
-                            .foregroundStyle(copyDone ? .green : ChatColors.primaryText)
+                            .foregroundStyle(copyDone ? .blue : ChatColors.primaryText)
                             .frame(width: 44, height: 44)
                             .contentShape(Circle())
                             .background(.ultraThinMaterial, in: Circle())
@@ -379,7 +379,7 @@ struct ImagePreviewView: View {
                                     .tint(ChatColors.primaryText)
                             case .saved:
                                 Image(systemName: "checkmark")
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(.blue)
                             case .failed:
                                 Image(systemName: "exclamationmark.triangle")
                             }

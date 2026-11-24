@@ -98,7 +98,7 @@ private struct TimelineRowView: View {
             HStack(spacing: 10) {
                 Image(systemName: row.symbol)
                     .font(.caption)
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(.indigo)
                     .frame(width: 22)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(row.title)

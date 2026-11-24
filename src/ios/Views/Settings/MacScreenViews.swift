@@ -97,7 +97,7 @@ private struct MacScreenCaption: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             HStack(spacing: 6) {
                 Circle()
-                    .fill(poller.error == nil && poller.isPolling ? Color.green : Color.secondary)
+                    .fill(poller.error == nil && poller.isPolling ? Color.blue : Color.secondary)
                     .frame(width: 6, height: 6)
                 Text(hostName ?? "Mac")
                     .font(.caption.weight(.semibold))

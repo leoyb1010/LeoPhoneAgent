@@ -174,7 +174,7 @@ nonisolated struct MinisAlarmMetadata: AlarmMetadata {}
 
                 let stopButton = AlarmButton(
                     text: "Done",
-                    textColor: .green,
+                    textColor: .blue,
                     systemImageName: "checkmark"
                 )
                 let alert = AlarmPresentation.Alert(

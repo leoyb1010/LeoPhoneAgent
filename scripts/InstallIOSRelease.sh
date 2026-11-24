@@ -6,6 +6,8 @@ set -eu
 #   ./scripts/InstallIOSRelease.sh <UDID> ...   # 装到指定设备
 #   LEO_IOS_INSTALL_ONLY=1 ./scripts/InstallIOSRelease.sh <UDID> ...
 #     用户自行测试时只做版本说明校验、编译签名和安装，不拉取性能数据或等待 CI。
+#   LEO_IOS_INCLUDE_PAIRED_WATCH=0 ./scripts/InstallIOSRelease.sh <iPhone-UDID>
+#     本次只更新指定 iPhone，不顺带更新在线手表。
 #
 # [T-gate-on-real-path] 闸门焊在第一步:更新记录漏写就装不进去。
 # 血的教训:IOSReleaseReadinessAudit 以前只挂在 .github/workflows/ios-tests.yml,
@@ -32,6 +34,8 @@ echo "==> 源码 $source_head"
 device_host=${LEO_IOS_DEVICE_HOST:-}
 install_only=${LEO_IOS_INSTALL_ONLY:-0}
 case "$install_only" in 0|1) ;; *) echo "LEO_IOS_INSTALL_ONLY 只能是 0 或 1" >&2; exit 2 ;; esac
+include_paired_watch=${LEO_IOS_INCLUDE_PAIRED_WATCH:-1}
+case "$include_paired_watch" in 0|1) ;; *) echo "LEO_IOS_INCLUDE_PAIRED_WATCH 只能是 0 或 1" >&2; exit 2 ;; esac
 dc() {
   if [ -n "$device_host" ]; then ssh -o BatchMode=yes "$device_host" xcrun devicectl "$@"; else xcrun devicectl "$@"; fi
 }
@@ -120,7 +124,7 @@ devices=$(dc list devices 2>/dev/null || true)
 # 手表那一行 Reality 列是空的(不写 physical),按 physical 过滤会把在线手表漏掉;改为排除模拟器。
 watch_udids=$(printf '%s\n' "$devices" | grep -vi simulated | grep -vi unavailable | grep -iE 'available|connected' | grep -i 'Watch' \
   | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{16}|[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})' || true)
-if [ -n "$watch_app" ]; then
+if [ "$include_paired_watch" = 1 ] && [ -n "$watch_app" ]; then
   for w in $watch_udids; do
     case " $udids " in *" $w "*) ;; *) udids="$udids $w" ;; esac
   done

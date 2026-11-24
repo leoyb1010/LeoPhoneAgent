@@ -46,7 +46,7 @@ struct RemoteHostSettingsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
                                     Circle()
-                                        .fill(reachability[host.id] == true ? Color.green
+                                        .fill(reachability[host.id] == true ? Color.blue
                                               : reachability[host.id] == false ? Color.red : Color.gray)
                                         .frame(width: 8, height: 8)
                                         .leoPulse(active: reachability[host.id] == true)
@@ -452,7 +452,7 @@ private struct RemoteHostEditSheet: View {
                     if let testResult = model.testResult {
                         Text(testResult)
                             .font(.caption.monospaced())
-                            .foregroundStyle(testResult.contains("LEO_OK") ? .green : .red)
+                            .foregroundStyle(testResult.contains("LEO_OK") ? .blue : .red)
                             .leoShake(trigger: model.failShake)
                             .leoShineSweep(trigger: model.okSweep)
                     }
@@ -735,7 +735,7 @@ struct SSHPortForwardView: View {
 
     private func statusColor(_ state: SSHPortForwardManager.State?) -> Color {
         switch state {
-        case .active: return .green
+        case .active: return .blue
         case .failed: return .red
         default: return .secondary
         }

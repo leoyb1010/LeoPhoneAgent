@@ -795,7 +795,7 @@ struct CollectionsView: View {
                 annotationDraft = item.annotation ?? ""
                 annotating = item
             } label: { Label("批注", systemImage: "text.bubble") }
-                .tint(.teal)
+                .tint(.indigo)
         }
     }
 
@@ -1688,7 +1688,7 @@ private struct TreasuryReadingSheet: View {
                         switch remoteAttachmentStatus {
                         case "ready":
                             Label("附件已安全下载并通过完整性校验", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
+                                .foregroundStyle(.blue)
                             if let onOpenOriginal {
                                 Button("打开附件", systemImage: "doc") {
                                     if let refreshed = CollectionStore.load().first(where: { $0.id == item.id }) {
@@ -2117,7 +2117,7 @@ private struct CollectionImportSheet: View {
 /// [T-treasury-ui] 来源 → 稳定颜色。同一个来源永远同色,列表里形成识别;
 /// 卡片徽标、无图占位共用这一个函数,不许各配各的色。
 func leoSourceColor(_ source: String) -> Color {
-    let palette: [Color] = [.blue, .purple, .pink, .orange, .green, .teal, .indigo, .brown]
+    let palette: [Color] = [.blue, .indigo, .purple, .orange, .pink, .gray, .cyan, .brown]
     // 不能用 hashValue:Swift 的字符串哈希每次启动换随机种子,
     // "同一来源永远同色"重启一次就破了。djb2 是稳定的。
     var hash: UInt64 = 5381

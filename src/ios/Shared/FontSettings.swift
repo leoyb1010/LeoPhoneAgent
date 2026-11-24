@@ -55,6 +55,11 @@ enum FontScaleLevel: Int, CaseIterable, Identifiable, Comparable {
         }
     }
 
+    func resolvedDynamicTypeSize(inheriting systemSize: DynamicTypeSize) -> DynamicTypeSize {
+        // 「默认」由系统提供，不能固定为 .large，否则辅助功能大字布局永远用不上。
+        self == .default ? systemSize : dynamicTypeSize
+    }
+
     /// UIKit equivalent for applying to all UIWindows (including sheets).
     var contentSizeCategory: UIContentSizeCategory {
         switch self {
@@ -232,9 +237,10 @@ final class FontSettings: ObservableObject {
 /// Use on sheet content and any view that doesn't inherit the root environment.
 private struct AppFontScaleModifier: ViewModifier {
     @ObservedObject private var fontSettings = FontSettings.shared
+    @Environment(\.dynamicTypeSize) private var inheritedSize
 
     func body(content: Content) -> some View {
-        content.dynamicTypeSize(fontSettings.appBaseScale.dynamicTypeSize)
+        content.dynamicTypeSize(fontSettings.appBaseScale.resolvedDynamicTypeSize(inheriting: inheritedSize))
     }
 }
 

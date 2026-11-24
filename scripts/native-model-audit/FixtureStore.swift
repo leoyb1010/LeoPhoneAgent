@@ -162,6 +162,24 @@ import SwiftUI
     @discardableResult
     func setBinding(_ value: SessionModelBinding, for id: String) -> Bool { sessionBindings[id] = value; return true }
     @discardableResult
+    func setNewChatDefault(choice: String) -> Bool {
+        if choice.hasPrefix("group:") {
+            let id = String(choice.dropFirst(6))
+            guard group(for: id) != nil else { return false }
+            defaultPrimaryGroupId = id
+        } else {
+            guard let model = entry(for: choice) else { return false }
+            if let existing = modelGroups.first(where: { $0.strategy == .fallback && $0.memberEntryIds == [model.id] }) {
+                defaultPrimaryGroupId = existing.id
+            } else {
+                let group = ModelGroup(name: model.model.displayName, memberEntryIds: [model.id], strategy: .fallback)
+                guard addGroup(group) else { return false }
+                defaultPrimaryGroupId = group.id
+            }
+        }
+        return true
+    }
+
     func addGroup(_ group: ModelGroup) -> Bool {
         guard admitGroupSave() else { return false }
         modelGroups.append(group)

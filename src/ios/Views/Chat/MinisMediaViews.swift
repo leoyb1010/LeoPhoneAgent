@@ -2,6 +2,7 @@ import SwiftUI
 import AVKit
 import Photos
 import QuickLook
+import PDFKit
 
 private let minisLogger = AppLogger(category: "MinisMedia")
 // MARK: - leophoneagent:// Media Provider
@@ -735,6 +736,7 @@ struct MinisMarkdownPreviewView: View {
 
 struct MinisHTMLPreviewView: View {
     let fileURL: URL
+    var onPark: ((WebViewHolder) -> Void)? = nil
     var onExpand: ((WebViewHolder) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
@@ -745,10 +747,12 @@ struct MinisHTMLPreviewView: View {
 
     @State private var showFullPath = false
 
-    init(fileURL: URL, onExpand: ((WebViewHolder) -> Void)? = nil) {
+    init(fileURL: URL, retainedHolder: WebViewHolder? = nil,
+         onPark: ((WebViewHolder) -> Void)? = nil, onExpand: ((WebViewHolder) -> Void)? = nil) {
         self.fileURL = fileURL
+        self.onPark = onPark
         self.onExpand = onExpand
-        _holder = StateObject(wrappedValue: WebViewHolder(url: fileURL, localFile: true))
+        _holder = StateObject(wrappedValue: retainedHolder ?? WebViewHolder(url: fileURL, localFile: true))
     }
 
     var body: some View {
@@ -762,6 +766,14 @@ struct MinisHTMLPreviewView: View {
                         Button { dismiss() } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(ChatColors.secondaryText)
+                        }
+                    }
+                    if let onPark {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button { onPark(holder) } label: {
+                                Label(AppLocalized("收起预览"), systemImage: "rectangle.compress.vertical")
+                            }
+                            .accessibilityIdentifier("chat-preview.park")
                         }
                     }
                     ToolbarItem(placement: .principal) {
@@ -809,7 +821,103 @@ struct MinisHTMLPreviewView: View {
 
 // MARK: - leophoneagent:// Document Preview
 
-import QuickLook
+/// 保存预览当前位置，然后交给同一会话复用。文件改写后重新取新版本。
+@MainActor
+final class MinisPDFPreviewPosition {
+    private var fingerprint: URLResourceValues?
+    private var pageIndex: Int?
+    private var point: CGPoint = .zero
+    private var scale: CGFloat?
+
+    func capture(in view: PDFView, url: URL) {
+        guard let document = view.document, let destination = view.currentDestination,
+              let page = destination.page else { return }
+        let index = document.index(for: page)
+        guard index != NSNotFound else { return }
+        pageIndex = index
+        point = destination.point
+        scale = view.scaleFactor
+        fingerprint = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+    }
+
+    func restore(in view: PDFView, url: URL) {
+        let current = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+        guard let fingerprint, let current,
+              fingerprint.contentModificationDate == current.contentModificationDate,
+              fingerprint.fileSize == current.fileSize,
+              let pageIndex,
+              let page = view.document?.page(at: pageIndex) else { return }
+        if let scale, scale.isFinite, scale > 0 {
+            view.scaleFactor = scale
+        }
+        view.go(to: PDFDestination(page: page, at: point))
+    }
+}
+
+struct MinisReadablePDF: UIViewRepresentable {
+    let document: PDFDocument
+    let fileURL: URL
+    let position: MinisPDFPreviewPosition
+    let onViewReady: (PDFView) -> Void
+
+    func makeUIView(context: Context) -> PDFView {
+        let pdf = PDFView()
+        pdf.displayMode = .singlePageContinuous
+        pdf.autoScales = true
+        pdf.document = document
+        DispatchQueue.main.async {
+            position.restore(in: pdf, url: fileURL)
+            onViewReady(pdf)
+        }
+        return pdf
+    }
+
+    func updateUIView(_ view: PDFView, context: Context) {}
+}
+
+struct MinisPausablePDFPreview: View {
+    let fileURL: URL
+    let position: MinisPDFPreviewPosition
+    let onPark: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var document: PDFDocument?
+    @State private var pdfView: PDFView?
+    @State private var loadFinished = false
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let document, !document.isLocked {
+                    MinisReadablePDF(document: document, fileURL: fileURL, position: position) { pdfView = $0 }
+                } else if loadFinished {
+                    MinisDocumentPreviewView(fileURL: fileURL)
+                } else {
+                    ProgressView()
+                }
+            }
+            .navigationTitle(fileURL.lastPathComponent)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(AppLocalized("Done")) { dismiss() }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        if let pdfView { position.capture(in: pdfView, url: fileURL) }
+                        onPark()
+                    } label: {
+                        Label(AppLocalized("收起预览"), systemImage: "rectangle.compress.vertical")
+                    }
+                    .accessibilityIdentifier("chat-preview.park")
+                }
+            }
+        }
+        .task {
+            document = PDFDocument(url: fileURL)
+            loadFinished = true
+        }
+    }
+}
 
 /// [T-artifact-preview-exit] Bare QLPreviewController: the caller puts it in a
 /// NavigationStack with a Done button (its own UINavigationController had no

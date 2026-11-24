@@ -14,6 +14,7 @@ struct HomeCapsuleLabel: Equatable {
     var icon: String
     var place: String
     var model: String?
+    var showsTarget = true
 }
 
 // MARK: - 底部输入栏
@@ -36,7 +37,22 @@ final class HomeDraft: ObservableObject {
     }
     var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    private struct Snapshot: Codable { let text: String; let modelChoice: String? }
+    @Published var attachments: [HomeDraftAttachment] = [] {
+        didSet {
+            guard persistenceURL != nil else { return }
+            needsSave = true
+            flushPersistence()
+        }
+    }
+    @Published var importsInFlight = 0
+    @Published var attachmentError: String?
+    var canSubmit: Bool { importsInFlight == 0 && (!trimmed.isEmpty || !attachments.isEmpty) }
+
+    private struct Snapshot: Codable {
+        let text: String
+        let modelChoice: String?
+        var attachments: [HomeDraftAttachment]?
+    }
     private var persistenceURL: URL?
     private var modelChoice: String?
     private var needsSave = false
@@ -51,6 +67,7 @@ final class HomeDraft: ObservableObject {
            let saved = try? JSONDecoder().decode(Snapshot.self, from: data) {
             text = saved.text
             modelChoice = saved.modelChoice
+            attachments = saved.attachments ?? []
         }
         persistenceURL = url
         return modelChoice
@@ -69,11 +86,11 @@ final class HomeDraft: ObservableObject {
         saveTask = nil
         guard needsSave, let url = persistenceURL else { return }
         do {
-            if text.isEmpty, modelChoice == nil {
+            if text.isEmpty, modelChoice == nil, attachments.isEmpty {
                 if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
             } else {
                 try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-                let data = try JSONEncoder().encode(Snapshot(text: text, modelChoice: modelChoice))
+                let data = try JSONEncoder().encode(Snapshot(text: text, modelChoice: modelChoice, attachments: attachments))
                 try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             }
             needsSave = false
@@ -125,23 +142,46 @@ struct HomeComposerHost: View {
     var glassNamespace: Namespace.ID? = nil
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !draft.attachments.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack {
+                        ForEach(draft.attachments) { attachment in
+                            Button {
+                                draft.attachments.removeAll { $0.id == attachment.id }
+                                try? FileManager.default.removeItem(at: attachment.url)
+                            } label: {
+                                Label(attachment.name, systemImage: "xmark.circle")
+                                    .font(.footnote).lineLimit(1).frame(minHeight: 44)
+                            }
+                            .accessibilityLabel(Text("移除附件：\(attachment.name)"))
+                        }
+                    }.padding(.horizontal)
+                }
+            }
+            if draft.importsInFlight > 0 { ProgressView("正在添加附件").padding(.horizontal) }
+            if let error = draft.attachmentError {
+                Text(error).font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
+            }
         HomeComposerBar(
             text: $draft.text,
             isFocused: isFocused,
             capsule: capsule,
+            hasAttachments: !draft.attachments.isEmpty,
             capsuleMenu: capsuleMenu,
             onChooseModel: onChooseModel,
             modelPopover: modelPopover,
             brightnessDialog: brightnessDialog,
             plusMenu: plusMenu,
             isBusy: isBusy,
-            canSend: !isBusy && !draft.trimmed.isEmpty,
+            canSend: !isBusy && draft.canSubmit,
             onSubmit: onSubmit,
             onSlash: onSlash,
             onMic: onMic,
             onCancelBusy: onCancelBusy,
             glassNamespace: glassNamespace
         )
+        }
     }
 }
 
@@ -149,6 +189,7 @@ struct HomeComposerBar: View {
     @Binding var text: String
     var isFocused: FocusState<Bool>.Binding
     let capsule: HomeCapsuleLabel
+    var hasAttachments = false
     /// 执行位置菜单,由 ContentView 组装。AnyView 截断类型链。
     let capsuleMenu: AnyView
     var onChooseModel: (() -> Void)? = nil
@@ -170,7 +211,7 @@ struct HomeComposerBar: View {
     @Environment(\.horizontalSizeClass) private var hSizeClass
 
     private var trimmedEmpty: Bool {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasAttachments
     }
 
     var body: some View {
@@ -178,7 +219,7 @@ struct HomeComposerBar: View {
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
-                        executionTarget
+                        if capsule.showsTarget { executionTarget }
                         Spacer(minLength: 0)
                         FullAutoBadge()
                     }
@@ -186,7 +227,7 @@ struct HomeComposerBar: View {
                 }
             } else {
                 HStack(spacing: 8) {
-                    executionTarget
+                    if capsule.showsTarget { executionTarget }
                     modelControl
                     FullAutoBadge()
                     Spacer(minLength: 0)
@@ -212,7 +253,8 @@ struct HomeComposerBar: View {
                     .frame(minHeight: 36)
 
                 Button(action: onSlash) {
-                    circleIcon("slash.circle", weight: .regular)
+                    Text("动作").font(.footnote.weight(.medium))
+                        .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("动作、技能和 MCP"))
@@ -363,7 +405,7 @@ struct HomeResultBanner: View {
 
     private var color: Color {
         switch tone {
-        case .success: return .green
+        case .success: return .blue
         case .info: return .secondary
         case .error: return LeoTheme.ColorToken.destructive
         }
@@ -458,11 +500,16 @@ struct HomeActionSheet: View {
     @State private var showAll = false
 
     private static let usageKey = "home.actionUsage"
+    @AppStorage("leo.home.pinnedActionIDs") private var pinnedActionIDs = ""
+    private var pinnedIDs: [String] { pinnedActionIDs.split(separator: ",").map(String.init) }
+
 
     private var ordered: [HomeAction] {
         let usage = UserDefaults.standard.dictionary(forKey: Self.usageKey) as? [String: Double] ?? [:]
         let base = Dictionary(uniqueKeysWithValues: actions.enumerated().map { ($1.id, $0) })
         return actions.sorted { a, b in
+            let pa = pinnedIDs.firstIndex(of: a.id), pb = pinnedIDs.firstIndex(of: b.id)
+            if pa != pb { return (pa ?? Int.max) < (pb ?? Int.max) }
             let ua = usage[a.id] ?? 0, ub = usage[b.id] ?? 0
             if ua != ub { return ua > ub }
             return (base[a.id] ?? 0) < (base[b.id] ?? 0)
@@ -594,6 +641,14 @@ struct HomeActionSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(action.title))
+        .contextMenu {
+            Button {
+                var keys = pinnedIDs
+                if keys.contains(action.id) { keys.removeAll { $0 == action.id } }
+                else { keys.append(action.id) }
+                pinnedActionIDs = keys.joined(separator: ",")
+            } label: { Label(pinnedIDs.contains(action.id) ? "取消固定" : "固定动作", systemImage: "pin") }
+        }
     }
 
     private func perform(_ action: HomeAction) {

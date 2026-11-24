@@ -8,6 +8,8 @@ struct SessionModelPicker: View {
     var resolvedEntryKey: String? = nil
     var draftChoice: String? = nil
     var onPick: ((String) -> Void)? = nil
+    var editsNewChatDefault = false
+    var scopeNote: String?
     var prefersQuickSelection = false
     var onResetToDefault: (() -> Void)?
     var onExpand: (() -> Void)?
@@ -27,6 +29,7 @@ struct SessionModelPicker: View {
 
     init(sessionId: String?, ensureSessionId: (() async -> String)? = nil,
          resolvedEntryKey: String? = nil, draftChoice: String? = nil, onPick: ((String) -> Void)? = nil,
+         editsNewChatDefault: Bool = false, scopeNote: String? = nil,
          prefersQuickSelection: Bool = false, onResetToDefault: (() -> Void)? = nil,
          onExpand: (() -> Void)? = nil) {
         self.sessionId = sessionId
@@ -34,6 +37,8 @@ struct SessionModelPicker: View {
         self.resolvedEntryKey = resolvedEntryKey
         self.draftChoice = draftChoice
         self.onPick = onPick
+        self.editsNewChatDefault = editsNewChatDefault
+        self.scopeNote = scopeNote
         self.prefersQuickSelection = prefersQuickSelection
         self.onResetToDefault = onResetToDefault
         self.onExpand = onExpand
@@ -74,18 +79,21 @@ struct SessionModelPicker: View {
 
     var body: some View {
         UnifiedModelPicker(config: .init(
-            title: "Choose Model",
+            title: editsNewChatDefault ? "设为新对话默认" : "Choose Model",
             mode: .single,
             groupScope: .all,
-            headerNote: onPick != nil
+            headerNote: editsNewChatDefault ? AppLocalized("选择后作为新对话的默认模型，已有对话继续使用原来的模型。") : onPick != nil
                 ? AppLocalized("Choose for your next chat. Your saved default stays the same.")
-                : AppLocalized("Changes this conversation only. Manage groups to change defaults for new chats."),
+                : AppLocalized("Changes this conversation only."),
             dismissOnSelect: false,
             currentEntryId: { [self] in currentEntryId },
             currentGroupId: { [self] in currentGroupId },
             onSelect: { entry in handleEntryTap(entry) },
             onSelectGroup: { group in handleGroupTap(group) },
             onSelectInGroup: { entry, group in handleEntryTap(entry, inGroup: group) },
+            allowsDefaultEdit: !editsNewChatDefault,
+            quickScopeTitle: editsNewChatDefault ? "新对话默认" : (onPick != nil ? "下次新对话" : "此对话后续"),
+            scopeNote: scopeNote,
             prefersQuickSelection: prefersQuickSelection,
             onResetToDefault: onResetToDefault.map { action in { action(); dismiss() } },
             onExpand: onExpand
@@ -164,12 +172,18 @@ struct SessionModelPicker: View {
     }
 
     private func bindToGroup(_ group: ModelGroup) {
+        if editsNewChatDefault {
+            if store.setNewChatDefault(choice: "group:\(group.id)") { dismiss() }
+            else { selectionFailure = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.") }
+            return
+        }
         if let onPick {
             guard let live = store.group(for: group.id),
                   ModelGroupRouter.resolve(group: live, sessionId: "draft", store: store, verbose: false) != nil else {
                 selectionFailure = AppLocalized("This group has no available models. Check its members and provider sign-in.")
                 return
             }
+            ModelSwitcher.remember("group:\(live.id)")
             onPick("group:\(live.id)")
             dismiss()
             return
@@ -191,12 +205,18 @@ struct SessionModelPicker: View {
     }
 
     private func bindToEntry(_ entry: ModelEntry, inGroup group: ModelGroup? = nil) {
+        if editsNewChatDefault {
+            if store.setNewChatDefault(choice: entry.id) { dismiss() }
+            else { selectionFailure = AppLocalized("Could not save model changes. Your previous configuration was kept. Try again.") }
+            return
+        }
         if let onPick {
             guard let live = store.entry(for: entry.id), ModelSwitcher.isAvailable(live, store: store) else {
                 selectionFailure = AppLocalized("This model is no longer available. Choose another model.")
                 return
             }
             // The draft contract stores a choice, not a session or default.
+            ModelSwitcher.remember(live.id)
             onPick(live.id)
             dismiss()
             return

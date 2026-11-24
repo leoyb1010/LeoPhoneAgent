@@ -15,8 +15,9 @@ enum LeoTokens {
     }
 
     enum Color {
-        static let brand = ThemedColor(dark: RGBA(r: 46, g: 156, b: 156, a: 1), light: RGBA(r: 42, g: 130, b: 130, a: 1))
-        static let brandSoft = ThemedColor(dark: RGBA(r: 46, g: 156, b: 156, a: 0.14), light: RGBA(r: 42, g: 130, b: 130, a: 0.1))
+        static let brand = ThemedColor(dark: RGBA(r: 107, g: 159, b: 255, a: 1), light: RGBA(r: 23, g: 97, b: 220, a: 1))
+        static let brandSoft = ThemedColor(dark: RGBA(r: 107, g: 159, b: 255, a: 0.14), light: RGBA(r: 23, g: 97, b: 220, a: 0.08))
+        static let primary = ThemedColor(dark: RGBA(r: 37, g: 99, b: 235, a: 1), light: RGBA(r: 23, g: 97, b: 220, a: 1))
         static let attention = ThemedColor(dark: RGBA(r: 240, g: 184, b: 110, a: 1), light: RGBA(r: 184, g: 110, b: 18, a: 1))
         static let bg = ThemedColor(dark: RGBA(r: 19, g: 19, b: 21, a: 1), light: RGBA(r: 250, g: 250, b: 250, a: 1))
         static let panel = ThemedColor(dark: RGBA(r: 24, g: 24, b: 27, a: 1), light: RGBA(r: 255, g: 255, b: 255, a: 1))

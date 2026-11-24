@@ -18,7 +18,7 @@ struct RootfsManagementView: View {
                     Text("Installed")
                     Spacer()
                     Image(systemName: viewModel.isInstalled ? "checkmark.circle.fill" : "xmark.circle.fill")
-                        .foregroundColor(viewModel.isInstalled ? .green : .red)
+                        .foregroundColor(viewModel.isInstalled ? .blue : .red)
                 }
 
                 if viewModel.isInstalled {
@@ -74,7 +74,7 @@ struct RootfsManagementView: View {
                                 .font(.system(size: 9))
                                 .foregroundStyle(.white)
                                 .frame(width: 21, height: 21)
-                                .background(.green, in: Circle())
+                                .background(.blue, in: Circle())
                         }
                     }
                     .disabled(viewModel.isProcessing)
@@ -122,7 +122,7 @@ struct RootfsManagementView: View {
                                 .font(.system(size: 9))
                                 .foregroundStyle(.white)
                                 .frame(width: 21, height: 21)
-                                .background(.teal, in: Circle())
+                                .background(.indigo, in: Circle())
                         }
                     }
                     .disabled(viewModel.isProcessing || viewModel.terminalNeedsRelaunch)
@@ -150,7 +150,7 @@ struct RootfsManagementView: View {
                 Section {
                     Text(message)
                         .font(.callout)
-                        .foregroundColor(viewModel.lastOperationSuccess ? .green : .red)
+                        .foregroundColor(viewModel.lastOperationSuccess ? .blue : .red)
                 }
             }
 

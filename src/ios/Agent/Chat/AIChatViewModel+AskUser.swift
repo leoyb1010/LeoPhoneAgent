@@ -67,6 +67,8 @@ final class AskUserCenter: ObservableObject {
         }
     }
 
+    var waitingSessionIds: Set<String> { Set(live.values.compactMap(\.sessionId)) }
+
     func isWaiting(_ toolUseId: String) -> Bool { live[toolUseId] != nil }
 
     func waitingToolUseId(sessionId: String?) -> String? {

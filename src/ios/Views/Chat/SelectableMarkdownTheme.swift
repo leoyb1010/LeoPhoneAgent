@@ -35,9 +35,9 @@ private let leoSyntaxColors: [UIColor] = LeoSyntaxToken.allCases.map { token in
     }
 }
 
-/// 全 App 唯一的强调色：AccentColor 资源（浅 #2A8282 / 深 #2E9C9C），与 `LeoTheme.ColorToken.accent` 同源。
+/// Markdown 与原生按钮共用生成的 AccentColor 蓝色。
 /// 直接用 UIKit 取，因为引用条是在 draw(_:) 里 `.cgColor` 出来的，要保证按当前外观解析。
-private let leoAccentUIColor: UIColor = UIColor(named: "AccentColor") ?? .systemTeal
+private let leoAccentUIColor: UIColor = UIColor(named: "AccentColor") ?? .systemBlue
 
 /// Mirrors the chat Markdown theme using UIKit types.
 struct SelectableMarkdownTheme {

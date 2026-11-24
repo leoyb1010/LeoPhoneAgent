@@ -199,23 +199,33 @@ final class CrossFeatureFlowTests: XCTestCase {
 
     @MainActor func testRelayCompletionWithPhoneSessionLandsInThatChatOnce() throws {
         let event: [String: Any] = ["event": "run.completed", "session_id": "hs_1",
-                                    "phone_session_id": "chat-42", "output": "改好了 3 个文件"]
+                                    "phone_session_id": "chat-42", "seq": 18, "output": "改好了 3 个文件"]
         let entry = try XCTUnwrap(MacResultInbox.entry(event: event, machine: "Studio", receivedAt: Date()))
         XCTAssertFalse(entry.failed)
         XCTAssertEqual(entry.noticeText, "Studio 上的 Mac 任务已完成:\n改好了 3 个文件")
-        XCTAssertNil(MacResultInbox.entry(event: ["event": "run.completed", "session_id": "hs_2"],
-                                          machine: "Studio", receivedAt: Date()))
+        let remote = try XCTUnwrap(MacResultInbox.entry(event: ["event": "run.completed", "session_id": "hs_2", "seq": 3],
+                                                         machine: "Studio", receivedAt: Date()))
+        let standalone = try XCTUnwrap(MacReceiptTarget(remoteNotification: ["machine": "Studio", "completionReceipt": "1", "macSessionId": "hs_2", "eventSequence": "3"]))
+        XCTAssertTrue(standalone.matches(remote))
+        XCTAssertFalse(standalone.matches(entry))
         XCTAssertNil(MacResultInbox.entry(event: ["event": "approval.request", "session_id": "hs_1",
                                                   "phone_session_id": "chat-42"], machine: "Studio", receivedAt: Date()))
         MacResultInbox.record(entry, defaults: defaults)
-        // 同一个 Mac 任务又结束一次:替换而不是叠加。
         var again = entry
-        again.output = "又改了 1 个"
+        again.eventSequence = 31
+        again.receivedAt = entry.receivedAt.addingTimeInterval(1)
+        again.output = String(repeating: "更多正文", count: 900)
         MacResultInbox.record(again, defaults: defaults)
         XCTAssertTrue(MacResultInbox.take(phoneSessionId: "other", defaults: defaults).isEmpty)
         let taken = MacResultInbox.take(phoneSessionId: "chat-42", defaults: defaults)
-        XCTAssertEqual(taken.map(\.output), ["又改了 1 个"])
+        XCTAssertEqual(taken.map(\.output), [entry.output, again.output])
+        for _ in 0..<20 { MacResultInbox.record(entry, defaults: defaults) }
         XCTAssertTrue(MacResultInbox.take(phoneSessionId: "chat-42", defaults: defaults).isEmpty)
+        let history = MacResultInbox.history(phoneSessionId: "chat-42", defaults: defaults)
+        XCTAssertEqual(history.map(\.id), [again.id, entry.id])
+        let target = MacReceiptTarget(phoneSessionId: "chat-42", machine: "Studio", hostId: nil,
+                                      harnessSessionId: "hs_1", eventSequence: 18, runId: nil, receivedAt: nil)
+        XCTAssertEqual(history.filter(target.matches).map(\.id), [entry.id])
     }
 
     @MainActor func testFailedRunUsesErrorAndEmptyOutputPointsToMacTask() throws {

@@ -152,12 +152,12 @@ struct ModelGroupDetailView: View {
                         }
                     )) {
                         HStack {
-                            settingsIcon("hand.raised.circle", color: .teal)
+                            settingsIcon("hand.raised.circle", color: .indigo)
                             Text("Default")
                         }
                         .tag(FallbackStrategy.limited)
                         HStack {
-                            settingsIcon("arrow.2.squarepath", color: .mint)
+                            settingsIcon("arrow.2.squarepath", color: .gray)
                             Text("Always")
                         }
                         .tag(FallbackStrategy.always)
@@ -480,7 +480,7 @@ struct ModelGroupDetailView: View {
         switch provider {
         case "Anthropic": return .purple
         case "Google", "Google Gemini": return .blue
-        case "OpenAI": return .green
+        case "OpenAI": return .blue
         default: return .gray
         }
     }

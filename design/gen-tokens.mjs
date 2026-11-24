@@ -6,6 +6,7 @@
 //   src/mac/leophone/packages/ui/src/leo/skin/leo-tokens.css      (CSS custom properties, always loaded via styles.css)
 //   src/mac/leophone/packages/ui/src/leo/skin/leoTokens.generated.ts (motion values for motion/react)
 //   src/ios/Shared/LeoTokens.generated.swift                       (constants; the iOS line wires it into LeoDesignSystem)
+//   src/ios/Assets.xcassets/AccentColor.colorset/Contents.json     (system accent)
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -176,10 +177,29 @@ function swift() {
   return lines.join("\n");
 }
 
+function accentColorAsset() {
+  const colors = ["light", "dark"].map((mode) => {
+    const hex = tokens.color.brand[mode].slice(1);
+    const components = Object.fromEntries(
+      ["red", "green", "blue"].map((channel, index) => [
+        channel,
+        (Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16) / 255).toFixed(6),
+      ]),
+    );
+    return {
+      ...(mode === "dark" ? { appearances: [{ appearance: "luminosity", value: "dark" }] } : {}),
+      color: { "color-space": "srgb", components: { ...components, alpha: "1.000" } },
+      idiom: "universal",
+    };
+  });
+  return JSON.stringify({ colors, info: { author: "xcode", version: 1 } }, null, 2) + "\n";
+}
+
 const outputs = [
   ["src/mac/leophone/packages/ui/src/leo/skin/leo-tokens.css", css()],
   ["src/mac/leophone/packages/ui/src/leo/skin/leoTokens.generated.ts", ts()],
   ["src/ios/Shared/LeoTokens.generated.swift", swift()],
+  ["src/ios/Assets.xcassets/AccentColor.colorset/Contents.json", accentColorAsset()],
 ];
 
 const check = process.argv.includes("--check");

@@ -348,7 +348,7 @@ struct ProviderInstanceDetailView: View {
                     if let source = fetchSource {
                         Label("Loaded from \(source)", systemImage: "checkmark.circle")
                             .font(.caption)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(.blue)
                     }
                     // Warnings (yellow) — diagnostic tips for each fallback step
                     ForEach(fetchWarnings, id: \.self) { warning in
@@ -564,7 +564,7 @@ struct ProviderInstanceDetailView: View {
                 Spacer()
                 if isAuth {
                     Circle()
-                        .fill(needsReauth ? Color.red : Color.green)
+                        .fill(needsReauth ? Color.red : Color.blue)
                         .frame(width: 8, height: 8)
                 }
             }
@@ -630,7 +630,7 @@ struct ProviderInstanceDetailView: View {
             if instance.providerType == .xAI {
                 if GrokViaMacBroker.hostMarker(instanceId: instance.id) != nil {
                     HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.blue)
                         Text("已经由 Mac 借用 Grok 登录(自动续期)").font(.caption)
                         Spacer()
                         Button("停用") {
@@ -908,7 +908,7 @@ struct ProviderInstanceDetailView: View {
                     }
                     Spacer()
                     Circle()
-                        .fill(Color.green)
+                        .fill(Color.blue)
                         .frame(width: 8, height: 8)
                 }
 
@@ -1601,7 +1601,7 @@ struct ModelEntryDetailSheet: View {
                             Spacer()
                             if supportsThinking {
                                 Label(AppLocalized("Supported"), systemImage: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(.blue)
                                     .labelStyle(.titleAndIcon)
                             } else if entry.baseModel.supportsReasoning == false {
                                 Text(AppLocalized("Not Supported"))

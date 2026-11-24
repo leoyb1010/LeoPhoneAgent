@@ -42,6 +42,9 @@ struct HarnessSessionSummary: Sendable, Identifiable, Hashable {
     /// [remote-ctl] 当前模型与推理强度;旧版 Mac 不报。
     var model: HarnessModelRef? = nil
 
+    var pendingApprovalIds: Set<String>? = nil
+    var updatedAt: Date? = nil
+
     /// 列表里显示的名字:有标题用标题,没有就用会话类型名。
     var displayTitle: String {
         if let title, !title.isEmpty { return title }
@@ -113,7 +116,9 @@ extension LeoAgentClient {
                 mode: HarnessMode.parse(row["mode"]),
                 following: row["following"] as? Bool,
                 source: (row["source"] as? String).flatMap { $0.isEmpty ? nil : $0 },
-                model: HarnessModelRef.parse(row["model"]))
+                model: HarnessModelRef.parse(row["model"]),
+                pendingApprovalIds: (row["pending_approvals"] as? [[String: Any]]).map { Set($0.compactMap { $0["approval_id"] as? String }) },
+                updatedAt: (row["updated_at"] as? Double).flatMap { $0 > 0 && $0.isFinite ? Date(timeIntervalSince1970: $0) : nil })
         }
     }
 

@@ -16,9 +16,8 @@ enum ChatColors {
     static let userBubble = Color(UIColor.tertiarySystemFill)
     static let toolBg = Color(UIColor.tertiarySystemGroupedBackground)
     static let toolBorder = LeoTheme.ColorToken.separator.opacity(0.5)
-    /// Was `UIColor.label` (black / white): the chat's send button and
-    /// highlights now use the app's teal like home.
+    /// 高亮用强调蓝；白字填充按钮用深一点的同系蓝。
     static let accent = LeoTheme.ColorToken.accent
-    static let sendButton = LeoTheme.ColorToken.accent
+    static let sendButton = LeoTheme.ColorToken.primaryButton
     static let sendButtonDisabled = Color(UIColor.quaternaryLabel)
 }

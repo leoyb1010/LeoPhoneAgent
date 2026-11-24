@@ -83,8 +83,8 @@ extension ModelEntry {
         switch provider {
         case "Anthropic": return .purple
         case "Google", "Google Gemini": return .blue
-        case "OpenAI": return .green
-        case "OpenCode Go": return .teal
+        case "OpenAI": return .blue
+        case "OpenCode Go": return .indigo
         case "OpenRouter": return .cyan
         default: return .gray
         }

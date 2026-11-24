@@ -309,7 +309,7 @@ private struct InstanceRow: View {
         HStack(spacing: 12) {
             Circle()
                 .fill(status.needsReauth ? Color.red
-                      : (status.configured && instance.isEnabled ? Color.green : Color(UIColor.quaternaryLabel)))
+                      : (status.configured && instance.isEnabled ? Color.blue : Color(UIColor.quaternaryLabel)))
                 .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 2) {

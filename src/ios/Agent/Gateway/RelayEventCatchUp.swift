@@ -45,7 +45,9 @@ final class RelayEventCatchUp: ObservableObject {
     /// 横幅;后台/非活跃才发通知。
     @Published private(set) var missedApprovals: [RelayEventItem] = []
 
-    func clearMissedApprovals() { missedApprovals = [] }
+    func markApprovalRead(_ item: RelayEventItem) {
+        missedApprovals.removeAll { $0.machine == item.machine && $0.sessionId == item.sessionId && $0.approvalId == item.approvalId }
+    }
 
     private init() {
         NotificationCenter.default.addObserver(
@@ -99,14 +101,16 @@ final class RelayEventCatchUp: ObservableObject {
         for item in plan.items {
             let fingerprint = item.fingerprint
             guard !notifiedSet.contains(fingerprint) else { continue }
-            remember(fingerprint)
-            // [E5] 从手机对话派出的 Mac 任务结束:结果暂存,打开那个对话时显示。
-            if let result = MacResultInbox.entry(event: item.raw, machine: item.machine,
-                                                 receivedAt: Date(timeIntervalSince1970: item.receivedAt > 0 ? min(item.receivedAt, now) : now)) {
-                MacResultInbox.record(result)
+            // Retain linked chat results and followed Mac-only tasks opened from a notification.
+            let host = GatewayHostStore.shared.taskHost(machine: item.machine)
+            if host != nil || item.raw["phone_session_id"] != nil, let result = MacResultInbox.entry(event: item.raw, machine: item.machine,
+                                                 receivedAt: Date(timeIntervalSince1970: item.receivedAt > 0 ? min(item.receivedAt, now) : now),
+                                                 hostId: host?.id) {
+                guard MacResultInbox.record(result) else { return }
                 NotificationCenter.default.post(name: MacResultInbox.changed, object: nil,
                                                 userInfo: ["sessionId": result.phoneSessionId])
             }
+            remember(fingerprint)
             switch item.eventName {
             case "approval.request":
                 approvals.append(item)
@@ -138,18 +142,27 @@ final class RelayEventCatchUp: ObservableObject {
             // Only what the Mac is still waiting on: one already answered on the
             // lock screen, the watch or the Mac itself must not come back as a
             // banner. A session the store doesn't know (Mac unreachable) stays.
-            await MacLiveSessionsStore.shared.refresh()
-            let live = MacLiveSessionsStore.shared.rows
-            let unfollowedNow = MacLiveSessionsStore.shared.unfollowedSessionIds
-            approvals = approvals.filter { item in
-                // [remote-ctl-power] 不关注的会话不发审批本地通知(打开它的控制台照样能答)。
-                if MacFollowLogic.skipsCatchUp(sessionId: item.sessionId, unfollowed: unfollowedNow) { return false }
-                guard let row = live.first(where: { $0.session.id == item.sessionId }) else { return true }
-                return row.session.pendingApprovalId == item.approvalId
+            let byMachine = Dictionary(grouping: approvals, by: \.machine)
+            await withTaskGroup(of: Void.self) { group in
+                for (machine, pending) in byMachine {
+                    group.addTask { @MainActor in
+                        guard let host = GatewayHostStore.shared.taskHost(machine: machine) else { return }
+                        let store = MacLiveSessionsStore.shared
+                        await store.refreshHost(host)
+                        for item in pending {
+                            if store.isKnownUnfollowed(sessionId: item.sessionId ?? "") { continue }
+                            if let row = store.rows.first(where: { $0.hostId == host.id && $0.session.id == item.sessionId }), !row.isStale,
+                               let id = item.approvalId, !(row.session.pendingApprovalIds?.contains(id) ?? (row.session.pendingApprovalId == id)) {
+                                self.markApprovalRead(item)
+                                continue
+                            }
+                            self.markApprovalRead(item)
+                            self.missedApprovals.append(item)
+                            self.postApproval(item, hostName: machine)
+                        }
+                    }
+                }
             }
-            for item in approvals { postApproval(item, hostName: item.machine) }
-            // 前台时通知发不出去(系统会压掉),改由界面显示这批待审批。
-            if !approvals.isEmpty { missedApprovals = approvals }
         }
         lastSeenAt = plan.highWater
     }
@@ -161,12 +174,24 @@ final class RelayEventCatchUp: ObservableObject {
             for item in items {
                 // [remote-ctl-power] 标识与中继 APNs 的 collapse id 相同(run.completed-<sid>):
                 // 推送到过的,补拉这条把它替换掉,而不是再来一条。
-                let id = MacFollowLogic.catchUpNotificationId(event: item.eventName, sessionId: item.sessionId,
-                                                              approvalId: nil)
-                if item.eventName == "run.failed" {
-                    postSimple(title: "🖥 \(item.machine) 任务失败", body: item.text ?? "", identifier: id)
+                let id: String?
+                if let seq = item.raw["seq"] as? Int, let sid = item.sessionId {
+                    let identity = [item.machine, sid, item.eventName, String(seq)].joined(separator: "\0")
+                    id = SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()
                 } else {
-                    postSimple(title: "✅ \(item.machine) 任务完成", body: item.text ?? "", identifier: id)
+                    id = MacFollowLogic.catchUpNotificationId(event: item.eventName, sessionId: item.sessionId, approvalId: nil)
+                }
+                var info: [String: Any] = ["machine": item.machine, "completionReceipt": true]
+                info["harnessSessionId"] = item.sessionId
+                info["phoneSessionId"] = item.raw["phone_session_id"] as? String
+                info["hostId"] = GatewayHostStore.shared.taskHost(machine: item.machine)?.id
+                info["runId"] = item.raw["run_id"] as? String
+                info["eventSequence"] = item.raw["seq"] as? Int
+                if item.receivedAt > 0 { info["receivedAt"] = item.receivedAt }
+                if item.eventName == "run.failed" {
+                    postSimple(title: "🖥 \(item.machine) 任务失败", body: item.text ?? "", identifier: id, userInfo: info)
+                } else {
+                    postSimple(title: "✅ \(item.machine) 任务完成", body: item.text ?? "", identifier: id, userInfo: info)
                 }
             }
             return
@@ -191,7 +216,7 @@ final class RelayEventCatchUp: ObservableObject {
         // [T-catchup-hostid] 中继报的 machine 名与用户在「我的 Mac」里自取的
         // 名字未必一致;精确匹配失败就退到"唯一一台中继主机",再退到首台。
         // 匹配不上会导致通知按钮回调找不到 host,批准静默失败。
-        let hostId = GatewayHostStore.shared.hostMatching(machine: hostName)?.id
+        guard let hostId = GatewayHostStore.shared.taskHost(machine: hostName)?.id else { return }
         // [remote-ctl-power] 与中继 APNs 同一个标识(approval.request-<approval_id>):不重复成两条。
         let identifier = MacFollowLogic.catchUpNotificationId(
             event: item.eventName, sessionId: fields.sessionId, approvalId: fields.approvalId)

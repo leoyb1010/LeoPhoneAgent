@@ -135,7 +135,7 @@ struct AgentLoginSheet: View {
         case .verifying?:
             HStack { ProgressView(); Text("Mac 正在验证…").foregroundStyle(.secondary) }
         case .succeeded?:
-            Label("已登录", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            Label("已登录", systemImage: "checkmark.circle.fill").foregroundStyle(.blue)
         case .failed?:
             Label(flow?.message ?? "登录失败", systemImage: "xmark.circle.fill").foregroundStyle(.red)
         case .cancelled?:

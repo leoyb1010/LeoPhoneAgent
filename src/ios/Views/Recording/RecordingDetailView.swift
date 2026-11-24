@@ -363,7 +363,7 @@ struct RecordingDetailView: View {
     }
 
     private func speakerColor(_ s: Int) -> Color {
-        let palette: [Color] = [.blue, .orange, .green, .purple, .pink, .teal, .indigo, .brown]
+        let palette: [Color] = [.blue, .indigo, .purple, .orange, .pink, .gray, .cyan, .brown]
         return palette[(max(1, s) - 1) % palette.count]
     }
 

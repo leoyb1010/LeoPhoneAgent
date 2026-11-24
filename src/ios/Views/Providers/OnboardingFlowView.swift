@@ -72,7 +72,7 @@ struct OnboardingFlowView: View {
             }
         }
         .sheet(isPresented: $showAddProvider) { NavigationStack { AddProviderView() } }
-        .sheet(isPresented: $showModelLibrary) { NavigationStack { ModelLibraryView() } }
+        .sheet(isPresented: $showModelLibrary) { NavigationStack { ModelConnectionRecoveryView() } }
         .sheet(isPresented: $showDefaultModels) { NavigationStack { OnboardingModelSelectionView() } }
     }
 
@@ -100,12 +100,12 @@ struct OnboardingFlowView: View {
         switch step {
         case .model:
             if hasModel {
-                OnboardingUI.primary("下一步", id: "onboarding.next") { advance() }
+                OnboardingUI.primary("开始使用", id: "onboarding.next") { finish(prefill: nil) }
                 if providerStore.defaultPrimaryGroupId == nil {
                     OnboardingUI.secondary("选择默认模型", id: "onboarding.model.defaults") { showDefaultModels = true }
                 }
             } else {
-                OnboardingUI.primary("添加模型服务商", id: "onboarding.model.add") {
+                OnboardingUI.primary(providerStore.instances.isEmpty ? "添加模型服务商" : "连接已有模型", id: "onboarding.model.add") {
                     if providerStore.instances.isEmpty { showAddProvider = true } else { showModelLibrary = true }
                 }
                 OnboardingUI.secondary("稍后再说", id: "onboarding.model.later") { advance() }
@@ -206,6 +206,47 @@ struct OnboardingHost: View {
             }
             presented = OnboardingGate.shouldPresent(hasModel: hasModel, completed: OnboardingGate.isCompleted(),
                                                      releaseNotesPending: releaseNotesPending)
+        }
+    }
+}
+
+
+/// Reached from a blocked send. Show the repair for each configured account.
+struct ModelConnectionRecoveryView: View {
+    @ObservedObject private var store = ProviderConfigStore.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var editing: ModelEntry?
+    @State private var adding: String?
+
+    var body: some View {
+        List {
+            ForEach(store.instances) { provider in
+                Section(provider.label) {
+                    if provider.isRetiredSignIn || !provider.hasAnyCredential {
+                        NavigationLink("重新登录或配置密钥") { ProviderInstanceDetailView(instanceId: provider.id) }
+                    } else if !provider.isEnabled {
+                        Button("启用服务商") {
+                            var enabled = provider
+                            enabled.isEnabled = true
+                            store.updateInstance(enabled)
+                        }
+                    } else if store.entries(for: provider.id).isEmpty {
+                        NavigationLink("获取模型") { ProviderInstanceDetailView(instanceId: provider.id) }
+                    } else {
+                        NavigationLink("显示模型") {
+                            ProviderModelCatalogView(instanceId: provider.id,
+                                onEdit: { editing = $0 }, onAddCustom: { adding = provider.id })
+                        }
+                    }
+                }
+            }
+            NavigationLink("添加服务商") { AddProviderView() }
+        }
+        .navigationTitle("连接模型")
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+        .sheet(item: $editing) { ModelEntryDetailSheet(entry: $0) }
+        .sheet(isPresented: Binding(get: { adding != nil }, set: { if !$0 { adding = nil } })) {
+            if let id = adding { AddCustomModelSheet(instanceId: id) }
         }
     }
 }

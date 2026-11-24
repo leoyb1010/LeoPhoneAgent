@@ -6,7 +6,9 @@ import tempfile
 root=Path(__file__).resolve().parents[1]
 source=(root/'src/ios/Views/Home/HomeComposer.swift').read_text()
 source=source[source.index('@MainActor\nfinal class HomeDraft'):source.index('/// 首页搜索框:')]
-swift='import Foundation\nimport Combine\n'+source+r'''
+router=(root/'src/ios/Shared/QuickActionRouter.swift').read_text()
+attachment=router[router.index('struct HomeDraftAttachment:'):router.index('enum ChatLaunchAction:')]
+swift='import Foundation\nimport Combine\n'+attachment+source+r'''
 func expect(_ c:Bool,_ m:String){if !c{print("FAIL: "+m);exit(1)}}
 @main struct Runner {
  @MainActor static func main() async throws {
@@ -30,6 +32,13 @@ func expect(_ c:Bool,_ m:String){if !c{print("FAIL: "+m);exit(1)}}
   second.flushPersistence()
   let idle=HomeDraft();_ = idle.enablePersistence(at:url)
   expect(idle.text=="latest debounced edit","untouched Home instance overwrote newer draft")
+  let attachment=HomeDraftAttachment(id:UUID(),name:"notes.pdf",kind:.document)
+  second.attachments=[attachment];second.flushPersistence()
+  let withFiles=HomeDraft();let picked=withFiles.enablePersistence(at:url)
+  expect(withFiles.attachments==[attachment] && picked=="provider/vision", "attachment and model must restore in the same draft")
+  withFiles.text="";expect(withFiles.canSubmit,"file-only draft should be sendable")
+  withFiles.importsInFlight=1;expect(!withFiles.canSubmit,"partially imported files must not be sent")
+  second.attachments=[]
   second.text="last keystrokes";second.flushPersistence()
   let immediate=HomeDraft();_ = immediate.enablePersistence(at:url)
   expect(immediate.text=="last keystrokes","background flush lost debounced text")

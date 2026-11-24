@@ -282,7 +282,7 @@ private struct CopyableURLCapsule: View {
             .truncationMode(.middle)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(showCopied ? Color.green : Color(white: 0.85))
+            .background(showCopied ? Color.blue : Color(white: 0.85))
             .clipShape(Capsule())
             .animation(LeoMotion.standardEase(), value: showCopied)
             .onTapGesture {
@@ -581,7 +581,7 @@ struct ToolLiveSheet: View {
                     } label: {
                         Image(systemName: navCopyDone ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 14))
-                            .foregroundStyle(navCopyDone ? Color.green : ChatColors.primaryText)
+                            .foregroundStyle(navCopyDone ? Color.blue : ChatColors.primaryText)
                             .frame(width: 32, height: 32)
                             .background(ChatColors.secondaryBg)
                             .clipShape(Circle())
@@ -594,7 +594,7 @@ struct ToolLiveSheet: View {
                     } label: {
                         Image(systemName: navCopyDone ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 14))
-                            .foregroundStyle(navCopyDone ? Color.green : ChatColors.primaryText)
+                            .foregroundStyle(navCopyDone ? Color.blue : ChatColors.primaryText)
                             .frame(width: 32, height: 32)
                             .background(ChatColors.secondaryBg)
                             .clipShape(Circle())
@@ -609,7 +609,7 @@ struct ToolLiveSheet: View {
                     } label: {
                         Image(systemName: navCopyDone ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 14))
-                            .foregroundStyle(navCopyDone ? Color.green : ChatColors.primaryText)
+                            .foregroundStyle(navCopyDone ? Color.blue : ChatColors.primaryText)
                             .frame(width: 32, height: 32)
                             .background(ChatColors.secondaryBg)
                             .clipShape(Circle())
@@ -624,7 +624,7 @@ struct ToolLiveSheet: View {
                     } label: {
                         Image(systemName: navCopyDone ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 14))
-                            .foregroundStyle(navCopyDone ? Color.green : ChatColors.primaryText)
+                            .foregroundStyle(navCopyDone ? Color.blue : ChatColors.primaryText)
                             .frame(width: 32, height: 32)
                             .background(ChatColors.secondaryBg)
                             .clipShape(Circle())
@@ -638,7 +638,7 @@ struct ToolLiveSheet: View {
                     } label: {
                         Image(systemName: navCopyDone ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 14))
-                            .foregroundStyle(navCopyDone ? Color.green : ChatColors.primaryText)
+                            .foregroundStyle(navCopyDone ? Color.blue : ChatColors.primaryText)
                             .frame(width: 32, height: 32)
                             .background(ChatColors.secondaryBg)
                             .clipShape(Circle())
@@ -1157,17 +1157,17 @@ struct ToolLiveSheet: View {
                                             .background(Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.3, green: 0.08, blue: 0.08, alpha: 1) : UIColor(red: 1, green: 0.9, blue: 0.9, alpha: 1) }))
                                     }
                                 }
-                                // Added lines (green)
+                                // 蓝色新增行同时保留 + 前缀，和红色删除行区分。
                                 if !newText.isEmpty {
                                     let newChunks = Self.chunkedDiffLines(newText, prefix: "+ ")
                                     ForEach(newChunks, id: \.id) { chunk in
                                         Text(chunk.text)
                                             .font(.system(size: 13, design: .monospaced))
-                                            .foregroundStyle(Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.4, green: 1, blue: 0.4, alpha: 1) : UIColor(red: 0.1, green: 0.6, blue: 0.1, alpha: 1) }))
+                                            .foregroundStyle(LeoTheme.ColorToken.accent)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                             .padding(.horizontal, 14)
                                             .padding(.vertical, 2)
-                                            .background(Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.08, green: 0.2, blue: 0.08, alpha: 1) : UIColor(red: 0.9, green: 1, blue: 0.9, alpha: 1) }))
+                                            .background(LeoTheme.ColorToken.accentSoft)
                                     }
                                 }
                             }
@@ -1649,9 +1649,9 @@ struct ToolLiveSheet: View {
                         if isLive {
                             HStack(spacing: 12) {
                                 Text(resourceMonitor.formattedCPU)
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(.blue)
                                 Text(resourceMonitor.formattedMem())
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(.blue)
                             }
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
                             .frame(maxWidth: .infinity)
@@ -1894,7 +1894,7 @@ struct ToolLiveSheet: View {
                 if isLive {
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(.green)
+                            .fill(.blue)
                             .frame(width: 7, height: 7)
                         Text("Live")
                             .font(.system(size: 13, weight: .medium))
@@ -1935,7 +1935,7 @@ struct ToolLiveSheet: View {
         case .success:
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 18))
-                .foregroundStyle(.green)
+                .foregroundStyle(.blue)
         case .failed:
             Image(systemName: "xmark.circle.fill")
                 .font(.system(size: 18))
@@ -1984,7 +1984,7 @@ struct ToolLiveSheet: View {
 
     private var accentColor: Color {
         switch block.kind {
-        case .shellTool: return .green
+        case .shellTool: return .blue
         case .fileReadTool: return .primary
         case .fileWriteTool: return .blue
         case .fileEditTool: return .orange
@@ -2210,7 +2210,7 @@ private struct ToolPreviewThumbnail: View {
             if !newText.isEmpty {
                 Text(lastLines(newText, count: 6).split(separator: "\n", omittingEmptySubsequences: false).map { "+ " + $0 }.joined(separator: "\n"))
                     .font(.system(size: 4, design: .monospaced))
-                    .foregroundStyle(Color(red: 0.4, green: 1, blue: 0.4).opacity(0.85))
+                    .foregroundStyle(Color(red: 0.56, green: 0.73, blue: 1).opacity(0.9))
                     .lineLimit(6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
@@ -2321,7 +2321,7 @@ private struct ToolPreviewThumbnail: View {
 
     private var accentColor: Color {
         switch block.kind {
-        case .shellTool: return .green
+        case .shellTool: return .blue
         case .fileReadTool: return .cyan
         case .fileWriteTool: return .blue
         case .fileEditTool: return .orange
@@ -2436,7 +2436,7 @@ private struct ToolStatusBar: View {
         case .success:
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 15))
-                .foregroundStyle(.green)
+                .foregroundStyle(.blue)
         case .failed:
             Image(systemName: "xmark.circle.fill")
                 .font(.system(size: 15))

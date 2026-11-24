@@ -86,7 +86,7 @@ struct SoulSettingsView: View {
                             Spacer()
                             if showForceSyncDone {
                                 Text(AppLocalized("Queued"))
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(.blue)
                                     .font(.caption)
                             }
                         }
@@ -138,7 +138,7 @@ struct SoulSettingsView: View {
                 Text(AppLocalized("Saved"))
                     .font(.footnote.weight(.medium))
                     .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Color.green.opacity(0.85), in: Capsule())
+                    .background(Color.blue.opacity(0.85), in: Capsule())
                     .foregroundStyle(.white)
                     .padding(.bottom, 24)
                     .transition(.opacity)
