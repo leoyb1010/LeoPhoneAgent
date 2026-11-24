@@ -103,7 +103,7 @@ import { LeoHomeSetupCard } from "@/leo/LeoHomeSetupCard.js";
 import { ConversationDraftEmptyState } from "@/v4/ConversationDraftEmptyState.js";
 import { LeoDraftStatusList } from "@/leo/LeoDraftStatusList.js";
 import { LeoRecentWorkspaces } from "@/leo/LeoRecentWorkspaces.js";
-import { LeoWorkbenchMore, LeoWorkbenchStarters } from "@/leo/LeoWorkbenchHome.js";
+import { LeoContinueLast, LeoWorkbenchMore, LeoWorkbenchStarters } from "@/leo/LeoWorkbenchHome.js";
 import { ConversationDraftSuggestedPromptsContainer } from "@/v4/ConversationDraftSuggestedPromptsContainer.js";
 import { ConversationHeader, type PaneWorkspaceBadge } from "@/v4/ConversationHeader.js";
 import { ConversationQueuePanel } from "@/v4/ConversationQueuePanel.js";
@@ -3619,6 +3619,7 @@ export function SessionPane({
       telemetryDraftConfig={telemetryDraftConfig}
       contextHeader={isDraft ? draftComposerHeader : undefined}
       centered={isDraft}
+      compactDraftSettings={isDraft && !compactForRemoteControl}
       blockingRequestId={blockingInteractionId}
       listenAddToChatEvents={focused}
       externalTextInsertRequest={canApplyLeoComposerInsert(composerTextInsertRequest, sessionId, focused) ? composerTextInsertRequest : null}
@@ -3721,7 +3722,8 @@ export function SessionPane({
         />
       ) : null}
       {composerNode}
-      {isDraft && !compactForRemoteControl ? <LeoWorkbenchStarters workspacePath={workspacePath} workspaceIdentity={workspaceIdentity} className="mt-5" /> : null}
+      {isDraft && !compactForRemoteControl ? <LeoContinueLast workspaceKey={workspaceIdentity?.trim() || workspacePath} /> : null}
+      {isDraft && !compactForRemoteControl ? <LeoWorkbenchStarters workspacePath={workspacePath} workspaceIdentity={workspaceIdentity} className="mt-3" /> : null}
       {isDraft ? <LeoDraftStatusList className="mt-5" /> : null}
       {isDraft ? <LeoRecentWorkspaces className="mt-5" /> : null}
       {isDraft && !compactForRemoteControl ? <LeoHomeSetupCard className="mt-4" /> : null}

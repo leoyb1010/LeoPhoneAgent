@@ -15,6 +15,16 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.22.0",
+    date: "2026-11-24",
+    items: [
+      "快捷浮窗的工作区更新保留输入焦点、中文输入和选区。",
+      "快捷浮窗派发超时后核对原请求，避免重复创建任务。",
+      "首页可继续上次的任务，执行者、模型与模式收在同一处。选中文字时，新回复不会拉走阅读位置。",
+      "HTML 和 Markdown 产物都可下载原文，并回到原任务继续修改。",
+    ],
+  },
+  {
     version: "1.21.0",
     date: "2026-11-14",
     items: [

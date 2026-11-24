@@ -1,9 +1,35 @@
 import { useState, type ReactNode } from "react";
-import { ArrowUpRight, Code2, FileSearch, SquareTerminal } from "lucide-react";
+import { History, Code2, FileSearch, SquareTerminal } from "lucide-react";
 import { cn } from "@/components/lib/utils.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
+import { useLeoHome, type LeoHomeContextValue } from "./LeoHomeContext.js";
+import { useLeoHomeTasks } from "./LeoDraftStatusList.js";
 import { LEO_WORKBENCH_STARTERS } from "./leoWorkbenchPrompts.js";
+
+export function LeoContinueLast({ workspaceKey }: { workspaceKey: string }) {
+  const home = useLeoHome();
+  return home ? <ContinueLastTask home={home} workspaceKey={workspaceKey} /> : null;
+}
+
+function ContinueLastTask({ home, workspaceKey }: { home: LeoHomeContextValue; workspaceKey: string }) {
+  const { intl, locale } = useZCodeIntl();
+  const { items } = useLeoHomeTasks(home);
+  const task = items.find((entry) => (entry.workspaceIdentity?.trim() || entry.workspacePath) === workspaceKey);
+  if (!task) return null;
+  return (
+    <button
+      type="button"
+      data-testid="leo-continue-last"
+      onClick={() => home.onSelectTask(task.workspacePath, task.taskId, task.workspaceIdentity, task.unreadAt)}
+      className="mt-3 flex w-full max-w-2xl items-center gap-2 rounded-lg px-2 py-1.5 text-left text-ui-caption text-foreground-subtle hover:bg-hover focus-visible:outline-brand"
+    >
+      <History aria-hidden="true" className="size-4 shrink-0" />
+      <span className="shrink-0">{locale.startsWith("zh") ? "继续上次" : "Continue last task"}</span>
+      <span className="truncate font-medium text-foreground">{task.title?.trim() || intl.formatMessage({ id: "taskList.untitled" })}</span>
+    </button>
+  );
+}
 
 export function LeoWorkbenchStarters({
   workspacePath,
@@ -20,7 +46,7 @@ export function LeoWorkbenchStarters({
   return (
     <section
       className={cn(
-        "leo-workbench-starters grid w-full max-w-2xl grid-cols-1 gap-2 @2xl/conversation:grid-cols-3",
+        "leo-workbench-starters flex w-full max-w-2xl flex-wrap gap-2",
         className,
       )}
       aria-label={zh ? "开始一项任务" : "Start a task"}
@@ -40,7 +66,7 @@ export function LeoWorkbenchStarters({
                   zh
                     ? starter.prompt
                     : starter.id === "html"
-                      ? "Create a refined, minimal interactive single-file HTML page with all CSS/JS inline and no external URLs, CDNs, fonts or images; use inline SVG or data URIs. Write real runnable files, check desktop and narrow layouts, buttons and page errors, then provide a preview and downloadable output."
+                      ? "Build and check a self-contained HTML brief. My topic is:"
                       : starter.id === "code"
                         ? "Read this project's rules and relevant code, preserve existing edits, implement my changes and run the relevant checks. My goal is:"
                         : "Research the supplied material, distinguish facts and inferences, retain sources and produce a clear report with suitable HTML, Markdown or structured data files. My topic is:",
@@ -49,21 +75,15 @@ export function LeoWorkbenchStarters({
                   "append-if-missing",
                 )
             }
-            className="group flex min-h-20 items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-left transition-colors hover:border-border-hover hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand motion-reduce:transition-none"
+            title={zh ? starter.description : starter.enDescription}
+            className="group flex min-h-8 items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-left transition-colors hover:border-border-hover hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand motion-reduce:transition-none"
           >
             <Icon aria-hidden="true" className="size-4 shrink-0 text-brand" />
             <span className="min-w-0 flex-1">
               <span className="block text-ui-caption font-medium text-foreground">
                 {zh ? starter.title : starter.en}
               </span>
-              <span className="mt-1 block text-ui-sm leading-relaxed text-foreground-subtle">
-                {zh ? starter.description : starter.enDescription}
-              </span>
             </span>
-            <ArrowUpRight
-              aria-hidden="true"
-              className="size-3.5 shrink-0 text-foreground-subtle opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
-            />
           </button>
         );
       })}

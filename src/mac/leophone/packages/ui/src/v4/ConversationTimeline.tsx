@@ -1011,9 +1011,16 @@ function ConversationTimelineImpl({
   );
 
   // 贴底必须 instant（scrollTop 赋值）：smooth 的中间帧会被 scroll 判定误读为「离底」。
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((explicit = false) => {
     const element = scrollRef.current;
     if (!element) return;
+    // 流式测高和侧栏改宽都可触发吸底；正在选取正文时把阅读位置交回用户。
+    const selection = element.ownerDocument.getSelection();
+    if (!explicit && selection && !selection.isCollapsed && selection.anchorNode &&
+        (virtualHistoryRef.current?.contains(selection.anchorNode) || liveTailRef.current?.contains(selection.anchorNode))) {
+      commitFollowing(false);
+      return;
+    }
     markProgrammaticScroll();
     // 草稿安全居中允许内容在低高度下向下溢出；若沿用真实会话吸底，
     // 顶部安全留白会被滚走。草稿始终展示顶部，真实会话继续吸底。
@@ -1025,6 +1032,7 @@ function ConversationTimelineImpl({
     cacheCurrentScrollMemoryState(element);
     notifyScrollObserversAfterCommit(element);
   }, [
+    commitFollowing,
     cacheCurrentScrollMemoryState,
     responsiveCenteredEmptyLayout,
     markProgrammaticScroll,
@@ -1326,7 +1334,7 @@ function ConversationTimelineImpl({
     pendingDetachedScrollRestoreRef.current = null;
     clearUserScrollIntent();
     commitFollowing(true);
-    scrollToBottom();
+    scrollToBottom(true);
     // scrollToBottom 只更新组件内 ref；若用户点击后立刻切任务，scope
     // cleanup/scroll 事件可能还没运行，旧 Map 会把下次恢复重新带回中部甚至顶部。
     saveCurrentScrollMemory();

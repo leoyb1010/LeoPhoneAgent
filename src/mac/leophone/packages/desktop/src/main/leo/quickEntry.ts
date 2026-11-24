@@ -287,9 +287,10 @@ export function startLeoQuickEntry(deps: LeoQuickEntryDeps): void {
     return window;
   };
 
-  const pushPanelState = (window: BrowserWindow) => {
+  const pushPanelState = (window: BrowserWindow, opening = false) => {
     const workspaces = summary?.workspaces ?? [];
     window.webContents.send(PANEL_STATE_CHANNEL, {
+      opening,
       theme: settings.appTheme,
       workspaces,
       selected: lastWorkspace && workspaces.includes(lastWorkspace) ? lastWorkspace : (workspaces[0] ?? null),
@@ -308,7 +309,7 @@ export function startLeoQuickEntry(deps: LeoQuickEntryDeps): void {
     returnFocusOnHide = BrowserWindow.getFocusedWindow() === null;
     window.setBounds(computeQuickPanelBounds(screen.getCursorScreenPoint(), screen.getAllDisplays()));
     await panelLoaded?.catch(() => undefined);
-    pushPanelState(window);
+    pushPanelState(window, true);
     panelVisible = true;
     window.show();
     // 别的 App 在前台时,只 focus() 的激活请求会被系统的协作式激活拒掉,浮窗几十毫秒后就失焦收起;
@@ -409,12 +410,12 @@ export function startLeoQuickEntry(deps: LeoQuickEntryDeps): void {
   ipcMain.handle(PANEL_DISPATCH_CHANNEL, async (event, payload: unknown): Promise<DispatchResult> => {
     if (!fromPanel(event)) return { ok: false, error: "forbidden" };
     const body = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
-    const request = { prompt: body["prompt"], workspacePath: body["workspacePath"] };
+    const request = { prompt: body["prompt"], workspacePath: body["workspacePath"], requestId: body["requestId"] };
     let result = await callLeoQuick("/api/leo/quick/dispatch", request);
     if (!result.ok && /没启动/.test(result.error)) {
       // 主窗口都关了时 Host 不在:先把主窗口拉起来(Host 跟着起),再派一次。
       await deps.showMainWindow();
-      for (let attempt = 0; attempt < 30 && !result.ok; attempt += 1) {
+      for (let attempt = 0; attempt < 30 && !result.ok && result.error === "本机 Leo 服务还没启动"; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         result = await callLeoQuick("/api/leo/quick/dispatch", request);
       }

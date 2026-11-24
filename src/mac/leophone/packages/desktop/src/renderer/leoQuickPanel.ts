@@ -5,6 +5,7 @@
  */
 
 interface LeoQuickPanelState {
+  opening: boolean;
   theme?: "light" | "dark" | "system";
   workspaces: string[];
   selected: string | null;
@@ -17,7 +18,7 @@ declare global {
   interface Window {
     leoQuickPanel?: {
       onState(callback: (state: LeoQuickPanelState) => void): () => void;
-      dispatch(payload: { prompt: string; workspacePath: string | null; open: boolean }): Promise<DispatchResult>;
+      dispatch(payload: { requestId: string; prompt: string; workspacePath: string | null; open: boolean }): Promise<DispatchResult>;
       hide(reason: "escape" | "dispatched"): void;
     };
   }
@@ -32,6 +33,9 @@ const input = document.getElementById("prompt") as HTMLInputElement;
 const select = document.getElementById("workspace") as HTMLSelectElement;
 const status = document.getElementById("status") as HTMLSpanElement;
 let busy = false;
+let presentation = 0;
+let revision = 0;
+let submitted: { revision: number; workspacePath: string; requestId: string } | null = null;
 let hideTimer: number | null = null;
 
 function setStatus(text: string, tone: "hint" | "ok" | "error" | "busy" = "hint") {
@@ -56,6 +60,8 @@ export function applyPanelTheme(root: HTMLElement, theme: LeoQuickPanelState["th
 
 function renderWorkspaces(state: LeoQuickPanelState) {
   const current = select.value || state.selected;
+  if (state.workspaces.length > 0 && state.workspaces.length === select.options.length &&
+      state.workspaces.every((path, index) => select.options[index]?.value === path)) return;
   select.replaceChildren(
     ...state.workspaces.map((path) => {
       const option = document.createElement("option");
@@ -76,40 +82,62 @@ function renderWorkspaces(state: LeoQuickPanelState) {
   select.disabled = state.workspaces.length === 0;
 }
 
+function cancelAutoHide() {
+  if (hideTimer !== null) window.clearTimeout(hideTimer);
+  hideTimer = null;
+}
+
+function editDraft() {
+  revision++;
+  cancelAutoHide();
+  if (!busy) setStatus(HINT);
+}
+input.addEventListener("input", editDraft);
+input.addEventListener("compositionstart", editDraft);
+select.addEventListener("change", editDraft);
+
 bridge?.onState((state) => {
-  // 每次呼出:清掉上一轮的「已派发」,保留没发出去的草稿。
-  if (hideTimer !== null) {
-    window.clearTimeout(hideTimer);
-    hideTimer = null;
-  }
   applyPanelTheme(document.documentElement, state.theme);
   renderWorkspaces(state);
-  if (!busy) {
+  if (state.opening) {
+    presentation++;
+    cancelAutoHide();
+    document.body.classList.remove("shown");
+    requestAnimationFrame(() => document.body.classList.add("shown"));
+    // 刷新工作区和外观只更新投影，不能再次抢中文输入法或下拉列表的焦点。
+    input.focus();
+  }
+  if (!busy && hideTimer === null && (state.opening || status.dataset["tone"] !== "error")) {
     if (state.error) setStatus(`读不到工作区：${state.error}`, "error");
-    else if (state.workspaces.length === 0) setStatus("先在 LeoBot 里打开一个项目", "busy");
+    else if (!state.workspaces.length) setStatus("先在 LeoBot 里打开一个项目", "busy");
     else setStatus(HINT);
   }
-  document.body.classList.remove("shown");
-  // 下一帧再加类名,让出现动画每次都从 0.98 开始。
-  requestAnimationFrame(() => document.body.classList.add("shown"));
-  input.focus();
-  input.select();
 });
 
 async function dispatch(open: boolean) {
   const prompt = input.value.trim();
-  if (!bridge || busy || !prompt) return;
+  const workspacePath = select.value;
+  if (!bridge || busy || !prompt || !workspacePath) return;
+  if (!submitted || submitted.revision !== revision || submitted.workspacePath !== workspacePath) {
+    submitted = { revision, workspacePath, requestId: crypto.randomUUID() };
+  }
+  const submission = submitted;
+  const opened = presentation;
   busy = true;
   setStatus("派发中…", "busy");
   const result = await bridge
-    .dispatch({ prompt, workspacePath: select.value || null, open })
+    .dispatch({ prompt, workspacePath, requestId: submission.requestId, open })
     .catch((error: unknown) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) }));
   busy = false;
   if (!result.ok) {
-    setStatus(`没派出去：${result.error}`, "error");
-    input.focus();
+    setStatus(result.error, "error");
     return;
   }
+  if (opened !== presentation || revision !== submission.revision || select.value !== workspacePath) {
+    setStatus("上次任务已派发", "ok");
+    return;
+  }
+  submitted = null;
   input.value = "";
   if (open) return; // 主进程已收起浮窗并打开主窗口。
   setStatus("已派发", "ok");
@@ -128,7 +156,7 @@ window.addEventListener("keydown", (event) => {
     bridge?.hide("escape");
     return;
   }
-  if (event.key === "Enter") {
+  if (event.key === "Enter" && event.target === input) {
     event.preventDefault();
     void dispatch(event.metaKey);
   }

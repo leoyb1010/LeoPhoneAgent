@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Code2, Download, Eye, PencilLine } from "lucide-react";
+import { Code2, Eye } from "lucide-react";
 import { HTML_ARTIFACT_MAX_BYTES, type HtmlArtifactPreviewHandle } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
-import { toast } from "@/components/ui/toast.js";
+import { LeoArtifactActions } from "./LeoArtifactActions.js";
 import { useOptionalPlatform } from "@/hooks/usePlatform.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import { buildLeoHtmlPreviewDocument } from "./htmlArtifactPolicy.js";
 
 export function LeoHtmlPreview({
@@ -30,8 +29,9 @@ export function LeoHtmlPreview({
   const platform = useOptionalPlatform();
   const [mode, setMode] = useState<"preview" | "code">("preview");
   const [interactiveContent, setInteractiveContent] = useState<string | null>(null);
+  // 文件改回旧文本也是新版本，不能自动恢复曾经允许的脚本。
+  if (interactiveContent !== null && interactiveContent !== content) setInteractiveContent(null);
   const interactive = interactiveContent === content;
-  const [saving, setSaving] = useState(false);
   const document = useMemo(() => buildLeoHtmlPreviewDocument(content, false), [content]);
   const previewPort = platform?.htmlPreview;
   const previewTooLarge = new TextEncoder().encode(content).byteLength > HTML_ARTIFACT_MAX_BYTES;
@@ -81,59 +81,6 @@ export function LeoHtmlPreview({
       if (created) release(created);
     };
   }, [content, interactive, mode, previewPort, previewTooLarge, retry, zh]);
-  const download = async () => {
-    if (saving) return;
-    setSaving(true);
-    const name = (sourcePath ?? title).split(/[\\/]/).at(-1) || "artifact.html";
-    const suggestedName = /\.html?$/i.test(name) ? name : `${name}.html`;
-    try {
-      if (platform?.saveFile) {
-        const data = new TextEncoder().encode(content);
-        const result = await platform.saveFile({ data: data.buffer as ArrayBuffer, suggestedName });
-        if (result.canceled) return;
-        if (!result.success) throw new Error(result.error || (zh ? "保存失败" : "Save failed"));
-      } else {
-        const url = URL.createObjectURL(new Blob([content], { type: "text/html;charset=utf-8" }));
-        const link = window.document.createElement("a");
-        link.href = url;
-        link.download = suggestedName;
-        link.click();
-        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      }
-      toast(zh ? "HTML 文件已保存" : "HTML saved");
-    } catch (error) {
-      toast(
-        error instanceof Error
-          ? error.message
-          : zh
-            ? "保存失败，请重试"
-            : "Could not save. Try again.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-  const refine = () => {
-    if (!workspacePath) return;
-    const prompt = zh
-      ? `请继续修改 HTML 文件 ${sourcePath ?? title}，保留已有内容与用户修改。默认保持单文件，CSS/JS全部内联，不引用外部CDN、字体、图片；用户明确要求项目时遵循其现有技术栈。完成后重新检查页面与交互。我的修改要求是：`
-      : `Refine the HTML file ${sourcePath ?? title}. Preserve existing work and user edits, then check its layout and interactions. My requested changes are:`;
-    useZCodeSessionStore
-      .getState()
-      .requestComposerTextInsert(
-        workspacePath,
-        prompt,
-        workspaceIdentity,
-        undefined,
-        "append-if-missing",
-        targetSessionId,
-      );
-    toast(
-      zh
-        ? "修改要求已加入任务草稿，补充后发送"
-        : "Added to the task draft. Add your changes and send.",
-    );
-  };
   return (
     <section
       className="leo-html-artifact flex h-full min-h-0 flex-col bg-background"
@@ -185,29 +132,8 @@ export function LeoHtmlPreview({
               {interactive ? (zh ? "停止交互" : "Stop scripts") : zh ? "运行交互" : "Run scripts"}
             </Button>
           ) : null}
-          {workspacePath && sourcePath && targetSessionId !== undefined ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={refine}
-              data-testid="leo-html-refine"
-              className="h-8 gap-1.5 text-ui-sm"
-            >
-              <PencilLine className="size-3.5" />
-              {zh ? "继续修改" : "Refine"}
-            </Button>
-          ) : null}
-          <Button
-            size="sm"
-            variant="default"
-            disabled={saving}
-            onClick={() => void download()}
-            data-testid="leo-html-download"
-            className="h-8 gap-1.5 text-ui-sm"
-          >
-            <Download className="size-3.5" />
-            {zh ? "下载 HTML" : "Download HTML"}
-          </Button>
+          <LeoArtifactActions format="HTML" content={content} title={title} sourcePath={sourcePath}
+            workspacePath={workspacePath} workspaceIdentity={workspaceIdentity} targetSessionId={targetSessionId} />
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">

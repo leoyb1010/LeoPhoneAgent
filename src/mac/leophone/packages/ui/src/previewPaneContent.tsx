@@ -9,6 +9,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import type { CodePreviewSettings } from "@/store/index.js";
 import type { CodeCommentLabels } from "@/components/ui/code-viewer.js";
 import { MarkdownPreviewContent } from "@/previewPaneMarkdownContent.js";
+import { LeoArtifactActions } from "@/leo/LeoArtifactActions.js";
 import { LeoHtmlPreview } from "@/leo/LeoHtmlPreview.js";
 import { canPreviewLeoHtmlFile, isLeoHtmlPath, LEO_HTML_PREVIEW_LIMIT } from "@/leo/htmlArtifactPolicy.js";
 import { CodeContent } from "@/previewPaneCodeContent.js";
@@ -426,7 +427,7 @@ export function PreviewPaneContent({
   const isMarkdownFile = fileLanguage === "markdown";
   const isSvgFile = isSvgPath(source.path);
   if (source.type !== "code-review" && isMarkdownFile && markdownViewMode === "preview") {
-    return (
+    const preview = (
       <MarkdownPreviewContent
         selectionTarget={markdownSelectionTarget}
         sourceKey={source.path ?? source.title}
@@ -436,6 +437,17 @@ export function PreviewPaneContent({
         workspacePath={workspacePath}
         onOpenBrowserUrl={onOpenBrowserUrl}
       />
+    );
+    if (!canPreviewLeoHtmlFile(filePreview)) return preview;
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex flex-wrap justify-end gap-1 border-b border-border px-3 py-2">
+          <LeoArtifactActions format="Markdown" content={filePreview.content} title={source.title}
+            sourcePath={source.path} workspacePath={htmlRefineAllowed ? workspacePath : undefined}
+            workspaceIdentity={workspaceIdentity} targetSessionId={htmlRefineSessionId} />
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto">{preview}</div>
+      </div>
     );
   }
 

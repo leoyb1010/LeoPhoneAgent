@@ -66,3 +66,16 @@ Shift-only). Stored by Main in `userData/leo-quick-entry.json`.
   (summary classification, workspace list, dispatch validation).
 - Manual: `pnpm dev:desktop`, ⌥Space from another app, dispatch, task appears in sidebar,
   tray count changes, 待审批 opens the task.
+
+## 草稿与重试（2026-11-24）
+
+```text
+呼出 → Renderer 聚焦一次 → 草稿编辑版本 → 冻结输入 + 请求编号
+       工作区/主题更新只更新列表与外观         ↓
+Main 检查 Host 是否就绪 → Host 持久化操作编号 → 创建任务 → 保存任务/输入编号
+  Renderer 核对草稿版本 ← 同编号回执 ← CommandInbox 首条输入
+```
+
+- 工作区或外观迟到时保留输入法组字、选区和焦点。成功时仅清空提交的编辑版本，同次显示期间没有继续输入才自动收起。
+- 同一草稿版本、项目的重试沿用原编号。Host 复用已有 OperationReceipts，收到重复请求时先查原回执。已知任务、未知回执时从原输入编号查 admission，不能确认时显示待核对。仍兼容旧调用方的无编号单次派发。
+- 验收覆盖迟到刷新、回执期间继续编辑、并发提交、回执丢失后重开 Host、同编号不同内容，以及原任务真实存在但无法确认输入的情形。

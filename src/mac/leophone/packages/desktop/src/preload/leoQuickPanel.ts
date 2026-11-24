@@ -6,6 +6,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 export interface LeoQuickPanelState {
   /** [G3] App 的外观(浅色 / 深色 / 跟随系统),浮窗据此换主题,不只看系统外观。 */
+  opening: boolean;
   theme?: "light" | "dark" | "system";
   workspaces: string[];
   selected: string | null;
@@ -18,7 +19,7 @@ contextBridge.exposeInMainWorld("leoQuickPanel", {
     ipcRenderer.on("leo:quick:panel:state", listener);
     return () => ipcRenderer.removeListener("leo:quick:panel:state", listener);
   },
-  dispatch: (payload: { prompt: string; workspacePath: string | null; open: boolean }) =>
+  dispatch: (payload: { requestId: string; prompt: string; workspacePath: string | null; open: boolean }) =>
     ipcRenderer.invoke("leo:quick:panel:dispatch", payload),
   hide: (reason: "escape" | "dispatched") => ipcRenderer.send("leo:quick:panel:hide", reason),
 });

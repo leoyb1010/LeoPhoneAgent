@@ -76,6 +76,7 @@ export interface ModelSelectionSource {
 export interface V4ComposerToolbarProps {
   workspacePath: string;
   workspaceIdentity?: string;
+  compactDraftSettings?: boolean;
   modelSelectionView?: ModelSelectionView | null;
   modelSelectionState?: ModelSelectionState;
   modelSelectionReload?: () => void;
@@ -118,6 +119,7 @@ export interface V4ComposerToolbarProps {
 function V4ComposerModelControlsImpl({
   workspacePath,
   workspaceIdentity,
+  compactDraftSettings = false,
   modelSelectionView = null,
   modelSelectionState = MODEL_SELECTION_LOADING_STATE,
   modelSelectionReload,
@@ -481,6 +483,7 @@ function V4ComposerModelControlsImpl({
           })}
         </span>
       ) : modelMenuVisible ? (
+        <span className={compactDraftSettings && activeConfigPicker !== "model" ? "hidden" : "contents"}>
         <ModelConfigSelect
           modelGroups={modelSelectGroups}
           normalizedValue={normalizedModelValue}
@@ -512,6 +515,7 @@ function V4ComposerModelControlsImpl({
           providerSubmenuClassName={providerSubmenuClassName}
           quickAccess={modelPickerQuickAccess}
         />
+        </span>
       ) : null}
       {thoughtOption ? (
         <ThoughtLevelCycleControl

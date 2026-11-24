@@ -1,12 +1,12 @@
 export const LEO_WORKBENCH_STARTERS = [
   {
     id: "html",
-    title: "编程与 HTML",
-    en: "Code & HTML",
+    title: "HTML 简报",
+    en: "HTML brief",
     description: "生成、预览与修改",
     enDescription: "Build, preview and refine",
     prompt:
-      "制作一个高级、简约的交互式 HTML 单文件页面，CSS/JS全部内联，不引用外部URL（CDN、字体、图片）；图片用内联SVG或data URI。先明确内容和交互，输出真实可运行文件；检查桌面与窄屏、按钮和页面错误，再给出可预览、可下载的结果。",
+      "生成单文件 HTML 简报，检查交互并交付真实可运行文件。简报主题是：",
   },
   {
     id: "code",

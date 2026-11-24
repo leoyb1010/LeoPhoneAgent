@@ -1,4 +1,7 @@
 import { stat } from "node:fs/promises";
+import { OperationReceipts } from "./link/operationReceipts.js";
+import type { LinkRequest } from "./link/bridge.js";
+import { leoPath } from "./leoPaths.js";
 
 import {
   ISettingService,
@@ -143,7 +146,11 @@ export interface LeoQuickEntry {
 /** 菜单栏轮询时工作区列表的缓存时长:读设置 + stat 不必每 3 秒做一遍。派发总是现读。 */
 const WORKSPACE_CACHE_MS = 10_000;
 
-export function createLeoQuickEntry(services: ServiceCollection): LeoQuickEntry {
+export function createLeoQuickEntry(
+  services: ServiceCollection,
+  receiptDirectory = leoPath("quick", "operations"),
+): LeoQuickEntry {
+  const receipts = new OperationReceipts(receiptDirectory);
   const workspaces = async () =>
     resolveQuickWorkspaces(await services.getOptional(ISettingService)?.get().catch(() => undefined));
   let cached: { at: number; value: string[] } | null = null;
@@ -172,20 +179,55 @@ export function createLeoQuickEntry(services: ServiceCollection): LeoQuickEntry 
       return summarizeQuickTasks(result.items, scopes);
     },
     async dispatch(body) {
-      const fresh = await workspaces();
-      cached = { at: Date.now(), value: fresh };
-      const { workspacePath, prompt } = validateQuickDispatch(body, fresh);
       const taskService = services.get(IZCodeTaskService);
-      // 与闲时派发同一条无界面路径:先建空 session(首条输入时才落库),再发首条输入。
-      // 不指定 mode / model:跟随工作区默认,和手机上开任务一致。
-      const task = await taskService.createTask({ workspacePath, deferPersistenceUntilFirstPrompt: true });
-      await taskService.sendPrompt({
-        taskId: task.taskId,
-        traceId: task.traceId,
-        content: prompt,
-        clientMode: "desktop-continuous",
+      const createAndSend = async (request?: LinkRequest) => {
+        const fresh = await workspaces();
+        cached = { at: Date.now(), value: fresh };
+        const { workspacePath, prompt } = validateQuickDispatch(body, fresh);
+        const task = await taskService.createTask({ workspacePath, deferPersistenceUntilFirstPrompt: true });
+        // 发出前写入真实 inputId。回执丢失时查原 admission，不能新建第二个任务。
+        if (request) await receipts.checkpoint(request, { taskId: task.taskId, workspacePath, inputId: task.traceId });
+        await taskService.sendPrompt({
+          taskId: task.taskId,
+          traceId: task.traceId,
+          content: prompt,
+          clientMode: "desktop-continuous",
+        });
+        return { taskId: task.taskId, workspacePath };
+      };
+      if (body["requestId"] === undefined) return createAndSend();
+      const requestId = body["requestId"];
+      if (typeof requestId !== "string" || !/^[a-f0-9-]{36}$/i.test(requestId)) {
+        throw new QuickDispatchError(400, "派发编号无效");
+      }
+      const request: LinkRequest = {
+        caller: { kind: "master", deviceId: "quick-panel" },
+        method: "POST",
+        path: "/api/leo/quick/dispatch",
+        body: { prompt: body["prompt"], workspacePath: body["workspacePath"] },
+        requestId,
+      };
+      const result = await receipts.run(request, async () => {
+        try {
+          return { status: 202, body: await createAndSend(request) };
+        } catch (error) {
+          if (!(error instanceof QuickDispatchError)) throw error;
+          return { status: error.status, body: { error: { message: error.message } } };
+        }
+      }, async (checkpoint) => {
+        const { workspacePath, taskId, inputId } = checkpoint;
+        if (typeof workspacePath !== "string" || typeof taskId !== "string" || typeof inputId !== "string") return null;
+        const ack = await taskService.queryOperation({ workspacePath, taskId, operationId: inputId });
+        if (!ack) return null;
+        return ["accepted", "duplicate", "noop"].includes(ack.status)
+          ? { status: 202, body: { taskId, workspacePath } }
+          : { status: 409, body: { error: { message: ack.message ?? "原输入未获接纳，请核对任务" } } };
       });
-      return { taskId: task.taskId, workspacePath };
+      const payload = result.body as { taskId?: string; workspacePath?: string; error?: { message?: string } };
+      if (result.status !== 202 || !payload.taskId || !payload.workspacePath) {
+        throw new QuickDispatchError(result.status, payload.error?.message ?? "请核对任务状态");
+      }
+      return { taskId: payload.taskId, workspacePath: payload.workspacePath };
     },
   };
 }

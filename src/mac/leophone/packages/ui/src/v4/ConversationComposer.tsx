@@ -406,6 +406,7 @@ export interface ConversationComposerProps {
    * 仅草稿态由宿主下发；会话建立后为空。
    */
   contextHeader?: ReactNode;
+  compactDraftSettings?: boolean;
   /** 居中草稿布局（旧 shouldUseCenteredDraftChatLayout）：收窄 max-w-2xl、去 sticky。 */
   centered?: boolean;
   /**
@@ -519,6 +520,7 @@ function ConversationComposerImpl({
   createSubmissionFromComposer,
   telemetryDraftConfig,
   contextHeader,
+  compactDraftSettings = false,
   centered = false,
   blockingRequestId = null,
   disabled = false,
@@ -2094,6 +2096,7 @@ function ConversationComposerImpl({
       <div className="flex min-w-0 items-center gap-1">
         <span className="flex min-w-0 shrink items-center gap-1 overflow-hidden empty:hidden">
           <V4ComposerModelControls
+            compactDraftSettings={compactDraftSettings}
             workspacePath={workspacePath}
             workspaceIdentity={workspaceIdentity}
             modelSelectionView={modelSelectionView}
@@ -2156,6 +2159,7 @@ function ConversationComposerImpl({
       canSend,
       activeConfigPicker,
       composerPhase,
+      compactDraftSettings,
       composerUsage,
       disabled,
       draftConfig,
@@ -2193,7 +2197,7 @@ function ConversationComposerImpl({
   const leadingActionsNode = useMemo(
     () => (
       <>
-        {!localCliSelected ? <V4ComposerModeSwitch
+        {!localCliSelected ? <span className={compactDraftSettings && activeConfigPicker !== "mode" ? "hidden" : "contents"}><V4ComposerModeSwitch
           workspacePath={workspacePath}
           workspaceIdentity={workspaceIdentity}
           provider={provider}
@@ -2202,11 +2206,22 @@ function ConversationComposerImpl({
           activeConfigPicker={activeConfigPicker}
           onConfigPickerOpenChange={handleConfigPickerOpenChange}
           onSwitchMode={onSwitchMode}
-        /> : null}
+        /></span> : null}
         {/* [leo][wp-31] 工具条五件：模型(右侧) · 模式 · agent · 附件(+ 菜单) · 麦克风。 */}
         <LeoAgentSelect
           view={modelSelectionView}
           current={composerAgentSelection}
+          draftSettings={compactDraftSettings ? {
+            model: localCliSelected ? "" : composerAgentSelection.model || (locale.startsWith("zh") ? "选模型" : "Choose model"),
+            onChooseModel: localCliSelected ? undefined : () => {
+              if (!modelSelectionView?.providers.some((p) => p.providerId !== ACP_PROVIDER_ID && p.models.length)) {
+                handleManageLocalAgents("modelProvider");
+                return;
+              }
+              handleConfigPickerOpenChange("model", true);
+            },
+            onChooseMode: localCliSelected ? undefined : () => handleConfigPickerOpenChange("mode", true),
+          } : undefined}
           draftMode={draftMode}
           disabled={disabled}
           open={activeConfigPicker === "agent"}
@@ -2240,6 +2255,8 @@ function ConversationComposerImpl({
     [
       activeConfigPicker,
       localCliSelected,
+      compactDraftSettings,
+      locale,
       composerAgentSelection.provider,
       composerAgentSelection.model,
       modelSelectionView,

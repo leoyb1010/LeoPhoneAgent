@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import {
@@ -130,4 +133,38 @@ test("dispatch creates a real task and sends the first input on the desktop-cont
     "listTaskList",
     { kind: "active", workspaceScopes: [{ workspacePath: process.cwd() }], sortBy: "updated", limit: 40 },
   ]);
+});
+
+test("receipt recovery joins concurrent sends, replays after restart and checks an uncertain admission", async (t) => {
+  const journal = await mkdtemp(join(tmpdir(), "leo-quick-receipts-"));
+  t.after(() => rm(journal, { recursive: true, force: true }));
+  const services = new ServiceCollection();
+  services.register(ISettingService, { get: async () => ({ recentProjects: [process.cwd()] }) } as never);
+  let created = 0;
+  let sent = 0;
+  let admitted = false;
+  services.register(IZCodeTaskService, {
+    createTask: async () => ({ taskId: `task-${++created}`, traceId: `input-${created}` }),
+    sendPrompt: async () => { sent++; if (sent === 2) throw new Error("lost acknowledgement"); },
+    queryOperation: async (query: { taskId: string; operationId: string }) => {
+      assert.equal(query.taskId, "task-2");
+      assert.equal(query.operationId, "input-2");
+      return admitted ? { status: "accepted" } : null;
+    },
+  } as never);
+  const request = { prompt: "hello", workspacePath: process.cwd(), requestId: "8d3607f8-6367-4006-b9b0-c8d2850aadc3" };
+  const quick = createLeoQuickEntry(services, journal);
+  const results = await Promise.all(Array.from({ length: 20 }, () => quick.dispatch(request)));
+  assert.ok(results.every((result) => result.taskId === "task-1"));
+  const restarted = createLeoQuickEntry(services, journal);
+  assert.equal((await restarted.dispatch(request)).taskId, "task-1");
+  await assert.rejects(restarted.dispatch({ ...request, prompt: "changed" }), /同一操作编号/);
+  assert.equal(sent, 1);
+  const next = { ...request, requestId: "26953ea3-979e-4248-9cb2-f72697625917" };
+  await assert.rejects(quick.dispatch(next), /核对任务/);
+  await assert.rejects(restarted.dispatch(next), /核对任务/);
+  admitted = true;
+  assert.equal((await restarted.dispatch(next)).taskId, "task-2");
+  assert.equal(created, 2);
+  assert.equal(sent, 2);
 });

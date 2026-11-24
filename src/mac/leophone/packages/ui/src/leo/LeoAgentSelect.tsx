@@ -23,6 +23,7 @@ export function LeoAgentSelect({
   onSelect,
   onManage,
   onReload,
+  draftSettings,
 }: {
   view: ModelSelectionView | null | undefined;
   current: LeoAgentModelSelection | null;
@@ -33,6 +34,11 @@ export function LeoAgentSelect({
   onSelect: (selection: LeoAgentModelSelection) => void;
   onManage: (section?: "modelProvider" | "externalAgents") => void;
   onReload?: () => void;
+  draftSettings?: {
+    model: string;
+    onChooseModel?: () => void;
+    onChooseMode?: () => void;
+  };
 }) {
   const { locale } = useZCodeIntl();
   const zh = locale.startsWith("zh");
@@ -57,7 +63,7 @@ export function LeoAgentSelect({
           size="sm"
           disabled={disabled || !draftMode}
           data-testid="leo-agent-select"
-          aria-label={`${zh ? "执行 Agent" : "Task Agent"}: ${label}`}
+          aria-label={[zh ? "执行 Agent" : "Task Agent", label, draftSettings?.model].filter(Boolean).join(" · ")}
           title={
             !draftMode
               ? zh
@@ -68,7 +74,7 @@ export function LeoAgentSelect({
           className="h-8 max-w-44 gap-1.5 rounded-lg border border-transparent bg-surface px-2 text-ui-sm font-medium text-foreground hover:border-border"
         >
           <TerminalSquare aria-hidden="true" className="size-3.5 shrink-0" />
-          <span className="truncate">{label}</span>
+          <span className="truncate">{[label, draftSettings?.model].filter(Boolean).join(" · ")}</span>
           {draftMode ? (
             <ChevronDown aria-hidden="true" className="size-3 shrink-0 text-foreground-subtle" />
           ) : null}
@@ -84,6 +90,17 @@ export function LeoAgentSelect({
         <DropdownMenuLabel className="px-2 pb-2 text-ui-sm font-normal text-foreground-subtle">
           {zh ? "选择这个任务的执行者" : "Choose this task’s Agent"}
         </DropdownMenuLabel>
+        {draftSettings?.onChooseModel ? (
+          <DropdownMenuItem onSelect={draftSettings.onChooseModel} data-testid="leo-draft-choose-model">
+            {zh ? "选择模型" : "Choose model"}
+          </DropdownMenuItem>
+        ) : null}
+        {draftSettings?.onChooseMode ? (
+          <DropdownMenuItem onSelect={draftSettings.onChooseMode}>
+            {zh ? "行为模式" : "Task mode"}
+          </DropdownMenuItem>
+        ) : null}
+        {draftSettings?.onChooseMode ? <DropdownMenuSeparator /> : null}
         {choices.map((choice) => (
           <DropdownMenuItem
             key={choice.id}
