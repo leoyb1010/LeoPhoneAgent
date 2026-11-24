@@ -1015,8 +1015,8 @@ function ConversationTimelineImpl({
     const element = scrollRef.current;
     if (!element) return;
     // 流式测高和侧栏改宽都可触发吸底；正在选取正文时把阅读位置交回用户。
-    const selection = element.ownerDocument.getSelection();
-    if (!explicit && selection && !selection.isCollapsed && selection.anchorNode &&
+    const selection = explicit ? null : element.ownerDocument?.getSelection?.();
+    if (selection && !selection.isCollapsed && selection.anchorNode &&
         (virtualHistoryRef.current?.contains(selection.anchorNode) || liveTailRef.current?.contains(selection.anchorNode))) {
       commitFollowing(false);
       return;
