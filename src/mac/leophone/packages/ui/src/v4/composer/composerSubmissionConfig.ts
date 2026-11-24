@@ -1,4 +1,5 @@
 import { resolveExecutionState, type ModelSelection } from "@zcode/shared";
+import { acpRegistryModelId } from "@zcode/shared/acp";
 import { submissionModeSchema, type SubmissionMode } from "@zcode/shared/zcode-protocol-v4";
 import type { ModelSelectionView } from "@zcode/services";
 import { validateModelSelectionOptions } from "@zcode/provider";
@@ -28,7 +29,7 @@ export function createComposerSubmissionConfig(
     selection &&
     view?.providers
       .find((provider) => provider.providerId === selection.providerId)
-      ?.models.find((candidate) => candidate.modelId === selection.modelId);
+      ?.models.find((candidate) => candidate.modelId === acpRegistryModelId(selection.providerId, selection.modelId));
   if (!mode.success || !selection || !model || !validateModelSelectionOptions(model, selection).ok)
     return null;
   // 不读取 Session 或显示别名；复制所有选择叶子，防止 await 后用户切模改变本次请求。

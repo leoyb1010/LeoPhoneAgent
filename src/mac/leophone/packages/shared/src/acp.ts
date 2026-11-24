@@ -1,5 +1,5 @@
 // [leo][WP-21] ACP 外部 agent 的共享定义（UI / services / CLI 共用，只依赖 zod-free 常量）。
-// 外部 agent 会话在 ZCode 运行时里托管：会话的模型选择 providerId = "acp"，modelId = agent id。
+// 外部 agent 会话由 ZCode 托管。会话选择保留执行器与可选的 CLI 模型 ID。
 // 这样持久化、对话投影、审批卡、任务列表与 Leo Link 全部复用现有链路。
 
 export const ACP_PROVIDER_ID = "acp";
@@ -42,10 +42,46 @@ export interface AcpModelSelectionLike {
   modelId: string;
 }
 
+export interface AcpModelRoute {
+  agentId: AcpAgentId;
+  customModelId?: string;
+}
+
+export function isValidAcpCustomModelId(id: string): boolean {
+  return id.length > 0 && id.length <= 240 && !/[\s\p{Cc}\p{Cs}]/u.test(id);
+}
+
+/** 将 CLI 模型带进既有任务选择、恢复与提交链路。旧 `acp/<agent>` 表示 CLI 默认。 */
+export function formatAcpModelId(agentId: AcpAgentId, customModelId: string): string {
+  if (!isValidAcpCustomModelId(customModelId)) throw new Error("CLI 模型 ID 无效");
+  return `${agentId}@${encodeURIComponent(customModelId)}`;
+}
+
+export function parseAcpModelId(value: unknown): AcpModelRoute | null {
+  if (isAcpAgentId(value)) return { agentId: value };
+  if (typeof value !== "string") return null;
+  const separator = value.indexOf("@");
+  if (separator < 0) return null;
+  const agentId = value.slice(0, separator);
+  if (!isAcpAgentId(agentId)) return null;
+  try {
+    const customModelId = decodeURIComponent(value.slice(separator + 1));
+    return isValidAcpCustomModelId(customModelId) && formatAcpModelId(agentId, customModelId) === value
+      ? { agentId, customModelId }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function acpRegistryModelId(providerId: string, modelId: string): string {
+  return providerId === ACP_PROVIDER_ID ? (parseAcpModelId(modelId)?.agentId ?? modelId) : modelId;
+}
+
 export function isAcpModelSelection(
   selection: AcpModelSelectionLike | null | undefined,
-): selection is AcpModelSelectionLike & { modelId: AcpAgentId } {
-  return selection?.providerId === ACP_PROVIDER_ID && isAcpAgentId(selection.modelId);
+): selection is AcpModelSelectionLike {
+  return selection?.providerId === ACP_PROVIDER_ID && parseAcpModelId(selection.modelId) !== null;
 }
 
 export function acpModelSelection(id: AcpAgentId): {

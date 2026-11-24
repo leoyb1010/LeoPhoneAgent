@@ -1,5 +1,6 @@
 import type { AccountProviderStates } from "./account-provider-state.js";
 import type { EffectiveModelSelectionResult } from "@zcode/shared/model-selection";
+import { acpRegistryModelId } from "@zcode/shared/acp";
 export type { EffectiveModelSelectionResult } from "@zcode/shared/model-selection";
 import {
   validateModelSelectionOptions,
@@ -44,7 +45,9 @@ export function resolveEffectiveModelSelection(input: {
   if (!provider || (provider.config.visibility === "hidden" && kind !== "account-offpeak")) {
     return Object.freeze({ effectiveSelection: null, selectionIssue: "provider-not-found" });
   }
-  const model = provider.models.find((candidate) => candidate.modelId === original.modelId);
+  const model = provider.models.find(
+    (candidate) => candidate.modelId === acpRegistryModelId(providerId, original.modelId),
+  );
   if (!model) return Object.freeze({ effectiveSelection: null, selectionIssue: "model-not-found" });
   let normalized = original;
   let validation = validateModelSelectionOptions(model, normalized);

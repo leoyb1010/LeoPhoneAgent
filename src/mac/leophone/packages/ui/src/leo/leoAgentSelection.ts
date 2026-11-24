@@ -1,5 +1,5 @@
 import type { ModelSelectionView } from "@zcode/services";
-import { ACP_PROVIDER_ID, ACP_AGENTS, isAcpAgentId, type AcpAgentId } from "@zcode/shared/acp";
+import { ACP_PROVIDER_ID, ACP_AGENTS, isAcpAgentId, parseAcpModelId, type AcpAgentId } from "@zcode/shared/acp";
 
 export type LeoSelectableAgent = "leobot" | AcpAgentId;
 export interface LeoAgentModelSelection {
@@ -32,7 +32,11 @@ export function resolveLeoAgentChoice(
         provider.providerId === ACP_PROVIDER_ID &&
         provider.models.some((model) => model.modelId === agent),
     );
-    return exists ? { provider: ACP_PROVIDER_ID, model: agent } : null;
+    if (!exists) return null;
+    if (current?.provider === ACP_PROVIDER_ID && parseAcpModelId(current.model)?.agentId === agent) {
+      return current;
+    }
+    return { provider: ACP_PROVIDER_ID, model: agent };
   }
   const providers = view.providers.filter((provider) => provider.providerId !== ACP_PROVIDER_ID);
   if (
@@ -88,9 +92,12 @@ export function isSameLeoAgentRoute(
   next: LeoAgentModelSelection,
 ): boolean {
   if (!current.provider || !next.provider) return false;
-  return current.provider === ACP_PROVIDER_ID || next.provider === ACP_PROVIDER_ID
-    ? current.provider === next.provider && current.model === next.model
-    : true;
+  if (current.provider === ACP_PROVIDER_ID || next.provider === ACP_PROVIDER_ID) {
+    const currentAgent = parseAcpModelId(current.model)?.agentId;
+    return current.provider === next.provider && currentAgent !== undefined
+      && currentAgent === parseAcpModelId(next.model)?.agentId;
+  }
+  return true;
 }
 
 /** 草稿选择属于Composer，预热snapshot不代表用户本次选择；既有任务显示实际执行者。 */
@@ -105,9 +112,11 @@ export function resolveLeoComposerAgentSelection(
     | undefined,
   snapshot: LeoAgentModelSelection | null | undefined,
 ): LeoAgentModelSelection {
-  if (!draftMode) return snapshot ?? { provider: "", model: "" };
-  return {
+  const pending = {
     provider: draft?.provider ?? draft?.modelSelection?.providerId ?? "",
     model: draft?.model ?? draft?.modelSelection?.modelId ?? "",
   };
+  if (draftMode) return pending;
+  if (snapshot?.provider === ACP_PROVIDER_ID && isSameLeoAgentRoute(snapshot, pending)) return pending;
+  return snapshot ?? { provider: "", model: "" };
 }

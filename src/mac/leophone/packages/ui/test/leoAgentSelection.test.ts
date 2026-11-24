@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ModelSelectionView } from "@zcode/services";
+import { formatAcpModelId, parseAcpModelId } from "@zcode/shared/acp";
+import { resolveLeoAgentKind } from "@/leo/leoAgentKind.js";
 import {
   buildLeoAgentChoices,
   resolveLeoAgentChoice,
@@ -26,6 +28,17 @@ const view = {
 } as unknown as ModelSelectionView;
 
 describe("Leo local Agent selection", () => {
+  it("keeps a custom model on the selected CLI route, even with a provider-qualified ID", () => {
+    const model = formatAcpModelId("codex", "router/custom-model:beta");
+    const custom = { provider: "acp", model };
+    expect(parseAcpModelId(model)).toEqual({ agentId: "codex", customModelId: "router/custom-model:beta" });
+    expect(resolveLeoAgentKind(custom)).toBe("codex");
+    expect(resolveLeoAgentChoice("codex", view, custom)).toEqual(custom);
+    expect(isSameLeoAgentRoute({ provider: "acp", model: "codex" }, custom)).toBe(true);
+    expect(isSameLeoAgentRoute({ provider: "acp", model: "claude-code" }, custom)).toBe(false);
+    expect(resolveLeoComposerAgentSelection(false, custom, { provider: "acp", model: "codex" })).toEqual(custom);
+    expect(parseAcpModelId("codex@bad%20model")).toBeNull();
+  });
   it("shows the draft Agent instead of a stale prewarm snapshot, and pins an existing task's actual Agent", () => {
     expect(
       resolveLeoComposerAgentSelection(false, { provider: "api", model: "one" }, null),

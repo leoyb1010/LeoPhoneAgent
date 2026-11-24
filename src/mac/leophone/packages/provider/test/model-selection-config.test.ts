@@ -8,6 +8,7 @@ import {
 import { createAcpRegistryProvider } from "../src/leo/acp-provider.js";
 import { ModelConfig, ModelOptionSpecsConfig, ModelPropertiesConfig } from "../src/config/index.js";
 import { createApiKeyProviderConfig } from "./provider-config-fixtures.js";
+import { formatAcpModelId } from "@zcode/shared/acp";
 
 describe("resolveInitialModelSelection", () => {
   const registry = registryView();
@@ -17,6 +18,13 @@ describe("resolveInitialModelSelection", () => {
     const acp = createAcpRegistryProvider(["claude-code", "grok"]);
     const withAcpFirst: ProviderRegistryView = { ...registry, providers: [acp, ...registry.providers] };
 
+    it("validates the installed CLI without replacing the explicit model ID", () => {
+      const selection = { providerId: "acp", modelId: formatAcpModelId("claude-code", "private/custom-v2") };
+      const complete = completeNewModelSelection(withAcpFirst, selection);
+      expect(complete).toEqual({ ...selection, options: { reasoningLevel: "default" } });
+      expect(normalizeModelSelection(withAcpFirst, complete!)).toEqual(complete);
+      expect(completeNewModelSelection(withAcpFirst, { ...selection, modelId: formatAcpModelId("codex", "custom") })).toBeUndefined();
+    });
     it("acp 排在前面也跳过，取第一个非 acp 模型", () => {
       expect(resolveInitialModelSelection({ registry: withAcpFirst })).toMatchObject({
         source: "registry-fallback",

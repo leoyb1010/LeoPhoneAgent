@@ -6,6 +6,7 @@ import {
   ndJsonStream,
   PROTOCOL_VERSION,
   type InitializeResponse,
+  type SessionConfigOption,
   type Stream,
 } from "@agentclientprotocol/sdk";
 import type { AcpLaunchSpec } from "./catalog.js";
@@ -17,6 +18,8 @@ export interface AcpAgentConnection {
   readonly sessionId: string;
   /** 会话是从 agent 的历史里恢复的（session/load），不是新建的。 */
   readonly resumed: boolean;
+  /** 在发送前由同一 Agent 确认新的模型选项。 */
+  setModel?(modelId: string): Promise<void>;
   dispose(): void;
 }
 
@@ -25,6 +28,7 @@ export interface ConnectAcpAgentOptions {
   cwd: string;
   /** 上次的 ACP 会话 id；agent 支持 loadSession 时优先恢复。 */
   resumeSessionId?: string;
+  customModelId?: string;
   clientVersion?: string;
   onStderr?: (chunk: string) => void;
   /** [fix-remote] agent 进程退出（握手后也算）：管理器据此丢掉死连接、让进行中的回合以可读错误结束。 */
@@ -39,9 +43,11 @@ export interface ConnectAcpAgentOptions {
 
 const KILL_GRACE_MS = 5_000;
 
-export type AcpStage = "initialize" | "authenticate" | "newSession";
+export type AcpStage = "initialize" | "authenticate" | "newSession" | "setModel";
 
-const STAGE_TIMEOUTS: Record<AcpStage, number> = { initialize: 30_000, authenticate: 20_000, newSession: 60_000 };
+const STAGE_TIMEOUTS: Record<AcpStage, number> = {
+  initialize: 30_000, authenticate: 20_000, newSession: 60_000, setModel: 25_000,
+};
 
 /** [fix-remote] 握手某一步没有回应：报出卡在哪一步，而不是让手机一直转圈。 */
 export class AcpStageTimeoutError extends Error {
@@ -82,7 +88,16 @@ export async function connectAcpStream(
   dispose: () => void = () => undefined,
 ): Promise<AcpAgentConnection> {
   const handlers = options.host.clientHandlers();
-  const connection = new ClientSideConnection(() => handlers, stream);
+  let configOptions: readonly SessionConfigOption[] = [];
+  const connection = new ClientSideConnection(() => ({
+    ...handlers,
+    sessionUpdate(update) {
+      if (update.update.sessionUpdate === "config_option_update") {
+        configOptions = update.update.configOptions;
+      }
+      return handlers.sessionUpdate(update);
+    },
+  }), stream);
   const initialize = await withStageTimeout(
     connection.initialize({
       protocolVersion: PROTOCOL_VERSION,
@@ -124,11 +139,19 @@ export async function connectAcpStream(
   };
   let sessionId: string | undefined;
   let resumed = false;
+  let legacyModelId: string | undefined;
+  const rememberSessionConfig = (response: { configOptions?: SessionConfigOption[] | null }) => {
+    if (response.configOptions) configOptions = response.configOptions;
+    // 一些旧 ACP 适配器只在开会话时报告 models.currentModelId。
+    const legacy = (response as { models?: { currentModelId?: unknown } }).models;
+    if (typeof legacy?.currentModelId === "string") legacyModelId = legacy.currentModelId;
+  };
   if (options.resumeSessionId && initialize.agentCapabilities?.loadSession) {
     try {
-      await open(() =>
+      const loaded = await open(() =>
         connection.loadSession({ sessionId: options.resumeSessionId!, cwd: options.cwd, mcpServers: [] }),
       );
+      rememberSessionConfig(loaded);
       sessionId = options.resumeSessionId;
       resumed = true;
     } catch (error) {
@@ -139,9 +162,35 @@ export async function connectAcpStream(
   if (!sessionId) {
     const created = await open(() => connection.newSession({ cwd: options.cwd, mcpServers: [] }));
     sessionId = created.sessionId;
+    rememberSessionConfig(created);
   }
+  const resolvedSessionId = sessionId;
+  const modelOption = () => configOptions.find(
+    (option) => option.type === "select" && (option.category === "model" || option.id === "model"),
+  );
+  const setModel = async (modelId: string): Promise<void> => {
+    const current = modelOption();
+    if (!current) {
+      if (legacyModelId === modelId) return;
+      throw new Error(`CLI 未报告可确认的模型，无法使用「${modelId}」。请检查本机 CLI 的模型配置。`);
+    }
+    if (current.currentValue === modelId) return;
+    const result = await withStageTimeout(
+      connection.setSessionConfigOption({ sessionId: resolvedSessionId, configId: current.id, value: modelId }),
+      "setModel",
+      options,
+    ).catch((cause: unknown) => {
+      if (cause instanceof AcpStageTimeoutError) throw cause;
+      throw new Error(`CLI 未接受模型「${modelId}」。请检查模型 ID 和 CLI 的服务商设置。`, { cause });
+    });
+    configOptions = result.configOptions;
+    if (modelOption()?.currentValue !== modelId) {
+      throw new Error(`CLI 未确认模型「${modelId}」，该轮尚未发送。`);
+    }
+  };
+  if (options.customModelId) await setModel(options.customModelId);
   options.host.attach({ agent: connection, sessionId });
-  return { connection, initialize, sessionId, resumed, dispose };
+  return { connection, initialize, sessionId, resumed, setModel, dispose };
 }
 
 export async function spawnAcpAgent(

@@ -1,3 +1,5 @@
+import { ACP_PROVIDER_ID, parseAcpModelId } from "@zcode/shared/acp";
+
 /**
  * [leo][wp-31] 任务由哪种 agent 在跑。ACP(WP-21)合入前只有 LeoBot 自己的 ZCode 内核,
  * 所以一律是 "leobot";ACP 合入后由任务元数据给出 agentKind,这里的映射表补上对应徽标即可。
@@ -32,12 +34,14 @@ export function resolveLeoAgentKind(task: unknown): LeoAgentKind {
   if (task && typeof task === "object" && "provider" in task && "model" in task) {
     const provider = (task as { provider?: unknown }).provider;
     const model = (task as { model?: unknown }).model;
-    if (provider === "acp" && isLeoAgentKind(model) && model !== "leobot") return model;
+    const route = provider === ACP_PROVIDER_ID ? parseAcpModelId(model) : null;
+    if (route) return route.agentId;
   }
   if (task && typeof task === "object" && "model" in task) {
     const model = (task as { model?: unknown }).model;
     const match = typeof model === "string" ? /^acp\/([^$]+)/.exec(model) : null;
-    if (match && isLeoAgentKind(match[1]) && match[1] !== "leobot") return match[1];
+    const route = parseAcpModelId(match?.[1]);
+    if (route) return route.agentId;
   }
   return LEO_DEFAULT_AGENT_KIND;
 }

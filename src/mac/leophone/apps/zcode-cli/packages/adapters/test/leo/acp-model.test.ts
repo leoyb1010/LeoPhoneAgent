@@ -12,6 +12,7 @@ import {
   type Agent,
   type PromptRequest,
   type RequestPermissionResponse,
+  type SessionConfigOption,
 } from "@agentclientprotocol/sdk";
 import type { ModelEvent, ModelInputMessage } from "@zcode/contracts";
 import {
@@ -87,6 +88,58 @@ function fakeClaudeEnvironment() {
     env: { PATH: bin, HOME: home },
     resolveClaudeAgentAcpEntry: () => "/fake/claude-agent-acp.js",
   };
+}
+
+for (const acceptsModel of [true, false]) {
+  test(`ACP confirms a custom model before sending, accepted=${acceptsModel}`, async () => {
+    const requested = "private/claude-compatible";
+    const seen: string[] = [];
+    const environment = fakeClaudeEnvironment();
+    const manager = new AcpSessionManager({
+      environment,
+      statePath: "/dev/null/acp-sessions.json",
+      connect: async (launch, options) => {
+        assert.equal(launch.env?.ANTHROPIC_MODEL, requested);
+        const { clientStream, agentStream } = pipePair();
+        const catalog = (currentValue: string): SessionConfigOption[] => [{
+          id: "model", name: "Model", category: "model", type: "select", currentValue,
+          options: [{ value: "default", name: "Default" }, { value: requested, name: requested }],
+        }];
+        const agent: Agent = {
+          initialize: async () => ({ protocolVersion: PROTOCOL_VERSION }),
+          authenticate: async () => ({}),
+          newSession: async () => ({ sessionId: "custom-1", configOptions: catalog("default") }),
+          setSessionConfigOption: async ({ value }) => {
+            assert.equal(value, requested);
+            seen.push("select");
+            return { configOptions: catalog(acceptsModel ? requested : "default") };
+          },
+          prompt: async (request) => {
+            seen.push("prompt");
+            await peer.sessionUpdate({
+              sessionId: request.sessionId,
+              update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "selected" } },
+            });
+            return { stopReason: "end_turn" };
+          },
+          cancel: async () => {},
+        };
+        const peer = new AgentSideConnection(() => agent, agentStream);
+        return connectAcpStream(clientStream, options);
+      },
+    });
+    const model = new AcpModel({ agentId: "claude-code", customModelId: requested, leoSessionId: "custom-test",
+      cwd: () => "/w", manager });
+    const stream = collect(model.streamText({ messages: [user("hello")] }));
+    if (acceptsModel) {
+      assert.equal(textOf(await stream), "selected");
+      assert.deepEqual(seen, ["select", "prompt"]);
+    } else {
+      await assert.rejects(stream, /未确认模型/);
+      assert.deepEqual(seen, ["select"]);
+    }
+    manager.disposeAll();
+  });
 }
 
 test("ACP turn: text, approved edit, auto command, plan, then stop", async () => {

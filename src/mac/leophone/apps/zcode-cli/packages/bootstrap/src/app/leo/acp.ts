@@ -6,7 +6,7 @@
 import { AcpModel, AcpSessionManager } from "@zcode/adapters/acp";
 import type { Logger } from "@zcode/contracts";
 import { createAcpToolCallEntry, type ToolRegistry } from "@zcode/core";
-import { ACP_TOOL_NAME, isAcpModelSelection } from "@zcode/shared/acp";
+import { ACP_PROVIDER_ID, ACP_TOOL_NAME, isAcpModelSelection, parseAcpModelId } from "@zcode/shared/acp";
 import type { RuntimeModelFactory } from "../provider-registry-model-runtime.js";
 
 let sharedManager: AcpSessionManager | undefined;
@@ -41,9 +41,10 @@ export function wrapModelFactoryForAcp(
   options: { sessionId: string; workingDirectory: () => string; logger?: Logger },
 ): RuntimeModelFactory {
   return (input) => {
-    if (isAcpModelSelection(input.selection)) {
+    const route = input.selection?.providerId === ACP_PROVIDER_ID ? parseAcpModelId(input.selection.modelId) : null;
+    if (route) {
       return new AcpModel({
-        agentId: input.selection.modelId,
+        ...route,
         leoSessionId: options.sessionId,
         cwd: options.workingDirectory,
         manager: getAcpSessionManager(options.logger),

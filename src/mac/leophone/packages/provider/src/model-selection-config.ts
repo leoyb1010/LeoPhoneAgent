@@ -1,4 +1,4 @@
-import { ACP_PROVIDER_ID } from "@zcode/shared/acp";
+import { ACP_PROVIDER_ID, acpRegistryModelId } from "@zcode/shared/acp";
 import {
   validateModelSelectionOptions,
   type ModelSelection,
@@ -64,7 +64,7 @@ export function completeNewModelSelection(
 ): ModelSelection | undefined {
   const model = registry.providers
     .find((provider) => provider.providerId === selection.providerId)
-    ?.models.find((candidate) => candidate.modelId === selection.modelId);
+    ?.models.find((candidate) => candidate.modelId === acpRegistryModelId(selection.providerId, selection.modelId));
   const reasoningLevel = model?.config.optionSpecs.reasoningLevel.values.at(-1);
   if (!reasoningLevel) return undefined;
   return {
@@ -85,7 +85,7 @@ export function normalizeModelSelection(
 ): ModelSelection | undefined {
   const model = registry.providers
     .find((provider) => provider.providerId === selection.providerId)
-    ?.models.find((candidate) => candidate.modelId === selection.modelId);
+    ?.models.find((candidate) => candidate.modelId === acpRegistryModelId(selection.providerId, selection.modelId));
   if (!model) return undefined;
   const values = model.config.optionSpecs.reasoningLevel.values;
   const reasoningLevel = selection.options?.reasoningLevel;
@@ -101,7 +101,9 @@ function isSelectable(registry: ProviderRegistryView, selection: ModelSelection)
     (candidate) => candidate.providerId === selection.providerId,
   );
   if (provider?.config.visibility === "hidden") return false;
-  const model = provider?.models.find((candidate) => candidate.modelId === selection.modelId);
+  const model = provider?.models.find(
+    (candidate) => candidate.modelId === acpRegistryModelId(selection.providerId, selection.modelId),
+  );
   if (!model) return false;
   return validateModelSelectionOptions(model, selection).ok;
 }

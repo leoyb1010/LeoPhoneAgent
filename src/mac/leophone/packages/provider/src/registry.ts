@@ -1,6 +1,7 @@
 import type { ModelId, ProviderId } from "./config/index.js";
 import type { Provider, ProviderModel } from "./resolver.js";
 import type { ModelSelection } from "@zcode/shared/model-selection";
+import { acpRegistryModelId } from "@zcode/shared/acp";
 
 export type { ModelSelection } from "@zcode/shared/model-selection";
 
@@ -68,7 +69,7 @@ export class ProviderRegistry {
   }
 
   getModel(providerId: ProviderId, modelId: ModelId): ProviderModel | undefined {
-    return this.#modelByProviderId.get(providerId)?.get(modelId);
+    return this.#modelByProviderId.get(providerId)?.get(acpRegistryModelId(providerId, modelId));
   }
 
   validateSelection(selection: ModelSelection): ModelSelectionValidation {

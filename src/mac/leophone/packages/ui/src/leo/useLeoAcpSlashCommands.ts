@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ZCodeSlashCommand } from "@zcode/shared";
-import { ACP_PROVIDER_ID, isAcpAgentId, type AcpAgentCommand } from "@zcode/shared/acp";
+import { ACP_PROVIDER_ID, parseAcpModelId, type AcpAgentCommand } from "@zcode/shared/acp";
 
 /**
  * [leo][WP-21] 外部 agent（ACP）会话的 `/` 面板：列 agent 自己广播的命令（available_commands_update，
@@ -13,7 +13,7 @@ interface AcpCommandsBridge {
 }
 
 export function acpAgentIdOf(config: { provider?: string; model?: string } | null | undefined): string | null {
-  return config?.provider === ACP_PROVIDER_ID && isAcpAgentId(config.model) ? config.model : null;
+  return config?.provider === ACP_PROVIDER_ID ? (parseAcpModelId(config.model)?.agentId ?? null) : null;
 }
 
 export function toAcpSlashCommands(commands: readonly AcpAgentCommand[]): ZCodeSlashCommand[] {

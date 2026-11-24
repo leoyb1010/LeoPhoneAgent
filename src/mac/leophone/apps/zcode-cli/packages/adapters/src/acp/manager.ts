@@ -42,6 +42,7 @@ type AcpEntry = {
   connected?: AcpAgentConnection;
   /** 不支持 session/load 的 agent 闲置时只记一次日志、不回收。 */
   idleLogged?: boolean;
+  customModelId?: string;
 };
 
 /** 每个 LeoBot 会话一个 agent 进程；会话 id 落盘，重启后用 session/load 接上。 */
@@ -82,6 +83,7 @@ export class AcpSessionManager {
     leoSessionId: string,
     agentId: AcpAgentId,
     cwd: string,
+    customModelId?: string,
   ): Promise<{ host: AcpSessionHost; connection: AcpAgentConnection }> {
     let entry = this.#entries.get(leoSessionId);
     if (entry && entry.host.agentId !== agentId) {
@@ -92,7 +94,7 @@ export class AcpSessionManager {
       const host = new AcpSessionHost(agentId, {
         onCommands: (commands) => this.#writeCommands(agentId, cwd, commands),
       });
-      const launch = resolveAcpLaunch(agentId, this.#environment);
+      const launch = resolveAcpLaunch(agentId, this.#environment, customModelId);
       const tail: string[] = [];
       this.#stderrTails.set(leoSessionId, tail);
       // [fix] 以前每块 stderr 一条 warn：agent 一刷屏日志就爆。改成一秒合并成一条 debug，失败时才带尾部写 warn。
@@ -108,6 +110,7 @@ export class AcpSessionManager {
         ? this.#connect(launch, {
             host,
             cwd,
+            customModelId,
             resumeSessionId: this.#readState()[leoSessionId]?.acpSessionId,
             onStderr: (chunk) => {
               appendStderrTail(tail, chunk);
@@ -130,7 +133,7 @@ export class AcpSessionManager {
         : Promise.reject(
             acpUnavailableError(agentId, detectAcpAgent(agentId, this.#environment).unavailableReason),
           );
-      const created: AcpEntry = { host, connection };
+      const created: AcpEntry = { host, connection, customModelId };
       entry = created;
       this.#entries.set(leoSessionId, entry);
       this.#startSweep();
@@ -144,7 +147,15 @@ export class AcpSessionManager {
         },
       );
     }
-    return { host: entry.host, connection: await entry.connection };
+    const connection = await entry.connection;
+    if (entry.customModelId !== customModelId) {
+      if (!customModelId) throw new Error("请在新任务中使用 CLI 默认模型。");
+      if (entry.host.turnActive) throw new Error("当前 CLI 任务仍在运行，请在下一轮再切换模型。");
+      if (!connection.setModel) throw new Error("当前 CLI 会话不支持切换模型，请新建任务。");
+      await connection.setModel(customModelId);
+      entry.customModelId = customModelId;
+    }
+    return { host: entry.host, connection };
   }
 
   /** [fix-remote] 空回合（没有任何产出就结束）按失败报。 */

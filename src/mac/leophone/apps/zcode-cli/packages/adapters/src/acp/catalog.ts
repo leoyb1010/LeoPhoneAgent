@@ -43,6 +43,7 @@ function launchEnv(env: NodeJS.ProcessEnv): Record<string, string> {
 export function resolveAcpLaunch(
   id: AcpAgentId,
   environment: AcpEnvironment = {},
+  customModelId?: string,
 ): AcpLaunchSpec | undefined {
   const env = environment.env ?? process.env;
   const status = detectAcpAgent(id, environment);
@@ -63,12 +64,21 @@ export function resolveAcpLaunch(
           ...base,
           CLAUDE_CODE_EXECUTABLE: status.cliPath!,
           ELECTRON_RUN_AS_NODE: "1",
+          ...(customModelId ? { ANTHROPIC_MODEL: customModelId } : {}),
           ...(token ? { CLAUDE_CODE_OAUTH_TOKEN: token } : {}),
         },
       };
     }
     case "codex": {
       const codexPath: Record<string, string> = status.cliPath ? { CODEX_PATH: status.cliPath } : {};
+      if (customModelId) {
+        // 官方 codex-acp 接受 JSON CODEX_CONFIG。按任务覆盖模型，保留 CLI 的 Provider 和登录配置。
+        const config: unknown = base.CODEX_CONFIG ? JSON.parse(base.CODEX_CONFIG) : {};
+        if (typeof config !== "object" || config === null || Array.isArray(config)) {
+          throw new Error("Codex ACP 的 CODEX_CONFIG 不是 JSON 对象");
+        }
+        base.CODEX_CONFIG = JSON.stringify({ ...config, model: customModelId });
+      }
       // [fix-remote] 优先用随包的 codex-acp（钉版本、随包 Node 跑），不再依赖运行时 npx 安装：
       // 有的 Mac 的 npm 缓存目录不可写（外接盘），npx 一拉就失败。CODEX_PATH 指本机 codex（登录态是用户自己的）。
       const bundled = status.cliPath ? (environment.resolveCodexAcpEntry ?? resolveCodexAcpEntry)() : undefined;
@@ -85,7 +95,7 @@ export function resolveAcpLaunch(
       const keyed = { ...base, ...geminiEnvFromDotEnv(base) };
       const authPreference = geminiAuthPreference(keyed);
       const env = { ...keyed, ...geminiIsolatedHomeEnv(keyed) };
-      const model = env.GOOGLE_GEMINI_MODEL?.trim();
+      const model = customModelId ?? env.GOOGLE_GEMINI_MODEL?.trim();
       return { command: status.cliPath!, args: ["--acp", ...(model ? ["-m", model] : [])], env, authPreference };
     }
     case "opencode":

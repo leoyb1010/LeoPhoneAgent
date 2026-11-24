@@ -18,7 +18,7 @@ import {
   type ModelRequest,
   type ModelResult,
 } from "@zcode/contracts";
-import { ACP_PROVIDER_ID, ACP_TOOL_NAME, acpAgentInfo, type AcpAgentId } from "@zcode/shared/acp";
+import { ACP_PROVIDER_ID, ACP_TOOL_NAME, acpAgentInfo, formatAcpModelId, type AcpAgentId } from "@zcode/shared/acp";
 import type { AcpSessionManager } from "./manager.js";
 import type { AcpSessionHost } from "./session.js";
 
@@ -46,6 +46,7 @@ const ACP_OPTION_SPECS: ModelOptionSpecs = {
 
 export interface AcpModelOptions {
   agentId: AcpAgentId;
+  customModelId?: string;
   leoSessionId: string;
   cwd: () => string;
   manager: AcpSessionManager;
@@ -127,8 +128,10 @@ export class AcpModel implements Model {
   constructor(options: AcpModelOptions) {
     this.#options = options;
     this.agentId = options.agentId;
-    this.modelId = createModelId(options.agentId);
-    this.displayName = acpAgentInfo(options.agentId).name;
+    this.modelId = createModelId(options.customModelId
+      ? formatAcpModelId(options.agentId, options.customModelId)
+      : options.agentId);
+    this.displayName = options.customModelId ?? acpAgentInfo(options.agentId).name;
   }
 
   bind(): Model {
@@ -143,14 +146,16 @@ export class AcpModel implements Model {
   }
 
   async *streamText(request: ModelRequest): AsyncIterable<ModelEvent> {
-    const { manager, leoSessionId, agentId, cwd } = this.#options;
+    const { manager, leoSessionId, agentId, customModelId, cwd } = this.#options;
+    const signal = request.abortSignal;
+    signal?.throwIfAborted();
     let host: AcpSessionHost;
     try {
-      ({ host } = await manager.ensure(leoSessionId, agentId, cwd()));
+      ({ host } = await manager.ensure(leoSessionId, agentId, cwd(), customModelId));
     } catch (error) {
       throw manager.describeFailure(leoSessionId, agentId, error);
     }
-    const signal = request.abortSignal;
+    signal?.throwIfAborted();
     const userIndex = lastRealUserIndex(request.messages);
     if (userIndex >= 0) {
       host.rejectPending(host.pendingApprovalIds());
