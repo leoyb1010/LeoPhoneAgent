@@ -645,6 +645,28 @@ describe("ConversationTimeline renderer-local scroll memory", () => {
     expect(findByTestId(container, TID_V4_TIMELINE_BOTTOM)).not.toBeNull();
   });
 
+  it("keeps a selected history passage in view until the user explicitly returns to the bottom", () => {
+    const container = installMinimalDom();
+    mountedRoot = createRoot(container);
+    const action = { current: null as (() => void) | null };
+    const render = () => renderTimeline(mountedRoot!, "session-1", "workspace::pane:a::session:1", action);
+    act(render);
+    const timeline = findByTestId(container, TID_V4_TIMELINE)!;
+    const history = findByTestId(container, "true", "data-v4-timeline-virtual-history")!;
+    history.contains = (node) => node === history;
+    timeline.ownerDocument.getSelection = () => ({ anchorNode: history, isCollapsed: false }) as Selection;
+    act(() => {
+      flushAnimationFrame();
+      flushAnimationFrame();
+      layout.scrollHeight += 300;
+      render();
+    });
+    expect(timeline.scrollTop).toBe(900);
+    expect(timeline.getAttribute("data-following")).toBe("false");
+    act(() => action.current?.());
+    expect(timeline.scrollTop).toBe(1200);
+  });
+
   it("exposes the same one-shot bottom action used by prompt submission", () => {
     saveChatSessionScrollMemoryState("workspace::pane:a::session:1", {
       scrollTop: 240,

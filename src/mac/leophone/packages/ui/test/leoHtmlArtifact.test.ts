@@ -17,6 +17,7 @@ vi.mock("@/components/ui/toast.js", () => ({ toast: vi.fn() }));
 vi.mock("@/store/zcodeSessionStore.js", () => ({
   useZCodeSessionStore: { getState: () => ({ requestComposerTextInsert: mocks.insert }) },
 }));
+import { LeoArtifactActions } from "@/leo/LeoArtifactActions.js";
 import { LeoHtmlPreview } from "@/leo/LeoHtmlPreview.js";
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root | undefined;
@@ -57,6 +58,8 @@ describe("HTML artifact controls", () => {
     expect(mocks.create).toHaveBeenLastCalledWith({ html: props().content, interactive: true });
     await act(async () => root!.render(createElement(LeoHtmlPreview, props("<h1>新版本</h1>"))));
     expect(mocks.create).toHaveBeenLastCalledWith({ html: "<h1>新版本</h1>", interactive: false });
+    await act(async () => root!.render(createElement(LeoHtmlPreview, props())));
+    expect(mocks.create).toHaveBeenLastCalledWith({ html: props().content, interactive: false });
     expect(mocks.release).toHaveBeenCalled();
   });
   it("downloads original bytes, and refines through the owning workspace draft without replacement", async () => {
@@ -91,4 +94,19 @@ it("recreates its bounded native preview after a source/preview round-trip", asy
   expect(mocks.release).toHaveBeenCalled();
   await click("leo-html-preview-tab");
   expect(mocks.create.mock.calls.length).toBe(initial + 1);
+});
+
+it("downloads Markdown text with its original name and targets only its source task for edits", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  const input = { ...props("# 报告\r\n"), format: "Markdown" as const, sourcePath: "/workspace/报告.md" };
+  await act(async () => root!.render(createElement(LeoArtifactActions, input)));
+  await click("leo-markdown-download");
+  const request = mocks.save.mock.calls[0]![0] as { data: ArrayBuffer; suggestedName: string };
+  expect(new TextDecoder().decode(request.data)).toBe(input.content);
+  expect(request.suggestedName).toBe("报告.md");
+  await click("leo-markdown-refine");
+  expect(mocks.insert).toHaveBeenCalledWith("/workspace", expect.stringContaining(input.sourcePath),
+    "same-path-isolated", undefined, "append-if-missing", "task-a");
 });
