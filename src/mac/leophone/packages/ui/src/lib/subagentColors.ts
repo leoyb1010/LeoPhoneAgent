@@ -42,5 +42,6 @@ export function resolveSubagentColorFromName(name: string): AgentColor {
   for (let index = 0; index < name.length; index += 1) {
     hash = (hash * 31 + name.charCodeAt(index)) >>> 0;
   }
-  return SUBAGENT_COLORS[hash % SUBAGENT_COLORS.length] ?? "blue";
+  const color = SUBAGENT_COLORS[hash % SUBAGENT_COLORS.length];
+  return color === "green" ? "blue" : (color ?? "blue");
 }

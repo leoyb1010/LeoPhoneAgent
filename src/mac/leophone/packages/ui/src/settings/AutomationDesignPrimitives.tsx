@@ -110,7 +110,6 @@ export function AutomationKeepAwakeNotice({
         checked={checked}
         ariaLabel={intl.formatMessage({ id: "offPeak.keepAwakeBanner" })}
         onChange={onChange}
-        color="blue"
         size="sm"
       />
     </div>

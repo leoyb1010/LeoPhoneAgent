@@ -14,8 +14,8 @@ export const OAUTH_PAGE_HTML = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>LeoBot · 订阅账号登录</title>
 <style>
-  :root { color-scheme: light dark; --fg:#1d1d1f; --sub:#6e6e73; --line:rgba(0,0,0,.1); --bg:#fbfbfd; --card:#fff; --ok:#1a7f37; --accent:#0a66ff; }
-  @media (prefers-color-scheme: dark) { :root { --fg:#f5f5f7; --sub:#98989d; --line:rgba(255,255,255,.12); --bg:#111113; --card:#1c1c1e; --ok:#3fb950; --accent:#4c8dff; } }
+  :root { color-scheme: light dark; --fg:#1d1d1f; --sub:#6e6e73; --line:rgba(0,0,0,.1); --bg:#fbfbfd; --card:#fff; --ok:var(--accent); --accent:#0a66ff; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#f5f5f7; --sub:#98989d; --line:rgba(255,255,255,.12); --bg:#111113; --card:#1c1c1e; --ok:var(--accent); --accent:#4c8dff; } }
   * { box-sizing: border-box; }
   body { margin:0; font:14px/1.55 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; background:var(--bg); color:var(--fg); }
   main { max-width:640px; margin:0 auto; padding:40px 20px 60px; }

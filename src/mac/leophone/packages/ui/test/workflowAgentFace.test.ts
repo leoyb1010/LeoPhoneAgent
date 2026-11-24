@@ -31,14 +31,14 @@ describe("WorkflowAgentFace", () => {
     const hues = Array.from({ length: 9 }, (_, i) => agentColor(i, "x"));
     expect(new Set(hues).size).toBe(9);
     expect(hues).toEqual([
-      "#54B9A6",
+      "#5075AE",
       "#F19D38",
       "#6464EF",
       "#885CF5",
       "#3C82F6",
       "#ED712E",
       "#EB4699",
-      "#5BC67A",
+      "#77889D",
       "#EA4045",
     ]);
     expect(agentColor(9, "x")).toBe(FACE_COLORS[0]);

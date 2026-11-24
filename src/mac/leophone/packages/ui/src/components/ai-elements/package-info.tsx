@@ -56,7 +56,7 @@ const changeTypeStyles: Record<ChangeType, string> = {
   major: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
   minor:
     "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-  patch: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  patch: "bg-surface text-foreground-subtle",
   removed: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
 };
 

@@ -2,8 +2,7 @@
  * [leo] LeoPhoneAgent 皮肤层 —— 安静工作台。
  *
  * 只改变量和几个稳定钩子(data-*、上游已有的语义 class),不改上游组件源码,
- * 同步上游时这里基本不冲突。强调色与 iOS 1.57 统一的青绿一致(浅 #2A8282 / 深 #2E9C9C,
- * 白色图标/文字压在上面都清楚),灰阶全中性。
+ * 强调色取自与 iOS 共享的品牌令牌，灰阶保持中性。
  * 1.9.0 去掉了每次切视图都播的 <main> 位移动画:设置页切分区时会闪一下,不丝滑。
  * 全部规则挂在 html[data-leo-skin] 下;localStorage["leo.skin"] = "off" 即整层关闭(见 leoSkin.ts)。
  */
@@ -17,13 +16,11 @@ html[data-leo-skin] {
   --ease-out: var(--leo-ease);
 }
 
-/* ── 深色:中性石墨 + 青绿(与 iOS 同一个 #2E9C9C) ─────────────
-   1.9.0:去掉暖色调。之前灰阶和边框都带奶油色 rgba(255,244,228),主按钮是米白,
-   和上游没覆盖到的冷灰变量混在一起显得发黄发脏;现在灰阶全中性,青绿是唯一强调色。 */
+/* 深色主题保持中性石墨背景。 */
 html[data-leo-skin].theme-zai-dark {
   /* 强调色、提醒色、四级背景与阴影来自 leo-tokens.css（与 iOS 同一份 design/tokens.json）。 */
-  --leo-mark-from: #e4e4e7;
-  --leo-mark-to: #2e9c9c;
+  --leo-mark-from: var(--leo-brand);
+  --leo-mark-to: var(--leo-brand);
 
   --color-brand: var(--leo-brand);
   --color-background: var(--leo-bg);
@@ -56,25 +53,22 @@ html[data-leo-skin].theme-zai-dark {
   --color-foreground: #e4e4e7;
   --color-foreground-subtle: color-mix(in oklab, #e4e4e7 60%, transparent);
   --color-foreground-subtlest: color-mix(in oklab, #e4e4e7 32%, transparent);
-  /* 主按钮/发送按钮是青绿底,压在上面的图标和字用白色 */
   --color-foreground-inverse: #ffffff;
-  --color-primary: #2e9c9c;
+  --color-primary: var(--leo-primary, var(--leo-brand));
   --color-primary-foreground: #ffffff;
-  --color-accent: rgba(46, 156, 156, 0.16);
-  --color-input-border-focused: rgba(46, 156, 156, 0.6);
-  --color-interaction-ask-surface: rgba(46, 156, 156, 0.12);
-  --color-interaction-ask-foreground: #8ee8e8;
-  --color-terminal-cursor: #2e9c9c;
-  --color-terminal-selection: rgba(46, 156, 156, 0.28);
+  --color-accent: color-mix(in oklab, var(--leo-brand) 16%, transparent);
+  --color-input-border-focused: color-mix(in oklab, var(--leo-brand) 60%, transparent);
+  --color-interaction-ask-surface: color-mix(in oklab, var(--leo-brand) 12%, transparent);
+  --color-interaction-ask-foreground: var(--leo-brand);
+  --color-terminal-cursor: var(--leo-brand);
+  --color-terminal-selection: color-mix(in oklab, var(--leo-brand) 28%, transparent);
 }
 
-/* ── 浅色:中性白 + 青绿(与 iOS 同一个 #2A8282) ──────────────
-   1.9.0:去掉米黄。之前背景 #f7f6f3、侧栏 #f0eeea、分割线棕色 rgba(40,32,20),
-   再叠上窗口毛玻璃的 70% 暖白,整个界面发黄;现在全部换成中性灰阶。 */
+/* 浅色主题保持中性白背景。 */
 html[data-leo-skin].theme-zai-light {
   /* 强调色、提醒色、四级背景与阴影来自 leo-tokens.css（与 iOS 同一份 design/tokens.json）。 */
-  --leo-mark-from: #2a8282;
-  --leo-mark-to: #1d5f5f;
+  --leo-mark-from: var(--leo-brand);
+  --leo-mark-to: var(--leo-brand);
 
   --color-brand: var(--leo-brand);
   --color-background: var(--leo-bg);
@@ -106,14 +100,14 @@ html[data-leo-skin].theme-zai-light {
   --color-foreground-subtle: color-mix(in oklab, #18181b 60%, transparent);
   --color-foreground-subtlest: color-mix(in oklab, #18181b 38%, transparent);
   --color-foreground-inverse: #ffffff;
-  --color-primary: #2a8282;
+  --color-primary: var(--leo-primary, var(--leo-brand));
   --color-primary-foreground: #ffffff;
-  --color-accent: rgba(42, 130, 130, 0.09);
-  --color-input-border-focused: rgba(42, 130, 130, 0.42);
-  --color-interaction-ask-surface: rgba(42, 130, 130, 0.09);
-  --color-interaction-ask-foreground: #1f6b6b;
-  --color-terminal-cursor: #2a8282;
-  --color-terminal-selection: rgba(42, 130, 130, 0.2);
+  --color-accent: color-mix(in oklab, var(--leo-brand) 9%, transparent);
+  --color-input-border-focused: color-mix(in oklab, var(--leo-brand) 42%, transparent);
+  --color-interaction-ask-surface: color-mix(in oklab, var(--leo-brand) 9%, transparent);
+  --color-interaction-ask-foreground: var(--leo-brand);
+  --color-terminal-cursor: var(--leo-brand);
+  --color-terminal-selection: color-mix(in oklab, var(--leo-brand) 20%, transparent);
 }
 
 /* ── 输入卡:一层柔和投影,聚焦时描边转青 ───────────────────── */
@@ -204,14 +198,14 @@ html[data-leo-skin] [data-leo-approval] {
   background: var(--leo-attention, #e0a24a);
 }
 .leo-status-dot[data-state="running"] {
-  background: var(--leo-brand, #2a8282);
+  background: var(--leo-brand);
   animation: leo-breathe var(--leo-beat) ease-in-out infinite;
 }
 .leo-status-dot[data-state="error"] {
   background: var(--color-destructive);
 }
 .leo-status-dot[data-state="done"] {
-  background: color-mix(in oklab, var(--leo-brand, #2a8282) 55%, transparent);
+  background: color-mix(in oklab, var(--leo-brand) 55%, transparent);
 }
 
 @keyframes leo-breathe {
@@ -432,8 +426,7 @@ html[data-leo-skin] [data-leo-approval-risk="high"] > :first-child::before {
   }
 }
 
-/* 2026-11-14 Mac workbench: semantic blue is generated from design/tokens.json.mac.
-   Keep shared/iOS tokens untouched; disabling the skin still respects that preference. */
+/* Mac 工作台沿用跨端蓝色，主按钮使用适配白字的实色。 */
 html.platform-mac-desktop[data-leo-skin] {
   --color-brand: var(--leo-brand);
   --color-primary: var(--leo-primary);

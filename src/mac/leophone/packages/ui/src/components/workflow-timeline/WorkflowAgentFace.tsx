@@ -16,14 +16,14 @@ import type { StepRunStatus } from "@/components/workflow-graph/types.js";
  * 状态定义基础表情，独立随机动作仅更新 SVG 属性。
  */
 export const FACE_COLORS = [
-  "#54B9A6",
+  "#5075AE",
   "#F19D38",
   "#6464EF",
   "#885CF5",
   "#3C82F6",
   "#ED712E",
   "#EB4699",
-  "#5BC67A",
+  "#77889D",
   "#EA4045",
 ] as const;
 

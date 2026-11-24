@@ -190,7 +190,7 @@ html[data-document-hidden] *::after {
   --color-icon-blue: var(--color-terminal-bright-blue);
   --color-icon-purple: var(--color-terminal-bright-magenta);
   --color-trajectory-user: #2563eb;
-  --color-trajectory-assistant: #0f766e;
+  --color-trajectory-assistant: var(--color-interaction-ask-foreground);
   --color-trajectory-reasoning: #7c3aed;
   --color-trajectory-tool-call: #d97706;
   --color-trajectory-tool-result: #0284c7;
@@ -278,15 +278,15 @@ html[data-document-hidden] *::after {
   --color-secondary: var(--color-neutral-300);
   --color-interaction-ask-surface: var(--color-sky-50);
   --color-interaction-ask-foreground: var(--color-sky-700);
-  --color-interaction-ask-fill: color-mix(in oklab, var(--color-green-500) 20%, transparent);
-  --color-interaction-confirmation-surface: var(--color-green-50);
-  --color-interaction-confirmation-foreground: var(--color-green-700);
+  --color-interaction-ask-fill: color-mix(in oklab, var(--color-interaction-ask-foreground) 22%, transparent);
+  --color-interaction-confirmation-surface: var(--color-interaction-ask-surface);
+  --color-interaction-confirmation-foreground: var(--color-interaction-ask-foreground);
   --color-foreground: var(--color-neutral-700);
   --color-foreground-subtle: color-mix(in oklab, var(--color-neutral-700) 60%, transparent);
   --color-foreground-subtlest: color-mix(in oklab, var(--color-neutral-700) 40%, transparent);
   --lucide-subtlest-opacity: 0.4;
   --color-foreground-inverse: var(--color-white);
-  --color-success: var(--color-green-600);
+  --color-success: var(--leo-brand, var(--color-interaction-ask-foreground));
   --color-success-foreground: var(--color-foreground-inverse);
   --color-destructive: var(--color-red-600);
   --color-destructive-foreground: var(--color-foreground-inverse);
@@ -323,9 +323,9 @@ html[data-document-hidden] *::after {
   --color-subagent-node: color-mix(in oklab, #6f7a2f 14%, transparent);
   --color-subagent-node-hover: color-mix(in oklab, #6f7a2f 20%, transparent);
   --color-subagent-node-foreground: #6f7a2f;
-  --color-session-node: color-mix(in oklab, var(--color-teal-600) 14%, transparent);
-  --color-session-node-hover: color-mix(in oklab, var(--color-teal-600) 20%, transparent);
-  --color-session-node-foreground: var(--color-teal-600);
+  --color-session-node: var(--color-file-node);
+  --color-session-node-hover: var(--color-file-node-hover);
+  --color-session-node-foreground: var(--color-file-node-foreground);
   --color-plugin-node: color-mix(in oklab, var(--color-amber-600) 14%, transparent);
   --color-plugin-node-hover: color-mix(in oklab, var(--color-amber-600) 20%, transparent);
   --color-plugin-node-foreground: var(--color-amber-600);
@@ -341,7 +341,7 @@ html[data-document-hidden] *::after {
   --color-background-win-alt: var(--color-neutral-800);
   --color-brand: var(--color-sky-500);
   --color-trajectory-user: #60a5fa;
-  --color-trajectory-assistant: #2dd4bf;
+  --color-trajectory-assistant: var(--color-interaction-ask-foreground);
   --color-trajectory-reasoning: #a78bfa;
   --color-trajectory-tool-call: #f59e0b;
   --color-trajectory-tool-result: #38bdf8;
@@ -426,19 +426,15 @@ html[data-document-hidden] *::after {
   --color-secondary: var(--color-neutral-700);
   --color-interaction-ask-surface: color-mix(in oklab, var(--color-sky-950) 50%, transparent);
   --color-interaction-ask-foreground: var(--color-sky-300);
-  --color-interaction-ask-fill: color-mix(in oklab, var(--color-green-400) 24%, transparent);
-  --color-interaction-confirmation-surface: color-mix(
-    in oklab,
-    var(--color-green-950) 45%,
-    transparent
-  );
-  --color-interaction-confirmation-foreground: var(--color-green-300);
+  --color-interaction-ask-fill: color-mix(in oklab, var(--color-interaction-ask-foreground) 22%, transparent);
+  --color-interaction-confirmation-surface: var(--color-interaction-ask-surface);
+  --color-interaction-confirmation-foreground: var(--color-interaction-ask-foreground);
   --color-foreground: var(--color-neutral-200);
   --color-foreground-subtle: color-mix(in oklab, var(--color-neutral-200) 60%, transparent);
   --color-foreground-subtlest: color-mix(in oklab, var(--color-neutral-200) 30%, transparent);
   --lucide-subtlest-opacity: 0.3;
   --color-foreground-inverse: var(--color-white);
-  --color-success: var(--color-green-500);
+  --color-success: var(--leo-brand, var(--color-interaction-ask-foreground));
   --color-success-foreground: var(--color-foreground-inverse);
   --color-destructive: var(--color-red-500);
   --color-destructive-foreground: var(--color-foreground-inverse);
@@ -475,9 +471,9 @@ html[data-document-hidden] *::after {
   --color-subagent-node: color-mix(in oklab, #b7bd75 18%, transparent);
   --color-subagent-node-hover: color-mix(in oklab, #b7bd75 24%, transparent);
   --color-subagent-node-foreground: #b7bd75;
-  --color-session-node: color-mix(in oklab, var(--color-teal-400) 18%, transparent);
-  --color-session-node-hover: color-mix(in oklab, var(--color-teal-400) 24%, transparent);
-  --color-session-node-foreground: var(--color-teal-300);
+  --color-session-node: var(--color-file-node);
+  --color-session-node-hover: var(--color-file-node-hover);
+  --color-session-node-foreground: var(--color-file-node-foreground);
   --color-plugin-node: color-mix(in oklab, var(--color-amber-400) 18%, transparent);
   --color-plugin-node-hover: color-mix(in oklab, var(--color-amber-400) 24%, transparent);
   --color-plugin-node-foreground: var(--color-amber-300);
@@ -493,7 +489,7 @@ html[data-document-hidden] *::after {
   --color-background-alt: color-mix(in oklab, var(--color-background) 70%, transparent);
   --color-brand: #000000;
   --color-trajectory-user: #2563eb;
-  --color-trajectory-assistant: #0f766e;
+  --color-trajectory-assistant: var(--color-interaction-ask-foreground);
   --color-trajectory-reasoning: #7c3aed;
   --color-trajectory-tool-call: #d97706;
   --color-trajectory-tool-result: #0284c7;
@@ -574,15 +570,15 @@ html[data-document-hidden] *::after {
   --color-secondary: #e6e6e6;
   --color-interaction-ask-surface: #ebf4ff;
   --color-interaction-ask-foreground: #0066dd;
-  --color-interaction-ask-fill: rgba(70, 191, 114, 0.2);
-  --color-interaction-confirmation-surface: #eaf7ee;
-  --color-interaction-confirmation-foreground: #166b32;
+  --color-interaction-ask-fill: color-mix(in oklab, var(--color-interaction-ask-foreground) 22%, transparent);
+  --color-interaction-confirmation-surface: var(--color-interaction-ask-surface);
+  --color-interaction-confirmation-foreground: var(--color-interaction-ask-foreground);
   --color-foreground: var(--color-neutral-800);
   --color-foreground-subtle: color-mix(in oklab, var(--color-neutral-800) 60%, transparent);
   --color-foreground-subtlest: color-mix(in oklab, var(--color-neutral-800) 40%, transparent);
   --lucide-subtlest-opacity: 0.4;
   --color-foreground-inverse: #ffffff;
-  --color-success: #1e8a3e;
+  --color-success: var(--leo-brand, var(--color-interaction-ask-foreground));
   --color-success-foreground: #ffffff;
   --color-destructive: #e03131;
   --color-destructive-foreground: #ffffff;
@@ -619,9 +615,9 @@ html[data-document-hidden] *::after {
   --color-subagent-node: rgba(111, 122, 47, 0.1);
   --color-subagent-node-hover: rgba(111, 122, 47, 0.16);
   --color-subagent-node-foreground: #6f7a2f;
-  --color-session-node: rgba(20, 128, 122, 0.1);
-  --color-session-node-hover: rgba(20, 128, 122, 0.16);
-  --color-session-node-foreground: #14807a;
+  --color-session-node: var(--color-file-node);
+  --color-session-node-hover: var(--color-file-node-hover);
+  --color-session-node-foreground: var(--color-file-node-foreground);
   --color-plugin-node: rgba(184, 122, 26, 0.1);
   --color-plugin-node-hover: rgba(184, 122, 26, 0.16);
   --color-plugin-node-foreground: #b87a1a;
@@ -637,7 +633,7 @@ html[data-document-hidden] *::after {
   --color-background-alt: color-mix(in oklab, var(--color-background-win-alt) 60%, transparent);
   --color-brand: #ffffff;
   --color-trajectory-user: #60a5fa;
-  --color-trajectory-assistant: #2dd4bf;
+  --color-trajectory-assistant: var(--color-interaction-ask-foreground);
   --color-trajectory-reasoning: #a78bfa;
   --color-trajectory-tool-call: #f59e0b;
   --color-trajectory-tool-result: #38bdf8;
@@ -718,15 +714,15 @@ html[data-document-hidden] *::after {
   --color-secondary: #363636;
   --color-interaction-ask-surface: #001d3d;
   --color-interaction-ask-foreground: #80beff;
-  --color-interaction-ask-fill: rgba(70, 191, 114, 0.24);
-  --color-interaction-confirmation-surface: rgba(70, 191, 114, 0.16);
-  --color-interaction-confirmation-foreground: #87d9a4;
+  --color-interaction-ask-fill: color-mix(in oklab, var(--color-interaction-ask-foreground) 22%, transparent);
+  --color-interaction-confirmation-surface: var(--color-interaction-ask-surface);
+  --color-interaction-confirmation-foreground: var(--color-interaction-ask-foreground);
   --color-foreground: var(--color-neutral-300);
   --color-foreground-subtle: color-mix(in oklab, var(--color-neutral-300) 60%, transparent);
   --color-foreground-subtlest: color-mix(in oklab, var(--color-neutral-300) 30%, transparent);
   --lucide-subtlest-opacity: 0.3;
   --color-foreground-inverse: #000000;
-  --color-success: #46bf72;
+  --color-success: var(--leo-brand, var(--color-interaction-ask-foreground));
   --color-success-foreground: #000000;
   --color-destructive: #ff5c5c;
   /* 修复原因：Zai Dark 曾把 destructive 前景设为黑色，与红色危险按钮的固定白字设计冲突。 */
@@ -764,9 +760,9 @@ html[data-document-hidden] *::after {
   --color-subagent-node: rgba(183, 189, 117, 0.16);
   --color-subagent-node-hover: rgba(183, 189, 117, 0.22);
   --color-subagent-node-foreground: #c8cd90;
-  --color-session-node: rgba(104, 196, 188, 0.16);
-  --color-session-node-hover: rgba(104, 196, 188, 0.22);
-  --color-session-node-foreground: #93d8d2;
+  --color-session-node: var(--color-file-node);
+  --color-session-node-hover: var(--color-file-node-hover);
+  --color-session-node-foreground: var(--color-file-node-foreground);
   --color-plugin-node: rgba(224, 174, 112, 0.16);
   --color-plugin-node-hover: rgba(224, 174, 112, 0.22);
   --color-plugin-node-foreground: #efc58f;
@@ -1887,7 +1883,7 @@ html[data-document-hidden] *::after {
   min-width: 20px;
   min-height: 20px;
   flex-shrink: 0;
-  --wf-face-body: #54b9a6;
+  --wf-face-body: var(--leo-brand, #1761dc);
   --wf-face-eye: #ffffff;
   --wf-face-x: 0px;
   --wf-face-y: 0px;

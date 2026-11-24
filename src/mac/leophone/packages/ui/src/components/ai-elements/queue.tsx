@@ -67,7 +67,7 @@ const queueItemIndicatorIconMap = {
 const queueItemIndicatorClassMap: Record<QueueItemStatus, string> = {
   pending: "text-muted-foreground/70",
   in_progress: "text-blue-500",
-  completed: "text-green-500",
+  completed: "text-success",
 };
 
 export const QueueItemIndicator = ({

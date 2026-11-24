@@ -160,7 +160,7 @@ describe("TaskInteractionBadge", () => {
     expect(html).toContain("text-interaction-confirmation-foreground");
   });
 
-  it("keeps a snoozed Ask badge green and static until the interaction resolves", () => {
+  it("keeps a snoozed Ask badge in its confirmation style and static until the interaction resolves", () => {
     const html = renderToStaticMarkup(
       createElement(TaskInteractionBadge, {
         interaction: {

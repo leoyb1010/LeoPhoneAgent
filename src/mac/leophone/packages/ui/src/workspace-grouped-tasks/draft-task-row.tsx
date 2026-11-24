@@ -66,7 +66,7 @@ export function GroupedDraftTaskRow({
                 onClose && "group-hover/task-row:hidden",
               )}
             >
-              <span className="size-1.5 rounded-full bg-green-500 dark:bg-green-400" />
+              <span className="size-1.5 rounded-full bg-brand" />
             </span>
             {onClose ? (
               <span className="absolute inset-0 hidden items-center justify-center group-hover/task-row:flex">

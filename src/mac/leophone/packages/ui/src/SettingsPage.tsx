@@ -146,7 +146,7 @@ function SettingsUsageProviderTabs() {
 /** [leo] 1.20：每组一个色系，颜色只放在图标块上（系统设置式实色圆角块 + 白色线性图标），扫一眼就分得出组。 */
 const SETTINGS_GROUP_TILE_CLASS: Record<string, string> = {
   agent: "bg-indigo-500 dark:bg-indigo-500/90",
-  devices: "bg-teal-500 dark:bg-teal-500/90",
+  devices: "bg-blue-600 dark:bg-blue-500",
   general: "bg-slate-500 dark:bg-slate-500/90",
 };
 

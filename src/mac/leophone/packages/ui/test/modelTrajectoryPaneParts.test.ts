@@ -495,8 +495,7 @@ describe("ModelTrajectoryPaneParts", () => {
     ]) {
       expect(stylesSource.match(new RegExp(`${token}:`, "g"))).toHaveLength(4);
     }
-    expect(stylesSource.match(/--color-trajectory-assistant: #0f766e/g)).toHaveLength(2);
-    expect(stylesSource.match(/--color-trajectory-assistant: #2dd4bf/g)).toHaveLength(2);
+    expect(stylesSource.match(/--color-trajectory-assistant: var\(--color-interaction-ask-foreground\)/g)).toHaveLength(4);
     expect(stylesSource.match(/--color-trajectory-reasoning: #7c3aed/g)).toHaveLength(2);
     expect(stylesSource.match(/--color-trajectory-reasoning: #a78bfa/g)).toHaveLength(2);
     expect(stylesSource.match(/--color-trajectory-tool-call: #d97706/g)).toHaveLength(2);

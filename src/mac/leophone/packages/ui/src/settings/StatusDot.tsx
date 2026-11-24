@@ -5,7 +5,7 @@ import { CircleIcon, Loader2Icon } from "lucide-react";
 export type StatusDotTone = "green" | "amber" | "red" | "muted" | "subtle";
 
 const TONE_CLASS: Record<StatusDotTone, string> = {
-  green: "text-green-500",
+  green: "text-success",
   amber: "text-yellow-500",
   red: "text-red-500",
   muted: "text-muted-foreground",

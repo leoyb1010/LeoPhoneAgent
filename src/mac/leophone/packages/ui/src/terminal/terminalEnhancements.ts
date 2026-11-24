@@ -70,13 +70,14 @@ export function getTerminalEnhancements(term: XTerm | null): TerminalEnhancement
   return term ? (enhanced.get(term) ?? null) : null;
 }
 
-const BRAND = "#2e9c9c";
-
 /** 把品牌色按比例叠到终端背景上,得到「brand-soft」的不透明 #RRGGBB(搜索高亮只认这种格式)。 */
 function mixHex(background: string | undefined, foreground: string, ratio: number): string {
   const parse = (hex: string | undefined) => {
     const match = /^#([0-9a-f]{6})$/i.exec(hex?.trim() ?? "");
-    if (!match) return null;
+    if (!match) {
+      const rgb = /^rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/i.exec(hex ?? "");
+      return rgb ? [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])] as const : null;
+    }
     const value = Number.parseInt(match[1]!, 16);
     return [(value >> 16) & 255, (value >> 8) & 255, value & 255] as const;
   };
@@ -90,12 +91,13 @@ function mixHex(background: string | undefined, foreground: string, ratio: numbe
 
 export function terminalSearchOptions(term: XTerm): ISearchOptions {
   const background = term.options.theme?.background;
+  const accent = term.element ? getComputedStyle(term.element).getPropertyValue("--leo-brand").trim() || "#1761dc" : "#1761dc";
   return {
     decorations: {
-      matchBackground: mixHex(background, BRAND, 0.28),
-      matchOverviewRuler: BRAND,
-      activeMatchBackground: mixHex(background, BRAND, 0.6),
-      activeMatchColorOverviewRuler: BRAND,
+      matchBackground: mixHex(background, accent, 0.28),
+      matchOverviewRuler: accent,
+      activeMatchBackground: mixHex(background, accent, 0.6),
+      activeMatchColorOverviewRuler: accent,
     },
   };
 }

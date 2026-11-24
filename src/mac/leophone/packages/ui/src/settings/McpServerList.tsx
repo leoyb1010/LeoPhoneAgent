@@ -33,7 +33,7 @@ export function McpStatusDot({
   const color = disabled
     ? "text-foreground-subtlest"
     : status === "connected"
-      ? "text-green-500"
+      ? "text-success"
       : status === "connecting"
         ? "text-yellow-500"
         : status === "error"

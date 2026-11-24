@@ -12,7 +12,8 @@ test("late workspace refresh preserves editing and a lost receipt retries the or
   const html = await readFile(new URL("leo-quick-panel.html", renderer), "utf8");
   const { code } = await transform(await readFile(new URL("leoQuickPanel.ts", renderer), "utf8"), { loader: "ts", format: "iife" });
   await page.route("http://localhost/panel", route => route.fulfill({ contentType: "text/html", body: html.replace(/<script[^>]*src="\.\/leoQuickPanel.ts"><\/script>/, "") }));
-  await page.route("**/leo-tokens.css", route => route.fulfill({ body: "" }));
+  const tokens = await readFile(new URL("../../../ui/src/leo/skin/leo-tokens.css", renderer), "utf8");
+  await page.route("**/leo-tokens.css", route => route.fulfill({ contentType: "text/css", body: tokens }));
   await page.addInitScript(() => {
     window.requests = [];
     window.hiddenReasons = [];
@@ -26,6 +27,16 @@ test("late workspace refresh preserves editing and a lost receipt retries the or
   await page.addScriptTag({ content: code });
   const push = (opening, workspaces = ["/one", "/two"]) => page.evaluate(([opening, workspaces]) => window.pushState({ opening, workspaces, selected: workspaces[0], error: null }), [opening, workspaces]);
   const input = page.locator("#prompt");
+  for (const [theme, system, expected] of [
+    ["light", "dark", "rgb(23, 97, 220)"],
+    ["dark", "light", "rgb(107, 159, 255)"],
+    ["system", "dark", "rgb(107, 159, 255)"],
+    ["system", "light", "rgb(23, 97, 220)"],
+  ]) {
+    await page.emulateMedia({ colorScheme: system });
+    await page.evaluate(theme => window.pushState({ opening: false, theme, workspaces: [], selected: null, error: null }), theme);
+    assert.equal(await page.locator(".mark").evaluate(el => getComputedStyle(el).backgroundColor), expected);
+  }
   await push(true);
   assert.equal(await input.evaluate(el => document.activeElement === el), true);
   await input.fill("中文输入");

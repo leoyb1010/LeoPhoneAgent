@@ -28,7 +28,7 @@ Treat violations of this section as design-system defects, not stylistic prefere
 
 ## Product Character
 
-LeoBot is a desktop-first AI workspace with phone, tablet and watch companions. The interface should feel calm, dense, and operational rather than decorative: a quiet workbench with one teal accent.
+LeoBot is a desktop-first AI workspace with phone, tablet and watch companions. The interface should feel calm, dense, and operational rather than decorative: a quiet workbench with one blue accent.
 
 Design for:
 
@@ -78,17 +78,17 @@ Default light and dark CSS variables still exist as fallback foundations, but ne
 ## LeoBot Design tokens
 
 Values below are copied from `design/tokens.json` for reading convenience; the JSON wins if they ever differ.
-Mac and iOS keep the values they already shared; only gaps were filled and Mac's separate workflow timing set was merged in.
+Both platforms use the project blue for controls and neutral surfaces for ordinary content.
 
 ### Color
 
 | Token | Dark | Light | Mac | iOS |
 | --- | --- | --- | --- | --- |
-| `brand` | `#2E9C9C` | `#2A8282` | `--leo-brand` (→ `--color-brand`, `--color-primary`) | `AccentColor` asset |
-| `brandSoft` | `rgba(46,156,156,.14)` | `rgba(42,130,130,.10)` | `--leo-brand-soft` | `accent.opacity(.14 / .10)` |
+| `brand` | `#6B9FFF` | `#1761DC` | `--leo-brand` (→ `--color-brand`, `--color-primary`) | `AccentColor` asset |
+| `brandSoft` | `rgba(107,159,255,.14)` | `rgba(23,97,220,.08)` | `--leo-brand-soft` | `accent.opacity(.14 / .10)` |
 | `attention` | `#F0B86E` | `#B86E12` | `--leo-attention` | approval / waiting states (replaces `.systemOrange`) |
 | `bg` / `panel` / `sidebar` / `card` | `#131315` / `#18181B` / `#111113` / `#1F1F22` | `#FAFAFA` / `#FFFFFF` / `#F4F4F5` / `#FFFFFF` | `--leo-bg` … `--leo-card` (→ `--color-background` …) | system dynamic colors; only self-drawn surfaces (e.g. the Mac screen view) use these values |
-| `success` / `destructive` / `warning` | system green / red / orange | same | `--color-success` … | system colors |
+| `success` / `destructive` / `warning` | brand blue / red / orange | same | `--color-success` … | system colors |
 
 Brand color is an accent, never a large fill. `attention` marks "needs you" (approval, waiting); `destructive` marks irreversible risk.
 
@@ -220,7 +220,7 @@ Every animation checks `prefers-reduced-motion` (Mac) / `accessibilityReduceMoti
 - **Destructive**: `--color-destructive` with `--color-destructive-foreground`
 - **Idle-time task**: `--color-idle-task` with `--color-idle-task-surface`
   Use only for idle-time queue and paused tags so they remain visually distinct
-  from the green scheduled-task treatment.
+  from the scheduled-task treatment.
 - **Diff Added**: `--color-diff-added` with `--color-diff-added-foreground`
 - **Diff Removed**: `--color-diff-removed` with `--color-diff-removed-foreground`
 
@@ -233,7 +233,7 @@ Use semantic colors only for actual semantic states. Do not borrow success, warn
 - **Confirmation Interaction**: `--color-interaction-confirmation-surface`, `--color-interaction-confirmation-foreground`
   Use for all waiting badges, including `AskUserQuestion`, permission, and `ExitPlanMode`.
 
-Waiting badges use one green confirmation treatment so identical waiting copy does not appear as different states. Do not substitute `--color-success` for a waiting confirmation.
+Waiting badges use one blue confirmation treatment so identical waiting copy does not appear as different states. Do not substitute `--color-success` for a waiting confirmation.
 
 ### Workflow timeline colors
 
