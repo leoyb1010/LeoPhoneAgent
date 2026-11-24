@@ -6,7 +6,7 @@ export const LEO_WORKBENCH_STARTERS = [
     description: "生成、预览与修改",
     enDescription: "Build, preview and refine",
     prompt:
-      "生成单文件 HTML 简报，检查交互并交付真实可运行文件。简报主题是：",
+      "生成单文件 HTML 简报，不引用外部资源。检查交互并交付真实可运行文件。简报主题是：",
   },
   {
     id: "code",

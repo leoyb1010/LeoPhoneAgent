@@ -66,7 +66,7 @@ export function LeoWorkbenchStarters({
                   zh
                     ? starter.prompt
                     : starter.id === "html"
-                      ? "Build and check a self-contained HTML brief. My topic is:"
+                      ? "Build and check a single-file HTML brief with no external resources. My topic is:"
                       : starter.id === "code"
                         ? "Read this project's rules and relevant code, preserve existing edits, implement my changes and run the relevant checks. My goal is:"
                         : "Research the supplied material, distinguish facts and inferences, retain sources and produce a clear report with suitable HTML, Markdown or structured data files. My topic is:",
