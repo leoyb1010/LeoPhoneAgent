@@ -247,6 +247,7 @@ struct HomeComposerBar: View {
                     .font(.body)
                     .textFieldStyle(.plain)
                     .focused(isFocused)
+                    .accessibilityIdentifier("home.prompt")
                     .submitLabel(.send)
                     .onSubmit { if canSend { onSubmit() } }
                     .padding(.vertical, 7)

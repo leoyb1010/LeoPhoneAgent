@@ -620,12 +620,6 @@ struct UnifiedModelPicker: View {
                 .foregroundStyle(ModelPickerText.action)
                 .accessibilityIdentifier("model-picker.use-default")
             }
-            Button { browseScope = .providers; config.onExpand?() } label: {
-                Label("All models", systemImage: "list.bullet")
-                    .frame(minHeight: 44)
-            }
-            .foregroundStyle(ModelPickerText.action)
-            .accessibilityIdentifier("model-picker.all-models")
         } footer: {
             if let note = config.headerNote { Text(note).foregroundStyle(ModelPickerText.secondary) }
         }
@@ -802,7 +796,12 @@ struct UnifiedModelPicker: View {
                 Button("Cancel") { dismiss() }
             }
         } else {
-            if config.prefersQuickSelection && browseScope != .quick && !isSearching {
+            if isQuickBrowse && !isSearching {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("All models") { browseScope = .providers; config.onExpand?() }
+                        .accessibilityIdentifier("model-picker.all-models")
+                }
+            } else if config.prefersQuickSelection && !isSearching {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { browseScope = .quick } label: {
                         Label("Quick picks", systemImage: "chevron.backward")

@@ -57,7 +57,7 @@ final class ReadOnlyProductAuditUITests: XCTestCase {
         guard model.waitForExistence(timeout: 5), model.isHittable else {
             missing("02-home-model-entry"); return
         }
-        let input = app.textFields["问 Leo,或直接说要做的事"]
+        let input = app.descendants(matching: .any)["home.prompt"].firstMatch
         if input.exists && input.isHittable {
             input.tap()
             XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
@@ -74,7 +74,6 @@ final class ReadOnlyProductAuditUITests: XCTestCase {
         model.tap(); settle()
         capture("03-model-picker-initial")
         let allModels = app.buttons["model-picker.all-models"]
-        if !allModels.isHittable, app.collectionViews.count > 0 { app.collectionViews.element(boundBy: app.collectionViews.count - 1).swipeUp() }
         guard allModels.exists && allModels.isHittable else { missing("04-all-models-entry"); return }
         allModels.tap(); settle()
         for (name, labels) in [("favorites", ["常用", "收藏", "Favorites"]),

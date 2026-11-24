@@ -28,16 +28,23 @@ final class KeyboardSwipeDismissUITests: XCTestCase {
         let newChat = app.buttons["新对话"]
         if newChat.waitForExistence(timeout: 2) { newChat.tap(); settle(1.2) }
 
-        let field = app.textViews.firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5), "找不到输入框")
+        // SwiftUI 的多行输入框在不同的 Duo 环境可被系统报告为 TextField 或 TextView。
+        let homeField = app.descendants(matching: .any)["home.prompt"].firstMatch
+        let field = homeField.exists ? homeField
+            : (app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch)
+        guard field.waitForExistence(timeout: 5), field.isHittable else {
+            XCTFail("找不到可用的输入框")
+            return
+        }
         field.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), "点输入框后键盘没出来")
         settle(0.6)
 
         // 输入框上方空白处往下滑
         let window = app.windows.firstMatch
-        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.22))
-        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+        let x = min(0.86, max(0.14, (field.frame.midX - window.frame.minX) / window.frame.width))
+        let start = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.22))
+        let end = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.45))
         start.press(forDuration: 0.05, thenDragTo: end)
         settle(1.0)
         XCTAssertFalse(app.keyboards.firstMatch.exists, "下滑后键盘还在")

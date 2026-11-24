@@ -3626,6 +3626,7 @@ struct ContentView: View {
                 capsuleMenu: AnyView(homeCapsuleMenuContent),
                 onChooseModel: homeTargetIsIPhone ? {
                     restoreHomeModelFocus = homePromptFocused
+                    homePromptFocused = false
                     showHomeModelPicker = true
                 } : nil,
                 modelPopover: isWideLayout ? HomeModelPopover(isPresented: $showHomeModelPicker,
