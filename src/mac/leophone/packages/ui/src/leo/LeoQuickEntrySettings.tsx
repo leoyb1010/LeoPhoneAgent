@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button.js";
 import { Switch } from "@/components/ui/switch.js";
+import { useOptionalPlatform } from "@/hooks/usePlatform.js";
+import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import { SettingsRow } from "@/settings/SettingsRow.js";
 import { setShortcutRecordingActive } from "@/shortcuts/bindings.js";
@@ -44,6 +46,9 @@ export function LeoQuickEntrySettings() {
 }
 
 function LeoQuickEntrySettingsBody({ bridge }: { bridge: LeoQuickBridge }) {
+  const platform = useOptionalPlatform();
+  const { locale } = useZCodeIntl();
+  const zh = (locale ?? "zh-CN").startsWith("zh");
   const [settings, setSettings] = useState<QuickEntrySettings | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -74,18 +79,19 @@ function LeoQuickEntrySettingsBody({ bridge }: { bridge: LeoQuickBridge }) {
         accept(await bridge.setSettings(patch));
       } catch (error) {
         logger.warn("[LeoQuickEntrySettings] 保存设置失败", error);
-        setMessage("保存失败，请查看日志");
+        setMessage(zh ? "保存失败，请查看日志" : "Failed to save settings. Check logs.");
       } finally {
         setSaving(false);
       }
     },
-    [accept, bridge],
+    [accept, bridge, zh],
   );
 
   useEffect(() => {
     if (!recording) return;
-    // 录制期间暂停应用内快捷键分发,不然按下的组合会先触发应用命令。
+    // 录制期间暂停应用内与系统菜单快捷键分发,不然 ⌘W / ⌘N 会先触发应用命令。
     setShortcutRecordingActive(true);
+    void platform?.setShortcutRecordingActive?.(true);
     const onKeyDown = (event: KeyboardEvent) => {
       event.preventDefault();
       event.stopPropagation();
@@ -102,8 +108,9 @@ function LeoQuickEntrySettingsBody({ bridge }: { bridge: LeoQuickBridge }) {
     return () => {
       window.removeEventListener("keydown", onKeyDown, { capture: true });
       setShortcutRecordingActive(false);
+      void platform?.setShortcutRecordingActive?.(false);
     };
-  }, [recording, update]);
+  }, [platform, recording, update]);
 
   if (!settings) return null;
   const current = formatAccelerator(settings.accelerator);
@@ -111,39 +118,49 @@ function LeoQuickEntrySettingsBody({ bridge }: { bridge: LeoQuickBridge }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border" data-testid="leo-quick-entry-settings">
       <SettingsRow
-        label="菜单栏图标"
-        description="在屏幕顶部菜单栏显示 LeoBot：看在跑的任务、等你确认的审批，点一下就打开对应任务。"
+        label={zh ? "菜单栏图标" : "Menu bar icon"}
+        description={
+          zh
+            ? "在屏幕顶部菜单栏显示 LeoBot：看在跑的任务、等你确认的审批，点一下就打开对应任务。"
+            : "Show LeoBot in the macOS menu bar to inspect running tasks and pending approvals."
+        }
         control={
           <Switch
             checked={settings.menuBarEnabled}
             disabled={saving}
             onCheckedChange={(checked) => void update({ menuBarEnabled: checked })}
-            aria-label="菜单栏图标"
+            aria-label={zh ? "菜单栏图标" : "Menu bar icon"}
           />
         }
       />
       <SettingsRow
-        label="快速派发"
-        description={`在任何 App 里按 ${current} 呼出输入框，选好工作区回车就派一个新任务；⌘↩\uFE0E 派发并打开。`}
+        label={zh ? "快速派发" : "Quick dispatch"}
+        description={
+          zh
+            ? `在任何 App 里按 ${current} 呼出输入框，选好工作区回车就派一个新任务；⌘↩\uFE0E 派发并打开。`
+            : `Press ${current} from any app to open the quick bar, press Enter to dispatch, or ⌘↩\uFE0E to dispatch and open.`
+        }
         control={
           <Switch
             checked={settings.quickPanelEnabled}
             disabled={saving}
             onCheckedChange={(checked) => void update({ quickPanelEnabled: checked })}
-            aria-label="快速派发"
+            aria-label={zh ? "快速派发" : "Quick dispatch"}
           />
         }
       />
       {settings.quickPanelEnabled ? (
         <SettingsRow
-          label="快速派发快捷键"
+          label={zh ? "快速派发快捷键" : "Quick dispatch shortcut"}
           description={
             message ? (
               <span className="text-[var(--leo-attention)]" role="status">
                 {message}
               </span>
-            ) : (
+            ) : zh ? (
               "需要至少一个 ⌘ / ⌃ / ⌥；被系统或别的 App 占用时会保留原来的键位。"
+            ) : (
+              "Requires at least one modifier (⌘ / ⌃ / ⌥). Previous shortcut is kept if occupied."
             )
           }
           controlLayout="wide"
@@ -158,7 +175,7 @@ function LeoQuickEntrySettingsBody({ bridge }: { bridge: LeoQuickBridge }) {
                   disabled={saving || recording}
                   onClick={() => void update({ accelerator: preset })}
                 >
-                  用 {formatAccelerator(preset)}
+                  {zh ? `用 ${formatAccelerator(preset)}` : `Use ${formatAccelerator(preset)}`}
                 </Button>
               ))}
               <Button
@@ -170,7 +187,7 @@ function LeoQuickEntrySettingsBody({ bridge }: { bridge: LeoQuickBridge }) {
                 onClick={() => setRecording((value) => !value)}
                 data-testid="leo-quick-entry-record"
               >
-                {recording ? "按下新的组合键…" : current}
+                {recording ? (zh ? "按下新的组合键…" : "Press shortcut…") : current}
               </Button>
             </div>
           }

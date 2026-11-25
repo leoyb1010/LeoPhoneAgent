@@ -241,6 +241,16 @@ actor LeoAgentClient {
         self.directSession = URLSession(configuration: directConfig, delegate: GatewayNoRedirect(), delegateQueue: nil)
     }
 
+    func invalidate() {
+        session.finishTasksAndInvalidate()
+        directSession.finishTasksAndInvalidate()
+    }
+
+    deinit {
+        session.finishTasksAndInvalidate()
+        directSession.finishTasksAndInvalidate()
+    }
+
     // MARK: Request plumbing
 
     func request(_ path: String, method: String = "GET", body: Data? = nil,

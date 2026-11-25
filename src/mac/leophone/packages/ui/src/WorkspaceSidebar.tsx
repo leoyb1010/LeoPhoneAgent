@@ -48,7 +48,6 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import type { Locale, UserInfo, ZCodeTaskMeta } from "@zcode/shared";
-import { BUILTIN_MODEL_PROVIDER_IDS } from "@zcode/shared";
 import {
   TID_CONVERSATION_NEW_TASK,
   TID_CONVERSATION_SECTION,
@@ -73,7 +72,6 @@ import {
 } from "@/components/ui/dropdown-menu.js";
 import { useLeoHome } from "@/leo/LeoHomeContext.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { usePlatform } from "@/hooks/usePlatform.js";
 import { logger } from "@/logger.js";
 import { NewTaskButtonGroup } from "@/NewTaskButtonGroup.js";
 import { selectWorkspaceZCodeState, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
@@ -93,7 +91,6 @@ import {
   reorderSidebarPurposeSections,
 } from "@/lib/sidebarPurposeSectionPreferences.js";
 import { useShortcutCommandLabel } from "@/shortcuts/useShortcutBindings.js";
-import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
 import { buildTaskWorkspaceKey } from "@/lib/taskQueryCache.js";
 import {
   increaseWorkspaceTaskVisibleLimit,
@@ -310,7 +307,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     },
     [onSelectTask],
   );
-  const bumpTaskListVersion = useZCodeSessionStore((state) => state.bumpTaskListVersion);
   const workspaceIdentity = useTabStore((state) => {
     if (!state.activeTabId) {
       return undefined;
@@ -997,7 +993,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
               >
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-y-0.5 left-0 rounded-full bg-background transition-[opacity,transform,width] duration-200 ease-out"
+                  className="pointer-events-none absolute inset-y-0.5 left-0 rounded-full bg-background transition-[opacity,transform,width] duration-200 ease-out motion-reduce:transition-none"
                   style={primaryTaskIndicatorStyle}
                 />
                 <TabsTrigger
@@ -1206,6 +1202,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
       taskSortBy,
       taskViewMode,
       toggleAllTaskGroupsPresentation,
+      workspaceReadOnly,
+      workspaceReadOnlyReason,
       workspaceTaskViewValue,
     ],
   );
@@ -1220,7 +1218,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
       <div className="relative flex-1 min-h-0 overflow-hidden">
         <div
           className={cn(
-            "absolute inset-0 flex min-h-0 flex-col transition-transform duration-200 ease-out",
+            "absolute inset-0 flex min-h-0 flex-col transition-transform duration-200 ease-out motion-reduce:transition-none",
             isFileTreeOpen && "-translate-x-full pointer-events-none",
           )}
           aria-hidden={isFileTreeOpen}
@@ -1246,15 +1244,15 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
               />
             </WorkspaceNewTaskTooltip>
             <Button variant="ghost" onClick={() => activeTaskId ? onSelectTask(workspacePath, activeTaskId, workspaceIdentity, workspaceRemoteSessionId) : onStartDraftInWorkspace(workspacePath, workspaceIdentity)} data-testid="leo-nav-tasks" aria-pressed={!automationsActive && !pluginStoreActive} className={cn("w-full justify-start gap-2 text-ui-caption text-foreground", !automationsActive && !pluginStoreActive && "bg-accent text-brand")}>
-              <MessageCircleCheck className="size-4" />{locale.startsWith("zh") ? "任务" : "Tasks"}
+              <MessageCircleCheck className="size-4" aria-hidden="true" />{locale.startsWith("zh") ? "任务" : "Tasks"}
             </Button>
-            {leoHome?.onOpenBrain ? <Button variant="ghost" onClick={leoHome.onOpenBrain} data-testid="leo-nav-library" className="w-full justify-start gap-2 text-ui-caption text-foreground"><BookOpen className="size-4" />{locale.startsWith("zh") ? "资料" : "Library"}</Button> : null}
+            {leoHome?.onOpenBrain ? <Button variant="ghost" onClick={leoHome.onOpenBrain} data-testid="leo-nav-library" className="w-full justify-start gap-2 text-ui-caption text-foreground"><BookOpen className="size-4" aria-hidden="true" />{locale.startsWith("zh") ? "资料" : "Library"}</Button> : null}
             <Button variant="ghost" onClick={handleOpenAutomationsMain} data-testid={TID_AUTOMATIONS_OPEN} aria-pressed={automationsActive} className={cn("w-full justify-start gap-2 text-ui-caption text-foreground", automationsActive && "bg-selected")}>
-              <CalendarClock className="size-4" />{intl.formatMessage({ id: "workspace.openScheduledSettings" })}
+              <CalendarClock className="size-4" aria-hidden="true" />{intl.formatMessage({ id: "workspace.openScheduledSettings" })}
             </Button>
             <div className="mt-1 flex items-center gap-1 border-t border-border pt-2">
-              <Button variant="ghost" onClick={onOpenCommandCenter} className="min-w-0 flex-1 justify-start gap-2 text-ui-sm text-foreground-subtle"><Search className="size-3.5" /><span className="truncate">{intl.formatMessage({ id: "commandCenter.open" })}</span><span className="ml-auto text-ui-xs">{commandCenterShortcutLabel}</span></Button>
-              <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={intl.formatMessage({ id: "common.more" })}><Blocks className="size-3.5" /></Button></DropdownMenuTrigger><DropdownMenuContent align="start"><DropdownMenuItem onSelect={handleOpenPluginStoreMain} data-testid="plugin-store-sidebar-open">{intl.formatMessage({ id: "workspace.openPluginsSettings" })}</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+              <Button variant="ghost" onClick={onOpenCommandCenter} className="min-w-0 flex-1 justify-start gap-2 text-ui-sm text-foreground-subtle"><Search className="size-3.5 shrink-0" aria-hidden="true" /><span className="truncate">{intl.formatMessage({ id: "commandCenter.open" })}</span><span className="ml-auto shrink-0 text-ui-xs">{commandCenterShortcutLabel}</span></Button>
+              <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={intl.formatMessage({ id: "common.more" })}><Blocks className="size-3.5" aria-hidden="true" /></Button></DropdownMenuTrigger><DropdownMenuContent align="start"><DropdownMenuItem onSelect={handleOpenPluginStoreMain} data-testid="plugin-store-sidebar-open">{intl.formatMessage({ id: "workspace.openPluginsSettings" })}</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
             </div>
           </div>
 
@@ -1555,7 +1553,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
         </div>
         <div
           className={cn(
-            "absolute inset-0 transition-transform duration-200 ease-out",
+            "absolute inset-0 transition-transform duration-200 ease-out motion-reduce:transition-none",
             isFileTreeOpen ? "translate-x-0" : "translate-x-full pointer-events-none",
           )}
           aria-hidden={!isFileTreeOpen}

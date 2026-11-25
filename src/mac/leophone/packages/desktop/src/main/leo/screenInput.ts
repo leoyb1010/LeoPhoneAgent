@@ -144,6 +144,7 @@ export function startScreenInput(logger: Logger): void {
     let buffer = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
+      if (helper !== child) return;
       buffer += chunk;
       let index = buffer.indexOf("\n");
       while (index >= 0) {
@@ -171,13 +172,18 @@ export function startScreenInput(logger: Logger): void {
     });
     child.stderr.on("data", () => undefined);
     child.stdin.on("error", () => undefined);
-    child.on("exit", () => {
+    const clearHelper = () => {
       if (helper === child) {
         helper = null;
         helperSession = null;
         helperDisplay = null;
       }
+    };
+    child.on("error", (error) => {
+      logger.warn("[leo-input] helper spawn failed", error);
+      clearHelper();
     });
+    child.on("exit", clearHelper);
   };
 
   setScreenPeerInputSink((sessionId, data) => {
@@ -212,6 +218,10 @@ export function startScreenInput(logger: Logger): void {
   onScreenPeerSessions(apply);
 
   app.on("will-quit", () => {
+    if (cooldownTimer) {
+      clearTimeout(cooldownTimer);
+      cooldownTimer = null;
+    }
     helper?.kill();
     hideTray();
   });

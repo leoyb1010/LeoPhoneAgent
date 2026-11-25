@@ -261,7 +261,7 @@ struct SkillsManagementView: View {
         case .session:
             Image(systemName: "bubble.left.and.text.bubble.right")
                 .font(.caption2)
-                .foregroundStyle(.purple)
+                .foregroundStyle(LeoTheme.ColorToken.accent)
         }
     }
 }
@@ -672,7 +672,7 @@ private struct SkillDetailView: View {
                                 Label {
                                     Text(AppLocalized("Force iCloud Sync"))
                                 } icon: {
-                                    SettingsActionIcon(systemImage: "icloud.and.arrow.up", color: .indigo)
+                                    SettingsActionIcon(systemImage: "icloud.and.arrow.up", color: LeoTheme.ColorToken.accent)
                                 }
                                 Spacer()
                                 if showForceSyncDone {

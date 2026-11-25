@@ -85,7 +85,7 @@ export function LeoArtifactActions({ format, content, title, sourcePath, workspa
               data-testid={html ? "leo-html-refine" : "leo-markdown-refine"}
               className="h-8 gap-1.5 text-ui-sm"
             >
-              <PencilLine className="size-3.5" />
+              <PencilLine className="size-3.5" aria-hidden="true" />
               {zh ? "继续修改" : "Refine"}
             </Button>
           ) : null}
@@ -93,11 +93,12 @@ export function LeoArtifactActions({ format, content, title, sourcePath, workspa
             size="sm"
             variant="default"
             disabled={saving}
+            aria-busy={saving}
             onClick={() => void download()}
             data-testid={html ? "leo-html-download" : "leo-markdown-download"}
             className="h-8 gap-1.5 text-ui-sm"
           >
-            <Download className="size-3.5" />
+            <Download className="size-3.5" aria-hidden="true" />
             {zh ? `下载 ${format}` : `Download ${format}`}
           </Button>
     </>

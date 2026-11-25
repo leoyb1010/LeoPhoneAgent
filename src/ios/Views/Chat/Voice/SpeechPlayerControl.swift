@@ -467,11 +467,22 @@ struct SpeechPlayerControl: View {
                     .offset(x: 6, y: 4)
             }
         }
+        .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: LeoChromeMetrics.hitTarget)
         .contentShape(Circle())
         // Double-tap toggles MUTE (temporary silence; capsule stays visible).
-        .onTapGesture(count: 2) { state.isMuted.toggle() }
+        .onTapGesture(count: 2) {
+            LeoHaptics.selection()
+            state.isMuted.toggle()
+        }
         // Single-tap always EXPANDS to the controls.
-        .onTapGesture { setExpanded(true); bumpIdle() }
+        .onTapGesture {
+            LeoHaptics.selection()
+            setExpanded(true)
+            bumpIdle()
+        }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(Text(state.isMuted ? AppLocalized("朗读控制（已静音）") : AppLocalized("朗读控制")))
+        .accessibilityHint(Text(AppLocalized("点按展开，连按静音")))
         .highPriorityGesture(dragGesture)
     }
 
@@ -479,18 +490,23 @@ struct SpeechPlayerControl: View {
     // MARK: - Expanded
 
     private var expandedCapsule: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             // Pause / resume — on = blue speaker, off = dimmed muted-speaker.
             // Speaker = MUTE toggle (temporary silence; capsule stays visible).
             Button {
+                LeoHaptics.selection()
                 state.isMuted.toggle(); bumpIdle()
             } label: {
-                speakerGlyph(size: 15, ring: 28).frame(width: 28, height: 28)
+                speakerGlyph(size: 15, ring: 28)
+                    .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: LeoChromeMetrics.hitTarget)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(state.isMuted ? AppLocalized("取消静音") : AppLocalized("静音")))
 
             // Model chip (tap to switch the TTS model).
             Button {
+                LeoHaptics.selection()
                 showModelSelector = true; bumpIdle()
             } label: {
                 HStack(spacing: 4) {
@@ -505,12 +521,15 @@ struct SpeechPlayerControl: View {
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundStyle(.tertiary)
                 }
-                .frame(maxWidth: 130)
+                .frame(maxWidth: 130, minHeight: LeoChromeMetrics.hitTarget)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(AppLocalized("切换朗读语音")))
 
             // Speed chip (tap to cycle 1×→1.25×→1.5×→2×).
             Button {
+                LeoHaptics.selection()
                 state.nextSpeed(); bumpIdle()
             } label: {
                 Text(Self.speedLabel(state.speechSpeed))
@@ -522,22 +541,28 @@ struct SpeechPlayerControl: View {
                     .frame(width: 34)
                     .padding(.vertical, 4)
                     .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                    .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: LeoChromeMetrics.hitTarget)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(AppLocalized("朗读倍速 \(Self.speedLabel(state.speechSpeed))")))
 
             // Close (turn read-replies off).
             Button {
+                LeoHaptics.impact(.light)
                 state.disable()
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 24, height: 24)
+                    .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: LeoChromeMetrics.hitTarget)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(AppLocalized("关闭朗读")))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
         // [WP-42] Floating control → Liquid Glass (was material + hairline border).
         .glassEffect(.regular.interactive(), in: .capsule)
         // Drag to reposition. Highest priority so the outer tap-to-dismiss layer

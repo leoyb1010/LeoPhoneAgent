@@ -347,22 +347,16 @@ enum LauncherCategory: String, CaseIterable, Hashable {
 
     var color: Color {
         switch self {
-        case .code:         return .orange
-        case .writing:      return .blue
-        case .research:     return .indigo
-        case .analysis:     return .indigo
-        case .creative:     return .pink
-        case .chat:         return .blue
-        case .math:         return .purple
-        case .translation:  return .cyan
-        case .health:       return .red
-        case .finance:      return .gray
-        case .travel:       return .orange
-        case .education:    return .blue
-        case .design:       return .pink
-        case .productivity: return .yellow
-        case .support:      return .brown
-        case .other:        return .gray
+        case .code, .writing, .research, .creative, .chat, .translation, .education, .productivity:
+            return LeoTheme.ColorToken.accent
+        case .health:
+            return LeoTheme.ColorToken.destructive
+        case .travel:
+            return LeoTheme.ColorToken.attention
+        case .analysis, .math, .design:
+            return .secondary
+        case .finance, .support, .other:
+            return .gray
         }
     }
 }

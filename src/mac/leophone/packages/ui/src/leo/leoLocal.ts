@@ -1,3 +1,4 @@
+import { toast } from "@/components/ui/toast.js";
 import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
 
 type OAuthOpenResult = { ok: true } | { ok: false; error: string };
@@ -7,7 +8,7 @@ type OAuthOpenResult = { ok: true } | { ok: false; error: string };
  * 凭据只存在本机 ~/.leoagent/oauth。地址由主进程拼:端口按实际配置,并带上本次启动的口令
  * (登录 / 退出接口只认它);界面里不写死地址。
  */
-export async function openLeoOAuthPage(): Promise<void> {
+export async function openLeoOAuthPage(locale?: string): Promise<void> {
   const bridge = (window as unknown as { leoLink?: { openOAuthPage?: () => Promise<OAuthOpenResult> } })
     .leoLink;
   if (!bridge?.openOAuthPage) return;
@@ -15,7 +16,15 @@ export async function openLeoOAuthPage(): Promise<void> {
     ok: false as const,
     error: error instanceof Error ? error.message : String(error),
   }));
-  if (!result.ok) window.alert(`打不开订阅账号登录页：${result.error}`);
+  if (!result.ok) {
+    const zh = !locale || locale.startsWith("zh");
+    toast(
+      zh
+        ? `打不开订阅账号登录页：${result.error}`
+        : `Could not open subscription sign-in page: ${result.error}`,
+      { variant: "warning" },
+    );
+  }
 }
 
 const OPEN_MODEL_SETTINGS_AFTER_WELCOME_KEY = "leo.openModelSettingsAfterWelcome";

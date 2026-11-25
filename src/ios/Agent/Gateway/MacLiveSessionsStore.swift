@@ -284,9 +284,13 @@ final class MacLiveSessionsStore: ObservableObject {
         // 手表的回答可能从实时消息和排队通道各到一次:只送一次。
         guard answeredApprovals.insert(approvalId).inserted else { return false }
         if !rows.contains(where: { $0.session.pendingApprovalId == approvalId }) { await refresh() }
-        // 列表里已经没有这条审批:别处答过了(或 Mac 已不在等),什么都不发。
+        // 列表里已经没有这条审批:别处答过了(或 Mac 已不在等),或本次刷新临时未拉到。
+        // 移除防重标记,免得弱网/冷启动时把手表排队重试永久吞掉。
         guard let row = rows.first(where: { $0.session.pendingApprovalId == approvalId }),
-              let client = client(for: row.hostId) else { return false }
+              let client = client(for: row.hostId) else {
+            answeredApprovals.remove(approvalId)
+            return false
+        }
         // 腕上回来的 choice 必须是这条审批 Mac 给过的;不在其中(旧手表补出的按钮)就不送。
         let offered = row.session.pendingApprovalChoices ?? RelayApprovalFields.legacyChoices
         guard offered.contains(choice) else {

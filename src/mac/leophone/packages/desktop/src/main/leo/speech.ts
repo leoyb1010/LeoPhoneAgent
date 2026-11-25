@@ -72,10 +72,10 @@ export function registerSpeechIpc(logger: Logger): void {
 
   // [WP-60 预热] 听写助手常驻(leo-speech serve):进输入框时就拉起并把模型备好,按键只发一条 start。
   // 以前每次按键才 spawn + 装资源 + 加载模型,~1.2s 内说的话会丢。全局一个助手,同时一路听写;
-  // 助手按顺序处理指令,每段以 done 结尾,所以用一个队列记「这段是谁发起的」,事件发给队首。
+  type SpeechOwner = { sender: WebContents; startedAt: number; firstPartialLogged: boolean };
   let helper: ChildProcessWithoutNullStreams | null = null;
   let helperLocale: string | null = null;
-  const owners: { sender: WebContents; startedAt: number; firstPartialLogged: boolean }[] = [];
+  let helperOwners: SpeechOwner[] = [];
   let idleTimer: NodeJS.Timeout | null = null;
 
   const releaseHelper = () => {
@@ -84,12 +84,13 @@ export function registerSpeechIpc(logger: Logger): void {
     // stdin EOF:助手收尾当前段后自己退出。
     helper?.stdin.end();
     helper = null;
+    helperOwners = [];
   };
 
   const touchIdle = () => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
-      if (owners.length === 0) releaseHelper();
+      if (helperOwners.length === 0) releaseHelper();
       else touchIdle();
     }, SPEECH_IDLE_RELEASE_MS);
     idleTimer.unref();
@@ -109,8 +110,10 @@ export function registerSpeechIpc(logger: Logger): void {
         stdio: ["pipe", "pipe", "pipe"],
       },
     );
+    const childOwners: SpeechOwner[] = [];
     helper = child;
     helperLocale = settings.locale;
+    helperOwners = childOwners;
     onLines(child, (line) => {
       const parsed: SpeechEvent | null = parseSpeechLine(line);
       if (!parsed) return;
@@ -118,24 +121,32 @@ export function registerSpeechIpc(logger: Logger): void {
         logger.info(`[leo-speech] helper warm after ${Date.now() - spawnedAt}ms`);
         return;
       }
-      const owner = owners[0];
+      const owner = childOwners[0];
       if (!owner) return;
       if (parsed.type === "partial" && !owner.firstPartialLogged) {
         owner.firstPartialLogged = true;
         logger.info(`[leo-speech] first partial after ${Date.now() - owner.startedAt}ms`);
       }
       send(owner.sender, EVENT_CHANNEL, parsed);
-      if (parsed.type === "done") owners.shift();
+      if (parsed.type === "done") childOwners.shift();
     });
     child.stderr.on("data", () => undefined);
     child.stdin.on("error", () => undefined);
-    child.on("error", (error) => logger.warn("[leo-speech] helper failed", error));
-    child.on("exit", (code) => {
-      if (helper === child) helper = null;
-      // 助手中途没了:还在等的每一段都补一个 done,渲染端据此收尾。
-      for (const owner of owners.splice(0)) {
+    const flushChildOwners = (code?: number | null) => {
+      if (helper === child) {
+        helper = null;
+        helperOwners = [];
+      }
+      for (const owner of childOwners.splice(0)) {
         send(owner.sender, EVENT_CHANNEL, { type: "done", ...(code ? { exitCode: code } : {}) });
       }
+    };
+    child.on("error", (error) => {
+      logger.warn("[leo-speech] helper failed", error);
+      flushChildOwners();
+    });
+    child.on("exit", (code) => {
+      flushChildOwners(code);
     });
     return child;
   };
@@ -181,8 +192,8 @@ export function registerSpeechIpc(logger: Logger): void {
     if (!settings.dictationEnabled) return { ok: false, error: "语音输入已关闭" };
     if (!ensureHelper()) return { ok: false, error: "这个版本没有带语音助手" };
     // 同时只一路:上一段还没结束就丢弃它(它的 done 仍会按顺序发回原窗口)。
-    if (owners.length > 0) command({ cmd: "cancel" });
-    owners.push({ sender: event.sender, startedAt: Date.now(), firstPartialLogged: false });
+    if (helperOwners.length > 0) command({ cmd: "cancel" });
+    helperOwners.push({ sender: event.sender, startedAt: Date.now(), firstPartialLogged: false });
     // 开发态端到端验证:用音频文件代替麦克风(不碰麦克风授权)。打包版不认这个变量。
     const testFile = !app.isPackaged ? process.env["LEO_SPEECH_TEST_FILE"]?.trim() : undefined;
     command({ cmd: "start", ...(testFile ? { file: testFile } : {}) });
@@ -191,7 +202,7 @@ export function registerSpeechIpc(logger: Logger): void {
 
   ipcMain.handle("leo:speech:stop", (event) => {
     if (!guard(event)) return false;
-    if (owners.at(-1)?.sender !== event.sender) return false;
+    if (helperOwners.at(-1)?.sender !== event.sender) return false;
     command({ cmd: "stop" });
     touchIdle();
     return true;
@@ -215,12 +226,18 @@ export function registerSpeechIpc(logger: Logger): void {
     speaking = current;
     child.stdout.resume();
     child.stderr.resume();
-    child.on("exit", () => {
+    child.stdin.on("error", () => undefined);
+    const finishSpeaking = () => {
       if (speaking === current) {
         speaking = null;
         send(current.sender, SPEAK_STATE_CHANNEL, { speaking: false });
       }
+    };
+    child.on("error", (error) => {
+      logger.warn("[leo-speech] speak helper failed", error);
+      finishSpeaking();
     });
+    child.on("exit", finishSpeaking);
     child.stdin.end(text);
     send(event.sender, SPEAK_STATE_CHANNEL, { speaking: true });
     return { ok: true };

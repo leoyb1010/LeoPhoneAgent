@@ -111,7 +111,15 @@ function ensureServer(logger: Logger): void {
               : await handlePeerRequest(request, logger);
           res.writeHead(result.status, { "content-type": "application/json" });
           res.end(JSON.stringify(result.body));
-        })();
+        })().catch((error: unknown) => {
+          logger.warn("[leo-screen] /peer handler threw", error);
+          if (!res.headersSent) {
+            res.writeHead(500, { "content-type": "application/json" });
+            res.end(JSON.stringify({ code: "peer_internal_error", message: "看屏内部错误" }));
+          } else if (!res.writableEnded) {
+            res.end();
+          }
+        });
       });
       return;
     }

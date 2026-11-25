@@ -52,14 +52,36 @@ final class HarnessLiveActivityBridge {
     }
     private var detached: [String: Detached] = [:]
     private var rowsWatch: AnyCancellable?
+    private final class LockedSessionSets: @unchecked Sendable {
+        private let lock = NSLock()
+        private var onScreen: Set<String> = []
+        private var registered: Set<String> = []
+
+        var onScreenIds: Set<String> {
+            get { lock.withLock { onScreen } }
+            set { lock.withLock { onScreen = newValue } }
+        }
+
+        var registeredIds: Set<String> {
+            get { lock.withLock { registered } }
+            set { lock.withLock { registered = newValue } }
+        }
+    }
+    private static let sessionSets = LockedSessionSets()
     /// Mac sessions with a console on screen (a driver registers on appear and
     /// leaves on disappear). Read by the notification delegate, which isn't
-    /// main-actor isolated; written on main only.
-    nonisolated(unsafe) static var onScreenSessionIds: Set<String> = []
+    /// main-actor isolated; synchronized via `sessionSets`.
+    nonisolated static var onScreenSessionIds: Set<String> {
+        get { sessionSets.onScreenIds }
+        set { sessionSets.onScreenIds = newValue }
+    }
     /// 所有登记过的 Mac 会话(不论是否在跑)。它们进 SessionActivityTracker 只为了灵动岛;
     /// 本机保活(静音音频 / 定位)不该因为「屏幕上开着一个 Mac 控制台」而一直开着 ——
-    /// 活在 Mac 上跑,审批靠中继推送。写只在主线程。
-    nonisolated(unsafe) static var registeredSessionIds: Set<String> = []
+    /// 活在 Mac 上跑,审批靠中继推送。通过锁同步跨线程读。
+    nonisolated static var registeredSessionIds: Set<String> {
+        get { sessionSets.registeredIds }
+        set { sessionSets.registeredIds = newValue }
+    }
     /// 只有这里拉起的 activity 才由这里结束,不碰聊天任务的。
     private var startedByBridge = false
     /// [remote-ctl-power] 这里登记进 tracker(会上卡、会要推送令牌)的会话:只有关注的。

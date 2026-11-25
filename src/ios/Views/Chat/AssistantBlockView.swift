@@ -83,27 +83,27 @@ struct AssistantBlockView: View {
                 }
             }
         case .fileReadTool:
-            ToolCapsuleView(block: block, icon: "doc.text", accentColor: .cyan,
+            ToolCapsuleView(block: block, icon: "doc.text", accentColor: .secondary,
                             commandStartTime: commandStartTime, onStop: onStop,
                             toolSnapshots: toolSnapshots, detailBlock: $detailBlock)
         case .fileWriteTool:
-            ToolCapsuleView(block: block, icon: "doc.text.fill", accentColor: .blue,
+            ToolCapsuleView(block: block, icon: "doc.text.fill", accentColor: LeoTheme.ColorToken.accent,
                             commandStartTime: commandStartTime, onStop: onStop,
                             toolSnapshots: toolSnapshots, detailBlock: $detailBlock)
         case .fileEditTool:
-            ToolCapsuleView(block: block, icon: "square.and.pencil", accentColor: .orange,
+            ToolCapsuleView(block: block, icon: "square.and.pencil", accentColor: LeoTheme.ColorToken.attention,
                             commandStartTime: commandStartTime, onStop: onStop,
                             toolSnapshots: toolSnapshots, detailBlock: $detailBlock)
         case .browserTool:
-            ToolCapsuleView(block: block, icon: "globe", accentColor: .blue,
+            ToolCapsuleView(block: block, icon: "globe", accentColor: LeoTheme.ColorToken.accent,
                             commandStartTime: commandStartTime, onStop: onStop, browserPool: browserPool,
                             toolSnapshots: toolSnapshots, detailBlock: $detailBlock)
         case .readImageTool:
-            ToolCapsuleView(block: block, icon: "photo", accentColor: .purple,
+            ToolCapsuleView(block: block, icon: "photo", accentColor: LeoTheme.ColorToken.accent,
                             commandStartTime: commandStartTime, onStop: onStop,
                             toolSnapshots: toolSnapshots, detailBlock: $detailBlock)
         case .memoryTool:
-            ToolCapsuleView(block: block, icon: "brain.head.profile", accentColor: .pink,
+            ToolCapsuleView(block: block, icon: "brain.head.profile", accentColor: .secondary,
                             commandStartTime: commandStartTime, onStop: onStop,
                             toolSnapshots: toolSnapshots, detailBlock: $detailBlock)
         case .delegateTool:
@@ -560,14 +560,16 @@ struct ToolCapsuleView: View {
             // background (deep-links to Settings → Permissions → Background).
             if showBgSuspendedHint {
                 Button {
+                    LeoHaptics.impact(.light)
                     showBgHintAlert = true
                 } label: {
                     Image(systemName: "info.circle.fill")
                         .font(.system(size: 15))
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(LeoTheme.ColorToken.attention)
+                        .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: LeoChromeMetrics.hitTarget)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(.leading, 6)
                 .accessibilityLabel(Text(AppLocalized("Background suspension info")))
             }
             Spacer(minLength: 0)
@@ -611,9 +613,9 @@ struct ToolCapsuleView: View {
 
     private var iconColor: Color {
         switch block.toolStatus {
-        case .success: return .blue
-        case .failed: return .red
-        case .cancelled: return .yellow
+        case .success: return LeoTheme.ColorToken.accent
+        case .failed: return LeoTheme.ColorToken.destructive
+        case .cancelled: return ChatColors.secondaryText
         default: return accentColor
         }
     }
@@ -868,8 +870,10 @@ struct ThinkingBlockView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
+            .frame(minHeight: LeoChromeMetrics.hitTarget)
             .contentShape(Rectangle())
             .onTapGesture {
+                LeoHaptics.selection()
                 // Mark before flipping so any concurrent stream-end collapse
                 // observer in this view sees `thinkingUserToggled = true`
                 // and bails out instead of stomping the user's choice.
@@ -883,6 +887,8 @@ struct ThinkingBlockView: View {
                 }
                 isExpanded.wrappedValue.toggle()
             }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityValue(isExpanded.wrappedValue ? Text("Expanded") : Text("Collapsed"))
 
             // Content — only visible when expanded, windowed to the tail
             // to prevent UI freeze on very long thinking (T-thinking-render-perf-ios).

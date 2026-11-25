@@ -117,6 +117,11 @@ class LiveActivityPlanner:
 
     def bind(self, token: str, sessions: List[Dict[str, str]]) -> None:
         """iOS 登记 update token 时带上卡上已有的会话(session_id + title)。"""
+        token = (token or "").strip().lower()
+        if not token:
+            return
+        if len(self.cards) >= 256 and token not in self.cards:
+            self.cards.pop(next(iter(self.cards)), None)
         card = self.cards.setdefault(token, {})
         for item in sessions[:MAX_ROWS]:
             sid = str(item.get("session_id") or "").strip()
@@ -125,7 +130,9 @@ class LiveActivityPlanner:
             card[sid] = snapshot(sid, str(item.get("title") or "Mac"), icon=RUNNING_ICON, status="运行中…")
 
     def forget(self, token: str) -> None:
-        self.cards.pop(token, None)
+        token = (token or "").strip().lower()
+        if token:
+            self.cards.pop(token, None)
 
     def plan(self, kind: str, machine: str, event: Dict[str, Any],
              update_tokens: Dict[str, List[str]], now: Optional[float] = None) -> List[LiveActivityPush]:
@@ -173,6 +180,12 @@ class LiveActivityPlanner:
         if tokens or kind in END_OUTCOMES or kind in RESUME_EVENTS:
             return pushes
         # 这台手机还没有这张卡(App 被杀、或卡被划掉):审批/开跑时远程拉起一张。
+        if len(self.started) >= 512:
+            expired = [k for k, ts in self.started.items() if now - ts >= self.restart_guard_s]
+            for k in expired:
+                self.started.pop(k, None)
+            if len(self.started) >= 512:
+                self.started.pop(next(iter(self.started)), None)
         last = self.started.get(sid)
         if last is not None and now - last < self.restart_guard_s:
             return []

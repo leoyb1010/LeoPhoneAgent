@@ -583,46 +583,57 @@ function isLikelyCompactCurrencyRangeText(
 }
 
 function normalizeSingleDollarMathInText(text: string): string {
-  if (!text.includes("$")) {
+  const firstDollar = text.indexOf("$");
+  if (firstDollar === -1) {
     return text;
   }
 
-  let output = "";
+  const parts: string[] = [];
+  let plainStart = 0;
 
-  for (let index = 0; index < text.length; index++) {
+  for (let index = firstDollar; index < text.length; index++) {
+    const nextDollar = text.indexOf("$", index);
+    if (nextDollar === -1) {
+      break;
+    }
+    index = nextDollar;
     if (!isSingleDollarDelimiter(text, index)) {
-      output += text[index];
       continue;
     }
 
     const closingIndex = findClosingSingleDollarDelimiter(text, index + 1);
 
     if (closingIndex === -1) {
-      output += text[index];
-      continue;
+      // 后面已经没有任何可闭合的单个 `$`：剩余整段都是普通文本，直接 O(1) 结束扫描。
+      break;
     }
 
     const content = text.slice(index + 1, closingIndex);
 
     if (isLikelyCompactCurrencyRangeText(text, closingIndex, content)) {
-      // `$5-$10` 这类紧凑价格区间的第二个 `$` 会被误当成公式闭合符。
-      // 只转义当前 `$`，让整段继续按普通文本渲染并保留美元符号。
-      output += "\\$";
+      if (index > plainStart) parts.push(text.slice(plainStart, index));
+      parts.push("\\$");
+      plainStart = index + 1;
       continue;
     }
 
     if (isLikelySingleDollarMath(content)) {
-      output += text.slice(index, closingIndex + 1);
       index = closingIndex;
       continue;
     }
 
-    // 开启 singleDollarTextMath 后，`$5 ... $10` / `$HOME ... $PATH`
-    // 这类普通文本会被误当成公式。只转义当前 `$`，让后续 `$` 继续按原文本扫描。
-    output += "\\$";
+    if (index > plainStart) parts.push(text.slice(plainStart, index));
+    parts.push("\\$");
+    plainStart = index + 1;
   }
 
-  return output;
+  if (parts.length === 0) {
+    return text;
+  }
+  if (plainStart < text.length) {
+    parts.push(text.slice(plainStart));
+  }
+  return parts.join("");
 }
 
 function normalizeSingleDollarMathOutsideInlineCode(line: string): string {
@@ -1322,6 +1333,8 @@ export const messageResponsePropsAreEqual = (
   nextProps: Readonly<MessageResponseProps>,
 ): boolean =>
   prevProps.children === nextProps.children &&
+  prevProps.className === nextProps.className &&
+  prevProps.dir === nextProps.dir &&
   nextProps.streaming === prevProps.streaming &&
   nextProps.streamingAnimationKey === prevProps.streamingAnimationKey &&
   nextProps.workspacePath === prevProps.workspacePath &&

@@ -9,6 +9,8 @@ import { installLeoSessionGuard } from "./leoSessionGuard.js";
 import { registerLeoLinkIpc } from "./leoLinkIpc.js";
 import { installRequestSecurityDiagnostics } from "./request-security-edition/index.js";
 import { isLeoQuickPanelWindow, startLeoQuickEntry } from "./leo/quickEntry.js";
+import { isLeoScreenPeerWindow } from "./leo/screenMediaHandler.js";
+import { isLeoScreenHudWindow } from "./leo/screenControlHud.js";
 import { clearLeoQuitIntent, markLeoQuitIntent } from "./leo/quitIntent.js";
 import { registerImcpIpc } from "./leo/imcp.js";
 import { registerAcpIpc } from "./leo/acp.js";
@@ -1568,8 +1570,10 @@ function getApplicationWindowsExcludingCuaIndicator(): BrowserWindow[] {
     (win) =>
       !win.isDestroyed() &&
       !windowsCuaOperationIndicator.ownsWindow(win) &&
-      // [leo] ⌥Space 浮窗不是应用主窗口(见 leo/quickEntry.ts)。
-      !isLeoQuickPanelWindow(win),
+      // [leo] ⌥Space 浮窗、看屏隐藏窗与悬浮被控提示条都不是应用主窗口。
+      !isLeoQuickPanelWindow(win) &&
+      !isLeoScreenPeerWindow(win) &&
+      !isLeoScreenHudWindow(win),
   );
 }
 

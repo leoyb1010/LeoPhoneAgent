@@ -105,6 +105,8 @@ struct BrainLibraryView: View {
                     .font(.caption).foregroundStyle(.tertiary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         if isMedia {
             NavigationLink(value: BrainSpaceMediaRow(id: item.id, title: item.title, ext: item.ext, mediaKind: item.mediaKind)) { content }
         } else if kind == "card" {
@@ -179,10 +181,11 @@ struct BrainDocView: View {
                     Text(reader.info?.summary.flatMap { $0.isEmpty ? nil : $0 } ?? "还没有可读的正文").font(.subheadline).foregroundStyle(.secondary)
                 }
                 ForEach(reader.chunks) { c in
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 6) {
                         if let l = c.locator { Text(l).font(.caption).foregroundStyle(.tertiary) }
-                        Text(c.text).font(.subheadline).textSelection(.enabled)
+                        Text(c.text).font(.body).textSelection(.enabled)
                     }
+                    .leoReadingMeasure()
                 }
                 if let moreError = reader.moreError {
                     Text(moreError).font(.footnote).foregroundStyle(.secondary)

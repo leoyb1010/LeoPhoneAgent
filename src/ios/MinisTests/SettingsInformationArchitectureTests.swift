@@ -27,7 +27,7 @@ final class SettingsInformationArchitectureTests: XCTestCase {
         let all = titles(in: block)
         XCTAssertEqual(all.count, Set(all).count, "同一项出现在两个分组里: \(all)")
         let expected: Set<String> = [
-            "AI 服务商", "模型分组", "推理与模型", "快速判断模型", "本机模型",
+            "新对话默认", "AI 服务商", "模型分组", "推理与模型", "快速判断模型", "本机模型",
             "技能", "MCP 集成", "工具开关", "手机能力与授权", "子代理", "邮箱账户", "环境变量",
             "记忆", "资料库", "人设", "手机收藏",
             "快捷任务", "自动化", "定时任务", "快捷指令模板", "Siri 指挥中心",
@@ -55,10 +55,10 @@ final class SettingsInformationArchitectureTests: XCTestCase {
             XCTAssertFalse(titles(in: String(piece)).isEmpty && id != "devices", "空分组: \(id)")
         }
         let all = Set(titles(in: block))
-        for pinned in ["AI 服务商", "远程机器", "权限", "外观"] {
+        for pinned in ["新对话默认", "AI 服务商", "快捷任务", "外观"] {
             XCTAssertTrue(all.contains(pinned), "常用方块指向不存在的条目: \(pinned)")
         }
-        XCTAssertTrue(s.contains("static let pinnedTitles = [\"AI 服务商\", \"远程机器\", \"权限\", \"外观\"]"))
+        XCTAssertTrue(s.contains("static let pinnedTitles = [\"新对话默认\", \"AI 服务商\", \"快捷任务\", \"外观\"]"))
         // 不再有折叠手风琴,也不在每一行上做入场动画(45 行同时 onAppear)。
         XCTAssertFalse(s.contains("leoStaggerEntrance"))
         XCTAssertFalse(s.contains("@AppStorage(\"settings.group."))

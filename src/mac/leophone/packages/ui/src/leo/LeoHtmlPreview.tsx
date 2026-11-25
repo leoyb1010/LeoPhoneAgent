@@ -34,7 +34,10 @@ export function LeoHtmlPreview({
   const interactive = interactiveContent === content;
   const document = useMemo(() => buildLeoHtmlPreviewDocument(content, false), [content]);
   const previewPort = platform?.htmlPreview;
-  const previewTooLarge = new TextEncoder().encode(content).byteLength > HTML_ARTIFACT_MAX_BYTES;
+  const previewTooLarge = useMemo(
+    () => new TextEncoder().encode(content).byteLength > HTML_ARTIFACT_MAX_BYTES,
+    [content],
+  );
   const [retry, setRetry] = useState(0);
   const [nativePreview, setNativePreview] = useState<{
     content: string;
@@ -100,7 +103,7 @@ export function LeoHtmlPreview({
             data-testid="leo-html-preview-tab"
             className="h-8 gap-1.5 text-ui-sm"
           >
-            <Eye className="size-3.5" />
+            <Eye className="size-3.5" aria-hidden="true" />
             {zh ? "预览" : "Preview"}
           </Button>
           <Button
@@ -114,12 +117,12 @@ export function LeoHtmlPreview({
             data-testid="leo-html-source-tab"
             className="h-8 gap-1.5 text-ui-sm"
           >
-            <Code2 className="size-3.5" />
+            <Code2 className="size-3.5" aria-hidden="true" />
             {zh ? "源码" : "Source"}
           </Button>
         </div>
-        <div className="flex items-center gap-1">
-          {mode === "preview" && previewPort ? (
+        <div className="flex flex-wrap items-center gap-1">
+          {mode === "preview" && previewPort && !previewTooLarge ? (
             <Button
               size="sm"
               variant="ghost"
@@ -141,7 +144,7 @@ export function LeoHtmlPreview({
           sourceView
         ) : previewPort && !matchedPreview?.handle ? (
           <div
-            className="flex h-full min-h-80 flex-col items-center justify-center gap-3 p-5 text-ui-sm text-foreground-subtle"
+            className="flex h-full min-h-0 flex-col items-center justify-center gap-3 p-5 text-ui-sm text-foreground-subtle"
             role={matchedPreview?.error ? "alert" : "status"}
           >
             <p>
@@ -151,7 +154,11 @@ export function LeoHtmlPreview({
                   : "This file is too large to preview. View its source or download HTML."
                 : (matchedPreview?.error ?? (zh ? "正在准备预览…" : "Preparing preview…"))}
             </p>
-            {!previewTooLarge && matchedPreview?.error ? (
+            {previewTooLarge ? (
+              <Button variant="secondary" size="sm" onClick={() => setMode("code")}>
+                {zh ? "查看源码" : "View source"}
+              </Button>
+            ) : matchedPreview?.error ? (
               <Button variant="secondary" size="sm" onClick={() => setRetry((value) => value + 1)}>
                 {zh ? "重试预览" : "Retry preview"}
               </Button>
@@ -167,7 +174,7 @@ export function LeoHtmlPreview({
             referrerPolicy="no-referrer"
             src={matchedPreview?.handle?.url}
             srcDoc={previewPort ? undefined : document}
-            className="h-full min-h-80 w-full border-0 bg-white"
+            className="h-full min-h-0 w-full border-0 bg-white"
           />
         )}
       </div>

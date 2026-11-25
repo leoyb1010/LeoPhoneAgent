@@ -78,7 +78,7 @@ struct SettingsHomeView: View {
     private static var macConsoleEntries: [SettingsEntry] {
         guard MacFleetFeature.isEnabled() else { return [] }
         return [SettingsEntry("Mac 控制台", keywords: "控制台 console 编码 任务 遥控",
-                              icon: "terminal.fill", color: .indigo,
+                              icon: "terminal.fill", color: LeoTheme.ColorToken.accent,
                               hint: "在已连接的 Mac 上发任务、看进度、审批") { GatewayEntryView() }]
     }
 
@@ -89,97 +89,97 @@ struct SettingsHomeView: View {
         [
             SettingsGroup(id: "models", title: "模型与推理", entries: [
                 SettingsEntry("新对话默认", keywords: "默认 换模型 默认模型 model default 分组",
-                              icon: "cpu", color: .blue) {
+                              icon: "cpu", color: LeoTheme.ColorToken.accent) {
                     SessionModelPicker(sessionId: nil, editsNewChatDefault: true, prefersQuickSelection: true)
                 },
                 SettingsEntry("AI 服务商", keywords: "provider api key oauth 模型 llm 模型供应商",
-                              icon: "key.fill", color: .indigo) { ProviderInstancesView() },
+                              icon: "key.fill", color: LeoTheme.ColorToken.accent) { ProviderInstancesView() },
                 SettingsEntry("模型分组", keywords: "model group 回退 负载",
-                              icon: "square.stack.3d.up.fill", color: .indigo) { ModelGroupsView() },
+                              icon: "square.stack.3d.up.fill", color: LeoTheme.ColorToken.accent) { ModelGroupsView() },
                 SettingsEntry("推理与模型", keywords: "thinking 推理 读图 压缩 标题 vision compact 上下文 裁剪 精简 context trim",
-                              icon: "brain.head.profile", color: .indigo,
+                              icon: "brain.head.profile", color: LeoTheme.ColorToken.accent,
                               hint: "思考深度、读图、压缩与标题用哪个模型") { ThinkingAndModelSlotsView() },
                 SettingsEntry("快速判断模型", keywords: "jev 快速判断 typesafe system one 快速判断 分类 打分",
-                              icon: "bolt.horizontal.fill", color: .indigo,
+                              icon: "bolt.horizontal.fill", color: LeoTheme.ColorToken.accent,
                               hint: "TypeSafe 的快判断模型,填 Key 后 Agent 多一个 jev_decide 工具") { JevSettingsView() },
                 SettingsEntry("本机模型", keywords: "本机 端上 离线 apple intelligence foundation models 改写 摘要 隐私",
-                              icon: "cpu.fill", color: .indigo) { LocalBrainSettingsView() },
+                              icon: "cpu.fill", color: LeoTheme.ColorToken.accent) { LocalBrainSettingsView() },
             ]),
             SettingsGroup(id: "abilities", title: "能力与工具", entries: [
                 SettingsEntry("技能", keywords: "skills 技能包",
-                              icon: "sparkles", color: .purple) { SkillsManagementView() },
+                              icon: "sparkles", color: LeoTheme.ColorToken.accent) { SkillsManagementView() },
                 SettingsEntry("MCP 集成", keywords: "mcp server 集成 工具",
-                              icon: "puzzlepiece.extension.fill", color: .purple) { MCPIntegrationsView() },
+                              icon: "puzzlepiece.extension.fill", color: LeoTheme.ColorToken.accent) { MCPIntegrationsView() },
                 SettingsEntry("工具开关", keywords: "tools 工具 开关 浏览器 browser 子代理 定时跟进 关闭",
-                              icon: "switch.2", color: .purple,
+                              icon: "switch.2", color: LeoTheme.ColorToken.accent,
                               hint: "浏览器、子代理、定时跟进可以分别关掉") { ToolTogglesSettingsView() },
                 SettingsEntry("手机能力与授权", keywords: "相机 拍照 能力中心 capabilities 权限 能干什么",
-                              icon: "square.grid.2x2.fill", color: .purple,
+                              icon: "square.grid.2x2.fill", color: LeoTheme.ColorToken.accent,
                               hint: "Agent 能调用哪些手机能力，系统授权到哪一步") { CapabilitiesView() },
                 SettingsEntry("子代理", keywords: "sub agent subagent helper 子代理 委派 角色 并行",
-                              icon: "person.2.fill", color: .purple,
+                              icon: "person.2.fill", color: LeoTheme.ColorToken.accent,
                               hint: "让 Agent 把独立任务交给后台子代理并行完成") { HelperSettingsView() },
                 SettingsEntry("邮箱账户", keywords: "mail email imap 邮箱 邮件 gmail qq 163 126 icloud",
-                              icon: "envelope.fill", color: .purple,
+                              icon: "envelope.fill", color: LeoTheme.ColorToken.accent,
                               hint: "授权 Gmail / QQ / 163 等邮箱,对话里直接读邮件") { MailAccountsView() },
                 SettingsEntry("环境变量", keywords: "environment env 变量",
-                              icon: "chevron.left.forwardslash.chevron.right", color: .purple) { EnvironmentVariablesView() },
+                              icon: "chevron.left.forwardslash.chevron.right", color: LeoTheme.ColorToken.accent) { EnvironmentVariablesView() },
             ]),
             SettingsGroup(id: "knowledge", title: "记忆与资料", entries: [
                 SettingsEntry("记忆", keywords: "memory 记忆库",
-                              icon: "brain", color: .pink) { MemoryManagementView() },
+                              icon: "brain", color: .gray) { MemoryManagementView() },
                 SettingsEntry("资料库", keywords: "brain archive 资料库 第二大脑 知识卡 文件 mini 网关 令牌",
-                              icon: "books.vertical.fill", color: .pink,
+                              icon: "books.vertical.fill", color: .gray,
                               hint: "连接第二大脑；对话按需检索资料，私密影像在本机查看") { BrainSettingsView() },
                 SettingsEntry("人设", keywords: "灵魂 soul 人格 性格",
-                              icon: "heart.fill", color: .pink,
+                              icon: "heart.fill", color: .gray,
                               hint: "Agent 的说话风格和性格") { SoulSettingsView() },
                 SettingsEntry("手机收藏", keywords: "藏宝阁 收藏 笔记 note collect 分享 小红书 favorite 星标 附件 扫描 第二大脑",
-                              icon: "star.square.on.square.fill", color: .pink) { CollectionsView(phoneOnly: true) },
+                              icon: "star.square.on.square.fill", color: .gray) { CollectionsView(phoneOnly: true) },
             ]),
             SettingsGroup(id: "automation", title: "自动化", entries: [
                 SettingsEntry("快捷任务", keywords: "quick task 捷径 快速任务",
-                              icon: "bolt.fill", color: .orange) { QuickTaskSettingsView() },
+                              icon: "bolt.fill", color: .gray) { QuickTaskSettingsView() },
                 SettingsEntry("自动化", keywords: "automation 触发 位置 日历 充电",
-                              icon: "bolt.badge.clock.fill", color: .orange) { AutomationSettingsView() },
+                              icon: "bolt.badge.clock.fill", color: .gray) { AutomationSettingsView() },
                 SettingsEntry("定时任务", keywords: "schedule cron 定时",
-                              icon: "clock.fill", color: .orange) { ScheduledTaskSettingsView() },
+                              icon: "clock.fill", color: .gray) { ScheduledTaskSettingsView() },
                 SettingsEntry("快捷指令模板", keywords: "配方 shortcuts 快捷指令 自动化 配方 siri 到家 车载 蓝牙 晨报 recipe",
-                              icon: "square.on.square.fill", color: .orange,
+                              icon: "square.on.square.fill", color: .gray,
                               hint: "到家、上车、按一下按钮，让 Agent 自己动起来") { ShortcutRecipesView() },
                 SettingsEntry("Siri 指挥中心", keywords: "siri 语音 快捷指令 shortcuts 审批 action button 自动化",
-                              icon: "mic.fill", color: .orange) { SiriCommandCenterView() },
+                              icon: "mic.fill", color: .gray) { SiriCommandCenterView() },
             ]),
             SettingsGroup(id: "devices", title: "设备与连接", entries: macConsoleEntries + [
                 SettingsEntry("远程机器", keywords: "mac android 舰队 中继 relay 密钥 macbook cortex studio fold ipad",
-                              icon: "desktopcomputer", color: .indigo,
+                              icon: "desktopcomputer", color: LeoTheme.ColorToken.accent,
                               hint: "连接哪几台 Mac、中继地址与密钥") { GatewaySettingsView() },
                 SettingsEntry("Apple Watch", keywords: "手表 watch 蜂窝 直连 独立 模型 cellular",
-                              icon: "applewatch", color: .indigo,
+                              icon: "applewatch", color: LeoTheme.ColorToken.accent,
                               hint: "手表用哪个模型、离开 iPhone 能不能自己回答") { WatchSettingsView() },
                 SettingsEntry("iCloud 同步", keywords: "icloud sync 同步 云",
-                              icon: "icloud.fill", color: .indigo) { CloudSyncSettingsV2View() },
+                              icon: "icloud.fill", color: LeoTheme.ColorToken.accent) { CloudSyncSettingsV2View() },
                 SettingsEntry("远程主机(SSH·备用)", keywords: "ssh remote host 备用",
-                              icon: "server.rack", color: .indigo,
+                              icon: "server.rack", color: LeoTheme.ColorToken.accent,
                               hint: "旧通道，只在中继不可用时使用") { RemoteHostSettingsView() },
             ]),
             SettingsGroup(id: "general", title: "通用", entries: [
                 SettingsEntry("权限", keywords: "permission 审批 offload 全自动 自动批准 不再询问 yolo",
-                              icon: "hand.raised.fill", color: .blue,
+                              icon: "hand.raised.fill", color: LeoTheme.ColorToken.accent,
                               hint: "全自动开关；Agent 动用某项能力前，是直接放行还是先问你") { OffloadPermissionSettingsView() },
                 SettingsEntry("外观", keywords: "文字 appearance 深色 浅色 主题 语言 字体 字号 图标 启动 回车 复制 language font icon mac 进行中",
-                              icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
+                              icon: "paintbrush.fill", color: LeoTheme.ColorToken.accent) { AppearanceSettingsView() },
                 // 以前只能从 权限 → 后台 进去,搜「后台」「通知」「灵动岛」都搜不到。
                 SettingsEntry("后台与通知", keywords: "background 后台 保活 keep alive 通知 notification 实时活动 灵动岛 live activity 定位 位置追踪 朗读 语音 音色 隐私模式",
-                              icon: "bell.badge.fill", color: .blue) { EnhancedBackgroundSettingsView() },
+                              icon: "bell.badge.fill", color: LeoTheme.ColorToken.accent) { EnhancedBackgroundSettingsView() },
                 // 1.57 的实时出字、自动改字、热词、语音度量都在这一页;以前只能从 AI 服务商里翻到。
                 SettingsEntry("语音识别", keywords: "语音 识别 听写 实时出字 改字 热词 度量 离线 语言资源 speech",
-                              icon: "waveform", color: .blue,
+                              icon: "waveform", color: LeoTheme.ColorToken.accent,
                               hint: "实时出字、自动改字、热词与离线语言包") { SystemSpeechResourcesView() },
                 SettingsEntry("生物识别保护", keywords: "face id touch id 解锁 保护 spotlight 聚焦 搜索",
-                              icon: "faceid", color: .blue) { FaceIDProtectionSettingsView() },
+                              icon: "faceid", color: LeoTheme.ColorToken.accent) { FaceIDProtectionSettingsView() },
                 SettingsEntry("隐私与数据", keywords: "privacy 隐私",
-                              icon: "lock.shield.fill", color: .blue) { LeoPrivacyView() },
+                              icon: "lock.shield.fill", color: LeoTheme.ColorToken.accent) { LeoPrivacyView() },
             ]),
             SettingsGroup(id: "data", title: "数据与诊断", entries: [
                 SettingsEntry("存储", keywords: "storage 空间 清理",
@@ -311,7 +311,8 @@ struct SettingsHomeView: View {
                                         Capsule().fill(Self.card)
                                     }
                                 }
-                                .contentShape(Capsule())
+                                .frame(minHeight: LeoChromeMetrics.hitTarget)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .id(group.id)
@@ -319,7 +320,7 @@ struct SettingsHomeView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.vertical, 2)
             }
             .background(.bar)
             .onChange(of: currentGroup) { _, id in
@@ -339,17 +340,21 @@ struct SettingsHomeView: View {
                 .submitLabel(.search)
             if !query.isEmpty {
                 Button {
+                    LeoHaptics.selection()
                     query = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.tertiary)
+                        .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: LeoChromeMetrics.hitTarget)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("清除搜索")
             }
         }
-        .padding(.horizontal, 12)
-        .frame(minHeight: 40)
+        .padding(.leading, 12)
+        .padding(.trailing, query.isEmpty ? 12 : 0)
+        .frame(minHeight: LeoChromeMetrics.hitTarget)
         .background(Self.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .id("search")
     }
@@ -488,16 +493,13 @@ struct SettingsHomeView: View {
         }
     }
 
-    /// 每组一个色系(5 个色相 + 中性灰),颜色只出现在图标块上,不再给整条分组头上色。
+    /// 克制双色体系:核心分组用品牌蓝,其余分组用中性灰,颜色只出现在图标块与当前分组胶囊上。
     static func groupTint(_ id: String) -> Color {
         switch id {
-        case "models": return .indigo
-        case "abilities": return .purple
-        case "knowledge": return .pink
-        case "automation": return .orange
-        case "devices": return .indigo
-        case "general": return .blue
-        default: return .gray
+        case "models", "abilities", "devices", "general":
+            return LeoTheme.ColorToken.accent
+        default:
+            return .gray
         }
     }
 }
@@ -536,6 +538,8 @@ private struct SettingsRow: View {
                     Text(entry.title)
                         .font(.body)
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
                     if let hint = entry.hint {
                         Text(hint)
                             .font(.footnote)
@@ -549,6 +553,7 @@ private struct SettingsRow: View {
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .truncationMode(.middle)
                 }
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))

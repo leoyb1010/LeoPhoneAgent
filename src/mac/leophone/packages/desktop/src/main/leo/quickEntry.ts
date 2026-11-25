@@ -309,6 +309,7 @@ export function startLeoQuickEntry(deps: LeoQuickEntryDeps): void {
     returnFocusOnHide = BrowserWindow.getFocusedWindow() === null;
     window.setBounds(computeQuickPanelBounds(screen.getCursorScreenPoint(), screen.getAllDisplays()));
     await panelLoaded?.catch(() => undefined);
+    if (window.isDestroyed() || panel !== window || !settings.quickPanelEnabled) return;
     pushPanelState(window, true);
     panelVisible = true;
     window.show();
@@ -320,7 +321,7 @@ export function startLeoQuickEntry(deps: LeoQuickEntryDeps): void {
     logger.info(`[leo-quick] panel shown in ${Math.round(shownAt - startedAt)}ms`);
     // 工作区列表在后台刷新,回来再推一次;不挡着浮窗出现。
     void refresh().then(() => {
-      if (panelVisible) pushPanelState(window);
+      if (panelVisible && panel === window && !window.isDestroyed()) pushPanelState(window);
     });
   };
 
@@ -391,8 +392,10 @@ export function startLeoQuickEntry(deps: LeoQuickEntryDeps): void {
     } else {
       registerShortcut(next.accelerator);
       shortcutError = null;
-      if (panel && !panel.isDestroyed()) panel.destroy();
+      panelVisible = false;
+      const oldPanel = panel;
       panel = null;
+      if (oldPanel && !oldPanel.isDestroyed()) oldPanel.destroy();
     }
     // 重新打开快速派发:先把浮窗建好,下次按快捷键不用等建窗。
     if (next.quickPanelEnabled && !previous.quickPanelEnabled) ensurePanel();
@@ -436,14 +439,16 @@ export function startLeoQuickEntry(deps: LeoQuickEntryDeps): void {
     if (!fromPanel(event)) return;
     hidePanel(reason === "dispatched" ? "dispatched" : "escape");
   });
-  ipcMain.handle(SETTINGS_GET_CHANNEL, (event) =>
-    isTrustedLeoSender(event) ? settingsResult() : { error: "forbidden" },
-  );
-  ipcMain.handle(SETTINGS_SET_CHANNEL, (event, patch: unknown) =>
-    isTrustedLeoSender(event) && patch && typeof patch === "object"
-      ? applySettings(patch as Record<string, unknown>)
-      : { error: "forbidden" },
-  );
+  ipcMain.handle(SETTINGS_GET_CHANNEL, async (event) => {
+    if (!isTrustedLeoSender(event)) return { error: "forbidden" };
+    await settingsLoaded;
+    return settingsResult();
+  });
+  ipcMain.handle(SETTINGS_SET_CHANNEL, async (event, patch: unknown) => {
+    if (!isTrustedLeoSender(event) || !patch || typeof patch !== "object") return { error: "forbidden" };
+    await settingsLoaded;
+    return applySettings(patch as Record<string, unknown>);
+  });
 
   app.on("will-quit", () => {
     if (registeredAccelerator) globalShortcut.unregister(registeredAccelerator);
@@ -451,14 +456,9 @@ export function startLeoQuickEntry(deps: LeoQuickEntryDeps): void {
     if (pollTimer) clearTimeout(pollTimer);
   });
 
-  // ── 启动 ───────────────────────────────────────────────────────────────
-
-  void (async () => {
-    try {
-      settings = parseQuickEntrySettings(JSON.parse(await readFile(settingsPath, "utf8")));
-    } catch {
-      settings = { ...DEFAULT_QUICK_ENTRY_SETTINGS };
-    }
+  const settingsLoaded = (async () => {
+    try { settings = parseQuickEntrySettings(JSON.parse(await readFile(settingsPath, "utf8"))); }
+    catch { settings = { ...DEFAULT_QUICK_ENTRY_SETTINGS }; }
     // [G3] 浮窗跟 App 外观走(见 quickPanelTheme.ts);落盘,下次启动主窗口同步前也是对的。
     onLeoQuickPanelAppTheme((theme) => {
       if (settings.appTheme === theme) return;
@@ -471,14 +471,8 @@ export function startLeoQuickEntry(deps: LeoQuickEntryDeps): void {
     syncTray();
     schedulePoll(1_500);
     if (settings.quickPanelEnabled) {
-      afterFirstScreenIdle(
-        () => {
-          if (settings.quickPanelEnabled) ensurePanel();
-        },
-        PANEL_PREWARM_IDLE_MS,
-        PANEL_PREWARM_FALLBACK_MS,
-        isLeoQuickPanelWindow,
-      );
+      afterFirstScreenIdle(() => { if (settings.quickPanelEnabled) ensurePanel(); },
+        PANEL_PREWARM_IDLE_MS, PANEL_PREWARM_FALLBACK_MS, isLeoQuickPanelWindow);
     }
   })();
 }

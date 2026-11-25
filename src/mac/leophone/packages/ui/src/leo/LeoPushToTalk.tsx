@@ -2,6 +2,7 @@ import { Mic } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 
 import { DictationWriter, findDictationTarget } from "./dictationWriter.js";
@@ -28,6 +29,10 @@ type Phase =
 
 export function LeoPushToTalk() {
   const bridge = leoSpeechBridge();
+  const { locale } = useZCodeIntl();
+  const zh = (locale ?? "zh-CN").startsWith("zh");
+  const zhRef = useRef(zh);
+  zhRef.current = zh;
   const [settings, setSettings] = useState<LeoSpeechSettings | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const writerRef = useRef<DictationWriter | null>(null);
@@ -53,6 +58,27 @@ export function LeoPushToTalk() {
     };
   }, [bridge]);
 
+  const startingRef = useRef(false);
+  const stopPendingRef = useRef(false);
+
+  const clearErrorTimer = () => {
+    if (errorTimerRef.current !== null) {
+      window.clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = null;
+    }
+  };
+
+  const showTransientError = (message: string, micDenied = false) => {
+    clearErrorTimer();
+    setPhase({ kind: "error", message, micDenied });
+    errorTimerRef.current = window.setTimeout(() => {
+      errorTimerRef.current = null;
+      setPhase({ kind: "idle" });
+    }, 6_000);
+  };
+
+  useEffect(() => clearErrorTimer, []);
+
   useEffect(() => {
     if (!bridge) return;
     return bridge.onEvent((event: LeoSpeechEvent) => {
@@ -62,11 +88,13 @@ export function LeoPushToTalk() {
         writerRef.current?.update(event.text);
       else if (event.type === "error") {
         activeRef.current = false;
-        setPhase({ kind: "error", message: event.message, micDenied: event.code === "mic_denied" });
-        if (errorTimerRef.current !== null) window.clearTimeout(errorTimerRef.current);
-        errorTimerRef.current = window.setTimeout(() => setPhase({ kind: "idle" }), 6_000);
+        startingRef.current = false;
+        stopPendingRef.current = false;
+        showTransientError(event.message, event.code === "mic_denied");
       } else if (event.type === "done") {
         activeRef.current = false;
+        startingRef.current = false;
+        stopPendingRef.current = false;
         writerRef.current = null;
         setPhase((current) => (current.kind === "error" ? current : { kind: "idle" }));
       }
@@ -106,23 +134,55 @@ export function LeoPushToTalk() {
       if (!activeRef.current) return;
       activeRef.current = false;
       setPhase({ kind: "finishing" });
-      void bridge.stop();
+      if (startingRef.current) {
+        // start() IPC 还在路上：等 start() 返回后立刻补停，避免先发的 stop() 被丢弃导致麦克风常开。
+        stopPendingRef.current = true;
+        return;
+      }
+      void bridge.stop().catch(() => {
+        setPhase({ kind: "idle" });
+      });
     };
     const begin = () => {
+      clearErrorTimer();
       const target = findDictationTarget();
       if (!target) {
-        setPhase({ kind: "error", message: "先点一下输入框再说话", micDenied: false });
+        showTransientError(zhRef.current ? "先点一下输入框再说话" : "Click a text field before speaking", false);
         return;
       }
       activeRef.current = true;
+      startingRef.current = true;
+      stopPendingRef.current = false;
       writerRef.current = new DictationWriter(target);
       setPhase({ kind: "listening", installing: false });
-      void bridge.start().then((result) => {
-        if (!result.ok) {
+      void bridge
+        .start()
+        .then((result) => {
+          startingRef.current = false;
+          if (!result.ok) {
+            activeRef.current = false;
+            stopPendingRef.current = false;
+            showTransientError(
+              result.error ?? (zhRef.current ? "语音助手没启动" : "Voice dictation did not start"),
+              false,
+            );
+            return;
+          }
+          if (stopPendingRef.current) {
+            stopPendingRef.current = false;
+            void bridge.stop().catch(() => setPhase({ kind: "idle" }));
+          }
+        })
+        .catch((error: unknown) => {
+          startingRef.current = false;
           activeRef.current = false;
-          setPhase({ kind: "error", message: result.error ?? "语音助手没启动", micDenied: false });
-        }
-      });
+          stopPendingRef.current = false;
+          logger.warn("[LeoPushToTalk] 启动语音输入失败", error);
+          showTransientError(
+            zhRef.current ? "语音助手启动失败" : "Failed to start voice dictation",
+            false,
+          );
+        });
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isHotkey(event)) return;
@@ -172,7 +232,7 @@ export function LeoPushToTalk() {
                 className="text-[var(--leo-brand)] underline-offset-2 hover:underline"
                 onClick={() => void bridge.openMicSettings()}
               >
-                去系统设置
+                {zh ? "去系统设置" : "Open System Settings"}
               </button>
             ) : null}
           </>
@@ -183,10 +243,16 @@ export function LeoPushToTalk() {
               aria-hidden="true"
             />
             {phase.kind === "finishing"
-              ? "正在收尾…"
+              ? zh
+                ? "正在收尾…"
+                : "Finishing…"
               : phase.installing
-                ? "第一次使用，正在准备系统语音资源…"
-                : `正在听…  松开 ${hint} 或再点麦克风结束`}
+                ? zh
+                  ? "第一次使用，正在准备系统语音资源…"
+                  : "Preparing system speech resources for first use…"
+                : zh
+                  ? `正在听…  松开 ${hint} 或再点麦克风结束`
+                  : `Listening…  Release ${hint} or click Mic to finish`}
           </>
         )}
       </div>

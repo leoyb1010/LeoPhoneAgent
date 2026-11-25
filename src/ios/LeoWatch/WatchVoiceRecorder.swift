@@ -27,6 +27,7 @@ final class WatchVoiceRecorder: NSObject, ObservableObject {
     private var recorder: AVAudioRecorder?
     private var meterTimer: Timer?
     private var autoStopTask: Task<Void, Never>?
+    private var isStarting = false
     private var fileURL: URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("leo-ask.m4a")
     }
@@ -35,6 +36,9 @@ final class WatchVoiceRecorder: NSObject, ObservableObject {
     private let maxSeconds: TimeInterval = 30
 
     func start() async -> Bool {
+        guard !isStarting, !isRecording else { return false }
+        isStarting = true
+        defer { isStarting = false }
         let granted = await withCheckedContinuation { continuation in
             AVAudioSession.sharedInstance().requestRecordPermission { ok in
                 continuation.resume(returning: ok)
@@ -45,6 +49,8 @@ final class WatchVoiceRecorder: NSObject, ObservableObject {
             return false
         }
         do {
+            meterTimer?.invalidate(); meterTimer = nil
+            autoStopTask?.cancel(); autoStopTask = nil
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .default)
             try session.setActive(true)
@@ -66,7 +72,8 @@ final class WatchVoiceRecorder: NSObject, ObservableObject {
             }
             autoStopTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64((self?.maxSeconds ?? 30) * 1_000_000_000))
-                if let self, self.isRecording, let data = self.stop() {
+                guard !Task.isCancelled, let self, self.isRecording else { return }
+                if let data = self.stop() {
                     self.onAutoStop?(data)
                 }
             }

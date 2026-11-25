@@ -865,6 +865,7 @@ struct MinisLinkPreviewView: View {
                         Button { dismiss() } label: {
                             Image(systemName: "xmark")
                         }
+                        .accessibilityLabel(Text("Close"))
                     }
                     if let onPark {
                         ToolbarItem(placement: .primaryAction) {

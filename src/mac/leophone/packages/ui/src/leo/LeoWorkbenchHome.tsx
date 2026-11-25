@@ -115,7 +115,7 @@ export function LeoWorkbenchMore({ children }: { children: ReactNode }) {
       onToggle={(event) => setOpen(event.currentTarget.open)}
       className="w-full max-w-2xl border-t border-border pt-3"
     >
-      <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md px-1.5 py-1 text-ui-sm text-foreground-subtle transition-colors hover:bg-hover hover:text-foreground outline-offset-4 [&::-webkit-details-marker]:hidden motion-reduce:transition-none">
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md px-1.5 py-1 text-ui-sm text-foreground-subtle transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand [&::-webkit-details-marker]:hidden motion-reduce:transition-none">
         <ChevronRight
           aria-hidden="true"
           className={cn(

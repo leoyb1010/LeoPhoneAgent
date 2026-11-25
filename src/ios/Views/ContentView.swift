@@ -3551,12 +3551,17 @@ struct ContentView: View {
     }
 
     private func filterChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button {
+            LeoHaptics.selection()
+            action()
+        } label: {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(selected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.10), in: Capsule())
+                .frame(minHeight: LeoChromeMetrics.hitTarget)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -3883,37 +3888,37 @@ struct ContentView: View {
     /// "/" 面板的全部动作。顺序是首次打开时的默认顺序,之后按最近使用排。
     private var homeActions: [HomeAction] {
         var list: [HomeAction] = [
-            HomeAction(id: "voice", title: "语音模式", icon: "waveform", tint: .orange) { startHomeChatAction(.startVoice) },
-            HomeAction(id: "camera", title: "拍照识别", icon: "camera.viewfinder", tint: .blue) { homeAttachmentPicker = .camera },
-            HomeAction(id: "recording", title: "录音纪要", icon: "waveform", tint: .red) { RecordingPresenter.present(.recorder) },
+            HomeAction(id: "voice", title: "语音模式", icon: "waveform", tint: LeoTheme.ColorToken.accent) { startHomeChatAction(.startVoice) },
+            HomeAction(id: "camera", title: "拍照识别", icon: "camera.viewfinder", tint: LeoTheme.ColorToken.accent) { homeAttachmentPicker = .camera },
+            HomeAction(id: "recording", title: "录音纪要", icon: "waveform", tint: LeoTheme.ColorToken.destructive) { RecordingPresenter.present(.recorder) },
         ]
         if torchSupported {
             list.append(HomeAction(id: "torch", title: torchOn ? "关手电筒" : "手电筒",
-                                   icon: torchOn ? "flashlight.off.fill" : "flashlight.on.fill", tint: .yellow) {
+                                   icon: torchOn ? "flashlight.off.fill" : "flashlight.on.fill", tint: LeoTheme.ColorToken.attention) {
                 let enabled = !DeviceActions.shared.statusTorch().enabled
                 runHomeNative(.init(path: .native, kind: .toggleFlashlight,
                     hour: nil, minute: nil, tomorrow: false, label: enabled ? "on" : "off"))
             })
         }
         list += [
-            HomeAction(id: "files", title: "本机文件", icon: "folder.fill", tint: .blue) { activeToolSheet = .rootfsManagement },
-            HomeAction(id: "web", title: "网页研究", icon: "globe", tint: .indigo) { activeToolSheet = .browser },
-            HomeAction(id: "automation", title: "快捷任务", icon: "bolt.fill", tint: .indigo) { activeToolSheet = .quickTasks },
-            HomeAction(id: "terminal", title: "iSH 终端", icon: "terminal.fill", tint: .blue) { showTerminal = true },
+            HomeAction(id: "files", title: "本机文件", icon: "folder.fill", tint: LeoTheme.ColorToken.accent) { activeToolSheet = .rootfsManagement },
+            HomeAction(id: "web", title: "网页研究", icon: "globe", tint: LeoTheme.ColorToken.accent) { activeToolSheet = .browser },
+            HomeAction(id: "automation", title: "快捷任务", icon: "bolt.fill", tint: LeoTheme.ColorToken.accent) { activeToolSheet = .quickTasks },
+            HomeAction(id: "terminal", title: "iSH 终端", icon: "terminal.fill", tint: .secondary) { showTerminal = true },
             HomeAction(id: "clipboard", title: "读剪贴板", icon: "doc.on.clipboard", tint: .gray) {
                 runHomeNative(.init(path: .native, kind: .readClipboard, hour: nil, minute: nil, tomorrow: false, label: ""))
             },
-            HomeAction(id: "brightness", title: "亮度", icon: "sun.max.fill", tint: .orange) { showBrightnessOptions = true },
+            HomeAction(id: "brightness", title: "亮度", icon: "sun.max.fill", tint: LeoTheme.ColorToken.attention) { showBrightnessOptions = true },
             HomeAction(id: "device", title: "设备信息", icon: isIPad ? "ipad" : "iphone", tint: .gray) {
                 runHomeNative(.init(path: .native, kind: .deviceInfo, hour: nil, minute: nil, tomorrow: false, label: ""))
             },
-            HomeAction(id: "capabilities", title: "全部能力", icon: "square.grid.2x2", tint: .purple) { activeToolSheet = .capabilities },
+            HomeAction(id: "capabilities", title: "全部能力", icon: "square.grid.2x2", tint: LeoTheme.ColorToken.accent) { activeToolSheet = .capabilities },
         ]
         if macFleetEnabled {
             list.append(HomeAction(id: "mac", title: "Mac 控制台", icon: "desktopcomputer", tint: .secondary) { showMacConsole = true })
         }
         if hasAlarms {
-            list.append(HomeAction(id: "alarms", title: "闹钟", icon: "alarm", tint: .red) { showAlarmList = true })
+            list.append(HomeAction(id: "alarms", title: "闹钟", icon: "alarm", tint: LeoTheme.ColorToken.destructive) { showAlarmList = true })
         }
         list.append(HomeAction(id: "browser-settings", title: "浏览器设置", icon: "globe.badge.chevron.backward", tint: .gray) {
             activeToolSheet = .browserManagement
@@ -6171,7 +6176,7 @@ private struct SessionRow: View, Equatable {
                 .clipShape(Circle())
                 .overlay {
                     if isSuspended {
-                        SuspendedRing(color: .yellow)
+                        SuspendedRing(color: LeoTheme.ColorToken.attention)
                             .frame(width: density.iconSize - 2, height: density.iconSize - 2)
                     } else if isActive {
                         SpinningRing(color: iconBackgroundColor)
@@ -6191,15 +6196,15 @@ private struct SessionRow: View, Equatable {
                         badgeCircle(for: badge)
                             .offset(x: 2, y: 2)
                     } else if session.source == "shortcut" {
-                        badgeCircle(icon: "bolt.fill", color: .orange)
+                        badgeCircle(icon: "bolt.fill", color: LeoTheme.ColorToken.accent)
                             .offset(x: 2, y: 2)
                     } else if session.source == "watch" {
                         // [E4] 手表上问起的会话:手机上一眼认出来,接着问。
-                        badgeCircle(icon: "applewatch", color: .indigo)
+                        badgeCircle(icon: "applewatch", color: LeoTheme.ColorToken.accent)
                             .offset(x: 2, y: 2)
                             .accessibilityLabel(Text("来自 Apple Watch"))
                     } else if session.isRemote {
-                        badgeCircle(icon: "icloud.fill", color: .blue, iconSize: 7)
+                        badgeCircle(icon: "icloud.fill", color: LeoTheme.ColorToken.accent, iconSize: 7)
                             .offset(x: 2, y: 2)
                     }
                 }
@@ -6385,25 +6390,7 @@ private struct SessionRow: View, Equatable {
     }
 
     private var categoryIcon: (systemName: String, color: Color) {
-        switch session.category {
-        case "code":         return ("terminal.fill", .orange)
-        case "writing":      return ("doc.text.fill", .blue)
-        case "research":     return ("globe.americas.fill", .indigo)
-        case "analysis":     return ("chart.pie.fill", .indigo)
-        case "creative":     return ("paintbrush.pointed.fill", .pink)
-        case "chat":         return ("bubble.left.fill", .blue)
-        case "math":         return ("number.circle.fill", .purple)
-        case "translation":  return ("character.bubble", .cyan)
-        case "health":       return ("heart.fill", .red)
-        case "finance":      return ("banknote.fill", .gray)
-        case "travel":       return ("map.fill", .orange)
-        case "education":    return ("book.closed.fill", .blue)
-        case "design":       return ("paintpalette.fill", .pink)
-        case "productivity": return ("calendar.badge.checkmark", .yellow)
-        case "support":      return ("gearshape.fill", .brown)
-        case "other":        return ("square.grid.2x2.fill", .gray)
-        default:             return ("bubble.left.fill", .gray)
-        }
+        SessionCategoryPalette.icon(for: session.category)
     }
 
     @ViewBuilder
@@ -6556,25 +6543,7 @@ private struct RemoteSessionRow: View {
     }
 
     private var categoryIcon: (systemName: String, color: Color) {
-        switch session.category {
-        case "code":         return ("terminal.fill", .orange)
-        case "writing":      return ("doc.text.fill", .blue)
-        case "research":     return ("globe.americas.fill", .indigo)
-        case "analysis":     return ("chart.pie.fill", .indigo)
-        case "creative":     return ("paintbrush.pointed.fill", .pink)
-        case "chat":         return ("bubble.left.fill", .blue)
-        case "math":         return ("number.circle.fill", .purple)
-        case "translation":  return ("character.bubble", .cyan)
-        case "health":       return ("heart.fill", .red)
-        case "finance":      return ("banknote.fill", .gray)
-        case "travel":       return ("map.fill", .orange)
-        case "education":    return ("book.closed.fill", .blue)
-        case "design":       return ("paintpalette.fill", .pink)
-        case "productivity": return ("calendar.badge.checkmark", .yellow)
-        case "support":      return ("gearshape.fill", .brown)
-        case "other":        return ("square.grid.2x2.fill", .gray)
-        default:             return ("bubble.left.fill", .gray)
-        }
+        SessionCategoryPalette.icon(for: session.category)
     }
 
     private var iconColor: Color { categoryIcon.color }
@@ -6599,6 +6568,36 @@ private struct SuspendedRing: View {
     }
 }
 
+/// Single source of truth for session category icons & restrained palette
+/// shared by SessionRow, RemoteSessionRow, and SessionEditSheet.
+private enum SessionCategoryPalette {
+    static let all: [(key: String, label: String, icon: String, color: Color)] = [
+        ("code",         "Code",         "terminal.fill",               LeoTheme.ColorToken.accent),
+        ("writing",      "Writing",      "doc.text.fill",               LeoTheme.ColorToken.accent),
+        ("research",     "Research",     "globe.americas.fill",         LeoTheme.ColorToken.accent),
+        ("analysis",     "Analysis",     "chart.pie.fill",              .secondary),
+        ("creative",     "Creative",     "paintbrush.pointed.fill",     LeoTheme.ColorToken.accent),
+        ("chat",         "Chat",         "bubble.left.fill",            LeoTheme.ColorToken.accent),
+        ("math",         "Math",         "number.circle.fill",          .secondary),
+        ("translation",  "Translation",  "character.bubble",            LeoTheme.ColorToken.accent),
+        ("health",       "Health",       "heart.fill",                  LeoTheme.ColorToken.destructive),
+        ("finance",      "Finance",      "banknote.fill",               .gray),
+        ("travel",       "Travel",       "map.fill",                    LeoTheme.ColorToken.attention),
+        ("education",    "Education",    "book.closed.fill",            LeoTheme.ColorToken.accent),
+        ("design",       "Design",       "paintpalette.fill",           .secondary),
+        ("productivity", "Productivity", "calendar.badge.checkmark",    LeoTheme.ColorToken.accent),
+        ("support",      "Support",      "gearshape.fill",              .gray),
+        ("other",        "Other",        "square.grid.2x2.fill",        .gray),
+    ]
+
+    static func icon(for category: String?) -> (systemName: String, color: Color) {
+        if let category, let match = all.first(where: { $0.key == category }) {
+            return (match.icon, match.color)
+        }
+        return ("bubble.left.fill", .gray)
+    }
+}
+
 // MARK: - Session Edit Sheet
 
 struct SessionEditSheet: View {
@@ -6610,24 +6609,7 @@ struct SessionEditSheet: View {
     @State private var editCategory: String = ""
     @State private var isRegenerating = false
 
-    private static let categories: [(key: String, label: String, icon: String, color: Color)] = [
-        ("code",         "Code",         "terminal.fill",               .orange),
-        ("writing",      "Writing",      "doc.text.fill",               .blue),
-        ("research",     "Research",     "globe.americas.fill",         .indigo),
-        ("analysis",     "Analysis",     "chart.pie.fill",              .indigo),
-        ("creative",     "Creative",     "paintbrush.pointed.fill",     .pink),
-        ("chat",         "Chat",         "bubble.left.fill",            .blue),
-        ("math",         "Math",         "number.circle.fill",          .purple),
-        ("translation",  "Translation",  "character.bubble",            .cyan),
-        ("health",       "Health",       "heart.fill",                  .red),
-        ("finance",      "Finance",      "banknote.fill",               .gray),
-        ("travel",       "Travel",       "map.fill",                    .orange),
-        ("education",    "Education",    "book.closed.fill",            .blue),
-        ("design",       "Design",       "paintpalette.fill",           .pink),
-        ("productivity", "Productivity", "calendar.badge.checkmark",    .yellow),
-        ("support",      "Support",      "gearshape.fill",              .brown),
-        ("other",        "Other",        "square.grid.2x2.fill",       .gray),
-    ]
+    private static let categories = SessionCategoryPalette.all
 
     var body: some View {
         NavigationStack {

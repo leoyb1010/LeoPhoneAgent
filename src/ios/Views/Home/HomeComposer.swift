@@ -256,6 +256,7 @@ struct HomeComposerBar: View {
                 Button(action: onSlash) {
                     Text("动作").font(.footnote.weight(.medium))
                         .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("动作、技能和 MCP"))
@@ -283,8 +284,8 @@ struct HomeComposerBar: View {
         .padding(.bottom, 6)
         // [duo-fold] Keep the home composer off a half-open Duo's horizontal fold.
         .modifier(FoldAvoidingControl(squeezeHorizontally: false, maxLift: FoldAvoidance.composerMaxLift))
-        .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: trimmedEmpty)
-        .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: isBusy)
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: trimmedEmpty)
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: isBusy)
     }
 
     // [chat-chrome] Both chips use the shared chrome pill (32pt capsule, 44pt hit
@@ -342,7 +343,7 @@ struct HomeComposerBar: View {
             .accessibilityIdentifier("home.voice-input")
         } else {
             LeoComposerSendButton(canSend: canSend, label: Text("发送"), identifier: "home.send", action: onSubmit)
-                .transition(.scale(scale: 0.6).combined(with: .opacity))
+                .transition(reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
         }
     }
 
@@ -367,6 +368,7 @@ struct HomeResultBanner: View {
     /// [WP-42] Same GlassEffectContainer as the composer: the banner grows out of it.
     var glassNamespace: Namespace.ID? = nil
     let onClose: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -395,7 +397,7 @@ struct HomeResultBanner: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 18, style: .continuous))
         .leoGlassID("home.banner", in: glassNamespace)
         .padding(.horizontal, 12)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
     }
 
     private var icon: String {
@@ -603,14 +605,24 @@ struct HomeActionSheet: View {
                                 }
                             }
                         }
-                        Button("管理技能") { dismiss(); onManageSkills() }
-                            .font(.footnote.weight(.semibold))
+                        Button {
+                            dismiss(); onManageSkills()
+                        } label: {
+                            Text("管理技能")
+                                .font(.footnote.weight(.semibold))
+                                .frame(minHeight: LeoChromeMetrics.hitTarget)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.accentColor)
                     }
 
                     section("MCP") {
                         Button { dismiss(); onManageMCP() } label: {
                             Label("MCP 服务器", systemImage: "point.3.connected.trianglepath.dotted")
                                 .font(.subheadline)
+                                .frame(maxWidth: .infinity, minHeight: LeoChromeMetrics.hitTarget, alignment: .leading)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }

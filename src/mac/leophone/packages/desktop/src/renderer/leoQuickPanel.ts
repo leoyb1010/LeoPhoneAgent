@@ -40,6 +40,7 @@ let hideTimer: number | null = null;
 
 function setStatus(text: string, tone: "hint" | "ok" | "error" | "busy" = "hint") {
   status.textContent = text;
+  status.title = text;
   status.dataset["tone"] = tone;
 }
 

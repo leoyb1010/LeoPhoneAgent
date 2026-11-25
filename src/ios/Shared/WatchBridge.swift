@@ -863,8 +863,11 @@ enum WatchAskRunner {
             vm = ViewModelCache.shared.createDraft()
         }
         vm.sessionSource = "watch"
-        await vm.ensureSessionReturningId()
-        AIChatViewModel.activeSessionId = previousActive
+        let createdSessionId = await vm.ensureSessionReturningId()
+        // Only restore previousActive if the user on iPhone didn't switch to a different session while we awaited.
+        if AIChatViewModel.activeSessionId == nil || AIChatViewModel.activeSessionId == createdSessionId || AIChatViewModel.activeSessionId == vm.sessionId {
+            AIChatViewModel.activeSessionId = previousActive
+        }
         guard let sid = vm.sessionId else {
             deliver(requestId: requestId, text: "无法创建会话。")
             return
@@ -915,13 +918,25 @@ enum WatchAskRunner {
         var sawActive = false
         var stillRunning = false
         var lastPartial = (text: "", step: "")
+        var lastRawText = ""
+        var lastSanitizedText = ""
         // The watch stops waiting at 185 s.
         while Date().timeIntervalSince(started) < 180 {
             try? await Task.sleep(nanoseconds: 300_000_000)
-            let partial = partialSnapshot(vm: vm, after: baseline)
-            if partial.text != lastPartial.text || partial.step != lastPartial.step {
-                lastPartial = partial
-                WatchBridge.shared.sendAskPartial(requestId: requestId, text: partial.text, step: partial.step)
+            let raw = rawPartialSnapshot(vm: vm, after: baseline)
+            let sanitized: String
+            if raw.text == lastRawText {
+                sanitized = lastSanitizedText
+            } else {
+                lastRawText = raw.text
+                sanitized = await Task.detached(priority: .utility) {
+                    String(WatchTextSanitizer.plain(raw.text).suffix(4000))
+                }.value
+                lastSanitizedText = sanitized
+            }
+            if sanitized != lastPartial.text || raw.step != lastPartial.step {
+                lastPartial = (sanitized, raw.step)
+                WatchBridge.shared.sendAskPartial(requestId: requestId, text: sanitized, step: raw.step)
             }
             let active = SessionActivityTracker.shared.activeSessions.contains(sid)
                 || SessionActivityTracker.shared.isActive(sid)
@@ -950,9 +965,7 @@ enum WatchAskRunner {
         WatchBridge.shared.pushStatus()
     }
 
-    /// [T-watch-stream] This run's assistant turn so far: its text (flattened
-    /// for the wrist) and a short "what it's doing" line.
-    private static func partialSnapshot(vm: AIChatViewModel, after baseline: Int) -> (text: String, step: String) {
+    private static func rawPartialSnapshot(vm: AIChatViewModel, after baseline: Int) -> (text: String, step: String) {
         let messages = vm.messages
         guard messages.count > baseline,
               let turn = messages[baseline...].last(where: { $0.role == .assistant }) else { return ("", "") }
@@ -961,7 +974,14 @@ enum WatchAskRunner {
             .map { $0.content.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "\n")
-        return (String(WatchTextSanitizer.plain(text).suffix(4000)), stepLabel(turn))
+        return (text, stepLabel(turn))
+    }
+
+    /// [T-watch-stream] This run's assistant turn so far: its text (flattened
+    /// for the wrist) and a short "what it's doing" line.
+    private static func partialSnapshot(vm: AIChatViewModel, after baseline: Int) -> (text: String, step: String) {
+        let raw = rawPartialSnapshot(vm: vm, after: baseline)
+        return (String(WatchTextSanitizer.plain(raw.text).suffix(4000)), raw.step)
     }
 
     private static func stepLabel(_ turn: ChatMessage) -> String {

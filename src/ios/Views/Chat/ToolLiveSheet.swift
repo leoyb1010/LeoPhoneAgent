@@ -1943,7 +1943,7 @@ struct ToolLiveSheet: View {
         case .cancelled:
             Image(systemName: "stop.circle.fill")
                 .font(.system(size: 18))
-                .foregroundStyle(.yellow)
+                .foregroundStyle(ChatColors.secondaryText)
         case nil:
             EmptyView()
         }
@@ -1984,17 +1984,17 @@ struct ToolLiveSheet: View {
 
     private var accentColor: Color {
         switch block.kind {
-        case .shellTool: return .blue
+        case .shellTool: return LeoTheme.ColorToken.accent
         case .fileReadTool: return .primary
-        case .fileWriteTool: return .blue
-        case .fileEditTool: return .orange
-        case .browserTool: return .blue
-        case .readImageTool: return .purple
-        case .memoryTool: return .pink
-        case .delegateTool: return .indigo
+        case .fileWriteTool: return LeoTheme.ColorToken.accent
+        case .fileEditTool: return LeoTheme.ColorToken.attention
+        case .browserTool: return LeoTheme.ColorToken.accent
+        case .readImageTool: return LeoTheme.ColorToken.accent
+        case .memoryTool: return .secondary
+        case .delegateTool: return LeoTheme.ColorToken.accent
         case .info: return .secondary
         case .text: return .primary
-        case .thinking: return .blue
+        case .thinking: return LeoTheme.ColorToken.accent
         }
     }
 
@@ -2321,17 +2321,17 @@ private struct ToolPreviewThumbnail: View {
 
     private var accentColor: Color {
         switch block.kind {
-        case .shellTool: return .blue
-        case .fileReadTool: return .cyan
-        case .fileWriteTool: return .blue
-        case .fileEditTool: return .orange
-        case .browserTool: return .blue
-        case .readImageTool: return .purple
-        case .memoryTool: return .pink
-        case .delegateTool: return .indigo
+        case .shellTool: return LeoTheme.ColorToken.accent
+        case .fileReadTool: return .secondary
+        case .fileWriteTool: return LeoTheme.ColorToken.accent
+        case .fileEditTool: return LeoTheme.ColorToken.attention
+        case .browserTool: return LeoTheme.ColorToken.accent
+        case .readImageTool: return LeoTheme.ColorToken.accent
+        case .memoryTool: return .secondary
+        case .delegateTool: return LeoTheme.ColorToken.accent
         case .info: return .secondary
         case .text: return .primary
-        case .thinking: return .blue
+        case .thinking: return LeoTheme.ColorToken.accent
         }
     }
 
@@ -2390,13 +2390,14 @@ private struct ToolStatusBar: View {
 
             if let previewExpanded {
                 Button {
+                    LeoHaptics.selection()
                     previewExpanded.wrappedValue.toggle()
                 } label: {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(ChatColors.secondaryText)
                         .rotationEffect(.degrees(previewExpanded.wrappedValue ? 180 : 0))
-                        .frame(width: 32, height: LeoChromeMetrics.activityRowHeight)
+                        .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: LeoChromeMetrics.hitTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -2415,11 +2416,14 @@ private struct ToolStatusBar: View {
     }
 
     private func stepButton(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button {
+            LeoHaptics.selection()
+            action()
+        } label: {
             Image(systemName: symbol)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(enabled ? ChatColors.primaryText : ChatColors.tertiaryText)
-                .frame(width: 28, height: LeoChromeMetrics.activityRowHeight)
+                .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: LeoChromeMetrics.hitTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -2436,15 +2440,15 @@ private struct ToolStatusBar: View {
         case .success:
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 15))
-                .foregroundStyle(.blue)
+                .foregroundStyle(LeoTheme.ColorToken.accent)
         case .failed:
             Image(systemName: "xmark.circle.fill")
                 .font(.system(size: 15))
-                .foregroundStyle(.red)
+                .foregroundStyle(LeoTheme.ColorToken.destructive)
         case .cancelled:
             Image(systemName: "stop.circle.fill")
                 .font(.system(size: 15))
-                .foregroundStyle(.yellow)
+                .foregroundStyle(ChatColors.secondaryText)
         case nil:
             EmptyView()
         }

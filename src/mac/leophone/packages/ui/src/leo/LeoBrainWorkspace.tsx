@@ -73,6 +73,12 @@ export function LeoBrainWorkspace({
   const readEpoch = useRef(0);
   const retry = useRef<() => void>(() => {});
   const feedbackTimer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (feedbackTimer.current !== null) {
+      window.clearTimeout(feedbackTimer.current);
+      feedbackTimer.current = null;
+    }
+  }, []);
 
   const loadList = useCallback(async (request: ListRequest): Promise<void> => {
     if (!port) return;
@@ -184,14 +190,17 @@ export function LeoBrainWorkspace({
     if (!detail) return;
     const text = extractBrainDetailPlainText(detail);
     if (!text) return;
-    void navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      if (feedbackTimer.current !== null) window.clearTimeout(feedbackTimer.current);
-      feedbackTimer.current = window.setTimeout(() => {
-        setCopied(false);
-        feedbackTimer.current = null;
-      }, 1500);
-    });
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(true);
+        if (feedbackTimer.current !== null) window.clearTimeout(feedbackTimer.current);
+        feedbackTimer.current = window.setTimeout(() => {
+          setCopied(false);
+          feedbackTimer.current = null;
+        }, 1500);
+      })
+      .catch(() => undefined);
   };
 
   const handleInsertIntoChat = () => {

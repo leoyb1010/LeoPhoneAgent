@@ -97,8 +97,8 @@ extension FullAutoGate.Mode {
     var tint: Color {
         switch self {
         case .ask: .secondary
-        case .smart: .indigo
-        case .full: .orange
+        case .smart: LeoTheme.ColorToken.accent
+        case .full: LeoTheme.ColorToken.attention
         }
     }
 }
@@ -234,8 +234,8 @@ struct FullAutoBadge: View {
         } message: {
             Text("Agent 写文件、跑命令、调用手机能力、改设置都不再逐项确认,发给 Mac 的任务也一样。你设成「不允许」的能力仍然不执行。随时再点这里关掉。")
         }
-        .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.2), value: mode)
-        .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.15), value: flashing)
+        .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: mode)
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: flashing)
     }
 
     private func choose(_ mode: FullAutoGate.Mode) {

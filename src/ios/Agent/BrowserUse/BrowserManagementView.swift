@@ -294,7 +294,7 @@ struct BrowserManagementView: View {
     private func uaMismatchBanner(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.yellow)
+                .foregroundStyle(LeoTheme.ColorToken.attention)
             Text(message)
                 .font(.caption)
                 .foregroundStyle(Color(UIColor.label))

@@ -111,7 +111,7 @@ struct SyncLogView: View {
                     .foregroundStyle(.blue)
             case .conflict:
                 Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                    .foregroundStyle(.yellow)
+                    .foregroundStyle(LeoTheme.ColorToken.attention)
             case .error:
                 Image(systemName: "exclamationmark.circle.fill")
                     .foregroundStyle(.red)

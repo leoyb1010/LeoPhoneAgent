@@ -26,10 +26,7 @@ struct HomeContextStrip: View {
                 resumeRow(resume)
             }
             if snapshot.showsToday || snapshot.showsInboxToggle {
-                let layout = dynamicTypeSize.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: LeoTheme.Spacing.xs))
-                    : AnyLayout(HStackLayout(spacing: LeoTheme.Spacing.xs))
-                layout {
+                LeoFlowLayout(spacing: LeoTheme.Spacing.xs, lineSpacing: LeoTheme.Spacing.xs) {
                     if snapshot.showsToday { todayChip }
                     if snapshot.showsInboxToggle { inboxChip }
                 }

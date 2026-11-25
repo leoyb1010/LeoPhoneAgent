@@ -1028,14 +1028,17 @@ extension AIChatViewModel {
             // so handleUserCancelledCleanup sees the full streamed content.
             let msgIdx = mutableMsgIdx
             if let blockIdx = currentTextBlockIdx, !result.assistantText.isEmpty {
+                let cancelText = result.assistantText
+                let parsedCancel = MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(cancelText)))
+                let hasTable = parsedCancel.blocks.contains { if case .table = $0 { return true }; return false }
                 await MainActor.run {
                     guard msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count else { return }
                     self.setStreamingTextBlockContent(
                         msgIdx: msgIdx,
                         blockIdx: blockIdx,
-                        text: result.assistantText,
-                        parsedMarkdown: MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(result.assistantText))),
-                        cacheAttributedString: true,
+                        text: cancelText,
+                        parsedMarkdown: parsedCancel,
+                        cacheAttributedString: !hasTable,
                         requestScroll: false,
                         expectedMessageId: runMsgId,
                         ignoreUserCancel: true

@@ -859,11 +859,29 @@ class HarnessSession:
 
     async def _pump_stderr(self) -> None:
         assert self.process and self.process.stderr
+        buf = bytearray()
         while True:
-            raw = await self.process.stderr.readline()
-            if not raw:
+            chunk = await self.process.stderr.read(8192)
+            if not chunk:
                 break
-            text = raw.decode("utf-8", errors="replace").rstrip("\n")
+            buf.extend(chunk)
+            while True:
+                nl = buf.find(b"\n")
+                if nl < 0:
+                    # 防止单行超长 stderr 撑爆内存：超过 64KB 先按段吐出
+                    if len(buf) >= 65536:
+                        text = bytes(buf).decode("utf-8", errors="replace").strip()
+                        buf.clear()
+                        if text:
+                            self._emit({"event": "harness.stderr", "text": text[:4096]})
+                    break
+                raw = bytes(buf[:nl])
+                del buf[: nl + 1]
+                text = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+                if text.strip():
+                    self._emit({"event": "harness.stderr", "text": text})
+        if buf:
+            text = bytes(buf).decode("utf-8", errors="replace").rstrip("\r\n")
             if text.strip():
                 self._emit({"event": "harness.stderr", "text": text})
 

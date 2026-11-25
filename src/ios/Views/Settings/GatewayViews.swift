@@ -70,11 +70,11 @@ struct GatewaySettingsView: View {
                     VStack(spacing: LeoTheme.Spacing.md) {
                         ZStack {
                             Circle()
-                                .fill(Color.cyan.opacity(0.12))
+                                .fill(LeoTheme.ColorToken.accent.opacity(0.12))
                                 .frame(width: 68, height: 68)
                             Image(systemName: "desktopcomputer.and.macbook")
                                 .font(.system(size: 30, weight: .medium))
-                                .foregroundStyle(.cyan)
+                                .foregroundStyle(LeoTheme.ColorToken.accent)
                         }
                         .accessibilityHidden(true)
 
@@ -147,16 +147,19 @@ struct GatewaySettingsView: View {
                             .buttonStyle(.plain)
                             // [T-link-problem] 失败时:是谁的问题 + 一个主按钮,技术细节折叠。
                             // 放在行按钮外面:嵌在 Button 里会和整行的点击(进入编辑)抢手势。
-                            HStack(spacing: 14) {
+                            LeoFlowLayout(spacing: 12, lineSpacing: 4) {
                                 GatewayAgentLoginMenu(host: host) { kind in
                                     agentLogin = GatewayAgentLoginTarget(host: host, kind: kind)
                                 }
                                 if !host.isAndroidBody {
                                     Button {
+                                        LeoHaptics.impact(.light)
                                         terminalProblem = SSHTerminalLauncher.open(mac: host)
                                     } label: {
                                         Label("终端", systemImage: "apple.terminal")
                                             .font(.caption.weight(.medium))
+                                            .frame(minHeight: LeoChromeMetrics.hitTarget)
+                                            .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.borderless)
                                     .accessibilityIdentifier("gateway.terminal")
@@ -1009,10 +1012,11 @@ struct GatewayConsoleView: View {
                     }
                 }
                 .padding(16)
+                .modifier(HarnessReadableColumn())
             }
             .onChange(of: driver.items.count) { _ in
                 guard let last = driver.items.last else { return }
-                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                withAnimation(LeoMotion.smooth(reduceMotion: reduceMotion)) { proxy.scrollTo(last.id, anchor: .bottom) }
             }
         }
     }
@@ -1027,17 +1031,25 @@ struct GatewayConsoleView: View {
                 .padding(.vertical, 9)
                 .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
             Button {
+                LeoHaptics.impact(.light)
                 let text = input
                 input = ""
                 driver.send(text)
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 28))
+                    .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: LeoChromeMetrics.hitTarget)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.accentColor)
+            .keyboardShortcut(.return, modifiers: .command)
+            .accessibilityLabel(Text("发送"))
             .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || driver.isRunning)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 6)
+        .modifier(HarnessReadableColumn())
         .background(.bar)
     }
 }
@@ -1128,12 +1140,13 @@ private struct GatewayToolRow: View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 guard canExpand else { return }
+                LeoHaptics.selection()
                 withAnimation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: LeoMotion.standard)) { expanded.toggle() }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: isRunning ? "gearshape.2" : (isError ? "exclamationmark.triangle" : "checkmark.circle"))
                         .font(.system(size: 13))
-                        .foregroundStyle(isError ? .red : (isRunning ? .orange : .blue))
+                        .foregroundStyle(isError ? LeoTheme.ColorToken.destructive : (isRunning ? LeoTheme.ColorToken.attention : LeoTheme.ColorToken.accent))
                         .leoPulse(active: isRunning)
                     Text(name).font(.system(size: 13, weight: .medium, design: .monospaced))
                     if !item.text.isEmpty, !expanded {
@@ -1156,8 +1169,9 @@ private struct GatewayToolRow: View {
                             .rotationEffect(.degrees(expanded ? 90 : 0))
                     }
                 }
-                .padding(.vertical, 6)
+                .padding(.vertical, 8)
                 .padding(.horizontal, 10)
+                .frame(minHeight: LeoChromeMetrics.hitTarget)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1236,10 +1250,35 @@ struct GatewayApprovalCard: View {
         return GatewayApprovalRequest.title(forChoice: choice)
     }
 
+    @ViewBuilder
+    private func choiceButton(_ choice: String) -> some View {
+        let button = Button {
+            LeoHaptics.impact(choice == "deny" ? .medium : .light)
+            onChoose(choice)
+        } label: {
+            Text(label(for: choice))
+                .font(.system(size: 14, weight: choice == "once" ? .semibold : .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, minHeight: 32)
+                .padding(.vertical, 6)
+        }
+        if choice == "once" {
+            button
+                .buttonStyle(.borderedProminent)
+                .tint(LeoTheme.ColorToken.accent)
+        } else {
+            button
+                .buttonStyle(.bordered)
+                .tint(choice == "deny" ? LeoTheme.ColorToken.destructive : LeoTheme.ColorToken.accent)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: isPlan ? "list.bullet.clipboard.fill" : "hand.raised.fill").foregroundStyle(.orange)
+                Image(systemName: isPlan ? "list.bullet.clipboard.fill" : "hand.raised.fill")
+                    .foregroundStyle(LeoTheme.ColorToken.attention)
                 if isPlan {
                     Text("计划等你批准").font(.system(size: 15, weight: .semibold))
                 } else {
@@ -1254,12 +1293,16 @@ struct GatewayApprovalCard: View {
                 Text(reason).font(.system(size: 13)).foregroundStyle(.secondary)
             }
             if !isPlan, let command = approval.command, !command.isEmpty {
-                Text(command)
-                    .font(.system(size: 13, design: .monospaced))
-                    .textSelection(.enabled)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6))
+                ScrollView {
+                    Text(command)
+                        .font(.system(size: 13, design: .monospaced))
+                        .textSelection(.enabled)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 140)
+                .fixedSize(horizontal: false, vertical: true)
+                .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6))
             }
             // 两行两列:四个按钮挤一行时「本次会话允许」会被截成「本次会…」。单数个时最后一个占满一行。
             let choices = self.choices
@@ -1270,27 +1313,15 @@ struct GatewayApprovalCard: View {
                 ForEach(rows, id: \.self) { row in
                     HStack(spacing: 8) {
                         ForEach(row, id: \.self) { choice in
-                            Button {
-                                LeoHaptics.impact(choice == "deny" ? .medium : .light)
-                                onChoose(choice)
-                            } label: {
-                                Text(label(for: choice))
-                                    .font(.system(size: 14, weight: .medium))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
-                                    .frame(maxWidth: .infinity, minHeight: 24)
-                                    .padding(.vertical, 6)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(choice == "deny" ? .red : .accentColor)
+                            choiceButton(choice)
                         }
                     }
                 }
             }
         }
         .padding(14)
-        .background(Color.orange.opacity(0.09))
-        .overlay(Rectangle().frame(height: 1).foregroundStyle(.orange.opacity(0.35)), alignment: .top)
+        .background(LeoTheme.ColorToken.attention.opacity(0.09))
+        .overlay(Rectangle().frame(height: 1).foregroundStyle(LeoTheme.ColorToken.attention.opacity(0.35)), alignment: .top)
     }
 }
 
@@ -1468,37 +1499,45 @@ struct HarnessLauncherView: View {
                         .font(.system(size: 14)).foregroundStyle(.secondary)
                 } else {
                     ForEach(kinds) { kind in
-                        Button {
-                            selected = kind
-                        } label: {
-                            HStack(alignment: .firstTextBaseline) {
-                                Image(systemName: kind.symbol)
-                                    .frame(width: 20)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(kind.displayName)
-                                    // 装不上的照样列出，灰显并写明 Mac 给的原因（怎么装、装在哪）。
-                                    if let line = kind.statusLine {
-                                        Text(line)
-                                            .font(.system(size: 12))
-                                            .foregroundStyle(.secondary)
-                                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(alignment: .center, spacing: 8) {
+                            Button {
+                                LeoHaptics.selection()
+                                selected = kind
+                            } label: {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Image(systemName: kind.symbol)
+                                        .frame(width: 20)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(kind.displayName)
+                                        // 装不上的照样列出，灰显并写明 Mac 给的原因（怎么装、装在哪）。
+                                        if let line = kind.statusLine {
+                                            Text(line)
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(.secondary)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                        }
+                                    }
+                                    Spacer(minLength: 4)
+                                    if selected?.key == kind.key {
+                                        Image(systemName: "checkmark").foregroundStyle(.tint)
                                     }
                                 }
-                                Spacer()
-                                // [fix-remote] Mac 上这个 agent 没登录：在手机上直接网页登录。
-                                if kind.canLogin, kind.loggedIn != true {
-                                    Button(kind.loggedIn == false ? "登录" : "重新登录") { loginTarget = kind }
-                                        .buttonStyle(.bordered)
-                                        .controlSize(.small)
-                                }
-                                if selected?.key == kind.key {
-                                    Image(systemName: "checkmark").foregroundStyle(.tint)
-                                }
+                                .frame(maxWidth: .infinity, minHeight: LeoChromeMetrics.hitTarget, alignment: .leading)
+                                .contentShape(Rectangle())
+                                .opacity(kind.available ? 1 : 0.45)
                             }
-                            .opacity(kind.available ? 1 : 0.45)
+                            .buttonStyle(.plain)
+                            .disabled(!kind.available)
+                            // [fix-remote] Mac 上这个 agent 没登录：独立按钮避免嵌套 Button 抢手势。
+                            if kind.canLogin, kind.loggedIn != true {
+                                Button(kind.loggedIn == false ? "登录" : "重新登录") {
+                                    LeoHaptics.impact(.light)
+                                    loginTarget = kind
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
                         }
-                        .buttonStyle(.plain)
-                        .disabled(!kind.available)
                     }
                 }
                 if let linkProblem {
@@ -1664,7 +1703,7 @@ private extension View {
 /// [ipad-chat] The console's transcript, cards and composer share the chat's
 /// readable column on iPad (they ran edge to edge across a 13" screen); bars
 /// and backgrounds stay full width. Compact width is untouched.
-private struct HarnessReadableColumn: ViewModifier {
+struct HarnessReadableColumn: ViewModifier {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     func body(content: Content) -> some View {
@@ -2032,17 +2071,18 @@ private struct HarnessTranscript: View {
                     } label: {
                         Image(systemName: "arrow.down")
                             .font(.system(size: 14, weight: .semibold))
-                            .frame(width: 38, height: 38)
-                            .background(.regularMaterial, in: Circle())
+                            .frame(width: LeoChromeMetrics.hitTarget, height: LeoChromeMetrics.hitTarget)
+                            .glassEffect(.regular.interactive(), in: .circle)
                             .overlay(alignment: .topTrailing) {
                                 if hasUnseen {
                                     Circle().fill(Color.accentColor).frame(width: 9, height: 9)
                                         .offset(x: -2, y: 2)
                                 }
                             }
-                            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    .modifier(FoldAvoidingControl())
                     .padding(14)
                     .transition(reduceMotion ? .opacity : .scale(scale: 0.8).combined(with: .opacity))
                     .accessibilityLabel(Text("回到底部"))
@@ -2109,6 +2149,8 @@ private struct HarnessQuickActions: View {
                 .foregroundStyle(prominent ? Color.white : Color.primary)
                 .background(prominent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.secondary.opacity(0.14)),
                             in: Capsule())
+                .frame(minHeight: LeoChromeMetrics.hitTarget)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -2138,12 +2180,16 @@ private struct HarnessModeMenu: View {
                     .contentTransition(.symbolEffect(.replace))
                 Text(driver.mode.title)
                     .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
                     .contentTransition(.opacity)
             }
+            .fixedSize()
             .foregroundStyle(driver.mode.tint)
             .padding(.horizontal, 10)
             .frame(height: 34)
             .background(driver.mode.tint.opacity(0.13), in: Capsule())
+            .frame(minHeight: LeoChromeMetrics.hitTarget)
+            .contentShape(Rectangle())
             .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: driver.mode)
         }
         .accessibilityLabel(Text("权限模式"))
@@ -2154,6 +2200,7 @@ private struct HarnessModeMenu: View {
 
 private struct HarnessChangesBadge: View {
     let count: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Image(systemName: "plusminus.circle")
@@ -2167,10 +2214,10 @@ private struct HarnessChangesBadge: View {
                         .frame(minWidth: 16, minHeight: 16)
                         .background(Color.accentColor, in: Capsule())
                         .offset(x: 9, y: -7)
-                        .transition(.scale.combined(with: .opacity))
+                        .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
                 }
             }
-            .animation(.snappy, value: count)
+            .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: count)
     }
 }
 

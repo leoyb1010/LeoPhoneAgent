@@ -13,7 +13,10 @@ class ShareViewController: UIViewController {
     private var awaitingChoice = false
     private var processingDone = false
     private var hasAppeared = false
+    private var isFinished = false
+    private var pendingAutoAction: String?
     private var pendingPresentChoice = false
+    private var macSendTask: Task<Void, Never>?
     private var sheetState = ShareSheetState()
 
     override func viewDidLoad() {
@@ -35,10 +38,8 @@ class ShareViewController: UIViewController {
                 return
             }
             switch action {
-            case "chat":
-                self.sendToChat(note: "")
-            case "collect":
-                self.collect(note: "")
+            case "chat", "collect":
+                self.runAutoAction(action)
             default:
                 self.awaitingChoice = true
                 self.presentChoice()
@@ -49,13 +50,30 @@ class ShareViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         hasAppeared = true
+        if let auto = pendingAutoAction {
+            pendingAutoAction = nil
+            runAutoAction(auto)
+            return
+        }
         if pendingPresentChoice {
             pendingPresentChoice = false
             presentChoice()
             return
         }
         if processingDone && !awaitingChoice {
-            extensionContext?.completeRequest(returningItems: [])
+            finish()
+        }
+    }
+
+    private func runAutoAction(_ action: String) {
+        guard hasAppeared, view.window != nil else {
+            pendingAutoAction = action
+            return
+        }
+        if action == "chat" {
+            sendToChat(note: "")
+        } else {
+            collect(note: "")
         }
     }
 
@@ -104,8 +122,9 @@ class ShareViewController: UIViewController {
         vm.prependNote(note)
         _ = vm.save()
         sheetState.successFeedbackTick += 1
-        redirectToHostApp()
-        finish()
+        redirectToHostApp { [weak self] in
+            self?.finish()
+        }
     }
 
     private func sendToRecordings(note: String) {
@@ -114,8 +133,9 @@ class ShareViewController: UIViewController {
         // 同一次分享里的非音频内容照常进对话信箱。
         _ = vm.save()
         sheetState.successFeedbackTick += 1
-        redirect(to: "leophoneagent://recordings/import")
-        finish()
+        redirect(to: "leophoneagent://recordings/import") { [weak self] in
+            self?.finish()
+        }
     }
 
     private func collect(note: String) {
@@ -144,9 +164,10 @@ class ShareViewController: UIViewController {
         let payload = trimmedNote.isEmpty ? vm.macShareText : "\(trimmedNote)\n\n\(vm.macShareText)"
         let requests = target.attempts(text: payload, secrets: secrets)
         sheetState.isSendingToMac = true
-        Task { @MainActor [weak self] in
+        macSendTask?.cancel()
+        macSendTask = Task { @MainActor [weak self] in
             let outcome = await Self.deliver(requests)
-            guard let self else { return }
+            guard !Task.isCancelled, let self, !self.isFinished else { return }
             self.sheetState.isSendingToMac = false
             self.sheetState.statusTitle = outcome.title
             self.sheetState.statusDetail = outcome.detail
@@ -226,28 +247,37 @@ class ShareViewController: UIViewController {
     }
 
     private func finish() {
+        guard !isFinished else { return }
+        isFinished = true
         processingDone = true
         awaitingChoice = false
+        macSendTask?.cancel()
+        macSendTask = nil
         extensionContext?.completeRequest(returningItems: [])
     }
 
     // MARK: - Redirect to main app
 
-    private func redirectToHostApp() {
-        redirect(to: "leophoneagent://share")
+    private func redirectToHostApp(completion: @escaping () -> Void) {
+        redirect(to: "leophoneagent://share", completion: completion)
     }
 
-    private func redirect(to link: String) {
-        guard let url = URL(string: link) else { return }
-        let selectorOpenURL = sel_registerName("openURL:")
+    private func redirect(to link: String, completion: @escaping () -> Void) {
+        guard let url = URL(string: link) else {
+            completion()
+            return
+        }
         var responder: UIResponder? = self
         while responder != nil {
             if let application = responder as? UIApplication {
-                application.open(url, options: [:], completionHandler: nil)
-                break
+                application.open(url, options: [:]) { _ in
+                    Task { @MainActor in completion() }
+                }
+                return
             }
             responder = responder?.next
         }
+        completion()
     }
 }
 

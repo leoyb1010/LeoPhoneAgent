@@ -130,7 +130,8 @@ export class RelayE2E {
       if (ephemeral.length !== 32) return null;
       const keys = deriveKeys(this.privateKey, ephemeral, ephemeral, this.publicKey);
       const inner = record(JSON.parse(unseal(keys.req, 0, c, AAD_REQ).toString("utf8")));
-      return { keys, inner, ephemeral: k };
+      // Canonicalize to the 32-byte key's base64url so trailing '=' / whitespace / non-canonical bits cannot bypass replay detection.
+      return { keys, inner, ephemeral: ephemeral.toString("base64url") };
     } catch {
       return null;
     }

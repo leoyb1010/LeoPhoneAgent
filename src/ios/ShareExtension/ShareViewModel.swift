@@ -199,6 +199,7 @@ final class ShareViewModel {
             copyItemIfPossible(from: url, fileName: fileName)
             if pendingItems.count > before { audioFileNames.append(fileName) }
         } else if let data = item as? Data {
+            guard PendingShare.admitsAttachment(byteCount: Int64(data.count)) else { return }
             let fileName = prefix + "audio.\(ext)"
             let before = pendingItems.count
             writeDataIfPossible(data, fileName: fileName)
@@ -235,12 +236,18 @@ final class ShareViewModel {
                                     fileName: "shared-image-\(UUID().uuidString.prefix(8)).\(ext)")
                 return
             }
-            // Some share sources expose only a decoded UIImage. PNG is the
-            // lossless fallback; raw URL/Data representations above are always
-            // preferred when the provider supplies them.
-            if let image = item as? UIImage, let pngData = image.pngData() {
-                writeDataIfPossible(pngData,
-                                    fileName: "shared-image-\(UUID().uuidString.prefix(8)).png")
+            // Some share sources expose only a decoded UIImage. Prefer JPEG to stay well
+            // inside the Share Extension 120 MB memory budget and enforce the attachment size cap.
+            if let image = item as? UIImage {
+                if let jpegData = image.jpegData(compressionQuality: 0.88),
+                   PendingShare.admitsAttachment(byteCount: Int64(jpegData.count)) {
+                    writeDataIfPossible(jpegData,
+                                        fileName: "shared-image-\(UUID().uuidString.prefix(8)).jpg")
+                } else if let pngData = image.pngData(),
+                          PendingShare.admitsAttachment(byteCount: Int64(pngData.count)) {
+                    writeDataIfPossible(pngData,
+                                        fileName: "shared-image-\(UUID().uuidString.prefix(8)).png")
+                }
             }
         }
     }

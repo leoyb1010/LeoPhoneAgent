@@ -1148,8 +1148,11 @@ struct UnifiedModelPicker: View {
         let collapsed = !isSearching && collapsedInstanceIds.contains(item.instance.id)
         return Section {
             Button {
-                if collapsed { collapsedInstanceIds.remove(item.instance.id) }
-                else { collapsedInstanceIds.insert(item.instance.id) }
+                LeoHaptics.selection()
+                withAnimation(LeoMotion.snappy(reduceMotion: LeoMotion.systemReduceMotion)) {
+                    if collapsed { collapsedInstanceIds.remove(item.instance.id) }
+                    else { collapsedInstanceIds.insert(item.instance.id) }
+                }
             } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
@@ -1225,11 +1228,13 @@ struct UnifiedModelPicker: View {
                                 .fixedSize(horizontal: false, vertical: true)
                             if isLatest {
                                 Text("Latest").font(.caption2.weight(.semibold)).foregroundStyle(Color.accentColor)
+                                    .lineLimit(1)
+                                    .fixedSize()
                                     .padding(.horizontal, 5).padding(.vertical, 1)
                                     .background(Color.accentColor.opacity(0.12), in: Capsule())
                             }
                             if balances.isLow(instanceId: entry.providerInstanceId) {
-                                Circle().fill(Color.yellow).frame(width: 7, height: 7)
+                                Circle().fill(LeoTheme.ColorToken.attention).frame(width: 7, height: 7)
                                     .accessibilityLabel(Text("余额偏低"))
                             }
                         }

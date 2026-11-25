@@ -194,7 +194,6 @@ class LeoAgentServer:
         except ValueError:
             exp = datetime.now(timezone.utc)
         if exp - datetime.now(timezone.utc) < timedelta(minutes=10):
-            import aiohttp as _aiohttp
             issuer = str(entry.get("oidc_issuer") or "https://auth.x.ai").rstrip("/")
             issuer_host = urlparse(issuer).hostname or ""
             # refresh token 只发给 xAI 自己的授权服务器,auth.json 被改了也不外发。
@@ -533,7 +532,8 @@ class MacBridgeEventSink:
                                          timeout=aiohttp.ClientTimeout(total=10)) as r:
                         # 4xx 重发也不会好(钥匙不对、Mac 版本太旧),丢掉这一条。
                         if r.status < 500:
-                            self._outbox.pop(0)
+                            if self._outbox and self._outbox[0] is event:
+                                self._outbox.pop(0)
                             continue
                 except Exception:  # noqa: BLE001
                     pass
@@ -612,7 +612,18 @@ def main(argv: Optional[list] = None) -> int:
 
     async def _start_sink(started: web.Application) -> None:
         started["_mac_sink_task"] = asyncio.get_event_loop().create_task(sink.run_forever())
+
+    async def _stop_sink(stopped: web.Application) -> None:
+        task = stopped.get("_mac_sink_task")
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
     app.on_startup.append(_start_sink)
+    app.on_cleanup.append(_stop_sink)
     print(f"LeoAgent {VERSION} listening on http://{args.host}:{args.port}", flush=True)
     try:
         web.run_app(app, host=args.host, port=args.port, print=None)

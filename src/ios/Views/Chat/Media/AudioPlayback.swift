@@ -292,41 +292,50 @@ struct AudioPiPCapsule: View {
     private var capsuleContent: some View {
         HStack {
             Button {
+                LeoHaptics.selection()
                 player.showFullPreview = true
             } label: {
                 Image(systemName: "waveform")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .frame(width: 36, height: 40)
+                    .frame(width: LeoChromeMetrics.hitTarget, height: LeoChromeMetrics.hitTarget)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(AppLocalized("展开音频播放")))
 
             Spacer()
 
             Button {
+                LeoHaptics.selection()
                 player.togglePlayPause()
             } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
-                    .frame(width: 36, height: 40)
+                    .frame(width: LeoChromeMetrics.hitTarget, height: LeoChromeMetrics.hitTarget)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(player.isPlaying ? AppLocalized("暂停") : AppLocalized("播放")))
 
             Spacer()
 
             Button {
+                LeoHaptics.impact(.light)
                 player.stop()
             } label: {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 36, height: 40)
+                    .frame(width: LeoChromeMetrics.hitTarget, height: LeoChromeMetrics.hitTarget)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(AppLocalized("停止播放")))
         }
-        .padding(.horizontal, 16)
-        .frame(width: 160, height: 40)
+        .padding(.horizontal, 12)
+        .frame(width: 172, height: LeoChromeMetrics.hitTarget)
         .background {
             Capsule()
                 .fill(.ultraThinMaterial)

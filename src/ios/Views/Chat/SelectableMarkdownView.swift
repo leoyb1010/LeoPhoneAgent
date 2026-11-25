@@ -5993,18 +5993,21 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         if LeoTextContainer.needsUnboundedRestore(savedContainerHeight) {
             self.textContainer.size.height = LeoTextContainer.unboundedHeight
         }
-        // [T-attachment-zero-origin 2026-05-23] Invalidate glyph properties
-        // (not just layout) for the full range before ensureLayout. Otherwise
-        // TextKit retains stale glyphProp=controlCharacter cached during an
-        // earlier zero/narrow textContainer pass, leaving attachment glyphs
-        // with `boundingRect.origin == .zero` even after layout settles — the
-        // attachment view then gets pinned at (0,0) overlaying the cell's
-        // first text line. Reproducible on iPhone 15 Pro Max (tcW=370);
-        // iPad (tcW=900) escapes because its width never narrowed enough
-        // to trip the controlCharacter fallback. Pairs with the explicit
-        // `view.frame.origin = boundingRect.origin` write below.
-        layoutManager.invalidateGlyphs(forCharacterRange: fullRange, changeInLength: 0, actualCharacterRange: nil)
-        layoutManager.ensureLayout(forCharacterRange: fullRange)
+        // Only invalidate attachment glyph properties when attachments actually
+        // exist in the textStorage; wiping fullRange glyphs on pure-text
+        // streaming chunks forces TextKit1 to re-typeset the entire document.
+        var attachmentRanges: [NSRange] = []
+        textStorage.enumerateAttribute(.attachment, in: fullRange, options: []) { value, range, _ in
+            if value is NSTextAttachment { attachmentRanges.append(range) }
+        }
+        if !attachmentRanges.isEmpty {
+            for r in attachmentRanges {
+                layoutManager.invalidateGlyphs(forCharacterRange: r, changeInLength: 0, actualCharacterRange: nil)
+            }
+            if let lastEnd = attachmentRanges.map({ NSMaxRange($0) }).max(), lastEnd > 0 {
+                layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(lastEnd, textStorage.length)))
+            }
+        }
         // NOTE: we restore savedContainerHeight AFTER enumeration, not here
 
         textStorage.enumerateAttribute(.attachment, in: fullRange, options: []) { value, range, _ in
@@ -6625,6 +6628,8 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         return sum
     }
 
+    var isStreamingContent: Bool = false
+
     func invalidateCellSizeIfNeeded() {
         guard textContainer.size.width > 1 else {
             return
@@ -6668,7 +6673,21 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         }
         isInvalidatingCellSize = true
         defer { isInvalidatingCellSize = false }
-        let newHeight = sizeThatFits(CGSize(width: measureWidth, height: .greatestFiniteMagnitude)).height
+        let newHeight: CGFloat
+        if isStreamingContent && textStorage.length > 0 {
+            var hasAttachment = false
+            textStorage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: textStorage.length), options: []) { v, _, stop in
+                if v != nil { hasAttachment = true; stop.pointee = true }
+            }
+            if !hasAttachment {
+                newHeight = SelectableMarkdownView.ctFramesetterHeight(for: textStorage, width: measureWidth)
+                    + textContainerInset.top + textContainerInset.bottom
+            } else {
+                newHeight = sizeThatFits(CGSize(width: measureWidth, height: .greatestFiniteMagnitude)).height
+            }
+        } else {
+            newHeight = sizeThatFits(CGSize(width: measureWidth, height: .greatestFiniteMagnitude)).height
+        }
         // sizeThatFits clamps textContainer.size.height — restore it (only
         // when actually clamped, to avoid a redundant setSize: → fillLayoutHole).
         if LeoTextContainer.needsUnboundedRestore(textContainer.size.height) {
@@ -7002,11 +7021,14 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // fresh TableAttachment objects → layoutManager sees attachments
         // with no identity continuity and keeps the early-stream glyph
         // rects cached.
-        if let mid = messageId, let existing = SelectableMarkdownView.rendererCache[mid] {
+        let cacheKey = blockId ?? messageId
+        if let mid = cacheKey, let existing = SelectableMarkdownView.rendererCache[mid] {
             coord.renderer = existing
+            if let messageId { SelectableMarkdownView.rendererMessageByKey[mid] = messageId }
             SelectableMarkdownView.touchRenderer(mid)
-        } else if let mid = messageId {
+        } else if let mid = cacheKey {
             SelectableMarkdownView.rendererCache[mid] = coord.renderer
+            if let messageId { SelectableMarkdownView.rendererMessageByKey[mid] = messageId }
             SelectableMarkdownView.touchRenderer(mid)
         }
         return coord
@@ -7029,6 +7051,8 @@ struct SelectableMarkdownView: UIViewRepresentable {
     /// (well past a screenful, so scrolling back never re-parses) and drained
     /// when a VM releases its render state or on memory pressure.
     @MainActor private static var rendererCache: [UUID: MarkdownNSRenderer] = [:]
+    /// Maps each block-scoped cache key back to its owning messageId so `dropRenderer(for:)` evicts every block.
+    @MainActor private static var rendererMessageByKey: [UUID: UUID] = [:]
     /// LRU order for `rendererCache`, oldest first.
     @MainActor private static var rendererLRU: [UUID] = []
     @MainActor static let rendererCacheCap = 80
@@ -7040,6 +7064,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         while rendererLRU.count > rendererCacheCap, let oldest = rendererLRU.first {
             rendererLRU.removeFirst()
             rendererCache.removeValue(forKey: oldest)
+            rendererMessageByKey.removeValue(forKey: oldest)
         }
     }
 
@@ -7047,8 +7072,16 @@ struct SelectableMarkdownView: UIViewRepresentable {
     /// is a cache: the next render for this message builds a fresh one.
     @MainActor
     static func dropRenderer(for messageId: UUID) {
-        guard rendererCache.removeValue(forKey: messageId) != nil else { return }
-        if let i = rendererLRU.firstIndex(of: messageId) { rendererLRU.remove(at: i) }
+        var keysToDrop = rendererMessageByKey.compactMap { $0.value == messageId ? $0.key : nil }
+        if rendererCache[messageId] != nil && !keysToDrop.contains(messageId) {
+            keysToDrop.append(messageId)
+        }
+        guard !keysToDrop.isEmpty else { return }
+        for key in keysToDrop {
+            rendererCache.removeValue(forKey: key)
+            rendererMessageByKey.removeValue(forKey: key)
+            if let i = rendererLRU.firstIndex(of: key) { rendererLRU.remove(at: i) }
+        }
     }
 
     /// Drop every cached renderer (memory warning).
@@ -7056,6 +7089,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
     static func dropAllRenderers() -> Int {
         let n = rendererCache.count
         rendererCache.removeAll()
+        rendererMessageByKey.removeAll()
         rendererLRU.removeAll()
         // [T-codeblock-syntax] 代码块高亮缓存同样是可重建的缓存，内存告警时一并清掉（下次显示时后台重算）。
         LeoCodeHighlighter.shared.removeAll()
@@ -7587,7 +7621,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
             // TextKit will lay out the appended tail on demand. setNeedsLayout
             // is enough so the text view re-draws and re-measures intrinsic size.
             textView.setNeedsLayout()
-        } else if (cachedContent != nil || cachedAttributedString != nil) && textView.textContainer.size.width > 1 {
+        } else if !isStreaming && (cachedContent != nil || cachedAttributedString != nil) && textView.textContainer.size.width > 1 {
             // Bounded slow-path layout: only ensure the visible glyph range
             // plus a small overscan. Replacing the full-range ensureLayout
             // here was the second prong of the NSTypesetter watchdog fix —
@@ -7613,6 +7647,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         } else {
             textView.setNeedsLayout()
         }
+        textView.isStreamingContent = isStreaming
         textView.invalidateIntrinsicContentSize()
         textView.setNeedsDisplay()
         textView.invalidateCellSizeIfNeeded()
@@ -7706,19 +7741,26 @@ struct SelectableMarkdownView: UIViewRepresentable {
         let full = NSRange(location: 0, length: newPrefix.length)
         var equal = true
         newPrefix.enumerateAttributes(in: full, options: []) { aN, range, stop in
-            let aO = oldPrefix.attributes(at: range.location, effectiveRange: nil)
-            // Reconcile fonts: equal as-is, or new.NSFont == old.NSOriginalFont.
             let fontN = aN[fontKey] as? UIFont
-            let fontO = aO[fontKey] as? UIFont
-            let originalO = aO[nsOriginalFontKey] as? UIFont
-            let fontsOK = (fontN == fontO) || (fontN != nil && fontN == originalO)
-            if !fontsOK { equal = false; stop.pointee = true; return }
-            // Compare everything else with font bookkeeping removed.
             var nN = aN; nN.removeValue(forKey: fontKey); nN.removeValue(forKey: nsOriginalFontKey)
-            var nO = aO; nO.removeValue(forKey: fontKey); nO.removeValue(forKey: nsOriginalFontKey)
-            if !(nN as NSDictionary).isEqual(to: nO) {
-                equal = false
-                stop.pointee = true
+            let rangeEnd = NSMaxRange(range)
+            var pos = range.location
+            while pos < rangeEnd {
+                var oldEff = NSRange()
+                let aO = oldPrefix.attributes(at: pos, effectiveRange: &oldEff)
+                // Reconcile fonts: equal as-is, or new.NSFont == old.NSOriginalFont.
+                let fontO = aO[fontKey] as? UIFont
+                let originalO = aO[nsOriginalFontKey] as? UIFont
+                let fontsOK = (fontN == fontO) || (fontN != nil && fontN == originalO)
+                if !fontsOK { equal = false; stop.pointee = true; return }
+                var nO = aO; nO.removeValue(forKey: fontKey); nO.removeValue(forKey: nsOriginalFontKey)
+                if !(nN as NSDictionary).isEqual(to: nO) {
+                    equal = false
+                    stop.pointee = true
+                    return
+                }
+                let nextPos = NSMaxRange(oldEff)
+                pos = nextPos > pos ? nextPos : pos + 1
             }
         }
         return equal
@@ -8020,7 +8062,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
                 // and ≤8000 chars — streaming keeps the CT fast path (per-chunk
                 // cost), and huge blocks avoid TextKit1's near-O(n²) wall
                 // (T-ios-longreply-boundingRect-watchdog).
-                let finalizedSTF = cachedAttributedString != nil || cachedContent != nil
+                let finalizedSTF = !isStreaming && (cachedAttributedString != nil || cachedContent != nil)
                 let h: CGFloat
                 if finalizedSTF, pending.length <= 8000,
                    let mtv = coord.measureTextView as? SelectableMarkdownTextView {
@@ -8106,7 +8148,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
                     // post-commit probe would pay the mtv measure (1.4-11ms vs
                     // CT's 0.3ms) per chunk — the exact per-chunk typesetter
                     // cost de4d3df6 / REPRO-FIX(2026-05-16) fought to remove.
-                    let finalizedCommitted = cachedAttributedString != nil || cachedContent != nil
+                    let finalizedCommitted = !isStreaming && (cachedAttributedString != nil || cachedContent != nil)
                     let h: CGFloat
                     if finalizedCommitted, liveStorage.length <= 8000,
                        let mtv = coord.measureTextView as? SelectableMarkdownTextView {

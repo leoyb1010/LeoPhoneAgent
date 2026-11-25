@@ -29,7 +29,7 @@ final class BrainUploader: ObservableObject {
     }
 
     @Published private(set) var jobs: [Job] = []
-    private var running = Set<String>()
+    private var runningTasks: [String: Task<Void, Never>] = [:]
     private static let storeKey = "leo.brainSpace.uploads"
     private static let dir: URL = {
         let d = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -38,6 +38,18 @@ final class BrainUploader: ObservableObject {
         return d
     }()
 
+    /// Resolve relative filename (or migrate legacy absolute path) under current Application Support/BrainUploads.
+    private static func resolvedURL(for storedPath: String) -> URL? {
+        guard !storedPath.isEmpty else { return nil }
+        let fileName = (storedPath as NSString).lastPathComponent
+        let current = dir.appendingPathComponent(fileName)
+        if FileManager.default.fileExists(atPath: current.path) { return current }
+        if storedPath.hasPrefix("/"), FileManager.default.fileExists(atPath: storedPath) {
+            return URL(fileURLWithPath: storedPath)
+        }
+        return current
+    }
+
     private init() {
         if let data = UserDefaults.standard.data(forKey: Self.storeKey),
            let saved = try? JSONDecoder().decode([Job].self, from: data) {
@@ -45,38 +57,66 @@ final class BrainUploader: ObservableObject {
         }
     }
 
-    /// Copy the picked file into our own folder first so a resume never depends on a security-scoped URL.
+    /// Copy the picked file into our own folder off the main thread so a resume never blocks UI or depends on a security-scoped URL.
     func add(fileAt url: URL, name: String) {
         let id = UUID().uuidString
-        let dest = Self.dir.appendingPathComponent(id + "-" + name)
+        let fileName = id + "-" + name
+        let dest = Self.dir.appendingPathComponent(fileName)
         let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        do {
-            try FileManager.default.copyItem(at: url, to: dest)
-            let size = (try dest.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
-            let identity = "ios:" + SHA256.hash(data: Data("\(name)|\(size)|\(id)".utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
-            jobs.insert(Job(id: id, name: name, size: size, identity: identity, localPath: dest.path), at: 0)
-            persist()
-            resume(id)
-        } catch {
-            jobs.insert(Job(id: id, name: name, size: 0, identity: "", localPath: "", error: "读不到这个文件:\(error.localizedDescription)"), at: 0)
+        jobs.insert(Job(id: id, name: name, size: 0, identity: "", localPath: fileName), at: 0)
+        persist()
+        let copyTask = Task { [weak self] in
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let size: Int64 = try await Task.detached(priority: .userInitiated) {
+                    try FileManager.default.copyItem(at: url, to: dest)
+                    return (try dest.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+                }.value
+                guard !Task.isCancelled, let self, self.jobs.contains(where: { $0.id == id }) else {
+                    try? FileManager.default.removeItem(at: dest)
+                    return
+                }
+                let identity = "ios:" + SHA256.hash(data: Data("\(name)|\(size)|\(id)".utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
+                self.update(id) {
+                    $0.size = size
+                    $0.identity = identity
+                    $0.localPath = fileName
+                    $0.error = nil
+                }
+                self.runningTasks.removeValue(forKey: id)
+                self.resume(id)
+            } catch {
+                guard let self else { return }
+                self.runningTasks.removeValue(forKey: id)
+                self.update(id) { $0.error = "读不到这个文件:\(error.localizedDescription)" }
+            }
         }
+        runningTasks[id] = copyTask
     }
 
     func resumeAll() { jobs.filter { $0.stage < 3 && $0.size > 0 }.forEach { resume($0.id) } }
 
     func resume(_ id: String) {
-        guard !running.contains(id), let job = jobs.first(where: { $0.id == id }), job.size > 0 else { return }
-        running.insert(id)
+        guard runningTasks[id] == nil, let job = jobs.first(where: { $0.id == id }), job.size > 0 else { return }
         update(id) { $0.error = nil }
-        Task {
-            defer { running.remove(id) }
-            do { try await run(job) } catch { update(id) { $0.error = error.localizedDescription } }
+        runningTasks[id] = Task { [weak self] in
+            guard let self else { return }
+            defer { self.runningTasks.removeValue(forKey: id) }
+            do {
+                try await self.run(job)
+            } catch is CancellationError {
+                return
+            } catch {
+                self.update(id) { $0.error = error.localizedDescription }
+            }
         }
     }
 
     func remove(_ id: String) {
-        if let j = jobs.first(where: { $0.id == id }), !j.localPath.isEmpty { try? FileManager.default.removeItem(atPath: j.localPath) }
+        runningTasks.removeValue(forKey: id)?.cancel()
+        if let j = jobs.first(where: { $0.id == id }), let fileURL = Self.resolvedURL(for: j.localPath) {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
         jobs.removeAll { $0.id == id }
         persist()
     }
@@ -84,40 +124,60 @@ final class BrainUploader: ObservableObject {
     private func run(_ start: Job) async throws {
         let api = BrainSpaceAPI.shared
         var job = start
-        if job.stage == 0 {
+        if job.stage == 0 || (job.stage == 1 && job.fileId == nil) {
             if job.uploadId == nil {
                 let s: BrainUploadState = try await api.post("/upload/start", ["name": job.name, "size": job.size, "identity": job.identity])
+                try Task.checkCancellation()
                 job.uploadId = s.id
                 update(job.id) { $0.uploadId = s.id }
             }
             guard let uid = job.uploadId else { return }
-            let status: BrainUploadState = try await api.get("/upload/\(uid)")
-            var offset = Int64(status.received ?? 0)
-            let chunk = Int64(status.chunk ?? 8 * 1024 * 1024)
-            if status.state != "received" {
-                let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: job.localPath))
-                defer { try? handle.close() }
-                while offset < job.size {
-                    try handle.seek(toOffset: UInt64(offset))
-                    let data = handle.readData(ofLength: Int(min(chunk, job.size - offset)))
-                    guard !data.isEmpty else { throw BrainSpaceError.http(0, "本地文件读取中断") }
-                    let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-                    let reply = try await api.postData("/upload/\(uid)", query: [("offset", String(offset))], body: data,
-                                                       contentType: "application/octet-stream", extra: ["X-Chunk-SHA256": digest])
-                    let r = try BrainSpaceAPI.decoder.decode(BrainUploadState.Chunk.self, from: reply)
-                    offset = Int64(r.received)
-                    update(job.id) { $0.received = offset }
+            if job.stage == 0 {
+                let status: BrainUploadState = try await api.get("/upload/\(uid)")
+                try Task.checkCancellation()
+                var offset = Int64(status.received ?? 0)
+                let chunk = Int64(status.chunk ?? 8 * 1024 * 1024)
+                if status.state != "received" {
+                    guard let fileURL = Self.resolvedURL(for: job.localPath) else {
+                        throw BrainSpaceError.http(0, "找不到待上传的本地文件")
+                    }
+                    let totalSize = job.size
+                    while offset < totalSize {
+                        try Task.checkCancellation()
+                        let readOffset = offset
+                        let readLen = Int(min(chunk, totalSize - readOffset))
+                        let (data, digest): (Data, String) = try await Task.detached(priority: .utility) {
+                            let handle = try FileHandle(forReadingFrom: fileURL)
+                            defer { try? handle.close() }
+                            try handle.seek(toOffset: UInt64(readOffset))
+                            guard let data = try handle.read(upToCount: readLen), !data.isEmpty else {
+                                throw BrainSpaceError.http(0, "本地文件读取中断")
+                            }
+                            let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+                            return (data, digest)
+                        }.value
+                        try Task.checkCancellation()
+                        let reply = try await api.postData("/upload/\(uid)", query: [("offset", String(offset))], body: data,
+                                                           contentType: "application/octet-stream", extra: ["X-Chunk-SHA256": digest])
+                        let r = try BrainSpaceAPI.decoder.decode(BrainUploadState.Chunk.self, from: reply)
+                        offset = Int64(r.received)
+                        update(job.id) { $0.received = offset }
+                    }
                 }
+                update(job.id) { $0.stage = 1; $0.received = $0.size }
             }
-            update(job.id) { $0.stage = 1; $0.received = $0.size }
+            try Task.checkCancellation()
             let receipt: BrainUploadState.Receipt = try await api.post("/upload/\(uid)/finish", [:])
             job.fileId = receipt.fileId
             update(job.id) { $0.stage = 2; $0.fileId = receipt.fileId }
-            try? FileManager.default.removeItem(atPath: job.localPath)
+            if let fileURL = Self.resolvedURL(for: job.localPath) {
+                try? FileManager.default.removeItem(at: fileURL)
+            }
             update(job.id) { $0.localPath = "" }
         }
         guard let fid = job.fileId ?? jobs.first(where: { $0.id == job.id })?.fileId else { return }
         for _ in 0..<60 {
+            try Task.checkCancellation()
             if let p = try? await api.get("/pipeline", query: [("ids", fid), ("limit", "1")], as: BrainPipelinePage.self),
                let stages = p.items.first?.stages,
                stages.first(where: { $0.key == "parsed" }).map({ ["done", "skipped"].contains($0.state) }) == true {

@@ -148,9 +148,9 @@ struct MacTerminalSessionsView: View {
         }
     }
 
-    /// [codex-sessions] Claude 橙色、Codex 青色,一眼分得清是哪个 agent 的会话。
+    /// [codex-sessions] Codex 用品牌蓝、Claude 用语义橙色,一眼分得清是哪个 agent 的会话。
     private func tint(_ session: MacExternalSession) -> Color {
-        session.agent == "codex" ? Color.indigo : Color.orange
+        session.agent == "codex" ? LeoTheme.ColorToken.accent : LeoTheme.ColorToken.attention
     }
 
     private func row(_ session: MacExternalSession, host: GatewayHost, busy: Bool) -> some View {

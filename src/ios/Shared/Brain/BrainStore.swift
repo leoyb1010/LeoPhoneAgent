@@ -108,12 +108,13 @@ final class BrainStore: ObservableObject {
         hasAccessCredentials = BrainKeychain.get(.accessClientId) != nil
     }
 
-    /// 断开:删钥匙串里的令牌与 Access 凭据,清离线缓存,锁回私密资料。
+    /// 断开:删钥匙串里的令牌与 Access 凭据,清离线缓存与图片缓存,锁回私密资料。
     func disconnect() {
         connectionRevision += 1
         BrainKeychain.deleteAll()
         UserDefaults.standard.removeObject(forKey: Self.scopesKey)
         cache.clearAll()
+        Task { await BrainImageCache.shared.clearAll() }
         isConfigured = false
         hasAccessCredentials = false
         knownScopes = nil

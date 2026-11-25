@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useState } from "react";
 import { useNowTicker } from "@/components/workflow-graph/use-now-ticker.js";
 
 /**
@@ -43,13 +43,24 @@ export function LeoToolElapsed({
   running: boolean;
 }) {
   // 只有在跑且有起点时才走秒表;前 10 秒以 200ms 步进让 0.1s 读数丝滑递增，10 秒后切回 1s 省电。
-  const lastNowRef = useRef(Date.now());
   const active = running && typeof startedAt === "number";
-  const intervalMs = active
-    ? resolveLeoToolTickerIntervalMs(lastNowRef.current - startedAt)
-    : LEO_TOOL_SLOW_TICK_MS;
+  const [slowMode, setSlowMode] = useState(false);
+  useEffect(() => {
+    if (!active || typeof startedAt !== "number") {
+      setSlowMode(false);
+      return;
+    }
+    const remainingFastMs = 10_000 - (Date.now() - startedAt);
+    if (remainingFastMs <= 0) {
+      setSlowMode(true);
+      return;
+    }
+    setSlowMode(false);
+    const timer = window.setTimeout(() => setSlowMode(true), remainingFastMs);
+    return () => window.clearTimeout(timer);
+  }, [active, startedAt]);
+  const intervalMs = slowMode ? LEO_TOOL_SLOW_TICK_MS : LEO_TOOL_FAST_TICK_MS;
   const now = useNowTicker(active, intervalMs);
-  lastNowRef.current = now;
   if (typeof startedAt !== "number") return null;
   const end = running ? now : endedAt;
   if (typeof end !== "number") return null;

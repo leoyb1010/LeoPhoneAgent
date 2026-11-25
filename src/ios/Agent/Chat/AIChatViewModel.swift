@@ -5603,19 +5603,25 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             if !assistantText.isEmpty, msgIdx >= 0, msgIdx < messages.count,
                let textBlockIdx = messages[msgIdx].blocks.indices.last(where: { messages[msgIdx].blocks[$0].kind == .text }),
                messages[msgIdx].blocks[textBlockIdx].content != assistantText {
-                // [DIAG-FINAL-1] Final text flush — this is the last chance to push
-                // content to the UI before streaming ends. If this is skipped or
-                // deferred (e.g. streamingUIUpdatesSuspended), the cell stays empty.
+                // [DIAG-FINAL-1] Final text flush — parse Markdown off-main so stream end never stalls UI.
                 logger.info("[StreamEnd] FINAL FLUSH text len=\(assistantText.count) blockContent len=\(messages[msgIdx].blocks[textBlockIdx].content.count) uiSuspended=\(streamingUIUpdatesSuspended) appState=\(UIApplication.shared.applicationState.rawValue)")
-                setStreamingTextBlockContent(
-                    msgIdx: msgIdx,
-                    blockIdx: textBlockIdx,
-                    text: assistantText,
-                    parsedMarkdown: MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(assistantText))),
-                    cacheAttributedString: true,
-                    requestScroll: true,
-                    expectedMessageId: runMsgId
-                )
+                let finalTextSnapshot = assistantText
+                let parsedFinal = await Task.detached(priority: .userInitiated) {
+                    MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(finalTextSnapshot)))
+                }.value
+                let hasTable = parsedFinal.blocks.contains { if case .table = $0 { return true }; return false }
+                if msgIdx >= 0, msgIdx < messages.count,
+                   let currentTextBlockIdx = messages[msgIdx].blocks.indices.last(where: { messages[msgIdx].blocks[$0].kind == .text }) {
+                    setStreamingTextBlockContent(
+                        msgIdx: msgIdx,
+                        blockIdx: currentTextBlockIdx,
+                        text: finalTextSnapshot,
+                        parsedMarkdown: parsedFinal,
+                        cacheAttributedString: !hasTable,
+                        requestScroll: true,
+                        expectedMessageId: runMsgId
+                    )
+                }
             } else if !assistantText.isEmpty, msgIdx >= 0, msgIdx < messages.count {
                 // [DIAG-FINAL-2] Text already matches — no flush needed.
                 // But if the cell is visually empty despite content being set,
@@ -6208,10 +6214,15 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         if block.cachedMarkdownSource == block.content, let cached = block.cachedMarkdown { content = cached }
         else { content = MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(block.content))) }
         let source = block.content
+        let hasTable = content.blocks.contains { if case .table = $0 { return true }; return false }
         block.applyBatched {
             block.cachedMarkdown = content
-            block.cachedAttributedString = autoreleasepool {
-                renderMarkdownBlocksForDisplay(content.blocks, source: source)
+            // SelectableMarkdownView intentionally bypasses prebuilt cachedAttributedString
+            // when a block contains tables; avoid wasting main-thread work building one only to discard it.
+            if !hasTable {
+                block.cachedAttributedString = autoreleasepool {
+                    renderMarkdownBlocksForDisplay(content.blocks, source: source)
+                }
             }
         }
     }

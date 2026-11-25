@@ -125,25 +125,25 @@ struct StorageManagementView: View {
         List {
             Section("Overview") {
                 storageRow(icon: "terminal", color: .gray, label: "Shell Container", value: vm.format(vm.shellContainerSize))
-                storageRow(icon: "cylinder", color: .blue, label: "Chat Database", value: vm.format(vm.chatDatabaseSize))
-                storageRow(icon: "doc", color: .indigo, label: "Session Files", value: vm.format(vm.totalSessionSize))
+                storageRow(icon: "cylinder", color: LeoTheme.ColorToken.accent, label: "Chat Database", value: vm.format(vm.chatDatabaseSize))
+                storageRow(icon: "doc", color: .gray, label: "Session Files", value: vm.format(vm.totalSessionSize))
             }
 
             Section {
                 storageRow(
-                    icon: "archivebox.fill", color: .orange, label: "原始附件",
+                    icon: "archivebox.fill", color: LeoTheme.ColorToken.accent, label: "原始附件",
                     value: vm.format(vm.treasuryUsage.originalAttachmentBytes)
                 )
                 storageRow(
-                    icon: "doc.text.fill", color: .indigo, label: "正文与笔记",
+                    icon: "doc.text.fill", color: LeoTheme.ColorToken.accent, label: "正文与笔记",
                     value: vm.format(vm.treasuryUsage.bodyBytes)
                 )
                 storageRow(
-                    icon: "photo.fill", color: .pink, label: "缩略图缓存",
+                    icon: "photo.fill", color: .gray, label: "缩略图缓存",
                     value: vm.format(vm.treasuryUsage.thumbnailCacheBytes)
                 )
                 storageRow(
-                    icon: "arrow.triangle.2.circlepath", color: .cyan, label: "跨端按需缓存",
+                    icon: "arrow.triangle.2.circlepath", color: .gray, label: "跨端按需缓存",
                     value: vm.format(vm.treasuryUsage.syncCacheBytes)
                 )
                 Button(role: .destructive) {

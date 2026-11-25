@@ -707,7 +707,7 @@ struct AIChatView: View {
                             // the blue entry dots read as a glitch, not
                             // feedback (user report 2026-07-06).
                             SessionLoadingCard()
-                                .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                                .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.92)))
                                 .accessibilityIdentifier("sessionLoadingCard")
                         }
                     }
@@ -805,7 +805,7 @@ struct AIChatView: View {
                                         .font(.system(size: 9, weight: .bold))
                                         .foregroundStyle(.white)
                                         .padding(.horizontal, 3).padding(.vertical, 1)
-                                        .background(.indigo, in: Capsule())
+                                        .background(LeoTheme.ColorToken.accent, in: Capsule())
                                         .offset(x: 8, y: -6)
                                 }
                         }
@@ -854,7 +854,7 @@ struct AIChatView: View {
                     .padding(.vertical, 10)
                     .background(Color.accentColor, in: Capsule())
                     .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
         }
         .animation(LeoMotion.spring(reduceMotion: reduceMotion), value: forcePullToast)
@@ -2478,11 +2478,14 @@ struct AIChatView: View {
         .frame(minHeight: LeoChromeMetrics.headerPillHeight)
         .background(Capsule().fill(Color.secondary.opacity(0.10)))
         // [chat-chrome] Same row height and hit band as the model pill.
-        .frame(minWidth: 32, minHeight: 24)
+        .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: 28)
         .contentShape(Rectangle())
         .onTapGesture {
+            LeoHaptics.selection()
             showThinkingLevelSheet = true
         }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(Text(AppLocalized("思考强度：\(level.displayName)")))
         .sheet(isPresented: $showThinkingLevelSheet) {
             ThinkingLevelSheetView(
                 currentLevel: level,
@@ -2793,6 +2796,7 @@ struct AIChatView: View {
                     // way up to the first turn, it hides — nothing further up.
                     if !vm.isAtFirstTurn {
                         Button {
+                            LeoHaptics.impact(.light)
                             vm.forceScrollToTop.send()
                         } label: {
                             // arrow.up.to.line: "jump to a top anchor" reads truer
@@ -2803,7 +2807,7 @@ struct AIChatView: View {
                             scrollFloatingButtonLabel("arrow.up.to.line",
                                                       accessibilityLabel: AppLocalized("Previous Turn"))
                         }
-                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.8)))
                     }
                     // Scroll to bottom — ORIGINAL behavior: shown whenever not
                     // near the bottom (within the 20pt nearBottom threshold), so
@@ -2812,12 +2816,13 @@ struct AIChatView: View {
                     // the pill replaces the disc while unseen content exists.
                     if !newMessagePillVisible {
                         Button {
+                            LeoHaptics.impact(.light)
                             vm.forceScrollToBottom.send()
                         } label: {
                             scrollFloatingButtonLabel("chevron.down",
                                                       accessibilityLabel: AppLocalized("Scroll to Bottom"))
                         }
-                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.8)))
                     }
                 }
                 .frame(maxWidth: maxContentWidth ?? .infinity, alignment: .trailing)
@@ -3324,6 +3329,7 @@ struct AIChatView: View {
         return AnyView(
             HStack(spacing: 8) {
                 Button {
+                    LeoHaptics.selection()
                     if preview.url.isFileURL && !FileManager.default.fileExists(atPath: preview.url.path) {
                         parkedPreview = nil
                         missingMinisFileName = title
@@ -3346,9 +3352,12 @@ struct AIChatView: View {
                 .accessibilityLabel(Text(AppLocalized("继续预览 \(title)")))
                 .accessibilityIdentifier("chat-preview.resume")
                 Button {
+                    LeoHaptics.impact(.light)
                     parkedPreview = nil
                 } label: {
-                    Image(systemName: "xmark").frame(minWidth: 44, minHeight: 44)
+                    Image(systemName: "xmark")
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel(Text("Close"))
                 .accessibilityIdentifier("chat-preview.discard")
@@ -3357,8 +3366,9 @@ struct AIChatView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
             .padding(.leading, 12)
-            .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 12))
+            .leoGlassSurface(cornerRadius: 12)
             .padding(.horizontal, 12)
+            .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
         )
     }
 
@@ -6714,16 +6724,21 @@ private struct EmptyChatWorkspaceCard: View {
     }
 
     private func pill(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button {
+            LeoHaptics.impact(.light)
+            action()
+        } label: {
             Label(title, systemImage: icon)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(ChatColors.primaryText)
                 .lineLimit(1)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
+                .frame(minHeight: LeoChromeMetrics.hitTarget)
                 .background(ChatColors.secondaryBg.opacity(0.85), in: Capsule())
+                .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LeoSquishButtonStyle())
     }
 }
 

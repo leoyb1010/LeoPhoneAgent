@@ -888,6 +888,7 @@ export class LinkBridge {
       deliveryKind: "bot-channel-continuous",
     })((event: ZCodeStreamEvent) => {
       if (event.type !== "permission_request" && event.type !== "elicitation_request") return;
+      if (watch.queue.length >= 64) watch.queue.shift();
       watch.queue.push(event);
       if (!watch.adopting) void this.adoptAutomationRun(watch);
     });
@@ -915,7 +916,10 @@ export class LinkBridge {
         });
       }
       const session = this.sessions.get(run.taskId) ?? (await this.adoptDesktopTask(run.taskId));
-      if (!session) return;
+      if (!session) {
+        watch.adopting = false;
+        return;
+      }
       // 会话已订阅任务流:后续审批由它自己收,这里只把接管期间攒下的补交给它。
       watch.dispose();
       this.automationWatches.delete(run.runId);

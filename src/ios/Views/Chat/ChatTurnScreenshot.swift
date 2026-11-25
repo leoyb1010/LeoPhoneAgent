@@ -40,6 +40,7 @@ struct ChatScreenshotPreviewSheet: View {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
                     }
+                    .accessibilityLabel(Text("Close"))
                 }
                 ToolbarItem(placement: .primaryAction) {
                     HStack(spacing: 16) {
@@ -49,6 +50,7 @@ struct ChatScreenshotPreviewSheet: View {
                             Image(systemName: "doc.on.doc")
                                 .font(.system(size: 14))
                         }
+                        .accessibilityLabel(Text(AppLocalized("Copy")))
                         Button {
                             shareImage(image)
                         } label: {
@@ -57,11 +59,13 @@ struct ChatScreenshotPreviewSheet: View {
                                     shareButtonFrame = $0
                                 }
                         }
+                        .accessibilityLabel(Text(AppLocalized("Share")))
                         Button {
                             saveImageToPhotos(image)
                         } label: {
                             Image(systemName: "square.and.arrow.down")
                         }
+                        .accessibilityLabel(Text(AppLocalized("Save to Photos")))
                     }
                 }
             }

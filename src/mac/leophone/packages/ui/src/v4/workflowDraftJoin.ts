@@ -20,19 +20,25 @@ import { isAmendWorkflowToolCall, isCreateWorkflowToolCall } from "@/lib/workflo
  *
  * 行窗口是有界的：前面几稿滑出窗口时稿号会偏小。稿号只用于展示，没有别的读者。
  */
+const EMPTY_WORKFLOW_DRAFT_MAP: ReadonlyMap<string, WorkflowDraftPosition> = new Map();
+
 export function buildWorkflowDraftByToolCallId(
   rows: readonly ConversationRow[] | undefined,
 ): ReadonlyMap<string, WorkflowDraftPosition> {
-  const byToolCallId = new Map<string, WorkflowDraftPosition>();
+  let byToolCallId: Map<string, WorkflowDraftPosition> | null = null;
   // 谱系 → 该谱系最近一行的 toolCallId（用来在后一行出现时把它标为被替代）。
-  const latestByLineage = new Map<string, string>();
+  let latestByLineage: Map<string, string> | null = null;
   // 「谱系 + 轮」→ 自上次编过以来的连续失败数。
-  const failuresByLineageTurn = new Map<string, number>();
+  let failuresByLineageTurn: Map<string, number> | null = null;
 
   for (const row of rows ?? []) {
     if (row.kind !== "toolCall") continue;
     const lineage = workflowDraftLineage(row);
     if (lineage === undefined) continue;
+
+    byToolCallId ??= new Map<string, WorkflowDraftPosition>();
+    latestByLineage ??= new Map<string, string>();
+    failuresByLineageTurn ??= new Map<string, number>();
 
     const previous = latestByLineage.get(lineage);
     if (previous !== undefined) {
@@ -49,7 +55,7 @@ export function buildWorkflowDraftByToolCallId(
     if (compiled === false) failuresByLineageTurn.set(turnKey, failures + 1);
     if (compiled === true) failuresByLineageTurn.set(turnKey, 0);
   }
-  return byToolCallId;
+  return byToolCallId ?? EMPTY_WORKFLOW_DRAFT_MAP;
 }
 
 function workflowDraftLineage(row: ToolCallRow): string | undefined {

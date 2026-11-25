@@ -150,7 +150,9 @@ final class StreamingHangLogger {
                 LoggingManager.shared.writeRawLine(category: "HangDetector", level: "INFO", message: "[StreamHang] start reason=\(reason) started=\(started) thresholdMs=\(HangDetector.thresholdMs)")
                 LoggingManager.shared.flush()
                 self.startFlushTimerLocked()
+                #if DEBUG
                 self.startInventoryTimerLocked()
+                #endif
             }
         }
     }

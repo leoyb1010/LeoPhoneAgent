@@ -293,12 +293,17 @@ struct ChatMessageRow: View {
                         if message.isQueued {
                             if let onWithdraw {
                                 Button {
+                                    LeoHaptics.impact(.light)
                                     onWithdraw()
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.system(size: 22))
-                                        .foregroundStyle(.red)
+                                        .foregroundStyle(LeoTheme.ColorToken.destructive)
+                                        .frame(minWidth: LeoChromeMetrics.hitTarget, minHeight: LeoChromeMetrics.hitTarget)
+                                        .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(Text(AppLocalized("撤回排队消息")))
                             }
                         }
                     }
@@ -616,7 +621,10 @@ struct ChatMessageRow: View {
                     .background(Color.secondary.opacity(0.12))
                     .clipShape(Capsule())
             } else if let onRetry {
-                Button(action: onRetry) {
+                Button {
+                    LeoHaptics.impact(.light)
+                    onRetry()
+                } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise")
                             .font(.caption.weight(.semibold))
@@ -628,7 +636,10 @@ struct ChatMessageRow: View {
                     .padding(.vertical, 6)
                     .background(ChatColors.primaryText.opacity(0.15))
                     .clipShape(Capsule())
+                    .frame(minHeight: LeoChromeMetrics.hitTarget)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(10)
@@ -642,7 +653,7 @@ struct ChatMessageRow: View {
             HStack(spacing: 6) {
                 Image(systemName: "pause.circle.fill")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(LeoTheme.ColorToken.attention)
                 Text("Interrupted — tap Resume to continue")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -651,7 +662,10 @@ struct ChatMessageRow: View {
             Spacer()
 
             if let onResume {
-                Button(action: onResume) {
+                Button {
+                    LeoHaptics.impact(.light)
+                    onResume()
+                } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "play.fill")
                             .font(.caption.weight(.semibold))
@@ -661,14 +675,17 @@ struct ChatMessageRow: View {
                     .foregroundStyle(.black)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.orange)
+                    .background(LeoTheme.ColorToken.attention)
                     .clipShape(Capsule())
+                    .frame(minHeight: LeoChromeMetrics.hitTarget)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.orange.opacity(0.08))
+        .background(LeoTheme.ColorToken.attention.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 

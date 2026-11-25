@@ -190,6 +190,8 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     }
 
     private func askDirect(_ text: String) {
+        directTask?.cancel()
+        watchdogTask?.cancel()
         let requestId = begin(text, route: .direct)
         let context = recentContext
         directContext = (requestId, text, context)
@@ -296,6 +298,7 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         envelope.append(audio)
         session.sendMessageData(envelope, replyHandler: nil, errorHandler: { error in
             Task { @MainActor in
+                guard case .waiting(let id, _) = self.askState, id == requestId else { return }
                 self.phoneFailedAt = Date()
                 self.fail("iPhone 没有响应：\(error.localizedDescription)")
             }
@@ -311,6 +314,8 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         directContext = nil
         directTask?.cancel()
         directTask = nil
+        watchdogTask?.cancel()
+        watchdogTask = nil
         WatchStandaloneClient.shared.cancelBackground(requestId: requestId)
         if let session, session.isReachable {
             session.sendMessage(["kind": "cancelAsk", "requestId": requestId], replyHandler: nil, errorHandler: { _ in })
@@ -345,10 +350,14 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         WKInterfaceDevice.current().play(.failure)
     }
 
+    private var watchdogTask: Task<Void, Never>?
+
     /// Give the phone 3 minutes, then stop showing the spinner.
     private func startWatchdog(_ requestId: String) {
-        Task { [requestId] in
+        watchdogTask?.cancel()
+        watchdogTask = Task { [weak self, requestId] in
             try? await Task.sleep(nanoseconds: 185_000_000_000)
+            guard !Task.isCancelled, let self else { return }
             if case .waiting(let id, _) = self.askState, id == requestId {
                 self.finish(requestId: requestId,
                             text: "iPhone 未在时限内回复。任务可能仍在运行，可稍后在 iPhone 上查看。",
@@ -361,6 +370,8 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         // Only accept the answer we are actually waiting for — phone-side
         // automations reuse the delivery path and must not buzz the wrist.
         guard case .waiting(let id, _) = askState, id == requestId else { return }
+        watchdogTask?.cancel()
+        watchdogTask = nil
         askState = .replied(text: text)
         lastReplyFailed = failed
         if !failed, WKApplication.shared().applicationState != .active {

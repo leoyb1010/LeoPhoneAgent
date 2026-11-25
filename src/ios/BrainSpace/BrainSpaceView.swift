@@ -133,7 +133,7 @@ struct BrainSpaceView: View {
             if let t = model.toast {
                 Text(t).font(.subheadline).padding(.horizontal, 14).padding(.vertical, 8)
                     .background(.thinMaterial, in: Capsule()).padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                     .accessibilityAddTraits(.isStaticText)
             }
         }
@@ -328,10 +328,13 @@ struct BrainErrorRow: View {
 
 enum BrainAuth {
     /// Face ID (or passcode) before anything that shares, approves or changes data on the mini.
+    /// Fails closed on biometric lockout or policy errors; only passes when the device has no passcode set.
     static func confirm(_ reason: String) async -> Bool {
         let ctx = LAContext()
         var err: NSError?
-        guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else { return true }
+        guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else {
+            return (err as? LAError)?.code == .passcodeNotSet
+        }
         return (try? await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) ?? false
     }
 }

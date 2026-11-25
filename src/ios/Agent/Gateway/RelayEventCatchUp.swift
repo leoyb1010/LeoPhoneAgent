@@ -98,6 +98,7 @@ final class RelayEventCatchUp: ObservableObject {
         // [remote-ctl-power] 已知不关注的会话(首页列表上一轮拉到的):Mac 本不为它推送,补拉也不提示。
         // 定时任务另有 notify 开关(Mac 端判),这里不按关注过滤。
         let unfollowed = MacLiveSessionsStore.shared.unfollowedSessionIds
+        var storageFailed = false
         for item in plan.items {
             let fingerprint = item.fingerprint
             guard !notifiedSet.contains(fingerprint) else { continue }
@@ -106,7 +107,10 @@ final class RelayEventCatchUp: ObservableObject {
             if host != nil || item.raw["phone_session_id"] != nil, let result = MacResultInbox.entry(event: item.raw, machine: item.machine,
                                                  receivedAt: Date(timeIntervalSince1970: item.receivedAt > 0 ? min(item.receivedAt, now) : now),
                                                  hostId: host?.id) {
-                guard MacResultInbox.record(result) else { return }
+                guard MacResultInbox.record(result) else {
+                    storageFailed = true
+                    break
+                }
                 NotificationCenter.default.post(name: MacResultInbox.changed, object: nil,
                                                 userInfo: ["sessionId": result.phoneSessionId])
             }
@@ -164,7 +168,9 @@ final class RelayEventCatchUp: ObservableObject {
                 }
             }
         }
-        lastSeenAt = plan.highWater
+        if !storageFailed {
+            lastSeenAt = plan.highWater
+        }
     }
 
     /// 终态提示:少量逐条发,多了合并成一条,不让一次补拉刷屏。

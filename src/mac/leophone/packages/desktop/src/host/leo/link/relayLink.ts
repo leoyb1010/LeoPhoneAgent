@@ -398,6 +398,7 @@ export class RelayLink {
 
   private async handleStream(ws: WebSocket, frame: Record<string, unknown>): Promise<void> {
     const id = String(frame["id"]);
+    this.streamAborts.get(id)?.abort();
     const controller = new AbortController();
     this.streamAborts.set(id, controller);
     this.streamCallers.set(id, callerFrom(frame).deviceId);
@@ -440,16 +441,8 @@ export function keychainMachineKeyStore(
   return {
     async get() {
       try {
-        const { stdout } = await run("/usr/bin/security", [
-          "find-generic-password",
-          "-s",
-          service,
-          "-a",
-          account,
-          "-w",
-        ]);
-        const key = stdout.trim();
-        return key || null;
+        const { stdout } = await run("/usr/bin/security", ["find-generic-password", "-s", service, "-a", account, "-w"]);
+        return stdout.trim() || null;
       } catch {
         return null;
       }
@@ -463,6 +456,7 @@ export function keychainMachineKeyStore(
         child.stderr.on("data", (chunk) => {
           stderr += String(chunk);
         });
+        child.stdin.on("error", () => undefined);
         child.on("error", reject);
         child.on("close", (code) =>
           code === 0 && !stderr.trim()

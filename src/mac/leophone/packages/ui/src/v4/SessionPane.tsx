@@ -3969,7 +3969,7 @@ export function SessionPane({
                       className="flex w-full max-w-3xl items-center gap-2 px-6 text-ui-sm text-foreground-subtle motion-safe:animate-pulse"
                     >
                       <span className="size-1.5 rounded-full bg-[var(--leo-brand)]" aria-hidden="true" />
-                      正在发送…
+                      {(locale ?? "zh-CN").startsWith("zh") ? "正在发送…" : "Sending…"}
                     </div>
                   )
                 }

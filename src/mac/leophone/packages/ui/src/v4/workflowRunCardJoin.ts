@@ -149,18 +149,24 @@ function workflowGraphOfRow(
  * 「图按发起 toolCallId 找」只有这一处实现。行窗口是有界的，老对话里翻不到发起行是正常情况，
  * 不是错误：此时没有图可给，卡片退成单行表头、侧板念一句「图不可用」。
  */
+const EMPTY_WORKFLOW_GRAPH_MAP: ReadonlyMap<string, WorkflowCausalityGraphData> = new Map();
+const EMPTY_WORKFLOW_FILL_GRAPH_MAP: ReadonlyMap<string, WorkflowFillGraph> = new Map();
+
 export function buildWorkflowGraphByToolCallId(
   rows: readonly ConversationRow[] | undefined,
 ): ReadonlyMap<string, WorkflowCausalityGraphData> {
-  const byToolCallId = new Map<string, WorkflowCausalityGraphData>();
+  let byToolCallId: Map<string, WorkflowCausalityGraphData> | null = null;
   for (const row of rows ?? []) {
     const found = workflowGraphOfRow(row);
     // 启动轮的 turnHeader 与 userInput 各带一份同样的元数据：首见即定。
-    if (found !== undefined && !byToolCallId.has(found.toolCallId)) {
-      byToolCallId.set(found.toolCallId, found.graph);
+    if (found !== undefined) {
+      byToolCallId ??= new Map<string, WorkflowCausalityGraphData>();
+      if (!byToolCallId.has(found.toolCallId)) {
+        byToolCallId.set(found.toolCallId, found.graph);
+      }
     }
   }
-  return byToolCallId;
+  return byToolCallId ?? EMPTY_WORKFLOW_GRAPH_MAP;
 }
 
 /**
@@ -198,16 +204,17 @@ function readFillRow(
 export function buildWorkflowFillGraphByRunId(
   rows: readonly ConversationRow[] | undefined,
 ): ReadonlyMap<string, WorkflowFillGraph> {
-  const byRunId = new Map<string, WorkflowFillGraph>();
+  let byRunId: Map<string, WorkflowFillGraph> | null = null;
   for (const row of rows ?? []) {
     const fill = readFillRow(row);
     if (fill === undefined) continue;
+    byRunId ??= new Map<string, WorkflowFillGraph>();
     // 名字跨补全累积：第二次补全的图上仍有第一次的头，它的名字只在第一行的入参里。
     const labels = new Map(byRunId.get(fill.runId)?.holeLabels ?? []);
     if (fill.name !== undefined) labels.set(fill.holeId, { name: fill.name });
     byRunId.set(fill.runId, { graph: fill.graph, holeLabels: labels });
   }
-  return byRunId;
+  return byRunId ?? EMPTY_WORKFLOW_FILL_GRAPH_MAP;
 }
 
 /** 卡与侧板取图的唯一入口：补全过就是补全行的图，否则按发起 toolCallId（含「配置」的借图规则）。 */

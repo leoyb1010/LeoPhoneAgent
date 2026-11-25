@@ -52,18 +52,19 @@ function isSuccessfulUiRow(row: ToolCallRow): boolean {
  * running / failed / isError 的行既不替代别人也不被替代（各自显示自己的状态）。
  * autoExpand 按全部行的回合顺序取最近 N 个回合（回合里没有插件卡片也算一个回合）。
  */
+const EMPTY_PLUGIN_UI_DERIVATION: PluginUiInstanceDerivation = Object.freeze({
+  instances: Object.freeze([]) as unknown as PluginUiLogicalInstance[],
+  byToolCallId: Object.freeze({}) as Record<string, PluginUiRowDisposition>,
+});
+
 export function deriveLogicalUiInstances(
   rows: readonly ConversationRow[],
   options: { autoExpandTurns?: number } = {},
 ): PluginUiInstanceDerivation {
   // domain 不用 Map / Set（模块边界约束），全部用数组与普通对象。
-  const turnOrder: string[] = [];
-  for (const row of rows) {
-    if (!turnOrder.includes(row.turnId)) turnOrder.push(row.turnId);
-  }
-  const recentTurns = turnOrder.slice(-(options.autoExpandTurns ?? PLUGIN_UI_AUTO_EXPAND_TURNS));
+  // 快速短路：绝大多数普通对话不含插件 UI 行，避免每次流式分片做 O(N×T) 扫描并分配新对象。
   const groupKeys: string[] = [];
-  const groups: Record<string, ToolCallRow[]> = {};
+  const groups: Record<string, ToolCallRow[]> = Object.create(null);
   for (const row of rows) {
     if (!isPluginUiToolRow(row)) continue;
     const display = row.display;
@@ -85,6 +86,21 @@ export function deriveLogicalUiInstances(
       groupKeys.push(key);
     }
   }
+  if (groupKeys.length === 0) {
+    return EMPTY_PLUGIN_UI_DERIVATION;
+  }
+  const seenTurns: Record<string, true> = Object.create(null);
+  const turnOrder: string[] = [];
+  for (const row of rows) {
+    if (!seenTurns[row.turnId]) {
+      seenTurns[row.turnId] = true;
+      turnOrder.push(row.turnId);
+    }
+  }
+  const recentTurnSet: Record<string, true> = Object.create(null);
+  for (const turnId of turnOrder.slice(-(options.autoExpandTurns ?? PLUGIN_UI_AUTO_EXPAND_TURNS))) {
+    recentTurnSet[turnId] = true;
+  }
   const instances: PluginUiLogicalInstance[] = [];
   const byToolCallId: Record<string, PluginUiRowDisposition> = {};
   for (const key of groupKeys) {
@@ -92,12 +108,14 @@ export function deriveLogicalUiInstances(
     const successes = group.filter(isSuccessfulUiRow);
     const active = successes.at(-1) ?? group.at(-1)!;
     const superseded = successes.filter((row) => row !== active).map((row) => row.toolCallId);
+    const supersededSet: Record<string, true> = Object.create(null);
+    for (const id of superseded) supersededSet[id] = true;
     instances.push({ key, activeToolCallId: active.toolCallId, supersededToolCallIds: superseded });
     for (const row of group) {
       byToolCallId[row.toolCallId] = {
         key,
-        superseded: superseded.includes(row.toolCallId),
-        autoExpand: recentTurns.includes(row.turnId),
+        superseded: Boolean(supersededSet[row.toolCallId]),
+        autoExpand: Boolean(recentTurnSet[row.turnId]),
         forcedInline: row.display?.kind === "mcp_tool" && row.display.ui?.showInline === true,
       };
     }

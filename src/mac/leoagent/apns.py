@@ -203,6 +203,7 @@ class APNsPusher:
         return out
 
     def _forget(self, kind: str, token: str) -> bool:
+        token = (token or "").strip().lower()
         data = self._load_devices()
         if data.get(kind, {}).pop(token, None) is not None:
             self._save_devices(data)

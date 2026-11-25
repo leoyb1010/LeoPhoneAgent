@@ -104,6 +104,11 @@ final class BrainBrowseModel: ObservableObject {
 
     /// 只有最新一次请求能改 loading / 结果:打字时旧请求被取消后晚到的收尾不能把新状态冲掉。
     private var generation = 0
+    private var prefetchTask: Task<Void, Never>?
+
+    deinit {
+        prefetchTask?.cancel()
+    }
 
     func load(scope: BrainBrowseScope, query: String) async {
         generation += 1
@@ -141,25 +146,37 @@ final class BrainBrowseModel: ObservableObject {
     }
 
     func loadCards() async {
+        generation += 1
+        let mine = generation
         let store = BrainStore.shared
+        let connRev = store.connectionRevision
+        prefetchTask?.cancel()
         loading = true
-        defer { loading = false }
+        defer { if mine == generation { loading = false } }
         do {
             let client = try store.requireClient()
             let (list, data) = try await client.cards()
+            guard !Task.isCancelled, mine == generation, store.connectionRevision == connRev else { return }
             cards = list.items
             cardsFromCache = false
             error = nil
             store.cache.storeCardList(data)
-            // 知识卡全文离线可读:后台把正文都缓存一遍(最多 50 张)。
-            Task.detached(priority: .utility) {
+            // 知识卡全文离线可读:后台把正文都缓存一遍(最多 50 张),断开或切换请求即中止。
+            prefetchTask = Task.detached(priority: .utility) { [weak store] in
                 for summary in list.items.prefix(50) {
-                    if let (_, body) = try? await client.card(summary.id) {
-                        store.cache.storeCard(id: summary.id, data: body)
+                    if Task.isCancelled { break }
+                    guard let (_, body) = try? await client.card(summary.id) else { continue }
+                    let stillValid = await MainActor.run {
+                        guard let store else { return false }
+                        return store.isConfigured && store.connectionRevision == connRev
                     }
+                    guard stillValid, !Task.isCancelled else { break }
+                    store?.cache.storeCard(id: summary.id, data: body)
                 }
             }
+        } catch is CancellationError {
         } catch {
+            guard !Task.isCancelled, mine == generation, store.connectionRevision == connRev else { return }
             let brainError = (error as? BrainError) ?? .network
             if brainError.isOffline, let data = store.cache.cardList(),
                let list = try? BrainJSON.decode(BrainCardList.self, from: data) {

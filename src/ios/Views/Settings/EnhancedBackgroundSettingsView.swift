@@ -326,7 +326,7 @@ struct EnhancedBackgroundSettingsView: View {
 // MARK: - Focus highlight
 
 private extension View {
-    /// [T-settings-focus-highlight] Draw a yellow rounded-rect border around a
+    /// [T-settings-focus-highlight] Draw an accent rounded-rect border around a
     /// row recommended by a `?focus=…` deep-link. The border fades out once
     /// `focused` flips to false (i.e. the user interacted with the row).
     @ViewBuilder
@@ -334,7 +334,7 @@ private extension View {
         self
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.yellow, lineWidth: 2)
+                    .stroke(LeoTheme.ColorToken.accent, lineWidth: 2)
                     // Expand the border outward so it isn't cramped against the
                     // row text — more breathing room above/below in particular.
                     .padding(.horizontal, -10)

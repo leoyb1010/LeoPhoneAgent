@@ -39,14 +39,14 @@ struct HarnessQuestionCard: View {
                     LeoHaptics.impact(.medium)
                     onDecline()
                 } label: {
-                    Text("跳过").frame(maxWidth: .infinity, minHeight: 24).padding(.vertical, 6)
+                    Text("跳过").frame(maxWidth: .infinity, minHeight: 32).padding(.vertical, 6)
                 }
                 .buttonStyle(.bordered)
                 Button {
                     LeoHaptics.impact(.light)
                     onSubmit(draft.answers(for: request))
                 } label: {
-                    Text("提交").frame(maxWidth: .infinity, minHeight: 24).padding(.vertical, 6)
+                    Text("提交").frame(maxWidth: .infinity, minHeight: 32).padding(.vertical, 6)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!draft.canSubmit(request))
@@ -90,8 +90,10 @@ struct HarnessQuestionCard: View {
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 10).padding(.vertical, 8)
+                    .frame(minHeight: LeoChromeMetrics.hitTarget)
                     .background(selected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08),
                                 in: RoundedRectangle(cornerRadius: 8))
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected ? .isSelected : [])
@@ -204,9 +206,11 @@ struct HarnessAttachmentStrip: View {
                                     .font(.system(size: 18))
                                     .symbolRenderingMode(.palette)
                                     .foregroundStyle(.white, .black.opacity(0.6))
+                                    .frame(width: LeoChromeMetrics.hitTarget, height: LeoChromeMetrics.hitTarget)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .offset(x: 6, y: -6)
+                            .offset(x: 16, y: -16)
                             .accessibilityLabel(Text("移除图片"))
                         }
                 }
@@ -235,7 +239,8 @@ struct HarnessPhotoButton: View {
                     Image(systemName: "photo.on.rectangle.angled").font(.system(size: 20))
                 }
             }
-            .frame(width: 34, height: 34)
+            .frame(width: LeoChromeMetrics.hitTarget, height: LeoChromeMetrics.hitTarget)
+            .contentShape(Rectangle())
         }
         .disabled(loading || HarnessAttachment.remainingSlots(current: images.count) == 0)
         .accessibilityLabel(Text("添加图片"))

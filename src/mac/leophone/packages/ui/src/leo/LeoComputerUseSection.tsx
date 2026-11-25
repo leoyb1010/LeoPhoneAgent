@@ -1,8 +1,9 @@
 import { CheckCircle2, ExternalLink, RefreshCw, TriangleAlert } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
+import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 
 /**
@@ -32,7 +33,7 @@ interface ComputerUseBridge {
   relaunch?(): Promise<boolean>;
 }
 
-const LABELS: Record<PermissionKey, { title: string; detail: string; where: string }> = {
+const LABELS_ZH: Record<PermissionKey, { title: string; detail: string; where: string }> = {
   "screen-recording": {
     title: "屏幕录制",
     detail: "截图、识别界面元素（see）",
@@ -50,61 +51,109 @@ const LABELS: Record<PermissionKey, { title: string; detail: string; where: stri
   },
 };
 
+const LABELS_EN: Record<PermissionKey, { title: string; detail: string; where: string }> = {
+  "screen-recording": {
+    title: "Screen Recording",
+    detail: "Capture screenshots and inspect UI elements",
+    where: "System Settings › Privacy & Security › Screen & System Audio Recording › LeoBot",
+  },
+  accessibility: {
+    title: "Accessibility",
+    detail: "Click, type, and inspect window hierarchy",
+    where: "System Settings › Privacy & Security › Accessibility › LeoBot",
+  },
+  "event-synthesizing": {
+    title: "Event Synthesizing",
+    detail: "Keyboard shortcuts in some apps (optional)",
+    where: "System Settings › Privacy & Security › Accessibility",
+  },
+};
+
 function bridge(): ComputerUseBridge | null {
   return (window as unknown as { leoComputerUse?: ComputerUseBridge }).leoComputerUse ?? null;
 }
 
 export function LeoComputerUseSection() {
   const api = bridge();
+  const { locale } = useZCodeIntl();
+  const zh = (locale ?? "zh-CN").startsWith("zh");
+  const labels = zh ? LABELS_ZH : LABELS_EN;
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(false);
+  const mountedRef = useRef(true);
+  const epochRef = useRef(0);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!api) return;
+    const epoch = ++epochRef.current;
     setLoading(true);
     try {
-      setStatus(await api.status());
+      const next = await api.status();
+      if (!mountedRef.current || epochRef.current !== epoch) return;
+      setStatus(next);
     } catch (error) {
       logger.warn("[LeoComputerUseSection] 读取权限失败", error);
+      if (!mountedRef.current || epochRef.current !== epoch) return;
       setStatus({
         state: "error",
         message: error instanceof Error ? error.message : String(error),
       });
     } finally {
-      setLoading(false);
+      if (mountedRef.current && epochRef.current === epoch) setLoading(false);
     }
   }, [api]);
 
   useEffect(() => {
     void refresh();
-    // 用户去系统设置勾完权限再切回来:窗口重新获得焦点时再查一次。
     const onFocus = () => void refresh();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [refresh]);
 
   if (!api) {
-    return <p className="text-ui-base text-foreground-subtle">电脑操作只在 macOS 桌面版可用。</p>;
+    return (
+      <p className="text-ui-base text-foreground-subtle">
+        {zh ? "电脑操作只在 macOS 桌面版可用。" : "Computer Use is available on macOS desktop only."}
+      </p>
+    );
   }
 
   return (
     <div className="space-y-4" data-testid="leo-computer-use-section">
       <p className="text-ui-base leading-6 text-foreground-subtle">
-        允许后，Agent 可以看屏幕、点按和输入；在后台操作，不抢你的鼠标。授权给 LeoBot
-        本身，改完回到这里会自动刷新。
+        {zh
+          ? "允许后，Agent 可以看屏幕、点按和输入；在后台操作，不抢你的鼠标。授权给 LeoBot 本身，改完回到这里会自动刷新。"
+          : "When granted, the agent can view the screen, click, and type in the background without stealing your cursor. Changes refresh automatically on window focus."}
       </p>
       <details className="text-ui-sm text-foreground-subtlest">
-        <summary className="cursor-pointer select-none">技术细节</summary>
+        <summary className="cursor-pointer select-none">{zh ? "技术细节" : "Technical details"}</summary>
         <p className="mt-1 leading-5">
-          通过随包的 Peekaboo{status?.state === "ok" && status.version ? ` ${status.version}` : ""}，以 MCP 服务「leo-screen」的形式提供给 Agent。
+          {zh
+            ? `通过随包的 Peekaboo${status?.state === "ok" && status.version ? ` ${status.version}` : ""}，以 MCP 服务「leo-screen」的形式提供给 Agent。`
+            : `Exposed to the agent as MCP server "leo-screen" via bundled Peekaboo${status?.state === "ok" && status.version ? ` ${status.version}` : ""}.`}
         </p>
       </details>
       <div className="overflow-hidden rounded-xl border border-border">
         <div className="flex items-center justify-between bg-surface px-4 py-2.5 text-ui-sm text-foreground-subtle">
           <span>
-            权限
+            {zh ? "权限" : "Permissions"}
             {status?.state === "ok"
-              ? ` · ${status.permissions.some((p) => p.required && !p.granted) ? "还差几项" : "已就绪"}`
+              ? ` · ${
+                  status.permissions.some((p) => p.required && !p.granted)
+                    ? zh
+                      ? "还差几项"
+                      : "Action needed"
+                    : zh
+                      ? "已就绪"
+                      : "Ready"
+                }`
               : ""}
           </span>
           <Button
@@ -119,93 +168,127 @@ export function LeoComputerUseSection() {
                 "mr-1.5 size-3.5",
                 loading && "animate-spin motion-reduce:animate-none",
               )}
+              aria-hidden="true"
             />
-            重新检查
+            {zh ? "重新检查" : "Re-check"}
           </Button>
         </div>
         {status === null ? (
           <div className="border-t border-border px-4 py-3 text-ui-base text-foreground-subtle">
-            正在检查…
+            {zh ? "正在检查…" : "Checking…"}
           </div>
         ) : status.state === "missing" ? (
           <div className="border-t border-border px-4 py-3 text-ui-base text-foreground-subtle">
-            这个版本没有带 Peekaboo（开发环境请先运行{" "}
-            <code className="font-mono">pnpm leo:fetch-peekaboo</code>）。
+            {zh ? (
+              <>
+                这个版本没有带 Peekaboo（开发环境请先运行{" "}
+                <code className="font-mono">pnpm leo:fetch-peekaboo</code>）。
+              </>
+            ) : (
+              <>
+                Peekaboo is not bundled in this build (run{" "}
+                <code className="font-mono">pnpm leo:fetch-peekaboo</code> in dev).
+              </>
+            )}
           </div>
         ) : status.state === "error" ? (
           <div
             role="alert"
             className="border-t border-border px-4 py-3 text-ui-base text-destructive"
           >
-            读不到权限状态：{status.message}
+            {zh ? `读不到权限状态：${status.message}` : `Failed to check permissions: ${status.message}`}
           </div>
         ) : (
-          status.permissions.map((permission) => (
-            <div
-              key={permission.key}
-              className="flex items-center gap-3 border-t border-border px-4 py-3"
-              data-permission={permission.key}
-            >
-              {permission.granted ? (
-                <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" />
-              ) : (
-                <TriangleAlert
-                  className={cn(
-                    "size-4 shrink-0",
-                    permission.required
-                      ? "text-[var(--leo-attention)]"
-                      : "text-foreground-subtlest",
-                  )}
-                  aria-hidden="true"
-                />
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 text-ui-base font-medium text-foreground">
-                  {LABELS[permission.key].title}
-                  {permission.required ? "" : "（可选）"}
-                  {/* 状态要有文字：只靠图标颜色，读屏和色弱用户都分不出来。 */}
-                  <span
+          status.permissions.map((permission) => {
+            const meta = labels[permission.key] ?? {
+              title: permission.name,
+              detail: permission.instructions,
+              where: permission.instructions,
+            };
+            return (
+              <div
+                key={permission.key}
+                className="flex flex-wrap items-center gap-3 border-t border-border px-4 py-3 sm:flex-nowrap"
+                data-permission={permission.key}
+              >
+                {permission.granted ? (
+                  <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" />
+                ) : (
+                  <TriangleAlert
                     className={cn(
-                      "rounded-full px-1.5 py-px text-ui-xs font-normal",
-                      permission.granted
-                        ? "bg-success/10 text-success"
-                        : permission.required
-                          ? "bg-[color-mix(in_srgb,var(--leo-attention)_14%,transparent)] text-[var(--leo-attention)]"
-                          : "bg-muted text-foreground-subtle",
+                      "size-4 shrink-0",
+                      permission.required
+                        ? "text-[var(--leo-attention)]"
+                        : "text-foreground-subtlest",
                     )}
+                    aria-hidden="true"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 text-ui-base font-medium text-foreground">
+                    {meta.title}
+                    {permission.required ? "" : zh ? "（可选）" : " (optional)"}
+                    <span
+                      className={cn(
+                        "rounded-full px-1.5 py-px text-ui-xs font-normal",
+                        permission.granted
+                          ? "bg-success/10 text-success"
+                          : permission.required
+                            ? "bg-[color-mix(in_srgb,var(--leo-attention)_14%,transparent)] text-[var(--leo-attention)]"
+                            : "bg-muted text-foreground-subtle",
+                      )}
+                    >
+                      {permission.granted ? (zh ? "已允许" : "Granted") : zh ? "未允许" : "Not granted"}
+                    </span>
+                  </div>
+                  <div className="text-ui-sm text-foreground-subtle">
+                    {permission.granted ? meta.detail : meta.where}
+                  </div>
+                </div>
+                {permission.granted ? null : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    aria-label={
+                      zh
+                        ? `${meta.title}：未允许，去系统设置开启`
+                        : `${meta.title}: not granted, open System Settings`
+                    }
+                    onClick={() =>
+                      void api.openSettings(permission.key).catch((error: unknown) => {
+                        logger.warn("[LeoComputerUseSection] 打开系统设置失败", error);
+                      })
+                    }
                   >
-                    {permission.granted ? "已允许" : "未允许"}
-                  </span>
-                </div>
-                <div className="text-ui-sm text-foreground-subtle">
-                  {permission.granted ? LABELS[permission.key].detail : LABELS[permission.key].where}
-                </div>
+                    {zh ? "去系统设置" : "Open Settings"}
+                    <ExternalLink className="ml-1.5 size-3.5" aria-hidden="true" />
+                  </Button>
+                )}
               </div>
-              {permission.granted ? null : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  aria-label={`${LABELS[permission.key].title}：未允许，去系统设置开启`}
-                  onClick={() => void api.openSettings(permission.key)}
-                >
-                  去系统设置
-                  <ExternalLink className="ml-1.5 size-3.5" />
-                </Button>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
       </div>
       {status?.state === "ok" && status.permissions.some((p) => !p.granted) ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl bg-surface px-4 py-3 text-ui-sm text-foreground-subtle">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface px-4 py-3 text-ui-sm text-foreground-subtle sm:flex-nowrap">
           <span>
-            在系统设置里已经打开了？屏幕录制要重启 LeoBot 才生效；辅助功能如果打开了仍显示未允许，先在列表里用「−」删掉
-            LeoBot 再重新添加 /Applications/LeoBot.app（升级后旧条目可能失效）。
+            {zh
+              ? "在系统设置里已经打开了？屏幕录制要重启 LeoBot 才生效；辅助功能如果打开了仍显示未允许，先在列表里用「−」删掉 LeoBot 再重新添加 /Applications/LeoBot.app（升级后旧条目可能失效）。"
+              : "Already enabled in System Settings? Screen Recording requires restarting LeoBot. If Accessibility still shows not granted after an update, remove LeoBot with \"−\" and re-add /Applications/LeoBot.app."}
           </span>
           {api.relaunch ? (
-            <Button type="button" size="sm" variant="outline" onClick={() => void api.relaunch?.()}>
-              重启 LeoBot
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void api.relaunch?.().catch((error: unknown) => {
+                  logger.warn("[LeoComputerUseSection] 重启应用失败", error);
+                })
+              }
+            >
+              {zh ? "重启 LeoBot" : "Restart LeoBot"}
             </Button>
           ) : null}
         </div>

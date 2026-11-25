@@ -780,7 +780,7 @@ struct CollectionsView: View {
             Button {
                 sendToAgent(item, prompt: nil)
             } label: { Label("发给 Agent", systemImage: "paperplane.fill") }
-                .tint(.indigo)
+                .tint(LeoTheme.ColorToken.accent)
             Button {
                 var updated = item
                 updated.pinned.toggle()
@@ -790,12 +790,12 @@ struct CollectionsView: View {
                 Label(item.pinned ? "取消置顶" : "置顶",
                       systemImage: item.pinned ? "pin.slash" : "pin")
             }
-            .tint(.orange)
+            .tint(LeoTheme.ColorToken.attention)
             Button {
                 annotationDraft = item.annotation ?? ""
                 annotating = item
             } label: { Label("批注", systemImage: "text.bubble") }
-                .tint(.indigo)
+                .tint(.gray)
         }
     }
 

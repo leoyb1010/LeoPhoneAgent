@@ -190,6 +190,7 @@ class Relay:
         self.join_tokens: Dict[str, Dict[str, Any]] = {}
         self.pending_joins: Dict[str, Dict[str, Any]] = {}
         self.join_failures: Dict[str, List[float]] = {}
+        self._uploading_treasury_assets: set[str] = set()
         self.offline_queue: Dict[str, List[Dict[str, Any]]] = {}
         self.queue_results: Dict[str, Dict[str, Any]] = {}
         # [P0] 离线排队落盘:中继重启(launchd 拉起、mini 重启)不再丢手机排的任务。
@@ -670,6 +671,9 @@ class Relay:
     async def post_treasury_asset_request(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return self._unauthorized()
+        corrupt = self._treasury_corrupt_response()
+        if corrupt is not None:
+            return corrupt
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001
@@ -720,6 +724,9 @@ class Relay:
     async def get_treasury_asset_requests(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return self._unauthorized()
+        corrupt = self._treasury_corrupt_response()
+        if corrupt is not None:
+            return corrupt
         origin = self._safe_treasury_text(request.query.get("origin_device_id"), 200)
         if not origin:
             return web.json_response({"error": {"message": "origin_device_id is required"}}, status=400)
@@ -733,12 +740,17 @@ class Relay:
     async def put_treasury_asset(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return self._unauthorized()
+        corrupt = self._treasury_corrupt_response()
+        if corrupt is not None:
+            return corrupt
         if not self._clean_treasury_asset_requests():
             return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
         request_id = str(request.match_info.get("request_id") or "")
         value = self.treasury_asset_requests.get(request_id)
         if not self._valid_treasury_asset_request(request_id, value) or value.get("status") != "pending":
             return web.json_response({"error": {"message": "asset request unavailable"}}, status=404)
+        if request_id in self._uploading_treasury_assets:
+            return web.json_response({"error": {"message": "asset upload already in progress"}}, status=409)
         device_id = self._safe_treasury_text(request.headers.get("X-Treasury-Device-ID"), 200)
         digest_header = self._safe_treasury_text(request.headers.get("X-Treasury-Digest"), 64).lower()
         mime_type = self._treasury_mime(request.headers.get("Content-Type"))
@@ -770,9 +782,10 @@ class Relay:
             return web.json_response({"error": {"message": "asset mime type mismatch"}}, status=409)
         os.makedirs(self.treasury_asset_dir, mode=0o700, exist_ok=True)
         target = self._treasury_asset_path(request_id)
-        temporary = target + ".tmp"
+        temporary = f"{target}.{secrets.token_hex(6)}.tmp"
         actual_digest = hashlib.sha256()
         actual_count = 0
+        self._uploading_treasury_assets.add(request_id)
         try:
             stream = open(temporary, "wb")
             os.chmod(temporary, 0o600)
@@ -799,6 +812,14 @@ class Relay:
             except OSError:
                 pass
             return web.json_response({"error": {"message": "asset integrity validation failed"}}, status=422)
+        except BaseException:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+            raise
+        finally:
+            self._uploading_treasury_assets.discard(request_id)
         previous_value = dict(value)
         value.update({
             "status": "ready", "digest": digest_header, "byte_count": actual_count,
@@ -820,6 +841,9 @@ class Relay:
     async def post_treasury_asset_unavailable(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return self._unauthorized()
+        corrupt = self._treasury_corrupt_response()
+        if corrupt is not None:
+            return corrupt
         if not self._clean_treasury_asset_requests():
             return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
         request_id = str(request.match_info.get("request_id") or "")
@@ -847,6 +871,9 @@ class Relay:
     async def get_treasury_asset(self, request: web.Request) -> web.StreamResponse:
         if not self._authorized(request):
             return self._unauthorized()
+        corrupt = self._treasury_corrupt_response()
+        if corrupt is not None:
+            return corrupt
         if not self._clean_treasury_asset_requests():
             return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
         request_id = str(request.match_info.get("request_id") or "")
@@ -1197,9 +1224,17 @@ class Relay:
 
     @staticmethod
     def _source(request: web.Request) -> str:
-        forwarded = request.headers.get("X-Forwarded-For", "")
-        first = forwarded.split(",")[0].strip()
-        return first or (getattr(request, "remote", None) or "?")
+        remote = getattr(request, "remote", None) or "?"
+        trusted = {"127.0.0.1", "::1", "localhost"}
+        extra = os.environ.get("LEO_RELAY_TRUSTED_PROXIES", "")
+        if extra:
+            trusted.update(p.strip() for p in extra.split(",") if p.strip())
+        if remote in trusted:
+            forwarded = request.headers.get("X-Forwarded-For", "")
+            first = forwarded.split(",")[0].strip()
+            if first:
+                return first
+        return remote
 
     def _join_locked(self, source: str) -> bool:
         now = time.time()
@@ -1211,7 +1246,15 @@ class Relay:
         return len(recent) >= JOIN_FAIL_LIMIT
 
     def _note_join_failure(self, source: str) -> None:
-        self.join_failures.setdefault(source, []).append(time.time())
+        now = time.time()
+        if len(self.join_failures) >= 2048 and source not in self.join_failures:
+            stale = [k for k, ts in self.join_failures.items()
+                     if not any(now - t < JOIN_FAIL_WINDOW_S for t in ts)]
+            for k in stale:
+                self.join_failures.pop(k, None)
+            if len(self.join_failures) >= 2048:
+                self.join_failures.pop(next(iter(self.join_failures)), None)
+        self.join_failures.setdefault(source, []).append(now)
 
     @staticmethod
     async def _json_body(request: web.Request) -> Dict[str, Any]:
@@ -1396,11 +1439,15 @@ class Relay:
         except (TypeError, ValueError):
             grace_days = MASTER_GRACE_S / 86400
         register_key = secrets.token_urlsafe(32)
+        prev_hash = self.register_key_hash
+        prev_expires = self.master_expires_at
         self.register_key_hash = self._hash_key(register_key)
         self.master_expires_at = time.time() + grace_days * 86400
         if not math.isfinite(self.master_expires_at):
             self.master_expires_at = time.time()
         if not self._save_state():
+            self.register_key_hash = prev_hash
+            self.master_expires_at = prev_expires
             return web.json_response({"error": {"message": "rotation persistence unavailable"}}, status=503)
         return web.json_response({"registerKey": register_key, "masterExpiresAt": self.master_expires_at})
 
@@ -1448,6 +1495,9 @@ class Relay:
                 kind = frame.get("type")
 
                 if kind == "register":
+                    if machine is not None:
+                        await ws.close(code=1008, message=b"already registered")
+                        break
                     raw_name = frame.get("name")
                     if raw_name is not None and not isinstance(raw_name, str):
                         await ws.close(code=1008, message=b"invalid machine name")
@@ -1760,6 +1810,9 @@ class Relay:
     async def get_collections(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return self._unauthorized()
+        corrupt = self._treasury_corrupt_response()
+        if corrupt is not None:
+            return corrupt
         items = [entry["item"] for entry in self.treasury_items.values()
                  if not entry["item"].get("deleted_at")]
         items.sort(key=lambda item: float(item.get("updated_at") or 0), reverse=True)
@@ -1909,7 +1962,7 @@ class Relay:
         if platform not in ("ios", ""):
             return web.json_response({"error": {"message": "unknown push platform"}}, status=400)
         kind = str(body.get("kind") or "device")
-        token = str(body.get("token") or "")
+        token = str(body.get("token") or "").strip().lower()
         raw_sids = body.get("session_ids")
         session_ids = [str(s) for s in raw_sids] if isinstance(raw_sids, list) else None
         kwargs: Dict[str, Any] = {}
@@ -1957,7 +2010,8 @@ class Relay:
         if len(token) < 32 or len(token) > 512:
             return web.json_response({"error": {"message": "bad token"}}, status=400)
         owner = next((device_id for device_id, device in self.devices.items()
-                      if token in ((device.get("push_tokens") or {}).get("activity_update") or [])), None)
+                      if any(str(t).strip().lower() == token
+                             for t in ((device.get("push_tokens") or {}).get("activity_update") or []))), None)
         if owner is not None and owner != caller.device_id:
             return web.json_response({"error": {"message": "unknown token"}}, status=404)
         forget = getattr(self.apns, "_forget", None)
@@ -1965,9 +2019,10 @@ class Relay:
         self.live_planner.forget(token)
         if owner is not None:
             tokens = self.devices[owner].setdefault("push_tokens", {})
-            tokens["activity_update"] = [t for t in tokens.get("activity_update", []) if t != token]
+            tokens["activity_update"] = [t for t in tokens.get("activity_update", [])
+                                         if str(t).strip().lower() != token]
             push = self.devices[owner].get("push") or {}
-            if push.get("kind") == "activity_update" and push.get("token") == token:
+            if push.get("kind") == "activity_update" and str(push.get("token") or "").strip().lower() == token:
                 self.devices[owner].pop("push", None)
             self._save_state()
             removed = True
@@ -2096,11 +2151,16 @@ class Relay:
         trace = request.headers.get("X-Leo-Trace-Id", "")[:64]
         try:
             frame = await asyncio.wait_for(fut, timeout=REQUEST_TIMEOUT_S)
-        except (asyncio.TimeoutError, ConnectionError):
-            machine.pending.pop(request_id, None)
+        except asyncio.TimeoutError:
             log(f"[relay] {request.method} {name}{tail} timed out trace={trace or '-'}")
             return web.json_response(
                 {"error": {"message": "这台 Mac 没有按时响应"}}, status=504)
+        except ConnectionError as exc:
+            log(f"[relay] {request.method} {name}{tail} disconnected trace={trace or '-'}: {exc}")
+            return web.json_response(
+                {"error": {"message": "这台 Mac 连接已断开"}}, status=502)
+        finally:
+            machine.pending.pop(request_id, None)
         elapsed = time.monotonic() - started
         if elapsed >= 5:
             # 慢请求留一行,带手机给的 trace id,方便和手机 / Mac 两端日志对上。
@@ -2166,19 +2226,11 @@ class Relay:
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         })
-        await response.prepare(request)
-        await machine.ws.send_json({"type": "stream_open", "id": stream_id, "path": tail,
-                                    "caller": caller.public() if caller else {}})
         loop = asyncio.get_running_loop()
-        # 攒着还没发的正文:[首帧原文, 最近一帧, 各段 delta];外加攒的这段时间里最新的
-        # 一条 journal.status(iOS 带 journal_status=1 时,桌面端每条事件前后都插一条
-        # 状态快照;新的覆盖旧的,正文发完紧跟着发——要是见一条就先发正文,iOS 这条
-        # 最常用的路径上一段也合并不了)。
-        # 攒着的正文 seq 还没到手机,续传游标停在它们之前:手机断线时这截直接丢掉
-        # 也不少字,重连 ?after=N 由 Mac 的事件日志原样补回。
         pending: Optional[List[Any]] = None
         status: Optional[str] = None
         deadline = 0.0
+        stream_opened = False
 
         async def write_authorized(data: bytes) -> None:
             if not self._stream_authorized(caller):
@@ -2194,9 +2246,6 @@ class Relay:
                 raw, last, parts = pending
                 pending = None
                 if len(parts) > 1:
-                    # 合成帧 = 最后一帧换上拼好的正文,seq 用最后一段的:手机按它续传正好
-                    # 接在这截之后,不重不漏。ensure_ascii 保持默认:拼接处可能是被切开的
-                    # 代理对,转义输出永远是合法 JSON,手机解析时自动拼回。
                     raw = json.dumps({**last, "delta": "".join(parts)})
                 await write_authorized(f"data: {raw}\n\n".encode("utf-8"))
             if status is not None:
@@ -2204,6 +2253,10 @@ class Relay:
                 await write_authorized(f"data: {raw}\n\n".encode("utf-8"))
 
         try:
+            await response.prepare(request)
+            await machine.ws.send_json({"type": "stream_open", "id": stream_id, "path": tail,
+                                        "caller": caller.public() if caller else {}})
+            stream_opened = True
             while True:
                 if not self._stream_authorized(caller):
                     pending, status = None, None
@@ -2262,11 +2315,12 @@ class Relay:
             # stream_cancel 根本发不出去:Mac 那边的上游连接没人叫停,一直挂着
             # 读到 sock_read 超时为止。shield 让这次发送独立于本任务的取消跑完,
             # 外层的 BaseException 只是把"本任务已被取消"这件事咽掉。
-            try:
-                await asyncio.shield(
-                    machine.ws.send_json({"type": "stream_cancel", "id": stream_id}))
-            except BaseException:  # noqa: BLE001
-                pass
+            if stream_opened:
+                try:
+                    await asyncio.shield(
+                        machine.ws.send_json({"type": "stream_cancel", "id": stream_id}))
+                except BaseException:  # noqa: BLE001
+                    pass
         return response
 
     # -- 离线排队 --------------------------------------------------------------

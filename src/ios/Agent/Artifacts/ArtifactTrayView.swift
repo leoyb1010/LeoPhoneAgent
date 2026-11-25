@@ -632,12 +632,12 @@ private extension ArtifactKind {
 
     var tint: Color {
         switch self {
-        case .document: return .blue
-        case .image: return .purple
-        case .audio: return .orange
-        case .video: return .pink
-        case .code: return .blue
-        case .archive: return .brown
+        case .document: return LeoTheme.ColorToken.accent
+        case .image: return LeoTheme.ColorToken.accent
+        case .audio: return LeoTheme.ColorToken.attention
+        case .video: return LeoTheme.ColorToken.accent
+        case .code: return LeoTheme.ColorToken.accent
+        case .archive: return .gray
         case .file: return .gray
         }
     }

@@ -187,7 +187,7 @@ struct CloudSyncSettingsV2View: View {
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(.white)
                                     .frame(width: 28, height: 28)
-                                    .background(Color.purple, in: RoundedRectangle(cornerRadius: 7))
+                                    .background(LeoTheme.ColorToken.accent, in: RoundedRectangle(cornerRadius: 7))
                                 Text("Max Artifact Version Size")
                             }
                         }
@@ -400,13 +400,10 @@ struct CloudSyncSettingsV2View: View {
 
     private func iconColor(for cat: UploadPolicy.Category) -> Color {
         switch cat {
-        case .chatSessions: return .blue
-        case .sessionFiles: return .indigo
-        case .artifacts:    return .purple
-        case .skills:       return .orange
-        case .providers:    return .indigo
-        case .envVars:      return .blue
-        case .memory:       return .pink
+        case .chatSessions, .providers, .envVars, .artifacts:
+            return LeoTheme.ColorToken.accent
+        case .sessionFiles, .skills, .memory:
+            return .gray
         }
     }
 

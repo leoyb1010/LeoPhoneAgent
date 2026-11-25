@@ -83,8 +83,8 @@ export function LeoHomeSetupCard({ className }: { className?: string }) {
       aria-label={title}
       data-testid="leo-home-setup-card"
       className={cn(
-        // [G3] 只用设计 token:卡片 bg-card / rounded-xl,主操作用共享 Button(青绿 primary)。
-        "leo-home-setup relative flex w-full max-w-2xl items-center gap-3 rounded-xl border border-border bg-card px-4 py-3",
+        // [G3] 只用设计 token：卡片 bg-card / rounded-xl，主操作用共享 Button（品牌主色）。
+        "leo-home-setup relative flex w-full max-w-2xl flex-wrap items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 sm:flex-nowrap",
         className,
       )}
     >
@@ -117,7 +117,7 @@ export function LeoHomeSetupCard({ className }: { className?: string }) {
         onClick={dismiss}
         className="text-foreground-subtlest hover:text-foreground"
       >
-        <X className="size-3.5" />
+        <X className="size-3.5" aria-hidden="true" />
       </Button>
     </section>
   );

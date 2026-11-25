@@ -34,21 +34,24 @@ export function LeoComposerAgentTools({
 
   useEffect(() => {
     if (!bridge) return;
+    let alive = true;
     const load = () =>
       bridge
         .getSettings()
-        .then((result) =>
+        .then((result) => {
+          if (!alive) return;
           setHotkey(
             result.available && result.settings?.dictationEnabled
               ? formatAccelerator(result.settings.accelerator)
               : null,
-          ),
-        )
+          );
+        })
         .catch((error: unknown) => logger.warn("[LeoComposerAgentTools] 读取语音设置失败", error));
     load();
     window.addEventListener("focus", load);
     window.addEventListener("leo-speech-settings-changed", load);
     return () => {
+      alive = false;
       window.removeEventListener("focus", load);
       window.removeEventListener("leo-speech-settings-changed", load);
     };
@@ -67,7 +70,7 @@ export function LeoComposerAgentTools({
             disabled={disabled}
             onClick={onPickAgent}
             aria-label={intl.formatMessage({ id: "leoHome.composer.pickAgentAria" }, { agent: agentName })}
-            className="mx-0.5 rounded-full transition-opacity hover:opacity-80 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--leo-brand)]"
+            className="mx-0.5 rounded-full transition-opacity hover:opacity-80 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--leo-brand)] motion-reduce:transition-none"
           >
             <LeoAgentBadge kind={agentKind} />
           </button>
@@ -88,7 +91,7 @@ export function LeoComposerAgentTools({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => window.dispatchEvent(new Event(LEO_DICTATION_TOGGLE_EVENT))}
           >
-            <Mic className="size-4" />
+            <Mic className="size-4" aria-hidden="true" />
           </Button>
         </ControlHintTooltip>
       ) : null}

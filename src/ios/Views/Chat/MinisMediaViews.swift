@@ -481,6 +481,7 @@ struct MinisImageFilePreviewView: View {
                         .contentShape(Circle())
                         .background(.ultraThinMaterial, in: Circle())
                 }
+                .accessibilityLabel(Text("Close"))
                 .padding(.horizontal)
                 .padding(.top, 2)
             }
@@ -562,6 +563,7 @@ struct MinisTextPreviewView: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(ChatColors.secondaryText)
                     }
+                    .accessibilityLabel(Text("Close"))
                 }
                 ToolbarItem(placement: .principal) {
                     PreviewTitleToggle(fileURL: fileURL, showFullPath: $showFullPath)
@@ -580,6 +582,7 @@ struct MinisTextPreviewView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                    .accessibilityLabel(Text(AppLocalized("More Actions")))
                 }
             }
             .sheet(isPresented: $showShareSheet) {
@@ -681,6 +684,7 @@ struct MinisMarkdownPreviewView: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(ChatColors.secondaryText)
                     }
+                    .accessibilityLabel(Text("Close"))
                 }
                 ToolbarItem(placement: .principal) {
                     PreviewTitleToggle(fileURL: fileURL, showFullPath: $showFullPath)
@@ -706,6 +710,7 @@ struct MinisMarkdownPreviewView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                    .accessibilityLabel(Text(AppLocalized("More Actions")))
                 }
             }
             .sheet(isPresented: $showShareSheet) {
@@ -767,6 +772,7 @@ struct MinisHTMLPreviewView: View {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(ChatColors.secondaryText)
                         }
+                        .accessibilityLabel(Text("Close"))
                     }
                     if let onPark {
                         ToolbarItem(placement: .primaryAction) {

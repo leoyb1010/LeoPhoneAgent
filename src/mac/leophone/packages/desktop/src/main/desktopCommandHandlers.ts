@@ -114,11 +114,8 @@ async function clearAllDataAndRelaunch(options: {
   }
 
   try {
-    const session = BrowserWindow.getAllWindows()[0]?.webContents.session;
-    if (session) {
-      await session.clearStorageData();
-      options.logger.info("[clear-all-data] cleared session storage data");
-    }
+    await session.defaultSession.clearStorageData();
+    options.logger.info("[clear-all-data] cleared defaultSession storage data");
   } catch (error) {
     options.logger.error("[clear-all-data] failed to clear session data:", error);
   }

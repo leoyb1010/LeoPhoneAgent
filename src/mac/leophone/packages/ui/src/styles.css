@@ -141,22 +141,22 @@ html[data-document-hidden] *::after {
 }
 
 /*
- * Bugfix: 部分浏览器 / Electron 运行环境会在 focus-visible 时叠加系统级高亮边框，
- * 表现为和产品主题无关的黄色描边，看起来像“随机冒出来的无障碍样式”。
- * 这里在全局层同时清掉 outline 和 focus ring 对应的 box-shadow，避免系统高亮和组件局部 ring 混用。
+ * 键盘焦点规范：点击（非 focus-visible）不显示外框；键盘导航（:focus-visible）统一使用
+ * 品牌蓝 2px 焦点环，避免系统黄色描边与无焦点指示器两种极端；高对比度模式保留系统 Highlight。
  */
-*:focus,
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
 *:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-  -webkit-box-shadow: none !important;
+  outline: 2px solid var(--leo-brand, var(--color-ring));
+  outline-offset: 2px;
 }
 
 @media (forced-colors: active) {
-  *:focus,
   *:focus-visible {
-    outline: none !important;
-    box-shadow: none !important;
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
   }
 }
 

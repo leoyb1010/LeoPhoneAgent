@@ -138,6 +138,17 @@ function forget(sessionId: string): void {
   if (sessions.size === 0) closeWindow();
 }
 
+export function isLeoScreenPeerWindow(win: BrowserWindow): boolean {
+  return peerWindow !== null && win === peerWindow;
+}
+
+let lifecycleChain: Promise<void> = Promise.resolve();
+function serializePeerLifecycle<T>(work: () => Promise<T>): Promise<T> {
+  const next = lifecycleChain.then(work, work);
+  lifecycleChain = next.then(() => undefined, () => undefined);
+  return next;
+}
+
 function closeWindow(): void {
   const current = peerWindow;
   peerWindow = null;
@@ -209,16 +220,29 @@ async function ensureWindow(logger: Logger): Promise<BrowserWindow> {
     created.webContents.on("render-process-gone", () => created.destroy());
     // 仿内置录屏器:临时空白页 + preload;file:// 是安全上下文,getDisplayMedia 可用。
     const page = join(tmpdir(), `leo-screen-peer-${process.pid}.html`);
-    await writeFile(page, "<!doctype html><title>leo-screen-peer</title>", { mode: 0o600 });
-    await created.loadFile(page);
-    await rm(page, { force: true }).catch(() => undefined);
-    return created;
+    try {
+      await writeFile(page, "<!doctype html><title>leo-screen-peer</title>", { mode: 0o600 });
+      await created.loadFile(page);
+      return created;
+    } catch (error) {
+      if (peerWindow === created) {
+        peerWindow = null;
+        windowReady = null;
+      }
+      if (!created.isDestroyed()) created.destroy();
+      throw error;
+    } finally {
+      await rm(page, { force: true }).catch(() => undefined);
+    }
   })();
   return windowReady;
 }
 
 async function command(logger: Logger, payload: Record<string, unknown>): Promise<unknown> {
   const target = await ensureWindow(logger);
+  if (target.isDestroyed() || target.webContents.isDestroyed()) {
+    throw new Error("看屏窗口已关闭");
+  }
   const id = nextCommandId++;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -230,7 +254,13 @@ async function command(logger: Logger, payload: Record<string, unknown>): Promis
       if (reply.error) reject(new Error(reply.error));
       else resolve(reply.result);
     });
-    target.webContents.send("leo:screen-peer:cmd", { id, command: payload });
+    try {
+      target.webContents.send("leo:screen-peer:cmd", { id, command: payload });
+    } catch (error) {
+      clearTimeout(timer);
+      pending.delete(id);
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
   });
 }
 
@@ -260,44 +290,48 @@ export async function handlePeerRequest(
   if (!/^scr_[0-9a-f-]{36}$/.test(sessionId)) return fail(400, "bad_session", "会话 id 不对");
   try {
     if (request.op === "open") {
-      // 同时只一路:Host 已按设备裁决过,这里把旧的都关掉。
-      await closeAllScreenPeers(logger);
-      nextDisplayId = request.displayId ?? null;
-      const entry = {
-        id: sessionId,
-        state: "new",
-        control: false,
-        displayId: nextDisplayId ?? String(screen.getPrimaryDisplay().id),
-        createdAt: Date.now(),
-        timer: setTimeout(() => {
-          logger.info(`[leo-screen] session ${sessionId} not connected in time`);
-          void command(logger, { op: "close", sessionId }).catch(() => undefined);
+      return await serializePeerLifecycle(async () => {
+        // 同时只一路:Host 已按设备裁决过,这里串行关旧开新防止并发交错。
+        await closeAllScreenPeers(logger);
+        nextDisplayId = request.displayId ?? null;
+        const entry = {
+          id: sessionId,
+          state: "new",
+          control: false,
+          displayId: nextDisplayId ?? String(screen.getPrimaryDisplay().id),
+          createdAt: Date.now(),
+          timer: setTimeout(() => {
+            logger.info(`[leo-screen] session ${sessionId} not connected in time`);
+            void command(logger, { op: "close", sessionId }).catch(() => undefined);
+            forget(sessionId);
+          }, NEGOTIATION_TIMEOUT_MS),
+        };
+        sessions.set(sessionId, entry);
+        notify();
+        try {
+          const result = (await command(logger, {
+            op: "open",
+            sessionId,
+            offer: request.offer ?? "",
+            maxFps: request.maxFps ?? 30,
+            maxEdge: request.maxEdge ?? 1920,
+            iceServers: request.iceServers ?? [],
+            control: request.control === true,
+          })) as { answer: string };
+          return { status: 200, body: { answer: result.answer } };
+        } catch (error) {
           forget(sessionId);
-        }, NEGOTIATION_TIMEOUT_MS),
-      };
-      sessions.set(sessionId, entry);
-      notify();
-      try {
-        const result = (await command(logger, {
-          op: "open",
-          sessionId,
-          offer: request.offer ?? "",
-          maxFps: request.maxFps ?? 30,
-          maxEdge: request.maxEdge ?? 1920,
-          iceServers: request.iceServers ?? [],
-          control: request.control === true,
-        })) as { answer: string };
-        return { status: 200, body: { answer: result.answer } };
-      } catch (error) {
-        forget(sessionId);
-        throw error;
-      }
+          throw error;
+        }
+      });
     }
     if (!sessions.has(sessionId)) return fail(404, "session_not_found", "看屏会话已结束");
     if (request.op === "close") {
-      await command(logger, { op: "close", sessionId }).catch(() => undefined);
-      forget(sessionId);
-      return { status: 200, body: { ok: true } };
+      return await serializePeerLifecycle(async () => {
+        await command(logger, { op: "close", sessionId }).catch(() => undefined);
+        forget(sessionId);
+        return { status: 200, body: { ok: true } };
+      });
     }
     if (request.op === "ice") {
       await command(logger, { op: "ice", sessionId, candidates: request.candidates ?? [] });

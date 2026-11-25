@@ -29,6 +29,10 @@ a:active{opacity:.8}
 
 let hud: BrowserWindow | null = null;
 
+export function isLeoScreenHudWindow(win: BrowserWindow): boolean {
+  return hud !== null && win === hud;
+}
+
 export function showControlHud(onDisconnect: () => void, displayId?: string): void {
   if (hud && !hud.isDestroyed()) return;
   // 多显示器时提示条放在被看 / 被操控的那块屏上（以前总在主屏，操控副屏时看不到）。

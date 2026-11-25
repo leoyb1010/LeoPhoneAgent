@@ -439,8 +439,27 @@ html.platform-mac-desktop[data-leo-skin] {
   --color-interaction-ask-foreground: var(--leo-brand);
   --color-terminal-cursor: var(--leo-brand);
   --color-terminal-selection: var(--leo-brand-soft);
+  --color-subagent-node-foreground: var(--leo-brand);
+  --color-subagent-node-background: var(--leo-brand-soft);
+  --color-plugin-node-foreground: var(--leo-fg-subtle);
+  --color-plugin-node-background: var(--leo-surface);
+  --color-usage-chart-1: var(--leo-brand);
+  --color-usage-chart-2: color-mix(in srgb, var(--leo-brand) 72%, var(--leo-fg));
+  --color-usage-chart-3: color-mix(in srgb, var(--leo-brand) 48%, var(--leo-fg-subtle));
+  --color-usage-chart-4: var(--leo-fg-subtle);
+  --color-usage-chart-5: var(--leo-fg-subtlest);
   --leo-mark-from: var(--leo-brand);
   --leo-mark-to: var(--leo-brand);
+}
+/* 正常「运行中」工作流进度统一使用品牌蓝，不借用告警黄/琥珀色（真正的 hole-waiting 保留告警语义）。 */
+html.platform-mac-desktop[data-leo-skin] .wf-rail-march::after {
+  background: linear-gradient(90deg, transparent, var(--leo-brand) 80%);
+}
+html.platform-mac-desktop[data-leo-skin] .wf-lamp-running {
+  background: var(--leo-brand);
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--leo-brand) 22%, transparent),
+    0 0 8px color-mix(in oklab, var(--leo-brand) 38%, transparent);
 }
 html.platform-mac-desktop[data-leo-skin].theme-zai-dark {
   --color-foreground-inverse: #111827;

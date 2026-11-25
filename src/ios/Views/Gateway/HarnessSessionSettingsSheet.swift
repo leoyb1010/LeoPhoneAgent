@@ -39,6 +39,8 @@ struct HarnessSessionHeader: View {
             .foregroundStyle(.primary)
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
+            .frame(minHeight: LeoChromeMetrics.hitTarget)
+            .modifier(HarnessReadableColumn())
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
