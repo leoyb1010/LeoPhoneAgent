@@ -153,29 +153,60 @@ struct LeoDuoSideButtons: View {
     }
 
     let buttons: [Item]
+    /// Measured height of bottom-anchored chrome (quickHomeTray + banner + composer)
+    /// so the capsule automatically lifts clear of it instead of overlapping.
+    var bottomClearance: CGFloat = 0
     /// Vertical position of the capsule's centre as a fraction of the page height.
     static let verticalFraction: CGFloat = 0.6
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Clamped center Y for the floating capsule, keeping clear of top bar and bottom chrome.
+    static func centerY(containerHeight: CGFloat,
+                        topInset: CGFloat,
+                        bottomInset: CGFloat,
+                        bottomClearance: CGFloat,
+                        buttonCount: Int) -> CGFloat {
+        let count = max(1, buttonCount)
+        let pillHeight = CGFloat(count) * LeoChromeMetrics.hitTarget
+            + CGFloat(max(0, count - 1)) * 2 + 8
+        let half = pillHeight / 2
+        let topFloor = max(topInset + 56, 76) + half
+        let bottomCeiling = containerHeight - max(bottomInset, 12) - max(0, bottomClearance) - 12 - half
+        let preferred = containerHeight * verticalFraction
+        if bottomCeiling <= topFloor { return topFloor }
+        return min(max(preferred, topFloor), bottomCeiling)
+    }
+
     var body: some View {
         GeometryReader { geo in
+            let y = Self.centerY(containerHeight: geo.size.height,
+                                 topInset: geo.safeAreaInsets.top,
+                                 bottomInset: geo.safeAreaInsets.bottom,
+                                 bottomClearance: bottomClearance,
+                                 buttonCount: buttons.count)
             VStack(spacing: 2) {
                 ForEach(buttons) { item in
-                    Button(action: item.action) {
+                    Button {
+                        LeoHaptics.selection()
+                        item.action()
+                    } label: {
                         Image(systemName: item.systemImage)
                             .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(.primary)
                             .frame(width: LeoChromeMetrics.hitTarget, height: LeoChromeMetrics.hitTarget)
                             .contentShape(Circle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(LeoSquishButtonStyle())
                     .accessibilityLabel(Text(item.label))
                 }
             }
             .padding(.vertical, 4)
             .glassEffect(.clear.interactive(), in: .capsule)
             .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.trailing, 8)
-            .position(x: geo.size.width / 2, y: geo.size.height * Self.verticalFraction)
+            .padding(.trailing, max(8, geo.safeAreaInsets.trailing + 6))
+            .position(x: geo.size.width / 2, y: y)
+            .animation(LeoMotion.standardEase(reduceMotion: reduceMotion), value: bottomClearance)
         }
     }
 }

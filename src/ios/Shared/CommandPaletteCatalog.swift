@@ -11,7 +11,7 @@
 import Foundation
 
 enum PaletteCommand: String, CaseIterable, Identifiable {
-    case newTask, search, settings
+    case newTask, search, settings, brainSpace
     case switchModel, stopRun, approve, deny
     case contextDetails, macScreen
     case automations, macConsole, timeline, scheduledTasks
@@ -23,6 +23,7 @@ enum PaletteCommand: String, CaseIterable, Identifiable {
         case .newTask: "新任务"
         case .search: "搜索会话"
         case .settings: "设置"
+        case .brainSpace: "第二大脑"
         case .switchModel: "切换模型 / Agent"
         case .stopRun: "停止当前任务"
         case .approve: "审批：允许这一次"
@@ -41,6 +42,7 @@ enum PaletteCommand: String, CaseIterable, Identifiable {
         case .newTask: "square.and.pencil"
         case .search: "magnifyingglass"
         case .settings: "gear"
+        case .brainSpace: "brain.head.profile"
         case .switchModel: "cpu"
         case .stopRun: "stop.circle"
         case .approve: "checkmark.shield"
@@ -58,8 +60,9 @@ enum PaletteCommand: String, CaseIterable, Identifiable {
     var shortcut: String? {
         switch self {
         case .newTask: "⌘N"
-        case .search: "⌘F"
+        case .search: "⇧⌘F"
         case .settings: "⌘,"
+        case .brainSpace: "⇧⌘B"
         case .stopRun: "⌘."
         case .contextDetails: "⌥⌘I"
         case .macScreen: "⇧⌘M"
@@ -76,7 +79,7 @@ enum CommandPaletteCatalog {
         /// The on-device agent is waiting on an approval (SensitiveToolGate).
         var hasApproval = false
         var macFleetEnabled = false
-        /// The iPad split layout, where the chat has a third column.
+        /// The iPad split layout (or Duo regular-width chat), where the chat has an inspector container.
         var splitLayout = false
     }
 
@@ -91,7 +94,7 @@ enum CommandPaletteCatalog {
             out.append(.contextDetails)
             if c.macFleetEnabled { out.append(.macScreen) }
         }
-        out += [.newTask, .search, .settings, .automations]
+        out += [.newTask, .search, .brainSpace, .settings, .automations]
         if c.macFleetEnabled { out.append(.macConsole) }
         out += [.timeline, .scheduledTasks]
         return out

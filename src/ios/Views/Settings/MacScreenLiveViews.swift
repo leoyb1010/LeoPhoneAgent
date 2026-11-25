@@ -538,9 +538,12 @@ private struct MacScreenControlBar: View {
 
     private func key(_ title: String, _ code: String) -> some View {
         Button {
+            LeoHaptics.selection()
             peer.send(sticky.press(code))
         } label: {
-            Text(title).font(.callout.monospaced().weight(.semibold)).frame(minWidth: 34, minHeight: 32)
+            Text(title).font(.callout.monospaced().weight(.semibold))
+                .frame(minWidth: LeoTheme.TouchTarget.minimum, minHeight: LeoTheme.TouchTarget.minimum)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 8))
@@ -548,9 +551,12 @@ private struct MacScreenControlBar: View {
 
     private func modifier(_ title: String, _ m: ScreenInputEvent.Modifier) -> some View {
         Button {
+            LeoHaptics.selection()
             sticky.toggle(m)
         } label: {
-            Text(title).font(.callout.weight(.semibold)).frame(minWidth: 34, minHeight: 32)
+            Text(title).font(.callout.weight(.semibold))
+                .frame(minWidth: LeoTheme.TouchTarget.minimum, minHeight: LeoTheme.TouchTarget.minimum)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .glassEffect(sticky.isHeld(m) ? .regular.tint(.accentColor).interactive() : .regular.interactive(),
@@ -569,9 +575,13 @@ private struct MacScreenPadKeys: View {
         HStack(spacing: 6) {
             ForEach(ScreenHIDKeys.reserved) { combo in
                 Button {
+                    LeoHaptics.selection()
                     peer.send(.key(code: combo.code, mods: combo.mods, phase: .press))
                 } label: {
-                    Text(combo.title).font(.caption.monospaced().weight(.semibold)).frame(minWidth: 44, minHeight: 30)
+                    Text(combo.title).font(.caption.monospaced().weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .frame(minWidth: LeoTheme.TouchTarget.minimum, minHeight: LeoTheme.TouchTarget.minimum)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 8))

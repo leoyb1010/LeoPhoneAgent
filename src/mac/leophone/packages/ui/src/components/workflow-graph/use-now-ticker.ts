@@ -16,8 +16,25 @@ export function useNowTicker(active: boolean, intervalMs: number = NOW_TICKER_IN
   useEffect(() => {
     if (!active) return undefined;
     setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(timer);
+    const tick = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      setNow(Date.now());
+    };
+    const timer = setInterval(tick, intervalMs);
+    const onVisibilityChange = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        setNow(Date.now());
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    }
+    return () => {
+      clearInterval(timer);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
+    };
   }, [active, intervalMs]);
   return now;
 }

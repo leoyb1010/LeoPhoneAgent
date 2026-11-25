@@ -10,10 +10,8 @@
 import SwiftUI
 
 enum BrainAskStyle {
-    /// Text on the brand-blue question bubble: white on the light blue, near-black on the dark-mode light blue.
-    static let onAccent = Color(UIColor { trait in
-        trait.userInterfaceStyle == .dark ? UIColor(white: 0.06, alpha: 1) : .white
-    })
+    /// Text on the brand-blue primaryButton question bubble (matches main chat user bubble).
+    static let onAccent = Color.white
 }
 
 struct BrainAskView: View {
@@ -32,6 +30,8 @@ struct BrainAskView: View {
                     ForEach(ask.turns) { turn in turnView(turn).id(turn.id) }
                 }
                 .padding(16)
+                .frame(maxWidth: LeoWorkspaceLayoutPolicy.contentMaxWidth, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: ask.turns.count) { _, _ in
@@ -108,7 +108,7 @@ struct BrainAskView: View {
                 Text(t.question)
                     .font(.body).foregroundStyle(BrainAskStyle.onAccent)
                     .padding(.horizontal, 14).padding(.vertical, 9)
-                    .background(BrainTheme.accent, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.bubble, style: .continuous))
+                    .background(LeoTheme.ColorToken.primaryButton, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.bubble, style: .continuous))
                 if t.hasContext {
                     Button(showSent == t.id ? "收起实际发送的内容" : "带了上文 · 查看实际发送的内容") {
                         showSent = showSent == t.id ? nil : t.id
@@ -200,7 +200,8 @@ struct BrainAskView: View {
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let canSend = ask.draftLength > 0 && ask.draftLength <= BrainAskContext.limit
+        return VStack(alignment: .leading, spacing: 6) {
             if let t = ask.followUpTurn {
                 HStack(spacing: 6) {
                     Image(systemName: "arrowshape.turn.up.left").font(.caption)
@@ -211,28 +212,35 @@ struct BrainAskView: View {
                 .foregroundStyle(.secondary)
             }
             if let e = ask.composeError { Text(e).font(.caption).foregroundStyle(LeoTheme.ColorToken.destructive) }
-            HStack(spacing: 8) {
+            HStack(alignment: .bottom, spacing: 8) {
                 if !ask.fileIds.isEmpty {
                     Button { ask.clearScope() } label: { Label("\(ask.fileIds.count)", systemImage: "paperclip") }
                         .font(.footnote).frame(minWidth: LeoTheme.TouchTarget.minimum, minHeight: LeoTheme.TouchTarget.minimum)
                         .accessibilityLabel(Text("取消限定的资料"))
                 }
                 TextField("问资料库…", text: $ask.draft, axis: .vertical)
-                    .lineLimit(1...4).focused($focused)
-                    .onSubmit { ask.send(ask.draft) }
-                Button { ask.send(ask.draft) } label: { Image(systemName: "arrow.up.circle.fill").font(.title2) }
-                    .frame(minWidth: LeoTheme.TouchTarget.minimum, minHeight: LeoTheme.TouchTarget.minimum)
-                    .disabled(ask.draftLength == 0 || ask.draftLength > BrainAskContext.limit)
-                    .accessibilityLabel(Text("发送"))
+                    .lineLimit(1...4)
+                    .focused($focused)
+                    .padding(.vertical, 8)
+                    .onSubmit { if canSend { ask.send(ask.draft) } }
+                LeoComposerSendButton(canSend: canSend, label: Text("发送"), identifier: "brain.ask.send") {
+                    LeoHaptics.selection()
+                    ask.send(ask.draft)
+                }
             }
             if ask.draftLength > BrainAskContext.limit - 200 {
                 Text("\(ask.draftLength) / \(BrainAskContext.limit)").font(.caption2.monospacedDigit())
                     .foregroundStyle(ask.draftLength > BrainAskContext.limit ? LeoTheme.ColorToken.destructive : .secondary)
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 6)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous))
-        .padding(.horizontal, 12).padding(.bottom, 6)
+        .padding(.horizontal, LeoComposerMetrics.horizontalPadding)
+        .padding(.vertical, LeoComposerMetrics.verticalPadding)
+        .leoComposerChrome()
+        .padding(.horizontal, LeoComposerMetrics.outerPadding)
+        .padding(.bottom, 6)
+        .frame(maxWidth: LeoWorkspaceLayoutPolicy.contentMaxWidth)
+        .frame(maxWidth: .infinity)
+        .modifier(FoldAvoidingControl(squeezeHorizontally: false, maxLift: FoldAvoidance.composerMaxLift))
     }
 
     // MARK: Seeds

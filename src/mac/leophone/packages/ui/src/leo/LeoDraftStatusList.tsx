@@ -61,13 +61,17 @@ function LeoDraftStatusListBody({
 
   return (
     <section
-      aria-label="进行中的任务"
+      aria-label={intl.formatMessage({ id: "leoHome.inProgressAria" })}
       className={cn("leo-home-status w-full max-w-2xl px-1", className)}
     >
       <div className="mb-1.5 flex items-baseline justify-between px-3">
-        <span className="text-ui-caption text-foreground-subtlest">进行中</span>
+        <span className="text-ui-caption text-foreground-subtlest">
+          {intl.formatMessage({ id: "leoHome.inProgress" })}
+        </span>
         {hidden > 0 ? (
-          <span className="text-ui-caption text-foreground-subtlest">另有 {hidden} 个在侧栏</span>
+          <span className="text-ui-caption text-foreground-subtlest">
+            {intl.formatMessage({ id: "leoHome.moreInSidebar" }, { count: hidden })}
+          </span>
         ) : null}
       </div>
       {loading || loadError ? (
@@ -86,7 +90,7 @@ function LeoDraftStatusListBody({
       <ul className="flex flex-col">
         {/* [wp-31] 状态行进出:motion layout + AnimatePresence,dur.2 / ease.out;减弱动态下只淡入淡出。 */}
         <AnimatePresence initial={false}>
-        {visible.map(({ task, state, label, agentKind }) => {
+        {visible.map(({ task, state, labelId, agentKind }) => {
           const title =
             task.title?.trim() || intl.formatMessage({ id: "taskList.untitled" });
           const project = showProject ? getPathLeaf(task.workspacePath) : "";
@@ -133,7 +137,7 @@ function LeoDraftStatusListBody({
                     state === "attention" ? "text-[var(--leo-attention)]" : state === "error" ? "text-destructive" : "text-foreground-subtle",
                   )}
                 >
-                  {label}
+                  {intl.formatMessage({ id: labelId })}
                 </span>
                 <span className="w-14 shrink-0 text-right text-ui-caption text-foreground-subtlest tabular-nums">
                   {formatTaskRelativeTime(task.updatedAt, intl)}

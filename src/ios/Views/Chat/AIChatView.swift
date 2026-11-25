@@ -487,7 +487,7 @@ struct AIChatView: View {
     /// True when any sheet or fullScreenCover is presented (suppress auto-focus to avoid keyboard bugs).
     private var hasOverlayPresented: Bool {
         showFileBrowser || showArtifactTray || showBrowserSheet || showTerminal || showCamera
-            || showPhotoPicker || showDocumentPicker || showModelPicker
+            || showPhotoPicker || showDocumentPicker || showModelPicker || showQuickModelSwitch
     }
 
     /// Tracks whether this ChatView is the currently visible screen.
@@ -728,6 +728,9 @@ struct AIChatView: View {
 
             // Full-screen kernel boot overlay
             kernelBootOverlay
+            // Top-center popover anchor for the header model pill on regular widths
+            // (outside ChatToolbarHost's equatable barrier and UINavigationBar).
+            headerModelPopoverAnchor
         }
         .background(ChatColors.background)
         // [chat-chrome] Column width for the header cap. Rounded so a sub-point
@@ -1161,7 +1164,8 @@ struct AIChatView: View {
                 vm.browserTakeoverActive = true
             })
         }
-        .sheet(isPresented: $showModelPicker) {
+        // Compact: sheet. Regular (iPad / Duo inner): popover anchored on the header model pill.
+        .sheet(isPresented: modelPickerSheetBinding) {
             sessionModelSelection
             .presentationDetents([.large])
         }
@@ -2105,7 +2109,7 @@ struct AIChatView: View {
         var trailing = inspectorRoute != nil ? 2 : 1
         if deliveryCount > 0 && !titleIsVisuallyLocked { trailing += 1 }
         let cap = ChatHeaderLayout.principalCap(columnWidth: column,
-                                                leadingItems: hSizeClass == .regular ? 2 : 1,
+                                                leadingItems: headerBar.leadingItems ?? (hSizeClass == .regular ? 2 : 1),
                                                 trailingItems: trailing,
                                                 coveredTrailing: headerBar.coveredTrailing)
         return cap.rounded(.down)
@@ -2959,11 +2963,19 @@ struct AIChatView: View {
     /// draft id while the chat has none (same key the replacement view gets).
     private var foldKey: String? { sessionId ?? draftId }
 
+    /// Secondary key when a draft has already persisted into a real session:
+    /// folding migrates navigation to `vm.sessionId`, so continuity state must
+    /// bridge from `draftId` to `vm.sessionId` as well.
+    private var foldSecondaryKey: String? {
+        guard let real = vm.sessionId, !real.isEmpty, real != foldKey else { return nil }
+        return real
+    }
+
     /// The panels worth reopening after a fold re-creates the view: sheets the
     /// user opened to read or pick something, all presented from this view.
     private var openFoldPanels: Set<ChatFoldPanel> {
         var open: Set<ChatFoldPanel> = []
-        if showModelPicker { open.insert(.modelPicker) }
+        if showModelPicker || showQuickModelSwitch { open.insert(.modelPicker) }
         if showFileBrowser { open.insert(.fileBrowser) }
         if showArtifactTray { open.insert(.artifacts) }
         if showSessionInspector { open.insert(.inspector) }
@@ -2994,9 +3006,12 @@ struct AIChatView: View {
         guard let key = foldKey else { return }
         if sessionId == nil { ChatFoldContinuity.draftModels.claim(key) }
         ChatFoldContinuity.voiceModels.claim(key)
+        if let alt = foldSecondaryKey { ChatFoldContinuity.voiceModels.claim(alt) }
         // A panel open in the view this one replaces comes back once the
         // replacement has settled (a sheet can't present mid-transition).
-        if let panels = ChatFoldContinuity.openPanels.take(key), let panel = ChatFoldPanel.allCases.first(where: { panels.contains($0) }) {
+        let parked = ChatFoldContinuity.openPanels.take(key)
+            ?? foldSecondaryKey.flatMap { ChatFoldContinuity.openPanels.take($0) }
+        if let panels = parked, let panel = ChatFoldPanel.allCases.first(where: { panels.contains($0) }) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                 guard isChatViewVisible, openFoldPanels.isEmpty else { return }
                 reopen(panel)
@@ -3012,10 +3027,16 @@ struct AIChatView: View {
         // jump or a pop must not re-open a sheet on the next appear.
         if panels.isEmpty || !FoldSignal.isRecent {
             ChatFoldContinuity.openPanels.discard(key)
+            if let alt = foldSecondaryKey { ChatFoldContinuity.openPanels.discard(alt) }
         } else {
             ChatFoldContinuity.openPanels.park(panels, for: key)
+            if let alt = foldSecondaryKey { ChatFoldContinuity.openPanels.park(panels, for: alt) }
         }
         if sessionId == nil { ChatFoldContinuity.draftModels.release(key) }
+        if FoldSignal.isRecent, let alt = foldSecondaryKey {
+            _ = ChatFoldContinuity.voiceModels.value(for: alt) { voiceVM }
+            ChatFoldContinuity.voiceModels.release(alt)
+        }
         ChatFoldContinuity.voiceModels.release(key)
     }
 
@@ -3622,6 +3643,7 @@ struct AIChatView: View {
         let on = voiceOutput.isEnabled
         let muted = voiceOutput.isMuted
         return Button {
+            LeoHaptics.selection()
             if on && !muted {
                 // Active → mute (temporary silence, capsule stays visible).
                 voiceOutput.isMuted = true
@@ -3652,6 +3674,8 @@ struct AIChatView: View {
                 Capsule().fill(on ? Color.accentColor.opacity(0.15)
                                   : Color.secondary.opacity(0.10))
             )
+            .frame(minHeight: LeoTheme.TouchTarget.minimum)
+            .contentShape(Rectangle())
             .fixedSize()
         }
         .buttonStyle(.plain)
@@ -3686,17 +3710,21 @@ struct AIChatView: View {
     /// "Exit Edit Mode" capsule shown while editing a past message.
     private var editExitButton: some View {
         Button {
+            LeoHaptics.selection()
             vm.cancelEdit()
         } label: {
             Text("Exit Edit Mode", comment: "Cancel message editing")
-                .font(.system(size: 13, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(ChatColors.secondaryText)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
                 .background(ChatColors.inputIconBg)
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(ChatColors.inputIconBorder, lineWidth: 0.5))
+                .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(LeoSquishButtonStyle())
     }
 
     /// Mic button plus the attached language-picker sheet.
@@ -3747,16 +3775,19 @@ struct AIChatView: View {
             }
         } label: {
             Image(systemName: mode == .stop ? "stop.circle.fill" : "arrow.up.circle.fill")
-                // [F2] 36pt like the home send disc.
+                // [F2] 36pt like the home send disc inside a 44pt HIG hit area.
                 .font(.system(size: LeoComposerMetrics.control))
                 .foregroundStyle(mode == .stop ? Color.red
                                  : (mode == .send && !canSend ? ChatColors.sendButtonDisabled : ChatColors.sendButton))
                 .contentTransition(.symbolEffect(.replace))
+                .frame(width: LeoTheme.TouchTarget.minimum, height: LeoTheme.TouchTarget.minimum)
+                .contentShape(Circle())
         }
+        .buttonStyle(LeoSquishButtonStyle())
         .disabled(mode == .send && !canSend)
         .hoverEffect(.lift)
         .keyboardShortcut(mode == .stop ? nil : KeyboardShortcut(.return, modifiers: .command))
-        // [WP-43] The menu bar's 发送 (⌘↩) and the palette's 切换模型 reach this chat.
+        // [WP-43] The menu bar's 发送 (⌘↩), ⌘F in-chat search and the palette's 切换模型 reach this chat.
         .onAppear {
             ChatComposerActions.register(.init(token: composerActionsToken, send: {
                 switch sendButtonMode {
@@ -3764,7 +3795,10 @@ struct AIChatView: View {
                 case .enqueue: performEnqueue()
                 case .stop: break
                 }
-            }, pickModel: { showModelPicker = true }))
+            }, pickModel: { showModelPicker = true }, findInChat: {
+                inputFocused = false
+                showConversationSearch = true
+            }))
         }
         .onDisappear { ChatComposerActions.unregister(composerActionsToken) }
         .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: mode)
@@ -3982,6 +4016,47 @@ struct AIChatView: View {
                     : AppLocalized("用于此对话后续消息"))
     }
 
+    /// Extracted out of `body` so SwiftUI's type-checker never sees inline Binding closures.
+    private var modelPickerSheetBinding: Binding<Bool> {
+        Binding(get: { showModelPicker && hSizeClass != .regular },
+                set: { showModelPicker = $0 })
+    }
+
+    private var modelPickerPopoverBinding: Binding<Bool> {
+        Binding(get: { showModelPicker && hSizeClass == .regular },
+                set: { showModelPicker = $0 })
+    }
+
+    private var headerModelPopoverAnchor: some View {
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(width: 1, height: 1)
+                .popover(isPresented: modelPickerPopoverBinding, arrowEdge: .top) {
+                    sessionModelSelection
+                        .frame(minWidth: 360, idealWidth: 420, minHeight: 360, idealHeight: 520)
+                }
+                .padding(.top, max(topSafeAreaInset, 54))
+            Spacer(minLength: 0)
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var quickModelSheetBinding: Binding<Bool> {
+        Binding(get: { showQuickModelSwitch && !quickModelUsesPopover },
+                set: { showQuickModelSwitch = $0 })
+    }
+
+    private var quickModelPopoverBinding: Binding<Bool> {
+        Binding(get: { showQuickModelSwitch && quickModelUsesPopover },
+                set: { showQuickModelSwitch = $0 })
+    }
+
+    /// Regular width with the composer pill actually mounted: anchor the model picker as a popover.
+    /// Compact widths, short-height mode, voice mode, or edit mode fall back to a sheet.
+    private var quickModelUsesPopover: Bool {
+        hSizeClass == .regular && !isShortHeight && !voiceInputActive && vm.editingMessageIndex == nil
+    }
+
     private var composerSheetsHost: AnyView {
         let host = Color.clear.frame(width: 0, height: 0)
         .sheet(isPresented: $showQuickTaskPicker) {
@@ -3992,7 +4067,7 @@ struct AIChatView: View {
         .fullScreenCover(item: $macChatTarget) { target in
             ComposerMacChatCover(target: target) { macChatTarget = nil }
         }
-        .sheet(isPresented: $showQuickModelSwitch) {
+        .sheet(isPresented: quickModelSheetBinding) {
             sessionModelSelection
         }
         .onReceive(NotificationCenter.default.publisher(for: .leoOpenQuickModelSwitch, object: vm)) { _ in
@@ -4177,6 +4252,10 @@ struct AIChatView: View {
         .accessibilityHint("点按查看当前模型并切换常用模型")
         .accessibilityIdentifier("chat.composer.model-pill")
         .contextMenu { pinnedQuickMenu }
+        .popover(isPresented: quickModelPopoverBinding) {
+            sessionModelSelection
+                .frame(minWidth: 360, idealWidth: 420, minHeight: 360, idealHeight: 520)
+        }
     }
 
     /// 胶囊上写的必须是"发出去会用谁"。

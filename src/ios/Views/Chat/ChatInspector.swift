@@ -29,6 +29,10 @@ struct ChatDetailContainer<Content: View>: View {
     /// [duo-shell] …and, once the user pinned it, at ≥ 900 pt (iPhone Duo inner
     /// landscape is 951 and never reaches 1100).
     var windowWidth: CGFloat = 0
+    /// False when hosted inside a single-column NavigationStack (e.g. Duo inner
+    /// portrait 669×951), where there is only one leading back button instead of
+    /// a split sidebar toggle pair.
+    var showsSidebarToggle: Bool = true
     var contextRequest: ChatContextRequest? = nil
     @ViewBuilder let content: Content
 
@@ -59,7 +63,9 @@ struct ChatDetailContainer<Content: View>: View {
     private var headerBarGeometry: ChatHeaderBarGeometry {
         let width = max(barWidth, contentFrame.width)
         let squeezed = inspectorVisible ? max(0, width - contentFrame.width) : 0
-        return ChatHeaderBarGeometry(width: width, coveredTrailing: max(coveredTrailing, squeezed))
+        return ChatHeaderBarGeometry(width: width,
+                                     coveredTrailing: max(coveredTrailing, squeezed),
+                                     leadingItems: showsSidebarToggle ? 2 : 1)
     }
 
     /// In a portrait split view the system floats the inspector OVER the
@@ -106,6 +112,7 @@ struct ChatDetailContainer<Content: View>: View {
     /// or unpins; narrower windows only show it for now.
     private func setInspectorByHand(_ visible: Bool) {
         inspectorLog.info("[Inspector] by hand visible=\(visible) width=\(Int(windowWidth)) sheet=\(usesSheet)")
+        LeoHaptics.selection()
         lastHandToggle = Date()
         if LeoWorkspaceLayoutPolicy.canPinContextColumn(width: windowWidth) { inspectorPinned = visible }
         withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = visible }
@@ -213,6 +220,7 @@ extension EnvironmentValues {
 struct ChatHeaderBarGeometry: Equatable {
     var width: CGFloat = 0
     var coveredTrailing: CGFloat = 0
+    var leadingItems: Int? = nil
 }
 
 /// [F8] Three fixed tabs: the tool timeline (every tool call, live), usage

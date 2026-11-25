@@ -105,7 +105,7 @@ struct BrainFamilyProfileView: View {
             }
             ForEach(profile?.years ?? []) { y in
                 Section("\(y.year) 年 · \(y.photos ?? 0) 张 · \(y.videos ?? 0) 段") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 4), spacing: 3) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 108, maximum: 180), spacing: 3)], spacing: 3) {
                         ForEach(y.picks ?? []) { pick in
                             NavigationLink(value: BrainSpaceMediaRow(id: pick.id, capturedAt: pick.capturedAt, thumbnailUrl: pick.thumbnailUrl)) {
                                 BrainRemoteImage(path: pick.thumbnailUrl ?? "/api/media/\(pick.id)/thumbnail")

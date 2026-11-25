@@ -230,3 +230,37 @@ export function buildConversationTurnWorkSegments(options: {
     };
   });
 }
+
+/**
+ * Updates only the trailing running segment's duration for the live clock tick so
+ * historical turns and the outer ConversationTimeline never rebuild every second.
+ */
+export function applyLiveNowToWorkSegments(
+  segments: readonly ConversationTurnWorkSegment[] | undefined,
+  header: TurnHeaderRow | undefined,
+  nowMs: number,
+): ConversationTurnWorkSegment[] | undefined {
+  if (!segments || segments.length === 0) return segments as ConversationTurnWorkSegment[] | undefined;
+  const lastIndex = segments.length - 1;
+  const last = segments[lastIndex]!;
+  if (!last.workStatus || last.workStatus.state !== "running") {
+    return segments as ConversationTurnWorkSegment[];
+  }
+  const durationMs = resolveSegmentDurationMs({
+    header,
+    segmentIndex: lastIndex,
+    triggerRow: last.triggerRow,
+    segmentRunning: true,
+    segmentCount: segments.length,
+    nowMs,
+  });
+  if (durationMs === undefined || last.workStatus.durationMs === durationMs) {
+    return segments as ConversationTurnWorkSegment[];
+  }
+  const next = segments.slice();
+  next[lastIndex] = {
+    ...last,
+    workStatus: { ...last.workStatus, durationMs },
+  };
+  return next;
+}

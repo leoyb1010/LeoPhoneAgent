@@ -1,5 +1,6 @@
 export type QuickPickCommandIcon =
   | "book"
+  | "brain"
   | "browser"
   | "community"
   | "diff"
@@ -12,6 +13,8 @@ export type QuickPickCommandIcon =
   | "sidebarClose"
   | "sidebarOpen"
   | "skills"
+  | "smartphone"
+  | "sparkles"
   | "themeDark"
   | "themeLight"
   | "terminal";
@@ -61,6 +64,9 @@ interface QuickPickCommandHandlers {
   openTerminalTab: () => void;
   openBrowserTab: () => void;
   openReviewTab: () => void;
+  openBrain?: () => void;
+  openPhoneLink?: () => void;
+  openWhatsNew?: () => void;
 }
 
 interface CreateQuickPickCommandsOptions {
@@ -219,6 +225,42 @@ export function createQuickPickCommands({
       keywords: ["mcp", "server", "servers", "MCP", "服务器"],
       run: handlers.openMcpSettings,
     },
+    ...(handlers.openBrain
+      ? [
+          {
+            id: "open-brain",
+            sectionId: "navigation",
+            titleId: "quickPick.command.openBrain",
+            icon: "brain",
+            keywords: ["brain", "library", "knowledge", "cards", "第二大脑", "资料", "知识卡"],
+            run: handlers.openBrain,
+          } satisfies QuickPickCommand,
+        ]
+      : []),
+    ...(handlers.openPhoneLink
+      ? [
+          {
+            id: "phone-link-settings",
+            sectionId: "configure",
+            titleId: "quickPick.command.phoneLink",
+            icon: "smartphone",
+            keywords: ["phone", "iphone", "ipad", "duo", "pair", "link", "手机", "连接手机", "扫码"],
+            run: handlers.openPhoneLink,
+          } satisfies QuickPickCommand,
+        ]
+      : []),
+    ...(handlers.openWhatsNew
+      ? [
+          {
+            id: "whats-new",
+            sectionId: "app",
+            titleId: "quickPick.command.whatsNew",
+            icon: "sparkles",
+            keywords: ["whats new", "release", "changelog", "notes", "更新", "本次更新", "版本"],
+            run: handlers.openWhatsNew,
+          } satisfies QuickPickCommand,
+        ]
+      : []),
   ];
 
   // [leo] 上游在这里追加「反馈 / 用户社群 / 产品文档 / 登录·登出」命令，

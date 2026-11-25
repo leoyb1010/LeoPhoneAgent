@@ -271,14 +271,7 @@ private struct BridgedAssistantHeaderV3: View {
         HStack(spacing: 6) {
             Image(systemName: "sparkles")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color(red: 0.72, green: 0.69, blue: 0.59),
-                                 Color(red: 0.6, green: 0.6, blue: 0.55)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .foregroundStyle(LeoTheme.ColorToken.accent)
             Text(soulMeta.name.isEmpty ? "LeoBot" : soulMeta.name)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(ChatColors.primaryText)
@@ -1439,6 +1432,33 @@ extension CollectionViewMessageListV3 {
             cv.setContentOffset(CGPoint(x: cv.contentOffset.x, y: y), animated: false)
             syncScrollFlags()
             AppLogger(category: "ScrollDiag").info("[duo-fold] restored reading position item=\(String(describing: anchor.item).prefix(40)) y=\(Int(y))")
+            // [duo-fold] Bounded second-pass settle: across a width jump (466↔951pt),
+            // UIHostingConfiguration self-sizing finishes measuring wrapped lines on the
+            // next layout cycle. Re-align once if the target item drifted > 2pt while
+            // the user hasn't touched the list.
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      self.scrollMode == .userBrowsing,
+                      let cv = self.viewController?.collectionView,
+                      !cv.isDragging, !cv.isTracking,
+                      let ds = self.dataSource else { return }
+                let settledTarget = ds.indexPath(for: anchor.item)
+                    ?? ds.snapshot().itemIdentifiers
+                        .first(where: { Self.messageId(of: $0) == anchor.messageId })
+                        .flatMap { ds.indexPath(for: $0) }
+                guard let settledTarget else { return }
+                cv.layoutIfNeeded()
+                guard let settledAttrs = cv.layoutAttributesForItem(at: settledTarget) else { return }
+                let settledMaxOff = cv.contentSize.height - cv.bounds.height + cv.adjustedContentInset.bottom
+                let settledY = ChatScrollAnchorMath.restoredOffset(itemMinY: settledAttrs.frame.minY,
+                                                                   offsetFromTop: anchor.offsetFromTop,
+                                                                   adjustedTop: cv.adjustedContentInset.top,
+                                                                   maxOffset: settledMaxOff)
+                if abs(settledY - cv.contentOffset.y) > 2 {
+                    cv.setContentOffset(CGPoint(x: cv.contentOffset.x, y: settledY), animated: false)
+                    self.syncScrollFlags()
+                }
+            }
         }
 
         // MARK: - Cell Configuration

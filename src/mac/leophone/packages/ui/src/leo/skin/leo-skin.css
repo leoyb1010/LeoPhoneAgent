@@ -407,8 +407,8 @@ html[data-leo-skin] [data-leo-approval-risk="high"] > :first-child::before {
 }
 
 /* [leo][up-design] 首页标志的呼吸：LeoBot 唯一的签名动效，周期取 token beat（1.6s × 2），幅度很小；
-   减少动态时完全静止。 */
-@keyframes leo-breathe {
+   减少动态时完全静止。使用独立 keyframe 避免覆盖 .leo-status-dot 的 leo-breathe。 */
+@keyframes leo-mark-breathe {
   0%,
   100% {
     transform: scale(1);
@@ -421,12 +421,12 @@ html[data-leo-skin] [data-leo-approval-risk="high"] > :first-child::before {
 }
 @media (prefers-reduced-motion: no-preference) {
   html[data-leo-skin] .leo-breathe {
-    animation: leo-breathe calc(var(--leo-beat, 1.6s) * 2) var(--leo-ease-settle, ease-in-out) infinite;
+    animation: leo-mark-breathe calc(var(--leo-beat, 1.6s) * 2) var(--leo-ease-settle, ease-in-out) infinite;
     transform-origin: center;
   }
 }
 
-/* Mac 工作台沿用跨端蓝色，主按钮使用适配白字的实色。 */
+/* Mac 工作台沿用跨端蓝色，主按钮使用适配白字的实色；保留 --leo-attention 语义区分「等你确认」与运行蓝。 */
 html.platform-mac-desktop[data-leo-skin] {
   --color-brand: var(--leo-brand);
   --color-primary: var(--leo-primary);
@@ -434,7 +434,6 @@ html.platform-mac-desktop[data-leo-skin] {
   --color-accent: var(--leo-brand-soft);
   --color-success: var(--leo-brand);
   --color-diff-added: var(--leo-brand);
-  --leo-attention: var(--leo-brand);
   --color-input-border-focused: var(--leo-brand);
   --color-interaction-ask-surface: var(--leo-brand-soft);
   --color-interaction-ask-foreground: var(--leo-brand);
@@ -448,8 +447,19 @@ html.platform-mac-desktop[data-leo-skin].theme-zai-dark {
 }
 html.platform-mac-desktop[data-leo-skin] .leo-workbench-heading { margin-bottom: var(--leo-space-5); }
 html.platform-mac-desktop[data-leo-skin] .leo-workbench-starters button {
-  transition: background-color var(--leo-dur-1) var(--leo-ease), border-color var(--leo-dur-1) var(--leo-ease);
+  transition:
+    transform var(--leo-press-dur) var(--leo-ease),
+    background-color var(--leo-dur-1) var(--leo-ease),
+    border-color var(--leo-dur-1) var(--leo-ease);
+}
+html.platform-mac-desktop[data-leo-skin] .leo-workbench-starters button:active {
+  transform: scale(var(--leo-press-scale));
 }
 @media (prefers-reduced-motion: reduce) {
-  html[data-leo-skin] .leo-workbench-starters button { transition: none; }
+  html[data-leo-skin] .leo-workbench-starters button {
+    transition: none;
+  }
+  html[data-leo-skin] .leo-workbench-starters button:active {
+    transform: none;
+  }
 }

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct BrainTodayView: View {
     @EnvironmentObject private var model: BrainSpaceModel
+    @Environment(\.horizontalSizeClass) private var hSizeClass
     @State private var wall: [BrainWall.Item] = []
     @State private var butler: BrainButler?
     @State private var steward: BrainSteward?
@@ -19,9 +20,11 @@ struct BrainTodayView: View {
     @State private var otdYear: BrainOnThisDay.Year?
     @State private var openDoc: BrainDocTarget?
 
+    private var heroHeight: CGFloat { hSizeClass == .regular ? 320 : 250 }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: 24) {
                 hero
                 if let butler { butlerLine(butler) }
                 if !continuations.isEmpty { continuationsSection }
@@ -32,6 +35,8 @@ struct BrainTodayView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 32)
+            .frame(maxWidth: LeoWorkspaceLayoutPolicy.contentMaxWidth, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
         .refreshable { await load() }
         .task { if wall.isEmpty { await load() } }
@@ -64,11 +69,11 @@ struct BrainTodayView: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .automatic))
-        .frame(height: 280)
+        .frame(height: heroHeight)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay {
             if wall.isEmpty && error == nil {
-                RoundedRectangle(cornerRadius: 20).fill(Color(.secondarySystemFill)).overlay(ProgressView())
+                LeoSkeletonBar(height: heroHeight, cornerRadius: 20)
             }
         }
     }
@@ -221,7 +226,7 @@ struct BrainMediaGridSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 3), spacing: 2) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 108, maximum: 180), spacing: 2)], spacing: 2) {
                     ForEach(items) { row in
                         NavigationLink(value: row) {
                             BrainRemoteImage(path: row.thumbPath).aspectRatio(1, contentMode: .fill)

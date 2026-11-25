@@ -8,10 +8,18 @@ import { resolveLeoAgentKind, type LeoAgentKind } from "./leoAgentKind.js";
 /** [leo] 首页「进行中」清单的分组:等你确认 / 回答 → 出错待看 → 在跑 → 已结束待看。同组内保持传入顺序(按更新时间)。 */
 export type LeoStatusState = "attention" | "running" | "error" | "done";
 
+export type LeoStatusLabelId =
+  | "leoHome.status.confirm"
+  | "leoHome.status.answer"
+  | "leoHome.status.error"
+  | "leoHome.status.running"
+  | "leoHome.status.done";
+
 export interface LeoStatusRow {
   task: ZCodeTaskMeta;
   state: LeoStatusState;
   label: string;
+  labelId: LeoStatusLabelId;
   /** [wp-31] 状态行徽标;ACP 合入前恒为 LeoBot。 */
   agentKind: LeoAgentKind;
 }
@@ -62,15 +70,34 @@ export function classifyLeoStatusRows(items: readonly ZCodeTaskMeta[]): LeoStatu
         task,
         state: "attention",
         label: pending.kind === "userInput" ? "等你回答" : "等你确认",
+        labelId: pending.kind === "userInput" ? "leoHome.status.answer" : "leoHome.status.confirm",
         agentKind: resolveLeoAgentKind(task),
       });
     } else if (task.unreadAt && deriveTaskLeadingIndicator(task, getTaskListRowActivity(task)) === "error") {
       // 与侧栏共用实时结果权威：失败不是成功完成，旧落盘错误不能盖过已恢复的运行。
-      failed.push({ task, state: "error", label: "出错待看", agentKind: resolveLeoAgentKind(task) });
+      failed.push({
+        task,
+        state: "error",
+        label: "出错待看",
+        labelId: "leoHome.status.error",
+        agentKind: resolveLeoAgentKind(task),
+      });
     } else if (isTaskListRowActive(task)) {
-      running.push({ task, state: "running", label: "在跑", agentKind: resolveLeoAgentKind(task) });
+      running.push({
+        task,
+        state: "running",
+        label: "在跑",
+        labelId: "leoHome.status.running",
+        agentKind: resolveLeoAgentKind(task),
+      });
     } else if (task.unreadAt) {
-      done.push({ task, state: "done", label: "做完待看", agentKind: resolveLeoAgentKind(task) });
+      done.push({
+        task,
+        state: "done",
+        label: "做完待看",
+        labelId: "leoHome.status.done",
+        agentKind: resolveLeoAgentKind(task),
+      });
     }
   }
   return [...attention, ...failed, ...running, ...done];

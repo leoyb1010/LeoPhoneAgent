@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useNowTicker } from "@/components/workflow-graph/use-now-ticker.js";
 
 /**
@@ -23,6 +24,15 @@ export function formatLeoToolElapsed(ms: number): string | null {
   return `${minutes}m${String(seconds % 60).padStart(2, "0")}s`;
 }
 
+export const LEO_TOOL_FAST_TICK_MS = 200;
+export const LEO_TOOL_SLOW_TICK_MS = 1_000;
+
+export function resolveLeoToolTickerIntervalMs(elapsedMs: number): number {
+  return Number.isFinite(elapsedMs) && elapsedMs < 10_000
+    ? LEO_TOOL_FAST_TICK_MS
+    : LEO_TOOL_SLOW_TICK_MS;
+}
+
 export function LeoToolElapsed({
   startedAt,
   endedAt,
@@ -32,8 +42,14 @@ export function LeoToolElapsed({
   endedAt?: number;
   running: boolean;
 }) {
-  // 只有在跑且有起点时才走秒表;结束态用 endedAt 定格,没有 endedAt 就不显示(不拿"现在"冒充结束时间)。
-  const now = useNowTicker(running && typeof startedAt === "number");
+  // 只有在跑且有起点时才走秒表;前 10 秒以 200ms 步进让 0.1s 读数丝滑递增，10 秒后切回 1s 省电。
+  const lastNowRef = useRef(Date.now());
+  const active = running && typeof startedAt === "number";
+  const intervalMs = active
+    ? resolveLeoToolTickerIntervalMs(lastNowRef.current - startedAt)
+    : LEO_TOOL_SLOW_TICK_MS;
+  const now = useNowTicker(active, intervalMs);
+  lastNowRef.current = now;
   if (typeof startedAt !== "number") return null;
   const end = running ? now : endedAt;
   if (typeof end !== "number") return null;

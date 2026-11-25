@@ -456,20 +456,21 @@ struct ToolCapsuleView: View {
                 // Stop button for running commands
                 if case .running = block.toolStatus {
                     Button {
+                        LeoHaptics.selection()
                         onStop?()
                     } label: {
                         // Visual: 10×10 red square unchanged. Hit area enlarged to
-                        // 24×24 via an expanded contentShape, while the negative
-                        // padding pins the *layout* footprint back to 18×18 so the
-                        // capsule width/height is identical to before.
+                        // 44×44 (HIG minimum) via an expanded contentShape, while
+                        // negative padding keeps the capsule footprint unchanged.
                         RoundedRectangle(cornerRadius: 2)
                             .fill(.red)
                             .frame(width: 10, height: 10)
-                            .frame(width: 24, height: 24)
+                            .frame(width: LeoTheme.TouchTarget.minimum, height: LeoTheme.TouchTarget.minimum)
                             .contentShape(Rectangle())
-                            .padding(-3)
+                            .padding(-13)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(Text("停止当前工具"))
                 }
             }
             .padding(.horizontal, 12)

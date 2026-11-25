@@ -160,9 +160,9 @@ function CuaAppList({ items }: { items: CuaAppItem[] }) {
           ) : (
             <AppWindow className="size-4 shrink-0 text-foreground-subtle" />
           )}
-          <span className="min-w-0 flex-1 truncate text-sm text-foreground">{item.name}</span>
+          <span className="min-w-0 flex-1 truncate text-ui-sm text-foreground">{item.name}</span>
           {item.active ? (
-            <span className="shrink-0 text-sm text-foreground-subtle">
+            <span className="shrink-0 text-ui-sm text-foreground-subtle">
               {intl.formatMessage({ id: "chat.toolCall.cua.details.active" })}
             </span>
           ) : null}

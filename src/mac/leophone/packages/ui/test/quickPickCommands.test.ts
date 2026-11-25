@@ -172,6 +172,46 @@ describe("createQuickPickCommands", () => {
     expect(commands.map((command) => command.id)).not.toContain("add-browser-tab");
   });
 
+  it("includes LeoBot workbench commands when optional handlers are provided and translates them in both locales", () => {
+    const openBrain = vi.fn();
+    const openPhoneLink = vi.fn();
+    const openWhatsNew = vi.fn();
+    const commands = createQuickPickCommands({
+      allowOpenWorkspace: true,
+      canOpenCommunity: false,
+      isSidebarVisible: true,
+      isLoggedIn: false,
+      themeTarget: "dark",
+      shortcuts,
+      handlers: {
+        ...createHandlers(),
+        openBrain,
+        openPhoneLink,
+        openWhatsNew,
+      },
+    });
+
+    const brain = commands.find((command) => command.id === "open-brain");
+    const phone = commands.find((command) => command.id === "phone-link-settings");
+    const whatsNew = commands.find((command) => command.id === "whats-new");
+
+    expect(brain).toMatchObject({ sectionId: "navigation", icon: "brain", titleId: "quickPick.command.openBrain" });
+    expect(phone).toMatchObject({ sectionId: "configure", icon: "smartphone", titleId: "quickPick.command.phoneLink" });
+    expect(whatsNew).toMatchObject({ sectionId: "app", icon: "sparkles", titleId: "quickPick.command.whatsNew" });
+
+    for (const cmd of [brain, phone, whatsNew]) {
+      expect(zhCN[cmd!.titleId as keyof typeof zhCN]).toBeTruthy();
+      expect(enUS[cmd!.titleId as keyof typeof enUS]).toBeTruthy();
+    }
+
+    brain!.run();
+    phone!.run();
+    whatsNew!.run();
+    expect(openBrain).toHaveBeenCalledTimes(1);
+    expect(openPhoneLink).toHaveBeenCalledTimes(1);
+    expect(openWhatsNew).toHaveBeenCalledTimes(1);
+  });
+
   it("runs the registered panel handler", () => {
     const handlers = createHandlers();
     const command = createQuickPickCommands({

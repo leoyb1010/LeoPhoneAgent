@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type ComponentProps,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -34,6 +35,7 @@ import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import { ConversationTurnGroup } from "@/v4/ConversationTurnGroup.js";
+import { useNowTicker } from "@/components/workflow-graph/use-now-ticker.js";
 import {
   deriveLogicalUiInstances,
   getPluginUiDisclosureVersion,
@@ -52,6 +54,7 @@ import {
   getConversationStatusPanelOffsetClassName,
 } from "@/v4/conversationLayout.js";
 import {
+  applyLiveNowToRunningTurnUnit,
   buildConversationTurnRenderUnits,
   type ConversationTurnRenderUnit,
 } from "@/v4/conversationTurnRenderUnits.js";
@@ -407,7 +410,6 @@ function ConversationTimelineImpl({
     observer.observe(element);
     return () => observer.disconnect();
   }, [hasHeaderSlot]);
-  const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
   // 插件卡片展示模型——同资源替代 + 最近三回合自动展开 + 手动固定；推导结果发布给卡片自己读。
   const pluginUiDerivation = useMemo(() => deriveLogicalUiInstances(rows), [rows]);
   useEffect(() => {
@@ -426,20 +428,20 @@ function ConversationTimelineImpl({
       manualPinned: getPluginUiManualPin(sessionKey, toolCallId),
     });
   }, [pluginUiDerivation, sessionKey, pluginUiDisclosureVersion]);
+  // 运行中“工作中 N 秒”的 1 秒计时器下沉到 RunningLiveTailTurnGroup 叶子节点，
+  // 避免流式期间整棵 2000 行虚拟时间线每秒全量重算 renderUnits 与历史回合。
   const renderUnits = useMemo(
     () =>
       buildConversationTurnRenderUnits(rows, {
-        nowMs: liveNowMs,
         sessionPhase,
         pluginUiPinResolver,
       }),
-    [liveNowMs, pluginUiPinResolver, rows, sessionPhase],
+    [pluginUiPinResolver, rows, sessionPhase],
   );
   const { virtualizedUnits, liveUnit, liveUnitIndex } = useMemo(
     () => splitConversationTimelineLiveTail(renderUnits),
     [renderUnits],
   );
-  const hasRunningUnit = useMemo(() => renderUnits.some((unit) => unit.isRunning), [renderUnits]);
   const turnNavigatorQueryRowIds = useMemo(
     () =>
       new Set(
@@ -537,21 +539,6 @@ function ConversationTimelineImpl({
     centeredEmptyLayout,
     statusPanelLayout: summaryPanelLayout,
   });
-
-  useEffect(() => {
-    if (!hasRunningUnit) {
-      return;
-    }
-
-    // 运行中的 assistant work 状态文案要显示“工作中 N 秒”并随时间推进；
-    // 完成态耗时由协议事实固定，builder 会拒绝把这个 UI 时钟用于已结束轮次。
-    setLiveNowMs(Date.now());
-    const timer = window.setInterval(() => {
-      setLiveNowMs(Date.now());
-    }, RUNNING_WORK_DURATION_TICK_MS);
-
-    return () => window.clearInterval(timer);
-  }, [hasRunningUnit]);
 
   useLayoutEffect(() => {
     const element = timelineRootRef.current;
@@ -1944,7 +1931,7 @@ function ConversationTimelineImpl({
                     summaryPanelInlineOffsetClassName,
                   )}
                 >
-                  <ConversationTurnGroup
+                  <RunningLiveTailTurnGroup
                     unit={liveUnit}
                     apiRetry={apiRetry}
                     context={rowContext}
@@ -2033,6 +2020,16 @@ function ConversationTimelineImpl({
       ) : null}
     </div>
   );
+}
+
+function RunningLiveTailTurnGroup(props: ComponentProps<typeof ConversationTurnGroup>) {
+  // 1 秒运行计时只留在活跃尾回合的叶子节点，后台隐藏时由 useNowTicker 自动暂停。
+  const nowMs = useNowTicker(props.unit.isRunning, RUNNING_WORK_DURATION_TICK_MS);
+  const tickedUnit = useMemo(
+    () => applyLiveNowToRunningTurnUnit(props.unit, nowMs),
+    [props.unit, nowMs],
+  );
+  return <ConversationTurnGroup {...props} unit={tickedUnit} />;
 }
 
 export const ConversationTimeline = memo(ConversationTimelineImpl);

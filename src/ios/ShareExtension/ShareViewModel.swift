@@ -18,6 +18,50 @@ final class ShareViewModel {
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
     }
+
+    struct PreviewSummary {
+        let icon: String
+        let headline: String
+        let detail: String?
+    }
+
+    /// Concise summary shown inside the Share Extension native sheet card.
+    var previewSummary: PreviewSummary {
+        let texts = pendingItems.filter { $0.kind == .inlineText }.map { $0.value.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        let attachments = pendingItems.filter { $0.kind == .attachment }
+        if hasAudio {
+            let extra = attachments.count - audioFileNames.count
+            let detail = extra > 0 ? "另含 \(extra) 个其他附件 · 音频默认本机转写" : "音频仅保存在本机，转写默认在本机完成"
+            return PreviewSummary(icon: "waveform", headline: "\(audioFileNames.count) 段录音/音频", detail: detail)
+        }
+        if let first = texts.first {
+            let isURL = first.hasPrefix("http://") || first.hasPrefix("https://")
+            let icon = isURL ? "link" : "doc.text"
+            var extras: [String] = []
+            if texts.count > 1 { extras.append("共 \(texts.count) 段文本/链接") }
+            if !attachments.isEmpty { extras.append("\(attachments.count) 个文件/图片") }
+            return PreviewSummary(icon: icon,
+                                  headline: String(first.prefix(120)),
+                                  detail: extras.isEmpty ? nil : extras.joined(separator: " · "))
+        }
+        if !attachments.isEmpty {
+            let hasImage = attachments.contains { $0.value.hasPrefix("shared-image-") }
+            let hasVideo = attachments.contains { $0.value.hasPrefix("shared-video-") }
+            let icon = hasVideo ? "film" : (hasImage ? "photo" : "paperclip")
+            let label = hasVideo ? "视频" : (hasImage ? "图片" : "文件")
+            return PreviewSummary(icon: icon,
+                                  headline: "\(attachments.count) 个\(label)附件",
+                                  detail: attachments.first?.value)
+        }
+        return PreviewSummary(icon: "square.and.arrow.up", headline: "已准备分享内容", detail: nil)
+    }
+
+    /// Optional user note prepended before saving to chat or sending to Mac.
+    func prependNote(_ raw: String) {
+        let note = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !note.isEmpty else { return }
+        pendingItems.insert(.init(kind: .inlineText, value: note), at: 0)
+    }
     static let pendingRecordingImportsKey = "recording.pendingImports"
 
     /// Process all extension items from the share context.

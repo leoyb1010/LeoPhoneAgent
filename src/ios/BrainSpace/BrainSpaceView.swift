@@ -12,11 +12,8 @@ import SwiftUI
 import WebKit
 
 enum BrainTheme {
-    static let accent = Color(UIColor { trait in
-        trait.userInterfaceStyle == .dark
-            ? UIColor(red: 0.541, green: 0.643, blue: 1.0, alpha: 1)
-            : UIColor(red: 0.239, green: 0.361, blue: 0.812, alpha: 1)
-    })
+    /// Unified with LeoBot's single-source brand accent from `design/tokens.json`.
+    static let accent = LeoTheme.ColorToken.accent
 }
 
 enum BrainSpaceTab: Hashable { case today, media, ask, family, library }
@@ -94,6 +91,7 @@ struct BrainWebPage: Identifiable, Hashable {
 
 struct BrainSpaceView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var model = BrainSpaceModel()
     @ObservedObject private var store = BrainStore.shared
 
@@ -102,13 +100,23 @@ struct BrainSpaceView: View {
             if let err = model.setupError {
                 BrainSpaceSetupView(message: err)
             } else if model.manifest == nil {
-                ProgressView("正在连接资料库…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 16) {
+                    LeoSkeletonCard(lines: 2)
+                    LeoSkeletonCard(showsTile: false, lines: 3)
+                    Text("正在连接资料库…")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(20)
+                .frame(maxWidth: 460)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 tabs
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .modifier(LeoHorizontalSystemBars())
         .environmentObject(model)
         .tint(BrainTheme.accent)
         .task(id: store.connectionRevision) {
@@ -129,7 +137,7 @@ struct BrainSpaceView: View {
                     .accessibilityAddTraits(.isStaticText)
             }
         }
-        .animation(.snappy, value: model.toast)
+        .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: model.toast)
     }
 
     private var tabs: some View {
@@ -150,6 +158,8 @@ struct BrainSpaceView: View {
                 NavigationStack { BrainLibraryView().brainChrome("资料") }
             }
         }
+        .tabViewStyle(.sidebarAdaptable)
+        .onChange(of: model.tab) { _, _ in LeoHaptics.selection() }
     }
 }
 

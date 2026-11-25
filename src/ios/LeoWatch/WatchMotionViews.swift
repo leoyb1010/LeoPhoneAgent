@@ -12,6 +12,11 @@
 import SwiftUI
 import WatchKit
 
+/// Shared brand blue for watchOS (matches `design/tokens.json` dark brand `#6B9FFF`).
+enum WatchTheme {
+    static let brandBlue = Color(red: 107.0 / 255.0, green: 159.0 / 255.0, blue: 255.0 / 255.0)
+}
+
 // MARK: - Reduced resources (watchOS 27)
 
 private struct ReducedResourcesKey: EnvironmentKey {
@@ -67,8 +72,8 @@ struct LifeRing: View {
         switch state {
         case "running": return .orange
         case "failed": return .red
-        case "completed": return .green
-        default: return .teal
+        case "completed": return WatchTheme.brandBlue
+        default: return WatchTheme.brandBlue
         }
     }
 
@@ -118,7 +123,7 @@ struct RadarPulseOnce: View {
 
     var body: some View {
         Circle()
-            .stroke(Color.teal.opacity(expand ? 0 : 0.7), lineWidth: 2)
+            .stroke(WatchTheme.brandBlue.opacity(expand ? 0 : 0.7), lineWidth: 2)
             .scaleEffect(expand ? 2.2 : 0.6)
             .onChange(of: trigger) { _ in
                 guard !reduceMotion else { return }
@@ -160,7 +165,7 @@ struct WorkingBars: View {
             HStack(spacing: 3) {
                 ForEach(0..<4, id: \.self) { index in
                     RoundedRectangle(cornerRadius: 1.5)
-                        .fill(.teal)
+                        .fill(WatchTheme.brandBlue)
                         .frame(width: 3, height: on ? 14 : 5)
                         .animation(
                             animated ? .easeInOut(duration: 0.45)

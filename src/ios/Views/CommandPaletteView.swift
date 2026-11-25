@@ -82,19 +82,22 @@ struct CommandPaletteView: View {
         NavigationStack {
             List(items) { item in
                 Button {
+                    LeoHaptics.selection()
                     item.action()
                     close()
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: item.symbol)
                             .frame(width: 24)
-                            .foregroundStyle(.indigo)
+                            .foregroundStyle(LeoTheme.ColorToken.accent)
                         Text(item.title).foregroundStyle(.primary)
                         Spacer()
                         Text(item.subtitle)
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
+                    .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                    .contentShape(Rectangle())
                 }
             }
             .listStyle(.plain)
@@ -111,6 +114,7 @@ struct CommandPaletteView: View {
             }
             .onSubmit(of: .search) {
                 guard let first = items.first else { return }
+                LeoHaptics.selection()
                 first.action()
                 close()
             }

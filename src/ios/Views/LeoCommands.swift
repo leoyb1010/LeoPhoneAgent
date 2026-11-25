@@ -16,16 +16,20 @@ import SwiftUI
 
 /// Workspace-level actions, handled by the frontmost ContentView.
 enum WorkspaceCommand: Equatable {
-    case search
+    case search              // ⌘F: context-aware (in-chat search when a chat is active, else sidebar)
+    case searchSessions      // ⇧⌘F: always search all sessions
     case palette
     case settings
+    case brainSpace          // ⇧⌘B: open Second Brain
     case session(Int)        // 1-based position in the visible list
 
     fileprivate var userInfo: [String: Any] {
         switch self {
         case .search: return ["command": "search"]
+        case .searchSessions: return ["command": "searchSessions"]
         case .palette: return ["command": "palette"]
         case .settings: return ["command": "settings"]
+        case .brainSpace: return ["command": "brainSpace"]
         case .session(let index): return ["command": "session", "index": index]
         }
     }
@@ -33,8 +37,10 @@ enum WorkspaceCommand: Equatable {
     init?(userInfo: [AnyHashable: Any]?) {
         switch userInfo?["command"] as? String {
         case "search": self = .search
+        case "searchSessions": self = .searchSessions
         case "palette": self = .palette
         case "settings": self = .settings
+        case "brainSpace": self = .brainSpace
         case "session": self = .session(userInfo?["index"] as? Int ?? 1)
         default: return nil
         }
@@ -68,6 +74,7 @@ enum ChatComposerActions {
         let token: UUID
         let send: () -> Void
         let pickModel: () -> Void
+        var findInChat: () -> Void = {}
     }
 
     private(set) static var current: Entry?
@@ -108,15 +115,27 @@ struct LeoCommands: Commands {
             Button {
                 WorkspaceCommand.search.post()
             } label: {
-                Label("搜索会话", systemImage: "magnifyingglass")
+                Label("查找", systemImage: "magnifyingglass")
             }
             .keyboardShortcut("f", modifiers: .command)
+            Button {
+                WorkspaceCommand.searchSessions.post()
+            } label: {
+                Label("搜索全部会话", systemImage: "text.magnifyingglass")
+            }
+            .keyboardShortcut("f", modifiers: [.command, .shift])
             Button {
                 WorkspaceCommand.palette.post()
             } label: {
                 Label("命令面板", systemImage: "command")
             }
             .keyboardShortcut("k", modifiers: .command)
+            Button {
+                WorkspaceCommand.brainSpace.post()
+            } label: {
+                Label("第二大脑", systemImage: "brain.head.profile")
+            }
+            .keyboardShortcut("b", modifiers: [.command, .shift])
             Divider()
             ForEach(1...9, id: \.self) { index in
                 Button("第 \(index) 个会话") { WorkspaceCommand.session(index).post() }

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
+import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 
 import { LeoAgentBadge } from "./LeoAgentBadge.js";
@@ -28,6 +29,7 @@ export function LeoComposerAgentTools({
   onPickAgent?: () => void;
 }) {
   const bridge = leoSpeechBridge();
+  const { intl } = useZCodeIntl();
   const [hotkey, setHotkey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,16 +54,19 @@ export function LeoComposerAgentTools({
     };
   }, [bridge]);
 
-  const micLabel = hotkey ? `语音输入（按住 ${hotkey}，或点一下开始 / 结束）` : "";
+  const micLabel = hotkey
+    ? intl.formatMessage({ id: "leoHome.composer.micLabel" }, { hotkey })
+    : "";
+  const agentName = agentKind === "leobot" ? "LeoBot" : agentKind;
   return (
     <span className="flex shrink-0 items-center gap-1" data-leo-composer-agent-tools>
       {hideAgent ? null : onPickAgent ? (
-        <ControlHintTooltip title="换一个执行者（LeoBot / Claude Code / Codex …）">
+        <ControlHintTooltip title={intl.formatMessage({ id: "leoHome.composer.pickAgentTitle" })}>
           <button
             type="button"
             disabled={disabled}
             onClick={onPickAgent}
-            aria-label={`执行者：${agentKind === "leobot" ? "LeoBot" : agentKind}，点击更换`}
+            aria-label={intl.formatMessage({ id: "leoHome.composer.pickAgentAria" }, { agent: agentName })}
             className="mx-0.5 rounded-full transition-opacity hover:opacity-80 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--leo-brand)]"
           >
             <LeoAgentBadge kind={agentKind} />

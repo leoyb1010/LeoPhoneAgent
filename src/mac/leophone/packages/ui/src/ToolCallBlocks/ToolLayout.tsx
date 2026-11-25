@@ -15,8 +15,22 @@ import { ToolSummaryRow, type ToolSummaryAction } from "@/ToolCallBlocks/ToolSum
 import { uiMemoryDiagnosticsRegistry } from "@/lib/memoryDiagnostics.js";
 import { LEO_DURATION, LEO_EASE_OUT, LEO_SPRING } from "@/leo/skin/leoTokens.generated.js";
 
+const MAX_TOOL_LAYOUT_OPEN_STATE_ENTRIES = 1000;
 const toolLayoutOpenState = new Map<string, boolean>();
-// 内存诊断计数器：该表按 toolId 只增不减，先落日志。
+
+function persistToolLayoutOpenState(key: string, open: boolean): void {
+  if (toolLayoutOpenState.has(key)) {
+    toolLayoutOpenState.delete(key);
+  }
+  toolLayoutOpenState.set(key, open);
+  while (toolLayoutOpenState.size > MAX_TOOL_LAYOUT_OPEN_STATE_ENTRIES) {
+    const oldest = toolLayoutOpenState.keys().next().value;
+    if (oldest === undefined) break;
+    toolLayoutOpenState.delete(oldest);
+  }
+}
+
+// 内存诊断计数器：按 FIFO 上限 1000 条裁剪，避免长会话无限增长。
 uiMemoryDiagnosticsRegistry.register("toolLayout", () => ({ openState: toolLayoutOpenState.size }));
 const TOOL_CONTENT_COLLAPSE_UNMOUNT_DELAY_MS = 300;
 const TOOL_CONTENT_SHELL_CLASSNAME = "text-popover-foreground outline-none";
@@ -162,7 +176,7 @@ function ToolLayoutComponent({
       return;
     }
 
-    toolLayoutOpenState.set(resolvedPersistOpenKey, true);
+    persistToolLayoutOpenState(resolvedPersistOpenKey, true);
     setShouldRenderContent(true);
     setIsOpen(true);
     hasAutoOpenedRef.current = true;
@@ -176,7 +190,7 @@ function ToolLayoutComponent({
     // 聊天流里会迅速变得很长，也和“运行中自动展开、完成后回到摘要”这套交互不一致。
     // 这里只在 running -> completed 的边沿自动收起一次，不影响用户后续手动再次展开查看细节。
     if (autoCollapseOnComplete && !isRunning && wasRunning) {
-      toolLayoutOpenState.set(resolvedPersistOpenKey, false);
+      persistToolLayoutOpenState(resolvedPersistOpenKey, false);
       setIsOpen(false);
     }
   }, [autoCollapseOnComplete, isRunning, resolvedPersistOpenKey]);
@@ -311,7 +325,7 @@ function ToolLayoutComponent({
         if (hasSummaryAction || forceOpen) {
           return;
         }
-        toolLayoutOpenState.set(resolvedPersistOpenKey, open);
+        persistToolLayoutOpenState(resolvedPersistOpenKey, open);
         if (open) {
           setShouldRenderContent(true);
         }

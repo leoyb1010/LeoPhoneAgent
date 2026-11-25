@@ -58,21 +58,32 @@ export function useLeoAcpSlashCommands(
       return;
     }
     let cancelled = false;
-    // agent 在会话开始后才广播命令：会话开着时隔一会儿、窗口回到前台时再读一次。
-    const load = () =>
+    // agent 在会话开始后才广播命令：会话开着时隔一会儿、窗口回到前台时再读一次，后台隐藏时暂停轮询。
+    const load = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       void bridge.commands!(agentId, workspacePath)
         .then((next) => {
           if (cancelled) return;
           setCommands(toAcpSlashCommands(next));
         })
         .catch(() => undefined);
+    };
     load();
     const timer = window.setInterval(load, REFRESH_MS);
+    const onVisibilityChange = () => {
+      if (typeof document !== "undefined" && !document.hidden) load();
+    };
     window.addEventListener("focus", load);
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    }
     return () => {
       cancelled = true;
       window.clearInterval(timer);
       window.removeEventListener("focus", load);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
     };
   }, [agentId, workspacePath]);
   return agentId ? commands : undefined;

@@ -247,6 +247,19 @@ final class IPhoneDuoLayoutTests: XCTestCase {
         XCTAssertFalse(L.usesQuickHome(width: .infinity, height: 678, regularWidth: false))
     }
 
+    func testDuoSideChromeExcludesInnerSplitHalf() {
+        // Closed Duo outer display (fullscreen 466 on 466 screen): floating side chrome enabled.
+        XCTAssertTrue(L.usesDuoSideChrome(windowWidth: 466, windowHeight: 678, screenWidth: 466, regularWidth: false))
+        // Duo inner Split View half (~475 on 951 screen): keeps top bar buttons instead of floating side chrome.
+        XCTAssertFalse(L.usesDuoSideChrome(windowWidth: 475, windowHeight: 669, screenWidth: 951, regularWidth: false))
+        // Duo inner portrait (669, regular width): normal top bar.
+        XCTAssertFalse(L.usesDuoSideChrome(windowWidth: 669, windowHeight: 951, screenWidth: 669, regularWidth: true))
+        // Ordinary iPhone portrait (440 × 956): normal top bar.
+        XCTAssertFalse(L.usesDuoSideChrome(windowWidth: 440, windowHeight: 956, screenWidth: 440, regularWidth: false))
+        // Unmeasured screenWidth falls back cleanly to usesQuickHome.
+        XCTAssertTrue(L.usesDuoSideChrome(windowWidth: 466, windowHeight: 678, screenWidth: 0, regularWidth: false))
+    }
+
     // MARK: - P1-10 nothing in the shell keys off the device idiom
 
     func testShellNeverReadsTheDeviceIdiom() throws {

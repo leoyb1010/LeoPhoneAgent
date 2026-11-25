@@ -1,8 +1,11 @@
 import { useState, type ReactNode } from "react";
-import { History, Code2, FileSearch, SquareTerminal } from "lucide-react";
+import { ChevronRight, Code2, FileSearch, History, SquareTerminal } from "lucide-react";
 import { cn } from "@/components/lib/utils.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { formatTaskRelativeTime } from "@/lib/taskListItemPresentation.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
+import { LeoAgentBadge } from "./LeoAgentBadge.js";
+import { resolveLeoAgentKind } from "./leoAgentKind.js";
 import { useLeoHome, type LeoHomeContextValue } from "./LeoHomeContext.js";
 import { useLeoHomeTasks } from "./LeoDraftStatusList.js";
 import { LEO_WORKBENCH_STARTERS } from "./leoWorkbenchPrompts.js";
@@ -17,16 +20,27 @@ function ContinueLastTask({ home, workspaceKey }: { home: LeoHomeContextValue; w
   const { items } = useLeoHomeTasks(home);
   const task = items.find((entry) => (entry.workspaceIdentity?.trim() || entry.workspacePath) === workspaceKey);
   if (!task) return null;
+  const agentKind = resolveLeoAgentKind(task);
   return (
     <button
       type="button"
       data-testid="leo-continue-last"
       onClick={() => home.onSelectTask(task.workspacePath, task.taskId, task.workspaceIdentity, task.unreadAt)}
-      className="mt-3 flex w-full max-w-2xl items-center gap-2 rounded-lg px-2 py-1.5 text-left text-ui-caption text-foreground-subtle hover:bg-hover focus-visible:outline-brand"
+      className="group mt-3 flex w-full max-w-2xl items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-ui-caption text-foreground-subtle transition-colors duration-[var(--leo-dur-1)] hover:bg-hover active:scale-[var(--leo-press-scale)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand motion-reduce:transition-none motion-reduce:active:scale-100"
     >
       <History aria-hidden="true" className="size-4 shrink-0" />
       <span className="shrink-0">{locale.startsWith("zh") ? "继续上次" : "Continue last task"}</span>
-      <span className="truncate font-medium text-foreground">{task.title?.trim() || intl.formatMessage({ id: "taskList.untitled" })}</span>
+      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+        {task.title?.trim() || intl.formatMessage({ id: "taskList.untitled" })}
+      </span>
+      <LeoAgentBadge kind={agentKind} />
+      <span className="shrink-0 text-ui-caption text-foreground-subtlest tabular-nums">
+        {formatTaskRelativeTime(task.updatedAt, intl)}
+      </span>
+      <ChevronRight
+        aria-hidden="true"
+        className="size-3.5 shrink-0 text-foreground-subtlest transition-transform duration-[var(--leo-dur-1)] group-hover:translate-x-0.5 motion-reduce:transform-none"
+      />
     </button>
   );
 }
@@ -101,8 +115,15 @@ export function LeoWorkbenchMore({ children }: { children: ReactNode }) {
       onToggle={(event) => setOpen(event.currentTarget.open)}
       className="w-full max-w-2xl border-t border-border pt-3"
     >
-      <summary className="w-fit cursor-pointer rounded-md px-1 py-1 text-ui-sm text-foreground-subtle outline-offset-4">
-        {locale.startsWith("zh") ? "更多工作流" : "More workflows"}
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md px-1.5 py-1 text-ui-sm text-foreground-subtle transition-colors hover:bg-hover hover:text-foreground outline-offset-4 [&::-webkit-details-marker]:hidden motion-reduce:transition-none">
+        <ChevronRight
+          aria-hidden="true"
+          className={cn(
+            "size-3.5 shrink-0 transition-transform duration-[var(--leo-dur-1)] motion-reduce:transition-none",
+            open && "rotate-90",
+          )}
+        />
+        <span>{locale.startsWith("zh") ? "更多工作流" : "More workflows"}</span>
       </summary>
       {open ? <div className="pt-3">{children}</div> : null}
     </details>

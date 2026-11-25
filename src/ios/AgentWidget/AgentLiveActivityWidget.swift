@@ -917,7 +917,8 @@ private struct CompactLeadingContent: View {
                     .font(.callout)
             }
             Text("\(state.activeSessionCount)")
-                .font(.callout.bold())
+                .font(.callout.bold().monospacedDigit())
+                .minimumScaleFactor(0.8)
                 .contentTransition(.numericText())
         }
     }

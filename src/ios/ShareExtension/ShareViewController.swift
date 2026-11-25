@@ -1,3 +1,4 @@
+import SwiftUI
 import UIKit
 
 /// The Share Extension's principal view controller.
@@ -11,6 +12,9 @@ class ShareViewController: UIViewController {
     /// 弹选择卡时置 true,阻止 viewDidAppear 提前 completeRequest。
     private var awaitingChoice = false
     private var processingDone = false
+    private var hasAppeared = false
+    private var pendingPresentChoice = false
+    private var sheetState = ShareSheetState()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -32,9 +36,9 @@ class ShareViewController: UIViewController {
             }
             switch action {
             case "chat":
-                self.sendToChat()
+                self.sendToChat(note: "")
             case "collect":
-                self.collect()
+                self.collect(note: "")
             default:
                 self.awaitingChoice = true
                 self.presentChoice()
@@ -44,73 +48,115 @@ class ShareViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        hasAppeared = true
+        if pendingPresentChoice {
+            pendingPresentChoice = false
+            presentChoice()
+            return
+        }
         if processingDone && !awaitingChoice {
             extensionContext?.completeRequest(returningItems: [])
         }
     }
 
-    // MARK: - 两种去向
+    // MARK: - Native SwiftUI Half-Sheet Card
 
     private func presentChoice() {
-        let alert = UIAlertController(title: "分享到 LeoBot",
-                                      message: nil, preferredStyle: .alert)
-        if vm?.hasAudio == true {
-            alert.message = "音频只保存在这台设备上;转写默认在本机完成。"
-            alert.addAction(UIAlertAction(title: "🎙 转写成录音纪要", style: .default) { [weak self] _ in
-                self?.sendToRecordings()
-            })
+        guard hasAppeared, view.window != nil else {
+            pendingPresentChoice = true
+            return
         }
-        alert.addAction(UIAlertAction(title: "💬 发到对话", style: .default) { [weak self] _ in
-            self?.sendToChat()
-        })
-        alert.addAction(UIAlertAction(title: "⭐️ 收藏", style: .default) { [weak self] _ in
-            self?.collect()
-        })
-        // [WP-44] Straight into the Mac task last opened on this phone (text / links only).
-        if let target = ShareMacTarget.load(), target.isFresh(), ShareMacTargetSecrets.load() != nil,
-           !(vm?.macShareText.isEmpty ?? true) {
-            alert.addAction(UIAlertAction(title: "🖥 发给 Mac:\(target.title)", style: .default) { [weak self] _ in
-                self?.sendToMac(target)
-            })
+        guard let vm else { return finish() }
+        let macTarget: ShareMacTarget? = {
+            guard let target = ShareMacTarget.load(),
+                  target.isFresh(),
+                  ShareMacTargetSecrets.load() != nil,
+                  !vm.macShareText.isEmpty else { return nil }
+            return target
+        }()
+
+        let card = ShareSheetCardView(
+            summary: vm.previewSummary,
+            hasAudio: vm.hasAudio,
+            macTargetTitle: macTarget?.title,
+            state: sheetState,
+            onRecordings: { [weak self] note in self?.sendToRecordings(note: note) },
+            onChat: { [weak self] note in self?.sendToChat(note: note) },
+            onCollect: { [weak self] note in self?.collect(note: note) },
+            onMac: macTarget.map { target in { [weak self] note in self?.sendToMac(target, note: note) } },
+            onDismiss: { [weak self] in self?.finish() }
+        )
+        let host = UIHostingController(rootView: card)
+        host.view.backgroundColor = .systemBackground
+        host.modalPresentationStyle = .pageSheet
+        if let sheet = host.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 24
         }
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in
-            self?.finish()
-        })
-        present(alert, animated: true)
+        host.isModalInPresentation = false
+        host.presentationController?.delegate = self
+        present(host, animated: true)
     }
 
-    private func sendToChat() {
+    private func sendToChat(note: String) {
         guard let vm else { return finish() }
+        vm.prependNote(note)
         _ = vm.save()
+        sheetState.successFeedbackTick += 1
         redirectToHostApp()
         finish()
     }
 
-    private func sendToRecordings() {
+    private func sendToRecordings(note: String) {
         guard let vm, vm.saveRecordingImports() else { return finish() }
+        vm.prependNote(note)
         // 同一次分享里的非音频内容照常进对话信箱。
         _ = vm.save()
+        sheetState.successFeedbackTick += 1
         redirect(to: "leophoneagent://recordings/import")
         finish()
     }
 
-    private func collect() {
+    private func collect(note: String) {
         guard let vm else { return finish() }
+        vm.prependNote(note)
         // 不落 pendingShare(那是对话管道的信箱),直接从物料建收藏。
         let count = CollectionStore.ingest(vm.builtShare())
         NSLog("[ShareExt] collected %d item(s)", count)
-        finish()
+        sheetState.successFeedbackTick += 1
+        guard awaitingChoice else {
+            finish()
+            return
+        }
+        sheetState.statusTitle = "已收藏"
+        sheetState.statusDetail = count > 1 ? "已保存 \(count) 项到本地收藏" : "已保存到本地收藏"
+        sheetState.isSuccess = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(550))
+            self?.finish()
+        }
     }
 
-    private func sendToMac(_ target: ShareMacTarget) {
+    private func sendToMac(_ target: ShareMacTarget, note: String) {
         guard let vm, let secrets = ShareMacTargetSecrets.load() else { return finish() }
-        let requests = target.attempts(text: vm.macShareText, secrets: secrets)
+        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let payload = trimmedNote.isEmpty ? vm.macShareText : "\(trimmedNote)\n\n\(vm.macShareText)"
+        let requests = target.attempts(text: payload, secrets: secrets)
+        sheetState.isSendingToMac = true
         Task { @MainActor [weak self] in
             let outcome = await Self.deliver(requests)
             guard let self else { return }
-            let alert = UIAlertController(title: outcome.title, message: outcome.detail, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "好", style: .default) { [weak self] _ in self?.finish() })
-            self.present(alert, animated: true)
+            self.sheetState.isSendingToMac = false
+            self.sheetState.statusTitle = outcome.title
+            self.sheetState.statusDetail = outcome.detail
+            let ok = outcome.title.contains("已接收") || outcome.title.contains("已确认")
+            self.sheetState.isSuccess = ok
+            if ok {
+                self.sheetState.successFeedbackTick += 1
+            } else {
+                self.sheetState.warningFeedbackTick += 1
+            }
         }
     }
 
@@ -202,5 +248,220 @@ class ShareViewController: UIViewController {
             }
             responder = responder?.next
         }
+    }
+}
+
+extension ShareViewController: UIAdaptivePresentationControllerDelegate {
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        finish()
+    }
+}
+
+// MARK: - SwiftUI Share Card
+
+@MainActor
+private final class ShareSheetState: ObservableObject {
+    @Published var isSendingToMac = false
+    @Published var statusTitle: String?
+    @Published var statusDetail: String?
+    @Published var isSuccess = true
+    @Published var successFeedbackTick = 0
+    @Published var warningFeedbackTick = 0
+}
+
+private struct ShareSheetCardView: View {
+    let summary: ShareViewModel.PreviewSummary
+    let hasAudio: Bool
+    let macTargetTitle: String?
+    @ObservedObject var state: ShareSheetState
+    let onRecordings: (String) -> Void
+    let onChat: (String) -> Void
+    let onCollect: (String) -> Void
+    let onMac: ((String) -> Void)?
+    let onDismiss: () -> Void
+
+    @State private var note = ""
+    @State private var selectionFeedbackTick = 0
+
+    private static let brandBlue = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 107/255, green: 159/255, blue: 1.0, alpha: 1)
+            : UIColor(red: 43/255, green: 92/255, blue: 230/255, alpha: 1)
+    })
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    previewCard
+
+                    if let statusTitle = state.statusTitle {
+                        statusCard(title: statusTitle, detail: state.statusDetail, ok: state.isSuccess)
+                    } else {
+                        TextField("补充一句说明或指令（可选）", text: $note)
+                            .textFieldStyle(.plain)
+                            .font(.subheadline)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .disabled(state.isSendingToMac)
+
+                        VStack(spacing: 8) {
+                            if hasAudio {
+                                actionRow(icon: "waveform", title: "转写成录音纪要", subtitle: "本机保存与转写，不上传原音频", prominent: true) {
+                                    selectionFeedbackTick += 1
+                                    onRecordings(note)
+                                }
+                            }
+                            actionRow(icon: "bubble.left.and.text.bubble.right.fill",
+                                      title: "发到对话",
+                                      subtitle: "带着内容打开 LeoBot 继续处理",
+                                      prominent: !hasAudio) {
+                                selectionFeedbackTick += 1
+                                onChat(note)
+                            }
+                            actionRow(icon: "bookmark.fill",
+                                      title: "收藏",
+                                      subtitle: "存到本地收藏，不打断当前页面") {
+                                selectionFeedbackTick += 1
+                                onCollect(note)
+                            }
+                            if let macTitle = macTargetTitle, let onMac {
+                                actionRow(icon: "desktopcomputer",
+                                          title: "发给 Mac：\(macTitle)",
+                                          subtitle: state.isSendingToMac ? "正在发送…" : "直接续发到当前 Mac 任务",
+                                          loading: state.isSendingToMac) {
+                                    selectionFeedbackTick += 1
+                                    onMac(note)
+                                }
+                            }
+                        }
+                        .disabled(state.isSendingToMac)
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+            }
+            .navigationTitle("分享到 LeoBot")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(state.statusTitle == nil ? "取消" : "完成") { onDismiss() }
+                }
+            }
+        }
+        .tint(Self.brandBlue)
+        .sensoryFeedback(.selection, trigger: selectionFeedbackTick)
+        .sensoryFeedback(.success, trigger: state.successFeedbackTick)
+        .sensoryFeedback(.warning, trigger: state.warningFeedbackTick)
+    }
+
+    private var previewCard: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: summary.icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Self.brandBlue)
+                .frame(width: 34, height: 34)
+                .background(Self.brandBlue.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(summary.headline)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                if let detail = summary.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func statusCard(title: String, detail: String?, ok: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.title3)
+                    .foregroundStyle(ok ? Self.brandBlue : .orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.headline)
+                    if let detail, !detail.isEmpty {
+                        Text(detail).font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            HStack(spacing: 10) {
+                if !ok {
+                    Button {
+                        state.statusTitle = nil
+                        state.statusDetail = nil
+                    } label: {
+                        Text("返回重选")
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                Button {
+                    onDismiss()
+                } label: {
+                    Text("好")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func actionRow(icon: String,
+                           title: String,
+                           subtitle: String,
+                           prominent: Bool = false,
+                           loading: Bool = false,
+                           action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                if loading {
+                    ProgressView()
+                        .frame(width: 24, height: 24)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(prominent ? .white : Self.brandBlue)
+                        .frame(width: 24, height: 24)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(prominent ? .white : .primary)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(prominent ? .white.opacity(0.82) : .secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(prominent ? Color.white.opacity(0.75) : Color(.tertiaryLabel))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+            .background(
+                prominent ? AnyShapeStyle(Self.brandBlue) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }

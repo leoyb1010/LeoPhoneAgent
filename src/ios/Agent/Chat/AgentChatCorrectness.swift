@@ -49,6 +49,19 @@ enum LeoWorkspaceLayoutPolicy {
         return width <= quickHomeMaxWidth && width / height >= quickHomeMinAspect
     }
 
+    /// [duo-bars] Floating right-edge home buttons belong ONLY to a closed iPhone
+    /// Duo outer fullscreen window (466 × 678), never to a Duo inner Split View
+    /// half (~475 × 669 on a 951 pt screen) where hiding the top bar breaks parity
+    /// with the adjacent split app.
+    static func usesDuoSideChrome(windowWidth: CGFloat,
+                                  windowHeight: CGFloat,
+                                  screenWidth: CGFloat,
+                                  regularWidth: Bool) -> Bool {
+        guard usesQuickHome(width: windowWidth, height: windowHeight, regularWidth: regularWidth) else { return false }
+        guard screenWidth.isFinite, screenWidth > 0 else { return true }
+        return windowWidth >= screenWidth - 40
+    }
+
     // MARK: [WP-43] iPad three columns (session list / chat / context)
     //
     // Numbers from OpenClaw RootTabsNavigation (sidebar 300, detail ≥ 500); the

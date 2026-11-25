@@ -1,5 +1,6 @@
 import {
   BookOpenIcon,
+  BrainIcon,
   FileDiffIcon,
   FolderOpenIcon,
   GlobeIcon,
@@ -11,6 +12,8 @@ import {
   PanelLeftOpen,
   ServerIcon,
   SettingsIcon,
+  SmartphoneIcon,
+  SparklesIcon,
   SquareTerminalIcon,
   SunIcon,
   UsersIcon,
@@ -20,6 +23,7 @@ import type { QuickPickCommandIcon } from "@/quickpick/quickPickCommands.js";
 
 export const QUICK_PICK_ICON_BY_KIND = {
   book: BookOpenIcon,
+  brain: BrainIcon,
   browser: GlobeIcon,
   community: UsersIcon,
   diff: FileDiffIcon,
@@ -32,6 +36,8 @@ export const QUICK_PICK_ICON_BY_KIND = {
   sidebarClose: PanelLeftClose,
   sidebarOpen: PanelLeftOpen,
   skills: WandSparkles,
+  smartphone: SmartphoneIcon,
+  sparkles: SparklesIcon,
   themeDark: MoonIcon,
   themeLight: SunIcon,
   terminal: SquareTerminalIcon,

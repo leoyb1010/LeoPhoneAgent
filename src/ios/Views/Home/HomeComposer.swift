@@ -281,6 +281,8 @@ struct HomeComposerBar: View {
         .leoComposerChrome(glassID: "home.composer", in: glassNamespace)
         .padding(.horizontal, LeoComposerMetrics.outerPadding)
         .padding(.bottom, 6)
+        // [duo-fold] Keep the home composer off a half-open Duo's horizontal fold.
+        .modifier(FoldAvoidingControl(squeezeHorizontally: false, maxLift: FoldAvoidance.composerMaxLift))
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: trimmedEmpty)
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: isBusy)
     }
@@ -427,46 +429,53 @@ struct HomeEmptyState: View {
     static let suggestions = ["帮我整理今天要做的事", "打开手电筒", "总结剪贴板里的内容"]
 
     var body: some View {
-        VStack(spacing: 18) {
-            Spacer(minLength: 40)
-            Image(systemName: "sparkles")
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(.tint)
-                .frame(width: 60, height: 60)
-                .glassEffect(.regular, in: .circle)
-                .accessibilityHidden(true)
-            Text("有什么要我做的?")
-                .font(.title2.weight(.semibold))
-            VStack(spacing: 8) {
-                ForEach(Self.suggestions, id: \.self) { item in
-                    Button { onSuggestion(item) } label: {
-                        Text(item)
-                            .font(.subheadline)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .background(Color.primary.opacity(0.06), in: Capsule())
-                            .frame(minHeight: LeoTheme.TouchTarget.minimum)
-                            .contentShape(Rectangle())
+        ScrollView {
+            VStack(spacing: 16) {
+                Spacer(minLength: 16)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(.tint)
+                    .frame(width: 56, height: 56)
+                    .glassEffect(.regular, in: .circle)
+                    .accessibilityHidden(true)
+                Text("有什么要我做的?")
+                    .font(.title2.weight(.semibold))
+                VStack(spacing: 8) {
+                    ForEach(Self.suggestions, id: \.self) { item in
+                        Button {
+                            LeoHaptics.selection()
+                            onSuggestion(item)
+                        } label: {
+                            Text(item)
+                                .font(.subheadline)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 9)
+                                .background(Color.primary.opacity(0.06), in: Capsule())
+                                .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(LeoSquishButtonStyle())
                     }
-                    .buttonStyle(.plain)
                 }
-            }
-            if !hasModel {
-                Button("连接模型,处理更复杂的任务", action: onConnectModel)
-                    .font(.footnote.weight(.semibold))
-                    .padding(.top, 4)
-                if let onOnboarding {
-                    Button("看看新手引导", action: onOnboarding)
-                        .font(.footnote)
-                        .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                if !hasModel {
+                    Button("连接模型,处理更复杂的任务", action: onConnectModel)
+                        .font(.footnote.weight(.semibold))
                         .frame(minHeight: LeoTheme.TouchTarget.minimum)
-                        .accessibilityIdentifier("home.onboarding")
+                        .padding(.top, 2)
+                    if let onOnboarding {
+                        Button("看看新手引导", action: onOnboarding)
+                            .font(.footnote)
+                            .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                            .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                            .accessibilityIdentifier("home.onboarding")
+                    }
                 }
+                Spacer(minLength: 32)
             }
-            Spacer(minLength: 120)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 24)
+        .scrollBounceBehavior(.basedOnSize)
     }
 }
 
@@ -498,6 +507,7 @@ struct HomeActionSheet: View {
     let onManageMCP: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showAll = false
 
     private static let usageKey = "home.actionUsage"
@@ -531,9 +541,11 @@ struct HomeActionSheet: View {
                         }
                         if list.count > 6 {
                             Button(showAll ? "收起" : "全部 \(list.count) 个动作") {
-                                withAnimation(.spring(duration: 0.35, bounce: 0.15)) { showAll.toggle() }
+                                LeoHaptics.selection()
+                                withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { showAll.toggle() }
                             }
                             .font(.footnote.weight(.semibold))
+                            .frame(minHeight: LeoTheme.TouchTarget.minimum)
                             .padding(.top, 2)
                         }
                     }
@@ -543,15 +555,19 @@ struct HomeActionSheet: View {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 8) {
                                     ForEach(quickTasks) { task in
-                                        Button { perform(task) } label: {
+                                        Button {
+                                            LeoHaptics.selection()
+                                            perform(task)
+                                        } label: {
                                             Label(task.title, systemImage: task.icon)
                                                 .font(.subheadline.weight(.medium))
                                                 .lineLimit(1)
                                                 .padding(.horizontal, 12)
                                                 .padding(.vertical, 9)
+                                                .frame(minHeight: LeoTheme.TouchTarget.minimum)
                                                 .background(Color.primary.opacity(0.06), in: Capsule())
                                         }
-                                        .buttonStyle(.plain)
+                                        .buttonStyle(LeoSquishButtonStyle())
                                     }
                                 }
                             }
@@ -624,7 +640,10 @@ struct HomeActionSheet: View {
     }
 
     private func actionTile(_ action: HomeAction) -> some View {
-        Button { perform(action) } label: {
+        Button {
+            LeoHaptics.selection()
+            perform(action)
+        } label: {
             VStack(spacing: 8) {
                 Image(systemName: action.icon)
                     .font(.system(size: 20, weight: .semibold))
@@ -640,7 +659,7 @@ struct HomeActionSheet: View {
             .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LeoSquishButtonStyle())
         .accessibilityLabel(Text(action.title))
         .contextMenu {
             Button {

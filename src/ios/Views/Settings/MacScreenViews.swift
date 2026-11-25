@@ -182,9 +182,13 @@ struct MacScreenFullscreen: View {
             HStack {
                 MacScreenCaption(poller: poller, hostName: hostName)
                     .foregroundStyle(.white)
-                Button { dismiss() } label: {
+                Button {
+                    LeoHaptics.selection()
+                    dismiss()
+                } label: {
                     Image(systemName: "xmark").font(.body.weight(.semibold))
-                        .frame(width: 36, height: 36)
+                        .frame(width: LeoTheme.TouchTarget.minimum, height: LeoTheme.TouchTarget.minimum)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .glassEffect(.regular.interactive(), in: .circle)

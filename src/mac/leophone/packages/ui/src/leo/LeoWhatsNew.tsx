@@ -5,9 +5,17 @@ import { Button } from "@/components/ui/button.js";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { LeoMark } from "./LeoMark.js";
-import { markLeoWhatsNewSeen, unseenLeoReleases, type LeoRelease } from "./leoReleaseNotes.js";
+import {
+  markLeoWhatsNewSeen,
+  recentLeoReleases,
+  unseenLeoReleases,
+  type LeoRelease,
+} from "./leoReleaseNotes.js";
 // 皮肤层随「本次更新」一起加载:两者都挂在 Root,模块求值早于首屏。
 import "./skin/leoSkin.js";
+
+/** Dispatched by ⌘K "What's New" command to inspect recent release notes on demand. */
+export const LEO_OPEN_WHATS_NEW_EVENT = "leo:open-whats-new";
 
 /** 更新说明复用共享 Dialog 的焦点约束；只有明确确认或 Escape 才记为已读。 */
 export function LeoWhatsNew() {
@@ -19,6 +27,15 @@ export function LeoWhatsNew() {
   useEffect(() => {
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setNotes(unseenLeoReleases(ZCODE_VERSION));
+  }, []);
+
+  useEffect(() => {
+    const onOpenRequested = () => {
+      returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setNotes(recentLeoReleases(3));
+    };
+    window.addEventListener(LEO_OPEN_WHATS_NEW_EVENT, onOpenRequested);
+    return () => window.removeEventListener(LEO_OPEN_WHATS_NEW_EVENT, onOpenRequested);
   }, []);
 
   const [latest] = notes;
@@ -79,7 +96,7 @@ export function LeoWhatsNew() {
           ))}
         </div>
         <div className="flex shrink-0 justify-end px-6 py-5">
-          <Button type="button" variant="secondary" className="min-h-10 px-4" onClick={close}>
+          <Button type="button" variant="default" className="min-h-10 px-5" onClick={close}>
             {intl.formatMessage({ id: "leoWhatsNew.confirm" })}
           </Button>
         </div>

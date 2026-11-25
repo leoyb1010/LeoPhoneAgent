@@ -32,24 +32,37 @@ export function LeoHomeSetupCard({ className }: { className?: string }) {
   const openSettingsTab = useOptionalTabStore((state) => state.openSettingsTab);
   const { intl } = useZCodeIntl();
 
+  const needsSetupCard = status === null || (status.enabled && (status.direct?.devices.length ?? 0) === 0);
+
   useEffect(() => {
-    if (!bridge || dismissed) return;
+    if (!bridge || dismissed || !needsSetupCard) return;
     let alive = true;
-    // 刚启动时中继还在连：只读一次会一直显示「还没连上中继」。每 5 秒刷新，直到不再需要这张卡。
-    const load = () =>
+    // 刚启动时中继还在连：每 5 秒刷新；一旦已配对设备或功能停用，立即停止轮询，后台切隐藏时暂停。
+    const load = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       void bridge
         .status()
         .then((result) => {
           if (alive && result.ok) setStatus(result.data);
         })
         .catch(() => undefined);
+    };
     load();
     const timer = window.setInterval(load, 5_000);
+    const onVisibilityChange = () => {
+      if (typeof document !== "undefined" && !document.hidden) load();
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    }
     return () => {
       alive = false;
       window.clearInterval(timer);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
     };
-  }, [bridge, dismissed]);
+  }, [bridge, dismissed, needsSetupCard]);
 
   if (!bridge || dismissed || !status) return null;
   const directDevices = status.direct?.devices.length ?? 0;

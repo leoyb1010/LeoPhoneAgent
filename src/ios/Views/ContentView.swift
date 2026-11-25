@@ -589,10 +589,14 @@ struct ContentView: View {
             .onChange(of: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing) { _, width in
                 updateWindowWidth(width)
             }
-            .onChange(of: geo.size.height) { _, height in windowHeight = height }
+            .onChange(of: geo.size.height) { _, height in
+                windowHeight = height
+                syncWindowScreenWidth()
+            }
             .onAppear {
                 updateWindowWidth(geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing)
                 windowHeight = geo.size.height
+                syncWindowScreenWidth()
                 isWideLayout = wide
                 if !homeDraftRestored {
                     homeDraftRestored = true
@@ -617,7 +621,7 @@ struct ContentView: View {
             .background(SceneSessionHost(
                 sessionId: Self.isNewSessionId(onScreenSessionId) ? (newSessionRealId ?? onScreenSessionId) : onScreenSessionId,
                 sessionCount: sessions.count,
-                onWindow: { window in WindowRegistry.shared.register(windowId, window: window) },
+                onWindow: handleCapturedWindow,
                 open: { id in
                     guard sessionsByIdCache[id] != nil else { return false }
                     jumpToSession(id)
@@ -635,6 +639,19 @@ struct ContentView: View {
                         .accessibilityIdentifier("handoff.syncing")
                 }
             }
+        }
+    }
+
+    private func handleCapturedWindow(_ window: UIWindow?) {
+        capturedWindowBox.window = window
+        WindowRegistry.shared.register(windowId, window: window)
+        syncWindowScreenWidth()
+    }
+
+    private func syncWindowScreenWidth() {
+        let sw = capturedWindowBox.window?.windowScene?.screen.bounds.width ?? 0
+        if sw > 0, abs(windowScreenWidth - sw) > 1 {
+            windowScreenWidth = sw
         }
     }
 
@@ -669,12 +686,21 @@ struct ContentView: View {
                       let command = WorkspaceCommand(userInfo: note.userInfo) else { return }
                 switch command {
                 case .search:
+                    if onScreenSessionId != nil, let actions = ChatComposerActions.current {
+                        actions.findInChat()
+                    } else {
+                        if isWideLayout { columnVisibility = .all }
+                        focusSearch()
+                    }
+                case .searchSessions:
                     if isWideLayout { columnVisibility = .all }
                     focusSearch()
                 case .palette:
                     showCommandPalette = true
                 case .settings:
                     activeToolSheet = .settings
+                case .brainSpace:
+                    showBrainSpace = true
                 case .session(let index):
                     selectSession(at: index - 1)
                 }
@@ -1010,13 +1036,9 @@ struct ContentView: View {
             }
             .sheet(item: $sessionToDelete) { session in
                 DeleteConfirmSheet(info: $singleDeleteInfo, isLoading: false) {
-                    print("[DELETE] onDelete called for session: \(session.id)")
                     deleteSession(session)
                     sessionToDelete = nil
                     singleDeleteInfo = nil
-                }
-                .onAppear {
-                    print("[DELETE] Sheet appeared. singleDeleteInfo is \(singleDeleteInfo == nil ? "nil" : "non-nil, sessionCount=\(singleDeleteInfo!.sessionCount)")")
                 }
                 .presentationDetents([.medium])
             }
@@ -1455,6 +1477,7 @@ struct ContentView: View {
     private func updateWindowWidth(_ width: CGFloat) {
         let old = windowWidth
         windowWidth = width
+        syncWindowScreenWidth()
         guard let resident = LeoWorkspaceLayoutPolicy.crossing(
             from: old, to: width, rule: LeoWorkspaceLayoutPolicy.sidebarResident) else { return }
         let target: NavigationSplitViewVisibility = resident ? .all : .detailOnly
@@ -1506,9 +1529,9 @@ struct ContentView: View {
                 // full width (no side column) and nothing changes shape on push / pop.
                 .modifier(LeoHorizontalSystemBars())
                 .overlay {
-                    // Closed iPhone Duo: 设置 / 搜索 / 第二大脑 float over the right edge a bit
-                    // below the middle — clear of the title, status and signal area at the top.
-                    if duoFloatingButtons, !isSelecting {
+                    // Closed iPhone Duo: 设置 / 搜索 / 第二大脑 float over the right edge,
+                    // hiding during search or typing and clearing measured bottom chrome.
+                    if duoFloatingButtons, !isSelecting, !showSearchBar, !homePromptFocused {
                         LeoDuoSideButtons(buttons: [
                             .init(systemImage: "magnifyingglass", label: "搜索对话") {
                                 withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { showSearchBar = true }
@@ -1516,7 +1539,7 @@ struct ContentView: View {
                             },
                             .init(systemImage: "brain.head.profile", label: "第二大脑") { showBrainSpace = true },
                             .init(systemImage: "gear", label: "设置") { activeToolSheet = .settings },
-                        ])
+                        ], bottomClearance: homeBottomBarHeight)
                     }
                 }
                 .navigationDestination(for: String.self) { id in
@@ -1532,15 +1555,33 @@ struct ContentView: View {
                                 .id(id)
                         }
                     } else {
-                        let chat = AIChatView(sessionId: Self.isNewSessionId(id) ? nil : id, draftId: Self.isNewSessionId(id) ? id : nil, initialGroupId: Self.extractGroupId(from: id), initialEntryKey: Self.extractEntryKey(from: id))
-                            .modifier(ChatToolbarMinimization())
-                            .id(id)
+                        let isDraft = Self.isNewSessionId(id)
+                        let baseChat = AIChatView(sessionId: isDraft ? nil : id, draftId: isDraft ? id : nil, initialGroupId: Self.extractGroupId(from: id), initialEntryKey: Self.extractEntryKey(from: id))
                             .onAppear {
                                 if currentStackSessionId != id { currentStackSessionId = id }
                                 SessionBadgeStore.shared.remove(.unread, for: id)
                                 shareLog.info("🔄SESSION stackNav APPEAR id=\(id)")
                             }
                             .onDisappear { shareLog.info("🔄SESSION stackNav DISAPPEAR id=\(id)") }
+                        // [duo-shell] Regular-width stack (Duo inner portrait 669×951,
+                        // narrow Stage Manager): wrap in ChatDetailContainer so the chat
+                        // keeps sidebar.right, sheet Inspector, focusedSceneValue and
+                        // ⌥⌘I/⇧⌘M, while reporting showsSidebarToggle=false (+136pt header).
+                        let chat: AnyView = horizontalSizeClass == .regular
+                            ? AnyView(
+                                ChatDetailContainer(sessionId: isDraft ? newSessionRealId : id,
+                                                    windowWidth: windowWidth,
+                                                    showsSidebarToggle: false,
+                                                    contextRequest: contextRequest) {
+                                    baseChat
+                                }
+                                .id(id)
+                            )
+                            : AnyView(
+                                baseChat
+                                    .modifier(ChatToolbarMinimization())
+                                    .id(id)
+                            )
                         // [T-home-zoom-transition] Zoom out of the tapped row for
                         // real sessions only: drafts have no row to zoom from, and
                         // Reduce Motion gets the stock push. `navigationTransition`
@@ -1548,7 +1589,7 @@ struct ContentView: View {
                         // structural branch; `isNewSessionId` is fixed per id, and
                         // Reduce Motion flipping while a chat is pushed is the one
                         // input that would remount the chat view.
-                        if reduceMotion || Self.isNewSessionId(id) {
+                        if reduceMotion || isDraft {
                             chat.navigationTransition(.automatic)
                         } else {
                             chat.navigationTransition(.zoom(sourceID: id, in: zoomNS))
@@ -1966,8 +2007,8 @@ struct ContentView: View {
         .sheet(isPresented: $showSelectModels) {
             NavigationStack { ModelConnectionRecoveryView() }
         }
-        // iPhone: bottom sheet. iPad: a popover on the chip (see `homeComposerStack`).
-        .sheet(isPresented: Binding(get: { showHomeModelPicker && !isWideLayout },
+        // Compact: bottom sheet. Regular (iPad & Duo inner): a popover on the chip (see `homeComposerStack`).
+        .sheet(isPresented: Binding(get: { showHomeModelPicker && horizontalSizeClass != .regular },
                                     set: { showHomeModelPicker = $0 })) {
             homeModelPickerContent
         }
@@ -2034,13 +2075,21 @@ struct ContentView: View {
 
     @ViewBuilder
     private var macLiveSection: some View {
-        if macLiveSectionVisible {
+        // [duo-shell] Avoid duplicating rows already pinned inside `quickHomeTray`
+        // on the short Duo outer / split-half home screen.
+        let pinnedIds: Set<String> = (usesQuickHome && !homePromptFocused)
+            ? Set(quickHomeMacRows.map(\.id)) : []
+        let remainingFollowed = pinnedIds.isEmpty
+            ? macLive.followedRows
+            : macLive.followedRows.filter { !pinnedIds.contains($0.id) }
+        let unfollowed = macLive.unfollowedBusyRows
+        let hasRemainingRows = !remainingFollowed.isEmpty || !unfollowed.isEmpty
+        if macLiveSectionVisible, (pinnedIds.isEmpty || hasRemainingRows) {
             Section {
                 if !macLiveCollapsed {
-                    ForEach(macLive.followedRows) { row in
+                    ForEach(remainingFollowed) { row in
                         macLiveRow(row)
                     }
-                    let unfollowed = macLive.unfollowedBusyRows
                     if !unfollowed.isEmpty {
                         macUnfollowedSummaryRow(count: unfollowed.count)
                         if macUnfollowedExpanded {
@@ -2543,7 +2592,7 @@ struct ContentView: View {
                                 .listRowBackground(
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                                         .fill(isSessionHighlighted(session.id)
-                                              ? Color(red: 183/255.0, green: 175/255.0, blue: 150/255.0).opacity(0.3)
+                                              ? LeoTheme.ColorToken.accentSoft
                                               : (group.label == "Today" ? Color.accentColor.opacity(0.035) : Color.clear))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
@@ -3214,16 +3263,12 @@ struct ContentView: View {
                 selectedIds = [sid]
                 scrollToId = sid
             case .delete(let sid):
-                print("[DELETE] Context menu tapped for session: \(sid)")
                 let info = Self.computeDeleteInfo(for: [sid], totalSessions: sessions.count)
-                print("[DELETE] computeDeleteInfo returned: sessionCount=\(info.sessionCount), fileCount=\(info.totalFileCount), size=\(info.totalSize)")
                 singleDeleteInfo = info
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                    print("[DELETE] singleDeleteInfo set, now setting sessionToDelete")
                     if let current = sessions.first(where: { $0.id == sid }) {
                         sessionToDelete = current
                     }
-                    print("[DELETE] sessionToDelete set, sheet should appear")
                 }
             case .archive(let sid):
                 sessionExtras.setArchived(sid, true)
@@ -3375,11 +3420,22 @@ struct ContentView: View {
     @State private var showBrightnessOptions = false
     @State private var showMacConsole = false
     @State private var showBrainSpace = false
-    /// [duo-bars] 1.90.3: the system laid this page's bar out vertically (closed iPhone Duo).
-    /// The main buttons then go to the bottom of the right-side column instead of the top.
-    /// [duo-bars] 1.90.3: closed iPhone Duo outer display (quick-home window shape). The main
-    /// buttons then float on the right edge instead of sitting in the top bar.
-    private var duoFloatingButtons: Bool { usesQuickHome }
+    /// Screen width of the hosting display (used only to separate a closed Duo outer
+    /// fullscreen window from a Duo inner Split View half of similar width).
+    @State private var windowScreenWidth: CGFloat = 0
+    /// Weak reference to the hosting UIWindow so `windowScreenWidth` stays fresh
+    /// across Duo fold/unfold and rotation (without re-firing `didMoveToWindow`).
+    @State private var capturedWindowBox = ChatHostWindow()
+    /// Measured height of `homeBottomBar` so Duo floating side buttons clear it cleanly.
+    @State private var homeBottomBarHeight: CGFloat = 0
+    /// [duo-bars] Closed iPhone Duo outer fullscreen only (never Duo inner Split View half).
+    private var duoFloatingButtons: Bool {
+        !isWideLayout && LeoWorkspaceLayoutPolicy.usesDuoSideChrome(
+            windowWidth: windowWidth,
+            windowHeight: windowHeight,
+            screenWidth: windowScreenWidth,
+            regularWidth: horizontalSizeClass == .regular)
+    }
     @State private var homeRoutingError: String?
     @State private var homeRoutingInProgress = false
     /// [T-home-sensory-feedback] Bumped when a NATIVE action starts (not the
@@ -3629,8 +3685,8 @@ struct ContentView: View {
                     homePromptFocused = false
                     showHomeModelPicker = true
                 } : nil,
-                modelPopover: isWideLayout ? HomeModelPopover(isPresented: $showHomeModelPicker,
-                                                              content: AnyView(homeModelPickerContent)) : nil,
+                modelPopover: horizontalSizeClass == .regular ? HomeModelPopover(isPresented: $showHomeModelPicker,
+                                                                                 content: AnyView(homeModelPickerContent)) : nil,
                 brightnessDialog: HomeBrightnessDialog(isPresented: $showBrightnessOptions,
                                                        onPick: { setBrightness($0) }),
                 plusMenu: AnyView(homePlusMenuContent),
@@ -3693,6 +3749,9 @@ struct ContentView: View {
             VStack(spacing: 8) {
                 quickHomeTray
                 homeComposerStack
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                if abs(homeBottomBarHeight - h) > 1 { homeBottomBarHeight = h }
             }
             // 输入栏后面垫一层渐变到页面底色:列表滚到底下时在输入栏上方淡出。系统的边缘模糊太轻,
             // 会话标题仍会糊在占位字下面,输入栏下面也露出半截会话(1.42.1 真机截图)。
@@ -4483,7 +4542,7 @@ struct ContentView: View {
             isProcessing: onScreenChatId.flatMap { ViewModelCache.shared.get(for: $0) }?.isProcessing ?? false,
             hasApproval: SensitiveToolGate.shared.pending != nil,
             macFleetEnabled: macFleetEnabled,
-            splitLayout: isWideLayout)
+            splitLayout: isWideLayout || horizontalSizeClass == .regular)
     }
 
     private func runPaletteCommand(_ command: PaletteCommand) {
@@ -4500,6 +4559,7 @@ struct ContentView: View {
             if isWideLayout { columnVisibility = .all }
             afterClose { focusSearch() }
         case .settings: afterClose { activeToolSheet = .settings }
+        case .brainSpace: afterClose { showBrainSpace = true }
         case .switchModel: afterClose { ChatComposerActions.current?.pickModel() }
         case .stopRun: ChatCommandTarget.stopRun(sessionId: onScreenChatId)
         case .approve: SensitiveToolGate.shared.resolve(.allowOnce)
@@ -5490,9 +5550,7 @@ private struct DeleteConfirmSheet: View {
                     ProgressView("Calculating…")
                         .controlSize(.large)
                     Spacer()
-                    let _ = print("[DELETE] DeleteConfirmSheet showing ProgressView. isLoading=\(isLoading), info is \(info == nil ? "nil" : "non-nil")")
                 } else if let info {
-                    let _ = print("[DELETE] DeleteConfirmSheet showing info. sessionCount=\(info.sessionCount)")
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
                             // Sessions

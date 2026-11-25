@@ -139,7 +139,7 @@ private struct WatchApprovalSheet: View {
     private var riskColor: Color {
         switch WatchApprovalPolicy.tone(forRisk: approval.risk) {
         case .destructive: return .red
-        case .readOnly: return .green
+        case .readOnly: return .secondary
         case .attention: return Color(red: 0xF0 / 255, green: 0xB8 / 255, blue: 0x6E / 255)
         }
     }
@@ -254,7 +254,7 @@ private struct MacStatusPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
-                    countRing(value: mac.running, label: "运行中", color: .teal)
+                    countRing(value: mac.running, label: "运行中", color: WatchTheme.brandBlue)
                     countRing(value: mac.waiting, label: "等你确认",
                               color: Color(red: 0xF0 / 255, green: 0xB8 / 255, blue: 0x6E / 255))
                 }
@@ -481,7 +481,7 @@ private struct AskPage: View {
             } else {
                 Image(systemName: isWaiting ? "stop.fill" : "mic.fill")
                     .font(.title2)
-                    .foregroundStyle(isWaiting ? Color.orange : Color.teal)
+                    .foregroundStyle(isWaiting ? Color.orange : WatchTheme.brandBlue)
                     .contentTransition(.symbolEffect(.replace))
             }
         }

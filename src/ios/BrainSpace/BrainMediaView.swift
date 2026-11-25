@@ -23,7 +23,7 @@ struct BrainMediaView: View {
     @State private var selected: [String] = []
     @State private var share: BrainShareResult?
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 4)
+    private let columns = [GridItem(.adaptive(minimum: 108, maximum: 180), spacing: 2)]
 
     var body: some View {
         ScrollView {
@@ -131,7 +131,16 @@ struct BrainMediaView: View {
             .onAppear { if row.id == items.last?.id { Task { await more() } } }
         if selecting {
             Button {
-                if picked { selected.removeAll { $0 == row.id } } else if selected.count < 12 { selected.append(row.id) }
+                if picked {
+                    LeoHaptics.selection()
+                    selected.removeAll { $0 == row.id }
+                } else if selected.count < 12 {
+                    LeoHaptics.selection()
+                    selected.append(row.id)
+                } else {
+                    LeoHaptics.notification(.warning)
+                    model.say("最多选择 12 项")
+                }
             } label: { cell }
             .buttonStyle(.plain)
             .accessibilityLabel(Text(picked ? "已选" : "未选"))
@@ -191,6 +200,7 @@ struct BrainMediaView: View {
 
 struct BrainSpaceMediaDetailView: View {
     @EnvironmentObject private var model: BrainSpaceModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let row: BrainSpaceMediaRow
     @State private var detail: BrainMediaDetail?
     @State private var error: String?
@@ -198,12 +208,18 @@ struct BrainSpaceMediaDetailView: View {
     @State private var videoReady = false
     @State private var videoError: String?
     @State private var share: BrainShareResult?
+    @State private var photoScale: CGFloat = 1
+    @State private var basePhotoScale: CGFloat = 1
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 visual
-                if let d = detail { info(d) }
+                if let d = detail {
+                    info(d)
+                        .frame(maxWidth: LeoWorkspaceLayoutPolicy.contentMaxWidth, alignment: .leading)
+                        .frame(maxWidth: .infinity)
+                }
                 if let error { BrainErrorRow(message: error) { Task { await load() } } }
             }
             .padding(.bottom, 24)
@@ -234,11 +250,40 @@ struct BrainSpaceMediaDetailView: View {
                 }
                 .task(id: ObjectIdentifier(player)) { await watch(player) }
         } else {
+            let isVideo = detail?.isVideo == true || row.isVideo
             BrainRemoteImage(path: "/api/media/\(row.id)/preview", contentMode: .fit)
                 .aspectRatio(aspect, contentMode: .fit)
                 .frame(maxWidth: .infinity)
+                .scaleEffect(isVideo ? 1 : photoScale)
+                .clipped()
+                .gesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            guard !isVideo else { return }
+                            photoScale = min(max(basePhotoScale * value.magnification, 1), 4)
+                        }
+                        .onEnded { _ in
+                            guard !isVideo else { return }
+                            if photoScale < 1.05 {
+                                withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
+                                    photoScale = 1
+                                    basePhotoScale = 1
+                                }
+                            } else {
+                                basePhotoScale = photoScale
+                            }
+                        }
+                )
+                .onTapGesture(count: 2) {
+                    guard !isVideo else { return }
+                    LeoHaptics.selection()
+                    withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
+                        photoScale = photoScale > 1.05 ? 1 : 2.2
+                        basePhotoScale = photoScale
+                    }
+                }
                 .overlay {
-                    if detail?.isVideo == true || row.isVideo {
+                    if isVideo {
                         Button { startVideo() } label: {
                             Image(systemName: "play.circle.fill").font(.system(size: 64)).foregroundStyle(.white).shadow(radius: 6)
                         }

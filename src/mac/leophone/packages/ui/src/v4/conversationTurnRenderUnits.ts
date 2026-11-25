@@ -21,6 +21,7 @@ import {
   resolveWorkflowLaunchMeta,
 } from "@/v4/workflowLaunchTurn.js";
 import {
+  applyLiveNowToWorkSegments,
   buildConversationTurnWorkSegments,
   resolveConversationTurnWorkDurationMs,
   resolveConversationTurnWorkStatus,
@@ -438,4 +439,31 @@ export function buildConversationTurnRenderUnits(
     normalizeRenderUnitPosition(unit, index, keptUnits.length, options),
   );
   return normalizedUnits;
+}
+
+/**
+ * Leaf clock projection for the active running turn: avoids rebuilding the full
+ * timeline's renderUnits array every second while a turn is streaming.
+ */
+export function applyLiveNowToRunningTurnUnit(
+  unit: ConversationTurnRenderUnit,
+  nowMs: number,
+): ConversationTurnRenderUnit {
+  if (!unit.isRunning) return unit;
+  const durationMs = resolveConversationTurnWorkDurationMs(unit.header, { nowMs }, true);
+  const nextWorkStatus =
+    unit.workStatus && unit.workStatus.state === "running" && durationMs !== undefined
+      ? unit.workStatus.durationMs === durationMs
+        ? unit.workStatus
+        : { ...unit.workStatus, durationMs }
+      : unit.workStatus;
+  const nextWorkSegments = applyLiveNowToWorkSegments(unit.workSegments, unit.header, nowMs);
+  if (nextWorkStatus === unit.workStatus && nextWorkSegments === unit.workSegments) {
+    return unit;
+  }
+  return {
+    ...unit,
+    ...(nextWorkStatus ? { workStatus: nextWorkStatus } : {}),
+    ...(nextWorkSegments ? { workSegments: nextWorkSegments } : {}),
+  };
 }

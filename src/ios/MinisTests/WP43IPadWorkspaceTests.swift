@@ -59,8 +59,11 @@ final class WP43IPadWorkspaceTests: XCTestCase {
         let commands = try String(contentsOf: root.appendingPathComponent("Views/LeoCommands.swift"), encoding: .utf8)
         XCTAssertTrue(commands.contains(#".keyboardShortcut("m", modifiers: [.command, .shift])"#))
         XCTAssertTrue(commands.contains(#".keyboardShortcut(".", modifiers: [.command, .shift])"#))
+        XCTAssertTrue(commands.contains(#".keyboardShortcut("b", modifiers: [.command, .shift])"#))
+        XCTAssertTrue(commands.contains(#".keyboardShortcut("f", modifiers: [.command, .shift])"#))
         XCTAssertTrue(commands.contains(".keyboardShortcut(.return, modifiers: .command)"))
         XCTAssertTrue(commands.contains(".labelStyle(.titleAndIcon)"))
+        XCTAssertEqual(PaletteCommand.brainSpace.shortcut, "⇧⌘B")
         let widget = try String(contentsOf: root.appendingPathComponent("AgentWidget/AgentLiveActivityWidget.swift"), encoding: .utf8)
         XCTAssertTrue(widget.contains(".systemExtraLargePortrait"))
     }

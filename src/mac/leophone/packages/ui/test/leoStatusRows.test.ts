@@ -46,13 +46,13 @@ test("home status list: needs-you first, then running, then finished-unread; rea
 
   const rows = classifyLeoStatusRows([idle, unread, running, background, approval, question]);
   assert.deepEqual(
-    rows.map((row) => [row.task.taskId, row.state, row.label]),
+    rows.map((row) => [row.task.taskId, row.state, row.label, row.labelId]),
     [
-      ["approval", "attention", "等你确认"],
-      ["question", "attention", "等你回答"],
-      ["running", "running", "在跑"],
-      ["background", "running", "在跑"],
-      ["unread", "done", "做完待看"],
+      ["approval", "attention", "等你确认", "leoHome.status.confirm"],
+      ["question", "attention", "等你回答", "leoHome.status.answer"],
+      ["running", "running", "在跑", "leoHome.status.running"],
+      ["background", "running", "在跑", "leoHome.status.running"],
+      ["unread", "done", "做完待看", "leoHome.status.done"],
     ],
   );
 });

@@ -5,7 +5,10 @@ import { resolveLeoAgentKind } from "../src/leo/leoAgentKind.js";
 import {
   formatLeoToolElapsed,
   hasLeoToolElapsed,
+  LEO_TOOL_FAST_TICK_MS,
+  LEO_TOOL_SLOW_TICK_MS,
   resolveLeoToolChromeState,
+  resolveLeoToolTickerIntervalMs,
 } from "../src/leo/leoToolChrome.js";
 import { claimLeoTurnEnter, resetLeoTurnEnterForTest } from "../src/leo/leoTurnEnter.js";
 import { resolveLeoApprovalRisk } from "../src/leo/leoApprovalRisk.js";
@@ -28,6 +31,11 @@ test("[wp-31] tool elapsed label", () => {
   assert.equal(hasLeoToolElapsed(1, undefined, false), false);
   assert.equal(hasLeoToolElapsed(1, undefined, true), true);
   assert.equal(hasLeoToolElapsed(undefined, 5, false), false);
+  // 前 10 秒以 200ms 步进，10 秒后切回 1s 省电。
+  assert.equal(resolveLeoToolTickerIntervalMs(0), LEO_TOOL_FAST_TICK_MS);
+  assert.equal(resolveLeoToolTickerIntervalMs(9_999), LEO_TOOL_FAST_TICK_MS);
+  assert.equal(resolveLeoToolTickerIntervalMs(10_000), LEO_TOOL_SLOW_TICK_MS);
+  assert.equal(resolveLeoToolTickerIntervalMs(65_000), LEO_TOOL_SLOW_TICK_MS);
 });
 
 test("[wp-31] new-turn entrance plays once, only for the running last turn", () => {

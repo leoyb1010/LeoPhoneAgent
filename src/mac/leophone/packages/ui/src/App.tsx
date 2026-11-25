@@ -3,6 +3,7 @@ import { PluginUiWorkspaceProvider } from "@/plugin-ui/index.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LeoHomeProvider } from "@/leo/LeoHomeContext.js";
 import { LeoBrainWorkspace } from "@/leo/LeoBrainWorkspace.js";
+import { LEO_OPEN_WHATS_NEW_EVENT } from "@/leo/LeoWhatsNew.js";
 import { useLeoQuickOpenTask } from "@/leo/useLeoQuickOpenTask.js";
 import { useShallow } from "zustand/react/shallow";
 import { resolveWorkspaceKey, type GitChangeSourceId, type WorkspacePurpose } from "@zcode/shared";
@@ -45,8 +46,10 @@ import {
 import {
   setPendingSettingsPluginIntent,
   setPendingSettingsSection,
+  setPendingSettingsSectionIntent,
   type SettingsSectionId,
 } from "@/lib/settingsNavigation.js";
+import { isShortcutRecordingActive } from "@/shortcuts/bindings.js";
 import { runWorkspaceVisibleCommand } from "@/lib/workspaceVisibleCommand.js";
 import { ZCODE_PRODUCT_DOCS_URL } from "@/lib/productDocs.js";
 import appLogoUrl from "@/assets/leo-logo.svg";
@@ -919,6 +922,57 @@ export function App({
   const handleSelectNextConversation = useCallback(() => {
     handleSelectAdjacentConversation("next");
   }, [handleSelectAdjacentConversation]);
+  const handleSelectConversationByIndex = useCallback(
+    (index: number) => {
+      runVisibleWorkspaceCommand(() => {
+        const sessionState = useZCodeSessionStore.getState();
+        const workspaceState = sessionState.getWorkspaceState(workspaceAbsPath, workspaceIdentity);
+        const fallbackTaskIds = getVisibleTaskMetas(workspaceState).map((task) => task.taskId);
+        const taskQueryCacheState = useTaskQueryCacheStore.getState();
+        const taskIds = selectQuickPickConversationTaskIds({
+          workspacePath: workspaceAbsPath,
+          workspaceIdentity,
+          resultsByQueryKey: taskQueryCacheState.resultsByQueryKey,
+          taskMetaByEntityKey: taskQueryCacheState.taskMetaByEntityKey,
+          fallbackTaskIds,
+        });
+        const targetTaskId = taskIds[index];
+        if (!targetTaskId || targetTaskId === activeTaskId) {
+          return;
+        }
+        handleSelectTask(workspaceAbsPath, targetTaskId, workspaceIdentity);
+      });
+    },
+    [
+      activeTaskId,
+      handleSelectTask,
+      runVisibleWorkspaceCommand,
+      workspaceAbsPath,
+      workspaceIdentity,
+    ],
+  );
+  // T3 Code / iOS parity: ⌘1…⌘9 quickly jumps to the Nth recent task in the current workspace.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || event.isComposing || isShortcutRecordingActive()) return;
+      if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+      if (!/^[1-9]$/.test(event.key)) return;
+      if (isQuickPickOpen || isBrainOpen || isTaskFindOpen) return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest("[role='dialog'], [role='alertdialog'], .xterm") !== null
+      ) {
+        return;
+      }
+      if (document.querySelector("[role='dialog'], [role='alertdialog']") !== null) {
+        return;
+      }
+      event.preventDefault();
+      handleSelectConversationByIndex(Number(event.key) - 1);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [handleSelectConversationByIndex, isBrainOpen, isQuickPickOpen, isTaskFindOpen]);
   const handleManageInstalledPlugins = useCallback(() => {
     setPendingSettingsPluginIntent("plugins", {
       origin: "plugin-store",
@@ -1013,6 +1067,14 @@ export function App({
           openTerminalTab: () => runVisibleWorkspaceCommand(handleOpenTerminalTabIfWritable),
           openBrowserTab: () => runVisibleWorkspaceCommand(handleOpenBrowserTab),
           openReviewTab: () => runVisibleWorkspaceCommand(handleOpenGitIfWritable),
+          openBrain: () => setIsBrainOpen(true),
+          openPhoneLink: () => {
+            setPendingSettingsSectionIntent("phone");
+            openSettingsTab();
+          },
+          openWhatsNew: () => {
+            window.dispatchEvent(new Event(LEO_OPEN_WHATS_NEW_EVENT));
+          },
         },
       }),
     [
@@ -1108,7 +1170,12 @@ export function App({
   return (
     // [leo] 首页状态清单跨项目读任务、点一下打开:把已打开项目和「打开任务」交给草稿页。
     <LeoHomeProvider value={leoHomeValue}>
-      <LeoBrainWorkspace open={isBrainOpen} onOpenChange={setIsBrainOpen} />
+      <LeoBrainWorkspace
+        open={isBrainOpen}
+        onOpenChange={setIsBrainOpen}
+        workspacePath={workspaceAbsPath}
+        workspaceIdentity={workspaceIdentity}
+      />
       <CommandCenterDialog
         open={isQuickPickOpen}
         commands={quickPickCommands}

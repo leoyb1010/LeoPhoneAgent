@@ -311,13 +311,18 @@ private struct AttachmentChip: View {
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.5), lineWidth: 0.5))
 
             Button {
+                LeoHaptics.selection()
                 onRemove()
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 18))
                     .symbolRenderingMode(.palette)
                     .foregroundStyle(.white, Color.black.opacity(0.6))
+                    .frame(width: LeoTheme.TouchTarget.minimum, height: LeoTheme.TouchTarget.minimum)
+                    .contentShape(Rectangle())
+                    .padding(-13)
             }
+            .buttonStyle(.plain)
             .accessibilityLabel(Text("Remove Attachment"))
             .offset(x: 4, y: -4)
         }
@@ -350,13 +355,18 @@ private struct AttachmentChip: View {
                 }
 
                 Button {
+                    LeoHaptics.selection()
                     onRemove()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 18))
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(.white, Color.black.opacity(0.6))
+                        .frame(width: LeoTheme.TouchTarget.minimum, height: LeoTheme.TouchTarget.minimum)
+                        .contentShape(Rectangle())
+                        .padding(-13)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel(Text("Remove Attachment"))
                 .offset(x: 4, y: -4)
             }
@@ -444,13 +454,18 @@ private struct AttachmentChip: View {
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.4), lineWidth: 0.5))
 
             Button {
+                LeoHaptics.selection()
                 onRemove()
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
                     .symbolRenderingMode(.palette)
                     .foregroundStyle(.white, Color.black.opacity(0.6))
+                    .frame(width: LeoTheme.TouchTarget.minimum, height: LeoTheme.TouchTarget.minimum)
+                    .contentShape(Rectangle())
+                    .padding(-13)
             }
+            .buttonStyle(.plain)
             .accessibilityLabel(Text("Remove Attachment"))
             .offset(x: 4, y: -4)
         }

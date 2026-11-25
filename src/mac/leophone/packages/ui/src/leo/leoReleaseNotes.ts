@@ -15,6 +15,16 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.23.0",
+    date: "2026-11-25",
+    items: [
+      "对话流式渲染更轻快：运行中任务计时下沉到局部节点，流式输出期间不再每秒整表重绘；工具计时在 10 秒内以 0.2 秒刷新，切到后台自动暂停计时。",
+      "工作台与任务组更顺手：任务组卡片直接显示实时运行状态并在完成后自动刷新改动统计；支持 ⌘1–⌘9 快速切换任务，命令面板（⌘K）新增打开第二大脑、手机直连与查看本次更新。",
+      "第二大脑阅读与键盘体验升级：搜索范围改为分段切换，支持方向键与回车浏览条目并兼容中文输入法，阅读区新增「引用到当前任务」与「复制正文」。",
+      "视觉与多语言一致性修复：修复工作台图标与状态指示灯呼吸动画冲突，恢复注意态独立配色，任务组、草稿状态与输入框工具区补齐中英文严格分离。",
+    ],
+  },
+  {
     version: "1.22.1",
     date: "2026-11-24",
     items: [
@@ -247,6 +257,10 @@ export function unseenLeoReleases(version: string): LeoRelease[] {
   const seen = lastSeen ? LEO_RELEASE_NOTES.findIndex((entry) => entry.version === lastSeen) : -1;
   const end = seen > current ? seen : current + 1;
   return LEO_RELEASE_NOTES.slice(current, Math.min(end, current + MAX_UNSEEN));
+}
+
+export function recentLeoReleases(limit = 3): LeoRelease[] {
+  return LEO_RELEASE_NOTES.slice(0, Math.max(1, limit));
 }
 
 export function markLeoWhatsNewSeen(version: string): void {
