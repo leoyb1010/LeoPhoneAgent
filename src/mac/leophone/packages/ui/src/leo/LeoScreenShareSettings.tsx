@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button.js";
 import { Switch } from "@/components/ui/switch.js";
-import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { useOptionalZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import { SettingsGroupCard, SettingsRow } from "@/settings/SettingsRow.js";
 
@@ -44,8 +44,7 @@ function screenBridge(): Required<ScreenBridge> | null {
 
 export function LeoScreenShareSettings() {
   const bridge = screenBridge();
-  const { locale } = useZCodeIntl();
-  const zh = (locale ?? "zh-CN").startsWith("zh");
+  const zh = (useOptionalZCodeIntl()?.locale ?? "zh-CN").startsWith("zh");
   const [state, setState] = useState<ScreenState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
