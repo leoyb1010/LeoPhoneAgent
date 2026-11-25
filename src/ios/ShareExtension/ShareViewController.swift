@@ -267,17 +267,28 @@ class ShareViewController: UIViewController {
             completion()
             return
         }
+        var completed = false
+        let finishOnce: @MainActor () -> Void = {
+            guard !completed else { return }
+            completed = true
+            completion()
+        }
         var responder: UIResponder? = self
         while responder != nil {
             if let application = responder as? UIApplication {
+                // 防止宿主系统极端情况下未回调 open completion 导致分享扩展一直挂起。
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(1500))
+                    finishOnce()
+                }
                 application.open(url, options: [:]) { _ in
-                    Task { @MainActor in completion() }
+                    Task { @MainActor in finishOnce() }
                 }
                 return
             }
             responder = responder?.next
         }
-        completion()
+        finishOnce()
     }
 }
 

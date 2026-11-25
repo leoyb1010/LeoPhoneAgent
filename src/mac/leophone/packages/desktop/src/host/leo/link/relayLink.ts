@@ -420,9 +420,11 @@ export class RelayLink {
         this.logger.warn("[leo/link] stream failed", { error: String(error) });
     } finally {
       clearInterval(keepAlive);
-      this.streamAborts.delete(id);
-      this.streamCallers.delete(id);
-      this.send(ws, { type: "stream_close", id });
+      if (this.streamAborts.get(id) === controller) {
+        this.streamAborts.delete(id);
+        this.streamCallers.delete(id);
+        this.send(ws, { type: "stream_close", id });
+      }
     }
   }
 }

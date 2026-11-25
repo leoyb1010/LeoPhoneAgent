@@ -57,4 +57,27 @@ final class MarkdownViewRenderStateTests: XCTestCase {
         XCTAssertTrue(md.contains("scrollView.isScrollEnabled = canScrollV || canScrollH"))
         XCTAssertTrue(md.contains("if let codeScroll = findCodeScrollView(in: subview)"))
     }
+
+    func testStreamingCoreTextHeightNeverPollutesAuthoritativeCacheAndSettlesOnEnd() throws {
+        let md = try source("Views/Chat/SelectableMarkdownView.swift")
+        // Streaming CoreText height estimates must never be committed to coord.cachedSizes.
+        XCTAssertTrue(md.contains("if !usedCoreTextEstimate, let coord = self.delegate as? SelectableMarkdownView.Coordinator"))
+        // Transitioning isStreamingContent true -> false must clear cachedSizes and re-measure with TextKit.
+        XCTAssertTrue(md.contains("if oldValue && !isStreamingContent"))
+        XCTAssertTrue(md.contains("coord.cachedSizes.removeAll(keepingCapacity: true)"))
+        // updateUIView must sync textView.isStreamingContent BEFORE markdownUnchanged early return.
+        let updateStart = try XCTUnwrap(md.range(of: "func updateUIView(_ textView: SelectableMarkdownTextView, context: Context)"))
+        let guardPos = try XCTUnwrap(md.range(of: "guard !markdownUnchanged || fontChanged", range: updateStart.upperBound..<md.endIndex))
+        let syncPos = try XCTUnwrap(md.range(of: "textView.isStreamingContent = isStreaming", range: updateStart.upperBound..<md.endIndex))
+        XCTAssertLessThan(syncPos.lowerBound, guardPos.lowerBound, "isStreamingContent must sync before markdownUnchanged early return")
+    }
+
+    func testTableFinalFlushMarksBlockNonStreamingWithoutForcingAttributedCache() throws {
+        let vm = try source("Agent/Chat/AIChatViewModel.swift")
+        XCTAssertTrue(vm.contains("isFinal: Bool? = nil"))
+        XCTAssertTrue(vm.contains("block.isStreamingText = !isFinal"))
+        XCTAssertTrue(vm.contains("cacheAttributedString: !hasTable,\n                        isFinal: true,"))
+        let sse = try source("Agent/Chat/AIChatViewModel+SSEStream.swift")
+        XCTAssertTrue(sse.contains("cacheAttributedString: !hasTable,\n                        isFinal: true,"))
+    }
 }

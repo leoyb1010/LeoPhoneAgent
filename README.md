@@ -2,9 +2,9 @@
 
 个人 AI Agent：iOS、Android、HarmonyOS 客户端与 Mac 运行时，通过配对中继连接；第二大脑由独立资料库服务提供数据。
 
-[![iOS](https://img.shields.io/badge/iOS-1.92.0%20(205)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.93.0%20(206)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
-[![macOS source](https://img.shields.io/badge/macOS_source-1.23.0-7C3AED.svg)](src/mac/leophone/package.json)
+[![macOS source](https://img.shields.io/badge/macOS_source-1.24.0-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS source](https://img.shields.io/badge/HarmonyOS_source-0.5.4-0A84FF.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 

@@ -6628,7 +6628,24 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         return sum
     }
 
-    var isStreamingContent: Bool = false
+    var isStreamingContent: Bool = false {
+        didSet {
+            // 流式转终态时清空流式 CT 估算指纹与高度缓存，并用权威 TextKit 补量一次，
+            // 避免中文长回复在流结束文本长度未变时沿用偏小的 CT 估算高度导致末行被裁。
+            if oldValue && !isStreamingContent {
+                lastSizedStorageLen = -1
+                lastSizedWidth = -1
+                if let coord = self.delegate as? SelectableMarkdownView.Coordinator {
+                    coord.cachedSizes.removeAll(keepingCapacity: true)
+                    coord.cachedSizeMarkdownCount = -1
+                }
+                invalidateIntrinsicContentSize()
+                if textStorage.length > 0 && (bounds.width > 1 || textContainer.size.width > 1) {
+                    invalidateCellSizeIfNeeded()
+                }
+            }
+        }
+    }
 
     func invalidateCellSizeIfNeeded() {
         guard textContainer.size.width > 1 else {
@@ -6674,12 +6691,14 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         isInvalidatingCellSize = true
         defer { isInvalidatingCellSize = false }
         let newHeight: CGFloat
+        var usedCoreTextEstimate = false
         if isStreamingContent && textStorage.length > 0 {
             var hasAttachment = false
             textStorage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: textStorage.length), options: []) { v, _, stop in
                 if v != nil { hasAttachment = true; stop.pointee = true }
             }
             if !hasAttachment {
+                usedCoreTextEstimate = true
                 newHeight = SelectableMarkdownView.ctFramesetterHeight(for: textStorage, width: measureWidth)
                     + textContainerInset.top + textContainerInset.bottom
             } else {
@@ -6783,7 +6802,8 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         lastSizedTableGenSum = tableGenSum
         lastComputedHeight = newHeight
         deferredCorrectionPending = false
-        if let coord = self.delegate as? SelectableMarkdownView.Coordinator {
+        // 仅在权威 TextKit 量高时写入 coord.cachedSizes，流式期间的 CT 估算值绝不污染权威高度缓存。
+        if !usedCoreTextEstimate, let coord = self.delegate as? SelectableMarkdownView.Coordinator {
             // [JitterFix] Key by render width (measureWidth), matching the
             // SwiftUI sizeThatFits cache key. Using textContainer.size.width
             // here would insert under whichever stale probe width was last
@@ -7108,6 +7128,9 @@ struct SelectableMarkdownView: UIViewRepresentable {
         textView.onReadAloud = onReadAloud
         textView.onSpeakText = onSpeakText
         textView.copyMarkdownSource = fullMarkdownForCopy
+        // 必须在任何早退分支（markdownUnchanged / contentHash 命中）之前同步流式态，
+        // 确保流结束但文本长度未变时 isStreamingContent 仍能从 true 翻回 false 并触发终态权威量高。
+        textView.isStreamingContent = isStreaming
         #if DEBUG
         // [T-ios-markdown-rerender-burst] makeUIView creates a FRESH textView +
         // resets lastMarkdown="", forcing the next updateUIView through a full
@@ -7129,6 +7152,9 @@ struct SelectableMarkdownView: UIViewRepresentable {
         textView.onReadAloud = onReadAloud
         textView.onSpeakText = onSpeakText
         textView.copyMarkdownSource = fullMarkdownForCopy
+        // 必须在任何早退分支（markdownUnchanged / contentHash 命中）之前同步流式态，
+        // 确保流结束但文本长度未变时 isStreamingContent 仍能从 true 翻回 false 并触发终态权威量高。
+        textView.isStreamingContent = isStreaming
 
         let currentFontSize = FontSettings.shared.scaledMessage(16.5)
         let fontChanged = context.coordinator.lastFontSize != currentFontSize
@@ -7647,7 +7673,6 @@ struct SelectableMarkdownView: UIViewRepresentable {
         } else {
             textView.setNeedsLayout()
         }
-        textView.isStreamingContent = isStreaming
         textView.invalidateIntrinsicContentSize()
         textView.setNeedsDisplay()
         textView.invalidateCellSizeIfNeeded()

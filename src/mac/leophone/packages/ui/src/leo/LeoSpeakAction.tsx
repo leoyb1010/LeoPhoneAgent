@@ -1,5 +1,5 @@
 import { Square, Volume2 } from "lucide-react";
-import { useId, useSyncExternalStore } from "react";
+import { useCallback, useId, useSyncExternalStore } from "react";
 
 import { MessageAction } from "@/components/ai-elements/message.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -24,6 +24,7 @@ let sharedSnapshot: SharedSpeakSnapshot = DISABLED_SNAPSHOT;
 let pendingOwnerId: string | null = null;
 let unsubscribeBridge: (() => void) | null = null;
 let unsubscribeSettingsEvent: (() => void) | null = null;
+let teardownScheduled = false;
 const listeners = new Set<() => void>();
 
 function emitSnapshot(next: SharedSpeakSnapshot) {
@@ -51,6 +52,16 @@ function refreshSharedSettings(bridge: NonNullable<ReturnType<typeof leoSpeechBr
     .catch(() => undefined);
 }
 
+function teardownSharedBridge() {
+  unsubscribeBridge?.();
+  unsubscribeBridge = null;
+  unsubscribeSettingsEvent?.();
+  unsubscribeSettingsEvent = null;
+  currentBridge = null;
+  pendingOwnerId = null;
+  sharedSnapshot = DISABLED_SNAPSHOT;
+}
+
 function subscribeSharedSpeak(
   bridge: ReturnType<typeof leoSpeechBridge>,
   listener: () => void,
@@ -58,8 +69,7 @@ function subscribeSharedSpeak(
   if (!bridge) return () => undefined;
   listeners.add(listener);
   if (currentBridge !== bridge) {
-    unsubscribeBridge?.();
-    unsubscribeSettingsEvent?.();
+    teardownSharedBridge();
     currentBridge = bridge;
     sharedSnapshot = { enabled: false, speaking: false, activeOwnerId: null };
     pendingOwnerId = null;
@@ -85,15 +95,22 @@ function subscribeSharedSpeak(
   }
   return () => {
     listeners.delete(listener);
-    if (listeners.size === 0) {
-      unsubscribeBridge?.();
-      unsubscribeBridge = null;
-      unsubscribeSettingsEvent?.();
-      unsubscribeSettingsEvent = null;
-      currentBridge = null;
-      pendingOwnerId = null;
+    if (listeners.size === 0 && !teardownScheduled) {
+      // 延迟到微任务结束后再判断：同一轮提交内重挂或 StrictMode 双挂载不会清空桥接与快照。
+      teardownScheduled = true;
+      queueMicrotask(() => {
+        teardownScheduled = false;
+        if (listeners.size === 0) teardownSharedBridge();
+      });
     }
   };
+}
+
+/** 仅供单元测试重置模块级共享朗读状态。 */
+export function resetLeoSpeakActionStoreForTest(): void {
+  listeners.clear();
+  teardownScheduled = false;
+  teardownSharedBridge();
 }
 
 /**
@@ -105,11 +122,15 @@ export function LeoSpeakAction({ text }: { text: string }) {
   const { locale } = useZCodeIntl();
   const zh = (locale ?? "zh-CN").startsWith("zh");
   const ownerId = useId();
-  const state = useSyncExternalStore(
-    (listener) => subscribeSharedSpeak(bridge, listener),
-    () => (bridge ? sharedSnapshot : DISABLED_SNAPSHOT),
-    () => DISABLED_SNAPSHOT,
+  const subscribe = useCallback(
+    (listener: () => void) => subscribeSharedSpeak(bridge, listener),
+    [bridge],
   );
+  const getSnapshot = useCallback(
+    () => (bridge ? sharedSnapshot : DISABLED_SNAPSHOT),
+    [bridge],
+  );
+  const state = useSyncExternalStore(subscribe, getSnapshot, () => DISABLED_SNAPSHOT);
 
   if (!bridge || !state.enabled || !text.trim()) return null;
   const active = (state.speaking && state.activeOwnerId === ownerId) || pendingOwnerId === ownerId;

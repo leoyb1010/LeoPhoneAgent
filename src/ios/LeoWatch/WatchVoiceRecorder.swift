@@ -36,7 +36,7 @@ final class WatchVoiceRecorder: NSObject, ObservableObject {
     private let maxSeconds: TimeInterval = 30
 
     func start() async -> Bool {
-        guard !isStarting, !isRecording else { return false }
+        guard !isStarting, !isRecording else { return true }
         isStarting = true
         defer { isStarting = false }
         let granted = await withCheckedContinuation { continuation in

@@ -1182,6 +1182,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         let text: String
         let parsedMarkdown: MarkdownContent?
         let cacheAttributedString: Bool
+        let isFinal: Bool
     }
     private var deferredStreamingTextUpdates: [DeferredStreamingTextUpdate] = []
     private(set) var streamingUIUpdatesSuspended = false
@@ -5618,6 +5619,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         text: finalTextSnapshot,
                         parsedMarkdown: parsedFinal,
                         cacheAttributedString: !hasTable,
+                        isFinal: true,
                         requestScroll: true,
                         expectedMessageId: runMsgId
                     )
@@ -6297,10 +6299,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         text: String,
         parsedMarkdown: MarkdownContent?,
         cacheAttributedString shouldCacheAttributedString: Bool,
+        isFinal: Bool? = nil,
         requestScroll: Bool,
         expectedMessageId: UUID? = nil,
         ignoreUserCancel: Bool = false
     ) {
+        let resolvedIsFinal = isFinal ?? shouldCacheAttributedString
         let hintedId = (msgIdx >= 0 && msgIdx < messages.count) ? messages[msgIdx].id : nil
         guard AgentChatCorrectness.shouldApplyStreamDelta(
             userDidCancel: ignoreUserCancel ? false : userDidCancel,
@@ -6321,25 +6325,27 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             messageId: message.id,
             blockId: block.id,
             text: text,
-            finalFlush: shouldCacheAttributedString
+            finalFlush: resolvedIsFinal
         )
 
         if streamingUIUpdatesSuspended {
             // [DIAG-SUSPEND] UI updates are suspended (e.g. tool detail sheet is presented).
-            // If this is the FINAL flush (cacheAttributedString=true), the content will be
+            // If this is the FINAL flush (resolvedIsFinal=true), the content will be
             // deferred until the sheet is dismissed. If the sheet never dismisses properly,
             // the cell stays empty.
-            logger.info("[StreamText] DEFERRED — uiSuspended=true text len=\(text.count) cacheAttr=\(shouldCacheAttributedString) blockId=\(block.id)")
+            logger.info("[StreamText] DEFERRED — uiSuspended=true text len=\(text.count) cacheAttr=\(shouldCacheAttributedString) isFinal=\(resolvedIsFinal) blockId=\(block.id)")
             let existing = deferredStreamingTextUpdates.first(where: {
                 $0.messageId == message.id && $0.blockId == block.id
             })
             let mergedCacheFlag = shouldCacheAttributedString || (existing?.cacheAttributedString == true)
+            let mergedFinalFlag = resolvedIsFinal || (existing?.isFinal == true)
             let pending = DeferredStreamingTextUpdate(
                 messageId: message.id,
                 blockId: block.id,
                 text: text,
                 parsedMarkdown: parsedMarkdown,
-                cacheAttributedString: mergedCacheFlag
+                cacheAttributedString: mergedCacheFlag,
+                isFinal: mergedFinalFlag
             )
             if let existingIdx = deferredStreamingTextUpdates.firstIndex(where: {
                 $0.messageId == message.id && $0.blockId == block.id
@@ -6355,7 +6361,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             block,
             text: text,
             parsedMarkdown: parsedMarkdown,
-            cacheAttributedString: shouldCacheAttributedString
+            cacheAttributedString: shouldCacheAttributedString,
+            isFinal: resolvedIsFinal
         )
         if requestScroll && isNearBottom {
             scrollToBottomSignal.send()
@@ -6367,13 +6374,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         _ block: AssistantBlock,
         text: String,
         parsedMarkdown: MarkdownContent?,
-        cacheAttributedString shouldCacheAttributedString: Bool
+        cacheAttributedString shouldCacheAttributedString: Bool,
+        isFinal: Bool
     ) {
         let wasEmpty = block.content.isEmpty
         // [T-r3-S7] One objectWillChange per flush (was one per property:
         // content, cachedMarkdown and, on the final flush, the attributed string).
         block.applyBatched {
-            block.isStreamingText = !shouldCacheAttributedString
+            block.isStreamingText = !isFinal
             block.content = text
             if block.cachedAttributedSource != text { block.cachedAttributedString = nil }
             if let parsedMarkdown {
@@ -6411,7 +6419,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 block,
                 text: pending.text,
                 parsedMarkdown: pending.parsedMarkdown,
-                cacheAttributedString: pending.cacheAttributedString
+                cacheAttributedString: pending.cacheAttributedString,
+                isFinal: pending.isFinal
             )
         }
         if isNearBottom {

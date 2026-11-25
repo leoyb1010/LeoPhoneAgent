@@ -82,6 +82,13 @@ test("handle decrypts, routes the inner request and seals the reply; replay and 
   assert.equal(replay.status, 409);
   assert.equal((replay.body as { error: { code: string } }).error.code, "e2e_replay");
 
+  // Round 1/3 security guard: non-canonical base64 padding / '+' '/' encoding of the same
+  // 32-byte ephemeral key must still hit the replay cache as 409 e2e_replay.
+  const altKey = Buffer.from(envelope.k, "base64url").toString("base64");
+  const replayAlt = await e2e.handle({ ...envelope, k: altKey }, async () => assert.fail("alt-encoded replay must not run"));
+  assert.equal(replayAlt.status, 409);
+  assert.equal((replayAlt.body as { error: { code: string } }).error.code, "e2e_replay");
+
   const fresh = phoneEnvelope(e2e.publicKey, { method: "GET", path: "/health" }).envelope;
   const flipped = { ...fresh, c: fresh.c.slice(0, -2) + (fresh.c.endsWith("A") ? "BB" : "AA") };
   const tampered = await e2e.handle(flipped, async () => assert.fail("tampered must not run"));

@@ -1293,16 +1293,26 @@ struct GatewayApprovalCard: View {
                 Text(reason).font(.system(size: 13)).foregroundStyle(.secondary)
             }
             if !isPlan, let command = approval.command, !command.isEmpty {
-                ScrollView {
-                    Text(command)
-                        .font(.system(size: 13, design: .monospaced))
-                        .textSelection(.enabled)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                let lineCount = command.split(separator: "\n", omittingEmptySubsequences: false).count
+                let isLongCommand = lineCount > 5 || command.count > 160
+                VStack(alignment: .leading, spacing: 4) {
+                    ScrollView {
+                        Text(command)
+                            .font(.system(size: 13, design: .monospaced))
+                            .textSelection(.enabled)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .scrollIndicators(isLongCommand ? .visible : .automatic)
+                    .frame(maxHeight: 140)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6))
+                    if isLongCommand {
+                        Text("共 \(lineCount) 行 · 上下滚动查看完整命令")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                .frame(maxHeight: 140)
-                .fixedSize(horizontal: false, vertical: true)
-                .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6))
             }
             // 两行两列:四个按钮挤一行时「本次会话允许」会被截成「本次会…」。单数个时最后一个占满一行。
             let choices = self.choices

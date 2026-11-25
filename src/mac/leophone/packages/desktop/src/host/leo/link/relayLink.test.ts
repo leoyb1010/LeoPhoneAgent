@@ -338,3 +338,62 @@ test("relay revocation stops only that caller immediately and retries failed per
   internals.streamAborts.get("b")?.abort();
   await other;
 });
+
+test("duplicate stream_open with same id keeps replacement stream alive and cancellable (Round 3 P2-3)", async () => {
+  const signals: AbortSignal[] = [];
+  const bridge = {
+    async stream(_req: LinkRequest, emit: (data: string) => void, signal: AbortSignal) {
+      const idx = signals.push(signal);
+      emit(`stream-${idx}`);
+      await new Promise<void>((resolve) => {
+        if (signal.aborted) return resolve();
+        signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+    },
+  } as unknown as LinkBridge;
+  const sent: { type: string; id: string; data?: string }[] = [];
+  const socket = { readyState: 1, send: (data: string) => sent.push(JSON.parse(data)) };
+  const link = new RelayLink(
+    { wsUrl: "ws://127.0.0.1/unused", name: "fixture", registerKey: MASTER },
+    bridge,
+    memoryKeys(),
+    { info() {}, warn() {} },
+    "test",
+  );
+  const internals = link as unknown as {
+    handleStream(ws: unknown, frame: Record<string, unknown>): Promise<void>;
+    streamAborts: Map<string, AbortController>;
+    streamCallers: Map<string, string | undefined>;
+  };
+
+  const first = internals.handleStream(socket, {
+    id: "dup-1",
+    path: "/harness/sessions/s/events",
+    caller: { kind: "iphone", device_id: "phone-1" },
+  });
+  await Promise.resolve();
+  const second = internals.handleStream(socket, {
+    id: "dup-1",
+    path: "/harness/sessions/s/events",
+    caller: { kind: "iphone", device_id: "phone-2" },
+  });
+  await first;
+
+  assert.equal(signals[0]?.aborted, true);
+  assert.equal(signals[1]?.aborted, false);
+  assert.equal(
+    sent.some((frame) => frame.type === "stream_close" && frame.id === "dup-1"),
+    false,
+    "old stream finally must not close the replacement stream",
+  );
+  assert.equal(internals.streamCallers.get("dup-1"), "phone-2");
+  assert.ok(internals.streamAborts.get("dup-1"), "replacement abort controller must stay registered");
+
+  internals.streamAborts.get("dup-1")?.abort();
+  await second;
+  assert.equal(signals[1]?.aborted, true);
+  assert.equal(
+    sent.filter((frame) => frame.type === "stream_close" && frame.id === "dup-1").length,
+    1,
+  );
+});

@@ -71,12 +71,18 @@ export function sendScreenPeerControlMessage(sessionId: string, data: string): v
     peerWindow.webContents.send("leo:screen-peer:control-out", { sessionId, data });
 }
 
-/** [WP-52] 本机 Esc×3 / 菜单栏「立即断开」:关掉所有看屏会话。 */
-export async function closeAllScreenPeers(logger: Logger): Promise<void> {
-  for (const id of sessions.keys()) {
-    await command(logger, { op: "close", sessionId: id }).catch(() => undefined);
-    forget(id);
-  }
+/** [WP-52] 本机 Esc×3 / 菜单栏「立即断开」:立即清空会话并销毁看屏窗口，走串行链避免与 open 交错。 */
+export async function closeAllScreenPeers(_logger: Logger): Promise<void> {
+  await serializePeerLifecycle(async () => {
+    const ids = Array.from(sessions.keys());
+    for (const id of ids) {
+      const entry = sessions.get(id);
+      if (entry?.timer) clearTimeout(entry.timer);
+      sessions.delete(id);
+    }
+    closeWindow();
+    if (ids.length > 0) notify();
+  });
 }
 
 /** [WP-52] DataChannel 收到的输入事件交给谁(leo-input helper)。 */

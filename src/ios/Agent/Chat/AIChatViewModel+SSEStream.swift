@@ -1039,6 +1039,7 @@ extension AIChatViewModel {
                         text: cancelText,
                         parsedMarkdown: parsedCancel,
                         cacheAttributedString: !hasTable,
+                        isFinal: true,
                         requestScroll: false,
                         expectedMessageId: runMsgId,
                         ignoreUserCancel: true

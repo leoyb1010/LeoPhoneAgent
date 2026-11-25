@@ -43,7 +43,7 @@ final class RenderHotPathTests: XCTestCase {
 
     func testStreamingFlushPublishesOnce() throws {
         let vm = try source("Agent/Chat/AIChatViewModel.swift")
-        XCTAssertTrue(vm.contains("block.applyBatched {\n            block.isStreamingText = !shouldCacheAttributedString"))
+        XCTAssertTrue(vm.contains("block.applyBatched {\n            block.isStreamingText = !isFinal"))
         let all = try source("Agent/Chat/ChatModels.swift")
         let start = try XCTUnwrap(all.range(of: "final class AssistantBlock: Identifiable, ObservableObject {"))
         let models = String(all[start.lowerBound...].prefix(20_000))

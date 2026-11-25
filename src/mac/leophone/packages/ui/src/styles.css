@@ -141,22 +141,24 @@ html[data-document-hidden] *::after {
 }
 
 /*
- * 键盘焦点规范：点击（非 focus-visible）不显示外框；键盘导航（:focus-visible）统一使用
- * 品牌蓝 2px 焦点环，避免系统黄色描边与无焦点指示器两种极端；高对比度模式保留系统 Highlight。
+ * 键盘焦点规范：置于 @layer base 中，保证组件自己的 Tailwind focus-visible:outline-none / ring
+ * 工具类可正常覆盖；仅作用于按钮/链接等交互控件，不干扰文本输入框与编辑器；高对比度模式保留系统 Highlight。
  */
-*:focus:not(:focus-visible) {
-  outline: none;
-}
+@layer base {
+  *:focus:not(:focus-visible) {
+    outline: none;
+  }
 
-*:focus-visible {
-  outline: 2px solid var(--leo-brand, var(--color-ring));
-  outline-offset: 2px;
-}
-
-@media (forced-colors: active) {
-  *:focus-visible {
-    outline: 2px solid Highlight;
+  :where(button, a[href], summary, select, [role="button"], [tabindex]):focus-visible {
+    outline: 2px solid var(--leo-brand, var(--color-ring));
     outline-offset: 2px;
+  }
+
+  @media (forced-colors: active) {
+    :where(button, a[href], summary, select, [role="button"], [tabindex]):focus-visible {
+      outline: 2px solid Highlight;
+      outline-offset: 2px;
+    }
   }
 }
 

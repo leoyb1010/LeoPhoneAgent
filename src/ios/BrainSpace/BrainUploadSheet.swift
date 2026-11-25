@@ -53,7 +53,23 @@ final class BrainUploader: ObservableObject {
     private init() {
         if let data = UserDefaults.standard.data(forKey: Self.storeKey),
            let saved = try? JSONDecoder().decode([Job].self, from: data) {
-            jobs = saved.filter { $0.stage < 3 || $0.fileId != nil }.suffix(20).map { var j = $0; j.error = nil; return j }
+            var needsPersist = false
+            jobs = saved.filter { $0.stage < 3 || $0.fileId != nil }.suffix(20).map {
+                var j = $0
+                if j.stage == 0 && j.size == 0 {
+                    // 上次拷贝尚未完成时进程被杀：清理半截本地副本并标明失败，避免任务永久卡死。
+                    if let orphanURL = Self.resolvedURL(for: j.localPath) {
+                        try? FileManager.default.removeItem(at: orphanURL)
+                    }
+                    j.localPath = ""
+                    j.error = "上次文件准备中断，请重新选择上传"
+                    needsPersist = true
+                } else {
+                    j.error = nil
+                }
+                return j
+            }
+            if needsPersist { persist() }
         }
     }
 

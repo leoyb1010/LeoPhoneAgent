@@ -203,6 +203,7 @@ actor BrainImageCache {
     private let memory = NSCache<NSString, UIImage>()
     private let dir: URL
     private var inflight: [String: Task<UIImage?, Never>] = [:]
+    private var inflightWaiters: [String: Set<UUID>] = [:]
 
     init() {
         memory.countLimit = 600
@@ -233,6 +234,7 @@ actor BrainImageCache {
     func clearAll() {
         for task in inflight.values { task.cancel() }
         inflight.removeAll()
+        inflightWaiters.removeAll()
         memory.removeAllObjects()
         let root = dir
         if let files = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
@@ -248,33 +250,65 @@ actor BrainImageCache {
         guard let url = try? BrainSpaceAPI.shared.apiURL(String(parts[0]), query: query) else { return nil }
         let key = url.absoluteString
         if let hit = memory.object(forKey: key as NSString) { return hit }
-        if let running = inflight[key] { return await running.value }
-        let file = dir.appendingPathComponent(SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined())
-        let task = Task<UIImage?, Never> {
-            if Task.isCancelled { return nil }
-            if let data = try? Data(contentsOf: file), let img = UIImage(data: data) { return img }
-            var data: Data?
-            for attempt in 0..<3 {
+        let waiterId = UUID()
+        let task: Task<UIImage?, Never>
+        if let running = inflight[key] {
+            task = running
+            inflightWaiters[key, default: []].insert(waiterId)
+        } else {
+            let file = dir.appendingPathComponent(SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined())
+            let created = Task<UIImage?, Never> {
                 if Task.isCancelled { return nil }
-                do { data = try await BrainSpaceAPI.shared.raw(url); break }
-                catch BrainSpaceError.http(let code, _) where code == 429 || code == 503 || code == 0 {
-                    // Fast scrolling can hit the gateway's per-minute limit; wait and try again instead of leaving a blank tile.
-                    try? await Task.sleep(for: .seconds(2 << attempt))
-                } catch { return nil }
+                if let data = try? Data(contentsOf: file), let img = UIImage(data: data) { return img }
+                var data: Data?
+                for attempt in 0..<3 {
+                    if Task.isCancelled { return nil }
+                    do { data = try await BrainSpaceAPI.shared.raw(url); break }
+                    catch BrainSpaceError.http(let code, _) where code == 429 || code == 503 || code == 0 {
+                        // Fast scrolling can hit the gateway's per-minute limit; wait and try again instead of leaving a blank tile.
+                        try? await Task.sleep(for: .seconds(2 << attempt))
+                    } catch { return nil }
+                }
+                if Task.isCancelled { return nil }
+                guard let data, let img = UIImage(data: data) else { return nil }
+                try? data.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                return img
             }
-            if Task.isCancelled { return nil }
-            guard let data, let img = UIImage(data: data) else { return nil }
-            try? data.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-            return img
+            inflight[key] = created
+            inflightWaiters[key] = [waiterId]
+            task = created
         }
-        inflight[key] = task
         let img = await withTaskCancellationHandler {
             await task.value
         } onCancel: {
-            task.cancel()
+            Task { await self.releaseWaiter(key: key, waiterId: waiterId, task: task) }
         }
-        inflight[key] = nil
-        if let img { memory.setObject(img, forKey: key as NSString) }
-        return img
+        finishWaiter(key: key, waiterId: waiterId, task: task, image: img)
+        return Task.isCancelled ? nil : img
+    }
+
+    private func releaseWaiter(key: String, waiterId: UUID, task: Task<UIImage?, Never>) {
+        guard var waiters = inflightWaiters[key] else { return }
+        waiters.remove(waiterId)
+        if waiters.isEmpty {
+            inflightWaiters[key] = nil
+            if inflight[key] == task {
+                inflight[key] = nil
+                task.cancel()
+            }
+        } else {
+            inflightWaiters[key] = waiters
+        }
+    }
+
+    private func finishWaiter(key: String, waiterId: UUID, task: Task<UIImage?, Never>, image: UIImage?) {
+        if let image { memory.setObject(image, forKey: key as NSString) }
+        if var waiters = inflightWaiters[key] {
+            waiters.remove(waiterId)
+            inflightWaiters[key] = waiters.isEmpty ? nil : waiters
+        }
+        if inflight[key] == task {
+            inflight[key] = nil
+        }
     }
 }
